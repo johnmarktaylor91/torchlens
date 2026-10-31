@@ -65,7 +65,7 @@ table is a selection, not the full list — read `torchlens.__all__` for that):
 
 | Job | Names |
 | --- | --- |
-| Capture and sparse recording | `trace`, `fastlog`, `span`, `tap` (the former `record_span` alias is removed) |
+| Capture and sparse recording | `trace`, `recording`, `span`, `tap` (the former `record_span` alias is removed) |
 | Persistence and bundles | `load`, `save`, `bundle`, `Bundle`; schema-v2 manifests add `backend`, `backend_runtime`, and `payload_policy` |
 | Replay and edits | `do`, `push`, `push_from`, `run` (the former `replay`/`replay_from`/`rerun` aliases are removed) |
 | Data objects | `Trace`, `Layer`, `Op`, `Quantity`, `Bytes`, `Duration`, `Flops`, `Macs` |
@@ -74,7 +74,7 @@ table is a selection, not the full list — read `torchlens.__all__` for that):
 | Activation helpers | `zero_ablate`, `mean_ablate`, `torchlens.intervention.scramble_elements` (elementwise iid scramble), `replace_with`, `swap_with`, `steer`, `scale`, `clamp`, `add_noise`, `project_onto`, `project_out`, `splice_module` |
 | Backward helpers | `hook_grad`, `zero_grad`, `scale_grad`, `clamp_grad`, `add_grad_noise`, `clip_grad` |
 | Extraction and validation | `pluck`, `extract`, `extract_dataset`, `validate` (the former `peek` and `batched_extract` aliases are removed); disk-mode `extract_dataset` writes a self-describing manifest, resumes with `resume=True`, and loads back via `torchlens.dataset_extraction.load_extraction` (DOCUMENTED-UNSTABLE spellings) |
-| Subpackages | `facets`, `fastlog` |
+| Subpackages | `facets`, `recording` |
 
 Submodules such as `tl.report`, `tl.stats`, `tl.viz`, and `tl.compat` are available as attributes
 but are deliberately not listed in `__all__`.

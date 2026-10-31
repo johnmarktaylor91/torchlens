@@ -269,7 +269,7 @@ class KnownRed:
 
         resolved = getattr(builtins, self.exception_type, None)
         if resolved is None:
-            from torchlens.semantic.logit_lens import LogitLensError
+            from torchlens._semantic.logit_lens import LogitLensError
 
             resolved = {"LogitLensError": LogitLensError}[self.exception_type]
         assert isinstance(resolved, type) and issubclass(resolved, BaseException)

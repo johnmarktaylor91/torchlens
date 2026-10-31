@@ -427,7 +427,7 @@ def test_seal_dual_stamps_live_journal_and_projection_clone() -> None:
     """S-N2 integration: the pre-seal snapshot clone carries the watermark.
 
     ``snapshot_recording_projection`` clones the journal BEFORE ``seal()``
-    runs (capture/trace.py), so the seal must stamp BOTH the live journal and
+    runs (_capture/trace.py), so the seal must stamp BOTH the live journal and
     the stored clone; the RecordingProjector additionally sources the core's
     own watermark as a fallback. A fresh recording then converts to a trace
     with the carried lane filtered empty (nothing folded twice).

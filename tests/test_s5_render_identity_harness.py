@@ -13,8 +13,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization.collapse_plan import RenderContext
-from torchlens.visualization.render_ir import (
+from torchlens._visualization.collapse_plan import RenderContext
+from torchlens._visualization.render_ir import (
     RenderIR,
     RenderIREdge,
     RenderIRRegion,

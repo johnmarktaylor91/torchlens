@@ -24,8 +24,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._user_funcs import _unwrap_data_parallel
 from torchlens.options import CaptureOptions
-from torchlens.user_funcs import _unwrap_data_parallel
 
 
 class _Tiny(nn.Module):

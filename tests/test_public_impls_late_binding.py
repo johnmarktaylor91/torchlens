@@ -1,7 +1,7 @@
 """The public-command implementations never keep a patched user_funcs name.
 
 ``torchlens._user_public_impls`` calls ``trace`` and
-``_run_model_and_save_specified_outs`` through ``torchlens.user_funcs``. It
+``_run_model_and_save_specified_outs`` through ``torchlens._user_funcs``. It
 used to hold copies of both, refreshed by every public entry call: a test that
 patched either name and then called a public entry left the patched function
 in the implementation module after its patch was undone, and a later test that
@@ -18,8 +18,8 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens._user_funcs as user_funcs
 import torchlens._user_public_impls as user_public_impls
-import torchlens.user_funcs as user_funcs
 from torchlens.validation import validate_forward_pass
 
 

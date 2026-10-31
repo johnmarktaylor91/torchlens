@@ -267,7 +267,7 @@ def test_inert_inventory_reports_without_loading(
 def test_unknown_field_is_registered_outcome_degrading() -> None:
     """D-ECO-10 assertion two: an accept mode may never attest COMPLETE."""
 
-    from torchlens.capture.outcome import (
+    from torchlens._capture.outcome import (
         OUTCOME_DEGRADING_LOAD_CONDITIONS,
         CaptureStatus,
     )

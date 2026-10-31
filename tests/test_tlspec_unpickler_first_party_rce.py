@@ -144,9 +144,9 @@ def test_module_is_installed_denied_by_direct_unpickler() -> None:
 def test_vetted_facet_recipe_admitted() -> None:
     """A genuine public first-party facet recipe still resolves to the real callable."""
 
-    from torchlens.semantic.recipes.norm import layer_norm
+    from torchlens._semantic.recipes.norm import layer_norm
 
-    assert _load_ref("torchlens.semantic.recipes.norm", "layer_norm") is layer_norm
+    assert _load_ref("torchlens._semantic.recipes.norm", "layer_norm") is layer_norm
 
 
 def test_vetted_transform_helper_admitted() -> None:
@@ -166,7 +166,7 @@ def test_full_facet_registry_snapshot_round_trips_through_unpickler() -> None:
     proving the narrowed gate does not regress a legitimate recipe-bearing bundle.
     """
 
-    from torchlens.semantic import facets as facets_mod
+    from torchlens._semantic import facets as facets_mod
 
     # Snapshot the PURE built-in registry (deterministic, unaffected by any recipe a
     # sibling test may have left registered). The built-in set includes the residual
@@ -200,10 +200,10 @@ def test_full_facet_registry_snapshot_round_trips_through_unpickler() -> None:
 def test_inert_first_party_gate_discriminates() -> None:
     """The gate admits public inert helpers and denies private / side-effecting ones."""
 
+    from torchlens._semantic.recipes.norm import layer_norm
     from torchlens._utils import _module_is_installed
     from torchlens._utils.display import identity
     from torchlens.intervention.helpers import clamp, zero_ablate
-    from torchlens.semantic.recipes.norm import layer_norm
 
     assert is_inert_first_party_callable(identity)
     assert is_inert_first_party_callable(layer_norm)
@@ -271,7 +271,7 @@ def test_resolver_denies_first_party_import_gadget_but_resolves_helper() -> None
 
 
 class _CleanupPartialGadget:
-    """``__reduce__`` -> ``torchlens.fastlog.cleanup.cleanup_partial('<attacker_dir>')``.
+    """``__reduce__`` -> ``torchlens.recording.cleanup.cleanup_partial('<attacker_dir>')``.
 
     On the pre-r22 tree the PUBLIC-named ``cleanup_partial`` slipped the verb
     denylist and pickle INVOKED it, ``shutil.rmtree``-ing an attacker-named directory
@@ -282,7 +282,7 @@ class _CleanupPartialGadget:
         self._victim = victim_dir
 
     def __reduce__(self):  # type: ignore[no-untyped-def]
-        from torchlens.fastlog.cleanup import cleanup_partial
+        from torchlens.recording.cleanup import cleanup_partial
 
         return (cleanup_partial, (self._victim,))
 
@@ -346,12 +346,12 @@ def test_public_side_effecting_first_party_callables_denied() -> None:
     """The public-name fallthrough is GONE: fs / state mutators fail the gate + door."""
 
     from torchlens._utils._torch_compat import mark_torch_capability_missing
-    from torchlens.fastlog.cleanup import cleanup_partial
+    from torchlens.recording.cleanup import cleanup_partial
 
     assert not is_inert_first_party_callable(cleanup_partial)
     assert not is_inert_first_party_callable(mark_torch_capability_missing)
     with pytest.raises(pickle.UnpicklingError):
-        _load_ref("torchlens.fastlog.cleanup", "cleanup_partial")
+        _load_ref("torchlens.recording.cleanup", "cleanup_partial")
     with pytest.raises(pickle.UnpicklingError):
         _load_ref("torchlens._utils._torch_compat", "mark_torch_capability_missing")
 

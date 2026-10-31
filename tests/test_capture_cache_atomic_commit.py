@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.user_funcs as user_funcs
+import torchlens._user_funcs as user_funcs
 
 
 class _CacheModel(nn.Module):

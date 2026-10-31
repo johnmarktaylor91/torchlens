@@ -21,8 +21,8 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._postprocess as pp
-from torchlens.fastlog import Recorder
-from torchlens.fastlog._halt import StopSignal
+from torchlens.recording import Recorder
+from torchlens.recording._halt import StopSignal
 
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
@@ -222,7 +222,7 @@ def test_halted_trace_refresh_refuses_typed() -> None:
     re-arm follow-on.
     """
 
-    from torchlens.capture.outcome import CaptureOutcomeError
+    from torchlens._capture.outcome import CaptureOutcomeError
 
     model = ThreeStageModel()
     x = torch.ones(1, 3)
@@ -241,7 +241,7 @@ def test_halted_trace_fast_run_refuses_typed() -> None:
     provider.
     """
 
-    from torchlens.capture.outcome import CaptureOutcomeError
+    from torchlens._capture.outcome import CaptureOutcomeError
 
     model = ThreeStageModel()
     x = torch.ones(1, 3)
@@ -322,7 +322,7 @@ def test_keyboard_interrupt_propagates_without_partial_banner() -> None:
 def test_recorder_keyboard_interrupt_leaves_no_product() -> None:
     """Recorder BaseException: propagates; `.recording` raises typed."""
 
-    from torchlens.fastlog.exceptions import RecorderStateError
+    from torchlens.recording.exceptions import RecorderStateError
 
     recorder = Recorder(FailingForwardModel(KeyboardInterrupt()), save=lambda ctx: True)
     with pytest.raises(KeyboardInterrupt), recorder as active:

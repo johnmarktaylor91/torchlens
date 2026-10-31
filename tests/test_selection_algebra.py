@@ -643,7 +643,7 @@ def test_resolver_refusals_no_index_space_and_non_tensor(log, monkeypatch):
 def test_facet_lift_and_refusal_rows(log):
     """FacetSpec lifts to its write region; unsaved home refuses value_not_saved."""
 
-    from torchlens.semantic.facets import FacetSpec
+    from torchlens._semantic.facets import FacetSpec
 
     op = log["relu_1_2"].ops[0]
     spec = FacetSpec.from_home(op)

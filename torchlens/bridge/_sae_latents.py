@@ -235,7 +235,7 @@ class _SAEFamily:
     def _spec(self, record: Any, index: int | tuple[int, ...] | None) -> Any:
         """Build the codec facet spec anchored to ``record``."""
 
-        from ..semantic.facets import FacetSpec, TransformPrimitive
+        from .._semantic.facets import FacetSpec, TransformPrimitive
 
         codec = _LatentCodec(self.name, self.sae, index)
         primitive = TransformPrimitive("codec", (codec,), capability_class="codec")
@@ -417,7 +417,7 @@ def register(name: str, sae: Any, *, site: Any) -> None:
         ``sae_family_name_taken`` when the name is registered already.
     """
 
-    from ..semantic import _families
+    from .._semantic import _families
 
     require_codec(sae, "tl.bridge.sae.register")
     if (
@@ -451,7 +451,7 @@ def unregister(name: str) -> None:
         ``sae_family_unknown`` when nothing is registered under ``name``.
     """
 
-    from ..semantic import _families
+    from .._semantic import _families
 
     if name not in _families._FACET_FAMILIES:
         registered = sorted(_families._FACET_FAMILIES)

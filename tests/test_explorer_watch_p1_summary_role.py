@@ -22,7 +22,7 @@ from torchlens._ir.summary_role import (
     transform_role,
 )
 from torchlens._training_validation import TrainingModeConfigError
-from torchlens.fastlog import CaptureSpec
+from torchlens.recording import CaptureSpec
 
 
 def _histo64(t: torch.Tensor) -> torch.Tensor:

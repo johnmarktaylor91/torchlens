@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._geometry_audit import (
+from torchlens._visualization._geometry_audit import (
     audit_layout,
     compute_usability_envelope,
     graphviz_version,

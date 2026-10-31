@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import facets as facets_mod
+from torchlens._semantic import facets as facets_mod
 
 
 class _LinearModel(nn.Module):

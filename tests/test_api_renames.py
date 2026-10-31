@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import user_funcs
+from torchlens import _user_funcs as user_funcs, _visualization
 from torchlens.options import CaptureOptions, SaveOptions, StorageOptions, VisualizationOptions
 
 _VISUALIZATION_CASES = [
@@ -202,7 +202,7 @@ def test_show_model_graph_new_recurrence_detection_has_no_warning(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.visualization.show_model_graph(_TinyModel(), _tiny_input(), recurrence_detection=False)
+        _visualization.show_model_graph(_TinyModel(), _tiny_input(), recurrence_detection=False)
 
     assert captured["recurrence_detection"] is False
     assert _deprecation_messages(records) == []
@@ -217,7 +217,7 @@ def test_show_model_graph_recurrence_detection(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.visualization.show_model_graph(_TinyModel(), _tiny_input(), recurrence_detection=False)
+        _visualization.show_model_graph(_TinyModel(), _tiny_input(), recurrence_detection=False)
 
     assert captured["recurrence_detection"] is False
     assert not _deprecation_messages(records)
@@ -246,7 +246,7 @@ def test_visualization_options_group_supports_every_field(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.visualization.show_model_graph(
+        _visualization.show_model_graph(
             _TinyModel(),
             _tiny_input(),
             visualization=VisualizationOptions(**option_kwargs),
@@ -270,7 +270,7 @@ def test_visualization_defaults_preserve_per_function_behavior(
     )
     assert dummy_log.render_calls == []
 
-    tl.visualization.show_model_graph(_TinyModel(), _tiny_input())
+    _visualization.show_model_graph(_TinyModel(), _tiny_input())
     assert dummy_log.render_calls[-1]["vis_mode"] == "unrolled"
 
 

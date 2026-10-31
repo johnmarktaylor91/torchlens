@@ -10,13 +10,13 @@ import types
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
 
+from ._capture.arg_positions import _normalize_func_name
 from ._errors import ArgumentTypeError
 from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
-from .capture.arg_positions import _normalize_func_name
-from .fastlog.options import PredicateFn
-from .fastlog.types import RecordContext
 from .intervention.selectors import BaseSelector
 from .options import SaveOptions
+from .recording.options import PredicateFn
+from .recording.types import RecordContext
 
 if TYPE_CHECKING:
     from .options import CaptureOptions

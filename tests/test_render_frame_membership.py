@@ -23,8 +23,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.visualization._rank_layout_internal.layout as layout_mod
-from torchlens.visualization._geometry_audit import run_layout_json
+import torchlens._visualization._rank_layout_internal.layout as layout_mod
+from torchlens._visualization._geometry_audit import run_layout_json
 
 
 class _SharedChildParent(nn.Module):
@@ -192,8 +192,8 @@ def test_rank_layout_edit_marks_keep_module_frames(
 def test_rank_size_estimate_ignores_edit_rows() -> None:
     """An edited node is sized from its unedited rows, whatever its edit rows say."""
 
-    from torchlens.visualization._edit_marks import EditRow
-    from torchlens.visualization.node_spec import render_lines_to_html
+    from torchlens._visualization._edit_marks import EditRow
+    from torchlens._visualization.node_spec import render_lines_to_html
 
     rows = ["linear_1_1", "(1, 8), 32 B", "params: weight (8, 8)"]
     plain = render_lines_to_html(rows)

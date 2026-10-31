@@ -15,8 +15,8 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from torchlens.visualization import lenses
-from torchlens.visualization.lenses.audit import CORPUS
+from torchlens._visualization import lenses
+from torchlens._visualization.lenses.audit import CORPUS
 
 
 def _member(name: str) -> Any:

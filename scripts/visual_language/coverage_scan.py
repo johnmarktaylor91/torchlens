@@ -34,7 +34,7 @@ SILENT_CALLS = frozenset(
 EMIT_ATTRS = frozenset({"node", "edge", "attr", "subgraph"})
 EMIT_NAMES = frozenset({"NodeSpec", "LegendRow"})
 
-#: Label-template sources: file (relative to ``torchlens/visualization``) and the
+#: Label-template sources: file (relative to ``torchlens/_visualization``) and the
 #: functions whose strings count (``None`` means the whole file).
 LABEL_SOURCES: Mapping[str, tuple[str, ...] | None] = {
     "_label_format.py": None,
@@ -133,7 +133,7 @@ def scanned_files() -> tuple[Path, ...]:
 
     def wanted(rel: str) -> bool:
         return (
-            rel.startswith("torchlens/visualization/")
+            rel.startswith("torchlens/_visualization/")
             or rel == "torchlens/_vocab/node_spec.py"
             or rel.startswith("torchlens/experimental/dagua/")
         )
@@ -403,7 +403,7 @@ def _collapse_token_templates(path: Path) -> Iterator[tuple[str, int]]:
 def label_template_universe() -> tuple[SourceItem, ...]:
     """Label-template prefixes from the label and edge-label builders, first location each."""
 
-    vis = PACKAGE_ROOT / "visualization"
+    vis = PACKAGE_ROOT / "_visualization"
     first: dict[str, str] = {}
     for name, wanted in LABEL_SOURCES.items():
         path = (vis / name).resolve()
@@ -470,7 +470,7 @@ def emission_site_universe(files: Iterable[Path] | None = None) -> tuple[Emissio
 def encoding_legend_texts() -> list[LegendText]:
     """Encoding-legend line prefixes: ``NOTE_*`` constants and the legend-row builders."""
 
-    path = (PACKAGE_ROOT / "visualization" / "_encoding.py").resolve()
+    path = (PACKAGE_ROOT / "_visualization" / "_encoding.py").resolve()
     out: list[LegendText] = []
     for node in _tree(path).body:
         if (

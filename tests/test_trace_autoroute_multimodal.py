@@ -9,8 +9,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._user_funcs as user_funcs
 import torchlens.bridge.transformers as hf_bridge
-import torchlens.user_funcs as user_funcs
 
 
 class _DictModel(nn.Module):

@@ -16,7 +16,7 @@ import torchlens as tl
 from torchlens import _autoroute as autoroute
 from torchlens._autoroute._builtin_output import load_imagenet1k_labels
 from torchlens._data_classes.trace import ResolvedPostprocessing
-from torchlens.user_funcs import semantic_output_cache_key
+from torchlens._user_funcs import semantic_output_cache_key
 
 
 def _decoded_rows(trace: tl.Trace) -> list[dict[str, Any]]:

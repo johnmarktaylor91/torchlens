@@ -161,7 +161,7 @@ def test_provenance_is_the_preamble_byte_for_byte() -> None:
     """Memo 3.6: the relocated preamble is served exactly."""
 
     trace = tl.trace(_Toy(), torch.randn(2, 8))
-    from torchlens.visualization._summary_internal._discoverability import (
+    from torchlens._visualization._summary_internal._discoverability import (
         format_discoverability_summary,
     )
 

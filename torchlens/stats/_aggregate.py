@@ -412,7 +412,7 @@ def _run_compiled_aggregate_batch(
     # data_classes -> stats import edge puts this module inside an import
     # SCC where mypy degrades facade names to implicit-Any and refuses the
     # call ("_Any? not callable").
-    from ..fastlog import _record_one_shot
+    from ..recording import _record_one_shot
 
     record: Any = _record_one_shot.record
 
@@ -583,8 +583,8 @@ def _aggregate_loop(
 
     # Real-home import (not the lazy root facade) for the same SCC/implicit-
     # Any reason as the fastlog.record import above.
+    from .._user_funcs import trace
     from ..options import CaptureOptions
-    from ..user_funcs import trace
 
     grad_loss_fn = loss_fn
 

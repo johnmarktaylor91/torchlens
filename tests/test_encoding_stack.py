@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._stacking import (
+from torchlens._visualization._stacking import (
     STACK_AUTO_DISPLAY,
     check_lockstep_license,
     resolve_stack_by,
@@ -413,7 +413,7 @@ def test_stack_composes_with_color(lockstep_log: tl.Trace, tmp_path: Path) -> No
 
 
 def test_request_hash_ignores_stack_fields() -> None:
-    from torchlens.visualization.request import ResolvedRenderRequest
+    from torchlens._visualization.request import ResolvedRenderRequest
 
     base = ResolvedRenderRequest()
     stacked = ResolvedRenderRequest(stack_by=True, encoding=object())
@@ -423,7 +423,7 @@ def test_request_hash_ignores_stack_fields() -> None:
 def test_rank_groups_ride_render_ir(lockstep_log: tl.Trace, tmp_path: Path) -> None:
     """The rank groups travel on RenderIR as a typed record (memo 4.1)."""
 
-    from torchlens.visualization.render_ir import RenderIRRankGroup
+    from torchlens._visualization.render_ir import RenderIRRankGroup
 
     _draw(lockstep_log, tmp_path, stack_by=True)
     state = _state(lockstep_log)

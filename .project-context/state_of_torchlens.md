@@ -15,9 +15,9 @@ visualization helpers, optional bridges, and stub appliance namespaces.
 validation, and core data-class names for the current 2.x surface.
 
 ### Capture and Extraction
-- `trace` - backend-resolved capture returning `Trace`; `torchlens.user_funcs.trace`.
-- `fastlog` - torch-only sparse predicate-recording namespace; `torchlens.fastlog`.
-- `record` - torch-only sparse predicate recorder returning `Recording`; `torchlens.fastlog._record_one_shot.record`.
+- `trace` - backend-resolved capture returning `Trace`; `torchlens._user_funcs.trace`.
+- `fastlog` - torch-only sparse predicate-recording namespace; `torchlens.recording`.
+- `record` - torch-only sparse predicate recorder returning `Recording`; `torchlens.recording._record_one_shot.record`.
 - `pluck` - capture one layer activation by label/query; `torchlens.__init__.pluck` (the removed `peek` raises a teaching redirect).
 - `extract` - extract one or more layer activations; `torchlens.__init__.extract`.
 - `extract_dataset` - batched extraction helper over an iterable; `torchlens.__init__.extract_dataset` (the removed `batched_extract` raises a teaching redirect).
@@ -80,20 +80,20 @@ validation, and core data-class names for the current 2.x surface.
 | `torchlens/__init__.py` | Top-level exports, lazy facade, teaching redirects for removed names, `pluck`, `extract`, `extract_dataset` | Public API shape |
 | `torchlens/_state.py` | Logging toggle, active log, wrapper maps, prepared model registry | Global state and decoration invariants |
 | `torchlens/_constants.py` | FIELD_ORDER tuples, torch function discovery | Field additions and wrapper coverage |
-| `torchlens/user_funcs.py` | Capture, summary, graph display, validation entry points | Main user workflows |
+| `torchlens/_user_funcs.py` | Capture, summary, graph display, validation entry points | Main user workflows |
 | `torchlens/options.py` | Capture/save/vis/replay/intervention/streaming options | Grouped option behavior |
 | `torchlens/observers.py` | `tap`, `span`, active span storage | User instrumentation during capture |
 | `torchlens/_io/` | Portable bundle internals, manifests, lazy refs, streaming writer | `.tlspec` and save/load implementation |
 | `torchlens/io/` | Public I/O/admin helpers | `inspect_tlspec`, `detect_tlspec_format`, moved admin APIs |
-| `torchlens/capture/` | Forward/backward runtime logging | Wrapper handoff and raw `Op` construction |
+| `torchlens/_capture/` | Forward/backward runtime logging | Wrapper handoff and raw `Op` construction |
 | `torchlens/backends/torch/` | Lazy torch wrapping and model preparation | Torch namespace lifecycle, module wrappers |
 | `torchlens/_postprocess/` | 26-step graph cleanup/finalization | Labels, loops, conditionals, modules, streaming finalization |
 | `torchlens/_data_classes/` | `Trace`, `Layer`, `Op`, module/param/buffer/grad records | User-visible capture data structures |
 | `torchlens/validation/` | Forward/backward replay, invariants, `.tlspec` schema | Correctness checks |
-| `torchlens/visualization/` | Graphviz dot and the pure-Python rank layout, NodeSpec, themes and lenses, overlays, bundle diff, fastlog preview | Rendering and visual customization |
+| `torchlens/_visualization/` | Graphviz dot and the pure-Python rank layout, NodeSpec, themes and lenses, overlays, bundle diff, fastlog preview | Rendering and visual customization |
 | `torchlens/intervention/` | Bundle, sites, selectors, hooks, helpers, replay/rerun/save | Intervention API |
 | `torchlens/intervention/_topology/`, `torchlens/bundle/` | Bundle supergraph, topology diff, node views, metrics | Cross-log comparisons |
-| `torchlens/fastlog/` | Sparse predicate recording and storage | Low-overhead selected activation capture |
+| `torchlens/recording/` | Sparse predicate recording and storage | Low-overhead selected activation capture |
 | `torchlens/bridge/` | Optional external-tool adapters | Captum, HF, SHAP, SAE Lens, profiler, LIT, etc. |
 | `torchlens/compat/` | Migration helpers and compatibility report | Interop with torchextractor, FX, HF/timm, torchshow/lovely |
 | `torchlens/export/` | Static SVG/HTML/tracing exports | Artifact export without full viewer extras |
@@ -297,7 +297,7 @@ releases; keep the 2.x family locked unless release work explicitly says otherwi
 |----------|------------|
 | Where is the logging toggle? | `torchlens/_state.py` |
 | Where does wrapping happen? | `torchlens/backends/torch/wrappers.py`, `torchlens/backends/torch/model_prep.py` |
-| Where is the main forward capture? | `torchlens/capture/trace.py` |
+| Where is the main forward capture? | `torchlens/_capture/trace.py` |
 | Where are raw operation records built? | `torchlens/backends/torch/ops.py` and its `_ops_*.py` helpers |
 | Where are inputs/buffers logged? | `torchlens/backends/torch/sources.py` |
 | Where is backward capture? | `torchlens/backends/torch/backward.py` |
@@ -309,11 +309,11 @@ releases; keep the 2.x family locked unless release work explicitly says otherwi
 | Where is `Trace.__getitem__` behavior? | `torchlens/_data_classes/interface.py` and `trace.py` |
 | Where is portable save/load? | `torchlens/_io/bundle.py`, `torchlens/_io/tlspec.py` |
 | Where is manifest schema validation? | `torchlens/validation/__init__.py`, `torchlens/schemas/tlspec_manifest_v1.json`, `torchlens/schemas/tlspec_manifest_v2.json` |
-| Where is Graphviz rendering? | `torchlens/visualization/_render_dot.py` (orchestration) + `_render_nodes.py`/`_render_edges.py`/`_render_leaf.py` (emission) |
-| Where is the large-graph rank layout? | `torchlens/visualization/_rank_layout_internal/layout.py` |
-| Where is NodeSpec customization? | `torchlens/visualization/node_spec.py`, `torchlens/visualization/modes.py` |
-| Where is bundle diff rendering? | `torchlens/visualization/bundle_diff.py` |
-| Where is fastlog storage decided? | `torchlens/fastlog/_storage_resolver.py` |
+| Where is Graphviz rendering? | `torchlens/_visualization/_render_dot.py` (orchestration) + `_render_nodes.py`/`_render_edges.py`/`_render_leaf.py` (emission) |
+| Where is the large-graph rank layout? | `torchlens/_visualization/_rank_layout_internal/layout.py` |
+| Where is NodeSpec customization? | `torchlens/_visualization/node_spec.py`, `torchlens/_visualization/modes.py` |
+| Where is bundle diff rendering? | `torchlens/_visualization/bundle_diff.py` |
+| Where is fastlog storage decided? | `torchlens/recording/_storage_resolver.py` |
 | Where are bridge integrations? | `torchlens/bridge/` |
 | Where is compat reporting? | `torchlens/compat/_report.py` |
 | Where are observer taps/spans? | `torchlens/observers.py` |

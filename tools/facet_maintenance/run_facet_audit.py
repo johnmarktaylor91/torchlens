@@ -1,7 +1,7 @@
 """Repeatable facet-coverage audit producing recipe PROPOSAL inputs.
 
 Runs a roster of models through TorchLens, computes
-``torchlens.semantic.facet_coverage`` for each, and writes ONE review document
+``torchlens._semantic.facet_coverage`` for each, and writes ONE review document
 aggregating classified/unclassified modules and typed facet absences. The
 output is evidence for the maintenance sweep prompt
 (``tools/facet_maintenance/DISCOVER_FACETS.md``); this script NEVER registers,
@@ -170,7 +170,7 @@ def run_audit(roster: Iterable[tuple[str, Any, Any]], out_dir: Path) -> Path:
     """
 
     import torchlens as tl
-    from torchlens.semantic import facet_coverage
+    from torchlens._semantic import facet_coverage
 
     sections: list[str] = [_BANNER]
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")

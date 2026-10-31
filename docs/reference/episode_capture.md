@@ -237,7 +237,7 @@ every spelling here is DOCUMENTED-UNSTABLE pending the naming session):
   (outranks the `forced`/escalation bases; `token_feed` still discloses a
   forced feed separately).
 - **Per-segment facts.** `trace.episode_coupling.segments` (also
-  `torchlens.capture._episode_coupling.coupling_segments`) derives
+  `torchlens._capture._episode_coupling.coupling_segments`) derives
   contiguous step runs that never span a measured break join
   (`exogenous`/`declared` grades): per-segment step ranges and fire-count
   totals, with unchecked joins and unmeasured envelopes disclosed. A claim
@@ -275,7 +275,7 @@ carries the settled product on `exc.partial_log` — recover it with
 The per-step ledger is evidence about ONE executed forward. A fresh
 re-execution product — `trace.run(inputs=...)` on any provider, including
 guarded-fast — never carries the original capture's episode ledger: the
-annotations travel policy (`torchlens/capture/_annotations_travel.py`)
+annotations travel policy (`torchlens/_capture/_annotations_travel.py`)
 replaces it with an inert in-key note
 (`episode_evidence_dropped_fresh_execution`) at the provider settlement
 finalizer, and capture-time observer values (`logged_values`) are removed
@@ -495,7 +495,7 @@ reproduction.
 
 A failed or suspect cheap-tier episode escalates by re-running the WHOLE
 episode wrapped, disclosed — never a partial product. Build the declaration
-with `torchlens.capture._episode_ledger.escalation_spec(producer,
+with `torchlens._capture._episode_ledger.escalation_spec(producer,
 stepped_module=..., reason=...)`: it derives `escalated_from` (a digest over
 the producer's persisted outcome payload + ledger rows), the closed-vocabulary
 `reason` (`step_failed` / `divergence` / `requested`), and the producer's

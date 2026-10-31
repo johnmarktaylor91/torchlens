@@ -80,10 +80,10 @@ _NEW_FILE_LINE_CAP = 2000
 #: with a DEBT RECORD, not an accepted new normal. PRE-SPRINT BASELINE at
 #: kickoff 75439a67 (the debloat pass's target to return to or beat):
 #:   _io/bundle.py 4450 | backends/torch/backward.py 3800
-#:   bundle/__init__.py 2450 | capture/trace.py 2200
+#:   bundle/__init__.py 2450 | _capture/trace.py 2200
 #:   _data_classes/trace.py 3750 | options.py 2425 | user_funcs.py 3900
 #:   _runnable_state.py 2700 (L4 D18 mode-aware projector + snapshot-restore)
-#:   visualization/_render_edges.py 2350 (portable rolled-edge label placement)
+#:   _visualization/_render_edges.py 2350 (portable rolled-edge label placement)
 #: 2026-08-16 L6 merge settle (same debt record): three more ceilings
 #: re-stepped for reviewed L6 selection-algebra / edge-substitution mass
 #: (edge boundary verdict in validation/core, tier-(ii) edge stores on Op,
@@ -147,7 +147,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 4250 -> 4100 (2026-10-05 rung-1 splitsrc): the frontier records and
     # merge algebra split to _collapse_frontier.py; re-keyed to the next
     # 50-line step above the post-split measurement (4082).
-    "torchlens/visualization/collapse_optimizer.py": 4100,
+    "torchlens/_visualization/collapse_optimizer.py": 4100,
     # 4400 -> 4403 (2026-08-27 C01 item 5): the _selective_save relocation
     # re-sorted one import into a 4-line parenthesized block (+3 mechanical
     # lines, zero behavior); the god file itself did not grow.
@@ -184,7 +184,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/_io/bundle.py": 4450,
     "torchlens/_io/runnable_load.py": 3850,
     # 4200 -> 4050: the wave-0 governance sweep extracted the structure-only
-    # Layer-0 entry contract to capture/_structure_only_entry.py; re-keyed
+    # Layer-0 entry contract to _capture/_structure_only_entry.py; re-keyed
     # down to the next 50-line step above the post-split measurement.
     # 4050 -> 4055 (2026-08-19 async-disk lane, measured at merge): tl.to_disk
     # gains the documented async_writes/max_pending_bytes knobs. The lane settled
@@ -280,7 +280,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 4400 -> 4450 (2026-10-29 measure.2): the measure_host_peak_memory knob is
     # threaded like track_device_memory (signature, docstring, trace stamp, the
     # chunked rebuild and the capture call); the file sat exactly at 4400.
-    "torchlens/user_funcs.py": 4450,
+    "torchlens/_user_funcs.py": 4450,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature
     # lanes landed reviewed fix mass on the merged tree (measures 4457);
@@ -294,7 +294,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 3900 -> 3925 (F24 observe): session-time FieldPolicy.DROP rows +
     # load-fill defaults for the observe stores (saved-band decomposition,
     # device-memory samples, nonfinite-prefix facts); the machinery itself
-    # lives in torchlens/observe and torchlens/capture/_nonfinite_prefix.py.
+    # lives in torchlens/observe and torchlens/_capture/_nonfinite_prefix.py.
     # 3900 -> 3940 (2026-08-28 F33 weightsfree): Trace.check_plan (the D14
     # audit-only plan-check verb) is a Trace method by contract (frozen root
     # budget: no new tl.* name); conscious raise.
@@ -491,7 +491,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 2100 -> 2150 (2026-08-29 F11 T74b fix): +9 lines documenting the
     # `fingerprints` parameter on the three run-fold assemblers (the D417
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
-    "torchlens/visualization/auto_collapse.py": 2150,
+    "torchlens/_visualization/auto_collapse.py": 2150,
     "torchlens/validation/exemptions.py": 3000,
     # 2700 -> 2800 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
@@ -500,7 +500,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # merged tree measures 2753. Next 50-line step above it.
     "torchlens/backends/paddle/backend.py": 2800,
     "torchlens/_runnable_state.py": 2850,
-    "torchlens/capture/arg_positions.py": 2650,
+    "torchlens/_capture/arg_positions.py": 2650,
     "torchlens/backends/jax/jaxpr.py": 2550,
     "torchlens/_capture_state_helpers.py": 2350,
     # 2500 -> 2550 (2026-08-29 F10 re-reconcile): merge union -- the F03
@@ -528,12 +528,12 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # (bug 27) with its coherent get/repr in-place -- the accessor lives
     # with its Layer owner; +11 measured lines, next 50-line step.
     "torchlens/_postprocess/loop_grouping_adapter.py": 2600,
-    "torchlens/visualization/_render_leaf.py": 2400,
+    "torchlens/_visualization/_render_leaf.py": 2400,
     # Re-keyed down 2450 -> 2350 (r7 R43-F2 slack rule) after the F13 legend
     # rewrite deleted the six-node emitter from this module; 2350 -> 2100 after
     # forks.11 FK5 midpoint-composed the rolled channel and deleted the tuned
     # head/tail placement classes.
-    "torchlens/visualization/_render_edges.py": 2100,
+    "torchlens/_visualization/_render_edges.py": 2100,
     # Re-keyed 2400 -> 2300 at the C03 fix cycle (2026-08-27): the site-key-first
     # compat checker (check_spec_compat + SpecCompat/TargetManifestDiff and its
     # private helpers) moved to intervention/spec_compat.py, decomposed under
@@ -568,14 +568,14 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/_io/scrub.py": 2100,
     "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/_postprocess/ast_branches.py": 2250,
-    "torchlens/visualization/_render_nodes.py": 2150,
+    "torchlens/_visualization/_render_nodes.py": 2150,
     # 2100 -> 2150 (2026-10-02 ci-fix fast2 settle): the numpy bounded-scalar
     # reconstructor trust fix (`fix(io): trust numpy's bounded scalar
     # reconstructor during unpickle`) added +8 reviewed security-fix lines,
     # landing the file at 2101. Reviewed raise with a stated reason; next
     # 50-line step above the measurement.
     "torchlens/_io/_safe_unpickle.py": 2150,
-    "torchlens/visualization/_render_flow.py": 2100,
+    "torchlens/_visualization/_render_flow.py": 2100,
     # Raised 2250 -> 2300 at the A08 persistence-honesty lane (2026-08-26): the
     # +16 lines are the streamed-bundle settlement seam (WT1 A-IV item 18) --
     # the one publish hook that lands the settled capture-outcome attestation
@@ -591,7 +591,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # unions measure 2354 (each parent grew inside its own slack; the F20
     # parent already carried 2354 from the T67f union). Re-step to the next
     # 50-line step; no new growth licensed, debloat target unchanged.
-    "torchlens/capture/trace.py": 2400,
+    "torchlens/_capture/trace.py": 2400,
     "torchlens/backends/torch/completeness_witness.py": 2100,
 }
 

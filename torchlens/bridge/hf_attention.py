@@ -348,10 +348,10 @@ def _check_against_sdpa(name: str, facts: _CallFacts) -> None:
     """Check one call's output against SDPA at the reconstruction tolerance.
 
     Uses the same cancellation-aware budget as the semantic SDPA ``z``
-    reconstruction gate (``torchlens.semantic.tolerances``).
+    reconstruction gate (``torchlens._semantic.tolerances``).
     """
 
-    from torchlens.semantic.tolerances import within_reconstruction_tolerance
+    from torchlens._semantic.tolerances import within_reconstruction_tolerance
 
     attn_mask, is_causal = _sdpa_reference_mask(facts)
     if attn_mask is not None and attn_mask.is_floating_point():

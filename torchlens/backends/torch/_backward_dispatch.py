@@ -5,7 +5,7 @@ A backward that runs through a capture that requested it (``backward_ready``,
 which records every ATen call dispatched during that backward as a value-free
 :class:`DispatchedOp` (operator, shapes, dtypes, the GradFn call it ran under)
 and counts it with the executed-backward rules in
-:mod:`torchlens.capture.flops` (fma2, matmul and convolution families). A
+:mod:`torchlens._capture.flops` (fma2, matmul and convolution families). A
 capture that requests no backward never enters the window and pays nothing.
 
 The records are session-time facts held weakly per trace, one tuple per
@@ -31,8 +31,8 @@ from typing import Any, TypeVar
 
 import torch
 
+from ..._capture.flops import compute_dispatched_op_flops, dispatch_op_family
 from ..._utils._torch_compat import get_current_autograd_node_fn
-from ...capture.flops import compute_dispatched_op_flops, dispatch_op_family
 from ._aten_capture import _capture_backward_aten
 from ._backward_markers import _ACTIVE_BACKWARD_GRAD_FN_REFS, executing_grad_fn_ref
 from ._modes import _TorchLensDispatchMode

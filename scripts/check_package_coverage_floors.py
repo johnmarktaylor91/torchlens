@@ -28,7 +28,7 @@ from collections import defaultdict
 #: backends 55.0, data_classes 72.1, _io 69.8, intervention 66.1,
 #: utils 66.0, merged 87.5, _trace_core 87.7, visualization 64.1.
 PACKAGE_FLOORS: dict[str, float] = {
-    "torchlens/capture": 74.0,
+    "torchlens/_capture": 74.0,
     "torchlens/postprocess": 80.0,
     "torchlens/validation": 54.0,
     "torchlens/backends": 48.0,
@@ -38,7 +38,7 @@ PACKAGE_FLOORS: dict[str, float] = {
     "torchlens/utils": 59.0,
     "torchlens/merged": 80.0,
     "torchlens/_trace_core": 80.0,
-    "torchlens/visualization": 57.0,
+    "torchlens/_visualization": 57.0,
 }
 
 

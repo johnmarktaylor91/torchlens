@@ -17,12 +17,12 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_join import (
+from torchlens._capture._episode_join import (
     EpisodeJoinSession,
     _select_entry,
     validate_step_join_envelope,
 )
-from torchlens.capture._episode_ledger import ResolvedEpisode
+from torchlens._capture._episode_ledger import ResolvedEpisode
 from torchlens.options import EpisodeOptions
 
 V = 16

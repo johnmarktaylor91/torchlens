@@ -1,6 +1,6 @@
 """The trace() entry door for the declared/inferred/kwargs-only rungs (F17 B8).
 
-Extracted verbatim from ``torchlens.user_funcs`` (god-file ratchet R43): the
+Extracted verbatim from ``torchlens._user_funcs`` (god-file ratchet R43): the
 capture-shaping-kwarg default table, its comparator, and the ladder capture
 driver ``trace_via_ladder`` that ``tl.trace`` re-enters through. The gold rung
 never comes through this module -- ``trace()`` handles a real input inline.
@@ -102,7 +102,7 @@ def _trace_via_ladder(
         The finished trace, carrying its input-provenance record.
     """
 
-    from ..user_funcs import trace
+    from .._user_funcs import trace
     from ._plan import resolve_rung
     from ._resolve import attach_provenance, resolve_inputs
 

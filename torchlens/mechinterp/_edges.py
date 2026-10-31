@@ -33,7 +33,7 @@ from typing import Any, Literal
 
 import torch
 
-from ..semantic.tolerances import within_reconstruction_tolerance
+from .._semantic.tolerances import within_reconstruction_tolerance
 from ._anchors import resolve_lm_head
 from ._edge_sources import LeafWriter, classify_leaf, pre_norm_input, writer_leaves
 from ._errors import refuse

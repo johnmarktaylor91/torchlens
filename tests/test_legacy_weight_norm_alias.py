@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.user_funcs import _validate_forward_pass_torch
+from torchlens._user_funcs import _validate_forward_pass_torch
 
 
 def _legacy_weight_norm(module: nn.Module) -> nn.Module:

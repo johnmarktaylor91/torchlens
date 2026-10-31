@@ -112,7 +112,7 @@ def _register_module_facet_recipes() -> Iterator[None]:
     collection saw different recipe/provenance state (hunt-b2-sol R76/R77).
     """
 
-    from torchlens.semantic import facets as _facets
+    from torchlens._semantic import facets as _facets
 
     saved = list(_facets._REGISTRY)
     tl.facets.register(

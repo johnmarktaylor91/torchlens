@@ -404,7 +404,7 @@ def test_model_device_selection_params_buffers_and_paramless_fallback(
     and computed the whole forward there (H200 finding, 2026-08-18).
     """
 
-    capture_trace = importlib.import_module("torchlens.capture.trace")
+    capture_trace = importlib.import_module("torchlens._capture.trace")
     original = capture_trace._fetch_label_move_input_tensors
     seen_devices: list[Any] = []
 

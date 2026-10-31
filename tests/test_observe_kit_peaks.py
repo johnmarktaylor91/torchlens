@@ -15,7 +15,7 @@ TORCHLENS_DIR = Path(tl.__file__).resolve().parent
 
 #: Display packages whose readers of a pass-level peak must route through the
 #: gate. Capture/schema internals legitimately read the raw fields.
-_DISPLAY_PACKAGES = ("report", "export", "visualization", "notebook", "bridge", "observe")
+_DISPLAY_PACKAGES = ("report", "export", "_visualization", "notebook", "bridge", "observe")
 
 #: Files sanctioned to read the raw fields inside display packages: the gate
 #: itself.

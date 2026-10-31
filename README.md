@@ -527,7 +527,7 @@ For training loops, build the sparse recorder once and log whichever steps
 you like; discovery helpers list what there is to ask for:
 
 ```python
-from torchlens.fastlog import Recorder
+from torchlens.recording import Recorder
 from torchlens._utils import list_modules, list_ops
 
 with Recorder(model, save=tl.func('relu')) as rec:
@@ -544,7 +544,7 @@ not), and custom ops get first-class cost rules:
 
 ```python
 # API sketch; register in your application before tracing (process-global registry).
-from torchlens.capture.flops import register_op_rule
+from torchlens._capture.flops import register_op_rule
 register_op_rule('my_custom_op', lambda output_shape, param_shapes, args, kwargs: 0)
 ```
 

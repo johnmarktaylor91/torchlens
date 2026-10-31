@@ -60,7 +60,7 @@ def test_live_view_handle_reads_route_through_index() -> None:
     assert events is not None
     # after postprocess the index may be cleared by the working-projection
     # release; the routing contract is asserted structurally instead:
-    from torchlens.capture import projections
+    from torchlens._capture import projections
 
     assert hasattr(projections, "_grad_fn_handle_from_index")
 

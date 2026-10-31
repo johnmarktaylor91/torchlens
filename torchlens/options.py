@@ -56,7 +56,7 @@ from ._vocab.node_spec import NodeSpec
 if TYPE_CHECKING:
     from ._data_classes.layer import Layer
     from ._data_classes.module import Module
-    from .fastlog.options import RecordingOptions as RecordingOptions
+    from .recording.options import RecordingOptions as RecordingOptions
 
 T = TypeVar("T")
 _ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
@@ -1891,7 +1891,7 @@ if TYPE_CHECKING:
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "HtmlReportOptions": ("torchlens.export._report", "HtmlReportOptions"),
-    "RecordingOptions": ("torchlens.fastlog.options", "RecordingOptions"),
+    "RecordingOptions": ("torchlens.recording.options", "RecordingOptions"),
 }
 
 

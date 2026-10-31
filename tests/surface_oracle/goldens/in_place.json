@@ -1242,7 +1242,7 @@
     "class_qualname": "capture_oracle._models.InPlaceModel",
     "cls": null,
     "code_context": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
@@ -1398,7 +1398,7 @@
      "\"pre_hook_invocations\"": 0
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -1614,7 +1614,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -1647,7 +1647,7 @@
       "\"add_1_2:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
     "flops_total": 8,
@@ -1977,7 +1977,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -2010,7 +2010,7 @@
       "\"clone_1_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -2353,7 +2353,7 @@
       "\"input_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -2661,7 +2661,7 @@
       "\"output_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
     "flops_total": 0,
@@ -2996,7 +2996,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -3029,7 +3029,7 @@
       "\"relu_1_3:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
     "flops_total": 8,
@@ -3307,7 +3307,7 @@
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": "<raises AttributeError>",
-   "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_distributed_plane_p": null,
@@ -3627,7 +3627,7 @@
    "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
-   "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "facet_registry_snapshot": "<torchlens._semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
    "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
    "forward_duration": "<measured>",
@@ -4020,7 +4020,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [
@@ -5353,7 +5353,7 @@
     "class_qualname": "capture_oracle._models.InPlaceModel",
     "cls": null,
     "code_context": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
@@ -5509,7 +5509,7 @@
      "\"pre_hook_invocations\"": 0
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -5725,7 +5725,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -5758,7 +5758,7 @@
       "\"add_1_2:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
     "flops_total": 8,
@@ -6088,7 +6088,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -6121,7 +6121,7 @@
       "\"clone_1_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -6464,7 +6464,7 @@
       "\"input_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -6772,7 +6772,7 @@
       "\"output_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
     "flops_total": 0,
@@ -7107,7 +7107,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -7140,7 +7140,7 @@
       "\"relu_1_3:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
     "flops_total": 8,
@@ -7418,7 +7418,7 @@
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": "<raises AttributeError>",
-   "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_distributed_plane_p": null,
@@ -7726,7 +7726,7 @@
    "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
-   "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "facet_registry_snapshot": "<torchlens._semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
    "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
    "forward_duration": "<measured>",
@@ -8124,7 +8124,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [
@@ -9453,7 +9453,7 @@
     "class_qualname": "capture_oracle._models.InPlaceModel",
     "cls": null,
     "code_context": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
@@ -9609,7 +9609,7 @@
      "\"pre_hook_invocations\"": 0
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -9825,7 +9825,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -9858,7 +9858,7 @@
       "\"add_1_2:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
     "flops_total": 8,
@@ -10188,7 +10188,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -10221,7 +10221,7 @@
       "\"clone_1_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -10564,7 +10564,7 @@
       "\"input_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -10872,7 +10872,7 @@
       "\"output_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
     "flops_total": 0,
@@ -11207,7 +11207,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -11240,7 +11240,7 @@
       "\"relu_1_3:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
     "flops_total": 8,
@@ -11518,7 +11518,7 @@
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": {},
-   "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_distributed_plane_p": null,
@@ -12231,7 +12231,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [
@@ -13558,7 +13558,7 @@
     "class_qualname": "capture_oracle._models.InPlaceModel",
     "cls": null,
     "code_context": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
@@ -13714,7 +13714,7 @@
      "\"pre_hook_invocations\"": 0
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -13930,7 +13930,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -13963,7 +13963,7 @@
       "\"add_1_2:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
     "flops_total": 8,
@@ -14293,7 +14293,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -14326,7 +14326,7 @@
       "\"clone_1_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -14669,7 +14669,7 @@
       "\"input_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -14977,7 +14977,7 @@
       "\"output_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
     "flops_total": 0,
@@ -15312,7 +15312,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -15345,7 +15345,7 @@
       "\"relu_1_3:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
     "flops_total": 8,
@@ -15623,7 +15623,7 @@
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": "<raises AttributeError>",
-   "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_distributed_plane_p": null,
@@ -15943,7 +15943,7 @@
    "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
-   "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "facet_registry_snapshot": "<torchlens._semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
    "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
    "forward_duration": "<measured>",
@@ -16336,7 +16336,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [
@@ -17666,7 +17666,7 @@
     "class_qualname": "capture_oracle._models.InPlaceModel",
     "cls": null,
     "code_context": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
@@ -17822,7 +17822,7 @@
      "\"pre_hook_invocations\"": 0
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -18036,7 +18036,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -18069,7 +18069,7 @@
       "\"add_1_2:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
     "flops_total": 8,
@@ -18381,7 +18381,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -18414,7 +18414,7 @@
       "\"clone_1_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -18739,7 +18739,7 @@
       "\"input_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -19044,7 +19044,7 @@
       "\"output_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
     "flops_total": 0,
@@ -19350,7 +19350,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -19383,7 +19383,7 @@
       "\"relu_1_3:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
     "flops_total": 8,
@@ -19643,7 +19643,7 @@
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": {},
-   "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_distributed_plane_p": null,
@@ -20350,7 +20350,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [

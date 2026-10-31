@@ -59,11 +59,11 @@ def cleanup(self: "Trace") -> None:
         a capture stays supported.
     """
     from .. import _state
+    from .._captured_run import forget_event_stream
     from .._errors import CaptureNotActiveError
     from .._fast_run import close_fast_run_session
     from ..backends.torch.backward import _purge_trace_from_backward_registry
     from ..backends.torch.tensor_tracking import remove_owned_state_grad_hooks
-    from ..captured_run import forget_event_stream
 
     if self.__dict__.get("_tl_cleaned_up", False):
         # Idempotent: a second cleanup() has nothing left to husk and must

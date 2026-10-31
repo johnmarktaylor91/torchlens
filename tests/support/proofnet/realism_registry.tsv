@@ -34,7 +34,7 @@ extract	R1	referenced	F36-freeze
 extract_dataset	R1	referenced	F36-freeze
 facet	toy	referenced	F36-freeze
 facets	toy	referenced	F36-freeze
-fastlog	toy	referenced	F36-freeze
+recording	toy	referenced	F36-freeze
 fingerprint	toy	referenced	F36-freeze
 followed_by	toy	referenced	F36-freeze
 func	R1	referenced	F36-freeze

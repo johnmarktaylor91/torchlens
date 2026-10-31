@@ -13,7 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.flops import ZERO_ARITHMETIC_CONSTRUCTIONS, compute_forward_flops
+from torchlens._capture.flops import ZERO_ARITHMETIC_CONSTRUCTIONS, compute_forward_flops
 
 
 class _ConstructionModel(nn.Module):

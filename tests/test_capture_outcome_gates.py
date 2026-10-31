@@ -16,14 +16,14 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes.trace import Trace
-from torchlens._io.bundle import save as _save_bundle
-from torchlens.capture.outcome import (
+from torchlens._capture.outcome import (
     CaptureOutcomeError,
     CaptureStatus,
     StopSignalSwallowedError,
 )
-from torchlens.fastlog._halt import StopSignal
+from torchlens._data_classes.trace import Trace
+from torchlens._io.bundle import save as _save_bundle
+from torchlens.recording._halt import StopSignal
 
 
 class ExplodingModel(nn.Module):
@@ -282,7 +282,7 @@ def test_swallowed_imperative_halt_fails_closed() -> None:
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             y = self.linear(x)
             try:
-                tl.fastlog.stop("mid-forward stop")
+                tl.recording.stop("mid-forward stop")
             except BaseException:
                 pass
             return torch.relu(y)
@@ -322,7 +322,7 @@ def test_imperative_halt_outside_capture_propagates() -> None:
     """No active capture: the latch no-ops and the signal reaches the user."""
 
     with pytest.raises(StopSignal, match="outside"):
-        tl.fastlog.stop("outside")
+        tl.recording.stop("outside")
 
 
 def test_legitimate_halt_still_settles_halted() -> None:
@@ -381,7 +381,7 @@ def test_partial_trace_wrapper_has_one_outcome_answer() -> None:
 
     import warnings
 
-    from torchlens.capture.outcome import outcome_for, require_capture_capability
+    from torchlens._capture.outcome import outcome_for, require_capture_capability
 
     try:
         with torch.no_grad():
@@ -415,8 +415,8 @@ def test_halted_arm_interrupt_settles_failed_interrupted(
     the fail-closed no-sidecar default instead of a settled record. It must
     settle FAILED/INTERRUPT exactly like the outer interrupt arm."""
 
-    import torchlens.capture.trace as trace_module
-    from torchlens.capture.outcome import FailureOrigin, outcome_for
+    import torchlens._capture.trace as trace_module
+    from torchlens._capture.outcome import FailureOrigin, outcome_for
 
     seen: list[object] = []
 

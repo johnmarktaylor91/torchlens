@@ -235,5 +235,5 @@ def test_migrate_source_has_no_execution_imports() -> None:
 
     migrate_module = importlib.import_module("torchlens._ecosystem.migrate")
     source = Path(migrate_module.__file__).read_text(encoding="utf-8")
-    for forbidden in ("from ..capture", "from ..backends", "from ..semantic", "import torch\n"):
+    for forbidden in ("from .._capture", "from ..backends", "from .._semantic", "import torch\n"):
         assert forbidden not in source, forbidden

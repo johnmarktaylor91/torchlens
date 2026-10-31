@@ -26,8 +26,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, NoReturn
 
-from ..semantic.facets import AbsenceReason
-from ..semantic.recipes.lm_head import _external_parents, _norm_input_spec
+from .._semantic.facets import AbsenceReason
+from .._semantic.recipes.lm_head import _external_parents, _norm_input_spec
 from ._errors import refuse
 from ._residual import _deepest_value_ancestor, _module_stack
 from ._walk import (

@@ -482,7 +482,7 @@ def save(
     # ``_runnable`` sparse-run state, so refuse_poisoned_trace crashed with a
     # bare AttributeError before this typed N1 refusal could fire -- the exact
     # shape the MergedTrace typed-refusal-first check above already closed.
-    from ..capture.outcome import CaptureOutcomeError, require_capture_capability
+    from .._capture.outcome import CaptureOutcomeError, require_capture_capability
 
     require_capture_capability(trace, "save_analysis")
     # L7a: a structure-only trace refuses persistence wholesale until the
@@ -490,7 +490,7 @@ def save(
     # registrar's test-only activation switch is the one sanctioned
     # exit-gate round-trip; every switch-on write stamps the fail-closed
     # pre-release marker).
-    from ..capture.structure_only import require_structure_only_capability
+    from .._capture.structure_only import require_structure_only_capability
 
     require_structure_only_capability(trace, "save_analysis_artifact")
     # L6 stage 3: THE v7 PERSISTENCE BOUNDARY for edge-intervened traces,
@@ -534,7 +534,7 @@ def save(
     # exist after its module was imported.
     partial_module = sys.modules.get("torchlens._partial")
     if partial_module is not None and isinstance(trace, partial_module.PartialTrace):
-        from ..capture.outcome import outcome_for
+        from .._capture.outcome import outcome_for
 
         settled = outcome_for(trace)
         raise CaptureOutcomeError(
@@ -1649,7 +1649,7 @@ def _load_trace_payload(
     # output was an unmaterialized blob handle, so the episode ledger's
     # evidence anchor had nothing to compare. Payloads are attached now; the
     # load itself refutes a ledger re-minted over another execution.
-    from ..capture._episode_ledger_anchors import reanchor_loaded_episode_evidence
+    from .._capture._episode_ledger_anchors import reanchor_loaded_episode_evidence
 
     reanchor_loaded_episode_evidence(trace)
     _reanchor_visualizer_paths(trace, bundle_path)

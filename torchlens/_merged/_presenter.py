@@ -313,7 +313,7 @@ class MergedTrace:
         sidecar (hand-built evidence carriers) make no claim and are absent.
         """
 
-        from ..capture.outcome import outcome_for
+        from .._capture.outcome import outcome_for
 
         statuses: dict[int, str] = {}
         for rank, handle in sorted(handles.items()):

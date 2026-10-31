@@ -185,7 +185,7 @@ def test_hop_walk_payload_identity_tripwire_fires_on_corruption() -> None:
     """A corrupted anchor payload FAILS the endpoint verification: the walk
     refuses instead of anchoring -- the tripwire is armed, not decorative."""
 
-    from torchlens.semantic._hops import HopRefusal, HopWalk, walk_upstream
+    from torchlens._semantic._hops import HopRefusal, HopWalk, walk_upstream
 
     model = _NormHead().eval()
     log = tl.trace(model, torch.randn(2, 3, 8))

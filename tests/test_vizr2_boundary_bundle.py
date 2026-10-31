@@ -18,9 +18,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._collapse_frontier import K_CAP
-from torchlens.visualization.collapse_optimizer import select_collapse_plan
-from torchlens.visualization.collapse_plan import RenderContext, collapse_plan_for_trace, count
+from torchlens._visualization._collapse_frontier import K_CAP
+from torchlens._visualization.collapse_optimizer import select_collapse_plan
+from torchlens._visualization.collapse_plan import RenderContext, collapse_plan_for_trace, count
 
 
 class _Body(nn.Module):

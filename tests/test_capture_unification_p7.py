@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.captured_run import _ActivationLookup
+from torchlens._captured_run import _ActivationLookup
 from torchlens.validation.invariants import (
     _check_special_layer_lists,
     _check_trace_self_consistency,
@@ -582,7 +582,7 @@ def test_recording_to_trace_rejects_multi_pass_recordings() -> None:
 
             return torch.relu(x + 1)
 
-    with tl.fastlog.Recorder(RepeatRelu(), save=lambda ctx: ctx.kind == "op") as recorder:
+    with tl.recording.Recorder(RepeatRelu(), save=lambda ctx: ctx.kind == "op") as recorder:
         recorder(torch.ones(1, 3))
         recorder(torch.ones(1, 3) * 2)
 

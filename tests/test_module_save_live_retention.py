@@ -26,8 +26,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.session as session_mod
 import torchlens._ir.selector_eval as selector_eval
-import torchlens.capture.session as session_mod
 from torchlens.errors import TorchLensWarning
 
 
@@ -250,7 +250,7 @@ def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, mo
     removed) at its exit, and the saved outputs still load exactly.
     """
 
-    from torchlens.capture.plan import CapturePlan
+    from torchlens._capture.plan import CapturePlan
 
     real_compile = CapturePlan.compile.__func__
 

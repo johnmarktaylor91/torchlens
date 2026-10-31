@@ -16,13 +16,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
-from torchlens.visualization import _render_utils
-from torchlens.visualization._rank_layout_internal import layout as rank_layout
-from torchlens.visualization._render_common import GraphvizRenderError, GraphvizUnavailableError
-from torchlens.visualization._render_dot import _strip_render_extension
-from torchlens.visualization._render_utils import render_dot_to_file
-from torchlens.visualization.collapse_plan import RenderContext
-from torchlens.visualization.render_ir import build_render_ir
+from torchlens._visualization import _render_utils
+from torchlens._visualization._rank_layout_internal import layout as rank_layout
+from torchlens._visualization._render_common import GraphvizRenderError, GraphvizUnavailableError
+from torchlens._visualization._render_dot import _strip_render_extension
+from torchlens._visualization._render_utils import render_dot_to_file
+from torchlens._visualization.collapse_plan import RenderContext
+from torchlens._visualization.render_ir import build_render_ir
 
 
 class _TinyRenderModel(nn.Module):
@@ -207,7 +207,7 @@ def test_bounded_render_child_dies_with_hard_parent_death(tmp_path: Path) -> Non
 
     parent_script = (
         "import os, subprocess, sys, threading, time\n"
-        "from torchlens.visualization._render_utils import run_bounded_subprocess\n"
+        "from torchlens._visualization._render_utils import run_bounded_subprocess\n"
         "t = threading.Thread(\n"
         "    target=lambda: run_bounded_subprocess(['sleep', '30'], timeout=60),\n"
         "    daemon=True,\n"
@@ -273,7 +273,7 @@ def test_missing_graphviz_binary_refuses_typed(
     (b8 R65).
     """
 
-    from torchlens.visualization._render_common import GraphvizUnavailableError
+    from torchlens._visualization._render_common import GraphvizUnavailableError
 
     trace = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
     empty_bin = tmp_path / "emptybin"
@@ -695,7 +695,7 @@ def test_grad_edges_use_preserved_edge_cluster_key(
 ) -> None:
     """Forward render passes grad edges the same LCA cluster as dataflow edges."""
 
-    import torchlens.visualization._render_edges as _render_edges
+    import torchlens._visualization._render_edges as _render_edges
 
     modules_by_edge: dict[tuple[str, str], str | int] = {}
     original_add_grad_edge = _render_edges._add_grad_edge
@@ -952,7 +952,7 @@ def test_rank_layout_escapes_html_special_chars_in_arg_edge_use_labels(
     """Rank-engine arg-position labels must escape HTML specials.
 
     ``_add_arg_label`` (the rank-layout engine's argument-position labeler,
-    ``torchlens/visualization/_rank_layout_internal/layout.py``) builds its
+    ``torchlens/_visualization/_rank_layout_internal/layout.py``) builds its
     label text from ``render_edge.argument_label``, which for ``Op`` children
     is derived from ``edge_uses[].arg_path`` (see
     ``_edge_use_argument_label``/``_arg_path_label_value`` in
@@ -1127,7 +1127,7 @@ def test_final_viewer_child_is_reaped_without_another_launch(
     import os
     import time
 
-    from torchlens.visualization import _render_utils
+    from torchlens._visualization import _render_utils
 
     stub_dir = tmp_path / "bin"
     stub_dir.mkdir()
@@ -1163,7 +1163,7 @@ def test_tooltip_reprs_mask_memory_addresses() -> None:
 
     import re
 
-    from torchlens.visualization import _render_nodes
+    from torchlens._visualization import _render_nodes
 
     address = re.compile(r"0x[0-9a-fA-F]{4,}")
 
@@ -1261,7 +1261,7 @@ def test_downstream_intervening_inference_builds_reverse_edges_once() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.visualization._render_leaf import _infer_intervening_module_downstream
+    from torchlens._visualization._render_leaf import _infer_intervening_module_downstream
 
     class _CountingGradFns(list):
         """Grad-fn table that counts full sweeps."""
@@ -1303,7 +1303,7 @@ def test_code_panel_tooltip_shows_basename_not_absolute_path() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.visualization.code_panel import _source_text_to_html_rows
+    from torchlens._visualization.code_panel import _source_text_to_html_rows
 
     source_text = SimpleNamespace(
         file_path="/home/canary_user_zq81/models/canary_src.py",

@@ -215,7 +215,7 @@ def save_intervention(
     # outcome gate, so a FAILED/aborted/unknown capture could export its spec
     # (fire records, target manifest) as if nothing happened. Same N1 authority
     # and ordering as trace.save(): outcome gate first, then the poison gate.
-    from ..capture.outcome import require_capture_capability
+    from .._capture.outcome import require_capture_capability
 
     require_capture_capability(trace, "save_analysis")
     from .._runnable import refuse_poisoned_trace

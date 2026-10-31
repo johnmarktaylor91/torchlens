@@ -1013,8 +1013,8 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     # Remap halt provenance from raw to final labels, exactly as the special
     # layer lists above. `halt_reason`/`halt_frontier` are set to a raw op label
     # by BOTH the exhaustive `tl.trace(halt=...)` finalizer
-    # (capture/trace.py `_finalize_halted_trace`) and the cooked
-    # `Recording.to_trace()` path (fastlog/types.py); leaving them raw meant the
+    # (_capture/trace.py `_finalize_halted_trace`) and the cooked
+    # `Recording.to_trace()` path (recording/types.py); leaving them raw meant the
     # two capture modes reported DIFFERENT halt labels for the same semantic op
     # whenever a buffer-write op (e.g. BatchNorm running-stat write-back, counted
     # only in exhaustive mode) preceded the halt point and shifted the raw index.

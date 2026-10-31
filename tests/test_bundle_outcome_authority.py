@@ -28,15 +28,15 @@ import torch
 from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 
 import torchlens as tl
-from torchlens._data_classes.trace import Trace
-from torchlens.bundle import Bundle, _fold_member_outcomes
-from torchlens.capture.outcome import (
+from torchlens._capture.outcome import (
     CaptureOutcome,
     CaptureOutcomeError,
     CaptureStatus,
     outcome_for,
     require_capture_capability,
 )
+from torchlens._data_classes.trace import Trace
+from torchlens.bundle import Bundle, _fold_member_outcomes
 from torchlens.errors import InvalidArgumentError
 
 # Least -> most severe; the fold picks the maximum over members.

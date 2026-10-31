@@ -33,7 +33,7 @@ revisions. The manifest names the EXACT checkpoint.
 - Coverage stratum: every channel-bearing row on resnet18, resnet50,
   vit_b_16, distilgpt2, coverage recorded against the 0.80 floor.
 - Toys (additional, never substitutes) and stress members: shipped in
-  `torchlens.visualization.lenses.audit.corpus` (residual diamond, tied
+  `torchlens._visualization.lenses.audit.corpus` (residual diamond, tied
   LSTMCell loop, nonfinite chain, encoder/decoder with skips, filtered
   chain, 2-node minimal, attention toy, StressDiamond10k; random-init
   resnet18/densenet121 for structural strata).

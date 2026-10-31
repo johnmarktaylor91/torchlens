@@ -305,7 +305,7 @@ def _select_fastlog_names(model: torch.nn.Module, x: Any, fraction: float) -> se
 
     import torchlens as tl
 
-    trace = tl.fastlog.dry_run(model, x, save=lambda _ctx: True)
+    trace = tl.recording.dry_run(model, x, save=lambda _ctx: True)
     names = [
         getattr(ctx, "func_name", "") for ctx in trace.contexts if getattr(ctx, "func_name", "")
     ]
@@ -341,7 +341,7 @@ def _fastlog_op_halt_index(model: torch.nn.Module, x: Any, fraction: float) -> i
 
     import torchlens as tl
 
-    trace = tl.fastlog.dry_run(model, x, save=lambda _ctx: True)
+    trace = tl.recording.dry_run(model, x, save=lambda _ctx: True)
     op_count = sum(1 for ctx in trace.contexts if getattr(ctx, "kind", None) == "op")
     return max(1, int(op_count * fraction))
 

@@ -404,7 +404,7 @@ def test_validate_forward_pass_snapshot_is_isolated_from_inplace_mutation() -> N
     module-level helper.
     """
 
-    from torchlens.user_funcs import _clone_state_dict_with_metadata
+    from torchlens._user_funcs import _clone_state_dict_with_metadata
 
     model = _BufferMutatingFailModel(fail_during="never")
     snapshot = _clone_state_dict_with_metadata(model)

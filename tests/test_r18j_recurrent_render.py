@@ -149,7 +149,7 @@ def test_get_multipass_attr_propagates_unrelated_value_error():
 
 @pytest.mark.smoke
 def test_h1_module_key_for_forward_op_no_multipass_leak():
-    from torchlens.visualization._render_leaf import (
+    from torchlens._visualization._render_leaf import (
         _forward_op_is_module_output,
         _module_key_for_forward_op,
     )
@@ -163,7 +163,7 @@ def test_h1_module_key_for_forward_op_no_multipass_leak():
 
 
 def test_h7_forward_correspondence_node_name_scoped_to_multipass():
-    from torchlens.visualization._render_leaf import _forward_correspondence_node_name
+    from torchlens._visualization._render_leaf import _forward_correspondence_node_name
 
     log = _recurrent_trace()
     single = tl.trace(FeedForward(), torch.randn(2, 8))
@@ -269,7 +269,7 @@ def test_h6_rolled_overlays_do_not_crash(tmp_path, overlay):
 
 
 def test_h6_rolled_per_pass_overlays_are_na():
-    from torchlens.visualization.overlays import builtin_overlay_value, format_overlay_value
+    from torchlens._visualization.overlays import builtin_overlay_value, format_overlay_value
 
     log = _recurrent_trace()
     layer = log["linear_1_1"]  # aggregate recurrent Layer
@@ -280,7 +280,7 @@ def test_h6_rolled_per_pass_overlays_are_na():
 
 
 def test_f15_nan_overlay_reports_na_when_nothing_inspected():
-    from torchlens.visualization.overlays import builtin_overlay_value
+    from torchlens._visualization.overlays import builtin_overlay_value
 
     # No available tensor -> "not checked" -> None -> "nan: n/a" (NOT False -> "no").
     assert builtin_overlay_value(SimpleNamespace(out=None), "nan") is None
@@ -300,12 +300,12 @@ def test_f15_nan_overlay_reports_na_when_nothing_inspected():
 
 @pytest.mark.smoke
 def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
-    from torchlens.visualization.fastlog_preview import (
+    from torchlens._visualization.fastlog_preview import (
         _build_preview_nodes,
         _make_node_spec_fn,
         preview_fastlog,
     )
-    from torchlens.visualization.node_spec import NodeSpec
+    from torchlens._visualization.node_spec import NodeSpec
 
     log = tl.trace(RecurrentReLU(), torch.tensor([-1.0, 2.0]))
     # No crash on a recurrent model.
@@ -342,12 +342,12 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
 
 @pytest.mark.smoke
 def test_h9_intervention_colors_only_intervened_pass():
-    from torchlens.intervention import resolver
-    from torchlens.visualization.node_spec import (
+    from torchlens._visualization.node_spec import (
         NodeSpec,
         intervention_site_and_cone_labels,
         make_intervention_node_spec_fn,
     )
+    from torchlens.intervention import resolver
 
     log = tl.trace(RecurrentReLU(), torch.tensor([-1.0, 2.0]))
     ops = list(log.layer_logs["relu_1_1"].ops.values())

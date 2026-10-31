@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state
+from ..._capture.session import capture_session_for
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import CaptureGapWarning
 from ..._io import BlobRef as PortableBlobRef
@@ -38,8 +39,7 @@ from ..._utils.introspection import (
 )
 from ..._utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
 from ..._utils.tensor_utils import _is_cuda_available, safe_copy
-from ...capture.session import capture_session_for
-from ...fastlog.types import CaptureSpec, ModuleStackFrame, StorageIntent
+from ...recording.types import CaptureSpec, ModuleStackFrame, StorageIntent
 from . import _tl
 from ._completeness_origins import internal_scalar_read
 from ._held_refs_capture import rebind_held_torch_refs, restore_held_torch_refs
@@ -230,8 +230,8 @@ def _promote_layers_to_save_output_parent(
     ):
         return event.output, event.policy, event.predicate_matched, event.capture_spec
 
-    from ...capture.projections import _record_context_from_event
-    from ...fastlog._storage_resolver import _resolve_storage
+    from ..._capture.projections import _record_context_from_event
+    from ...recording._storage_resolver import _resolve_storage
 
     ctx = dataclasses.replace(_record_context_from_event(event), is_output_parent=True)
     options = trace._predicate_save_options

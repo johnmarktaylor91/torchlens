@@ -20,12 +20,12 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+from .._capture.structure_only import (
+    require_structure_only_capability as _require_structure_only_capability,
+)
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._io._json import loads_bounded
 from .._utils.display import atomic_write_text
-from ..capture.structure_only import (
-    require_structure_only_capability as _require_structure_only_capability,
-)
 from ._common import _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
 from ._registry import (

@@ -91,7 +91,7 @@ Two guardrails follow from the record:
 ## The one-call render facade
 
 ```python
-from torchlens.user_funcs import render   # tl.render lands with the surface sweep
+from torchlens._user_funcs import render   # tl.render lands with the surface sweep
 
 result = render(model, x)                            # your real input
 result = render(model, input_size=(1, 3, 224, 224))  # declared shape

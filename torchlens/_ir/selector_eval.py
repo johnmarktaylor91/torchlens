@@ -1314,7 +1314,7 @@ def _episode_step_matches(value: Any, subject: Any, lifecycle: str) -> bool:
 
     steps = tuple(value) if isinstance(value, (list, tuple)) else (value,)
     if lifecycle in ("capture", "live"):
-        from torchlens.capture._episode_join import active_join_session
+        from torchlens._capture._episode_join import active_join_session
 
         session = active_join_session()
         if session is None:

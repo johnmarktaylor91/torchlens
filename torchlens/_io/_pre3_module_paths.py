@@ -17,9 +17,12 @@ _PRE_3_PACKAGES = frozenset(
         "accessors",
         "autoroute",
         "brainpipe",
+        "capture",
+        "captured_run",
         "constants",
         "data_classes",
         "ecosystem",
+        "fastlog",
         "hash",
         "ir",
         "kernel_telemetry",
@@ -37,10 +40,13 @@ _PRE_3_PACKAGES = frozenset(
         "selection_graph",
         "selection_subspace",
         "selection_values",
+        "semantic",
         "snoop",
         "trace_slice",
         "tviz",
+        "user_funcs",
         "utils",
+        "visualization",
     }
 )
 

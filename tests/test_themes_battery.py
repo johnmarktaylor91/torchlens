@@ -15,8 +15,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import lenses
-from torchlens.visualization.lenses import audit
+from torchlens._visualization import lenses
+from torchlens._visualization.lenses import audit
 
 
 @pytest.fixture(scope="module")

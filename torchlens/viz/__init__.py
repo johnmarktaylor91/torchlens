@@ -10,8 +10,8 @@ from typing import Any
 
 import torch
 
-from ..visualization.bundle_diff import bundle_diff
-from ..visualization.node_spec import NodeSpec
+from .._visualization.bundle_diff import bundle_diff
+from .._visualization.node_spec import NodeSpec
 from . import batch_summary as _batch_summary, nodes
 from .batch_summary import montage
 from .feature_maps import feature_maps
@@ -59,7 +59,7 @@ _LAZY_RENDERERS: dict[str, tuple[str, str]] = {
     "quantile_fan": ("torchlens._observability._render", "render_fan"),
     "site_detail": ("torchlens._observability._render", "render_detail"),
     "timeline": ("torchlens._observe._svg", "render_timeline_svg"),
-    "intervention_diff": ("torchlens.visualization._surgery_diff", "surgery_diff"),
+    "intervention_diff": ("torchlens._visualization._surgery_diff", "surgery_diff"),
 }
 
 

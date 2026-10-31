@@ -13,9 +13,9 @@ import torch.nn as nn
 from test_leverage_div_fixtures import ReusedReluNet
 
 import torchlens as tl
+from torchlens._capture.preflight import address_preflight
 from torchlens._errors import InvalidArgumentError
 from torchlens._save_budget import SaveBudgetExceededError
-from torchlens.capture.preflight import address_preflight
 from torchlens.errors._base import TorchLensWarning
 
 _SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
@@ -68,7 +68,7 @@ def test_overlay_full_match_renders_silently(tmp_path, recwarn):
 def test_overlay_selection_source_lowers_to_selected_counts(tmp_path):
     """Element-mask law: a Selection paints selected COUNTS, never membership."""
 
-    from torchlens.visualization.overlays import resolve_overlay_request
+    from torchlens._visualization.overlays import resolve_overlay_request
 
     _, _, trace = _traced_toy()
     # grouping rule row 28: the reused relu instance is one Layer with 2 passes,
@@ -147,8 +147,8 @@ def test_when_refuses_raw_string_at_build():
 def test_escrow_spill_budget_refuses_typed():
     """Crossing the declared spill bound refuses with the accounting on fields."""
 
-    from torchlens.capture.plan import RetentionKind, RetentionProfile
-    from torchlens.capture.session import CaptureSession
+    from torchlens._capture.plan import RetentionKind, RetentionProfile
+    from torchlens._capture.session import CaptureSession
 
     profile = RetentionProfile(
         activation_kind=RetentionKind.ACTIVATION,
@@ -174,7 +174,7 @@ def test_escrow_spill_budget_refuses_typed():
 
 
 def test_escrow_budget_none_disables_bound(tmp_path):
-    from torchlens.capture.plan import RetentionProfile
+    from torchlens._capture.plan import RetentionProfile
 
     profile = RetentionProfile(escrow_spill_budget_bytes=None)
     assert profile.escrow_spill_budget_bytes is None

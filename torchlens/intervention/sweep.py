@@ -174,7 +174,7 @@ def sweep(
     site = _coerce_sweep_site(resolved_at_typed)
     member_names = list(names) if names is not None else _default_member_names(len(swept_values))
     traces = {}
-    from ..user_funcs import trace as _trace
+    from .._user_funcs import trace as _trace
 
     baseline = _mint_pristine_baseline(
         model,
@@ -236,7 +236,7 @@ def _sweep_over_specs(
             argument="names",
         )
     member_names = list(names) if names is not None else _default_member_names(len(specs))
-    from ..user_funcs import trace as _trace
+    from .._user_funcs import trace as _trace
 
     baseline = _mint_pristine_baseline(
         model,
@@ -307,7 +307,7 @@ def _mint_pristine_baseline(
             remedy="rename the swept member or drop include_baseline",
             argument="names",
         )
-    from ..user_funcs import trace as _trace
+    from .._user_funcs import trace as _trace
 
     return _trace(model, x, **trace_kwargs)
 

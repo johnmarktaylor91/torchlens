@@ -14,8 +14,8 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._capture.outcome import CaptureStatus
 from torchlens._errors import InvalidArgumentError
-from torchlens.capture.outcome import CaptureStatus
 from torchlens.options import CaptureOptions
 
 pytest.importorskip("transformers")

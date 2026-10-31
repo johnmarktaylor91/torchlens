@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import ActivationRecord, CaptureSpec, RecordContext
+from torchlens.recording import ActivationRecord, CaptureSpec, RecordContext
 
 
 class _PostfuncModel(nn.Module):
@@ -355,7 +355,7 @@ def test_dry_run_does_not_invoke_transform() -> None:
     # dry_run does not accept activation_transform, but it shares the
     # storage resolver path. We exercise the same callable via a
     # full Recorder with no_tensor_capture toggled like dry_run does.
-    trace = tl.fastlog.dry_run(
+    trace = tl.recording.dry_run(
         _PostfuncModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
@@ -436,7 +436,7 @@ def test_transform_roundtrips_via_disk_recovery(tmp_path: Path) -> None:
     )
 
     loaded = tl.load(bundle_path)
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     original_records = _disk_out_records(original)
     loaded_records = _disk_out_records(loaded)

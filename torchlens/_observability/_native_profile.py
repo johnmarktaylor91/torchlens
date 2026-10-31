@@ -134,7 +134,7 @@ def kernel_profile(
         The trace, the joined result, and the session facts.
     """
 
-    from .. import user_funcs
+    from .. import _user_funcs as user_funcs
 
     if activities is None:
         activities = [torch.profiler.ProfilerActivity.CPU]

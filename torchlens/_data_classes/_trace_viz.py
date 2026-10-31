@@ -5,9 +5,9 @@ from html import escape
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 if TYPE_CHECKING:
+    from .._visualization.code_panel import CodePanelOption
     from ..experimental.dagua._bridge import TorchLensRenderAudit
     from ..intervention.types import FireRecord
-    from ..visualization.code_panel import CodePanelOption
     from .trace import Trace
 
     _TraceMixinBase = Trace
@@ -150,7 +150,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         show_buffers, direction, vis_node_placement, vis_renderer, theme, \
         vis_intervention_mode, vis_show_cone, code_panel, order_siblings, show_containers,
         container_max_inline, show_input_transform_summary, show_orphans:
-            Forwarded unchanged to :func:`torchlens.visualization._render_dot.draw`.
+            Forwarded unchanged to :func:`torchlens._visualization._render_dot.draw`.
             ``show_orphans=True`` renders orphan (island) ops -- captured but unreachable
             from both inputs and outputs -- as a dashed, greyed cluster of edgeless nodes,
             instead of omitting them. Orphans must have been retained at capture time
@@ -274,7 +274,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             Graphviz DOT source, renderer-specific output, or renderer object
             when ``return_graph=True``.
         """
-        from ..visualization._render_dot import draw as _impl
+        from .._visualization._render_dot import draw as _impl
 
         if view is not MISSING:
             vis_mode = cast(VisModeLiteral, view)
@@ -577,7 +577,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_node_mode, vis_edge_overrides, vis_save_only, file_format, \
         vis_direction, code_panel, vis_mode, bwd, show_legend:
             Forwarded unchanged to
-            :func:`torchlens.visualization._render_entrypoints.render_backward_graph`.
+            :func:`torchlens._visualization._render_entrypoints.render_backward_graph`.
             ``collapsed_node_spec_fn`` and ``vis_node_mode`` are accepted for
             forward-visualization API symmetry but are not applied because
             backward graphs do not render collapsed module nodes.
@@ -600,7 +600,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         str
             Graphviz DOT source.
         """
-        from ..visualization._render_entrypoints import render_backward_graph as _impl
+        from .._visualization._render_entrypoints import render_backward_graph as _impl
 
         return _impl(
             self,
@@ -646,14 +646,14 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_edge_overrides, vis_save_only, file_format, vis_direction, \
         vis_mode, intervening_cluster, show_buffers, bwd, show_legend:
             Forwarded unchanged to
-            :func:`torchlens.visualization._render_entrypoints.render_combined_graph`.
+            :func:`torchlens._visualization._render_entrypoints.render_combined_graph`.
 
         Returns
         -------
         str
             Graphviz DOT source.
         """
-        from ..visualization._render_entrypoints import render_combined_graph as _impl
+        from .._visualization._render_entrypoints import render_combined_graph as _impl
 
         return _impl(
             self,
@@ -686,7 +686,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             Predicate callables that receive synthesized fastlog ``RecordContext``
             objects.
         **kwargs:
-            Forwarded to :func:`torchlens.visualization.fastlog_preview.preview_fastlog`.
+            Forwarded to :func:`torchlens._visualization.fastlog_preview.preview_fastlog`.
 
         Returns
         -------
@@ -694,7 +694,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             Graphviz DOT source.
         """
 
-        from ..visualization.fastlog_preview import preview_fastlog as _impl
+        from .._visualization.fastlog_preview import preview_fastlog as _impl
 
         return _impl(
             self,
@@ -920,7 +920,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             Multi-section capture/provenance text.
         """
 
-        from ..visualization._summary_internal._discoverability import (
+        from .._visualization._summary_internal._discoverability import (
             format_discoverability_summary,
         )
 

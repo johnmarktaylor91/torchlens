@@ -47,19 +47,19 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.visualization._render_edges import (
+from torchlens._visualization._render_edges import (
     _collapsed_module_should_show_remainder,
     _plan_separately_rendered_op_labels,
     _run_fold_ellipsis_label,
 )
-from torchlens.visualization._segment_descriptors import (
+from torchlens._visualization._segment_descriptors import (
     _child_segment_covered_ops,
     _child_segment_label,
     _make_child_segment_descriptor,
     _op_segment_owner_key,
 )
-from torchlens.visualization.auto_collapse import _make_run_fold, analyze_collapse
-from torchlens.visualization.collapse_optimizer import (
+from torchlens._visualization.auto_collapse import _make_run_fold, analyze_collapse
+from torchlens._visualization.collapse_optimizer import (
     _RESULT_CACHE,
     OptimizerWeights,
     _condense_plan_with_child_segments,
@@ -71,7 +71,7 @@ from torchlens.visualization.collapse_optimizer import (
     select_collapse_level,
     select_collapse_plan,
 )
-from torchlens.visualization.collapse_plan import (
+from torchlens._visualization.collapse_plan import (
     ChildSegment,
     CollapsePlan,
     ModuleBox,
@@ -1852,14 +1852,14 @@ class TestIndexedChildStemLinearParser:
         random names from the {a, b, _, ., 0, 1, 9, z} alphabet.
         """
 
-        from torchlens.visualization.auto_collapse import _indexed_child_stem
+        from torchlens._visualization.auto_collapse import _indexed_child_stem
 
         assert _indexed_child_stem(name) == expected
 
     def test_pathological_input_is_linear(self) -> None:
         """The all-digits-plus-junk adversarial name parses instantly."""
 
-        from torchlens.visualization.auto_collapse import _indexed_child_stem
+        from torchlens._visualization.auto_collapse import _indexed_child_stem
 
         assert _indexed_child_stem("9" * 100_000 + "!!") is None
 
@@ -1870,7 +1870,7 @@ class TestNameConsecutiveTrailingDigitSplit:
     def test_consecutive_and_rejections(self) -> None:
         """Trailing-digit semantics match the old (.*?)(\\d+) fullmatch."""
 
-        from torchlens.visualization._segment_descriptors import _members_are_name_consecutive
+        from torchlens._visualization._segment_descriptors import _members_are_name_consecutive
 
         assert _members_are_name_consecutive(("m.block1", "m.block2", "m.block3"))
         assert not _members_are_name_consecutive(("m.block1", "m.block3"))
@@ -1887,7 +1887,7 @@ class TestRenderDisclosureCeiling:
     def test_small_render_is_silent(self) -> None:
         import warnings as _warnings
 
-        from torchlens.visualization.render_ir import (
+        from torchlens._visualization.render_ir import (
             _warn_if_render_exceeds_disclosure_ceiling,
         )
 
@@ -1896,7 +1896,7 @@ class TestRenderDisclosureCeiling:
             _warn_if_render_exceeds_disclosure_ceiling(100, 200)
 
     def test_oversized_render_warns_with_remedies(self) -> None:
-        from torchlens.visualization.render_ir import (
+        from torchlens._visualization.render_ir import (
             RENDER_DISCLOSURE_NODE_CEILING,
             _warn_if_render_exceeds_disclosure_ceiling,
         )

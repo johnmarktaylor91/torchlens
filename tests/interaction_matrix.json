@@ -1932,7 +1932,7 @@
     "record"
    ],
    "summary": "Recording.draw renders a flat event graph and takes bare kwargs; Trace.draw takes VisualizationOptions, collapse, encodings and layouts. Cooked structure needs Recording.to_trace().",
-   "evidence": "torchlens/fastlog/types.py",
+   "evidence": "torchlens/recording/types.py",
    "recommendation": "document",
    "ruling": "pending"
   },
@@ -2119,7 +2119,7 @@
     "record"
    ],
    "summary": "tl.trace takes recipes=; tl.record takes no recipes keyword, so facet recipes cannot be attached on the sparse path.",
-   "evidence": "torchlens/fastlog/_record_one_shot.py",
+   "evidence": "torchlens/recording/_record_one_shot.py",
    "recommendation": "document",
    "ruling": "pending"
   },

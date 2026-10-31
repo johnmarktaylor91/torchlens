@@ -30,6 +30,7 @@ import torch
 from torch.overrides import handle_torch_function, has_torch_function_unary  # noqa: F401
 
 from ... import _state
+from ..._capture.arg_positions import _ensure_schema_tensor_position_corrections
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._constants import _get_torchvision_funcs, get_orig_torch_funcs
 from ..._data_classes.internal_types import FuncExecutionContext
@@ -61,7 +62,6 @@ from ..._utils.tensor_utils import (
     print_override,
     safe_copy,
 )
-from ...capture.arg_positions import _ensure_schema_tensor_position_corrections
 from ._callable_location import _callable_source_location
 from ._function_boundary import EXPORT_FUNC_NAMES, note_function_export
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
@@ -2256,7 +2256,7 @@ def torch_func_decorator(
             # call is the ONE that resolved the buffer args, so it records its
             # own writes; the decomposition's inner calls never carry
             # snapshots (their names are not mutator-classified).
-            from ...capture._weightsfree_admission import weightsfree_meta_active
+            from ..._capture._weightsfree_admission import weightsfree_meta_active
 
             record_buffer_writes_here = weightsfree_meta_active(trace)
         if record_buffer_writes_here:

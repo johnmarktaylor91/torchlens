@@ -35,9 +35,8 @@ import torch
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _LAZY_MODULE_CASES = (
-    ("fastlog", "DryRun"),
+    ("recording", "DryRun"),
     ("intervention", "BoundModel"),
-    ("user_funcs", "trace"),
     # The record classes left the private data-classes package for tl.types.
     ("types", "Buffer"),
     # tl.viz members resolve only through its lazy table (no eager import).
@@ -46,7 +45,7 @@ _LAZY_MODULE_CASES = (
 
 #: Third-party packages a bare ``import torchlens`` must never pull. FROZEN and
 #: grow-only: every name here is either a real one-hop risk from the eagerly
-#: imported ``torchlens.visualization`` (graphviz, PIL) or an expensive optional
+#: imported ``torchlens._visualization`` (graphviz, PIL) or an expensive optional
 #: integration that belongs behind a lazy facade. ``numpy`` is deliberately
 #: absent -- torch imports it itself, so it is not TorchLens's to defer.
 _HEAVY_IMPORT_DENYLIST = frozenset(
@@ -346,7 +345,7 @@ for facade_name, module_path in facades.items():
     }
     collisions[facade_name] = sorted(set(public_names) & child_modules)
     expected_exports = {}
-    if facade_name == "fastlog":
+    if facade_name == "recording":
         for public_name in collisions[facade_name]:
             child_module = importlib.import_module(f"{module_path}.{public_name}")
             assert vars(eager_module)[public_name] is child_module
@@ -388,7 +387,6 @@ assert collisions == {
     ],
     "callbacks": ["lightning"],
     "neuro": [],
-    "captured_run": [],
     "compat": ["lovely", "torchextractor", "torchshow"],
     "dataset_extraction": [], "debug": [], "distributed": [],
     "errors": [], "examples": [],
@@ -398,14 +396,14 @@ assert collisions == {
     # reference to population, the name of its defining child module (the
     # function is bound over the submodule attribute at package import, as
     # compose is).
-    "fastlog": ["dry_run", "recover"], "intervention": ["compose", "population"],
+    "recording": ["dry_run", "recover"], "intervention": ["compose", "population"],
     "fingerprint": [], "io": [], "observers": [], "options": [],
     "report": [], "repgeom": [],
     "receptive_field": ["rules"], "stats": [],
     # C04: the transforms facade's children are all underscore-private.
     "transforms": [],
-    "types": [], "user_funcs": [],
-    "validation": [], "visualization": [],
+    "types": [],
+    "validation": [],
     # Visuals rename: tl.viz exports its nodes child module (the node-visual
     # factories namespace), and the feature_maps function shares its module's
     # name; the package imports the function eagerly, so the root keeps it.
@@ -645,8 +643,8 @@ def test_bare_import_defers_lazified_feature_modules() -> None:
 
     _run_import_script(
         "import sys; import torchlens; "
-        "blocked = ('torchlens.fastlog', 'torchlens.intervention', "
-        "'torchlens.user_funcs', 'torchlens._data_classes'); "
+        "blocked = ('torchlens.recording', 'torchlens.intervention', "
+        "'torchlens._user_funcs', 'torchlens._data_classes'); "
         "assert not any(name == prefix or name.startswith(prefix + '.') "
         "for prefix in blocked for name in sys.modules)"
     )

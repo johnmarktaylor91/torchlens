@@ -54,7 +54,7 @@ class EpisodeOptions:
         Optional declared step count, recorded on the ledger header and
         validated against the observed call count on COMPLETE captures.
         Declarations beyond the wrapped-tier cost ceiling
-        (``torchlens.capture._episode_ledger.EPISODE_DECLARED_STEP_CEILING``,
+        (``torchlens._capture._episode_ledger.EPISODE_DECLARED_STEP_CEILING``,
         100 steps) refuse typed (``episode_step_ceiling_exceeded``) at
         declaration time unless ``acknowledge_step_cost=True`` — the cost is
         superlinear and N=100 already measured 657 s / 5.4 GB peak RSS.
@@ -107,7 +107,7 @@ class EpisodeOptions:
         Producer digest of the cheap-tier product this capture escalates
         (present iff escalation; travels with ``reason`` — E-A2). Build the
         whole escalation declaration with
-        ``torchlens.capture._episode_ledger.escalation_spec(producer, ...)``.
+        ``torchlens._capture._episode_ledger.escalation_spec(producer, ...)``.
     reason:
         Escalation reason, closed vocabulary
         ``{"step_failed", "divergence", "requested"}``.

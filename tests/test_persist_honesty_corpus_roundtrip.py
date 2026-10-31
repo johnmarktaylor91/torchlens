@@ -25,8 +25,8 @@ from _oracle_env import expect_bundle_minor_version_mismatch
 from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
+from torchlens._capture.outcome import CaptureStatus
 from torchlens._io import ArtifactTooOldError
-from torchlens.capture.outcome import CaptureStatus
 
 _CORPUS_SHA256 = (  # content digest, not a credential
     "3429a84fbd406d374afde5b50f6a8be0867ada77b728d6e88309713c6eadcdb3"  # pragma: allowlist secret

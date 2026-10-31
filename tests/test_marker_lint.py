@@ -449,7 +449,7 @@ def test_warn_once_sentinel_census_matches_autouse_reset(
     # The global-mutated copy lives in _render_ordering since the renderer
     # thinning (the binding is import-created, so the source heuristic cannot
     # discover it there either).
-    runtime_only = {("torchlens.visualization._render_ordering", "_SIBLING_ORDER_WARNING_EMITTED")}
+    runtime_only = {("torchlens._visualization._render_ordering", "_SIBLING_ORDER_WARNING_EMITTED")}
     # Behavioral fidelity latches the NAME heuristic cannot discover (nothing
     # "warned"-shaped in the identifier), declared here explicitly so the two
     # ledgers (this census and the conftest reset list) can no longer disagree

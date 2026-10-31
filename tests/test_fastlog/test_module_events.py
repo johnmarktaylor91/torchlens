@@ -7,10 +7,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.projections as fastlog_state
 import torchlens._state as torchlens_state
-import torchlens.capture.projections as fastlog_state
 from torchlens.errors import PredicateError
-from torchlens.fastlog import RecordContext
+from torchlens.recording import RecordContext
 
 
 class RootLinear(nn.Linear):

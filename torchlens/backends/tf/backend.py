@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 from ... import _state
+from ..._capture.outcome import stamp_backend_finalized
 from ..._data_classes.param import ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
@@ -22,7 +23,6 @@ from ..._postprocess._selective_save import (
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends import BackendName
-from ...capture.outcome import stamp_backend_finalized
 from ...intervention.selectors import BaseSelector
 from ...options import CaptureOptions, merge_capture_options
 from .._finalize import (

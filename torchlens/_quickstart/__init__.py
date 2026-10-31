@@ -44,7 +44,7 @@ __tl_layer__ = "FACADE"
 #: on the root facade). Keys are requested ``tl.<name>`` spellings; values
 #: are ``(home_module, attribute)`` rows in ``_LAZY_ATTRS`` form.
 ROOT_SURFACE_REGISTRATION: dict[str, tuple[str, str]] = {
-    "render": ("torchlens.user_funcs", "render"),
+    "render": ("torchlens._user_funcs", "render"),
     "Drawing": ("torchlens._quickstart", "Drawing"),
 }
 

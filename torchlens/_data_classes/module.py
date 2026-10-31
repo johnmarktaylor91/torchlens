@@ -981,7 +981,7 @@ class ModuleCall:
 
         cache = self.__dict__.get("_facets_cache")
         if cache is None:
-            from ..semantic.facets import FacetView
+            from .._semantic.facets import FacetView
 
             cache = FacetView(self)
             self.__dict__["_facets_cache"] = cache
@@ -1657,7 +1657,7 @@ class Module:
             rounded to 6 places; ``0.0`` when the renderer never collapses it.
         """
 
-        from ..visualization.auto_collapse import module_collapse_score
+        from .._visualization.auto_collapse import module_collapse_score
 
         return module_collapse_score(self)
 
@@ -1935,7 +1935,7 @@ class Module:
         self._single_call_or_error()
         cache = self.__dict__.get("_facets_cache")
         if cache is None:
-            from ..semantic.facets import FacetView
+            from .._semantic.facets import FacetView
 
             cache = FacetView(self)
             self.__dict__["_facets_cache"] = cache

@@ -7,8 +7,8 @@ import torch
 import torchlens as tl
 from torchlens._utils.hashing import _hashable_path_component, compute_graph_shape_hash
 from torchlens.errors import MetadataInvariantError
-from torchlens.fastlog import RecordContext
 from torchlens.intervention.types import ParentRef, TupleIndex
+from torchlens.recording import RecordContext
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import check_func_call_id_invariant
 

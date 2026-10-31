@@ -15,9 +15,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import Recorder
-from torchlens.fastlog.recover import load
 from torchlens.options import StorageOptions
+from torchlens.recording import Recorder
+from torchlens.recording.recover import load
 
 
 def _model() -> nn.Module:

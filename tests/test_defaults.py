@@ -9,7 +9,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.user_funcs as user_funcs
+import torchlens._user_funcs as user_funcs
+from torchlens import _visualization
 from torchlens.options import VisualizationOptions
 
 
@@ -216,7 +217,7 @@ def test_show_model_graph_defaults_are_stable(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    tl.visualization.show_model_graph(_TinyModel(), _tiny_input())
+    _visualization.show_model_graph(_TinyModel(), _tiny_input())
 
     assert captured_calls[-1]["layers_to_save"] is None
     assert captured_calls[-1]["mark_layer_depths"] is False
@@ -235,7 +236,7 @@ def test_show_model_graph_accepts_explicit_opt_in_overrides(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    tl.visualization.show_model_graph(
+    _visualization.show_model_graph(
         _TinyModel(),
         _tiny_input(),
         recurrence_detection=False,

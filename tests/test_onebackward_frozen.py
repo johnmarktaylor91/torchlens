@@ -92,8 +92,8 @@ class TestFacetBridge:
         guessing.
         """
 
+        from torchlens._semantic.facets import FacetView
         from torchlens.attribution.onebackward import _facet_bridge
-        from torchlens.semantic.facets import FacetView
 
         original_has = FacetView.has
 

@@ -20,8 +20,6 @@ between	declared
 bridge	submodule
 bundle	submodule
 callbacks	submodule
-capture	submodule
-captured_run	submodule
 changed	declared
 checks	submodule
 clamp	declared
@@ -44,7 +42,6 @@ extract	declared
 extract_dataset	declared
 facet	declared
 facets	declared
-fastlog	declared
 features	submodule
 fingerprint	declared
 followed_by	declared
@@ -88,6 +85,7 @@ project_out	declared
 random_like	declared
 receptive_field	submodule
 record	declared
+recording	declared
 release_model	declared
 repgeom	submodule
 replace_with	declared
@@ -95,7 +93,6 @@ report	submodule
 saturated	declared
 scale	declared
 scale_grad	declared
-semantic	submodule
 sign	declared
 site	declared
 splice_module	declared
@@ -116,10 +113,8 @@ transformer	submodule
 transforms	submodule
 types	submodule
 units	declared
-user_funcs	submodule
 validate	declared
 validation	submodule
-visualization	submodule
 viz	submodule
 when	declared
 where	declared

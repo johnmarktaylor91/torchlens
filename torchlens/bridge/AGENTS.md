@@ -74,7 +74,7 @@ optional dependency.
   root so the SAE's parameters are known sources); `latents_site` labels the
   latents node; spliced outputs equal the off path's exactly.
 - `_sae_latents.py` (exported by `sae.py`): `register(name, sae, *, site)` and
-  `unregister(name)` fill `torchlens.semantic._families._FACET_FAMILIES`; every
+  `unregister(name)` fill `torchlens._semantic._families._FACET_FAMILIES`; every
   `FacetView` consults it live, so `tl.facet(name).latent(k)` (selector name
   `"name[k]"`) and `facets["name[k]"]` work on traces captured before the
   registration. The facet is a `"codec"` transform primitive (capability class

@@ -59,7 +59,7 @@ class TestTraceStateRelocation:
 
 class TestNodeSpecRelocation:
     def test_shim_and_home_serve_one_object(self) -> None:
-        shim = importlib.import_module("torchlens.visualization.node_spec")
+        shim = importlib.import_module("torchlens._visualization.node_spec")
         home = importlib.import_module("torchlens._vocab.node_spec")
         assert shim.NodeSpec is home.NodeSpec
         assert shim.NodeSpecFn is home.NodeSpecFn
@@ -69,7 +69,7 @@ class TestNodeSpecRelocation:
 
     def test_pickle_identity_is_the_historical_path(self) -> None:
         home = importlib.import_module("torchlens._vocab.node_spec")
-        assert home.NodeSpec.__module__ == "torchlens.visualization.node_spec"
+        assert home.NodeSpec.__module__ == "torchlens._visualization.node_spec"
         spec = home.NodeSpec(lines=["a"])
         assert pickle.loads(pickle.dumps(spec)) == spec
 

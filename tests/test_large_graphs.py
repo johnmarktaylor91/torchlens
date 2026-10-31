@@ -15,10 +15,9 @@ from example_models import RandomGraphModel
 from torch import nn
 
 from torchlens import trace as trace_fn
-from torchlens.errors._base import TorchLensWarning
-from torchlens.user_funcs import validate_forward_pass
-from torchlens.visualization._rank_layout_internal import layout as rank_layout
-from torchlens.visualization._rank_layout_internal.layout import (
+from torchlens._user_funcs import validate_forward_pass
+from torchlens._visualization._rank_layout_internal import layout as rank_layout
+from torchlens._visualization._rank_layout_internal.layout import (
     RANK_LAYOUT_COST_THRESHOLD,
     SPAN_LOCAL,
     _choose_spline_mode,
@@ -28,6 +27,7 @@ from torchlens.visualization._rank_layout_internal.layout import (
     estimate_rank_layout_cost,
     get_node_placement_engine,
 )
+from torchlens.errors._base import TorchLensWarning
 
 # Session-private output root (conftest exports it before collection); the
 # repo-local fallback raced across parallel worktree lanes (b2p2 R77).

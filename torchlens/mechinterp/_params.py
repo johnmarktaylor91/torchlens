@@ -32,7 +32,7 @@ from typing import Any
 
 import torch
 
-from ..semantic.tolerances import within_reconstruction_tolerance
+from .._semantic.tolerances import within_reconstruction_tolerance
 from ._errors import refuse
 from ._factored import FactoredMatrix
 
@@ -356,7 +356,7 @@ def _verify_qkv(
     flat = weight_view.permute(1, 0, 2).reshape(hidden.shape[-1], n_heads * d_head)
     recon = hidden @ flat
     # The reconstruction is an independent summation, so the budget carries the
-    # accumulated-|addend| magnitude (semantic/tolerances.py); without it the
+    # accumulated-|addend| magnitude (_semantic/tolerances.py); without it the
     # strict form refuses correct views wherever q/k/v cancel (all 36 roles of
     # real GPT-2 small, measured), while wrong views still miss by >1e4x.
     magnitude = hidden.detach().abs() @ flat.detach().abs()

@@ -17,9 +17,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens._constants import OP_LOG_FIELD_ORDER
-from torchlens.capture import projections
-from torchlens.capture.projections import (
+from torchlens._capture import projections
+from torchlens._capture.projections import (
     _LIVE_FIELD_GETTER_PAIRS,
     _LIVE_FIELD_GETTERS,
     _OPLOG_FIELDS_KNOWN_LATE,
@@ -27,6 +26,7 @@ from torchlens.capture.projections import (
     LiveOpView,
     LiveOpViewFieldNotYetWritten,
 )
+from torchlens._constants import OP_LOG_FIELD_ORDER
 
 # The documented LiveOpView field surface: live getter-table keys plus the
 # known-late names. Any change here is a reviewed contract diff — declare a new

@@ -37,7 +37,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 import torchlens as tl
 from tests.classics_corpus._loader import CorpusEntry, build_entry, corpus_entries
-from torchlens.capture.compute_record import MAC_FAMILY_NAMES, derive_compute_record_for_op
+from torchlens._capture.compute_record import MAC_FAMILY_NAMES, derive_compute_record_for_op
 from torchlens.report import backward_status
 
 pytestmark = pytest.mark.slow

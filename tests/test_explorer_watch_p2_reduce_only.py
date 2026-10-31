@@ -16,7 +16,7 @@ import torch
 
 import torchlens as tl
 from torchlens._ir.summary_role import summary
-from torchlens.fastlog import CaptureSpec
+from torchlens.recording import CaptureSpec
 
 
 def _model() -> torch.nn.Module:

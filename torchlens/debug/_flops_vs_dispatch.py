@@ -162,7 +162,7 @@ def flops_vs_dispatch(
 
     from torch.utils.flop_counter import FlopCounterMode
 
-    from .. import user_funcs
+    from .. import _user_funcs as user_funcs
     from ..report._compute_truth import compute_aggregation
 
     rng_state = torch.get_rng_state()

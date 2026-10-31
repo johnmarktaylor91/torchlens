@@ -19,12 +19,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io.prerelease import activate_prerelease_fields
-from torchlens.capture.structure_only import (
+from torchlens._capture.structure_only import (
     STRUCTURE_ONLY_CAPABILITIES,
     StructureOnlyCapabilityError,
     require_structure_only_capability,
 )
+from torchlens._io.prerelease import activate_prerelease_fields
 from torchlens.options import CaptureOptions
 
 TORCHLENS_DIR = Path(tl.__file__).resolve().parent
@@ -51,7 +51,7 @@ def _structure_trace():
 
 def test_nobody_reads_the_capability_table_but_the_chokepoint() -> None:
     for path in TORCHLENS_DIR.rglob("*.py"):
-        if path.name == "structure_only.py" and path.parent.name == "capture":
+        if path.name == "structure_only.py" and path.parent.name == "_capture":
             continue
         text = path.read_text(encoding="utf-8")
         assert "STRUCTURE_ONLY_CAPABILITIES[" not in text, str(path)
@@ -122,7 +122,7 @@ def test_doc_table_locksteps_with_the_in_code_authority() -> None:
 
 
 def test_row_grammar_is_closed_and_red_capable() -> None:
-    from torchlens.capture.structure_only import CapabilityRow, _validate_row_grammar
+    from torchlens._capture.structure_only import CapabilityRow, _validate_row_grammar
 
     with pytest.raises(AssertionError):
         _validate_row_grammar(

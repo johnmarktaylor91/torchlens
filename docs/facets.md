@@ -139,7 +139,7 @@ with tl.facets.adding(my_attention):
 ```
 
 `tl.facets.reset()` restores the process registry to built-ins. `tl.facets.functions()`
-and `tl.facets.info(class_name)` expose registry metadata.
+and `tl.facets.describe(class_name)` expose registry metadata.
 
 Conflict resolution is deterministic: `class_qualname` is more specific than
 `class_name`, which is more specific than a predicate; user recipes beat built-ins
@@ -150,11 +150,11 @@ only within the same specificity tier. True same-tier facet collisions warn.
 A recipe receives the TorchLens **`Module` record**, not the live `nn.Module`. The
 record does not proxy arbitrary live attributes as direct attributes -- they are
 snapshotted into `module.custom_attributes`. Use `config_value(module, *names)`
-(from `torchlens.semantic.recipes._helpers`), which checks record attributes **and**
+(from `torchlens._semantic.recipes._helpers`), which checks record attributes **and**
 the `custom_attributes` snapshot, instead of `module.num_heads` directly:
 
 ```python
-from torchlens.semantic.recipes._helpers import config_value, child_output_spec
+from torchlens._semantic.recipes._helpers import config_value, child_output_spec
 
 def my_attention(module):
     n_heads = config_value(module, "num_heads", "n_heads", "num_attention_heads", "n_head")
@@ -379,11 +379,11 @@ The final norm is derived structurally from the traced dataflow (the innermost
 classified norm module containing the head's input op), never by a name search
 over the module tree.
 
-`torchlens.semantic.logit_lens` projects each block's residual-stream facet
+`torchlens._semantic.logit_lens` projects each block's residual-stream facet
 through the model's own final norm + unembedding:
 
 ```python
-from torchlens.semantic import logit_lens
+from torchlens._semantic import logit_lens
 
 result = logit_lens(log)                      # resid_post through the model's head
 print(result.summary(tokenizer=tokenizer))    # per-layer top-1 table
@@ -411,7 +411,7 @@ weak evidence and often look like noise even when the layer carries the informat
 across depth, compare it with a probe or a tuned lens passed as `lens=`, and do not read one early
 layer's top token as what that layer "thinks".
 
-`torchlens.semantic.logit_lens_predictions` is the streaming reduction of the
+`torchlens._semantic.logit_lens_predictions` is the streaming reduction of the
 same sweep: it projects ONE layer at a time, keeps only per-position top-k
 values, the full-vocabulary `logsumexp`, and requested-token logits /
 probabilities / one-based ranks, then discards that layer's full projection --
@@ -419,7 +419,7 @@ so long sequences never materialize every `[batch, positions, vocab]` tensor
 at once:
 
 ```python
-from torchlens.semantic import logit_lens_predictions
+from torchlens._semantic import logit_lens_predictions
 
 preds = logit_lens_predictions(log, k=5, positions=[-1], tokens=[the_id])
 preds.rows[3].top_ids                         # one layer's top-k token ids
@@ -556,8 +556,8 @@ wrong facet label is a confidently mislabelled part of someone's model.
 ## Recipe Plugins
 
 On FIRST USE of the facet-recipe subsystem (not at `import torchlens` --
-the loader is module-level in `torchlens/semantic/recipes/__init__.py`, and
-`torchlens.semantic` is lazy), TorchLens loads installed setuptools entry
+the loader is module-level in `torchlens/_semantic/recipes/__init__.py`, and
+`torchlens._semantic` is lazy), TorchLens loads installed setuptools entry
 points in the `torchlens.recipes` group. A broken entry point therefore warns
 when facets are first touched, not at import. Entry points are never scanned
 from local directories.
@@ -565,7 +565,7 @@ from local directories.
 ## Built-In Inventory
 
 TorchLens records built-in facet capabilities as data in
-`torchlens.semantic.recipes.BUILTIN_FACET_CAPABILITY_INVENTORY`. Current classes
+`torchlens._semantic.recipes.BUILTIN_FACET_CAPABILITY_INVENTORY`. Current classes
 are:
 
 ```text

@@ -416,7 +416,7 @@ def _structure_evidence_facts(log: Any) -> dict[str, Any]:
     that should stop it.
     """
 
-    from .capture.structure_only import claim_status_for, registered_discharge
+    from ._capture.structure_only import claim_status_for, registered_discharge
 
     facts: dict[str, Any] = {
         "claim_status": claim_status_for(log).value,

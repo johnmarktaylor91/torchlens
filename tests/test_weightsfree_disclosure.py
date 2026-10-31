@@ -198,7 +198,7 @@ def test_dot_render_carries_banner(tmp_path) -> None:
     "export_name", ["chrome_trace", "speedscope", "flamegraph", "memory_timeline"]
 )
 def test_measurement_exports_refuse_typed(export_name: str, tmp_path) -> None:
-    from torchlens.capture.structure_only import StructureOnlyCapabilityError
+    from torchlens._capture.structure_only import StructureOnlyCapabilityError
 
     trace = _meta_capture()
     exporter = getattr(tl.export, export_name)
@@ -209,7 +209,7 @@ def test_measurement_exports_refuse_typed(export_name: str, tmp_path) -> None:
 
 def test_xarray_refuses_through_values_code(tmp_path) -> None:
     pytest.importorskip("xarray")
-    from torchlens.capture.structure_only import StructureOnlyCapabilityError
+    from torchlens._capture.structure_only import StructureOnlyCapabilityError
 
     trace = _meta_capture()
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:

@@ -1,7 +1,7 @@
 """Single-sourcing gate for the lookback payload policy vocabulary.
 
 The canonical authority is the ``LookbackPayloadPolicy`` literal in
-``torchlens/fastlog/options.py``; the runtime tuple is derived from it with
+``torchlens/recording/options.py``; the runtime tuple is derived from it with
 ``typing.get_args``, so validation and the type can never drift apart. These
 tests pin that derivation and the validation behavior at both boundaries.
 """
@@ -13,7 +13,7 @@ from typing import get_args
 import pytest
 
 from torchlens._errors import InvalidArgumentError
-from torchlens.fastlog.options import (
+from torchlens.recording.options import (
     LOOKBACK_PAYLOAD_POLICIES,
     LookbackPayloadPolicy,
     RecordingOptions,

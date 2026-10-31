@@ -25,7 +25,7 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from torchlens.capture.session import capture_session_for_events
+from torchlens._capture.session import capture_session_for_events
 
 from ._models import BufferOutputModel, _small_vec_input
 

@@ -2,7 +2,7 @@
 
 The verification reconstructs each q/k/v facet as ``input @ W (+ b)`` and
 compares it with the captured payload under the cancellation-aware
-reconstruction budget (``semantic/tolerances.py``). These tests pin both
+reconstruction budget (``_semantic/tolerances.py``). These tests pin both
 sides of that tripwire on real-class models: the true views verify, and a
 wrong view refuses typed whether the error is gross (permuted heads,
 permuted d_head columns, a transposed per-head view) or small (one head

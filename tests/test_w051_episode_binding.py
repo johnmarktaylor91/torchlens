@@ -26,13 +26,13 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_derivation import (
+from torchlens._capture._episode_derivation import (
     CAPTURE_DIGEST_SCHEMA,
     mint_capture_digest,
     recompute_capture_digests,
     rederived_evidence_matches,
 )
-from torchlens.capture._episode_ledger import episode_ledger_for
+from torchlens._capture._episode_ledger import episode_ledger_for
 from torchlens.errors import TorchLensError, TorchLensWarning
 from torchlens.options import CaptureOptions, EpisodeOptions
 

@@ -16,15 +16,15 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.visualization import lenses
-from torchlens.visualization.lenses._nonfinite import (
+from torchlens._visualization import lenses
+from torchlens._visualization.lenses._nonfinite import (
     _MOTIFS,
     NONFINITE_STATES,
     derive_nonfinite_channel,
     nonfinite_spec_fn,
 )
-from torchlens.visualization.lenses.audit import CORPUS
-from torchlens.visualization.node_spec import NodeSpec
+from torchlens._visualization.lenses.audit import CORPUS
+from torchlens._visualization.node_spec import NodeSpec
 
 
 def _member(name: str) -> Any:

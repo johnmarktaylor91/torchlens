@@ -30,7 +30,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.visualization import render_ir
+from torchlens._visualization import render_ir
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
@@ -104,7 +104,7 @@ def test_region_build_scans_each_collection_a_bounded_number_of_times(
     monkeypatch.setattr(render_ir, "_region_call_depths", counting_depths)
     monkeypatch.setattr(render_ir, "finalize_forward_regions", counting_finalize)
     for module_name in ("_render_dot", "_render_entrypoints", "_render_common"):
-        module = __import__(f"torchlens.visualization.{module_name}", fromlist=["x"])
+        module = __import__(f"torchlens._visualization.{module_name}", fromlist=["x"])
         if hasattr(module, "finalize_forward_regions"):
             monkeypatch.setattr(module, "finalize_forward_regions", counting_finalize)
 

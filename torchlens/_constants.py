@@ -1111,7 +1111,7 @@ IGNORED_FUNCS = [
     # they must be re-added here to be decorated. Without them a forward using
     # ``torch.rand_like`` / ``randn_like`` / ``randint_like`` records the freshly-allocated
     # output as an unattributed literal (the r45 ``.mH`` capture-gap class); their arg-specs
-    # already exist in capture/arg_positions.py (_FACTORY_SOURCE_SPEC / randintlike).
+    # already exist in _capture/arg_positions.py (_FACTORY_SOURCE_SPEC / randintlike).
     ("torch", "rand_like"),
     ("torch", "randn_like"),
     ("torch", "randint_like"),

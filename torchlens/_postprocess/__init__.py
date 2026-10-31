@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._capture.session import capture_session_for_events
 from .._data_classes._compaction import compact_op_metadata as _compact_op_metadata
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._trace_core.relation_views import freeze_trace_relation_views as _freeze_relation_views
@@ -40,7 +41,6 @@ from .._utils.hashing import (
 )
 from .._utils.tensor_utils import _is_cuda_available
 from ..backends.torch.ops import _compact_ancestor_sets
-from ..capture.session import capture_session_for_events
 from . import ast_branches
 from ._executor import StepContext, run_pipeline
 from ._materialize import materialize_from_events
@@ -262,7 +262,7 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         and self.__dict__.get("_out_writer") is not None
     )
     # WT1 A-IV item 18 (lane A08): a step-18 STAGED streamed bundle publishes
-    # at the settlement seam (capture/trace.py), which runs after this scrub;
+    # at the settlement seam (_capture/trace.py), which runs after this scrub;
     # popping the writer here would strand the staged bundle in its temp dir.
     keep_staged_publish = bool(
         getattr(self.__dict__.get("_out_writer"), "staged_for_settlement", False)
@@ -282,7 +282,7 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         # B1-02: session-time semantic-output scratch. Two of the four pin live
         # user objects (an HF tokenizer, a model-derived metadata key), so this
         # seam is the postprocess-side belt for the capture-boundary drop in
-        # ``capture/trace.py`` -- including the halted postprocess, which
+        # ``_capture/trace.py`` -- including the halted postprocess, which
         # reaches here through ``_finalize_halted_trace``.
         "_output_style",
         "_output_head",

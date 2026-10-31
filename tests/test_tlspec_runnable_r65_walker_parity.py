@@ -38,6 +38,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.trace import (
+    _OPAQUE_INPUT_LEAF,
+    _record_runnable_input_literal_leaves,
+    _record_runnable_input_tensor_sites,
+)
 from torchlens._input_walk import (
     INPUT_CONTAINER_KINDS,
     classify_input_container,
@@ -60,11 +65,6 @@ from torchlens._runnable_execution import (
     _value_at_path,
 )
 from torchlens._runnable_seam import runnable_trace_state
-from torchlens.capture.trace import (
-    _OPAQUE_INPUT_LEAF,
-    _record_runnable_input_literal_leaves,
-    _record_runnable_input_tensor_sites,
-)
 from torchlens.errors import PathDivergenceError, RunnablePreflightError
 from torchlens.options import CaptureOptions
 

@@ -21,8 +21,8 @@ from ..._utils._torch_compat import get_current_graph_task_id_fn
 from ..._utils.display import _record_phase_timing
 from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
 from ..._utils.tensor_utils import SaveMode, safe_copy
-from ...fastlog.types import CaptureSpec
 from ...intervention.selectors import BaseSelector
+from ...recording.types import CaptureSpec
 from ._tl import (
     get_param_meta,
     get_tensor_label,
@@ -32,8 +32,8 @@ from ._tl import (
 )
 
 if TYPE_CHECKING:
+    from ..._capture.session import LiveGradientReference
     from ..._data_classes.trace import Trace
-    from ...capture.session import LiveGradientReference
 
 
 _IMPLICIT_BACKWARD_TASK_IDS: weakref.WeakKeyDictionary[Any, int] = weakref.WeakKeyDictionary()
@@ -324,7 +324,7 @@ def _escrow_live_gradient_reference(
         Whether the hook sits on model state (see ``_add_tensor_backward_hook``).
     """
 
-    from ...capture.session import LiveGradientReference, capture_session_for
+    from ..._capture.session import LiveGradientReference, capture_session_for
     from .completeness_witness import internal_scalar_read
 
     session = capture_session_for(trace)
@@ -564,7 +564,7 @@ def _forward_op_count_at_backward_trigger(trace: "Trace") -> int | None:
         layer ``step_index``. ``None`` means no structural count is available.
     """
 
-    from ...capture import projections
+    from ..._capture import projections
 
     active_state = getattr(projections, "_active_recording_state", None)
     if active_state is not None and getattr(active_state, "runtime_trace", None) is trace:

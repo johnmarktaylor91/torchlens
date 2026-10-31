@@ -15,8 +15,8 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._snoop import normalize_echo
 from torchlens.errors import NarrationConfigError
-from torchlens.fastlog.options import RecordingOptions
 from torchlens.options import NarrationOptions
+from torchlens.recording.options import RecordingOptions
 
 
 class OneOp(nn.Module):
@@ -160,7 +160,7 @@ def test_echo_on_non_torch_backend_refuses_typed() -> None:
 def test_record_without_echo_or_save_still_refuses() -> None:
     """The pre-existing empty-capture refusal is untouched."""
 
-    from torchlens.fastlog.exceptions import RecordingConfigError
+    from torchlens.recording.exceptions import RecordingConfigError
 
     with pytest.raises(RecordingConfigError):
         tl.record(OneOp(), torch.randn(2, 4))
@@ -169,7 +169,7 @@ def test_record_without_echo_or_save_still_refuses() -> None:
 def test_halt_only_fast_path_declines_when_echo_is_armed() -> None:
     """The echo term in ``_is_halt_only_capture`` (snoop row 1)."""
 
-    from torchlens.capture.predicates import _is_halt_only_capture
+    from torchlens._capture.predicates import _is_halt_only_capture
 
     halt_only = RecordingOptions(halt=lambda ctx: False)
     assert _is_halt_only_capture(halt_only)

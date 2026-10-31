@@ -10389,7 +10389,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -10546,7 +10546,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -10703,7 +10703,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -10860,7 +10860,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -11017,7 +11017,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -11170,7 +11170,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -11323,7 +11323,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -11480,7 +11480,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0",
      "1",
@@ -11675,7 +11675,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -11851,7 +11851,7 @@
     "class_qualname": "capture_oracle._models.TinyTransformer",
     "cls": null,
     "code_context": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
@@ -12097,7 +12097,7 @@
      "\"norm_first\"": false
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -12463,7 +12463,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
     "forward_args_template": null,
@@ -12646,7 +12646,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -12829,7 +12829,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -13014,7 +13014,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -13202,7 +13202,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
     "forward_args_template": null,
@@ -13393,7 +13393,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -13584,7 +13584,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -13782,7 +13782,7 @@
     "custom_methods": [
      "merge_masks"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -14096,7 +14096,7 @@
      "\"pre_hook_invocations\"": 0
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -14489,7 +14489,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -14524,7 +14524,7 @@
       "\"add_2_34:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
     "flops_total": 48,
@@ -14885,7 +14885,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -14920,7 +14920,7 @@
       "\"add_2_34:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
     "flops_total": 48,
@@ -15300,7 +15300,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -15333,7 +15333,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -15699,7 +15699,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -15732,7 +15732,7 @@
       "\"dropout_1_26:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -16107,7 +16107,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -16140,7 +16140,7 @@
       "\"dropout_2_31:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
     "flops_total": 192,
@@ -16525,7 +16525,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -16558,7 +16558,7 @@
       "\"dropout_3_33:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -16927,7 +16927,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -16960,7 +16960,7 @@
       "\"getitem_1_8:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -17323,7 +17323,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -17356,7 +17356,7 @@
       "\"getitem_2_9:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -17719,7 +17719,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -17752,7 +17752,7 @@
       "\"getitem_3_10:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -18116,7 +18116,7 @@
       "\"input_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -18466,7 +18466,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -18499,7 +18499,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
     "flops_total": 420,
@@ -18919,7 +18919,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -18952,7 +18952,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
     "flops_total": 420,
@@ -19368,7 +19368,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -19401,7 +19401,7 @@
       "\"linear_1_2:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
     "flops_total": 1944,
@@ -19790,7 +19790,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -19823,7 +19823,7 @@
       "\"linear_2_23:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
     "flops_total": 648,
@@ -20208,7 +20208,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -20241,7 +20241,7 @@
       "\"linear_3_29:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
     "flops_total": 1296,
@@ -20637,7 +20637,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -20670,7 +20670,7 @@
       "\"linear_4_32:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
     "flops_total": 1224,
@@ -21055,7 +21055,7 @@
       "\"output_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
     "flops_total": 0,
@@ -21422,7 +21422,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -21455,7 +21455,7 @@
       "\"permute_1_21:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -21820,7 +21820,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -21853,7 +21853,7 @@
       "\"relu_1_30:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -22214,7 +22214,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -22247,7 +22247,7 @@
       "\"reshape_1_22:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -22619,7 +22619,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -22654,7 +22654,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
     "flops_total": 1764,
@@ -23056,7 +23056,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -23089,7 +23089,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -23449,7 +23449,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -23482,7 +23482,7 @@
       "\"transpose_1_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -23853,7 +23853,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -23886,7 +23886,7 @@
       "\"transpose_2_5:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -24257,7 +24257,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -24292,7 +24292,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -24657,7 +24657,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -24692,7 +24692,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -25057,7 +25057,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -25092,7 +25092,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -25453,7 +25453,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -25486,7 +25486,7 @@
       "\"transpose_6_25:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -25869,7 +25869,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -25902,7 +25902,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -26274,7 +26274,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -26307,7 +26307,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -26671,7 +26671,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -26706,7 +26706,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -27069,7 +27069,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -27104,7 +27104,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -27467,7 +27467,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -27502,7 +27502,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -27869,7 +27869,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -27904,7 +27904,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -28275,7 +28275,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -28310,7 +28310,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -28681,7 +28681,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -28716,7 +28716,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -29083,7 +29083,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -29116,7 +29116,7 @@
       "\"view_7_24:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -30380,7 +30380,7 @@
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": "<raises AttributeError>",
-   "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_distributed_plane_p": null,
@@ -31909,7 +31909,7 @@
    "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
-   "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "facet_registry_snapshot": "<torchlens._semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
    "forward_docstring": "Encode a short sequence.\n\n        Parameters\n        ----------\n        x:\n            Sequence batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Encoded sequence.\n        ",
    "forward_duration": "<measured>",
@@ -34333,7 +34333,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [
@@ -44815,7 +44815,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -44972,7 +44972,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -45129,7 +45129,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -45286,7 +45286,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -45443,7 +45443,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -45596,7 +45596,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -45749,7 +45749,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -45906,7 +45906,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0",
      "1",
@@ -46101,7 +46101,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -46277,7 +46277,7 @@
     "class_qualname": "capture_oracle._models.TinyTransformer",
     "cls": null,
     "code_context": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
@@ -46523,7 +46523,7 @@
      "\"norm_first\"": false
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -46889,7 +46889,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
     "forward_args_template": null,
@@ -47072,7 +47072,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -47255,7 +47255,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -47440,7 +47440,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -47628,7 +47628,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
     "forward_args_template": null,
@@ -47819,7 +47819,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -48010,7 +48010,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -48208,7 +48208,7 @@
     "custom_methods": [
      "merge_masks"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -48522,7 +48522,7 @@
      "\"pre_hook_invocations\"": 0
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -48915,7 +48915,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -48950,7 +48950,7 @@
       "\"add_2_34:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
     "flops_total": 48,
@@ -49311,7 +49311,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -49346,7 +49346,7 @@
       "\"add_2_34:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
     "flops_total": 48,
@@ -49726,7 +49726,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -49759,7 +49759,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -50125,7 +50125,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -50158,7 +50158,7 @@
       "\"dropout_1_26:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -50533,7 +50533,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -50566,7 +50566,7 @@
       "\"dropout_2_31:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
     "flops_total": 192,
@@ -50951,7 +50951,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -50984,7 +50984,7 @@
       "\"dropout_3_33:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -51353,7 +51353,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -51386,7 +51386,7 @@
       "\"getitem_1_8:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -51749,7 +51749,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -51782,7 +51782,7 @@
       "\"getitem_2_9:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -52145,7 +52145,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -52178,7 +52178,7 @@
       "\"getitem_3_10:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -52542,7 +52542,7 @@
       "\"input_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -52892,7 +52892,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -52925,7 +52925,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
     "flops_total": 420,
@@ -53345,7 +53345,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -53378,7 +53378,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
     "flops_total": 420,
@@ -53794,7 +53794,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -53827,7 +53827,7 @@
       "\"linear_1_2:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
     "flops_total": 1944,
@@ -54216,7 +54216,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -54249,7 +54249,7 @@
       "\"linear_2_23:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
     "flops_total": 648,
@@ -54634,7 +54634,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -54667,7 +54667,7 @@
       "\"linear_3_29:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
     "flops_total": 1296,
@@ -55063,7 +55063,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -55096,7 +55096,7 @@
       "\"linear_4_32:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
     "flops_total": 1224,
@@ -55481,7 +55481,7 @@
       "\"output_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
     "flops_total": 0,
@@ -55848,7 +55848,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -55881,7 +55881,7 @@
       "\"permute_1_21:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -56246,7 +56246,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -56279,7 +56279,7 @@
       "\"relu_1_30:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -56640,7 +56640,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -56673,7 +56673,7 @@
       "\"reshape_1_22:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -57045,7 +57045,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -57080,7 +57080,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
     "flops_total": 1764,
@@ -57482,7 +57482,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -57515,7 +57515,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -57875,7 +57875,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -57908,7 +57908,7 @@
       "\"transpose_1_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -58279,7 +58279,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -58312,7 +58312,7 @@
       "\"transpose_2_5:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -58683,7 +58683,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -58718,7 +58718,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -59083,7 +59083,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -59118,7 +59118,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -59483,7 +59483,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -59518,7 +59518,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -59879,7 +59879,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -59912,7 +59912,7 @@
       "\"transpose_6_25:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -60295,7 +60295,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -60328,7 +60328,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -60700,7 +60700,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -60733,7 +60733,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -61097,7 +61097,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -61132,7 +61132,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -61495,7 +61495,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -61530,7 +61530,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -61893,7 +61893,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -61928,7 +61928,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -62295,7 +62295,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -62330,7 +62330,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -62701,7 +62701,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -62736,7 +62736,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -63107,7 +63107,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -63142,7 +63142,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -63509,7 +63509,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -63542,7 +63542,7 @@
       "\"view_7_24:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -64806,7 +64806,7 @@
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": "<raises AttributeError>",
-   "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_distributed_plane_p": null,
@@ -66323,7 +66323,7 @@
    "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
-   "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "facet_registry_snapshot": "<torchlens._semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
    "forward_docstring": "Encode a short sequence.\n\n        Parameters\n        ----------\n        x:\n            Sequence batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Encoded sequence.\n        ",
    "forward_duration": "<measured>",
@@ -68784,7 +68784,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [
@@ -79293,7 +79293,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -79450,7 +79450,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -79607,7 +79607,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -79764,7 +79764,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -79921,7 +79921,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -80074,7 +80074,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -80227,7 +80227,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -80384,7 +80384,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0",
      "1",
@@ -80579,7 +80579,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -80755,7 +80755,7 @@
     "class_qualname": "capture_oracle._models.TinyTransformer",
     "cls": null,
     "code_context": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
@@ -81001,7 +81001,7 @@
      "\"norm_first\"": false
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -81367,7 +81367,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
     "forward_args_template": null,
@@ -81550,7 +81550,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -81733,7 +81733,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -81918,7 +81918,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -82106,7 +82106,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
     "forward_args_template": null,
@@ -82297,7 +82297,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -82488,7 +82488,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -82686,7 +82686,7 @@
     "custom_methods": [
      "merge_masks"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -83000,7 +83000,7 @@
      "\"pre_hook_invocations\"": 0
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -83393,7 +83393,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -83428,7 +83428,7 @@
       "\"add_2_34:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
     "flops_total": 48,
@@ -83789,7 +83789,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -83824,7 +83824,7 @@
       "\"add_2_34:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
     "flops_total": 48,
@@ -84204,7 +84204,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -84237,7 +84237,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -84603,7 +84603,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -84636,7 +84636,7 @@
       "\"dropout_1_26:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -85011,7 +85011,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -85044,7 +85044,7 @@
       "\"dropout_2_31:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
     "flops_total": 192,
@@ -85429,7 +85429,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -85462,7 +85462,7 @@
       "\"dropout_3_33:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -85831,7 +85831,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -85864,7 +85864,7 @@
       "\"getitem_1_8:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -86227,7 +86227,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -86260,7 +86260,7 @@
       "\"getitem_2_9:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -86623,7 +86623,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -86656,7 +86656,7 @@
       "\"getitem_3_10:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -87020,7 +87020,7 @@
       "\"input_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -87370,7 +87370,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -87403,7 +87403,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
     "flops_total": 420,
@@ -87823,7 +87823,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -87856,7 +87856,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
     "flops_total": 420,
@@ -88272,7 +88272,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -88305,7 +88305,7 @@
       "\"linear_1_2:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
     "flops_total": 1944,
@@ -88694,7 +88694,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -88727,7 +88727,7 @@
       "\"linear_2_23:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
     "flops_total": 648,
@@ -89112,7 +89112,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -89145,7 +89145,7 @@
       "\"linear_3_29:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
     "flops_total": 1296,
@@ -89541,7 +89541,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -89574,7 +89574,7 @@
       "\"linear_4_32:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
     "flops_total": 1224,
@@ -89959,7 +89959,7 @@
       "\"output_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
     "flops_total": 0,
@@ -90326,7 +90326,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -90359,7 +90359,7 @@
       "\"permute_1_21:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -90724,7 +90724,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -90757,7 +90757,7 @@
       "\"relu_1_30:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -91118,7 +91118,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -91151,7 +91151,7 @@
       "\"reshape_1_22:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -91523,7 +91523,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -91558,7 +91558,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
     "flops_total": 1764,
@@ -91960,7 +91960,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -91993,7 +91993,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -92353,7 +92353,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -92386,7 +92386,7 @@
       "\"transpose_1_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -92757,7 +92757,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -92790,7 +92790,7 @@
       "\"transpose_2_5:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -93161,7 +93161,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -93196,7 +93196,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -93561,7 +93561,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -93596,7 +93596,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -93961,7 +93961,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -93996,7 +93996,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -94357,7 +94357,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -94390,7 +94390,7 @@
       "\"transpose_6_25:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -94773,7 +94773,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -94806,7 +94806,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -95178,7 +95178,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -95211,7 +95211,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -95575,7 +95575,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -95610,7 +95610,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -95973,7 +95973,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -96008,7 +96008,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -96371,7 +96371,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -96406,7 +96406,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -96773,7 +96773,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -96808,7 +96808,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -97179,7 +97179,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -97214,7 +97214,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -97585,7 +97585,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -97620,7 +97620,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -97987,7 +97987,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -98020,7 +98020,7 @@
       "\"view_7_24:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -99284,7 +99284,7 @@
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": "<raises AttributeError>",
-   "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_distributed_plane_p": null,
@@ -100813,7 +100813,7 @@
    "escape_detector_verified": null,
    "escape_diagnostics": [],
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
-   "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "facet_registry_snapshot": "<torchlens._semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
    "forward_docstring": "Encode a short sequence.\n\n        Parameters\n        ----------\n        x:\n            Sequence batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Encoded sequence.\n        ",
    "forward_duration": "<measured>",
@@ -103237,7 +103237,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [
@@ -113715,7 +113715,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -113872,7 +113872,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -114029,7 +114029,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -114186,7 +114186,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -114343,7 +114343,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -114496,7 +114496,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -114649,7 +114649,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -114806,7 +114806,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0",
      "1",
@@ -115001,7 +115001,7 @@
       "label": null
      }
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [
      "0"
     ],
@@ -115177,7 +115177,7 @@
     "class_qualname": "capture_oracle._models.TinyTransformer",
     "cls": null,
     "code_context": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_arg_names": [],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
@@ -115423,7 +115423,7 @@
      "\"norm_first\"": false
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -115789,7 +115789,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
     "forward_args_template": null,
@@ -115972,7 +115972,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -116155,7 +116155,7 @@
      "\"p\"": "0.0"
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -116340,7 +116340,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -116528,7 +116528,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
     "forward_args_template": null,
@@ -116719,7 +116719,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -116910,7 +116910,7 @@
     "custom_methods": [
      "reset_parameters"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -117108,7 +117108,7 @@
     "custom_methods": [
      "merge_masks"
     ],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -117422,7 +117422,7 @@
      "\"pre_hook_invocations\"": 0
     },
     "custom_methods": [],
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
     "forward_args_template": null,
@@ -117815,7 +117815,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -117850,7 +117850,7 @@
       "\"add_2_34:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
     "flops_total": 48,
@@ -118179,7 +118179,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -118214,7 +118214,7 @@
       "\"add_2_34:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
     "flops_total": 48,
@@ -118562,7 +118562,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -118595,7 +118595,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -118937,7 +118937,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -118970,7 +118970,7 @@
       "\"dropout_1_26:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -119322,7 +119322,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -119355,7 +119355,7 @@
       "\"dropout_2_31:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
     "flops_total": 192,
@@ -119717,7 +119717,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -119750,7 +119750,7 @@
       "\"dropout_3_33:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -120100,7 +120100,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -120133,7 +120133,7 @@
       "\"getitem_1_8:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -120476,7 +120476,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -120509,7 +120509,7 @@
       "\"getitem_2_9:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -120852,7 +120852,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -120885,7 +120885,7 @@
       "\"getitem_3_10:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -121229,7 +121229,7 @@
       "\"input_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -121569,7 +121569,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -121602,7 +121602,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
     "flops_total": 420,
@@ -121996,7 +121996,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -122029,7 +122029,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
     "flops_total": 420,
@@ -122422,7 +122422,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -122455,7 +122455,7 @@
       "\"linear_1_2:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
     "flops_total": 1944,
@@ -122821,7 +122821,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -122854,7 +122854,7 @@
       "\"linear_2_23:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
     "flops_total": 648,
@@ -123217,7 +123217,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -123250,7 +123250,7 @@
       "\"linear_3_29:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
     "flops_total": 1296,
@@ -123623,7 +123623,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -123656,7 +123656,7 @@
       "\"linear_4_32:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
     "flops_total": 1224,
@@ -124022,7 +124022,7 @@
       "\"output_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
     "flops_total": 0,
@@ -124353,7 +124353,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -124386,7 +124386,7 @@
       "\"permute_1_21:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -124729,7 +124729,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -124762,7 +124762,7 @@
       "\"relu_1_30:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
     "flops_total": 96,
@@ -125101,7 +125101,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -125134,7 +125134,7 @@
       "\"reshape_1_22:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -125479,7 +125479,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -125514,7 +125514,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
     "flops_total": 1764,
@@ -125866,7 +125866,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -125899,7 +125899,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -126235,7 +126235,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -126268,7 +126268,7 @@
       "\"transpose_1_1:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -126617,7 +126617,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -126650,7 +126650,7 @@
       "\"transpose_2_5:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -126997,7 +126997,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -127032,7 +127032,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -127375,7 +127375,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -127410,7 +127410,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -127753,7 +127753,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -127788,7 +127788,7 @@
       "\"transpose_5_16:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -128127,7 +128127,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -128160,7 +128160,7 @@
       "\"transpose_6_25:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -128521,7 +128521,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -128554,7 +128554,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -128905,7 +128905,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -128938,7 +128938,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -129278,7 +129278,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -129313,7 +129313,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -129653,7 +129653,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -129688,7 +129688,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -130028,7 +130028,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -130063,7 +130063,7 @@
       "\"view_3_15:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -130406,7 +130406,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -130441,7 +130441,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -130788,7 +130788,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -130823,7 +130823,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -131170,7 +131170,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -131205,7 +131205,7 @@
       "\"view_6_19:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -131549,7 +131549,7 @@
       "label": null
      }
     ],
-    "compute_record": "<torchlens.capture.compute_record.ComputeRecord>",
+    "compute_record": "<torchlens._capture.compute_record.ComputeRecord>",
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
@@ -131582,7 +131582,7 @@
       "\"view_7_24:1\""
      ]
     },
-    "facets": "<torchlens.semantic.facets.FacetView>",
+    "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
     "flops_total": 0,
@@ -132512,7 +132512,7 @@
    "_annotation_blobs": null,
    "_append_sequence_id": 0,
    "_buffer_persistence": {},
-   "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_distributed_plane_p": null,
@@ -136459,7 +136459,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [

@@ -23,6 +23,12 @@ from typing import Any, Literal, cast
 import torch
 
 from ... import _state
+from ..._capture.peak_memory import (
+    peak_rss_bytes,
+    process_rss_bytes,
+    record_backward_peak,
+    reset_peak_rss,
+)
 from ..._data_classes.backward_pass import BackwardPass
 from ..._data_classes.func_call_location import FuncCallLocation
 from ..._data_classes.grad_fn import GradFn, _paired_pass_op
@@ -49,12 +55,6 @@ from ..._utils._torch_compat import (
 from ..._utils._torch_symbols import torch_attr
 from ..._utils.introspection import _get_code_qualname, _get_col_offset
 from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
-from ...capture.peak_memory import (
-    peak_rss_bytes,
-    process_rss_bytes,
-    record_backward_peak,
-    reset_peak_rss,
-)
 from ...errors import ConfigurationError
 from ._backward_dispatch import outside_census
 from ._backward_markers import begin_grad_fn_marker, end_grad_fn_marker, executing_grad_fn_ref
@@ -337,7 +337,7 @@ def _active_forward_op_count_at_trigger() -> int | None:
         trigger's graph walk, or ``None`` when no forward capture is active.
     """
 
-    from ...capture import projections
+    from ..._capture import projections
 
     active_state = getattr(projections, "_active_recording_state", None)
     if active_state is None:
@@ -2942,7 +2942,7 @@ def _rewalk_higher_order_grad_fns(trace: Any) -> None:
 def _is_static_truthy_keep_grad(value: Any) -> bool:
     """Return whether a gradient capture decision is statically keep-grad true."""
 
-    from ...fastlog.types import CaptureSpec
+    from ...recording.types import CaptureSpec
 
     return value is True or (isinstance(value, CaptureSpec) and value.save_grad)
 
@@ -2950,8 +2950,8 @@ def _is_static_truthy_keep_grad(value: Any) -> bool:
 def _selected_fastlog_forward_labels(recording: Any) -> set[str]:
     """Return labels for predicate-selected forward records."""
 
+    from ..._capture.predicates import _evaluate_keep_op
     from ..._ir.predicate import RetroactiveCaptureDecision
-    from ...capture.predicates import _evaluate_keep_op
 
     recording._ensure_records()  # noqa: SLF001
     labels: set[str] = set()
@@ -3011,8 +3011,8 @@ def log_recording_backward(
 ) -> Any:
     """Run backward while capturing gradients for a fastlog ``Recording``."""
 
-    from ...capture.projections import sync_recording_grad_records_from_sidecar
-    from ...fastlog.exceptions import InvalidStorageError, RecorderStateError
+    from ..._capture.projections import sync_recording_grad_records_from_sidecar
+    from ...recording.exceptions import InvalidStorageError, RecorderStateError
 
     recording_state = getattr(recording, "_recording_state", None)
     if recording_state is None:

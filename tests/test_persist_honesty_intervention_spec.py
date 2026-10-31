@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.outcome import CaptureOutcomeError
+from torchlens._capture.outcome import CaptureOutcomeError
 from torchlens.intervention.errors import ReplayPreconditionError
 from torchlens.intervention.save import (
     SaveLevel,

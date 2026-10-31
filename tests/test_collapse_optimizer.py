@@ -16,12 +16,12 @@ import pytest
 import torch
 
 import torchlens as tl
-import torchlens.visualization.auto_collapse as auto_collapse
-import torchlens.visualization.collapse_optimizer as collapse_optimizer
-import torchlens.visualization.source_graph as source_graph_module
+import torchlens._visualization.auto_collapse as auto_collapse
+import torchlens._visualization.collapse_optimizer as collapse_optimizer
+import torchlens._visualization.source_graph as source_graph_module
 from torchlens._data_classes._trace_accessors import TraceOpAccessor
-from torchlens.visualization._render_common import format_collapsed_module_contents
-from torchlens.visualization.auto_collapse import (
+from torchlens._visualization._render_common import format_collapsed_module_contents
+from torchlens._visualization.auto_collapse import (
     _condensed_owner_for_op,
     _condensed_owner_map,
     _resolve_relationship_op,
@@ -29,7 +29,7 @@ from torchlens.visualization.auto_collapse import (
     resolve_collapse_fn,
     resolve_repeat_folds,
 )
-from torchlens.visualization.collapse_optimizer import (
+from torchlens._visualization.collapse_optimizer import (
     _RESULT_CACHE,
     _SCHEDULE_CACHE,
     K_CAP,
@@ -53,7 +53,7 @@ from torchlens.visualization.collapse_optimizer import (
     collapse_schedule,
     select_collapse_plan,
 )
-from torchlens.visualization.collapse_plan import (
+from torchlens._visualization.collapse_plan import (
     ChildSegment,
     CollapsePlan,
     ModuleBox,
@@ -1605,7 +1605,7 @@ def test_auto_plan_unaffected_by_max_salience_floor(
     try:
         baseline = select_collapse_plan(trace, context, mode="auto").plan
         monkeypatch.setattr(
-            "torchlens.visualization.collapse_optimizer.MAX_SALIENCE_FLOOR",
+            "torchlens._visualization.collapse_optimizer.MAX_SALIENCE_FLOOR",
             0.0,
         )
         _RESULT_CACHE.pop(trace, None)
@@ -1641,7 +1641,7 @@ def test_segment_descriptor_parity_guard_survives_python_O() -> None:
     path, so they must fire with assertions disabled too.
     """
 
-    from torchlens.visualization.collapse_optimizer import (
+    from torchlens._visualization.collapse_optimizer import (
         _assert_segment_descriptor_parity,
     )
 
@@ -1657,7 +1657,7 @@ def test_visible_plan_guards_survive_python_O() -> None:
     plan must fail loudly with assertions disabled too.
     """
 
-    from torchlens.visualization.collapse_optimizer import _assert_visible_plan
+    from torchlens._visualization.collapse_optimizer import _assert_visible_plan
 
     _assert_visible_plan(1, "v2 collapse plan")
     with pytest.raises(RuntimeError, match="v2 collapse plan produced no visible nodes"):
@@ -1676,7 +1676,7 @@ def test_rank_group_parity_guard_survives_python_O() -> None:
 
     # Moved out of _render_dot by 1876dde2 (renderer thinning) into the region
     # emitter that actually calls it; the guard itself is unchanged.
-    from torchlens.visualization._render_regions import _assert_rank_group_parity
+    from torchlens._visualization._render_regions import _assert_rank_group_parity
 
     _assert_rank_group_parity(3, 3)
     with pytest.raises(RuntimeError, match="sibling rank-group emission mismatch"):
@@ -1702,7 +1702,7 @@ def test_collapse_optimizer_ops_ceiling_declines_disclosed(
     from torch import nn
 
     from torchlens._errors import InvalidArgumentError
-    from torchlens.visualization import collapse_optimizer as optimizer_module
+    from torchlens._visualization import collapse_optimizer as optimizer_module
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4), nn.ReLU())
     trace = tl.trace(model, torch.randn(2, 4))
@@ -1789,7 +1789,7 @@ def test_collapse_ceiling_documented_lockstep() -> None:
     CLAUDE.md only imports it).
     """
 
-    from torchlens.visualization.collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
+    from torchlens._visualization.collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
 
     repo_root = Path(__file__).resolve().parents[1]
     doc_pages = [

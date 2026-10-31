@@ -251,7 +251,7 @@ class RecordContext:
     def __getattr__(self, name: str) -> Any:
         """Raise a schema-specific error for unknown predicate fields."""
 
-        from ..fastlog.exceptions import RecordContextFieldError
+        from ..recording.exceptions import RecordContextFieldError
 
         raise RecordContextFieldError(name)
 

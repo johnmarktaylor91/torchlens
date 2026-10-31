@@ -1222,8 +1222,8 @@ def _trace_model(model: nn.Module, example_input: Any) -> Trace:
         Completed TorchLens trace.
     """
 
+    from torchlens._user_funcs import trace
     from torchlens.options import CaptureOptions
-    from torchlens.user_funcs import trace
 
     states = _training_states(model)
     try:

@@ -4,9 +4,9 @@ Every walker of the MODEL-INPUT boundary tree routes through
 :func:`walk_input_boundary`:
 
 * W1 -- capture literal-leaf walker
-  (``torchlens.capture.trace._record_runnable_input_literal_leaves``),
+  (``torchlens._capture.trace._record_runnable_input_literal_leaves``),
 * W2 -- capture metadata-read-site walker
-  (``torchlens.capture.trace._record_runnable_input_tensor_sites``),
+  (``torchlens._capture.trace._record_runnable_input_tensor_sites``),
 * W3 -- runtime literal-path walker
   (``torchlens._runnable_execution._runtime_nontensor_leaf_paths``).
 

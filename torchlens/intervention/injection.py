@@ -176,7 +176,7 @@ class injection_recorder:
         import torch
         from torch.overrides import TorchFunctionMode
 
-        from ..capture.arg_positions import _normalize_func_name
+        from .._capture.arg_positions import _normalize_func_name
         from .binding import _has_tensor, _wrap_name_universe
 
         recorder = self

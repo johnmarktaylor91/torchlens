@@ -30,7 +30,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.capture._episode_ledger import (
+from torchlens._capture._episode_ledger import (
     EPISODE_LEDGER_VERSION,
     EpisodeLedger,
     EpisodeLedgerHeader,
@@ -268,7 +268,7 @@ def test_v1_payload_quarantines_at_load_validation() -> None:
     ladder (foldA D9): validate_loaded_episode_annotations replaces it with
     the typed diagnostic record under ONE warning."""
 
-    from torchlens.capture._episode_ledger import validate_loaded_episode_annotations
+    from torchlens._capture._episode_ledger import validate_loaded_episode_annotations
 
     log = _capture_episode()
     log.annotations["episode"] = _v1_payload()

@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog.exceptions import RecordingConfigError
+from torchlens.recording.exceptions import RecordingConfigError
 
 
 def _mlp() -> nn.Module:

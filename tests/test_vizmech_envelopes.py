@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._geometry_audit import (
+from torchlens._visualization._geometry_audit import (
     ARROWHEAD_GAP_FLOOR_PT,
     compute_usability_envelope,
     parse_layout_json,

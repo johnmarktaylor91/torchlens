@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization.auto_collapse import analyze_collapse
+from torchlens._visualization.auto_collapse import analyze_collapse
 
 
 class _Pair(nn.Module):

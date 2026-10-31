@@ -225,7 +225,7 @@ def test_paddle_halt_value_dependent_predicate() -> None:
 def test_paddle_halt_non_bool_predicate_refuses_typed() -> None:
     """halt predicates must return bool, mirroring the torch contract."""
 
-    from torchlens.fastlog.exceptions import PredicateError
+    from torchlens.recording.exceptions import PredicateError
 
     with pytest.raises(PredicateError, match="must return bool"):
         tl.trace(_mlp, _inputs(), backend="paddle", halt=lambda ctx: 1)

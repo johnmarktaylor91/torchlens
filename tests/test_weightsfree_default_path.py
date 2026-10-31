@@ -31,11 +31,11 @@ def test_ordinary_capture_pays_no_weightsfree_machinery() -> None:
     """The factory slot is empty, the transparency belt is dormant, and no
     admission registers on an ordinary capture."""
 
-    from torchlens.backends.torch._weightsfree_ctx import active_factory_device
-    from torchlens.capture._weightsfree_admission import (
+    from torchlens._capture._weightsfree_admission import (
         admission_record_for,
         weightsfree_meta_active,
     )
+    from torchlens.backends.torch._weightsfree_ctx import active_factory_device
 
     trace = tl.trace(Toy(), torch.randn(2, 4))
     assert active_factory_device() is None

@@ -192,7 +192,7 @@ def _resolve_theme_tokens(theme: str) -> _ThemeTokens:
     """Return cosmetic tokens from the themes presets, defaulting safely."""
 
     try:
-        from ..visualization.themes import resolve_theme
+        from .._visualization.themes import resolve_theme
 
         resolved = resolve_theme(theme)
         return _ThemeTokens(

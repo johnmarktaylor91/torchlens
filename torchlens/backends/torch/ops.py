@@ -22,6 +22,33 @@ import torch
 from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state as _st
+from ..._capture.arg_positions import (
+    DYNAMIC_SPEC_UNCACHEABLE,
+    FUNC_ARG_SPECS,
+    VARIADIC_TENSOR_ARG_FUNCS,
+    ArgSpec,
+    _cache_dynamic_spec,
+    _normalize_func_name,
+    dynamic_spec_covers_call,
+    extract_tensors_and_params,
+)
+from ..._capture.flops import compute_backward_flops, compute_forward_flops
+from ..._capture.plan import EnrichmentLevel
+from ..._capture.predicates import (
+    _evaluate_intervene_op,
+    _evaluate_keep_op,
+    _is_halt_only_capture,
+    build_op_record_context,
+)
+from ..._capture.projections import (
+    LiveOpView,
+    append_projected_event,
+    commit_op,
+    get_active_recording_state,
+)
+from ..._capture.salient_args import extract_salient_args
+from ..._capture.session import capture_session_for
+from ..._capture.stop import evaluate_halt_stop, stop_directive_for_trace
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes._nonfinite import record_op_nonfinite
 from ..._data_classes.internal_types import FuncExecutionContext
@@ -115,43 +142,6 @@ from ..._utils.tensor_utils import (
     safe_to,
     tensor_nanequal,
 )
-from ...capture.arg_positions import (
-    DYNAMIC_SPEC_UNCACHEABLE,
-    FUNC_ARG_SPECS,
-    VARIADIC_TENSOR_ARG_FUNCS,
-    ArgSpec,
-    _cache_dynamic_spec,
-    _normalize_func_name,
-    dynamic_spec_covers_call,
-    extract_tensors_and_params,
-)
-from ...capture.flops import compute_backward_flops, compute_forward_flops
-from ...capture.plan import EnrichmentLevel
-from ...capture.predicates import (
-    _evaluate_intervene_op,
-    _evaluate_keep_op,
-    _is_halt_only_capture,
-    build_op_record_context,
-)
-from ...capture.projections import (
-    LiveOpView,
-    append_projected_event,
-    commit_op,
-    get_active_recording_state,
-)
-from ...capture.salient_args import extract_salient_args
-from ...capture.session import capture_session_for
-from ...capture.stop import evaluate_halt_stop, stop_directive_for_trace
-from ...fastlog._halt import StopSignal
-from ...fastlog._storage_resolver import _resolve_storage
-from ...fastlog.exceptions import PredicateError
-from ...fastlog.types import (
-    ActivationRecord,
-    CaptureSpec,
-    ModuleStackFrame,
-    RecordContext,
-    StorageIntent,
-)
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
 from ...intervention.selectors import (
@@ -169,6 +159,16 @@ from ...intervention.types import (
     ParentRef,
     TargetSpec,
     Unsupported,
+)
+from ...recording._halt import StopSignal
+from ...recording._storage_resolver import _resolve_storage
+from ...recording.exceptions import PredicateError
+from ...recording.types import (
+    ActivationRecord,
+    CaptureSpec,
+    ModuleStackFrame,
+    RecordContext,
+    StorageIntent,
 )
 from . import module_stack as _mstack
 from ._param_fingerprint import param_fingerprint

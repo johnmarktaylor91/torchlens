@@ -422,7 +422,7 @@ def _trace_text_capture(
 
     if not structure_only:
         return tl.trace(model, cast(Any, text), capture=capture, **kwargs)
-    from torchlens.capture.structure_only import ValueDependentBranchError
+    from torchlens._capture.structure_only import ValueDependentBranchError
 
     try:
         return tl.trace(model, cast(Any, text), capture=capture, **kwargs)

@@ -16,8 +16,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import TrainingModeConfigError
-from torchlens.fastlog import CaptureSpec
-from torchlens.fastlog.exceptions import PredicateError
+from torchlens.recording import CaptureSpec
+from torchlens.recording.exceptions import PredicateError
 
 
 def _model() -> nn.Module:

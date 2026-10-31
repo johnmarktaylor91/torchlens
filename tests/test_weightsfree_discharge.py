@@ -12,8 +12,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture._weightsfree_admission import stamp_wrap_generation
-from torchlens.capture.structure_only import (
+from torchlens._capture._weightsfree_admission import stamp_wrap_generation
+from torchlens._capture.structure_only import (
     COMPARISON_VOCABULARY_V1,
     StructureClaimStatus,
     StructureOnlyCapabilityError,

@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ..._capture.predicates import (
+    build_op_record_context,
+)
 from ..._data_classes.op import (
     _dtype_or_none,
     _memory_or_none,
@@ -28,19 +31,16 @@ from ..._utils.tensor_utils import (
     safe_to,
 )
 from ..._validation_argument_references import active_argument_references
-from ...capture.predicates import (
-    build_op_record_context,
+from ...intervention.selectors import (
+    BaseSelector,
 )
-from ...fastlog._storage_resolver import _resolve_storage
-from ...fastlog.exceptions import PredicateError
-from ...fastlog.types import (
+from ...recording._storage_resolver import _resolve_storage
+from ...recording.exceptions import PredicateError
+from ...recording.types import (
     CaptureSpec,
     ModuleStackFrame,
     RecordContext,
     StorageIntent,
-)
-from ...intervention.selectors import (
-    BaseSelector,
 )
 from ._tl import (
     mark_detached_saved_activation,

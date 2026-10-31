@@ -1069,7 +1069,7 @@ def _resolve_facet_sites(
         Coded ``facet_selector_no_match`` when the trace serves no such facet.
     """
 
-    from ..semantic.facets import Facet
+    from .._semantic.facets import Facet
     from .hooks import _resolve_facet_specs
 
     facets = tuple(Facet(spec) for _, spec in _resolve_facet_specs(log, selector))
@@ -1089,7 +1089,7 @@ def _resolve_facet_sites(
 def _site_record(site: Any) -> Any:
     """Return the record a table entry describes: the home op of a ``Facet``, else itself."""
 
-    from ..semantic.facets import Facet
+    from .._semantic.facets import Facet
 
     return site.spec.home if isinstance(site, Facet) else site
 
@@ -1288,7 +1288,7 @@ def _guard_episode_step_query(log: Trace, selector: Any) -> None:
         selector, "episode_step", unwrap=True
     ):
         return
-    from ..capture._episode_ledger import capture_kind_for
+    from .._capture._episode_ledger import capture_kind_for
 
     if capture_kind_for(log) != "episode":
         raise SiteResolutionError(

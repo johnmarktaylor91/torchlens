@@ -24,9 +24,9 @@ from _fresh_plant import PLANT_BYTES, touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.peak_memory import CPU_PEAK_NOT_REQUESTED_REASON
 from torchlens._io import ArtifactError
 from torchlens._observe._peaks import pass_peak_facts
-from torchlens.capture.peak_memory import CPU_PEAK_NOT_REQUESTED_REASON
 from torchlens.options import CaptureOptions
 
 MARGIN = 2**20

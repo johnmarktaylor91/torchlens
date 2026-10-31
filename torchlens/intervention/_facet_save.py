@@ -50,7 +50,7 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
         the zero-match save warning).
     """
 
-    from ..semantic._families import family_key
+    from .._semantic._families import family_key
 
     family = family_key(selector.name)
     if family is not None:
@@ -61,7 +61,7 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
         return home
 
     names = frozenset(("q", "k", "v") if selector.name is None else (selector.name,))
-    from ..semantic.facets import _REGISTRY
+    from .._semantic.facets import _REGISTRY
 
     if not any(names & set(recipe.declared_facets) for recipe in _REGISTRY):
         # No recipe declares the facet: it is structural (``out``, an output
@@ -75,8 +75,8 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
         # Capture frames carry module addresses but no class names, so the
         # class is read from the live model of the active capture.
         from .._data_classes._runtime_handles import source_model_from_trace
+        from .._semantic.facets import describe
         from .._state import active_capture
-        from ..semantic.facets import info
 
         model = source_model_from_trace(active_capture()[0])
         key = (id(model), address)
@@ -85,7 +85,7 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
                 class_name = "" if model is None else type(model.get_submodule(address)).__name__
             except (AttributeError, TypeError):
                 class_name = ""
-            declares[key] = bool(class_name) and bool(names & set(info(class_name)["facets"]))
+            declares[key] = bool(class_name) and bool(names & set(describe(class_name)["facets"]))
         return declares[key]
 
     def _recipe_interior(ctx: Any) -> bool:

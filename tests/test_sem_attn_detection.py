@@ -16,13 +16,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import facets as facets_mod
-from torchlens.semantic.recipes._helpers import (
+from torchlens._semantic import facets as facets_mod
+from torchlens._semantic.recipes._helpers import (
     attention_implementation,
     config_object_value,
     module_output_spec,
 )
-from torchlens.semantic.recipes.attention import (
+from torchlens._semantic.recipes.attention import (
     _no_attention_evidence,
     _projection_orientation,
 )

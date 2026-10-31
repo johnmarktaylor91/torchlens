@@ -621,7 +621,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         )
         self._record_do_intervention_event(txn, status=None, staged_only=staged_only)
         if not staged_only:
-            from ..capture._episode_coupling import (
+            from .._capture._episode_coupling import (
                 quarantine_episode_after_perturbed_replay,
             )
 
@@ -796,7 +796,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         self._record_do_intervention_event(txn, status=None)
         # Lane F42: the push/rerun replayed a perturbed cone -- inherited
         # episode step evidence no longer describes the edited product.
-        from ..capture._episode_coupling import quarantine_episode_after_perturbed_replay
+        from .._capture._episode_coupling import quarantine_episode_after_perturbed_replay
 
         quarantine_episode_after_perturbed_replay(result)
         return result
@@ -1682,8 +1682,8 @@ class TraceInterventionMixin(_TraceMixinBase):
             weight-fingerprint evidence differs.
         """
 
+        from .._user_funcs import _fingerprint_model_weights, _qualname_for_model
         from ..intervention.errors import ModelMismatchError
-        from ..user_funcs import _fingerprint_model_weights, _qualname_for_model
 
         # F41 (foldA D10/D11): the root entry-point fact joins this gate
         # FAIL-CLOSED -- it is written unconditionally on every capture, so

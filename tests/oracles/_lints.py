@@ -62,7 +62,9 @@ def cache_config_keys(user_funcs_path: Path | None = None) -> frozenset[str]:
         the site moves, never report an empty key set as coverage.
     """
 
-    path = user_funcs_path if user_funcs_path is not None else REPO_ROOT / "torchlens/user_funcs.py"
+    path = (
+        user_funcs_path if user_funcs_path is not None else REPO_ROOT / "torchlens/_user_funcs.py"
+    )
     tree = ast.parse(path.read_text())
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict):

@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_ledger import (
+from torchlens._capture._episode_ledger import (
     EpisodeLedger,
     derive_episode_status,
     episode_ledger_for,
@@ -159,7 +159,7 @@ def test_complete_episode_ledger_rows_and_tokens():
 
 def test_episode_ledger_rows_are_write_once():
     log = _capture_episode(n_steps=2)
-    from torchlens.capture._episode_ledger import ResolvedEpisode
+    from torchlens._capture._episode_ledger import ResolvedEpisode
 
     resolved = ResolvedEpisode(
         episode_id="ep-test",

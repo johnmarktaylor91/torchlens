@@ -798,7 +798,7 @@ def _attempt_live_forward(
         # input divergence, so the native error re-raises raw -- the old
         # ``None`` behavior, now explicit (R22-2).
         first_failed = None
-    from .capture.projectors import train_mode_norm_writers_eligible
+    from ._capture.projectors import train_mode_norm_writers_eligible
 
     try:
         with train_mode_norm_writers_eligible():

@@ -295,7 +295,7 @@ def _finalize_provider_run(
     # Function-local import: _runnable_execution rebinds this function into
     # its own globals (_rebind_function), so a module-level name is invisible
     # at call time.
-    from .capture._annotations_travel import scrub_fresh_execution_annotations
+    from ._capture._annotations_travel import scrub_fresh_execution_annotations
 
     scrub_fresh_execution_annotations(fork)
     report = _run_report(

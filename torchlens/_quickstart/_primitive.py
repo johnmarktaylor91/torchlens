@@ -171,8 +171,8 @@ def capture_concrete(  # noqa: PLR0913 -- the ONE capture door: a concrete plan 
     if plan.verified_trace is not None:
         return plan.verified_trace, ExecutionReceipt(policy="reused_verified_trace")
 
+    from .._user_funcs import trace as _trace
     from ..options import CaptureOptions
-    from ..user_funcs import trace as _trace
 
     kwargs: dict[str, Any] = dict(trace_kwargs or {})
     if metadata_only and "save" not in kwargs:

@@ -326,8 +326,8 @@ def test_fp64_corruption_fails_through_every_legacy_spelling(
     import warnings
 
     import torchlens
+    import torchlens._user_funcs as user_funcs
     import torchlens._user_public_impls as user_public_impls
-    import torchlens.user_funcs as user_funcs
 
     fns = {
         "top_level": torchlens.validation.validate_backward_pass,

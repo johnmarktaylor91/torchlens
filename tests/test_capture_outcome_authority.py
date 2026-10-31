@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.outcome import (
+from torchlens._capture.outcome import (
     CAPTURE_OUTCOME_CAPABILITIES,
     CaptureOutcome,
     CaptureOutcomeError,

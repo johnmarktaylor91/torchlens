@@ -815,7 +815,7 @@ def test_arg_spec_table_cannot_silently_cost_a_parent_edge() -> None:
     pinned by the genuine route in the test below instead.
     """
 
-    from torchlens.capture.arg_positions import FUNC_ARG_SPECS, ArgSpec
+    from torchlens._capture.arg_positions import FUNC_ARG_SPECS, ArgSpec
 
     class _PolygammaModel(nn.Module):
         """Exercise a schema-known tensor operand at a non-zero argument position."""

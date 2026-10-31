@@ -1,6 +1,6 @@
 ## Subpackages
 
-- `capture/` - real-time forward and backward operation logging.
+- `_capture/` - real-time forward and backward operation logging.
 - `data_classes/` - `Trace`, `Layer`, `Op`, module/param/buffer/grad logs. The declared
   record schema carries per-field `StorageBinding` axes (generated `_schema_bindings.py`,
   regenerate with `tools/generate_record_schema.py`); Trace fields have a declared
@@ -74,10 +74,10 @@
   every mutation surface atomically. Architecture of record:
   `docs/reference/trace_core_design.md`.
 - `backends/torch/` - torch function wrapping, explicit wrap/unwrap, module prep.
-- `fastlog/` - sparse predicate recording with RAM/disk storage and recovery.
+- `recording/` - sparse predicate recording with RAM/disk storage and recovery.
 - `postprocess/` - graph cleanup, conditionals, loop detection, labeling, finalization.
 - `validation/` - forward replay, backward validation, metadata invariants, `.tlspec` schema checks.
-- `visualization/` - Graphviz rendering, rank layout, NodeSpec, themes, overlays, bundle diff.
+- `_visualization/` - Graphviz rendering, rank layout, NodeSpec, themes, overlays, bundle diff.
 - `intervention/` - selectors, sites, hooks, helpers, Bundle, fork/replay/rerun/save.
 - `intervention/_super/` - internal Bundle-level Super* aligned views and accessors.
 - `intervention/_topology/` - internal bundle supergraph and topology diff support.
@@ -95,7 +95,7 @@
   summary stats, power-user diagnostics (lazy; `debug` deliberately not in
   `__all__`).
 - `partial/` - failed-capture recovery (`tl._partial.from_failed_capture`).
-- `accessors/`, `semantic/`, `observers`, `io/` - accessor protocols, facet
+- `accessors/`, `_semantic/`, `observers`, `io/` - accessor protocols, facet
   recipes, public observers, and the `torchlens.io` save/load facade.
 - `bridge/`, `compat/`, `callbacks/` - optional integrations and migration facades.
 - `notebook/`, `neuro/` - appliance package boundaries gated by extras.

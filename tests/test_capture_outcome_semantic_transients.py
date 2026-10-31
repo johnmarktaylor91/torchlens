@@ -27,8 +27,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.trace import _SEMANTIC_OUTPUT_TRANSIENT_FIELDS
 from torchlens._data_classes.field_policy import FieldPolicy
-from torchlens.capture.trace import _SEMANTIC_OUTPUT_TRANSIENT_FIELDS
 
 
 class _Tokenizer:

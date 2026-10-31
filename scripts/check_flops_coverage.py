@@ -8,8 +8,8 @@ Reports which ops from ORIG_TORCH_FUNCS are covered by the FLOPs module
 and which are uncovered, grouped by category.
 """
 
+from torchlens._capture.flops import ELEMENTWISE_FLOPS, SPECIALTY_HANDLERS, ZERO_FLOPS_OPS
 from torchlens._constants import ORIG_TORCH_FUNCS
-from torchlens.capture.flops import ELEMENTWISE_FLOPS, SPECIALTY_HANDLERS, ZERO_FLOPS_OPS
 
 all_names = {name for _, name in ORIG_TORCH_FUNCS}
 covered = ZERO_FLOPS_OPS | set(ELEMENTWISE_FLOPS) | set(SPECIALTY_HANDLERS)

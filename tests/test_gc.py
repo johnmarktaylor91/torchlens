@@ -843,8 +843,8 @@ def test_cleaned_trace_refuses_typed_and_settles_unknown():
     the first cleanup's own output.
     """
 
+    from torchlens._capture.outcome import CaptureStatus
     from torchlens._errors import TraceCleanedUpError
-    from torchlens.capture.outcome import CaptureStatus
 
     trace = tl.trace(_TwoLayerNet(), torch.randn(2, 5))
     assert trace.outcome is not None and trace.outcome.status is CaptureStatus.COMPLETE

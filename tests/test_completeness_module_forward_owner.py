@@ -24,8 +24,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._user_funcs import _validate_forward_pass_torch
 from torchlens.backends.torch.wrappers import wrap_torch
-from torchlens.user_funcs import _validate_forward_pass_torch
 from torchlens.validation._completeness_backstop import completeness_backstop_counts
 
 _WEIGHT_NORM_MODULE = sys.modules.get("torch.nn.utils.weight_norm")

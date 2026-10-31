@@ -112,7 +112,7 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
         EnvFlagSpec(
             name="TORCHLENS_AUTO",
             kind="bool",
-            reader="torchlens.user_funcs / torchlens.experimental",
+            reader="torchlens._user_funcs / torchlens.experimental",
             description=(
                 "Requests the unsupported implicit capture mode; TRUE refuses "
                 "capture entry with auto_environment_unsupported."
@@ -127,13 +127,13 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
         EnvFlagSpec(
             name="TORCHLENS_COLLAPSE_STRICT",
             kind="bool",
-            reader="torchlens.visualization._render_common",
+            reader="torchlens._visualization._render_common",
             description="Arms the strict collapse-verification tripwire during rendering.",
         ),
         EnvFlagSpec(
             name="TORCHLENS_COLLAPSE_WATCHDOG",
             kind="bool",
-            reader="torchlens.visualization.collapse_estimator",
+            reader="torchlens._visualization.collapse_estimator",
             description=(
                 "Collapse quality-planner wall-clock watchdog master switch "
                 "(default TRUE; FALSE disables the watchdog everywhere)."
@@ -142,7 +142,7 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
         EnvFlagSpec(
             name="TORCHLENS_DETERMINISTIC",
             kind="bool",
-            reader="torchlens.visualization.collapse_estimator",
+            reader="torchlens._visualization.collapse_estimator",
             description=(
                 "Declares a determinism-sensitive run: TRUE disables the "
                 "collapse watchdog so wall-clock can never change results."

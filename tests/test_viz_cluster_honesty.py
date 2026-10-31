@@ -118,7 +118,7 @@ def test_boundary_crossing_segment_discloses_spanned_modules() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.visualization._segment_descriptors import _make_op_segment_descriptor
+    from torchlens._visualization._segment_descriptors import _make_op_segment_descriptor
 
     trace = tl.trace(_Outer(), torch.randn(1, 4))
     context = SimpleNamespace(vis_mode="unrolled")
@@ -144,7 +144,7 @@ def test_within_module_segment_discloses_hidden_atomic_module_calls() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.visualization._segment_descriptors import _make_op_segment_descriptor
+    from torchlens._visualization._segment_descriptors import _make_op_segment_descriptor
 
     deep = nn.Sequential(nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4), nn.ReLU()))
     trace = tl.trace(deep, torch.randn(1, 4))

@@ -23,12 +23,12 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.backends.torch.ops import _extract_arg_tensors_and_params
-from torchlens.capture.arg_positions import (
+from torchlens._capture.arg_positions import (
     FUNC_ARG_SPECS,
     _normalize_func_name,
     extract_tensors_and_params,
 )
+from torchlens.backends.torch.ops import _extract_arg_tensors_and_params
 from torchlens.intervention.types import ParentRef
 from torchlens.options import CaptureOptions
 

@@ -11,7 +11,7 @@ from os.path import join as opj
 import pytest
 
 from torchlens import _state
-from torchlens.capture.arg_positions import FUNC_ARG_SPECS, _normalize_func_name
+from torchlens._capture.arg_positions import FUNC_ARG_SPECS, _normalize_func_name
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 # Session-private output root (conftest pytest_configure exports it before

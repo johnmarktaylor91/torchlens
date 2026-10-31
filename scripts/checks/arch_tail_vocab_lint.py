@@ -45,7 +45,7 @@ DECLARED_VOCABULARY: frozenset[str] = frozenset(
         "_vocab.trace_state",
         "_vocab.node_spec",
         "_io.format_errors",
-        "fastlog.types",
+        "recording.types",
     }
 )
 
@@ -65,7 +65,7 @@ _ALLOWED_EAGER_PREFIXES: tuple[str, ...] = ("_errors", "errors", "_vocab")
 #: down by splitting the vocabulary half out, never by widening the ledger.
 V3_RESIDUE_CEILINGS: dict[str, tuple[int, int]] = {
     # module: (max distinct eager behavior targets, max distinct deferred targets)
-    "fastlog.types": (3, 14),
+    "recording.types": (3, 14),
 }
 
 
@@ -260,7 +260,7 @@ _CLOSURE_BASELINE: dict[str, int] = {
     "_vocab.trace_state": 0,
     "_vocab.node_spec": 0,
     "_io.format_errors": 1,  # errors._base (L0 error vocabulary)
-    "fastlog.types": 25,  # the declared residue; splits burn this down
+    "recording.types": 25,  # the declared residue; splits burn this down
 }
 
 

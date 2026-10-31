@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture._nonfinite_prefix import resolve_raw_label
+from torchlens._capture._nonfinite_prefix import resolve_raw_label
 from torchlens.errors import CaptureError
 
 TORCHLENS_DIR = Path(tl.__file__).resolve().parent
@@ -206,7 +206,7 @@ def test_no_raw_label_strip_sites_outside_the_resolver() -> None:
     slice-stripping ``_RAW_LABEL_SUFFIX`` into a user-facing spelling is always
     wrong. The ONLY sanctioned sites are the constant's definition, the
     explicitly raw-named ``Op.raw_label`` identity property, and the resolver
-    door module itself (``capture/_nonfinite_prefix.py``, home of both
+    door module itself (``_capture/_nonfinite_prefix.py``, home of both
     ``resolve_raw_label`` and the constant-suffix ``strip_raw_label_suffix``
     the preview/neutral finishers use before any ``Trace`` identity map
     exists); every other consumer routes through one of those two functions.
@@ -215,7 +215,7 @@ def test_no_raw_label_strip_sites_outside_the_resolver() -> None:
     allowlist = {
         TORCHLENS_DIR / "_constants.py",
         TORCHLENS_DIR / "_data_classes" / "op.py",
-        TORCHLENS_DIR / "capture" / "_nonfinite_prefix.py",
+        TORCHLENS_DIR / "_capture" / "_nonfinite_prefix.py",
     }
     offenders: list[str] = []
     for path in sorted(TORCHLENS_DIR.rglob("*.py")):

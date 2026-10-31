@@ -42,7 +42,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from ..capture.flops import DISPATCH_COUNTING_CONVENTION
+from .._capture.flops import DISPATCH_COUNTING_CONVENTION
 from ._backward_attribution import node_resolver_missing, pass_failed
 
 if TYPE_CHECKING:

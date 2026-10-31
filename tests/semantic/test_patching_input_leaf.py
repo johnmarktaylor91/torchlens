@@ -1,7 +1,7 @@
 """Input-facet patcher fixes (grind-p3-fixplan T3, fix-patching lane).
 
 Four coupled defects in the input-facet patching path of
-``torchlens/semantic/patching.py``:
+``torchlens/_semantic/patching.py``:
 
 * [HIGH] the patcher indexed BFS-ordered ``input_ops`` ordinals into a DFS
   tree walk, silently patching the WRONG leaf on mixed-nesting inputs. The
@@ -162,7 +162,7 @@ def _register_module_facet_recipes() -> Iterator[None]:
     (hunt-b2-sol R76/R77).
     """
 
-    from torchlens.semantic import facets as _facets
+    from torchlens._semantic import facets as _facets
 
     saved = list(_facets._REGISTRY)
     tl.facets.register(

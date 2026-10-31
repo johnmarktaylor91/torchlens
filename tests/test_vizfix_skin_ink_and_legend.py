@@ -24,11 +24,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._header_block import KEY_TABLE_ID, key_swatches
-from torchlens.visualization._legend import LEGEND_NODE_NAME, drawn_legend_roles
-from torchlens.visualization._render_utils import strip_path_directories
-from torchlens.visualization.lenses.audit import palette_distinguishability
-from torchlens.visualization.themes import THEME_PRESETS, _contrast_ratio
+from torchlens._visualization._header_block import KEY_TABLE_ID, key_swatches
+from torchlens._visualization._legend import LEGEND_NODE_NAME, drawn_legend_roles
+from torchlens._visualization._render_utils import strip_path_directories
+from torchlens._visualization.lenses.audit import palette_distinguishability
+from torchlens._visualization.themes import THEME_PRESETS, _contrast_ratio
 
 _ATTR_RE = r"(?:^|[\s\[,])({name})=(\"[^\"]*\"|[^\s\],]+)"
 _WHITE_PAGE_SKINS = ("torchlens", "paper", "colorblind", "high_contrast")
@@ -128,8 +128,8 @@ def _legend_rows(dot: str) -> list[str]:
 def _fills(skin: str) -> tuple[str, str]:
     """Return the plain-op fill and the key's buffer fill under ``skin``."""
 
-    from torchlens.visualization.node_spec import NodeSpec
-    from torchlens.visualization.themes import apply_theme_to_spec
+    from torchlens._visualization.node_spec import NodeSpec
+    from torchlens._visualization.themes import apply_theme_to_spec
 
     theme = THEME_PRESETS[skin]
     plain = str(apply_theme_to_spec(NodeSpec(["x"], fillcolor="white"), theme).fillcolor)

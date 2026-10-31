@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from torchlens.visualization import lenses
-from torchlens.visualization.theme_registry import describe_lens, get_lens, list_lenses
+from torchlens._visualization import lenses
+from torchlens._visualization.theme_registry import describe_lens, get_lens, list_lenses
 
 
 def test_roster_has_exactly_nine_rows() -> None:

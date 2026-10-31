@@ -11,7 +11,7 @@ Exposed as `tl.viz` through the lazy attribute map in `torchlens/__init__.py`
 - Cross imports today: `viz/__init__.py` re-exports `bundle_diff` from
   `..visualization.bundle_diff`; `viz/feature_maps.py` imports `NodeSpec` /
   `NodeSpecFn` from `..visualization.node_spec`; and
-  `visualization/_render_nodes.py` imports `..viz.batch_summary`
+  `_visualization/_render_nodes.py` imports `..viz.batch_summary`
   (`batch_summary.text_table` at its string-summary node path and
   `batch_summary.montage` at its image-grid node path).
 
@@ -36,7 +36,7 @@ Exposed as `tl.viz` through the lazy attribute map in `torchlens/__init__.py`
 
 ## batch_summary.py
 - `montage()` (image grid with cap disclosure) and `text_table()` (truncated
-  text summary); reused by `visualization/_render_nodes.py` (both call sites
+  text summary); reused by `_visualization/_render_nodes.py` (both call sites
   live there, not in `_render_common.py`).
 
 ## feature_maps.py

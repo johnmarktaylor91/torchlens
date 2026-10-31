@@ -6,7 +6,7 @@ spied query/key tensors and a mask built here from the user's 2D padding mask
 and the causal flag (never from the 4D mask transformers hands the backend),
 with grouped-query heads expanded by ``repeat_interleave``. The SDPA legs
 check every call against ``scaled_dot_product_attention`` at the semantic
-reconstruction tolerance (``torchlens.semantic.tolerances``) and the model
+reconstruction tolerance (``torchlens._semantic.tolerances``) and the model
 output against the sdpa backend at the existing SDPA ``z`` tolerance
 (``tests/test_sem_attn_gpt2_sdpa.py``: atol 1e-5, rtol 1e-4).
 """
@@ -29,6 +29,7 @@ AttentionMaskInterface = pytest.importorskip("transformers.masking_utils").Atten
 
 from tests.real_model.r0.families import FAMILY_BY_NAME, VOCAB  # noqa: E402
 from torchlens._errors import InvalidArgumentError, MissingDependencyError  # noqa: E402
+from torchlens._semantic.tolerances import within_reconstruction_tolerance  # noqa: E402
 from torchlens.bridge import transformers as tl_hf  # noqa: E402
 from torchlens.bridge.hf_attention import (  # noqa: E402
     BACKEND_KEY,
@@ -37,7 +38,6 @@ from torchlens.bridge.hf_attention import (  # noqa: E402
     torchlens_attention_forward,
 )
 from torchlens.errors import ValidationError  # noqa: E402
-from torchlens.semantic.tolerances import within_reconstruction_tolerance  # noqa: E402
 
 SEQ = 7
 #: family -> (builder name, causal decoder?, attention modules suffix)

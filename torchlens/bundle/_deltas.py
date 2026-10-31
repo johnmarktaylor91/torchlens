@@ -524,7 +524,7 @@ def _bundle_show_diff(
         Graphviz DOT source for the rendered diff.
     """
 
-    from ..visualization.bundle_diff import bundle_diff
+    from .._visualization.bundle_diff import bundle_diff
 
     return bundle_diff(self, metric=metric, layout=layout, **kwargs)
 

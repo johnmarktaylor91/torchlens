@@ -10,6 +10,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
 from ... import _state
+from ..._capture.outcome import StopRequest, stamp_backend_finalized
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
@@ -41,10 +42,9 @@ from ..._postprocess._selective_save import (
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
-from ...capture.outcome import StopRequest, stamp_backend_finalized
-from ...fastlog._halt import StopSignal
-from ...fastlog.types import CaptureSpec
 from ...options import CaptureOptions, merge_capture_options
+from ...recording._halt import StopSignal
+from ...recording.types import CaptureSpec
 from ...validation.status import ValidationReplaySource, ValidationStatus
 from .._finalize import (
     attach_function_root_module,
@@ -514,7 +514,7 @@ class PaddleBackend:
                 raise BackendUnsupportedError(
                     "paddle backend trace(facets=...) requires recipe callables."
                 )
-            from ...semantic import facets as facets_mod
+            from ..._semantic import facets as facets_mod
 
             trace.facet_registry_snapshot = facets_mod.snapshot(recipe_tuple)
         trace.backend_runtime_version = str(getattr(self.paddle, "__version__", ""))

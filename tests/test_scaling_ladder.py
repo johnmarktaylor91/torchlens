@@ -138,7 +138,7 @@ def test_fixpoint_work_budget_degrades_to_singletons(monkeypatch) -> None:
 def test_collapse_order_declines_cheaply_above_ceiling(monkeypatch) -> None:
     """Over-ceiling collapse metadata returns [] without full analysis (R60-8)."""
 
-    from torchlens.visualization import auto_collapse, collapse_optimizer
+    from torchlens._visualization import auto_collapse, collapse_optimizer
 
     log = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4)), torch.randn(1, 4))
     # F11 (collapse memo D5(i)): the analysis-free decline arm is the
@@ -161,7 +161,7 @@ def test_collapse_order_declines_cheaply_above_ceiling(monkeypatch) -> None:
 def test_fold_repeats_true_respects_collapse_ceiling(monkeypatch) -> None:
     """draw(fold_repeats=True) declines folding above the ceiling (R60-9)."""
 
-    from torchlens.visualization import auto_collapse, collapse_optimizer
+    from torchlens._visualization import auto_collapse, collapse_optimizer
 
     log = tl.trace(
         nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4), nn.ReLU()),

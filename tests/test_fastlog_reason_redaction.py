@@ -18,7 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.streaming import REASON_SENTINEL
-from torchlens.fastlog import storage_disk
+from torchlens.recording import storage_disk
 
 _SENTINEL = "SECRET-VALUE-b7ab55b1"
 

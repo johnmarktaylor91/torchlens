@@ -67,7 +67,7 @@ These three claims look similar and must never be conflated:
 
 Also: collapsed boxes carry an honest contents remainder in the
 `N ops + M buffers` form (`format_collapsed_module_contents` in
-`visualization/_render_common.py`; the old `N layers total` label is
+`_visualization/_render_common.py`; the old `N layers total` label is
 test-FORBIDDEN — `tests/test_buffer_visibility.py` and
 `tests/test_auto_collapse_metrics.py` assert it never renders); ops with
 hidden buffer dependencies get a double border (`peripheries=2`).
@@ -95,7 +95,7 @@ it is in this pack:
 ### Critic passes
 
 - **Completeness critic:** independently enumerate every draw() kwarg x value
-  and every node/edge kind emitted by `torchlens/visualization/_render_nodes.py` and `_render_edges.py`;
+  and every node/edge kind emitted by `torchlens/_visualization/_render_nodes.py` and `_render_edges.py`;
   diff against `AXES` + `NA_AXES`. Anything unrepresented is a defect.
 - **Fresh-eyes clarity critic:** scroll the PDF as someone who has never seen
   TorchLens. Every page must be self-explanatory from its caption alone; flag

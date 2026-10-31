@@ -1587,7 +1587,7 @@ def test_h5_mode_sensitive_op_without_declared_mode_is_unverifiable(
     runtime belt behind the parse gate.
     """
 
-    import torchlens.capture.trace as capture_trace
+    import torchlens._capture.trace as capture_trace
     from torchlens.errors import RunnablePreflightError
 
     # Simulate an old bundle / capture gap: skip the mode recording entirely.
@@ -1621,7 +1621,7 @@ def test_h5_mode_insensitive_model_without_mode_still_verifies(
 ) -> None:
     """A model with NO mode-sensitive op verifies even with no declared mode (no over-trigger)."""
 
-    import torchlens.capture.trace as capture_trace
+    import torchlens._capture.trace as capture_trace
 
     monkeypatch.setattr(
         capture_trace, "_record_runnable_module_training_modes", lambda trace, model: None

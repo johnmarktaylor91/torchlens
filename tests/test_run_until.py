@@ -125,7 +125,7 @@ def test_live_truncated_output_is_none_and_disclosed():
 def test_live_truncation_leaves_source_outcome_complete():
     """The internal HALTED settle is invisible on both source and result."""
 
-    from torchlens.capture.outcome import CaptureStatus
+    from torchlens._capture.outcome import CaptureStatus
 
     model, log, result = _live_until_relu()
     assert log.outcome.status is CaptureStatus.COMPLETE
@@ -159,7 +159,7 @@ def test_live_truncation_leaves_no_halted_trace_registered():
     """
 
     from torchlens import io as tlio
-    from torchlens.capture.outcome import CaptureStatus
+    from torchlens._capture.outcome import CaptureStatus
 
     prior = tlio.list_traces()
     _model, _log, result = _live_until_relu()

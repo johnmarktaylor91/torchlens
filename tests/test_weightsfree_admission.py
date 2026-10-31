@@ -246,8 +246,8 @@ def test_identity_self_test_failure_refuses_typed(monkeypatch: pytest.MonkeyPatc
     refuses admission typed (structure_only_meta_identity_unavailable) rather
     than guessing where every data_ptr reads 0."""
 
+    from torchlens._capture import _weightsfree_admission as admission
     from torchlens._errors import WeightsfreeIntegrityError
-    from torchlens.capture import _weightsfree_admission as admission
 
     monkeypatch.setattr(
         admission,

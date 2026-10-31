@@ -4,17 +4,17 @@
 import torchlens
   |- exposes 87 top-level public names in __all__
   |- eagerly imports ONLY the light spine: options, errors/_state, ir.*,
-  |  captured_run, observers, quantities, _deprecations, _errors, _io,
+  |  _captured_run, observers, quantities, _deprecations, _errors, _io,
   |  _literals, _save_budget, utils,
-  |  and visualization (hard-pinned by tests/test_import_hygiene.py
-  |  _EAGER_TORCHLENS_MODULES). capture, intervention, fastlog, autoroute,
+  |  and _visualization (hard-pinned by tests/test_import_hygiene.py
+  |  _EAGER_TORCHLENS_MODULES). _capture, intervention, recording, autoroute,
   |  bridge, compat, export, report, stats, validation, and viz-rendering
   |  internals are ALL lazy (_LAZY_ATTRS) — do not add eager imports
   |
 trace(model, input, save=..., intervene=..., lookback=..., storage=...)
   |- backends/registry.py      - resolve torch / MLX / JAX / tinygrad / Paddle / TensorFlow backend
   |- backends/torch/model_prep.py - ensure torch is wrapped, prepare modules/buffers/params
-  |- capture/trace.py          - run forward pass with active logging
+  |- _capture/trace.py          - run forward pass with active logging
   |- backends/torch/ops.py     - build raw torch op records during wrapper calls
   |- postprocess/              - current 26-step graph cleanup/finalization pipeline
                                  (contract keys 0..20 + 5 fractional inserts)

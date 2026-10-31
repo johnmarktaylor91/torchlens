@@ -14,8 +14,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.compute_record import MAC_FAMILY_NAMES
-from torchlens.capture.flops import (
+from torchlens._capture.compute_record import MAC_FAMILY_NAMES
+from torchlens._capture.flops import (
     ELEMENTWISE_FLOPS,
     SPECIALTY_HANDLERS,
     ZERO_FLOPS_OPS,
@@ -79,8 +79,8 @@ def test_fma_convention_honored_never_discarded() -> None:
 def test_fma1_refuses_typed_on_underivable_split() -> None:
     """A6: an fma=1 request over an underivable MAC split refuses typed."""
 
+    from torchlens._capture.flops import _CUSTOM_OP_RULES, register_op_rule
     from torchlens._errors import InvalidArgumentError
-    from torchlens.capture.flops import _CUSTOM_OP_RULES, register_op_rule
 
     assert "mul" not in _CUSTOM_OP_RULES
     register_op_rule("mul", lambda out, params, args, kwargs: 42)

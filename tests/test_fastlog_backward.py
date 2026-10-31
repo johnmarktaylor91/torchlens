@@ -11,7 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import InvalidStorageError
-from torchlens.fastlog import CaptureSpec, GradRecordContext
+from torchlens.recording import CaptureSpec, GradRecordContext
 
 
 class TinyRelu(nn.Module):
@@ -114,7 +114,7 @@ def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
     """Sequential Recorder rollouts do not join a grad_fn_handle to a stale forward."""
 
     model = TinyRelu()
-    with tl.fastlog.Recorder(
+    with tl.recording.Recorder(
         model,
         save=lambda ctx: ctx.label == "relu_1",
         save_grads=True,

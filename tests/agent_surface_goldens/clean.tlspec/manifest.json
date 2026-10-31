@@ -4,7 +4,7 @@
   "torch_version": "2.13.0+cpu",
   "python_version": "3.10.20",
   "platform": "linux-x86_64",
-  "created_at": "2026-10-31T09:22:58Z",
+  "created_at": "2026-10-31T14:01:35Z",
   "bundle_format": "directory",
   "n_layers": 9,
   "n_out_blobs": 3,
@@ -91,11 +91,11 @@
       ]
     },
     "rng_state_digests": {
-      "torch": "6f9d75d0fbbceb714536e09a20beab283cc76bd0bc46f02f0dbd81ef4bb7b3ea"
+      "torch": "48bde5cbec54b780e157126217063c4cd7f721cf7fdc9c344bee21ec4cf0a35f"
     },
     "input_hash": "unavailable:PayloadUnavailableError",
     "model_structure_hash": "b64e0ca91fabdcea447df157d84acafa3a15fa0b31d821d01699510bada0a362",
-    "git_commit_hash": "8177837d997276f26f111c962696c132320687bb"
+    "git_commit_hash": "b785762ee4ba5ae5606ee974cecb5cdda3bfcdc5"
   },
   "custom_attributes_disclosure": {
     "included": true,

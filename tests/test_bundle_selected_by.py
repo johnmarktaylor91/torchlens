@@ -174,7 +174,7 @@ def test_unknown_bare_kinds_still_refuse(tmp_path: Path, model: _TinyLM, kind: s
 
 
 def test_graph_edge_names_the_decision() -> None:
-    from torchlens.visualization._bundle_graph import _relation_edge_label
+    from torchlens._visualization._bundle_graph import _relation_edge_label
 
     row = MemberRelationRow(
         kind="selected_by", from_member="writer", to_member="router", params={"chosen": 1}

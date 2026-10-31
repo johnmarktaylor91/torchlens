@@ -20,7 +20,7 @@ from torch import nn
 
 from benchmarks.live_index_append_counters import counting, synthetic_stream
 from torchlens._ir.live_index import LiveIndex
-from torchlens.fastlog import Recorder
+from torchlens.recording import Recorder
 
 
 @dataclass(frozen=True)

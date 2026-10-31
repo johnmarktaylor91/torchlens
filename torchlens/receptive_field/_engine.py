@@ -17,12 +17,12 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from ..backends import TORCH_BACKEND_NAME
-from ..capture.arg_positions import (
+from .._capture.arg_positions import (
     VARIADIC_TENSOR_ARG_FUNCS,
     _normalize_func_name,
     _schema_arg_is_parent_candidate,
 )
+from ..backends import TORCH_BACKEND_NAME
 from ._engine_descriptor import _descriptor
 from ._engine_geometry import (
     _Affine,

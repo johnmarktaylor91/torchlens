@@ -9,10 +9,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._visualization.fastlog_preview import _build_preview_nodes, _make_node_spec_fn
+from torchlens._visualization.node_spec import NodeSpec
 from torchlens.errors import RecordContextFieldError
-from torchlens.fastlog import RecordContext
-from torchlens.visualization.fastlog_preview import _build_preview_nodes, _make_node_spec_fn
-from torchlens.visualization.node_spec import NodeSpec
+from torchlens.recording import RecordContext
 
 
 class StaticGraph(nn.Module):
@@ -42,7 +42,7 @@ def test_preview_and_dry_run_contexts_match_field_by_field() -> None:
     model = StaticGraph()
     x = torch.randn(1, 4)
     trace = tl.trace(model, x)
-    dry = tl.fastlog.dry_run(model, x, save=lambda ctx: True, include_source_events=True)
+    dry = tl.recording.dry_run(model, x, save=lambda ctx: True, include_source_events=True)
     preview_nodes = _build_preview_nodes(trace, lambda ctx: True)
     preview_contexts = [node.ctx for node in dict.fromkeys(preview_nodes.values())]
     real_contexts = [
@@ -68,7 +68,7 @@ def test_missing_record_context_field_errors_in_preview_and_dry_run() -> None:
 
     assert "exception" in dot
     with pytest.raises(RecordContextFieldError):
-        tl.fastlog.dry_run(model, x, save=bad_predicate)
+        tl.recording.dry_run(model, x, save=bad_predicate)
 
 
 def test_preview_nodes_include_short_label_keys() -> None:

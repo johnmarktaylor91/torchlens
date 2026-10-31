@@ -30,7 +30,7 @@ class Row:
         slide's words state it.
     locator:
         ``module:symbol`` near the code that draws it; short modules are relative to
-        ``torchlens.visualization``. The check imports it, so a stale locator fails.
+        ``torchlens._visualization``. The check imports it, so a stale locator fails.
     status:
         ``"active"``, ``"experimental"`` or ``"inactive"``.
     gate:
@@ -442,7 +442,7 @@ ROWS: Mapping[str, Row] = {
         "layout.engine",
         "layout-engine",
         P,
-        "torchlens.visualization._rank_layout_internal.layout:RANK_LAYOUT_COST_THRESHOLD",
+        "torchlens._visualization._rank_layout_internal.layout:RANK_LAYOUT_COST_THRESHOLD",
         variants=("auto", "dot", "rank"),
     ),
     "VY03": _R(

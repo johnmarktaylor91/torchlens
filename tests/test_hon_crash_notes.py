@@ -173,9 +173,9 @@ def test_scalar_escape_advisory_note_appears() -> None:
 
 
 def test_nonfinite_prefix_failure_note_appears(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Site capture/_nonfinite_prefix: a failed prefix finalization leaves a note."""
+    """Site _capture/_nonfinite_prefix: a failed prefix finalization leaves a note."""
 
-    import torchlens.capture.trace as capture_trace
+    import torchlens._capture.trace as capture_trace
 
     def _broken(*_args: Any, **_kwargs: Any) -> Any:
         raise ValueError("planted prefix failure")

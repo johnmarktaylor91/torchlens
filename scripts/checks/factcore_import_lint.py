@@ -26,8 +26,8 @@ LICENSED_COMPUTE_READERS = {
     # The substrate itself: the ONE aggregation walk (costreport D1).
     "report/_compute_truth.py": "the canonical aggregation service (the one licensed walk)",
     # Producers: build/derive the fields they then re-read for verification.
-    "capture/compute_record.py": "two-term record producer (verifies its own split)",
-    "capture/projections.py": "journal commit tail (writes the persisted field)",
+    "_capture/compute_record.py": "two-term record producer (verifies its own split)",
+    "_capture/projections.py": "journal commit tail (writes the persisted field)",
     "_ir/op_record_scatter.py": "generated ingest scatter (field plumbing, not aggregation)",
     # Record classes: field definitions + per-record accessors (a single
     # op/layer's own value is record surface, not aggregation).
@@ -64,7 +64,7 @@ LICENSED_COMPUTE_READERS = {
 #: (sumfam D5): surfaces branch on ``nonfinite_verdict``/``health_facts``.
 _NO_TRUTHINESS_DIRS = (
     "report",
-    "visualization/_summary_internal",
+    "_visualization/_summary_internal",
 )
 #: ...except the health substrate itself, which SERVES the record.
 _TRUTHINESS_EXEMPT = frozenset({"report/_health.py"})

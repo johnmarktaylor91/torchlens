@@ -13,7 +13,7 @@
   component ownership map (`data_classes/_trace_components.py`).
 - `_io/` and `io/`: portable save/load, `.tlspec` manifests, lazy out refs, rehydration.
 - `intervention/`: Bundle, sites/selectors, hooks, helpers, replay/rerun/fork/save.
-- `fastlog/`: sparse `Recording` path, predicate normalization, RAM/disk storage.
+- `recording/`: sparse `Recording` path, predicate normalization, RAM/disk storage.
 - `bridge/`: optional adapters for external tools; bridge and autoroute surfaces stay lazy, as pinned by tests/test_import_hygiene.py.
 - `compat/`: migration helpers and `compat.report(model, x)`.
 - `callbacks/`: Lightning callback integration.

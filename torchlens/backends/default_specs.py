@@ -616,7 +616,7 @@ def _torch_capture_trace(*args: Any, **kwargs: Any) -> Any:
         Captured trace.
     """
 
-    from ..user_funcs import _trace_torch_model
+    from .._user_funcs import _trace_torch_model
 
     return _trace_torch_model(*args, **kwargs)
 
@@ -660,7 +660,7 @@ def _torch_fastlog_implementation() -> object:
         The ``Recorder`` class ``tl.record()`` actually runs.
     """
 
-    from ..fastlog._recorder import Recorder
+    from ..recording._recorder import Recorder
 
     return Recorder
 
@@ -689,7 +689,7 @@ def _torch_streaming_implementation() -> object:
         The disk storage backend behind ``storage=`` / ``streaming=`` saves.
     """
 
-    from ..fastlog.storage_disk import DiskStorageBackend
+    from ..recording.storage_disk import DiskStorageBackend
 
     return DiskStorageBackend
 
@@ -750,7 +750,7 @@ def _mlx_capture_trace(*args: Any, **kwargs: Any) -> Any:
         Captured trace.
     """
 
-    from ..user_funcs import _trace_mlx_model_from_public_kwargs
+    from .._user_funcs import _trace_mlx_model_from_public_kwargs
 
     return _trace_mlx_model_from_public_kwargs(*args, **kwargs)
 
@@ -861,7 +861,7 @@ def _torch_validate_entry(*args: Any, **kwargs: Any) -> bool:
         Validation result.
     """
 
-    from ..user_funcs import _validate_forward_pass_torch
+    from .._user_funcs import _validate_forward_pass_torch
 
     return _validate_forward_pass_torch(*args, **kwargs)
 

@@ -32,7 +32,9 @@ TABLE = TESTS_DIR / "test_arch_spine_surface_table.tsv"
 #: round-1 surface (lazy namespaces plus public non-lazy submodules); it may
 #: only go down through a decided surface change. 975 -> 974: the option
 #: receipt removal (e7449cd47) took tl.options.OptionReceiptEntry off the surface.
-DEEP_WALK_FLOOR = 974
+#: 974 -> 967: round 2 (module moves) made the visualization (5 names) and
+#: semantic (2 names) packages private.
+DEEP_WALK_FLOOR = 967
 
 _HEADER = (
     "canonical_path\thome_module\timplementation_layer\tproduct_role\tin_all\tlegacy_top_level"

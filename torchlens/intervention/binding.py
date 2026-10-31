@@ -523,7 +523,7 @@ class _BindDispatchMode:
         import torch
         from torch.overrides import TorchFunctionMode
 
-        from ..capture.arg_positions import _normalize_func_name
+        from .._capture.arg_positions import _normalize_func_name
 
         wrap_universe = _wrap_name_universe()
 
@@ -587,8 +587,8 @@ def _wrap_name_universe() -> frozenset[str]:
 
     global _WRAP_UNIVERSE
     if _WRAP_UNIVERSE is None:
+        from .._capture.arg_positions import _normalize_func_name
         from .._constants import get_orig_torch_funcs
-        from ..capture.arg_positions import _normalize_func_name
 
         _WRAP_UNIVERSE = frozenset(
             _normalize_func_name(func_name) for _ns, func_name in get_orig_torch_funcs()
@@ -610,11 +610,11 @@ def _consider_op(
     agree with what a capture of the same forward would evaluate.
     """
 
+    from .._capture.predicates import build_op_record_context
     from ..backends.torch._ops_interventions import (
         _iter_loggable_live_outputs,
         _replace_output_tensors_by_path,
     )
-    from ..capture.predicates import build_op_record_context
     from .hooks import make_hook_context
     from .runtime import _execute_hook
 

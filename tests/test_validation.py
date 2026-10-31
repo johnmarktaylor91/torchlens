@@ -17,13 +17,13 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._user_public_impls as user_public_impls
 
 # No import-order protection is needed here anymore: the historical
 # standalone-collection cycle between torchlens and _user_public_impls was
 # fixed at the root (lazy one-time metadata sync in user_funcs), so these
 # imports may be freely re-sorted.
-import torchlens.user_funcs as user_funcs
+import torchlens._user_funcs as user_funcs
+import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
 from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.backends.torch import rescue
@@ -32,9 +32,9 @@ from torchlens.errors import (
     MetadataInvariantError,
     TraceNotReproducibleWarning,
 )
-from torchlens.fastlog import RecordContext
 from torchlens.intervention.types import DictKey
 from torchlens.options import SaveOptions
+from torchlens.recording import RecordContext
 from torchlens.report import ValidationDiagnostic
 from torchlens.validation import (
     check_metadata_invariants,

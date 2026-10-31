@@ -27,8 +27,8 @@ torchvision = pytest.importorskip("torchvision")
 import example_models  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+from torchlens._visualization import show_model_graph  # noqa: E402
 from torchlens.validation import validate_forward_pass  # noqa: E402
-from torchlens.visualization import show_model_graph  # noqa: E402
 
 VIS_OUTPUT_DIR = opj(os.environ["TORCHLENS_TEST_OUTPUTS_DIR"], "visualizations")
 

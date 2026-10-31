@@ -33,7 +33,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.outcome import (
+from torchlens._capture.outcome import (
     CAPTURE_OUTCOME_CAPABILITIES,
     CaptureOutcome,
     CapturePhase,
@@ -159,7 +159,7 @@ def test_the_accepted_key_set_is_derived_from_the_writer() -> None:
     second hand-maintained list to be kept in sync.
     """
 
-    from torchlens.capture.outcome import _OUTCOME_PAYLOAD_KEYS
+    from torchlens._capture.outcome import _OUTCOME_PAYLOAD_KEYS
 
     written = CaptureOutcome(status=CaptureStatus.FAILED).to_payload()
     assert set(written) == set(_OUTCOME_PAYLOAD_KEYS)

@@ -32,10 +32,10 @@ import torchlens as tl  # noqa: E402
 import torchlens.errors
 import torchlens.mechinterp as mi  # noqa: E402
 import torchlens.transformer as tviz  # noqa: E402
+from torchlens._semantic.patching import _trace_kwargs  # noqa: E402
 from torchlens.errors import MechInterpError  # noqa: E402
 from torchlens.errors._base import TorchLensWarning  # noqa: E402
 from torchlens.mechinterp._kv_heads import _patch_query_heads_once  # noqa: E402
-from torchlens.semantic.patching import _trace_kwargs  # noqa: E402
 
 CLEAN = torch.tensor([[1, 5, 9, 3, 7, 2]])
 CORRUPTED = torch.tensor([[1, 6, 9, 3, 8, 2]])

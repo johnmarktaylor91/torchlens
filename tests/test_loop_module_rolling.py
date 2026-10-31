@@ -12,8 +12,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._utils import _call_site
+from torchlens._visualization._render_nodes import compute_default_node_lines
 from torchlens.options import CaptureOptions
-from torchlens.visualization._render_nodes import compute_default_node_lines
 
 # Session-private output root (conftest exports it before collection); the
 # repo-local fallback raced across parallel worktree lanes (b2p2 R77).

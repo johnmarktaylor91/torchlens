@@ -44,7 +44,7 @@ FIXED_IMPORT_CYCLES = (
     # re-export is now a lazy module __getattr__ instead of an eager bottom-
     # of-file import, so a cold import of _episode_fold first no longer
     # catches _episode_ledger still mid-initialization.
-    "torchlens.capture._episode_fold",
+    "torchlens._capture._episode_fold",
 )
 
 #: Modules whose standalone import legitimately requires a THIRD-PARTY package

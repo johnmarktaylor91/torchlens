@@ -21,19 +21,19 @@ module-containment-refactor).
 ### Data Flow
 1. Decoration intercepts torch function calls.
 2. Barcode nesting detection identifies bottom-level operations.
-3. `capture/` builds raw `Op` entries.
+3. `_capture/` builds raw `Op` entries.
 4. `postprocess/` removes orphans, marks conditionals, detects loops, labels nodes, builds logs.
 5. `Trace` exposes lookup, visualization, validation, save/load, intervention, and summary helpers.
 
 ### Journal Producer (single since producer unification P7)
 Torch captures journal decomposed `OpRecord` rows (`ir/op_record.py`: `OpCore` + typed
 facets, strict protocol with legacy flat-name properties) through the ONE commit tail
-`capture/projections.py::commit_op`; step 0 ingests them via the generated scatter
+`_capture/projections.py::commit_op`; step 0 ingests them via the generated scatter
 (`ingest_op_records`). The op lane is genuinely append-only: post-commit knowledge rides
 the typed `OpAmendment` lane (nine exact-set families, `append_amendment` the single
 writer) and every amended-state read folds through the capture-event journal's amended-op fold.
 ONE sanctioned in-place carve-out exists: the fastlog ancestry-closure backfill
-(`fastlog/types.py::_backfill_cooked_ancestry`) replaces op-lane cells on the
+(`recording/types.py::_backfill_cooked_ancestry`) replaces op-lane cells on the
 `_copy_for_replay` projection a cook owns — never the sealed Recording stream — and nulls
 `_amended_fold_cache` afterwards. Every in-place op-lane writer (this one included) is
 pinned by the closed reason-bearing ledger in

@@ -5,14 +5,14 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens._constants import get_orig_torch_funcs
-from torchlens.capture.arg_positions import (
+from torchlens._capture.arg_positions import (
     FUNC_ARG_SPECS,
     ArgSpec,
     _cache_dynamic_spec,
     _normalize_func_name,
     extract_tensors_and_params,
 )
+from torchlens._constants import get_orig_torch_funcs
 
 _HIGH_CONFIDENCE_STATIC_NAMES = frozenset(
     {
@@ -457,7 +457,7 @@ def test_no_binary_factory_argspec_key_collision() -> None:
     a shared key + dict last-writer-wins silently drops parents -- the historic
     __rand__/torch.rand "rand" collision. arg_positions enforces this at import; assert it here.
     """
-    from torchlens.capture.arg_positions import _BINARY_FUNCS, _FACTORY_FUNCS
+    from torchlens._capture.arg_positions import _BINARY_FUNCS, _FACTORY_FUNCS
 
     assert set(_BINARY_FUNCS) & set(_FACTORY_FUNCS) == set()
 

@@ -49,6 +49,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .. import _state
+from .._capture.outcome import stamp_forked
 from .._trace_core.op_store import (
     _COW_ATOMIC,
     _MISSING,
@@ -58,7 +59,6 @@ from .._trace_core.op_store import (
 )
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from .._utils.env_flags import closed_bool_env
-from ..capture.outcome import stamp_forked
 from ..intervention.types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
 from ._accessor_base import Accessor
 from ._state_adapter import state_items, state_new, state_restore
@@ -436,7 +436,7 @@ def _fork_model_field(parent: Trace, field_name: str, value: Any, memo: dict[Any
         # A plain fork is NOT a fresh execution: its records still hold the
         # capture's own values, so every annotations sub-key (episode ledger,
         # observer values) travels here verbatim. The per-sub-key travel
-        # policy (capture/_annotations_travel.py, foldA D6) fires at the
+        # policy (_capture/_annotations_travel.py, foldA D6) fires at the
         # provider settlement finalizer the moment an engine RE-EXECUTES on
         # a fork; the fork builder never decides per key.
         return _copy_fork_value(value, memo)

@@ -11,7 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import PredicateError
-from torchlens.fastlog import CaptureSpec, RecordContext
+from torchlens.recording import CaptureSpec, RecordContext
 
 
 class PredicateApiModel(nn.Module):

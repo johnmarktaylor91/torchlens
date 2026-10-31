@@ -1,4 +1,4 @@
-"""Regression tests for fastlog early-abort via ``tl.fastlog.stop``."""
+"""Regression tests for fastlog early-abort via ``tl.recording.stop``."""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.projections as fastlog_state
 import torchlens._state as torchlens_state
-import torchlens.capture.projections as fastlog_state
 from torchlens.errors import PredicateError, RecorderStateError
-from torchlens.fastlog import RecordContext, StopSignal
+from torchlens.recording import RecordContext, StopSignal
 
 
 class FiveOpModel(nn.Module):
@@ -49,7 +49,7 @@ def _keep_ops_until_fourth(ctx: RecordContext) -> bool:
     """Halt before recording the fourth operation."""
 
     if ctx.kind == "op" and ctx.step_index == 4:
-        tl.fastlog.stop("stop")
+        tl.recording.stop("stop")
     return ctx.kind == "op"
 
 
@@ -126,7 +126,7 @@ def test_halt_reason_default_empty_string() -> None:
         """Halt on the first operation."""
 
         if ctx.kind == "op":
-            tl.fastlog.stop()
+            tl.recording.stop()
         return True
 
     recording = _as_recording(tl.record(FiveOpModel(), torch.tensor(1.0), save=keep_op))
@@ -173,7 +173,7 @@ def test_halt_from_inside_module_enter_predicate() -> None:
         """Halt on the child module entry."""
 
         if ctx.kind == "module_enter" and ctx.address == "linear":
-            tl.fastlog.stop("module enter")
+            tl.recording.stop("module enter")
         return False
 
     recording = _as_recording(
@@ -203,7 +203,7 @@ def test_halt_from_inside_module_exit_predicate() -> None:
         """Halt on the child module exit."""
 
         if ctx.kind == "module_exit" and ctx.address == "linear":
-            tl.fastlog.stop("module exit")
+            tl.recording.stop("module exit")
         return False
 
     recording = _as_recording(
@@ -233,7 +233,7 @@ def test_halt_source_predicate() -> None:
         """Halt on the first input event."""
 
         if ctx.kind == "input":
-            tl.fastlog.stop("input")
+            tl.recording.stop("input")
         return True
 
     recording = _as_recording(
@@ -296,7 +296,7 @@ def test_record_halt_predicate_rejects_non_bool_return() -> None:
         """Return an invalid halt predicate value for runtime validation."""
 
         _ = ctx
-        return tl.fastlog.CaptureSpec(save_out=True)
+        return tl.recording.CaptureSpec(save_out=True)
 
     with pytest.raises(PredicateError) as exc_info:
         tl.record(
@@ -332,10 +332,10 @@ def test_halt_multi_call_recorder_first_halt_wins() -> None:
         nonlocal call_count
         if ctx.kind == "op" and ctx.step_index == 2:
             call_count += 1
-            tl.fastlog.stop(f"halt {call_count}")
+            tl.recording.stop(f"halt {call_count}")
         return ctx.kind == "op"
 
-    with tl.fastlog.Recorder(FiveOpModel(), save=keep_op) as recorder:
+    with tl.recording.Recorder(FiveOpModel(), save=keep_op) as recorder:
         recorder(torch.tensor(1.0))
         recorder(torch.tensor(1.0))
 
@@ -363,7 +363,7 @@ def test_halt_through_user_except_exception() -> None:
 
         if ctx.kind == "op" and ctx.step_index == 1:
             try:
-                tl.fastlog.stop("base")
+                tl.recording.stop("base")
             except Exception:
                 return False
         return True
@@ -402,7 +402,7 @@ def test_fastlog_halt_finalizes_disk_storage(tmp_path: Path) -> None:
         )
     )
     loaded = tl.load(bundle_path)
-    recovered = tl.fastlog.recover(bundle_path)
+    recovered = tl.recording.recover(bundle_path)
 
     assert recording.is_stopped is True
     assert loaded.is_stopped is True

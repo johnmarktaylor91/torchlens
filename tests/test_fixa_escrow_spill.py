@@ -27,8 +27,8 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.capture.plan import CapturePlan, RetentionKind, RetentionProfile
-from torchlens.capture.session import CaptureSession
+from torchlens._capture.plan import CapturePlan, RetentionKind, RetentionProfile
+from torchlens._capture.session import CaptureSession
 
 TORCH_HUB_CHECKPOINTS = Path.home() / ".cache" / "torch" / "hub" / "checkpoints"
 HF_HUB_CACHE = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"

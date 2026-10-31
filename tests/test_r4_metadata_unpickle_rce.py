@@ -422,7 +422,7 @@ def test_foreign_recipe_admission_ignores_live_registry() -> None:
     placeholder whether or not the recipe is currently registered.
     """
 
-    from torchlens.semantic import facets
+    from torchlens._semantic import facets
 
     module_name = "torchlens_r4_registry_probe_module"
     blob = _global_ref_pickle(module_name, "_reg_probe")

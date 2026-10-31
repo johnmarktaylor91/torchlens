@@ -12,8 +12,8 @@ from torch import nn
 import torchlens as tl
 from torchlens import Recording
 from torchlens._trace_state import TraceState
-from torchlens.fastlog import RecordContext
 from torchlens.options import CaptureOptions
+from torchlens.recording import RecordContext
 
 
 class LinearRelu(nn.Module):

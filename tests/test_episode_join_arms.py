@@ -16,8 +16,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_join import ENTRY_SNAPSHOT_ELEMENT_CEILING
-from torchlens.capture._episode_ledger import (
+from torchlens._capture._episode_join import ENTRY_SNAPSHOT_ELEMENT_CEILING
+from torchlens._capture._episode_ledger import (
     derive_episode_status,
     episode_ledger_for,
     escalation_spec,
@@ -447,7 +447,7 @@ def test_declared_crossing_grades_declared_and_claims_refuse() -> None:
 
 
 def test_oversize_entries_degrade_to_digest_basis_never_a_guess(monkeypatch) -> None:
-    monkeypatch.setattr("torchlens.capture._episode_join.ENTRY_SNAPSHOT_ELEMENT_CEILING", 0)
+    monkeypatch.setattr("torchlens._capture._episode_join.ENTRY_SNAPSHOT_ELEMENT_CEILING", 0)
     model = TinyLM()
     log = tl.trace(
         GreedyRunner(model, 3), _prompt(), episode=EpisodeOptions(stepped_module=model, num_steps=3)
@@ -463,7 +463,7 @@ def test_oversize_entries_degrade_to_digest_basis_never_a_guess(monkeypatch) -> 
 def test_unchecked_join_refuses_series_claim() -> None:
     """A hand-built envelope with an unchecked join refuses the series read."""
 
-    from torchlens.capture._episode_ledger import EpisodeLedger
+    from torchlens._capture._episode_ledger import EpisodeLedger
 
     model = TinyLM()
     log = tl.trace(

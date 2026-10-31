@@ -239,7 +239,7 @@ def _op_label(op: Op) -> str:
         Canonical public label, or ``"unknown"`` when none exists.
     """
 
-    from ..capture._nonfinite_prefix import canonical_public_label
+    from .._capture._nonfinite_prefix import canonical_public_label
 
     label = canonical_public_label(op)
     return label if label else "unknown"
@@ -421,8 +421,8 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
         First live non-finite output, or a clean result.
     """
 
+    from .._user_funcs import trace
     from ..options import CaptureOptions
-    from ..user_funcs import trace
 
     capture = trace_kwargs.pop("capture", None)
     trace_kwargs.pop("raise_on_nan", None)

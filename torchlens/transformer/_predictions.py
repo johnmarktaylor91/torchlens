@@ -1,6 +1,6 @@
 """Prediction pictures: ribbon, answer trajectory, rank panel, top-k table.
 
-These consume the STREAMING lens result (:func:`torchlens.semantic.logit_lens.
+These consume the STREAMING lens result (:func:`torchlens._semantic.logit_lens.
 logit_lens_predictions`, the FIX-L extractor): probabilities always use the
 full-vocabulary denominator, ranks are one-based with the tie convention
 recorded, and provenance wording travels row by row -- only a row numerically
@@ -71,7 +71,7 @@ def prediction_trajectory(  # noqa: PLR0913 -- position/batch/tokenizer/target a
     Parameters
     ----------
     predictions:
-        A :class:`torchlens.semantic.logit_lens.LogitLensPredictions`.
+        A :class:`torchlens._semantic.logit_lens.LogitLensPredictions`.
     position:
         Sequence position to inspect (negative = from the end).
     batch_index:

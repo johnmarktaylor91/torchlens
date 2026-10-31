@@ -11,7 +11,7 @@ from support.rf_isolation import preserved_rf_registry
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.arg_positions import _normalize_func_name
+from torchlens._capture.arg_positions import _normalize_func_name
 from torchlens.receptive_field import _rules
 from torchlens.receptive_field._engine_forward import solve_projective
 from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleResult

@@ -45,7 +45,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "": "FACADE",
     "types": "FACADE",
     "io": "FACADE",
-    "user_funcs": "FACADE",
+    "_user_funcs": "FACADE",
     "experimental": "FACADE",
     # quickstart is a FACADE-role package (lane F17): its verbs sit over the
     # capture engine, the inference search, and the renderer, with upward
@@ -84,13 +84,13 @@ PACKAGE_LAYERS: dict[str, str] = {
     # census helpers back from it eagerly.
     "_io._load_validators": "L3",
     # -- L2 ENGINE ----------------------------------------------------------
-    "capture": "L2",
+    "_capture": "L2",
     "backends": "L2",
     "_ir": "L2",
-    "fastlog": "L2",
-    "fastlog.types": "L1",
-    "fastlog.recover": "L3",
-    "fastlog.cleanup": "L3",
+    "recording": "L2",
+    "recording.types": "L1",
+    "recording.recover": "L3",
+    "recording.cleanup": "L3",
     "options": "L2",
     "observers": "L2",
     "_state": "L2",
@@ -116,7 +116,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_partial": "L3",
     "distributed": "L3",
     "compat": "L3",
-    "captured_run": "L3",
+    "_captured_run": "L3",
     "_fast_run": "L3",
     "_runnable": "L3",
     "_transport": "L3",
@@ -150,11 +150,11 @@ PACKAGE_LAYERS: dict[str, str] = {
     "debug": "L5",
     "checks": "L5",
     # -- L6 APPLIANCES ---------------------------------------------------------
-    "semantic": "L6",
+    "_semantic": "L6",
     "_notebook": "L6",
     "neuro": "L6",
     # -- L7 PRESENT --------------------------------------------------------------
-    "visualization": "L7",
+    "_visualization": "L7",
     "viz": "L7",
     "report": "L7",
     "export": "L7",
@@ -195,7 +195,7 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         # package holds no direct torch._ touches of its own.
         "_observability",
         "backends",
-        "capture",
+        "_capture",
         "compat",
         "_constants",
         "_data_classes",
@@ -203,7 +203,7 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "distributed",
         "_distributed",
         "errors",
-        "fastlog",
+        "recording",
         "intervention",
         "_ir",
         "_io",
@@ -224,7 +224,7 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "_runnable_witness_contracts",
         "_training_validation",
         "_fast_run",
-        "user_funcs",
+        "_user_funcs",
         # floor2 fix (2026-10-01): the runnable-save CPU float8 path
         # consumes get_cpu_float8_deterministic_fill_support() at the ONE
         # sanctioned probe chokepoint (_utils/_torch_compat); the module
@@ -250,7 +250,7 @@ def layer_for_module(dotted: str) -> str | None:
     Parameters
     ----------
     dotted:
-        Module path relative to ``torchlens`` (e.g. ``"fastlog.recover"``).
+        Module path relative to ``torchlens`` (e.g. ``"recording.recover"``).
 
     Returns
     -------

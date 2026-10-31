@@ -14,7 +14,7 @@ import torch
 
 from ..._utils._multipass_access import get_multipass_attr
 from ..._utils.display import human_readable_size
-from ...visualization.node_spec import (
+from ..._visualization.node_spec import (
     INTERVENTION_CONE_COLOR,
     INTERVENTION_SITE_COLOR,
     intervention_site_and_cone_labels,

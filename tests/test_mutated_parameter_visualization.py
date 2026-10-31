@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization.themes import resolve_theme
+from torchlens._visualization.themes import resolve_theme
 
 #: Parameter fills as the DEFAULT skin renders them.
 TRAINABLE_PARAMS_BG_COLOR = resolve_theme("torchlens").semantic_palette["params_trainable"]
@@ -414,7 +414,7 @@ def test_rolled_view_draws_the_parameter_node(tmp_path: Path) -> None:
 def test_only_the_receiver_parameter_gets_a_node(tmp_path: Path) -> None:
     """A Parameter read by an in-place op is not mutated; only the receiver is."""
 
-    from torchlens.visualization import _mutated_params
+    from torchlens._visualization import _mutated_params
 
     trace = _trace(_ParamReadByInplaceOp())
     try:
@@ -433,7 +433,7 @@ def test_never_mutated_parameters_get_no_node_and_unchanged_dot(
 ) -> None:
     """Without a mutation there is no node, and the DOT equals the feature-free render."""
 
-    from torchlens.visualization import _mutated_params
+    from torchlens._visualization import _mutated_params
 
     trace = _trace(_NeverMutated())
     try:
@@ -505,7 +505,7 @@ def test_module_focus_excluding_the_owner_draws_no_node(tmp_path: Path) -> None:
 def test_dot_and_underscore_addresses_get_distinct_nodes(tmp_path: Path) -> None:
     """``a.b`` and ``a_b`` keep separate node declarations and separate edges."""
 
-    from torchlens.visualization._mutated_params import mutated_parameter_node_name
+    from torchlens._visualization._mutated_params import mutated_parameter_node_name
 
     trace = _trace(_DotUnderscoreCollision())
     try:
@@ -534,7 +534,7 @@ def test_dot_and_underscore_addresses_get_distinct_nodes(tmp_path: Path) -> None
 def test_node_names_are_injective_and_port_free() -> None:
     """Distinct addresses never share a node name, and no name carries a DOT port colon."""
 
-    from torchlens.visualization._mutated_params import mutated_parameter_node_name
+    from torchlens._visualization._mutated_params import mutated_parameter_node_name
 
     addresses = ["a.b", "a_b", "a%2Eb", "a:b", "a-b", 'a"b', "a b", "a.b.c", "a_b.c"]
     names = [mutated_parameter_node_name(address) for address in addresses]

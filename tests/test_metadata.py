@@ -16,11 +16,11 @@ import torch.nn as nn
 import torchlens
 import torchlens as tl
 from torchlens import trace as trace_fn
-from torchlens._data_classes import FuncCallLocation
-from torchlens.capture.flops import (
+from torchlens._capture.flops import (
     compute_backward_flops,
     compute_forward_flops,
 )
+from torchlens._data_classes import FuncCallLocation
 
 
 class _SharedMultiOutputModel(nn.Module):
@@ -1819,7 +1819,7 @@ class TestConditionalBranchDetection:
         import os
         import tempfile
 
-        from torchlens.visualization import show_model_graph
+        from torchlens._visualization import show_model_graph
 
         model = example_models.ConditionalBranching()
         x = self._cond_input()
@@ -1868,7 +1868,7 @@ class TestConditionalBranchDetection:
         import os
         import tempfile
 
-        from torchlens.visualization import show_model_graph
+        from torchlens._visualization import show_model_graph
 
         model = example_models.ConditionalBranching()
         x = self._cond_input()

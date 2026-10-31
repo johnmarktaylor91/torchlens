@@ -1217,9 +1217,9 @@ def check_provenance_source_disclosure_ignores_the_familys_own_output() -> None:
         " M tests/golden/family_a/PROVENANCE\n"
     )
     assert _foreign_porcelain_lines(regen_only, own) == []
-    with_source_dirt = regen_only + " M torchlens/visualization/_render_dot.py\n"
+    with_source_dirt = regen_only + " M torchlens/_visualization/_render_dot.py\n"
     foreign = _foreign_porcelain_lines(with_source_dirt, own)
-    assert foreign == [" M torchlens/visualization/_render_dot.py"]
+    assert foreign == [" M torchlens/_visualization/_render_dot.py"]
     # A rename record is judged by its destination path.
     renamed = "R  tests/golden/family_a/old.dot -> tests/golden/family_a/new.dot\n"
     assert _foreign_porcelain_lines(renamed, own) == []

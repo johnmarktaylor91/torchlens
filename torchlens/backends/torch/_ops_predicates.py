@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..._capture.projections import (
+    get_active_recording_state,
+)
 from ..._ir.container import (
     DataclassField,
     DictKey,
@@ -22,10 +25,7 @@ from ..._ir.semantics import BackendSemantics
 from ..._utils.tensor_utils import (
     safe_copy,
 )
-from ...capture.projections import (
-    get_active_recording_state,
-)
-from ...fastlog.types import (
+from ...recording.types import (
     ActivationRecord,
     CaptureSpec,
 )

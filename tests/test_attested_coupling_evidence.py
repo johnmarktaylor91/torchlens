@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.capture._episode_coupling import (
+from torchlens._capture._episode_coupling import (
     CouplingFire,
     CouplingSession,
     attest_coupling,

@@ -2,7 +2,7 @@
 
 THE capability table file for structure-only capture (`structure_only=True`),
 owned by L7a; the in-code authority is
-`torchlens.capture.structure_only.STRUCTURE_ONLY_CAPABILITIES` with the ONE
+`torchlens._capture.structure_only.STRUCTURE_ONLY_CAPABILITIES` with the ONE
 chokepoint `require_structure_only_capability`, and this file is its human
 mirror (lockstep-tested in `tests/test_structure_only_capabilities.py`).
 

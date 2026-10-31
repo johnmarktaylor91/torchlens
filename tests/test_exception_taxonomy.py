@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from _source_corpus import package_ast, package_files
 
-from torchlens import errors, user_funcs
+from torchlens import _user_funcs as user_funcs, errors
 from torchlens._io.tlspec import coerce_tlspec_save_level
 from torchlens.errors import (
     AmbiguousBackendError,
@@ -64,21 +64,21 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
         "subclass",
     ),
     (
-        "torchlens.fastlog.exceptions",
+        "torchlens.recording.exceptions",
         "RecordingConfigError",
         errors.ConfigurationError,
         "subclass",
     ),
-    ("torchlens.fastlog.exceptions", "RecorderStateError", errors.CaptureError, "subclass"),
-    ("torchlens.fastlog.exceptions", "RecoveryError", errors.CaptureError, "subclass"),
-    ("torchlens.fastlog.exceptions", "BundleNotFinalizedError", errors.CaptureError, "subclass"),
+    ("torchlens.recording.exceptions", "RecorderStateError", errors.CaptureError, "subclass"),
+    ("torchlens.recording.exceptions", "RecoveryError", errors.CaptureError, "subclass"),
+    ("torchlens.recording.exceptions", "BundleNotFinalizedError", errors.CaptureError, "subclass"),
     (
-        "torchlens.fastlog.exceptions",
+        "torchlens.recording.exceptions",
         "RecordContextFieldError",
         errors.ConfigurationError,
         "subclass",
     ),
-    ("torchlens.fastlog.exceptions", "PredicateError", errors.CaptureError, "subclass"),
+    ("torchlens.recording.exceptions", "PredicateError", errors.CaptureError, "subclass"),
     (
         "torchlens.intervention.errors",
         "TorchLensInterventionError",
@@ -1028,7 +1028,7 @@ def test_collapse_order_mode_door_names_its_narrower_domain() -> None:
     exactly the accepted set — never ``'none'`` or floats, which refuse here.
     """
 
-    from torchlens.visualization.auto_collapse import collapse_order
+    from torchlens._visualization.auto_collapse import collapse_order
 
     with pytest.raises(errors.InvalidArgumentError) as exc_info:
         collapse_order(object(), mode="none")  # type: ignore[arg-type]
@@ -1054,7 +1054,7 @@ def test_code_panel_doors_split_render_from_config_refusals() -> None:
 
     from torch import nn
 
-    from torchlens.visualization.code_panel import resolve_code_panel_source
+    from torchlens._visualization.code_panel import resolve_code_panel_source
 
     model = nn.Identity()
     with pytest.raises(errors.ArgumentTypeError) as return_info:
@@ -1085,7 +1085,7 @@ def test_predicate_type_doors_split_by_surface() -> None:
     from torch import nn
 
     import torchlens as tl
-    from torchlens.fastlog.options import RecordingOptions
+    from torchlens.recording.options import RecordingOptions
 
     for kwarg in ("intervene", "halt"):
         base = "intervention" if kwarg == "intervene" else "halt"
@@ -1244,15 +1244,15 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     # their torchlens.errors registration rides the S2 author's ratification
     # PR together with the BUILTIN_LINEAGE_GOLDEN rows — this allowlist entry
     # is the pre-ratification parking spot, retired in that same PR) --
-    "torchlens.capture.structure_only.ValueDependentBranchError": (
+    "torchlens._capture.structure_only.ValueDependentBranchError": (
         "S2-gated structure-only teaching refusal; errors-namespace "
         "registration deferred to the S2 ratification PR"
     ),
-    "torchlens.capture.structure_only.MetaKernelUnavailableError": (
+    "torchlens._capture.structure_only.MetaKernelUnavailableError": (
         "S2-gated structure-only teaching refusal; errors-namespace "
         "registration deferred to the S2 ratification PR"
     ),
-    "torchlens.capture.structure_only.StructureOnlyCapabilityError": (
+    "torchlens._capture.structure_only.StructureOnlyCapabilityError": (
         "S2-gated structure-only chokepoint refusal; errors-namespace "
         "registration deferred to the S2 ratification PR"
     ),
@@ -1318,7 +1318,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "sprint with the extraction-v2 spellings"
     ),
     # -- Internal control-flow signals / private helpers (never user-caught) --
-    "torchlens.fastlog._halt.StopSignal": (
+    "torchlens.recording._halt.StopSignal": (
         "internal control-flow stop signal (BaseException); converted to recording status"
     ),
     "torchlens._fast_live_until.FastUntilReached": (
@@ -1333,7 +1333,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "projected output's size cannot be read and converted by the caller to "
         "the typed op_allocation_preflight refusal"
     ),
-    "torchlens.user_funcs._CaptureCacheEntryOverCeilingError": (
+    "torchlens._user_funcs._CaptureCacheEntryOverCeilingError": (
         "private mid-stream byte-ceiling abort signal; raised and caught inside the "
         "capture-cache writer, never escapes user_funcs"
     ),
@@ -1346,7 +1346,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens._utils._dynamo_explain_shapes._DynamoExplainOutputError": (
         "private dynamo-explain probe failure; caught inside the capability probe"
     ),
-    "torchlens.capture.projections.LiveOpViewFieldNotYetWritten": (
+    "torchlens._capture.projections.LiveOpViewFieldNotYetWritten": (
         "internal AttributeError shim for not-yet-written live OpRecord view fields"
     ),
     "torchlens._ir.op_record.OpRecordAttributeError": (
@@ -1416,7 +1416,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "raised by to_disk(async_writes=True) when a background write fails; "
         "errors-namespace registration deferred to the UI/API naming slate"
     ),
-    "torchlens.semantic.patching.PatchApplicationError": (
+    "torchlens._semantic.patching.PatchApplicationError": (
         "activation-patching ineffective-rerun refusal (patch_ineffective); "
         "registration deferred to the UI/API naming slate"
     ),
@@ -1430,7 +1430,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     ),
     # -- taxonomy closure: the three stranded classes that are NOT public
     # catch targets today --
-    "torchlens.visualization.collapse_estimator.FallbackDegrade": (
+    "torchlens._visualization.collapse_estimator.FallbackDegrade": (
         "internal control-flow signal of the smart-collapse quality planner: "
         "raised at budget checkpoints (allocation cap, watchdog) and caught at "
         "the selection entry, which degrades to the linear fallback; never "

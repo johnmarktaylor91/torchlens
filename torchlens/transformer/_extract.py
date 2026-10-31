@@ -93,7 +93,7 @@ def _mask_from_sdpa(module: Any, n_dst: int, n_src: int, batch_index: int) -> Ma
     """Mask source 1: recorded SDPA call arguments (memo D6/M8)."""
 
     try:
-        from ..semantic.reconstruction import find_sdpa_op
+        from .._semantic.reconstruction import find_sdpa_op
     except ImportError:
         return None
     op = find_sdpa_op(module)

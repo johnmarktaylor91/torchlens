@@ -10,13 +10,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.projections as fastlog_state
 import torchlens._state as torchlens_state
-import torchlens.capture.projections as fastlog_state
 from torchlens import Recording
 from torchlens._io.streaming import PARTIAL_SENTINEL
 from torchlens.backends.torch.backend import TorchBackend
 from torchlens.errors import PredicateError, RecorderStateError
-from torchlens.fastlog import RecordContext, Recorder
+from torchlens.recording import RecordContext, Recorder
 
 
 class FailingAfterOps(nn.Module):
@@ -466,7 +466,7 @@ def test_disk_partial_bundle_path_points_to_recoverable_temp_dir(tmp_path: Path)
     assert recording.bundle_path is not None
     assert recording.bundle_path.name.startswith("recoverable.tlfast.tmp.")
     assert (recording.bundle_path / "fastlog_index.jsonl").exists()
-    recovered = tl.fastlog.recover(recording.bundle_path)
+    recovered = tl.recording.recover(recording.bundle_path)
     assert recovered.is_recovered is True
     assert recovered.status == "recovered"
     assert len(recovered) > 0

@@ -32,7 +32,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.user_funcs import validate_forward_pass
+from torchlens._user_funcs import validate_forward_pass
 
 pytestmark = pytest.mark.heavy  # validation replays make these multi-second tests
 

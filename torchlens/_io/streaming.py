@@ -434,7 +434,7 @@ class BundleStreamWriter:
             If finalization fails.
         """
 
-        from ..capture.outcome import outcome_for
+        from .._capture.outcome import outcome_for
 
         self.stage_for_settlement(scrubbed_state, blob_specs, unsupported, trace=trace)
         settled = outcome_for(trace)

@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization.themes import THEME_PRESETS
+from torchlens._visualization.themes import THEME_PRESETS
 
 pydot = pytest.importorskip("pydot")
 

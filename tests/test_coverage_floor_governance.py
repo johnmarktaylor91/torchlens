@@ -156,7 +156,7 @@ def test_floor_lock_is_red_capable() -> None:
 #: Shrink-forbidden per-package floor baselines (r7 R72). The script is the
 #: single runtime authority; this mirror refuses a silent floor cut there.
 PACKAGE_FLOOR_BASELINES: dict[str, float] = {
-    "torchlens/capture": 74.0,
+    "torchlens/_capture": 74.0,
     "torchlens/postprocess": 80.0,
     "torchlens/validation": 54.0,
     "torchlens/backends": 48.0,
@@ -166,7 +166,7 @@ PACKAGE_FLOOR_BASELINES: dict[str, float] = {
     "torchlens/utils": 59.0,
     "torchlens/merged": 80.0,
     "torchlens/_trace_core": 80.0,
-    "torchlens/visualization": 57.0,
+    "torchlens/_visualization": 57.0,
 }
 
 
@@ -223,7 +223,7 @@ def test_package_percentage_aggregation_is_red_capable() -> None:
     script = _load_floor_script()
     payload = {
         "files": {
-            "torchlens/capture/trace.py": {
+            "torchlens/_capture/trace.py": {
                 "summary": {
                     "covered_lines": 10,
                     "num_statements": 100,
@@ -234,8 +234,8 @@ def test_package_percentage_aggregation_is_red_capable() -> None:
         }
     }
     measured = script.package_percentages(payload)
-    assert measured["torchlens/capture"] == 10.0
-    assert measured["torchlens/capture"] < script.PACKAGE_FLOORS["torchlens/capture"]
+    assert measured["torchlens/_capture"] == 10.0
+    assert measured["torchlens/_capture"] < script.PACKAGE_FLOORS["torchlens/_capture"]
 
 
 #: No-growth ceiling on `# pragma: no cover` sites in torchlens/ (r7 R72-F2:

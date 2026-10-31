@@ -9,7 +9,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._utils import format_flops, format_size
-from torchlens.visualization._label_format import (
+from torchlens._visualization._label_format import (
     format_module_kwargs,
     format_module_path,
     format_param_list,

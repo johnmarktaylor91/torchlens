@@ -13,7 +13,7 @@ import torch
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.visualization.theme_registry import (
+from torchlens._visualization.theme_registry import (
     GRAPHVIZ_DRAW_SURFACE,
     LensPreset,
     describe_lens,
@@ -93,7 +93,7 @@ def test_preset_spec_fn_rides_the_internal_slot() -> None:
         effective = resolve_lens_request(lens, {})
         assert effective["preset_spec_fn"] is spec_fn
     finally:
-        from torchlens.visualization import theme_registry
+        from torchlens._visualization import theme_registry
 
         theme_registry._REGISTRY.pop((GRAPHVIZ_DRAW_SURFACE, "_c05_test_slot"), None)
 
@@ -110,8 +110,8 @@ def test_rows_are_plain_serialisable() -> None:
 def test_graphviz_renderer_declares_encodings_capability() -> None:
     # N14: "refuse by capability, never draw an unencoded imitation" needs
     # the encodings bit to exist in the vocabulary.
-    from torchlens.visualization.renderers.base import RendererCapabilities
-    from torchlens.visualization.renderers.graphviz import GraphvizRenderer
+    from torchlens._visualization.renderers.base import RendererCapabilities
+    from torchlens._visualization.renderers.graphviz import GraphvizRenderer
 
     assert "encodings" in {f.name for f in RendererCapabilities.__dataclass_fields__.values()}
     assert GraphvizRenderer.capabilities.encodings is True
@@ -127,9 +127,9 @@ def test_explicit_max_above_ceiling_warns_every_call(monkeypatch) -> None:
     # outcome is the deterministic compact fallback plan (coded
     # collapse_budget_fallback), never a decline -- the re-warn contract is
     # unchanged, including on cache hits.
-    import torchlens.visualization.collapse_optimizer as co
+    import torchlens._visualization.collapse_optimizer as co
+    from torchlens._visualization.collapse_plan import RenderContext
     from torchlens.errors._base import TorchLensWarning
-    from torchlens.visualization.collapse_plan import RenderContext
 
     model = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())
     log = tl.trace(model, torch.randn(2, 4))

@@ -7,7 +7,7 @@ WT1 A-IV item 21 (lane A08), three defects in one bundle:
   ``_outcome`` slot behind the validating ``outcome`` property -- read as
   UNKNOWN with a false "hand-built object" warning. ``outcome_for`` now
   honors the sanctioned ``_OUTCOME_SELF_AUTHORITY`` marker.
-* ``tl.fastlog.recover()`` rebuilt aborted bundles (PARTIAL sentinel +
+* ``tl.recording.recover()`` rebuilt aborted bundles (PARTIAL sentinel +
   REASON.txt debris) as ``failed=False`` recordings with no error evidence --
   laundering the failure record. Recovery now carries the abort evidence and
   the derived outcome is FAILED; corruption salvage itself is unchanged.
@@ -27,7 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.outcome import (
+from torchlens._capture.outcome import (
     CaptureOutcomeError,
     CaptureStatus,
     outcome_for,
@@ -111,7 +111,7 @@ def aborted_bundle(tmp_path):
 
 @pytest.mark.smoke
 def test_recover_carries_abort_failure_evidence(aborted_bundle):
-    recovered = tl.fastlog.recover(aborted_bundle)
+    recovered = tl.recording.recover(aborted_bundle)
     assert recovered.is_recovered is True
     assert recovered.is_failed is True
     assert "aborted" in (recovered.error_repr or "")
@@ -134,7 +134,7 @@ def test_recover_still_salvages_clean_crash_debris_as_unknown(tmp_path):
     # Simulate a hard crash: strip the finalized manifest so only the index
     # remains, with no PARTIAL/REASON abort debris.
     (bundle / "manifest.json").unlink()
-    recovered = tl.fastlog.recover(bundle)
+    recovered = tl.recording.recover(bundle)
     assert recovered.is_recovered is True
     assert recovered.is_failed is False
     assert recovered.outcome.status is CaptureStatus.UNKNOWN

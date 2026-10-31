@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._geometry_audit import (
+from torchlens._visualization._geometry_audit import (
     AuditResult,
     audit_layout,
     compute_usability_envelope,
@@ -195,7 +195,7 @@ def test_competing_label_channels_detected(tmp_path: Path) -> None:
     label (memo D11); the detector is the plan's tripwire until it lands.
     """
 
-    from torchlens.visualization._geometry_audit import edges_with_competing_labels
+    from torchlens._visualization._geometry_audit import edges_with_competing_labels
 
     class Reused(nn.Module):
         """A two-input op whose edges carry argument labels."""

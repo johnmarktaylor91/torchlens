@@ -10,6 +10,12 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..._capture.predicates import _evaluate_halt, _evaluate_keep_op, _is_halt_only_capture
+from ..._capture.projections import (
+    _build_record_context,
+    append_projected_event,
+    get_active_recording_state,
+)
 from ..._errors import UserTransformError
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._training_validation import TrainingModeConfigError
@@ -17,15 +23,9 @@ from ..._utils.arg_handling import INPUT_WAS_PARAMETER_ATTR
 from ..._utils.introspection import _get_code_context
 from ..._utils.rng import log_current_rng_states
 from ..._utils.tensor_utils import get_memory_amount_from_metadata
-from ...capture.predicates import _evaluate_halt, _evaluate_keep_op, _is_halt_only_capture
-from ...capture.projections import (
-    _build_record_context,
-    append_projected_event,
-    get_active_recording_state,
-)
-from ...fastlog._halt import StopSignal
-from ...fastlog.exceptions import PredicateError
-from ...fastlog.types import ActivationRecord, CaptureSpec
+from ...recording._halt import StopSignal
+from ...recording.exceptions import PredicateError
+from ...recording.types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
 from ._tl import get_tensor_meta, set_tensor_label
 from .buffer_writes import buffer_version_key

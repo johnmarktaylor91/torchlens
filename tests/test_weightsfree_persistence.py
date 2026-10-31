@@ -69,7 +69,7 @@ def test_loaded_trace_is_hypothesis_again(tmp_path) -> None:
     """D21: the discharge registry is session-only; a corroborated trace
     loads back as HYPOTHESIS and the persisted envelope says discharge=absent."""
 
-    from torchlens.capture.structure_only import StructureClaimStatus, claim_status_for
+    from torchlens._capture.structure_only import StructureClaimStatus, claim_status_for
 
     torch.manual_seed(0)
     model = BufferedToy()

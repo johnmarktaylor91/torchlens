@@ -278,7 +278,7 @@ def render_logit_lens_heatmap(  # noqa: PLR0913 -- addressing, labeling and outp
     Parameters
     ----------
     result:
-        A :class:`torchlens.semantic.logit_lens.LogitLensResult` whose
+        A :class:`torchlens._semantic.logit_lens.LogitLensResult` whose
         per-layer logits are ``[batch, positions, vocab]``.
     path:
         Output path (PNG/SVG/PDF by suffix).

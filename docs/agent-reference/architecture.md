@@ -5,7 +5,7 @@ See `architecture.md` in `.project-context` for the older full map and
 `AGENTS.md` files for per-module details.
 
 Key entry points:
-- Main capture: `torchlens/user_funcs.py` - `trace()`, `show_model_graph()`,
+- Main capture: `torchlens/_user_funcs.py` - `trace()`, `show_model_graph()`,
   `draw_backward()`, `validate_forward_pass()`
 - Backend registry: `torchlens/backends/registry.py` - `BackendSpec`, `BackendName`,
   backend resolution, validation dispatch, and canonical backend errors.
@@ -32,7 +32,7 @@ Key entry points:
   Synthesized rungs persist `InputProvenance` inside the existing
   `Trace.input_preprocessor` KEEP field; `decode_output`/`output_table`
   refuse `nongold_semantics_unavailable` on synthesized values; first raw
-  read warns once (`nongold_raw_value_read`). `torchlens.user_funcs.render`
+  read warns once (`nongold_raw_value_read`). `torchlens._user_funcs.render`
   is the one-call facade (metadata-only pinned eval/no-grad, state-hash
   verified restore, `collapse="auto"` there only, detached `Drawing`,
   never auto-opens). Lazy: gold/declared rungs materialize during the one
@@ -132,7 +132,7 @@ Key entry points:
   shape/dtype HYPOTHESES, never values; META-BUILT models are admitted
   under this contract with a uniform substrate (mixed cells refuse
   `structure_only_substrate_mismatch`); value consumers refuse typed
-  through `torchlens.capture.structure_only` (contract:
+  through `torchlens._capture.structure_only` (contract:
   `docs/reference/structure_only_capabilities.md`); value-dependent
   branches refuse device-neutrally at the user's source line;
   `trace.discharge_against(real_trace)` corroborates/refutes hypotheses
@@ -289,7 +289,7 @@ Key entry points:
   Doc of record: `docs/reference/kernel_telemetry.md`.
 - Lazy decoration: `torchlens/backends/torch/model_prep.py:_ensure_model_prepared()` calls
   `wrap_torch()` and the belt/rescue stale-reference machinery
-- Forward-pass orchestration: `torchlens/capture/trace.py`
+- Forward-pass orchestration: `torchlens/_capture/trace.py`
 - Postprocess: `torchlens/_postprocess/__init__.py` current 26-step pipeline (steps `0`..`20`
   plus fractional inserts `11.5`/`11.75`/`15.5`/`16.5`/`17.5`; steps 1-20 run in order from
   `_postprocess/_executor.py::STEP_REGISTRY`)
@@ -306,7 +306,7 @@ Key entry points:
   (AUTO forces dot; explicit rank refuses `encoding_requires_dot_layout`), legend-disclosed via
   the tri-state `show_legend` (`None`=AUTO channel-only legend, `True`/`False` historical; explicit
   `False` honored). Rolled multi-pass field sources resolve through the name-keyed allowlist in
-  `torchlens/visualization/_encoding.py`; varying/first-pass-only sources stay unencoded with a
+  `torchlens/_visualization/_encoding.py`; varying/first-pass-only sources stay unencoded with a
   legend note (honest-visuals tripwire), and unclassified sources refuse `encoding_source_invalid`.
   Wave-1 size channel `Trace.draw(size_by=..., scale=...)` (UNSTABLE, D4 default-applied):
   scalar field / `"dims"` (non-batch numel) / callable mapped to width/height MINIMUMS
@@ -337,7 +337,7 @@ Key entry points:
   plan, and `Trace.collapse_schedule()` returns the float schedule metadata. Smart-collapse
   admission (F11, memo D5) gates on U -- the rendered universe of the full plan -- tiered by
   a measured (U, W) work estimator, with `COLLAPSE_OPTIMIZER_MAX_OPS` (2000,
-  `torchlens.visualization.collapse_optimizer`) as the defensive constant: over-budget
+  `torchlens._visualization.collapse_optimizer`) as the defensive constant: over-budget
   requests DEGRADE to a deterministic compact fallback plan (coded
   `collapse_budget_fallback`, `planner="linear_fallback"`), never an uncollapsed wall;
   only pathological inputs (raw ops above 20x the constant) still decline outright

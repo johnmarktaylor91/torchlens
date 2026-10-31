@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.visualization import lenses
+from torchlens._visualization import lenses
 
 trace = tl.trace(nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)), torch.randn(2, 8))
 out = Path(globals().get("DOCS_TMPDIR", "/tmp")) / "speed"
@@ -101,7 +101,7 @@ leftright + `color_by="flops"`), `debug_edge_shapes`.
 
 ## The validation harness
 
-`torchlens.visualization.lenses.audit`: the evidence corpus (toy builders +
+`torchlens._visualization.lenses.audit`: the evidence corpus (toy builders +
 guarded real members + per-artifact manifests), the Stage-0 deterministic
 audit (`run_stage0` -- geometry via `dot -Tjson`, size caps, colour spread,
 disclosure presence, the label-spelling audit, CVD palette gates),

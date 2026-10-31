@@ -17,13 +17,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.visualization.collapse_patterns import (
+from torchlens._visualization.collapse_patterns import (
     IDIOMATIC_PATTERNS,
     match_patterns,
     parse_patterns,
     resolve_pattern_request,
 )
-from torchlens.visualization.collapse_plan import RenderContext
+from torchlens._visualization.collapse_plan import RenderContext
 
 
 class _Cbr(nn.Module):

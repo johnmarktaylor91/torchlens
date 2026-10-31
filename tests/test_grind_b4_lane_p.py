@@ -12,7 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import user_funcs
+from torchlens import _user_funcs as user_funcs
 from torchlens._capture_state_helpers import (
     _facet_recipe_cache_key,
     _snapshot_plain_attr_value,
@@ -27,8 +27,8 @@ from torchlens._io.state_keys import (
 )
 from torchlens._trace_selector_helpers import _predicate_cache_key
 from torchlens._utils.display import cleanup_trace_visualizer_dir, ensure_trace_visualizer_dir
-from torchlens.visualization import auto_collapse
-from torchlens.visualization.auto_collapse import analyze_collapse
+from torchlens._visualization import auto_collapse
+from torchlens._visualization.auto_collapse import analyze_collapse
 
 
 class _NonPersistentBufferModel(nn.Module):

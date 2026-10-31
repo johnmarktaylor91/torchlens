@@ -17,10 +17,10 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..capture.outcome import CaptureOutcome
+    from .._capture.outcome import CaptureOutcome
 
 # Worst-of-members fold severity, least -> most severe, keyed on the frozen
-# CaptureStatus values (string keys keep torchlens.capture lazy at import).
+# CaptureStatus values (string keys keep torchlens._capture lazy at import).
 # The order is capability-table restrictiveness under the landed
 # CAPTURE_OUTCOME_CAPABILITIES matrix (refusal-cell count), with the two ties
 # broken by epistemic weakness: UNATTESTED sits above COMPLETE because an
@@ -54,7 +54,7 @@ def _fold_member_outcomes(
     ----------
     member_outcomes:
         Ordered ``(member_name, settled_outcome_or_None)`` pairs, as read
-        through :func:`torchlens.capture.outcome.outcome_for`.
+        through :func:`torchlens._capture.outcome.outcome_for`.
 
     Returns
     -------
@@ -64,7 +64,7 @@ def _fold_member_outcomes(
         ``settlement_note`` naming the driving member plus status counts.
     """
 
-    from ..capture.outcome import CaptureOutcome, CaptureStatus
+    from .._capture.outcome import CaptureOutcome, CaptureStatus
 
     if not member_outcomes:
         return CaptureOutcome(

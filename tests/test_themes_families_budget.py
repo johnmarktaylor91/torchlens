@@ -15,8 +15,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import lenses
-from torchlens.visualization.lenses import _resolve as resolve_module
+from torchlens._visualization import lenses
+from torchlens._visualization.lenses import _resolve as resolve_module
 
 
 @pytest.fixture(scope="module")
@@ -89,7 +89,7 @@ def test_zero_coverage_refuses_typed(mlp_log: Any, monkeypatch: Any) -> None:
     """ROW GATE: zero resolved coverage refuses; never a populated legend
     over an unencoded graph."""
 
-    from torchlens.visualization.lenses import _families
+    from torchlens._visualization.lenses import _families
 
     broken = dict(_families.SOURCE_FAMILIES)
     broken["time"] = _families.SourceFamily(
@@ -113,7 +113,7 @@ def test_one_view_zero_coverage_names_the_zero_coverage_code(
     """When only the view-resolved member is unencoded (the other view has
     evidence), the refusal is the ADVERTISED-SCALE code, not the headline gap."""
 
-    from torchlens.visualization.lenses import _families
+    from torchlens._visualization.lenses import _families
 
     broken = dict(_families.SOURCE_FAMILIES)
     broken["time"] = _families.SourceFamily(
@@ -208,7 +208,7 @@ def test_band_missed_warns_coded_and_discloses(mlp_log: Any, monkeypatch: Any) -
 
     import warnings as warnings_module
 
-    from torchlens.visualization.lenses import _budget
+    from torchlens._visualization.lenses import _budget
 
     # An impossible band (floor > ceiling admits no count) forces the miss path.
     monkeypatch.setattr(_budget, "BAND_FLOOR", 1)
@@ -228,7 +228,7 @@ def test_above_ceiling_fallback_warns_coded(mlp_log: Any, monkeypatch: Any) -> N
 
     import warnings as warnings_module
 
-    from torchlens.visualization import collapse_optimizer
+    from torchlens._visualization import collapse_optimizer
 
     # A tiny trace over a lowered ceiling: no call depth reaches the 100-220
     # band, so the nearest-depth estimate is served with the coded warning.

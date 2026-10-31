@@ -26,7 +26,7 @@ from torchlens._extraction.harvest_schema import (
     require_executable,
     validate_harvest_block,
 )
-from torchlens.visualization.collapse_plan import (
+from torchlens._visualization.collapse_plan import (
     export_collapse_plan,
     reapply_collapse_plan,
 )

@@ -421,7 +421,7 @@ def _compute_footer(facts: SummaryFacts, flop_convention: str = "fma2") -> str:
         suffix = f" +{more} more" if more else ""
         coverage += (
             f"; totals are lower bounds ({names}{suffix} unknown; "
-            "remedy: torchlens.capture.flops.register_op_rule)"
+            "remedy: torchlens._capture.flops.register_op_rule)"
         )
     return " | ".join([flops, macs, coverage])
 

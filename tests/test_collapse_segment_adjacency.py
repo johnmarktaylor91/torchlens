@@ -18,9 +18,9 @@ import torch
 
 import torchlens as tl
 from tests.test_collapse_optimizer import UniqueWideFanModel
-from torchlens.visualization.auto_collapse import analyze_collapse
-from torchlens.visualization.collapse_optimizer import _segment_is_legal, select_collapse_plan
-from torchlens.visualization.collapse_plan import ChildSegment, RenderContext
+from torchlens._visualization.auto_collapse import analyze_collapse
+from torchlens._visualization.collapse_optimizer import _segment_is_legal, select_collapse_plan
+from torchlens._visualization.collapse_plan import ChildSegment, RenderContext
 
 _DOT_EDGE = re.compile(r'^\s*"?([^"\s\[]+)"?\s*->\s*"?([^"\s\[;]+)"?', re.MULTILINE)
 

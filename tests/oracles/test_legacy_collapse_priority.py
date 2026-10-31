@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization import collapse_optimizer
+from torchlens._visualization import collapse_optimizer
 
 
 class Pair(nn.Module):

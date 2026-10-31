@@ -103,8 +103,7 @@ def constants() -> dict[str, Any]:
     import inspect
 
     from torchlens._data_classes._trace_viz import TraceVisualizationMixin
-    from torchlens._vocab import node_spec
-    from torchlens.visualization import (
+    from torchlens._visualization import (
         _edge_multiplicity,
         _encoding,
         _render_common,
@@ -113,8 +112,9 @@ def constants() -> dict[str, Any]:
         surgery_visuals,
         themes,
     )
-    from torchlens.visualization._rank_layout_internal import layout
-    from torchlens.visualization._typography import DEFAULT_TYPOGRAPHY
+    from torchlens._visualization._rank_layout_internal import layout
+    from torchlens._visualization._typography import DEFAULT_TYPOGRAPHY
+    from torchlens._vocab import node_spec
 
     draw_defaults = {
         name: param.default
@@ -1423,7 +1423,7 @@ OTHER_PICTURES: tuple[tuple[str, str, str, str], ...] = (
     (
         "Bundle graph",
         "several traces of one model, grouped",
-        "tl.visualization.show_bundle_graph(bundle)",
+        "tl._visualization.show_bundle_graph(bundle)",
         "docs/reference/glossary.md",
     ),
     (

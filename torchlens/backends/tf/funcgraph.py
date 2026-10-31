@@ -21,7 +21,7 @@ from ..._ir.events import (
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DtypeRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
-from ...fastlog.types import CaptureSpec
+from ...recording.types import CaptureSpec
 from ...validation.status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,

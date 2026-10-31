@@ -10,9 +10,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import CaptureSpec
-from torchlens.fastlog.exceptions import PredicateError, RecordingConfigError
-from torchlens.fastlog.types import RecordContext
+from torchlens.recording import CaptureSpec
+from torchlens.recording.exceptions import PredicateError, RecordingConfigError
+from torchlens.recording.types import RecordContext
 
 
 class TinyModel(nn.Module):
@@ -194,7 +194,7 @@ def test_crash_recovery_from_partial_bundle(tmp_path: Path) -> None:
     first_blob = next((partial_path / "blobs").glob("*.safetensors"))
     first_blob.unlink()
 
-    recovered = tl.fastlog.recover(partial_path)
+    recovered = tl.recording.recover(partial_path)
 
     assert recovered.is_recovered is True
     assert any("missing blob" in warning for warning in recovered.recovery_warnings)

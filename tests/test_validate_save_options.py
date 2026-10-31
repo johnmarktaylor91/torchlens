@@ -15,8 +15,8 @@ import pytest
 import torch
 
 import torchlens as tl
+import torchlens._user_funcs as user_funcs
 import torchlens._user_public_impls as public_impls
-import torchlens.user_funcs as user_funcs
 from torchlens.errors import InvalidArgumentError, SaveBudgetExceededError
 from torchlens.options import CaptureOptions
 

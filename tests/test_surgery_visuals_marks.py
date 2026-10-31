@@ -17,8 +17,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens._vocab.node_spec import NodeSpec
-from torchlens.visualization.surgery_visuals import (
+from torchlens._visualization.surgery_visuals import (
     CREDIT_ROWS,
     MARK_BASES,
     MARK_KINDS,
@@ -29,6 +28,7 @@ from torchlens.visualization.surgery_visuals import (
     surgery_facts,
     surgery_stage,
 )
+from torchlens._vocab.node_spec import NodeSpec
 from torchlens.viz import intervention_diff
 
 _CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_args=True)
@@ -338,7 +338,7 @@ def test_injection_hosts_mark_and_census_count() -> None:
 def test_surgery_lens_registered_over_c05_registry() -> None:
     """The surgery row rides C05's lens registry, never a new view kind."""
 
-    from torchlens.visualization.theme_registry import get_lens
+    from torchlens._visualization.theme_registry import get_lens
 
     lens = get_lens("surgery")
     assert lens.headline_evidence == "intervention_audit"

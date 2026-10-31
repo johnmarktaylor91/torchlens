@@ -360,7 +360,7 @@ def test_autocast_restore_exits_outer_contexts_when_inner_raises():
 def test_rng_monitor_verdict_is_prestamped_fail_closed(monkeypatch):
     """An unreached verdict stamp must read as UNCERTAIN, never as a clean window."""
 
-    import torchlens.capture.trace as capture_trace
+    import torchlens._capture.trace as capture_trace
 
     def _raise(*args, **kwargs):
         raise RuntimeError("injected after the monitor window")

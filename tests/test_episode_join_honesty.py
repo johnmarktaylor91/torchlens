@@ -13,8 +13,8 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import _capture_honesty
-from torchlens.capture import _episode_ledger as episode_ledger_module
-from torchlens.capture._episode_ledger import episode_step_join_claim
+from torchlens._capture import _episode_ledger as episode_ledger_module
+from torchlens._capture._episode_ledger import episode_step_join_claim
 from torchlens.options import EpisodeOptions
 
 

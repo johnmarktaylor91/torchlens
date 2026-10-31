@@ -1503,7 +1503,7 @@ _APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens._n
 # genuine but PRIVATE-named registration callable (e.g. the built-in residual
 # predicate ``_is_transformer_block``) be admitted while a private import gadget
 # (``torchlens._utils._module_is_installed``) -- which is never a registration entry
-# point -- stays denied. Set via ``torchlens.semantic.facets.register``.
+# point -- stays denied. Set via ``torchlens._semantic.facets.register``.
 FACET_RECIPE_MARKER_ATTR = "_torchlens_facet_recipe"
 
 
@@ -1574,7 +1574,7 @@ def is_inert_first_party_callable(func: Callable[..., Any]) -> bool:
     its argument. The pre-r22 narrowing kept a "PUBLIC name proves inertness"
     fallthrough, which was STILL unsound: the verb denylist omitted the filesystem /
     registry / capability-mutation verb class, so PUBLIC side-effecting callables such
-    as ``torchlens.fastlog.cleanup.cleanup_partial`` (``shutil.rmtree`` of an
+    as ``torchlens.recording.cleanup.cleanup_partial`` (``shutil.rmtree`` of an
     attacker-named directory) and ``mark_torch_capability_missing`` (global HAS_*
     flag poison) were admitted and INVOKED on a plain ``tl.load(path)``.
 

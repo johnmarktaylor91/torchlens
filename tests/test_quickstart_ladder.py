@@ -23,9 +23,9 @@ from torchlens._quickstart import (
     resolve_rung,
     trace_input_provenance,
 )
+from torchlens._user_funcs import render as _render
 from torchlens.errors import SynthesizedValueReadWarning
 from torchlens.types import InputSpec
-from torchlens.user_funcs import render as _render
 
 
 def _cnn() -> nn.Module:

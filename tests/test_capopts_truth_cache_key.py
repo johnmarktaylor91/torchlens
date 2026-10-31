@@ -27,12 +27,12 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens.user_funcs as user_funcs
-from torchlens.options import CaptureOptions
-from torchlens.user_funcs import (
+import torchlens._user_funcs as user_funcs
+from torchlens._user_funcs import (
     CAPTURE_CACHE_KEY_CURATED,
     CAPTURE_CACHE_KEY_NEUTRAL,
 )
+from torchlens.options import CaptureOptions
 
 
 class SmallNet(nn.Module):

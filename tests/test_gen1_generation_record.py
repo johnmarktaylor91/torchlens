@@ -20,7 +20,7 @@ import torchlens as tl
 pytest.importorskip("transformers")
 
 from tests.real_model.r0.families import build_distilgpt2, build_llama, build_t5  # noqa: E402
-from torchlens.fastlog._generation import GenerationRecording  # noqa: E402
+from torchlens.recording._generation import GenerationRecording  # noqa: E402
 
 RTOL, ATOL = 1e-4, 1e-5
 PROMPT = torch.tensor([[454, 137, 139, 386]])
@@ -277,7 +277,7 @@ def test_session_end_walk_does_not_grow_with_the_step_count(monkeypatch) -> None
     """Each pass's model-graph cleanup walk visits the same objects at every decode step."""
 
     import torchlens.backends.torch.model_prep as model_prep
-    from torchlens.fastlog._recorder import Recorder
+    from torchlens.recording._recorder import Recorder
 
     visits = [0]
     walk = model_prep._clear_session_tensor_metadata

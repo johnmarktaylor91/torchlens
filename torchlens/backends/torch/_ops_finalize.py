@@ -8,6 +8,14 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ..._capture.predicates import (
+    _evaluate_keep_op,
+)
+from ..._capture.projections import (
+    commit_op,
+)
+from ..._capture.session import capture_session_for
+from ..._capture.stop import stop_directive_for_trace
 from ..._data_classes._nonfinite import record_op_nonfinite
 from ..._data_classes.op import (
     _recursive_safe_copy,
@@ -23,20 +31,12 @@ from ..._utils.tensor_utils import (
     fp8_widen_for_numeric_ops,
     safe_copy,
 )
-from ...capture.predicates import (
-    _evaluate_keep_op,
-)
-from ...capture.projections import (
-    commit_op,
-)
-from ...capture.session import capture_session_for
-from ...capture.stop import stop_directive_for_trace
-from ...fastlog.types import (
-    CaptureSpec,
-    RecordContext,
-)
 from ...intervention.selectors import (
     BaseSelector,
+)
+from ...recording.types import (
+    CaptureSpec,
+    RecordContext,
 )
 
 if TYPE_CHECKING:

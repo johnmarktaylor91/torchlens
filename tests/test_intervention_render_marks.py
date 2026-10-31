@@ -21,12 +21,8 @@ from example_models import TinyReluAdd
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import TorchLensWarning
-from torchlens.intervention.selectors import grad_fn_label
-from torchlens.intervention.types import Edit, FireRecord
-from torchlens.options import VisualizationOptions
-from torchlens.visualization._edit_highlighter import HighlighterStyle, highlight_svg
-from torchlens.visualization._edit_marks import (
+from torchlens._visualization._edit_highlighter import HighlighterStyle, highlight_svg
+from torchlens._visualization._edit_marks import (
     EditMark,
     EditRow,
     edit_ink,
@@ -35,8 +31,12 @@ from torchlens.visualization._edit_marks import (
     header_edit_line,
     short_edit_text,
 )
-from torchlens.visualization.node_spec import intervention_sites_for_log, render_lines_to_html
-from torchlens.visualization.themes import THEME_PRESETS
+from torchlens._visualization.node_spec import intervention_sites_for_log, render_lines_to_html
+from torchlens._visualization.themes import THEME_PRESETS
+from torchlens.errors import TorchLensWarning
+from torchlens.intervention.selectors import grad_fn_label
+from torchlens.intervention.types import Edit, FireRecord
+from torchlens.options import VisualizationOptions
 
 PURPLE = "#7B1FA2"
 DARK_PURPLE = "#C084FC"
@@ -459,8 +459,8 @@ def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
 
 _PATCHED_IMPORT_PROBE = """
 import sys
-from torchlens.visualization import node_spec
-if "torchlens.visualization._render_common" in sys.modules:
+from torchlens._visualization import node_spec
+if "torchlens._visualization._render_common" in sys.modules:
     print("PRELOADED")
     raise SystemExit(0)
 real = node_spec.intervention_site_and_cone_labels
@@ -471,7 +471,7 @@ try:
     )
 finally:
     node_spec.intervention_site_and_cone_labels = real
-from torchlens.visualization import _render_common
+from torchlens._visualization import _render_common
 print("BOUND_REAL" if _render_common.intervention_site_and_cone_labels is real else "BOUND_PATCH")
 """
 

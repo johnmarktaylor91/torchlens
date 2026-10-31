@@ -300,7 +300,7 @@ def test_recipes_group_dispatches_to_the_recipes_door(
 ) -> None:
     """torchlens.recipes activation routes through the G2 recipes door."""
 
-    import torchlens.semantic.recipes as recipes_module
+    import torchlens._semantic.recipes as recipes_module
 
     calls: list[list[str]] = []
     monkeypatch.setattr(

@@ -12,6 +12,8 @@ __tl_role__ = "FACADE"
 
 import torch
 
+from ._capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
+from ._captured_run import TraceLike
 from ._data_classes._accessor_base import Accessor
 from ._data_classes.aten_op import AtenOp, OpRef
 from ._data_classes.attribute_write import AttributeWrite
@@ -27,8 +29,6 @@ from ._quantities import Bytes, Duration, Flops, Macs, Quantity
 from ._runnable import NumericAttestationStatus, PathFaithfulness, ReadinessStatus, RunProvider
 from ._selection import Site
 from ._selection_subspace import BasisProvenance
-from .capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
-from .captured_run import TraceLike
 from .intervention import SpecCompat, TargetManifestDiff
 
 if TYPE_CHECKING:

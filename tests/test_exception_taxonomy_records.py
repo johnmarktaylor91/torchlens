@@ -251,8 +251,8 @@ def test_intervention_doors_carry_codes_and_remedies() -> None:
 def test_visualization_doors_carry_codes_and_remedies(small_trace: Any) -> None:
     """Converted visualization option doors expose codes and remedies."""
 
-    from torchlens.visualization.overlays import normalize_overlay_name
-    from torchlens.visualization.themes import resolve_theme
+    from torchlens._visualization.overlays import normalize_overlay_name
+    from torchlens._visualization.themes import resolve_theme
 
     with pytest.raises(errors.TorchLensError) as exc_info:
         resolve_theme("bogus_theme")

@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.visualization._render_common import GRADIENT_ARROW_COLOR
+from torchlens._visualization._render_common import GRADIENT_ARROW_COLOR
 
 pydot = pytest.importorskip("pydot")
 

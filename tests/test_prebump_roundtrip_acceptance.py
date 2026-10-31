@@ -832,7 +832,7 @@ def test_combination_plain_truncation_legal_run_result_term_only() -> None:
     SOURCE capture outcome stays COMPLETE (never a CaptureStatus).
     """
 
-    from torchlens.capture.outcome import CaptureStatus
+    from torchlens._capture.outcome import CaptureStatus
 
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())

@@ -14,8 +14,8 @@ from __future__ import annotations
 import pytest
 import torch
 
+from torchlens._semantic.reconstruction import _allclose_sdpa
 from torchlens._utils._torch_compat import get_cpu_half_kernels_support
-from torchlens.semantic.reconstruction import _allclose_sdpa
 
 _SKIP_FLOAT16_NEXTAFTER = pytest.mark.skipif(
     not get_cpu_half_kernels_support(),

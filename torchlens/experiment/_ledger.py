@@ -4,7 +4,7 @@ The SEMANTIC record of an experiment — hypothesis, metric CHOICE, verdict —
 opt-in, beside the always-on material record (the Bundle), referencing it
 and never duplicating it. The third instance of a pattern the repo owns
 twice (``distributed/_ledger.py`` is the declared pattern-of-record,
-``capture/_episode_ledger.py`` the worked instance): closed vocabularies,
+``_capture/_episode_ledger.py`` the worked instance): closed vocabularies,
 frozen payload key sets, fail-closed loading, write-once rows,
 disclosure-never-authority.
 

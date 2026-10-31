@@ -20,7 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.backends.torch import _op_markers
 from torchlens.errors import ArgumentTypeError, InvalidArgumentError
-from torchlens.fastlog import Recorder
+from torchlens.recording import Recorder
 
 
 class _Tiny(nn.Module):

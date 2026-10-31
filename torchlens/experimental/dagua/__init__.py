@@ -4,7 +4,7 @@ Import this module before selecting ``vis_renderer="dagua"`` from the core
 visualization dispatcher.
 """
 
-from ...visualization.node_spec import NodeSpec
+from ..._visualization.node_spec import NodeSpec
 from ._bridge import (
     trace_to_dagua_graph,
 )

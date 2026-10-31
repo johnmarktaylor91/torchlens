@@ -122,7 +122,7 @@ def r0_capture(request: pytest.FixtureRequest, r0_capture_cache: dict) -> Any:
     """Factory: ``r0_capture(family, impl)`` -> cached :class:`R0Capture`."""
 
     import torchlens as tl
-    from torchlens.semantic.coverage import facet_coverage
+    from torchlens._semantic.coverage import facet_coverage
 
     def _get(family: str, impl: str) -> R0Capture:
         key = (family, impl)

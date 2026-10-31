@@ -14,7 +14,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._registry import RegistryError, kernel_universe_rows
-from torchlens.visualization.renderer_registry import (
+from torchlens._visualization.renderer_registry import (
     RendererEntry,
     register_renderer,
     renderer_info,
@@ -22,7 +22,7 @@ from torchlens.visualization.renderer_registry import (
     require_renderer_capabilities,
     unregister_renderer,
 )
-from torchlens.visualization.renderers.base import UnsupportedRendererCapabilityError
+from torchlens._visualization.renderers.base import UnsupportedRendererCapabilityError
 
 
 @pytest.fixture(scope="module")

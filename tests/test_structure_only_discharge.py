@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.structure_only import (
+from torchlens._capture.structure_only import (
     StructureClaimStatus,
     StructureOnlyCapabilityError,
     claim_status_for,

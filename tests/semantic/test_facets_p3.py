@@ -11,11 +11,11 @@ from torch import nn
 from torch.nn import functional as F
 
 import torchlens as tl
+from torchlens._semantic import facets as facets_mod
+from torchlens._semantic.recipes import activate_entrypoint_recipes
 from torchlens.errors import MissingFacetError
 from torchlens.facets import MissingFacet
 from torchlens.intervention.errors import SiteResolutionError
-from torchlens.semantic import facets as facets_mod
-from torchlens.semantic.recipes import activate_entrypoint_recipes
 
 
 class LlamaSdpaAttention(nn.Module):
@@ -329,7 +329,7 @@ def test_entrypoint_activation_warns_and_skips_broken_plugin(
             return [point for point in self if point.group == group]
 
     monkeypatch.setattr(
-        "torchlens.semantic.recipes.metadata.entry_points", lambda: _EntryPoints([broken])
+        "torchlens._semantic.recipes.metadata.entry_points", lambda: _EntryPoints([broken])
     )
     with pytest.warns(UserWarning, match="Skipping broken torchlens.recipes entry point"):
         activated = activate_entrypoint_recipes()
@@ -350,7 +350,7 @@ def test_entrypoint_activation_unknown_name_warns_coded(
             return [point for point in self if point.group == group]
 
     monkeypatch.setattr(
-        "torchlens.semantic.recipes.metadata.entry_points", lambda: _EntryPoints([])
+        "torchlens._semantic.recipes.metadata.entry_points", lambda: _EntryPoints([])
     )
     with pytest.warns(UserWarning, match="Unknown torchlens.recipes entry point") as caught:
         activated = activate_entrypoint_recipes(["nonexistent_provider"])
