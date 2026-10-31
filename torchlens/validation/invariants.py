@@ -14,7 +14,7 @@ and raises ``MetadataInvariantError`` on the first failure.
   G. Op <-> Layer cross-references (pass numbering, back-pointers)
   H. Module <-> Layer containment (layers, module pass layers, reverse check)
   I. Module hierarchy (address parent-child bidirectionality, pass consistency)
-  J. Param cross-references (Param -> layer, uses_params flag)
+  J. Param cross-references (Param -> layer, has_params flag)
   K. Buffer cross-references (buffer_layers list, Buffer module references)
   L. Equivalence group symmetry (op_equivalence_classes labels are valid)
 
@@ -43,15 +43,15 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast  # noqa: F401 (rebound-child globals)
 
 from .._errors import _ActionableErrorMixin
-from .._split_rebind import rebind_function as _rebind_function
-from ..errors._base import ValidationError
-from ..ir.container import (  # noqa: F401 (rebound-child globals)
+from .._ir.container import (  # noqa: F401 (rebound-child globals)
     DataclassField,
     DictKey,
     HFKey,
     NamedField,
     TupleIndex,
 )
+from .._split_rebind import rebind_function as _rebind_function
+from ..errors._base import ValidationError
 from . import (
     _invariants_backward_domain as _invariants_backward_domain,
     _invariants_backward_flow as _invariants_backward_flow,
@@ -74,7 +74,7 @@ from .status import (  # noqa: F401 (rebound-child globals)
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 InvariantApplicability = Literal["torch", "non_torch", "all"]
 MetadataInvariantFunc = Callable[["Trace"], object]

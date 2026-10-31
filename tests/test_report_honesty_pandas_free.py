@@ -22,6 +22,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import debug as dbg
+from torchlens.debug._gradients import gradient_flow_audit_rows
+from torchlens.debug._graph import _compare_rows, dead_neurons_rows
 
 
 @pytest.fixture(scope="module")
@@ -67,7 +69,8 @@ def test_hot_path_rows_runs_without_pandas(grad_trace: tl.Trace) -> None:
 def test_dead_neurons_rows_runs_without_pandas(grad_trace: tl.Trace) -> None:
     """dead_neurons_rows returns per-op row dicts + honesty attrs, no pandas."""
 
-    rows, attrs = dbg.dead_neurons_rows(grad_trace)
+    # The pandas-free row core is private; the public verb is dbg.dead_neurons.
+    rows, attrs = dead_neurons_rows(grad_trace)
     assert isinstance(rows, list)
     assert "insufficient sample" in attrs["note"]
     assert "torchlens_capture_honesty" in attrs
@@ -77,7 +80,7 @@ def test_dead_neurons_rows_runs_without_pandas(grad_trace: tl.Trace) -> None:
 def test_compare_rows_runs_without_pandas(grad_trace: tl.Trace) -> None:
     """compare_rows returns matched row dicts + per-trace honesty, no pandas."""
 
-    rows, attrs = dbg.compare_rows(grad_trace, grad_trace)
+    rows, attrs = _compare_rows(grad_trace, grad_trace)
     assert rows, "expected one row per pass-qualified op"
     assert attrs["torchlens_capture_honesty"]["trace_a"]["capture_status"] == "complete"
     assert attrs["torchlens_capture_honesty"]["trace_b"]["capture_status"] == "complete"
@@ -87,7 +90,7 @@ def test_compare_rows_runs_without_pandas(grad_trace: tl.Trace) -> None:
 def test_gradient_flow_audit_rows_runs_without_pandas(grad_trace: tl.Trace) -> None:
     """gradient_flow_audit_rows returns ranked row dicts, no pandas."""
 
-    rows, attrs = dbg.gradient_flow_audit_rows(grad_trace)
+    rows, attrs = gradient_flow_audit_rows(grad_trace)
     assert rows, "expected one row per saved-grad op"
     severities = [int(row["severity"]) for row in rows]
     assert severities == sorted(severities, reverse=True)
@@ -100,19 +103,19 @@ def test_gradient_flow_audit_rows_runs_without_pandas(grad_trace: tl.Trace) -> N
 def test_dataframe_views_teach_the_tabular_extra(grad_trace: tl.Trace) -> None:
     """Without pandas the DataFrame views refuse with the [tabular] remedy."""
 
-    for view in (dbg.hot_path, dbg.dead_neurons, dbg.gradient_flow_audit):
+    for view in (dbg.hot_path, dbg.dead_neurons, dbg.grad_health):
         with pytest.raises(ImportError, match=r"torchlens\[tabular\]"):
             view(grad_trace)
     with pytest.raises(ImportError, match=r"torchlens\[tabular\]"):
-        dbg.compare(grad_trace, grad_trace)
+        tl.debug.compare(grad_trace, grad_trace)
 
 
 def test_view_attrs_match_core_attrs(grad_trace: tl.Trace) -> None:
     """With pandas present, each DataFrame view carries the core's attrs."""
 
     pytest.importorskip("pandas")
-    frame = dbg.gradient_flow_audit(grad_trace).to_pandas()
-    rows, attrs = dbg.gradient_flow_audit_rows(grad_trace)
+    frame = dbg.grad_health(grad_trace).to_pandas()
+    rows, attrs = gradient_flow_audit_rows(grad_trace)
     assert len(frame) == len(rows)
     assert list(frame["op"]) == [row["op"] for row in rows]
     for key, value in attrs.items():

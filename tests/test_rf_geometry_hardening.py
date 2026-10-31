@@ -19,7 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchlens as tl
-from torchlens.postprocess.graph_traversal import output_payload_aliases_parent
+from torchlens._postprocess.graph_traversal import output_payload_aliases_parent
 from torchlens.receptive_field import ReceptiveFieldStatus, ReceptiveFieldValidationStatus
 
 torch.manual_seed(0)
@@ -229,7 +229,7 @@ def test_tensor_derived_shape_control_branch_preserves_exact_rf() -> None:
     assert_box_against_truth(box, truth, (2, 3), context="tensor-derived zero shape")
     checked = target.receptive_field.check((0, 0, 4, 4))
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0
 
     verify_trace = capture(model, inputs)
     verified = tl.receptive_field.verify(verify_trace, units="center")
@@ -616,13 +616,13 @@ def test_layer_to_layer_composition_law() -> None:
     mid, final = convs[0], convs[1]
     source = sole_input(trace)
     for out_pos in range(int(final.shape[-1])):
-        full_box = final.receptive_field.at((out_pos,), input=source)
+        full_box = final.receptive_field.at((out_pos,), input_op=source)
         mid_box = final.receptive_field.at((out_pos,), source=mid)
         mid_axis = mid_box.axes[-1]
         assert mid_axis.clipped_start is not None
         starts, stops = [], []
         for mid_pos in range(mid_axis.clipped_start, mid_axis.clipped_stop):
-            inner = mid.receptive_field.at((mid_pos,), input=source)
+            inner = mid.receptive_field.at((mid_pos,), input_op=source)
             inner_axis = inner.axes[-1]
             starts.append(inner_axis.clipped_start)
             stops.append(inner_axis.clipped_stop)
@@ -777,7 +777,8 @@ def test_nonempty_box_slices_match_support_hull() -> None:
 def test_multi_target_projective_raises_target_error() -> None:
     """Projective convenience properties speak target vocabulary, not input."""
 
-    from torchlens.receptive_field import AmbiguousInputError, AmbiguousTargetError
+    from torchlens.errors import AmbiguousTargetError
+    from torchlens.receptive_field import AmbiguousInputError
 
     class TwoOut(nn.Module):
         def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -790,7 +791,7 @@ def test_multi_target_projective_raises_target_error() -> None:
             getattr(source.projective_field, accessor)
         assert not isinstance(exc_info.value, AmbiguousInputError)
         message = str(exc_info.value)
-        assert "target=" in message and "input=" not in message
+        assert "target=" in message and "input_op=" not in message
 
     class TwoIn(nn.Module):
         def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -798,7 +799,7 @@ def test_multi_target_projective_raises_target_error() -> None:
 
     trace_in = tl.trace(TwoIn(), (torch.randn(1, 3), torch.randn(1, 3)))
     add = op_named(trace_in, "add")
-    with pytest.raises(AmbiguousInputError, match="input="):
+    with pytest.raises(AmbiguousInputError, match="input_op="):
         _ = add.receptive_field.status
 
 
@@ -1059,7 +1060,7 @@ def test_geometry_refuses_typed_for_underivable_rearrangements(
 ) -> None:
     """grid_sample / unfold+fold / pixel_shuffle refuse per-unit geometry typed."""
 
-    from torchlens.receptive_field import ReceptiveFieldError
+    from torchlens.errors import ReceptiveFieldError
 
     trace = capture(model_type().eval(), torch.randn(1, 1, 8, 8))
     target = op_named(trace, fragment)
@@ -1094,7 +1095,7 @@ def test_dilated_max_pool_exact_box_matches_bruteforce() -> None:
     assert_box_against_truth(box, truth, (2, 3), context="dilated max pool")
     checked = target.receptive_field.check((0, 0, 1, 1))
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0
 
 
 def test_dilated_box_axes_disclose_sparse_possible() -> None:
@@ -1151,7 +1152,7 @@ def test_batch_mean_mix_claims_full_batch_axis() -> None:
         assert (spatial.clipped_start, spatial.clipped_stop) == hull(truth, axis)
     checked = target.receptive_field.check((1, 0, 2, 2))
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0
 
 
 def test_check_exposes_retain_graph() -> None:

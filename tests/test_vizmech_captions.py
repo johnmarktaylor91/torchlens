@@ -67,8 +67,8 @@ def _draw(tmp_path: Path, name: str, model: nn.Module, direction: str = "bottomu
     return trace.draw(
         direction=direction,  # type: ignore[arg-type]
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / name),
+        file_format="svg",
+        path=str(tmp_path / name),
     )
 
 

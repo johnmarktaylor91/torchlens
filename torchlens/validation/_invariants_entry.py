@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 from .status import has_importer_region_provenance, is_region_replay_annotation
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .invariants import (
         InvariantResult,
         MetadataInvariantError,
@@ -362,7 +362,9 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
         If backend identity fields are invalid or unsupported by the registry.
     """
 
-    from ..backends import UnknownBackendError, get_backend_spec
+    from torchlens.backends.registry import UnknownBackendError
+
+    from ..backends.registry import get_backend_spec
 
     name = "backend_identity_invariants"
     backend = getattr(trace, "backend", None)

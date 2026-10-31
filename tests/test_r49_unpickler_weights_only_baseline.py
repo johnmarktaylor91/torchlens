@@ -47,8 +47,8 @@ from torchlens._io._safe_unpickle import (
     _is_torch_storage_instance,
     _is_torch_storage_type,
 )
+from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
 _CAP = CaptureOptions(
     intervention_ready=True,

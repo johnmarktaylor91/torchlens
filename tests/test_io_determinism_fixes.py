@@ -117,14 +117,14 @@ class _BufferedModel(torch.nn.Module):
         return self.linear(value) + self.offset
 
 
-def _save_seeded_trace(path: Path, *, random_seed: int) -> tl.Trace:
+def _save_seeded_trace(path: Path, *, seed: int) -> tl.Trace:
     """Capture, save, and reload one trace with a chosen capture seed.
 
     Parameters
     ----------
     path:
         Destination bundle path.
-    random_seed:
+    seed:
         Capture seed controlling the live parameter barcode.
 
     Returns
@@ -137,9 +137,9 @@ def _save_seeded_trace(path: Path, *, random_seed: int) -> tl.Trace:
     trace = tl.trace(
         _LinearModel(),
         torch.ones(1, 2),
-        capture=tl.options.CaptureOptions(random_seed=random_seed),
+        capture=tl.options.CaptureOptions(seed=seed),
     )
-    tl.save(trace, path)
+    trace.save(path)
     return tl.load(path)
 
 
@@ -148,11 +148,11 @@ def test_save_scrub_remaps_process_local_identity_tokens(tmp_path: Path) -> None
 
     first_path = tmp_path / "first.tlspec"
     second_path = tmp_path / "second.tlspec"
-    first = _save_seeded_trace(first_path, random_seed=1)
-    second = _save_seeded_trace(second_path, random_seed=2)
+    first = _save_seeded_trace(first_path, seed=1)
+    second = _save_seeded_trace(second_path, seed=2)
 
-    first_param_ops = [op for op in first.layer_list if op.uses_params]
-    second_param_ops = [op for op in second.layer_list if op.uses_params]
+    first_param_ops = [op for op in first.layer_list if op.has_params]
+    second_param_ops = [op for op in second.layer_list if op.has_params]
     assert [op._param_barcodes for op in first_param_ops] == [
         op._param_barcodes for op in second_param_ops
     ]
@@ -176,7 +176,7 @@ def test_save_scrub_remaps_autograd_identity_joins(tmp_path: Path) -> None:
     trace = tl.trace(_LinearModel(), value, capture=tl.options.CaptureOptions(backward_ready=True))
     trace.log_backward(trace.output_ops[0].out.sum())
     path = tmp_path / "backward.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     loaded = tl.load(path)
     expected_ids = list(range(1, len(loaded.grad_fn_order) + 1))
@@ -201,7 +201,7 @@ def test_bundle_writer_resolves_lazy_conjugate_payloads(tmp_path: Path) -> None:
     )
     expected = trace.output_ops[0].transformed_out.clone()
     path = tmp_path / "conjugate.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     loaded = tl.load(path)
     assert torch.equal(loaded.output_ops[0].transformed_out, expected)
@@ -239,7 +239,7 @@ def test_frozenset_round_trips_recursive_blob_payloads(tmp_path: Path) -> None:
     target = trace.output_ops[0]
     target.func_config = {"frozen": frozenset({torch.tensor(3)})}
     path = tmp_path / "frozenset.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     loaded = tl.load(path)
     frozen = loaded.output_ops[0].func_config["frozen"]
@@ -256,7 +256,7 @@ def test_tuple_subclasses_preserve_type_across_bundle_round_trip(tmp_path: Path)
     maximum = torch.max(torch.tensor([1, 3]), dim=0)
     target.func_config = {"size": torch.Size([2, 3]), "maximum": maximum}
     path = tmp_path / "tuple-subclasses.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     loaded = tl.load(path)
     config = loaded.output_ops[0].func_config
@@ -271,7 +271,7 @@ def test_defaultdict_factory_survives_bundle_round_trip(tmp_path: Path) -> None:
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
     assert isinstance(trace.output_ops[0].module_entry_arg_keys, defaultdict)
     path = tmp_path / "defaultdict.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     loaded = tl.load(path)
     mapping = loaded.output_ops[0].module_entry_arg_keys
@@ -314,7 +314,7 @@ def test_backup_cleanup_failure_does_not_fail_completed_save(
 
     path = tmp_path / "overwrite.tlspec"
     first = tl.trace(_LinearModel(), torch.ones(1, 2))
-    tl.save(first, path)
+    first.save(path)
     second = tl.trace(_LinearModel(), torch.full((1, 2), 2.0))
 
     def fail_cleanup(_path: Path) -> None:
@@ -323,7 +323,7 @@ def test_backup_cleanup_failure_does_not_fail_completed_save(
         raise OSError("simulated backup cleanup refusal")
 
     monkeypatch.setattr("torchlens._io.bundle._remove_path", fail_cleanup)
-    tl.save(second, path, overwrite=True)
+    second.save(path, overwrite=True)
 
     loaded = tl.load(path)
     assert torch.equal(loaded.output_ops[0].out, second.output_ops[0].out)
@@ -368,15 +368,17 @@ def test_content_hash_is_address_and_insertion_order_independent() -> None:
     right_a = _TiedReprKey("a")
     right_b = _TiedReprKey("b")
 
-    assert tl.hash.content(left_a) == tl.hash.content(right_a)
-    assert tl.hash.content({left_a: 1, left_b: 2}) == tl.hash.content({right_b: 2, right_a: 1})
+    assert tl.fingerprint.content(left_a) == tl.fingerprint.content(right_a)
+    assert tl.fingerprint.content({left_a: 1, left_b: 2}) == tl.fingerprint.content(
+        {right_b: 2, right_a: 1}
+    )
 
 
 @pytest.mark.smoke
 def test_loop_signature_sorts_sets_by_emitted_tokens() -> None:
     """Set signature order is total even when distinct elements share repr."""
 
-    from torchlens.postprocess.loop_detection import _append_signature_tokens
+    from torchlens._postprocess.loop_detection import _append_signature_tokens
 
     tokens: list[str] = []
     _append_signature_tokens(
@@ -393,7 +395,7 @@ def test_loop_signature_sorts_sets_by_emitted_tokens() -> None:
 def test_merged_tree_hash_frames_paths_by_length() -> None:
     """Newlines and NUL-like boundaries in member paths cannot forge entries."""
 
-    from torchlens.merged._artifact import _tree_hash_entry
+    from torchlens._merged._artifact import _tree_hash_entry
 
     path = "nested/name\nwith-newline"
     framed = _tree_hash_entry(path, 3, "00" * 32)
@@ -409,8 +411,8 @@ def test_resave_preserves_capture_provenance_certificate(tmp_path: Path) -> None
     first_path = tmp_path / "first.tlspec"
     second_path = tmp_path / "second.tlspec"
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
-    tl.save(trace, first_path)
-    tl.save(tl.load(first_path), second_path)
+    trace.save(first_path)
+    tl.load(first_path).save(second_path)
 
     first_manifest = json.loads((first_path / "manifest.json").read_text(encoding="utf-8"))
     second_manifest = json.loads((second_path / "manifest.json").read_text(encoding="utf-8"))
@@ -423,8 +425,8 @@ def test_resave_preserves_model_fingerprint_with_buffers(tmp_path: Path) -> None
     first_path = tmp_path / "first-buffered.tlspec"
     second_path = tmp_path / "second-buffered.tlspec"
     trace = tl.trace(_BufferedModel(), torch.ones(1, 2))
-    tl.save(trace, first_path)
-    tl.save(tl.load(first_path), second_path)
+    trace.save(first_path)
+    tl.load(first_path).save(second_path)
 
     first_manifest = json.loads((first_path / "manifest.json").read_text(encoding="utf-8"))
     second_manifest = json.loads((second_path / "manifest.json").read_text(encoding="utf-8"))
@@ -443,16 +445,16 @@ def test_provenance_set_values_are_canonically_ordered() -> None:
 def test_current_manifest_refuses_unparseable_torchlens_version(tmp_path: Path) -> None:
     """Current-schema artifacts cannot bypass the producer-version consistency belt."""
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     path = tmp_path / "bad-version.tlspec"
-    tl.save(tl.trace(_LinearModel(), torch.ones(1, 2)), path)
+    tl.trace(_LinearModel(), torch.ones(1, 2)).save(path)
     manifest_path = path / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["torchlens_version"] = "not-a-version"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(TorchLensIOError, match="could not be parsed"):
+    with pytest.raises(ArtifactError, match="could not be parsed"):
         tl.load(path)
 
 
@@ -554,10 +556,10 @@ def test_codec_metadata_round_trip_preserves_tuples() -> None:
 def test_computed_record_fields_are_not_portable() -> None:
     """Reported computed facade fields must not claim portable storage."""
 
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.op import Op
+    from torchlens._data_classes.trace import Trace
     from torchlens._io import FieldPolicy
-    from torchlens.data_classes.layer import Layer
-    from torchlens.data_classes.op import Op
-    from torchlens.data_classes.trace import Trace
 
     expected_drops = {
         Trace: ("ops_with_params",),
@@ -578,9 +580,9 @@ def test_save_succeeds_for_multi_pass_recurrent_trace(tmp_path: Path) -> None:
     """Saving a trace with a multi-pass Layer must not trip the scrub probe.
 
     Regression: the identity scrub probed ``record.parent_param_ops`` before
-    its PORTABLE_STATE_SPEC gate; a multi-pass Layer's per-pass delegation
+    its _PORTABLE_STATE_SPEC gate; a multi-pass Layer's per-pass delegation
     raises InvalidArgumentError (a ValueError getattr does not swallow), so
-    EVERY ``tl.save`` of a recurrent model died at the bundle writer.
+    EVERY ``Trace.save`` of a recurrent model died at the bundle writer.
     """
 
     class _Recurrent(torch.nn.Module):
@@ -596,7 +598,7 @@ def test_save_succeeds_for_multi_pass_recurrent_trace(tmp_path: Path) -> None:
     trace = tl.trace(_Recurrent(), torch.ones(1, 2))
     assert any(layer.num_passes > 1 for layer in trace.layers.values())
     path = tmp_path / "recurrent.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     assert tl.load(path).num_ops == trace.num_ops
 
 
@@ -612,7 +614,7 @@ def test_canonical_metadata_relation_sets_round_trip(tmp_path: Path) -> None:
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU(), torch.nn.Linear(2, 2))
     trace = tl.trace(model, torch.ones(1, 2))
     path = tmp_path / "canonical.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     loaded = tl.load(path)
     for label in ("linear_1_1", "relu_1_2", "linear_2_3"):

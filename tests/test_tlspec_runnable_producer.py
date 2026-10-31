@@ -17,10 +17,7 @@ from torchlens._io.runnable import (
     assert_sparse_core_has_no_tensor_payload,
     build_sparse_run_descriptor,
 )
-from torchlens.errors import RunnablePreflightError
-from torchlens.intervention.types import CapturedArgTemplate, LiteralValue
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     ControlWitnessKind,
     PathFaithfulness,
     ReadinessStatus,
@@ -28,6 +25,9 @@ from torchlens.runnable import (
     StateSlotRole,
     TensorSlotRole,
 )
+from torchlens.errors import RunnablePreflightError
+from torchlens.intervention.types import CapturedArgTemplate, LiteralValue
+from torchlens.options import CaptureOptions
 
 
 class SparseProducerModel(nn.Module):

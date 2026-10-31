@@ -152,7 +152,7 @@ def test_fused_attention_backward_equals_the_math_backend() -> None:
     fused = _executed(_Attend(), x)
     with sdpa_kernel(SDPBackend.MATH):
         math_status = _executed(_Attend(), x)
-    names = dict(fused.uncounted_ops)
+    names = dict(fused.uncounted_op_counts)
     assert "_scaled_dot_product_flash_attention_for_cpu_backward" not in names
     assert fused.executed_flops is not None and fused.executed_flops == math_status.executed_flops
 
@@ -172,5 +172,5 @@ def test_onednn_lstm_backward_is_counted() -> None:
     torch.manual_seed(0)
     status = _executed(_SequenceOutput(nn.LSTM(8, 16)), torch.randn(5, 3, 8))
     assert "mkldnn_rnn_layer_backward" in COUNTED_BEYOND_FLOP_COUNTER_MODE
-    assert "mkldnn_rnn_layer_backward" not in dict(status.uncounted_ops)
+    assert "mkldnn_rnn_layer_backward" not in dict(status.uncounted_op_counts)
     assert status.executed_flops == 2 * 2 * 5 * 3 * 4 * 16 * (8 + 16)

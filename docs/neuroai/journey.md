@@ -77,8 +77,8 @@ raises a typed error whose remedy shows a working spelling. Recurrent sites
 are pass-qualified (`"cell:2"` is pass 2 of a reused module) -- pass indices
 are first-class, never collapsed.
 
-Two transform slots exist and they are not the same: `tl.trace(transform=)`
-preprocesses INPUTS; `tl.extract_dataset(transform=)` post-processes OUTPUT
+Two transform slots exist and they are not the same: `CaptureOptions(input_transform=)`
+preprocesses INPUTS; `tl.extract_dataset(output_transform=)` post-processes OUTPUT
 activations before storage. For input preprocessing at extraction scale, use
 `input_transform=` (below).
 
@@ -90,7 +90,7 @@ paths = tl.extract_dataset(
     images,                       # any iterable: PIL images, tensors, a Dataset
     ["avgpool", "layer3"],
     batch_size=32,
-    output_dir="features_run",
+    path="features_run",
     input_transform=pre,          # the authority's OWN transform, applied + recorded
     stimulus_ids=image_ids,       # row-order authority, digested into the manifest
     resume=True,                  # continue an interrupted run from its ledger
@@ -107,7 +107,7 @@ before the block existed.
 ## 5. Take the features anywhere
 
 ```python
-loaded = tl.load_extraction("features_run")
+loaded = tl.load("features_run")
 print(loaded.input_preprocessing["verdict"])
 
 from torchlens.bridge import rsatoolbox as tl_rsa
@@ -128,7 +128,7 @@ alignment transforms (including gLocal), export and apply your own -- see
 ```python
 print(loaded.manifest["signature"]["model_identity"]["digest"][:16])  # who computed this
 print(loaded.input_preprocessing["verdict"])                          # on what input regime
-tl.assert_unchanged(model)                                            # model untouched
+tl.fingerprint.assert_unchanged(model)                                            # model untouched
 ```
 
 A resumed run refuses typed on ANY semantic signature mismatch (different

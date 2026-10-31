@@ -2,7 +2,7 @@
 
 This module converts a live ``Trace`` object graph into portable metadata
 plus a list of tensor blob specs. It is the save-side counterpart to
-rehydration: every class-specific ``PORTABLE_STATE_SPEC`` is applied here so
+rehydration: every class-specific ``_PORTABLE_STATE_SPEC`` is applied here so
 tensor payloads become ``BlobRef`` placeholders and non-portable live objects
 are dropped or stringified before writing ``metadata.pkl``.
 """
@@ -26,11 +26,11 @@ from typing import Any
 import numpy as np
 import torch
 
-from ..constants import MODEL_LOG_FIELD_ORDER
-from ..data_classes._state_adapter import state_items, state_new, state_restore
-from ..data_classes.trace import Trace, _scrubbed_transform_repr
+from .._constants import MODEL_LOG_FIELD_ORDER
+from .._data_classes._state_adapter import state_items, state_new, state_restore
+from .._data_classes.trace import Trace, _scrubbed_transform_repr
 from ..errors._base import TorchLensWarning
-from . import TLSPEC_VERSION, BlobRef, FieldPolicy, TorchLensIOError, prerelease as _prerelease
+from . import TLSPEC_VERSION, ArtifactError, BlobRef, FieldPolicy, prerelease as _prerelease
 from ._source_privacy import (
     _apply_advisory_source_policy,
     _apply_conditional_source_policy,
@@ -242,7 +242,7 @@ def scrub_for_save(
 
     scrubbed_model = _scrub_value(trace, options, memo, blob_specs, blob_counter)
     if not isinstance(scrubbed_model, Trace):
-        raise TorchLensIOError("Portable scrub expected a scrubbed Trace instance.")
+        raise ArtifactError("Portable scrub expected a scrubbed Trace instance.")
 
     scrubbed_state = dict(state_items(scrubbed_model))
     scrubbed_state["tlspec_version"] = TLSPEC_VERSION
@@ -444,9 +444,9 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         # Spec gate FIRST: Layer delegates `parent_param_ops` per pass and its
         # multi-pass accessor raises InvalidArgumentError (a ValueError, which
         # getattr does not swallow), so probing before the gate broke every
-        # save of a multi-pass trace. Layer's PORTABLE_STATE_SPEC has no
+        # save of a multi-pass trace. Layer's _PORTABLE_STATE_SPEC has no
         # `parent_param_ops` row; only Op-side records reach the getattr.
-        record_spec = getattr(type(record), "PORTABLE_STATE_SPEC", {})
+        record_spec = getattr(type(record), "_PORTABLE_STATE_SPEC", {})
         parent_param_ops = (
             getattr(record, "parent_param_ops", None) if "parent_param_ops" in record_spec else None
         )
@@ -561,7 +561,7 @@ def detach_conditional_trace_backrefs(value: Any) -> None:
         Scrubbed top-level metadata mapping to update in place.
     """
 
-    from ..data_classes.trace import Conditional, ConditionalAccessor
+    from .._data_classes.trace import Conditional, ConditionalAccessor
 
     if not isinstance(value, MutableMapping):
         return
@@ -624,7 +624,7 @@ def _reject_payload_mapping_keys(mapping: Mapping[Any, Any], options: _ScrubOpti
     for key in mapping:
         reason = _mapping_key_payload_reason(key, options)
         if reason is not None:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"Cannot save a mapping that uses {reason} as (or inside) a key. "
                 "Tensor payloads are portable only as mapping VALUES, which are "
                 "indexed into the bundle blob manifest; a tensor embedded in a key "
@@ -723,7 +723,7 @@ def _factory_is_load_reconstructible(factory: Any) -> bool:
     if root == "torch":
         return True
     if root == "torchlens":
-        from ..utils._callable_safety import is_inert_first_party_callable
+        from .._utils._callable_safety import is_inert_first_party_callable
         from ._safe_unpickle import _is_torchlens_owned
 
         return _is_torchlens_owned(factory) and is_inert_first_party_callable(factory)
@@ -868,7 +868,7 @@ def _scrub_value(
     ----------
     stringify_unknown:
         When ``True``, a value with neither a container type handled here
-        nor a ``PORTABLE_STATE_SPEC`` falls back to
+        nor a ``_PORTABLE_STATE_SPEC`` falls back to
         :func:`_stringify_value` instead of being returned unchanged. Used
         by the ``save_raw_input``/``save_raw_output`` ``True`` policy
         (:func:`_scrub_raw_value_for_save`) so live, un-picklable objects
@@ -879,7 +879,7 @@ def _scrub_value(
     """
 
     if _depth > _PORTABLE_WALK_MAX_DEPTH:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Portable metadata exceeds the maximum depth of {_PORTABLE_WALK_MAX_DEPTH}."
         )
 
@@ -930,7 +930,7 @@ def _scrub_value(
         obj_id = id(value)
         cached = memo.get(obj_id)
         if cached is _SCRUB_IN_PROGRESS:
-            raise TorchLensIOError("Portable metadata contains a cycle through a tuple.")
+            raise ArtifactError("Portable metadata contains a cycle through a tuple.")
         if cached is not None:
             return cached
         _pin_in_memo(memo, value)
@@ -988,7 +988,7 @@ def _scrub_value(
         obj_id = id(value)
         cached = memo.get(obj_id)
         if cached is _SCRUB_IN_PROGRESS:
-            raise TorchLensIOError("Portable metadata contains a cycle through a frozenset.")
+            raise ArtifactError("Portable metadata contains a cycle through a frozenset.")
         if cached is not None:
             return cached
         if type(value) is not frozenset:
@@ -1069,7 +1069,7 @@ def _scrub_value(
             )
         return rebuilt_mapping
 
-    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
     if spec is None:
         if stringify_unknown and not _is_safely_picklable(value):
             return _stringify_value(value)
@@ -1089,10 +1089,10 @@ def _scrub_value(
         if field_name not in spec:
             # A ``functools.cached_property`` read caches its value in the
             # instance ``__dict__`` under the property's own name (e.g. the
-            # public ``Trace.intervention_spec`` accessor). Those cells are
+            # public ``Trace.recipe`` accessor). Those cells are
             # DERIVED state that rebuilds on access, never portable fields,
             # and they appear only after a read -- refusing them here made a
-            # read-only public property poison every later ``tl.save``
+            # read-only public property poison every later ``Trace.save``
             # (B3R4-R10-1). Skip the whole class structurally; the check runs
             # only on the refusal path, so the hot field loop pays nothing.
             if isinstance(
@@ -1117,7 +1117,7 @@ def _scrub_value(
                         f" This cell was populated by reading the public "
                         f"`.{accessor_name}` accessor; a lazy derived cache "
                         f"must be declared FieldPolicy.DROP in "
-                        f"{type(value).__name__}.PORTABLE_STATE_SPEC so a "
+                        f"{type(value).__name__}._PORTABLE_STATE_SPEC so a "
                         f"read-only access cannot poison a later save."
                     )
             # Same lesson for LEDGERED-but-undeclared Trace transients (the
@@ -1125,7 +1125,7 @@ def _scrub_value(
             # "scrub-declared runtime-only" while no declaration existed) --
             # quote the ledger row so the message names the writer.
             if owner_is_trace and not accessor_hint:
-                from ..data_classes._trace_components import (
+                from .._data_classes._trace_components import (
                     TRACE_EXTERNAL_WRITE_EXEMPTIONS,
                 )
 
@@ -1140,9 +1140,9 @@ def _scrub_value(
                         f"FieldPolicy.DROP row) so populating it cannot "
                         f"poison a later save."
                     )
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"{type(value).__name__}.{field_name} is missing from "
-                f"PORTABLE_STATE_SPEC. Every live state field needs an "
+                f"_PORTABLE_STATE_SPEC. Every live state field needs an "
                 f"explicit portability policy before it can be saved."
                 f"{accessor_hint}"
             )
@@ -1298,7 +1298,7 @@ def _trace_state_items_for_scrub(
     tuple[str, Any]
         Live Trace field/value pairs: first fields present in
         ``MODEL_LOG_FIELD_ORDER`` order, then remaining present fields in
-        ``PORTABLE_STATE_SPEC`` order, then any still-unseen fields so the
+        ``_PORTABLE_STATE_SPEC`` order, then any still-unseen fields so the
         existing unknown-field guard can raise.
     """
 
@@ -1344,7 +1344,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_unrecorded_operator_mutations",
         "_last_sibling_ordering_decision",
         # Sibling render diagnostic (same _render_dot write site as the row
-        # above); left unenrolled, ONE draw() poisoned every later tl.save.
+        # above); left unenrolled, ONE draw() poisoned every later Trace.save.
         "_last_encoding_state",
         # Layout-execution geometry record (vizmech D24), same write site class.
         "_last_render_geometry",
@@ -1366,7 +1366,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         # B1-17: `_tl_predicate_intervention_{spec,target}_keys`,
         # `_source_bundle_{path,manifest_sha256}` and the output-parent
         # retention flag (now inside `_rerun_save_request`) moved out of this allowance
-        # into declared `Trace.PORTABLE_STATE_SPEC` DROP rows. This allowance is
+        # into declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is
         # consulted BEFORE the spec, so an entry here makes the declared policy
         # dead code.
         "jax_closed_jaxpr",
@@ -1380,7 +1380,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "jax_static_argnums",
         "_selective_save_hidden_payloads",
         # B1-02: the four semantic-output scratch names moved OUT of this
-        # allowance and into `Trace.PORTABLE_STATE_SPEC` as declared
+        # allowance and into `Trace._PORTABLE_STATE_SPEC` as declared
         # `FieldPolicy.DROP` rows. This allowance is consulted BEFORE the spec,
         # so an entry here makes the declared policy dead code -- a policy
         # flipped to KEEP would still be silently dropped. Declared rows keep
@@ -1601,7 +1601,7 @@ def _scrub_raw_value_for_save(
         # ``_blobify_recursive_value``) for exactly this class of object.
         return _scrub_value(value, options, memo, blob_specs, blob_counter, stringify_unknown=True)
     if policy != "small":
-        raise TorchLensIOError(f"{policy_name} must be 'small', True, or False.")
+        raise ArtifactError(f"{policy_name} must be 'small', True, or False.")
     return _small_raw_value(value, field_name=field_name)
 
 
@@ -1764,7 +1764,7 @@ def _blobify_tensor_field(
             reason=f"{options.backend_name}_array_audit_null",
         )
     if not options.payload_codec.can_encode(field_value):
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"{type(owner).__name__}.{field_name} expected a codec-encodable payload for "
             "portable blobification, "
             f"got {type(field_value).__name__}."
@@ -1839,7 +1839,7 @@ def _blobify_recursive_value(
     """Blobify tensors recursively inside nested containers."""
 
     if depth > _PORTABLE_WALK_MAX_DEPTH:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Portable payload exceeds the maximum depth of {_PORTABLE_WALK_MAX_DEPTH}."
         )
 
@@ -1878,7 +1878,7 @@ def _blobify_recursive_value(
         obj_id = id(value)
         cached = memo.get(obj_id)
         if cached is _SCRUB_IN_PROGRESS:
-            raise TorchLensIOError("Portable payload contains a cycle through a tuple.")
+            raise ArtifactError("Portable payload contains a cycle through a tuple.")
         if cached is not None:
             return cached
         _pin_in_memo(memo, value)
@@ -1938,7 +1938,7 @@ def _blobify_recursive_value(
         obj_id = id(value)
         cached = memo.get(obj_id)
         if cached is _SCRUB_IN_PROGRESS:
-            raise TorchLensIOError("Portable payload contains a cycle through a frozenset.")
+            raise ArtifactError("Portable payload contains a cycle through a frozenset.")
         if cached is not None:
             return cached
         _pin_in_memo(memo, value)
@@ -1951,7 +1951,7 @@ def _blobify_recursive_value(
         memo[obj_id] = rebuilt_frozenset
         return rebuilt_frozenset
 
-    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
     if spec is not None:
         return _scrub_value(
             value,
@@ -1978,7 +1978,7 @@ def _is_safely_picklable(value: Any) -> bool:
 
     Used by :func:`_scrub_value`'s ``stringify_unknown`` path to decide
     whether an unspecced leaf value (one with no
-    ``PORTABLE_STATE_SPEC``) reached via ``save_raw_input``/
+    ``_PORTABLE_STATE_SPEC``) reached via ``save_raw_input``/
     ``save_raw_output``'s ``True`` policy should be kept as-is (full
     retention, per those options' docs) or degraded to a bounded
     :func:`_stringify_value` placeholder. Probing picklability once, here,
@@ -2082,7 +2082,7 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         # L6 stage 3: tier-(ii) occurrence-granular substituted-value payloads
         # (BLOB_RECURSIVE under the pre-release switch / from the wave-3 bump).
         return "edge_substitution"
-    raise TorchLensIOError(f"No blob kind mapping defined for {type(owner).__name__}.{field_name}.")
+    raise ArtifactError(f"No blob kind mapping defined for {type(owner).__name__}.{field_name}.")
 
 
 def _blob_label_for_owner(owner: Any) -> str:

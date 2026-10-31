@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "torchlens"
-version = "2.36.1"
+version = "2.36.2"
 description = "A package for extracting activations from PyTorch models and saving portable bundles"
 readme = "README.md"
 license = "Apache-2.0"
@@ -44,7 +44,7 @@ dependencies = [
     # torch>=2.1 supported. The only torch-2.4-specific APIs TorchLens used were
     # torch.is_autocast_enabled(device_type) / torch.get_autocast_dtype(device_type)
     # (the device_type argument is torch 2.4+ only); these are now routed through
-    # a backward-compatible shim (torchlens/utils/_torch_compat.py) that falls back
+    # a backward-compatible shim (torchlens/_utils/_torch_compat.py) that falls back
     # to the legacy per-device autocast helpers on torch 2.1-2.3. Lowering the floor
     # to 2.1 unblocks frameworks pinned to older torch (e.g. the OpenMMLab stack,
     # which caps mmcv<2.2 -> prebuilt wheels only for torch<=2.1).
@@ -141,7 +141,7 @@ tlens-oracle = ["transformer-lens==3.8.0"]
 # (importorskip today; activate by installing this extra). Exact pins on
 # purpose: a relay-fidelity pin against a floating tracker is not a pin.
 trackers-relay-test = ["wandb==0.30.0", "clearml==2.1.12", "tensorboard>=2.21"]
-# F07 FORK-T1 branch A (tviz memo section 10): torchlens.tviz resolves
+# F07 FORK-T1 branch A (tviz memo section 10): torchlens.transformer resolves
 # matplotlib at CALL time and refuses typed (tv_matplotlib_missing) naming this
 # extra; the band is the one already proven in the test extra. cairosvg is
 # deliberately NOT added (tviz memo N15/N16).
@@ -569,8 +569,8 @@ extend-exclude = [
     # Harvested-corpus provenance dir: same vendored-data doctrine as the
     # classics corpus row (P05 request, sprint packaging queue, landed by A12).
     "tests/release_goldens",
-    "torchlens/data_classes/_schema_bindings.py",
-    "torchlens/ir/op_record_manifest.py",
+    "torchlens/_data_classes/_schema_bindings.py",
+    "torchlens/_ir/op_record_manifest.py",
 ]
 
 [tool.ruff.lint]

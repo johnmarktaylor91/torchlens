@@ -107,7 +107,7 @@ def test_default_source_input_box_is_unchanged() -> None:
     _, _, post = _ops(trace)
 
     default = post.receptive_field.at((5,))
-    legacy = post.receptive_field.at((5,), input=trace.input_ops[0])
+    legacy = post.receptive_field.at((5,), input_op=trace.input_ops[0])
     direct = _query.box_for_unit(post.receptive_field._solution, post, (5,))
 
     assert default == legacy == direct

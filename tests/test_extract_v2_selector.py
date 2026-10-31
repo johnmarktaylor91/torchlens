@@ -17,8 +17,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
-from torchlens.dataset_extraction import extract_dataset, open_extraction
+from torchlens.dataset_extraction import open_extraction
 
 
 class _TwoBlock(nn.Module):
@@ -59,7 +60,7 @@ def test_selector_disk_run_records_plan_and_resumes(tmp_path: Path) -> None:
     model = _TwoBlock().eval()
     stimuli = torch.randn(6, 3)
     out = tmp_path / "artifact"
-    extract_dataset(model, stimuli, tl.func("relu"), batch_size=3, output_dir=out, progress=False)
+    extract_dataset(model, stimuli, tl.func("relu"), batch_size=3, path=out, progress=False)
     manifest = json.loads((out / "manifest.json").read_text())
     plan = manifest["run"]["selector_plan"]
     assert plan["request"]["kind"] == "selector"
@@ -72,7 +73,7 @@ def test_selector_disk_run_records_plan_and_resumes(tmp_path: Path) -> None:
         stimuli,
         tl.func("relu"),
         batch_size=3,
-        output_dir=out,
+        path=out,
         progress=False,
         resume=True,
     )
@@ -159,7 +160,7 @@ def test_selector_plan_drift_refuses_before_commit(tmp_path: Path) -> None:
             stimuli,
             tl.func("relu"),
             batch_size=3,
-            output_dir=out,
+            path=out,
             progress=False,
         )
     assert excinfo.value.fields["code"] == "extraction_selector_plan_violated"

@@ -163,7 +163,7 @@ class Paths:
         self.direction = torch.randn(hidden, generator=torch.Generator().manual_seed(1)).to(DEVICE)
         self.save = tl.module(site_addr) | tl.module(LOGIT_SITE)
         self.spec = tl.when(
-            tl.module(site_addr), tl.steer(self.direction, magnitude=MAGNITUDE, feature_axis=-1)
+            tl.module(site_addr), tl.steer(self.direction, strength=MAGNITUDE, dim=-1)
         )
 
     def bare(self, ids: torch.Tensor) -> torch.Tensor:

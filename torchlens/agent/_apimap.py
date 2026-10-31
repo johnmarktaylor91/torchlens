@@ -23,7 +23,7 @@ _REQUIRED_PARAMS_MAX = 6
 _EXAMPLES: dict[str, str] = {
     "trace": "log = tl.trace(model, x, save=tl.func('relu'))",
     "load": "log = tl.load('run.tlspec')",
-    "save": "tl.save(log, 'run.tlspec')",
+    "save": "log.save('run.tlspec')",
     "record": "rec = tl.record(model, x, save=tl.func('relu'))",
     "func": "tl.trace(model, x, save=tl.func('relu'))",
     "in_module": "tl.trace(model, x, save=tl.in_module('encoder'))",
@@ -200,7 +200,7 @@ def submodule_map() -> dict[str, str]:
     """The deliberately-unlisted power submodules an agent should know about."""
 
     return {
-        "tl.report": "explain(), TraceProfile/build_profile",
+        "tl.report": "ProfileReport/profile, flops, overhead, health diagnostics",
         "tl.observers": "log_value(name, value), tap, span: in-forward value recording",
         "tl.compat": "compat.report(model, x): capture-compatibility findings",
         "tl.debug": "power-user diagnostics (bisect_nan, hot_path, ...)",

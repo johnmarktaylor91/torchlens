@@ -183,7 +183,7 @@ def test_payloadless_reports_refuse_rebuilt_methods_typed() -> None:
     """A report assembled from text (no rebuilt payload) teaches instead of half-working."""
 
     trace = tl.trace(_Toy(), torch.randn(2, 8))
-    legacy = tl.report.build_summary_report(trace, "assembled text")
+    legacy = tl.report.summary(trace, "assembled text")
     with pytest.raises(InvalidArgumentError) as excinfo:
         legacy.to_html()
     assert excinfo.value.fields["code"] == "summary_result_legacy"

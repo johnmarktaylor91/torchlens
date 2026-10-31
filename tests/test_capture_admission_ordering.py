@@ -88,7 +88,7 @@ def test_refused_capture_does_not_reseed_global_rng() -> None:
         refusal = _refused_trace_in_thread(
             model,
             x,
-            capture=tl.options.CaptureOptions(random_seed=1234),
+            capture=tl.options.CaptureOptions(seed=1234),
         )
         assert isinstance(refusal, ReentrantTraceError)
         assert torch.equal(before, torch.get_rng_state()), (
@@ -107,7 +107,7 @@ def test_admitted_capture_still_restores_user_rng() -> None:
     x = torch.randn(1, 3)
     torch.manual_seed(31337)
     before = torch.get_rng_state()
-    tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=99))
+    tl.trace(model, x, capture=tl.options.CaptureOptions(seed=99))
     assert torch.equal(before, torch.get_rng_state())
 
 

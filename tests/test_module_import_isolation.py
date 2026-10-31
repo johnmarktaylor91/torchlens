@@ -66,9 +66,9 @@ OPTIONAL_DEPENDENCY_MODULES: dict[str, str] = {
 # territory (the r3 ops-split and IR packages), so the cycle is DISCLOSED here rather
 # than silently tolerated. Fixing one means deleting its row.
 PENDING_IMPORT_CYCLES = {
-    "torchlens.ir.selector_eval": (
-        "cycle through torchlens.ir.__init__ -> selector_eval -> ir.* back-edge; "
-        "torchlens/ir/ is outside the artifact-boundary lane's territory"
+    "torchlens._ir.selector_eval": (
+        "cycle through torchlens._ir.__init__ -> selector_eval -> ir.* back-edge; "
+        "torchlens/_ir/ is outside the artifact-boundary lane's territory"
     ),
     "torchlens.backends.torch._ops_autograd": (
         "the four _ops_* split modules import back into their sibling ops.py facade; "

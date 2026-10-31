@@ -32,7 +32,7 @@ from typing import Any
 
 import torch
 
-from . import TorchLensIOError
+from . import ArtifactError
 from ._canonical_pickle import dump_canonical_metadata
 from .state_contract import governed_artifact_load
 
@@ -178,7 +178,7 @@ def preflight_metadata_portability(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         ``annotation_value_unportable`` / ``metadata_value_unportable`` when
         the default loader would refuse the bytes; the ``field`` names the
         located key path and ``reason`` carries the loader's own message.
@@ -189,7 +189,7 @@ def preflight_metadata_portability(
     failure = _dry_run_failure(data, unpickler_factory)
     if failure is None:
         return data
-    if isinstance(failure, TorchLensIOError):
+    if isinstance(failure, ArtifactError):
         raise failure
     located, in_annotations = _locate_unportable(scrubbed_state, unpickler_factory)
     reason = _root_cause_text(failure)
@@ -199,7 +199,7 @@ def preflight_metadata_portability(
         "Nothing was written. Remedy: "
     )
     if in_annotations:
-        raise TorchLensIOError(
+        raise ArtifactError(
             message + _ANNOTATION_REMEDY + ".",
             code="annotation_value_unportable",
             field=located,
@@ -207,7 +207,7 @@ def preflight_metadata_portability(
             remedy=_ANNOTATION_REMEDY,
             path=str(bundle_path),
         ) from failure
-    raise TorchLensIOError(
+    raise ArtifactError(
         message + _METADATA_REMEDY + ".",
         code="metadata_value_unportable",
         field=located,

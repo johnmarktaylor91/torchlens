@@ -121,7 +121,7 @@ def _refuse_partial_units(value: Any) -> None:
         code="extraction_selector_partial_units",
         remedy=(
             "pass the site's selector (e.g. tl.func/tl.in_module) or its "
-            "label, then slice elements downstream with transform= or read "
+            "label, then slice elements downstream with output_transform= or read "
             "the artifact and index it"
         ),
         selection=repr(value)[:200],
@@ -152,16 +152,16 @@ def is_selector_request(layers: Any) -> bool:
         door).
     """
 
-    from ..selection import Selection
+    from .._selection import Selector
 
-    if isinstance(layers, Selection):
+    if isinstance(layers, Selector):
         _refuse_partial_units(layers)
     if _is_selector(layers):
         return True
     if isinstance(layers, Mapping):
         kinds = set()
         for value in layers.values():
-            if isinstance(value, Selection):
+            if isinstance(value, Selector):
                 _refuse_partial_units(value)
             kinds.add("selector" if _is_selector(value) else "string")
         if kinds == {"selector"}:
@@ -252,7 +252,7 @@ def _saved_sites(trace: Any, selector: Any = None) -> list[tuple[str, str | None
         Ordered ``(pass_qualified_label, site_key, out)`` rows.
     """
 
-    from ..ir.selector_eval import evaluate
+    from .._ir.selector_eval import evaluate
 
     sites: list[tuple[str, str | None, torch.Tensor]] = []
     for op in trace.saved_ops:

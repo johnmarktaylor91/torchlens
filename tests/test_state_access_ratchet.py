@@ -63,13 +63,13 @@ _PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "torchlens"
 # completeness_witness.py's `__torch_dispatch__` (per-aten-op hot path;
 # the module policy keeps single-field raw loads on hot wrapper paths).
 # 288 -> 289 (2026-08-30 F01-AMENDED reconcile): net +1 from landed train
-# lanes that never ran this heavy gate -- observability/_region.py's
+# lanes that never ran this heavy gate -- _observability/_region.py's
 # capture-active peek (346f61df5) and a third observers.py `_active_trace`
 # read (a9582a30c) landed, one report/__init__.py read discharged; both new
 # sites are the sanctioned observer-side `_active_trace` snapshot class.
 # 288 -> 289 (2026-08-30 T82d re-reconcile, F28): the landed C06
 # observability lane (train T41) added ONE raw single-field read --
-# observability/_region.py:88 `_state._active_trace is not None`, the
+# _observability/_region.py:88 `_state._active_trace is not None`, the
 # sanctioned hot-path single-field-load class -- without raising this
 # baseline; every train gate since T41 blessed the tree without running
 # this suite (pre-existing on BOTH merge parents and the merge base,

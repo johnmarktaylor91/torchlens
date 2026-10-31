@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.options import EchoOptions
+from torchlens.options import NarrationOptions
 
 
 class ShapeCrash(nn.Module):
@@ -45,7 +45,7 @@ def _crash_tail(sink: io.StringIO) -> list[str]:
             tl.trace(
                 ShapeCrash(),
                 torch.randn(2, 4),
-                echo=EchoOptions(select=True, sink=sink),
+                narrate=NarrationOptions(select=True, sink=sink),
             )
     return [line for line in sink.getvalue().split("\n") if line]
 
@@ -73,7 +73,11 @@ def test_on_error_only_narrates_nothing_until_failure() -> None:
 
     sink = io.StringIO()
     model = nn.Sequential(nn.Linear(4, 8), nn.ReLU())
-    tl.trace(model, torch.randn(2, 4), echo=EchoOptions(select=True, sink=sink, on_error_only=True))
+    tl.trace(
+        model,
+        torch.randn(2, 4),
+        narrate=NarrationOptions(select=True, sink=sink, on_error_only=True),
+    )
     assert sink.getvalue() == ""
     tail_sink = io.StringIO()
     with warnings.catch_warnings():
@@ -82,7 +86,7 @@ def test_on_error_only_narrates_nothing_until_failure() -> None:
             tl.trace(
                 ShapeCrash(),
                 torch.randn(2, 4),
-                echo=EchoOptions(select=True, sink=tail_sink, on_error_only=True),
+                narrate=NarrationOptions(select=True, sink=tail_sink, on_error_only=True),
             )
     assert "!! forward failed" in tail_sink.getvalue()
 
@@ -100,7 +104,7 @@ def test_record_tier_disposition_trio_flushes_the_tail() -> None:
                 result = tl.record(
                     ShapeCrash(),
                     x,
-                    echo=EchoOptions(select=True, sink=sink),
+                    narrate=NarrationOptions(select=True, sink=sink),
                     on_forward_error=mode,
                 )
         except RuntimeError as exc:
@@ -109,7 +113,7 @@ def test_record_tier_disposition_trio_flushes_the_tail() -> None:
                 assert getattr(exc, "partial_recording", None) is not None
         else:
             assert mode == "return_partial"
-            assert result.failed
+            assert result.is_failed
         assert "!! forward failed" in sink.getvalue()
         assert "attempted call=layer_norm" in sink.getvalue()
 
@@ -161,7 +165,7 @@ def test_broken_sink_disables_narrator_and_capture_continues() -> None:
         log = tl.trace(
             nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
             torch.randn(2, 4),
-            echo=EchoOptions(select=True, sink=broken),
+            narrate=NarrationOptions(select=True, sink=broken),
         )
     assert log["relu_1_2"].shape == (2, 8)
     codes = [getattr(item.message, "fields", {}).get("code") for item in caught]
@@ -184,7 +188,7 @@ def test_double_fault_original_exception_wins() -> None:
             tl.trace(
                 ShapeCrash(),
                 torch.randn(2, 4),
-                echo=EchoOptions(select=True, sink=broken),
+                narrate=NarrationOptions(select=True, sink=broken),
             )
     assert "normalized_shape" in str(excinfo.value)
 
@@ -208,7 +212,7 @@ def test_keyboard_interrupt_stays_an_interrupt() -> None:
             tl.trace(
                 Interrupted(),
                 torch.randn(2, 4),
-                echo=EchoOptions(select=True, sink=sink),
+                narrate=NarrationOptions(select=True, sink=sink),
             )
 
 
@@ -232,7 +236,7 @@ def test_raise_on_nan_minting_op_is_last_narrated_and_census_exact() -> None:
             tl.trace(
                 Minter(),
                 torch.randn(2, 4),
-                echo=EchoOptions(select=True, sink=sink),
+                narrate=NarrationOptions(select=True, sink=sink),
                 capture=tl.options.CaptureOptions(raise_on_nan=True),
             )
     assert "div" in str(excinfo.value) or "nonfinite" in str(excinfo.value).lower()
@@ -255,7 +259,7 @@ def test_halted_capture_footer_says_halted_not_failed() -> None:
         nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 2)),
         torch.randn(2, 4),
         halt=tl.func("relu"),
-        echo=EchoOptions(select=True, sink=sink),
+        narrate=NarrationOptions(select=True, sink=sink),
     )
     assert log is not None
     transcript = sink.getvalue()

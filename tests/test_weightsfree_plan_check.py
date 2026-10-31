@@ -88,7 +88,7 @@ def test_plan_check_never_arms_the_capture() -> None:
     assert not bool(getattr(trace, "intervention_ready", False))
     # The runnable refusal is untouched by a successful plan check.
     with pytest.raises(Exception) as excinfo:
-        tl.save(trace, "/tmp/never-written.tlspec", level="runnable")
+        trace.save("/tmp/never-written.tlspec", level="runnable")
     assert "structure_only" in str(getattr(excinfo.value, "fields", {}).get("code", "")) or (
         "runnable" in str(excinfo.value)
     )

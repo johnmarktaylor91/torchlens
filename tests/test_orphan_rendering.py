@@ -54,7 +54,7 @@ def test_orphan_models_render_and_validate_with_either_visibility(
     """Incident orphan models validate whether islands are rendered or hidden."""
 
     trace = tl.trace(model, torch.ones(1, 4), capture=tl.options.CaptureOptions(keep_orphans=True))
-    assert trace.orphans
+    assert trace.graph.orphans
 
     dot = trace.draw(show_orphans=show_orphans, return_graph=True, vis_save_only=True)
     source = dot.source if isinstance(dot, graphviz.Digraph) else str(dot)
@@ -92,13 +92,13 @@ def test_orphan_island_ops_have_safe_repr_and_list_printing(
     """Completed orphan parent/child ops use the finalized, orphan-aware repr path."""
 
     trace = _orphan_trace()
-    parent, child = tuple(trace.orphans)
+    parent, child = tuple(trace.graph.orphans)
 
     assert parent.children == (child.layer_label,)
     assert child.parents == (parent.layer_label,)
     assert "PASS NOT FINISHED" not in repr(parent)
     assert "PASS NOT FINISHED" not in repr(child)
-    print(list(trace.orphans))
+    print(list(trace.graph.orphans))
     printed = capsys.readouterr().out
     assert parent.layer_label in printed
     assert child.layer_label in printed
@@ -113,7 +113,7 @@ def test_default_orphans_warn_instead_of_rendering_empty_cluster() -> None:
         dot = trace.draw(show_orphans=True, return_graph=True, vis_save_only=True)
     source = dot.source if isinstance(dot, graphviz.Digraph) else str(dot)
 
-    assert not trace.orphans
+    assert not trace.graph.orphans
     assert "cluster_orphans" not in source
 
 

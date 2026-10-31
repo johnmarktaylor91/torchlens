@@ -45,7 +45,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens.errors import SelectionError
 
 #: The two late-conv unit coordinates (channel, spatial) of the artifact.
 P = (3, 3)
@@ -83,7 +83,7 @@ def _gallery_capture() -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
 
 
@@ -97,14 +97,14 @@ def gallery():
     # no explicit conversion calls.
     inter = late.receptive_field.at(P) & late.receptive_field.at(Q)
     union = late.receptive_field.at(P) | late.receptive_field.at(Q)
-    ctrl = tl.random_selection(like=inter, within=~union, seed=CTRL_SEED)
+    ctrl = tl.random_like(like=inter, within=~union, seed=CTRL_SEED)
     try:
         yield trace, inter, union, ctrl
     finally:
         trace.cleanup()
 
 
-def _ablation_deltas(trace: tl.Trace, selection: tl.Selection) -> tuple[float, float, float]:
+def _ablation_deltas(trace: tl.Trace, selection: tl.Selector) -> tuple[float, float, float]:
     """Zero-ablate one selection on a fork; return (d_u1, d_u2, d_out)."""
 
     fork = trace.fork()
@@ -123,14 +123,14 @@ def test_flagship_compositions_are_selections(gallery):
 
     trace, inter, union, ctrl = gallery
     for composed in (inter, union, ctrl):
-        assert isinstance(composed, tl.Selection)
+        assert isinstance(composed, tl.Selector)
     resolved_inter = inter.resolve(trace)
     resolved_union = union.resolve(trace)
     # Both land on the trace's input site with exact-relation provenance
     # (exact RF geometry ops only).
     for resolved in (resolved_inter, resolved_union):
         assert len(resolved) == 1
-        assert resolved[0].site_key == ("input_1", 1)
+        assert resolved[0].key == ("input_1", 1)
         assert resolved[0].provenance.relation == "exact"
 
 
@@ -180,14 +180,14 @@ def test_a3_union_magnitudes_reported_and_cardinality_theorem(gallery):
     inter_deltas = _ablation_deltas(trace, inter)
     union_deltas = _ablation_deltas(trace, union)
     report = {
-        "inter": {"elements": sum(e.selected_count for e in resolved_inter)},
-        "union": {"elements": sum(e.selected_count for e in resolved_union)},
+        "inter": {"elements": sum(e.num_selected for e in resolved_inter)},
+        "union": {"elements": sum(e.num_selected for e in resolved_union)},
     }
     for name, deltas in (("inter", inter_deltas), ("union", union_deltas)):
         report[name].update({"d_u1": deltas[0], "d_u2": deltas[1], "d_out": deltas[2]})
     print(f"GALLERY A3 REPORT: {report}")
     assert report["inter"]["elements"] <= report["union"]["elements"]
-    assert resolved_inter.empty is False
+    assert resolved_inter.is_empty is False
 
 
 def test_a4_control_is_size_matched_by_construction(gallery):
@@ -196,15 +196,13 @@ def test_a4_control_is_size_matched_by_construction(gallery):
     trace, inter, union, ctrl = gallery
     resolved_inter = inter.resolve(trace)
     resolved_ctrl = ctrl.resolve(trace)
-    assert sum(e.selected_count for e in resolved_ctrl) == sum(
-        e.selected_count for e in resolved_inter
-    )
+    assert sum(e.num_selected for e in resolved_ctrl) == sum(e.num_selected for e in resolved_inter)
     # The control is disjoint from the union (sampled from its complement).
     union_mask = union.resolve(trace)[0].mask
     ctrl_mask = resolved_ctrl[0].mask
     assert not bool((union_mask & ctrl_mask).any())
     # Seeded determinism: same seed, same sample.
-    again = tl.random_selection(like=inter, within=~union, seed=CTRL_SEED).resolve(trace)
+    again = tl.random_like(like=inter, within=~union, seed=CTRL_SEED).resolve(trace)
     assert again == resolved_ctrl
 
 
@@ -213,7 +211,7 @@ def test_algebra_refusal_row_kind_incompatible(gallery):
 
     trace, inter, _, _ = gallery
     with pytest.raises(SelectionError) as excinfo:
-        _ = inter & tl.params("c2.weight")
+        _ = inter & tl.param("c2.weight")
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 
@@ -231,7 +229,7 @@ def test_cross_run_patch_gallery_row():
     model = _GalleryNet().double()
     x_a = torch.randn(1, 1, 12, 12, dtype=torch.float64)
     x_b = torch.randn(1, 1, 12, 12, dtype=torch.float64)
-    options = tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True)
+    options = tl.options.CaptureOptions(intervention_ready=True, save_args=True)
     trace_a = tl.trace(model, x_a, capture=options)
     trace_b = tl.trace(model, x_b, capture=options)
     try:

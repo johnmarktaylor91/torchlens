@@ -176,7 +176,7 @@ def test_draw_pattern_only_view_and_combination_refusal(cbr_trace, tmp_path) -> 
             collapse="none",
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             order_siblings=False,
         )
     assert dot.count("PATTERN 'ConvBnRelu'") == 3
@@ -185,7 +185,7 @@ def test_draw_pattern_only_view_and_combination_refusal(cbr_trace, tmp_path) -> 
             collapse="auto",
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
         )
     assert excinfo.value.fields["code"] == "pattern_collapse_combination_unsupported"
 
@@ -194,7 +194,7 @@ def test_patterns_default_off(cbr_trace) -> None:
     """No fold_patterns argument means zero chips (memo D11: default off)."""
 
     dot = cbr_trace.draw(
-        collapse="none", vis_save_only=True, vis_fileformat="dot", order_siblings=False
+        collapse="none", vis_save_only=True, file_format="dot", order_siblings=False
     )
     assert "PATTERN" not in dot
 
@@ -226,7 +226,7 @@ def test_reserved_text_grammar_lint(cbr_trace) -> None:
             collapse="none",
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             order_siblings=False,
         )
     pattern_lines = [line for line in dot.splitlines() if "PATTERN" in line]
@@ -246,6 +246,6 @@ def test_rank_layout_refuses_pattern_chips(cbr_trace) -> None:
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
             vis_node_placement="rank",
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
         )
     assert excinfo.value.fields["code"] == "pattern_rank_layout_unsupported"

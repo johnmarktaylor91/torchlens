@@ -22,7 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._input_coerce import _coerce_input_args
-from torchlens.utils.arg_handling import copy_arg_tree, rebuild_tuple_like
+from torchlens._utils.arg_handling import copy_arg_tree, rebuild_tuple_like
 
 
 class _MalformedFields(tuple):

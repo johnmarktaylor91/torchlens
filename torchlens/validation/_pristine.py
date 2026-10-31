@@ -45,7 +45,7 @@ If the wrappers cannot be removed (a capture is active on this thread --
 only reachable by calling validation from inside a traced forward), the
 caller must REFUSE to bless rather than silently validating through the
 wrapper root; ``pristine_torch_oracle`` propagates the typed
-``CaptureContextError`` for the caller to convert into a fail-closed
+``CaptureNotActiveError`` for the caller to convert into a fail-closed
 verdict.
 """
 
@@ -74,7 +74,7 @@ def pristine_torch_oracle() -> Iterator[bool]:
 
     Raises
     ------
-    torchlens.errors.CaptureContextError
+    torchlens.errors.CaptureNotActiveError
         If a capture is currently active (propagated from ``unwrap_torch``)
         or the unwrap ledger records a wrapper as an original callable
         (``code="pristine_ledger_poisoned"``). Callers convert either into
@@ -99,9 +99,9 @@ def pristine_torch_oracle() -> Iterator[bool]:
         None,
     )
     if poisoned is not None:
-        from .._errors import CaptureContextError
+        from .._errors import CaptureNotActiveError
 
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             "the _decorated_to_orig unwrap ledger records a TorchLens wrapper "
             f"({getattr(poisoned, '__tl_wrapper_name__', '<unknown>')!s}) as an "
             "original callable, so the pristine-torch restoration cannot be "

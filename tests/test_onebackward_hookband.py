@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.utils._torch_compat import HAS_NODE_PREHOOK, get_gradient_edge_support
+from torchlens._utils._torch_compat import HAS_NODE_PREHOOK, get_gradient_edge_support
 
 _HAS_GRADIENT_EDGE = get_gradient_edge_support()
 

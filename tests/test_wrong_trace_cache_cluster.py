@@ -219,7 +219,7 @@ def test_digest_sites_accept_lazy_conj_and_neg() -> None:
 
     conj = torch.randn(3, dtype=torch.complex64).conj()
     assert isinstance(_hash_tensor_content(conj), str)
-    assert isinstance(tl.hash.content(conj), str)
+    assert isinstance(tl.fingerprint.content(conj), str)
     assert isinstance(runnable_tensor_byte_digest(conj), str)
     neg = torch.randn(3).conj().resolve_conj() * -1
     neg_view = torch.randn(3, dtype=torch.complex64).conj().imag

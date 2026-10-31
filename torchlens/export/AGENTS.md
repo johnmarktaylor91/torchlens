@@ -42,7 +42,7 @@ never named `module`; missing-is-absent-never-zero);
 `_netron_emit.py` deterministic serialization; `_netron_attachment.py` the
 `netron:attachment` companion (written by default beside every file export,
 ruling U09.3) with four fail-closed vendor guards; `_netron_diff.py` the
-`baseline=` per-node diff facts read from `torchlens.differential.diff_report`
+`baseline=` per-node diff facts read from `torchlens.report.diff`
 (ruling U09.5). Every
 artifact must stay green under strict `onnx.ModelProto` parse +
 `check_model(full_check=True)` — the checker catches what netron's
@@ -57,7 +57,7 @@ netron outright.
   resolve lazily at call time; add new exporters with the same deferred
   pattern, never module-top imports.
 - These renderers are NOT behind the capture-outcome N-gates (those cover
-  `tl.save`/replay/validation entries); they read whatever the log exposes.
+  `Trace.save`/replay/validation entries); they read whatever the log exposes.
   Report-side honesty (unverified/halted disclosure) lives in `report/`.
 
 ## Tests

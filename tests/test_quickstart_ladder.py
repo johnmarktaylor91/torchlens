@@ -12,9 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.quickstart import (
-    InputSpec,
-    SynthesizedValueReadWarning,
+from torchlens._quickstart import (
     internal_read,
     is_gold,
     parse_input_size,
@@ -25,6 +23,8 @@ from torchlens.quickstart import (
     resolve_rung,
     trace_input_provenance,
 )
+from torchlens.errors import SynthesizedValueReadWarning
+from torchlens.types import InputSpec
 from torchlens.user_funcs import render as _render
 
 
@@ -180,7 +180,7 @@ class TestProvenanceRecord:
         assert rehydrated is not None
         assert rehydrated.origin == "declared"
         assert rehydrated.rung == 2
-        assert not rehydrated.values_semantic
+        assert not rehydrated.has_semantic_values
         assert rehydrated.tensors[0].shape == (2, 3, 8, 8)
         assert rehydrated.recipes is not None
         assert rehydrated.caveats
@@ -257,7 +257,7 @@ class TestTypedRefusalProvocation:
     def test_render_pipeline_failure_refuses_typed(self) -> None:
         """A graphviz pipeline failure surfaces as one typed refusal."""
 
-        from torchlens.quickstart._render import _render_dot_source
+        from torchlens._quickstart._render import _render_dot_source
 
         with pytest.raises(Exception) as excinfo:
             _render_dot_source("digraph { a -> b }", "not_a_real_format")
@@ -270,7 +270,7 @@ class TestTypedRefusalProvocation:
 
         import sys as _sys
 
-        from torchlens.quickstart._render import _render_dot_source
+        from torchlens._quickstart._render import _render_dot_source
 
         monkeypatch.setitem(_sys.modules, "graphviz", None)  # import raises ImportError
         with pytest.raises(Exception) as excinfo:
@@ -287,7 +287,7 @@ class TestTypedRefusalProvocation:
         import os as _os
         import sys as _sys
 
-        from torchlens.quickstart._render import _open_viewer
+        from torchlens._quickstart._render import _open_viewer
 
         opened: list[str] = []
         monkeypatch.setattr(_sys, "platform", "win32")

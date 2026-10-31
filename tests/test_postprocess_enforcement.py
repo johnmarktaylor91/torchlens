@@ -202,7 +202,7 @@ def test_buffer_duplicate_axis_actually_merges(
 
     from support.postprocess_axes import _axis_buffer_duplicate
 
-    import torchlens.postprocess.control_flow as cf
+    import torchlens._postprocess.control_flow as cf
 
     merges: list[tuple[str, str]] = []
     real_merge = cf._merge_buffer_entries
@@ -266,7 +266,7 @@ def test_buffer_from_input_axis_makes_ancestry_writes_effective(
 
     from support.postprocess_axes import _axis_buffer_from_input
 
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
 
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_ASSERTIONS", "1")
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_WRITE_AUDIT", "record")
@@ -313,7 +313,7 @@ def test_reads_before_release_mark_still_record(
 
     from support.postprocess_axes import _axis_orphan_remove
 
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
 
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_ASSERTIONS", "1")
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_READ_AUDIT", "record")
@@ -372,7 +372,7 @@ def test_write_effectiveness_classifier_is_finding_favoring() -> None:
 def test_matrix_union_reports(monkeypatch: pytest.MonkeyPatch) -> None:
     """Phantom-declaration and no-op-writer reports over the full matrix."""
 
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
 
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_ASSERTIONS", "1")
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_WRITE_AUDIT", "record")
@@ -450,7 +450,7 @@ def test_audit_env_knob_refusals_are_typed(monkeypatch: pytest.MonkeyPatch) -> N
     """
 
     from torchlens._errors import InvalidArgumentError
-    from torchlens.postprocess import (
+    from torchlens._postprocess import (
         _postprocess_assertions_enabled,
         _read_audit_mode,
         _write_audit_record_mode,
@@ -540,7 +540,7 @@ def test_audit_armed_under_stripped_asserts_refuses_typed() -> None:
     script = (
         "import os\n"
         "os.environ['TORCHLENS_POSTPROCESS_ASSERTIONS'] = '1'\n"
-        "from torchlens.postprocess import _postprocess_assertions_enabled\n"
+        "from torchlens._postprocess import _postprocess_assertions_enabled\n"
         "try:\n"
         "    _postprocess_assertions_enabled()\n"
         "except Exception as exc:\n"

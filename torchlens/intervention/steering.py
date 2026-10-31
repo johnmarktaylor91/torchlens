@@ -18,7 +18,7 @@ from typing import Any
 
 from .binding import BindReport, _ArmedLazyOutput
 from .errors import BindingRuntimeError
-from .spec import InterventionSpec
+from .spec import Recipe
 
 
 @dataclass(frozen=True)
@@ -41,7 +41,7 @@ class SteerResult:
 def steer_generate(
     model: Any,
     inputs: Any,
-    spec: InterventionSpec,
+    spec: Recipe,
     *,
     on_zero_fire: str = "warn",
     **generate_kwargs: Any,

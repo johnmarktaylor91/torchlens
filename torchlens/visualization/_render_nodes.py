@@ -67,13 +67,13 @@ def _normalize_buffer_visibility(
         f"received {show_buffer_layers!r}",
         code="buffer_visibility_invalid",
         remedy="pass show_buffer_layers='never', 'meaningful', or 'always'",
-        argument="show_buffer_layers",
+        argument="show_buffers",
     )
 
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn import GradFn
-    from ..data_classes.trace import Trace
+    from .._data_classes.grad_fn import GradFn
+    from .._data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
 
 
@@ -195,7 +195,7 @@ def _visible_backward_calls_by_pass(
     """
 
     calls_by_pass: dict[int, list[tuple[GradFn, Any]]] = defaultdict(list)
-    for grad_fn_handle in trace.grad_fns:
+    for grad_fn_handle in trace.autograd.grad_fns:
         for call in grad_fn_handle.calls.values():
             if not _grad_fn_call_matches_backward_filter(call, pass_filter):
                 continue
@@ -1060,7 +1060,7 @@ def _raw_input_visualizer_dir(trace: "Trace") -> Path:
         Directory where image artifacts can be written.
     """
 
-    from ..utils.display import ensure_trace_visualizer_dir
+    from .._utils.display import ensure_trace_visualizer_dir
 
     input_dir = ensure_trace_visualizer_dir(trace) / "raw_inputs"
     input_dir.mkdir(parents=True, exist_ok=True)
@@ -1453,7 +1453,7 @@ def _build_collapsed_module_node(
         # A rolled box stands for every call of the module, so the mode
         # presets aggregate per-pass op records across all calls.
         scope_op_labels = tuple(op_label for call in ml.ops.values() for op_label in call.ops)
-        module_num_tensors = ml.num_layers
+        module_num_tensors = len(ml.layer_labels)
         module_num_buffers = sum(self[layer].is_buffer for layer in ml.layer_labels)
         module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.layer_labels)
         # Rolled boxes need the same surfaced-exit remainder belt as the
@@ -1461,7 +1461,7 @@ def _build_collapsed_module_node(
         # ``_collapse_address_for_node`` is vis_mode-independent, so the exit
         # op renders separately in rolled mode too and counting it inside the
         # box double-represents it (round-27). ``ml.layer_labels`` is already
-        # in pass-free layer currency, matching ``ml.num_layers``.
+        # in pass-free layer currency, matching ``len(ml.layers)``.
         if (
             _collapsed_module_should_show_remainder(
                 self,
@@ -1873,7 +1873,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
         bg_color = BOOL_NODE_COLOR
     elif node.is_buffer:
         bg_color = BUFFER_NODE_COLOR
-    elif node.uses_params:
+    elif node.has_params:
         param_logs = getattr(node, "_param_logs", [])
         if param_logs:
             trainable_flags = [pl.is_trainable for pl in param_logs]

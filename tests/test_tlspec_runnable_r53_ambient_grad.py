@@ -24,9 +24,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import AmbientExecutionContext, PathFaithfulness
 from torchlens.errors import RunnableTLSPECError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import AmbientExecutionContext, PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -195,7 +195,7 @@ def test_ambient_snapshot_covers_every_recorded_field() -> None:
     (minus the derived ``attestation_ineligible_context``). A future
     result-affecting knob added to either side without the other FAILS here."""
 
-    from torchlens.utils._torch_compat import snapshot_ambient_execution_context
+    from torchlens._utils._torch_compat import snapshot_ambient_execution_context
 
     snapshot_keys = set(snapshot_ambient_execution_context())
     recorded_fields = {field.name for field in dataclasses.fields(AmbientExecutionContext)} - {
@@ -208,7 +208,7 @@ def test_live_grad_read_never_ceilings_or_degrades(tmp_path: Path) -> None:
     """No-over-trigger pin: a model that merely READS ``torch.is_grad_enabled()``
     stays VERIFIED (+ATTESTED with archive) -- reads are never witnessed."""
 
-    from torchlens.runnable import NumericAttestationStatus
+    from torchlens._runnable import NumericAttestationStatus
 
     torch.manual_seed(0)
     model = GradBranchModel().eval()

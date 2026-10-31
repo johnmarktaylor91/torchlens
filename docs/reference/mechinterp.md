@@ -89,7 +89,7 @@ refusal (`worst_element`).
   and refuses `mi_kv_expansion_unavailable` (load with
   `attn_implementation="eager"` or the `"torchlens"` backend); equal head
   counts refuse `mi_kv_heads_not_grouped`.
-- `lowered_counterfactual`: by-head and by-pattern patching on DEFAULT-loaded
+- `patch_head`: by-head and by-pattern patching on DEFAULT-loaded
   fused-SDPA models with no eager reload -- the delta lowers EXACTLY to an
   add at the real post-projection op, with a receipt naming the virtual
   site, the real site, the formula version, and the invalidated facets;
@@ -107,7 +107,7 @@ refusal (`worst_element`).
   adds nothing (measured on GPT-2 small in the circuit section below).
 
 Fused attention (torch SDPA) needs
-`capture=CaptureOptions(save_arg_values=True)` for reconstructed
+`capture=CaptureOptions(save_args=True)` for reconstructed
 pattern/z/result reads; the facets stay READ-only -- edits are the lowered
 counterfactual's job, or an eager recapture.
 
@@ -170,7 +170,7 @@ corrupt = tl.trace(model, torch.randint(0, 32, (1, 5)), capture=ready)
 corrupt_graph = torchlens.mechinterp.component_graph(corrupt)
 kept = {"input->a0.h0<q>", "a0.h0->a1.h1<v>", "a1.h1->logits"}
 outside = [e for name, e in torchlens.mechinterp.component_graph(clean).edges.items() if name not in kept]
-circuit = torchlens.mechinterp.patch_edges(clean, outside, corrupt=corrupt_graph)
+circuit = torchlens.mechinterp.patch_edges(clean, outside, corrupted_graph=corrupt_graph)
 print(circuit.modules["lm_head"].out[0, -1, :3])
 for t in (trace, clean, corrupt):
     t.cleanup()
@@ -181,7 +181,7 @@ Edges are intervention selections. `graph.edges["m0->logits"]` passed to
 edge substitution on the replay engine); an edge into `a{L}.h{H}<q>` (or
 `<k>`, `<v>`) addresses head H's slice of that layer's projection output (an
 ACT selection), because the heads and roles of one layer share their norm.
-`patch_edges(trace, edges, *, corrupt=corrupt_graph)` builds the matching
+`patch_edges(trace, edges, *, corrupted_graph=corrupt_graph)` builds the matching
 values and returns a fork in which every patched receiver reads `input -
 sum(s) + sum(s_corrupt)` over its patched edges. With edges into one
 receiver, `input` and `s` are the clean values, and every receiver that is
@@ -206,7 +206,7 @@ trace captured with `intervention_ready=True`.
 
 ## Edge attribution patching and circuit faithfulness
 
-`edge_scores(model, inputs, *, corrupted, metric)` scores every edge of the
+`edge_scores(model, inputs, *, corrupted_input, metric)` scores every edge of the
 component graph by edge attribution patching, the first-order estimate of
 patching that edge alone: `score(s->t) = (s_corrupt - s_clean) . dM/d(input
 of t)`, summed over positions and averaged over examples
@@ -258,7 +258,7 @@ def logit_difference(logits):
 
 
 table = torchlens.mechinterp.edge_scores(
-    model, clean, corrupted=corrupted, metric=logit_difference, steps=2
+    model, clean, corrupted_input=corrupted, metric=logit_difference, steps=2
 )
 scores = {address[0]: row.score for (_target, kind, address), row in table.items()}
 print(max(scores, key=lambda name: abs(scores[name])))

@@ -21,7 +21,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable_state_context import _ambient_execution_context_restored
-from torchlens.utils import _torch_compat
+from torchlens._utils import _torch_compat
 
 
 def _globals() -> dict[str, Any]:
@@ -61,7 +61,7 @@ def test_loaded_runnable_run_leaves_globals_unchanged(tmp_path: Path) -> None:
     x = torch.randn(2, 4)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     path = tmp_path / "ambient.tlspec"
-    tl.save(trace, path, level="runnable", include_weights=True)
+    trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
 
     before = _globals()

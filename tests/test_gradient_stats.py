@@ -67,7 +67,7 @@ def test_aggregate_grad_requires_loss_fn_raises_typeerror() -> None:
     batches = [(torch.ones(2, 3), torch.ones(2, 1))]
 
     with pytest.raises(TypeError, match="loss_fn"):
-        tl.aggregate(model, batches, {"relu": tl.stats.Mean()}, target="grad")
+        tl.stats.aggregate(model, batches, {"relu": tl.stats.Mean()}, target="grad")
 
 
 def test_aggregate_grad_basic_norms() -> None:
@@ -79,7 +79,7 @@ def test_aggregate_grad_basic_norms() -> None:
         (torch.zeros(2, 3), torch.zeros(2, 1)),
     ]
 
-    result = tl.aggregate(
+    result = tl.stats.aggregate(
         model,
         batches,
         {"relu": tl.stats.Norm(name="norm")},
@@ -124,7 +124,7 @@ def test_aggregate_grad_warns_on_ambiguous_saved_selector_and_uses_first_match()
     trace.cleanup()
 
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        result = tl.aggregate(
+        result = tl.stats.aggregate(
             model,
             [batch],
             {"linear": tl.stats.Norm(name="norm")},

@@ -24,6 +24,7 @@ from torch import nn
 from torch.overrides import TorchFunctionMode
 
 import torchlens as tl
+from torchlens._utils._callable_safety import _ALLOWED_FORWARD_DUNDERS
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.rescue import (
     _MODE_RESPELLED_DUNDERS,
@@ -31,7 +32,6 @@ from torchlens.backends.torch.rescue import (
     capture_with_rescue,
 )
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-from torchlens.utils._callable_safety import _ALLOWED_FORWARD_DUNDERS
 
 _MODE_BOOKKEEPING = frozenset({"untyped_storage", "__get__"})
 

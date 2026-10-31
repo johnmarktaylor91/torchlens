@@ -10,12 +10,12 @@ edges (`torchlens.mechinterp.component_graph`), executes each patch
 records each decision (`torchlens.experiment.ledger`); the loop and every prune
 decision are yours, and live on this page.
 
-Why each edge test goes through edge substitution and not `site_sweep`:
-`site_sweep` applies one edit at every candidate site, but the value an
+Why each edge test goes through edge substitution and not `sweep_sites`:
+`sweep_sites` applies one edit at every candidate site, but the value an
 edge patch writes depends on the edge's sender (receiver `t` reads
 `input - s + s_corrupt`), and every edge into `t` writes at the same site,
 `t`'s input. One edit per site cannot express that, so the loop calls
-`patch_edges` for every test. `site_sweep` runs once, beside the loop, as a
+`patch_edges` for every test. `sweep_sites` runs once, beside the loop, as a
 head-knockout pass whose table is reported next to the circuit; it never
 changes which edges are pruned.
 
@@ -66,7 +66,7 @@ def kl_to_full(logits):
 
 def circuit_kl(pruned):
     """Patch every pruned edge to its corrupted sender in one call; return the KL."""
-    patched = torchlens.mechinterp.patch_edges(clean, pruned, corrupt=corrupt)
+    patched = torchlens.mechinterp.patch_edges(clean, pruned, corrupted_graph=corrupt)
     return kl_to_full(patched.modules["lm_head"].out)
 
 
@@ -75,7 +75,7 @@ print(len(graph.edges), len(edges), circuit_kl([]))
 RESULT = (len(graph.edges), len(edges), circuit_kl([])) == (57, 46, 0.0)
 ```
 
-## The head-knockout pass (`site_sweep`, reported beside the circuit)
+## The head-knockout pass (`sweep_sites`, reported beside the circuit)
 
 Arm the ledger first, so the sweep lands in its first entry as one material
 step. Each candidate zero-ablates one head's value vectors on a real
@@ -83,7 +83,7 @@ forward.
 
 ```python
 # recipe-test: tool=transformers expected=True
-from torchlens.experiment import head_ablation_candidates, ledger, site_sweep
+from torchlens.experiment import head_ablation_candidates, ledger, sweep_sites
 
 led = ledger(
     "acdc_ledger.jsonl",
@@ -95,7 +95,7 @@ candidates = {}
 for layer in range(2):
     plan = head_ablation_candidates(clean, f"transformer.h.{layer}.attn", heads=2)
     candidates.update({f"a{layer}.{key}": site for key, site in plan.items()})
-knockout = site_sweep(
+knockout = sweep_sites(
     clean,
     candidates=candidates,
     edit=tl.zero_ablate(),
@@ -135,7 +135,7 @@ for receiver in walk:
         edge = graph.edges[f"{sender.name}->{receiver.name}"]
         tested.append(edge.name)
         trial = circuit_kl(pruned + [edge])
-        led.entry(
+        led.open_entry(
             question=f"Is {edge.name} needed?",
             hypothesis=f"{edge.name} carries part of the prediction",
             metric="KL(full || circuit) change when the edge is patched",

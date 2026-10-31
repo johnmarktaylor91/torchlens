@@ -162,10 +162,8 @@ def test_post_trace_model_pickles_and_round_trips() -> None:
 def test_text_sinks_carry_no_terminal_escapes(sweep_trace: Any) -> None:
     """No ANSI/OSC escapes in non-tty text sinks (explain, summary, repr)."""
 
-    import torchlens as tl
-
     for name, text in (
-        ("explain", tl.report.explain(sweep_trace)),
+        ("explain", sweep_trace.explain()),
         ("summary", str(sweep_trace.summary())),
         ("repr", repr(sweep_trace)),
     ):

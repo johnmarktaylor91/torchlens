@@ -181,7 +181,7 @@ def test_fold_is_flat_across_the_gpt2_depth_series(tmp_path) -> None:
         assert fold.membership().keys() == {str(op.label) for op in log.layer_list}
         if name == "gpt2-medium":
             artifact = tmp_path / "gpt2_medium.tlspec"
-            tl.save(log, artifact)
+            log.save(artifact)
             envelope = call_tool("torchlens_overview", {"path": str(artifact)})
             served = estimate_tokens(canonical_dumps(json_safe(envelope)))
             assert served <= OVERVIEW_MAX_TOKENS, f"served overview is ~{served} tokens"

@@ -43,7 +43,7 @@ from ._residual import _require_payloads
 __all__ = [
     "ComponentEdge",
     "ComponentGraph",
-    "ComponentNode",
+    "ComponentSender",
     "ComponentReceiver",
     "component_graph",
 ]
@@ -56,7 +56,7 @@ _QKV: tuple[ReceiverKind, ...] = ("q", "k", "v")
 
 
 @dataclass(frozen=True, eq=False)
-class ComponentNode:
+class ComponentSender:
     """One residual writer (a graph source node).
 
     Parameters
@@ -122,7 +122,7 @@ class ComponentReceiver:
     norm_address: str
     input_label: str
     value: torch.Tensor
-    senders: tuple[ComponentNode, ...]
+    senders: tuple[ComponentSender, ...]
     _trace: Any = field(default=None, repr=False, compare=False)
 
     def __repr__(self) -> str:
@@ -135,7 +135,7 @@ class ComponentReceiver:
 class ComponentEdge:
     """One edge ``sender->receiver`` of the component graph."""
 
-    sender: ComponentNode
+    sender: ComponentSender
     receiver: ComponentReceiver
 
     @property
@@ -180,11 +180,11 @@ class ComponentGraph:
 
     def __init__(
         self,
-        nodes: tuple[ComponentNode, ...],
+        nodes: tuple[ComponentSender, ...],
         receivers: tuple[ComponentReceiver, ...],
         identity_receipt: dict[str, Any],
     ) -> None:
-        self.nodes: Mapping[str, ComponentNode] = MappingProxyType({n.name: n for n in nodes})
+        self.nodes: Mapping[str, ComponentSender] = MappingProxyType({n.name: n for n in nodes})
         self.receivers: Mapping[str, ComponentReceiver] = MappingProxyType(
             {r.name: r for r in receivers}
         )
@@ -224,7 +224,7 @@ def _layer_order(leaves: list[LeafWriter]) -> _Layers:
 
 def _head_nodes(
     trace: Any, address: str, layer: int, writer_values: list[torch.Tensor]
-) -> list[ComponentNode]:
+) -> list[ComponentSender]:
     """Return one attention layer's head nodes plus its verified bias node.
 
     The attention writer must be payload-identical to the layer's ``attn_out``
@@ -246,17 +246,17 @@ def _head_nodes(
                 "output before the residual add are outside the component graph",
                 module_address=address,
             )
-    nodes: list[ComponentNode] = []
+    nodes: list[ComponentSender] = []
     head = 0
     for row in stack.rows:
         kind = row.coordinate.kind
         if kind == "attention":
             nodes.append(
-                ComponentNode(f"a{layer}.h{head}", "head", layer, head, address, row.value)
+                ComponentSender(f"a{layer}.h{head}", "head", layer, head, address, row.value)
             )
             head += 1
         elif kind == "constant":
-            nodes.append(ComponentNode(f"b{layer}", "bias", layer, None, address, row.value))
+            nodes.append(ComponentSender(f"b{layer}", "bias", layer, None, address, row.value))
         else:
             refuse(
                 code="mi_edge_graph_nonadditive",
@@ -371,7 +371,7 @@ class _Builder:
 
         return [self.payloads[f.op_label] for f in self.final_leaves if f.module_address == address]
 
-    def _input_node(self) -> ComponentNode:
+    def _input_node(self) -> ComponentSender:
         """The ``input`` node: the sum of the embedding writes, in write order."""
 
         embedding = [self.payloads[f.op_label] for f in self.final_leaves if f.kind == "embedding"]
@@ -384,12 +384,12 @@ class _Builder:
         value = embedding[0]
         for addend in embedding[1:]:
             value = value + addend
-        return ComponentNode("input", "input", None, None, None, value)
+        return ComponentSender("input", "input", None, None, None, value)
 
-    def _component_nodes(self) -> dict[str, list[ComponentNode]]:
+    def _component_nodes(self) -> dict[str, list[ComponentSender]]:
         """Map each attention and MLP module address to its graph nodes."""
 
-        nodes_of: dict[str, list[ComponentNode]] = {}
+        nodes_of: dict[str, list[ComponentSender]] = {}
         for layer, address in enumerate(self.layers.attention):
             _require_mha(self.trace, address)  # refuse before reading any head rows
             nodes_of[address] = _head_nodes(self.trace, address, layer, self._writes_of(address))
@@ -403,17 +403,19 @@ class _Builder:
                     "the component graph",
                     module_address=address,
                 )
-            nodes_of[address] = [ComponentNode(f"m{layer}", "mlp", layer, None, address, writes[0])]
+            nodes_of[address] = [
+                ComponentSender(f"m{layer}", "mlp", layer, None, address, writes[0])
+            ]
         return nodes_of
 
-    def senders_of(self, input_op: Any) -> tuple[ComponentNode, ...]:
+    def senders_of(self, input_op: Any) -> tuple[ComponentSender, ...]:
         """Return the nodes whose outputs sum to ``input_op``'s value, in node order."""
 
-        found: dict[str, ComponentNode] = {}
+        found: dict[str, ComponentSender] = {}
         for label in writer_leaves(self.trace, input_op):
             leaf = self.classify(label)
             if leaf.kind == "embedding":
-                group: list[ComponentNode] | None = [self.input_node]
+                group: list[ComponentSender] | None = [self.input_node]
             else:
                 group = self.nodes_of.get(leaf.module_address)
             if group is None:

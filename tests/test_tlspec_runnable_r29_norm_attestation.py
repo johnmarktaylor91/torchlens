@@ -27,8 +27,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 
 def _save(model: nn.Module, x: torch.Tensor, path: Path) -> Path:
@@ -56,7 +56,7 @@ def test_r29_instance_norm_tracking_does_not_falsely_diverge(tmp_path: Path) -> 
 
         result = tl.load(path).run(inputs=x.clone())
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-        assert not result.report.poisoned
+        assert not result.report.is_poisoned
         # The replayed output is numerically correct (the fix does not mask a real divergence).
         fresh = nn.InstanceNorm1d(4, track_running_stats=True)
         fresh.load_state_dict(model.state_dict())
@@ -100,5 +100,5 @@ def test_r29_batchnorm_train_journaled_stats_stay_conservative(tmp_path: Path) -
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE

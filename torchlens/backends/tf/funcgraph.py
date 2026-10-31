@@ -9,9 +9,8 @@ from typing import Any
 
 import numpy as np
 
-from ...fastlog.types import CaptureSpec
-from ...ir.capture_events import CaptureEvents
-from ...ir.events import (
+from ..._ir.capture_events import CaptureEvents
+from ..._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
     ModuleFrame,
@@ -19,9 +18,10 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
-from ...ir.predicate import RecordContext
-from ...ir.refs import DtypeRef, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
+from ..._ir.predicate import RecordContext
+from ..._ir.refs import DtypeRef, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ...fastlog.types import CaptureSpec
 from ...validation.status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
@@ -679,7 +679,7 @@ def _selected_fetch_names(
         # Graph outputs are always fetched, so a typo'd predicate still
         # produced payloads for them -- but the SELECTOR matched nothing,
         # exactly the silent-typo case the shared disclosure family warns on.
-        from ...postprocess._selective_save import warn_zero_match_save_predicate
+        from ..._postprocess._selective_save import warn_zero_match_save_predicate
 
         warn_zero_match_save_predicate("tf")
     return tuple(dict.fromkeys((*output_names, *names)))

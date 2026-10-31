@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .types import Edit, FireRecord
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
+    from .._data_classes.op import Op
     from .hooks import NormalizedHookEntry
 
 _UNSET: Any = object()
@@ -409,9 +409,9 @@ def event_audit_rows(trace: Any) -> tuple[dict[str, Any], ...]:
 def rules_payload(spec: Any) -> tuple[dict[str, Any], ...]:
     """Render a public InterventionSpec's per-rule envelope payload."""
 
-    from .spec import InterventionSpec
+    from .spec import Recipe
 
-    if not isinstance(spec, InterventionSpec):
+    if not isinstance(spec, Recipe):
         return ()
     return tuple(
         {

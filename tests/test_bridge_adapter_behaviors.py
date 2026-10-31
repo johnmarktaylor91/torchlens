@@ -52,7 +52,7 @@ def test_bridge_namespace_lazily_imports_and_rejects_unknown_names() -> None:
 
     module = bridge.profiler
     assert module.__name__ == "torchlens.bridge.profiler"
-    assert "gradcam" in dir(bridge)
+    assert "pytorch_grad_cam" in dir(bridge)
     with pytest.raises(AttributeError, match="no attribute"):
         _ = bridge.does_not_exist
 
@@ -80,16 +80,16 @@ def test_bridge_utils_error_contracts(conv_log) -> None:
 def test_gradcam_layer_resolves_self_addresses_and_site_fallback(conv_log) -> None:
     """layer() honors 'self', module addresses, resolved sites, and refusals."""
 
-    from torchlens.bridge import gradcam
+    from torchlens.bridge import pytorch_grad_cam
 
     model = bridge_utils.source_model(conv_log)
-    assert gradcam.layer(conv_log, "self") is model
-    assert gradcam.layer(conv_log, "conv") is model.conv
+    assert pytorch_grad_cam.layer(conv_log, "self") is model
+    assert pytorch_grad_cam.layer(conv_log, "conv") is model.conv
     # A layer-label site falls back to the module the op executed in.
-    assert gradcam.layer(conv_log, "conv2d_1_1") is model.conv
+    assert pytorch_grad_cam.layer(conv_log, "conv2d_1_1") is model.conv
 
     with pytest.raises(ValueError, match="Could not resolve"):
-        gradcam.layer(conv_log, conv_log["input_1"])
+        pytorch_grad_cam.layer(conv_log, conv_log["input_1"])
 
 
 @pytest.mark.smoke
@@ -98,7 +98,7 @@ def test_gradcam_cam_runs_context_manager_runner_with_resolved_inputs(
 ) -> None:
     """cam() builds the runner from the resolved model/layer and captured input."""
 
-    from torchlens.bridge import gradcam
+    from torchlens.bridge import pytorch_grad_cam
 
     calls: dict[str, Any] = {}
 
@@ -121,7 +121,7 @@ def test_gradcam_cam_runs_context_manager_runner_with_resolved_inputs(
 
     monkeypatch.setitem(sys.modules, "pytorch_grad_cam", SimpleNamespace(GradCAM=_StubCam))
 
-    payload = gradcam.cam(conv_log, "conv")
+    payload = pytorch_grad_cam.cam(conv_log, "conv")
 
     assert payload["schema"] == "torchlens.gradcam.v1"
     assert payload["cam"] == "cam-output"
@@ -134,11 +134,11 @@ def test_gradcam_cam_runs_context_manager_runner_with_resolved_inputs(
 def test_gradcam_missing_dependency_names_extra(conv_log, monkeypatch: pytest.MonkeyPatch) -> None:
     """cam() raises ImportError naming the gradcam extra when the package is absent."""
 
-    from torchlens.bridge import gradcam
+    from torchlens.bridge import pytorch_grad_cam
 
     monkeypatch.setitem(sys.modules, "pytorch_grad_cam", None)
     with pytest.raises(ImportError, match="torchlens\\[gradcam\\]"):
-        gradcam.cam(conv_log, "conv")
+        pytorch_grad_cam.cam(conv_log, "conv")
 
 
 @pytest.mark.smoke

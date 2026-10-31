@@ -18,7 +18,8 @@ def test_receipt_covers_every_public_field_in_order() -> None:
     """One entry per public CaptureOptions field, dataclass order, no privates."""
 
     from tests.composition_expectations._censuses import capture_option_fields
-    from torchlens.options import CaptureOptions, option_receipt
+    from torchlens._option_receipt import option_receipt
+    from torchlens.options import CaptureOptions
 
     receipt = option_receipt(CaptureOptions())
     assert tuple(entry.name for entry in receipt) == capture_option_fields()
@@ -35,7 +36,8 @@ def test_receipt_distinguishes_explicit_from_default() -> None:
     """Explicitness and requested-value truth ride _specified_fields."""
 
     from torchlens._deprecations import MISSING
-    from torchlens.options import CaptureOptions, option_receipt
+    from torchlens._option_receipt import option_receipt
+    from torchlens.options import CaptureOptions
 
     options = CaptureOptions(save_grads=True)
     by_name = {entry.name: entry for entry in option_receipt(options)}
@@ -59,7 +61,8 @@ def test_receipt_distinguishes_explicit_from_default() -> None:
 def test_receipt_adjustments_disclose_forcing() -> None:
     """A consumer-forced option is disclosed with its reason, never silent."""
 
-    from torchlens.options import CaptureOptions, option_receipt
+    from torchlens._option_receipt import option_receipt
+    from torchlens.options import CaptureOptions
 
     options = CaptureOptions(save_grads=True)
     receipt = option_receipt(options, adjustments={"save_grads": (False, "forced")})
@@ -75,7 +78,8 @@ def test_receipt_refusals_are_typed_teaching() -> None:
     """The three receipt refusals carry stable codes and remedies."""
 
     from torchlens._errors import InvalidArgumentError
-    from torchlens.options import CaptureOptions, option_receipt
+    from torchlens._option_receipt import option_receipt
+    from torchlens.options import CaptureOptions
 
     with pytest.raises(InvalidArgumentError) as not_options:
         option_receipt(object())
@@ -94,7 +98,8 @@ def test_receipt_refusals_are_typed_teaching() -> None:
 def test_receipt_works_across_the_options_families() -> None:
     """Any _specified_fields-carrying options object yields a receipt."""
 
-    from torchlens.options import ReplayOptions, SaveOptions, option_receipt
+    from torchlens._option_receipt import option_receipt
+    from torchlens.options import ReplayOptions, SaveOptions
 
     save_receipt = option_receipt(SaveOptions())
     replay_receipt = option_receipt(ReplayOptions(append=True))

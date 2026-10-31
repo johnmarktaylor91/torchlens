@@ -73,4 +73,4 @@ RESULT = (
 - A vision transformer layer: `tl.attribution.grad_cam`, which lays the tokens
   on the grid the trace proves and drops the class, distillation or register
   tokens it finds; see the [attribution reference](../reference/attribution.md).
-- pytorch-grad-cam instead: the `tl.bridge.gradcam` bridge.
+- pytorch-grad-cam instead: the `tl.bridge.pytorch_grad_cam` bridge.

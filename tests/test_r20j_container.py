@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.ir.container import (
+from torchlens._ir.container import (
     _CONTAINER_REGISTRY,
     ContainerReconstructionError,
     ContainerSpec,
@@ -19,7 +19,7 @@ from torchlens.ir.container import (
     rebuild_container_from_spec,
     register_container,
 )
-from torchlens.ir.container_registry import (
+from torchlens._ir.container_registry import (
     ContainerRegistry,
     FuncSite,
     Phase,

@@ -12,8 +12,8 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ..._errors import TorchLensCaptureGapWarning
-from ...utils._torch_symbols import torch_attr
+from ..._errors import CaptureGapWarning
+from ..._utils._torch_symbols import torch_attr
 from .escape_detection import (
     ExpectedOriginalToken,
 )
@@ -277,7 +277,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 f"{len(diagnostics)} unaccounted aten dispatch event(s); first: "
                 f"{first['operator']} ({first['reason']}). The Trace is marked "
                 "capture_verified=False; inspect trace.completeness_diagnostics.",
-                TorchLensCaptureGapWarning,
+                CaptureGapWarning,
                 stacklevel=3,
             )
             # Gap path only: name a TorchScript or DLPack call behind the gap (no verdict moves).

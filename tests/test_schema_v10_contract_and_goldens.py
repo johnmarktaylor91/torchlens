@@ -20,19 +20,17 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-import warnings
 from pathlib import Path
 
 import pytest
+from _refuses_as_2x import assert_refuses_as_2x
 
-import torchlens as tl
 from torchlens._io import (
     MIN_TLSPEC_VERSION,
     MIN_TORCHLENS_VERSION_TEXT,
     TLSPEC_VERSION,
-    ArtifactSchemaAgeWarning,
-    ArtifactVersionAboveRuntimeError,
-    ArtifactVersionBelowFloorError,
+    ArtifactTooNewError,
+    ArtifactTooOldError,
     read_tlspec_version,
 )
 from torchlens._io.compat_ledger import floor_metadata, pair_is_governed
@@ -219,7 +217,7 @@ def test_facet_snapshot_stays_a_drop_field() -> None:
 
 def test_below_floor_refusal_names_the_corrected_floor() -> None:
     state = {"tlspec_version": MIN_TLSPEC_VERSION - 1}
-    with pytest.raises(ArtifactVersionBelowFloorError) as excinfo:
+    with pytest.raises(ArtifactTooOldError) as excinfo:
         read_tlspec_version(state, cls_name="Trace")
     fields = excinfo.value.fields
     assert fields["code"] == "artifact_version_below_floor"
@@ -232,13 +230,13 @@ def test_below_floor_refusal_names_the_corrected_floor() -> None:
 def test_modellog_216_refusal_keeps_the_verified_reader_remedy() -> None:
     from torchlens._io.compat_ledger import raise_if_modellog_portable
 
-    with pytest.raises(ArtifactVersionBelowFloorError) as excinfo:
+    with pytest.raises(ArtifactTooOldError) as excinfo:
         raise_if_modellog_portable("v2.16_modellog_portable", "Artifact", "x.tlspec")
     assert "torchlens==2.17.0" in excinfo.value.fields["remedy"]
 
 
 def test_future_version_refuses_on_state_and_producer_windows() -> None:
-    with pytest.raises(ArtifactVersionAboveRuntimeError) as excinfo:
+    with pytest.raises(ArtifactTooNewError) as excinfo:
         read_tlspec_version({"tlspec_version": TLSPEC_VERSION + 1}, cls_name="Trace")
     assert excinfo.value.fields["ceiling_tlspec_version"] == 10
     assert pair_is_governed("2.36.0", 10)
@@ -246,17 +244,12 @@ def test_future_version_refuses_on_state_and_producer_windows() -> None:
     assert pair_is_governed("2.34.1", 9)
 
 
-def test_v9_artifact_loads_at_its_recorded_schema(tmp_path: Path) -> None:
-    """A committed v9 artifact (writer 2.34.1) loads under v10 with the age advisory."""
+def test_v9_artifact_refuses_as_2x(tmp_path: Path) -> None:
+    """A committed v9 artifact (writer 2.34.1) refuses with the typed 2.x error."""
 
-    source = _HERE / "agent_surface_goldens" / "clean.tlspec"
+    source = _HERE / "fixtures" / "tlspec_v9" / "clean.tlspec"
     manifest = _load(source / "manifest.json")
     assert manifest["tlspec_version"] == 9, "fixture must stay a v9 artifact"
     work = tmp_path / "clean_v9.tlspec"
     shutil.copytree(source, work)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        trace = tl.load(work)
-    assert any(issubclass(w.category, ArtifactSchemaAgeWarning) for w in caught)
-    assert trace.tlspec_version == 9, "a loaded artifact keeps its recorded schema"
-    assert len(trace.ops) > 0
+    assert_refuses_as_2x(work)

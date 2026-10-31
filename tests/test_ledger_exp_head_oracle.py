@@ -18,7 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors.episode import BundleExperimentError
-from torchlens.experiment import head_ablation_candidates, site_sweep
+from torchlens.experiment import head_ablation_candidates, sweep_sites
 
 pytestmark = pytest.mark.heavy
 
@@ -57,7 +57,7 @@ def test_head_ablation_sugar_matches_hand_written_hook_oracle() -> None:
     baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
     candidates = head_ablation_candidates(baseline, module, heads=n_heads)
     assert list(candidates) == [f"h{i}" for i in range(n_heads)]
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=candidates,
         edit=tl.zero_ablate(),
@@ -128,7 +128,7 @@ def test_unscoped_head_selector_is_refused_as_sweep_candidate() -> None:
         label = member.output_layers[0]
         return float(member[label].out[0, -1, 17].item())
 
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates={"unscoped": tl.head(0)},
         edit=tl.zero_ablate(),

@@ -64,7 +64,7 @@ Gemma or GPT-2 model the common Gemma Scope hooks land here:
 | `blocks.{L}.hook_resid_post` | `gemma-scope-2b-pt-res`, `gemma-scope-2-*-pt-res` | output of the decoder layer, `model.layers.{L}` (GPT-2: `transformer.h.{L}`) |
 | `blocks.{L}.hook_mlp_out` | `gemma-scope-2b-pt-mlp`, `gemma-scope-2-*-pt-mlp` | the MLP output facet that `resolve_alias` names; on Gemma 2 and 3 the MLP output passes through `post_feedforward_layernorm` before it joins the residual stream, so check which tensor the release was trained on |
 | `blocks.{L}.attn.hook_z` | `gemma-scope-2b-pt-att` | the concatenated head outputs before the output projection (`resolve_alias` reports whether that tensor is a captured op in your attention implementation) |
-| a transcoder's input and output hooks | `gemma-scope-2-*-pt-transcoders` | the MLP module as a whole, spliced with `tl.splice_module(transcoder, input="in")`; see the transcoder section below |
+| a transcoder's input and output hooks | `gemma-scope-2-*-pt-transcoders` | the MLP module as a whole, spliced with `tl.splice_module(transcoder, input_route="in")`; see the transcoder section below |
 
 ## The same steps on a stand-in
 
@@ -159,7 +159,7 @@ RESULT = (
 ## Transcoders
 
 A transcoder maps a block's MLP input to its MLP output, so it replaces the
-MLP call as a whole: `tl.splice_module(transcoder, input="in")` on the MLP
+MLP call as a whole: `tl.splice_module(transcoder, input_route="in")` on the MLP
 module runs the transcoder on the arguments the MLP was called with (here the
 `ln_2` output) and uses its result as the MLP's output. With `input="out"` it
 would read the MLP's own output instead, which is the SAE case. A loaded
@@ -181,7 +181,7 @@ spliced = tl.trace(
     ids,
     capture=tl.options.CaptureOptions(
         intervention_ready=True,
-        hooks={tl.module("transformer.h.1.mlp"): tl.splice_module(transcoder, input="in")},
+        hooks={tl.module("transformer.h.1.mlp"): tl.splice_module(transcoder, input_route="in")},
     ),
 )
 with torch.no_grad():

@@ -14,8 +14,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.observe._device_memory as device_memory
-from torchlens.observe._device_memory import (
+import torchlens._observe._device_memory as device_memory
+from torchlens._observe._device_memory import (
     DeviceMemoryReading,
     DeviceMemorySample,
     device_memory_samples,
@@ -206,7 +206,7 @@ def test_pass_peak_observation_independent_of_sampling(monkeypatch) -> None:
         # forks.13: a CPU delta of 0 reads None (with a reason); either reading
         # is the same measurement kind, so compare the kind, not the RSS luck.
         for peak in (plain.forward_peak_memory, sampled.forward_peak_memory):
-            assert peak is None or isinstance(peak, tl.Bytes)
+            assert peak is None or isinstance(peak, tl.types.Bytes)
     finally:
         plain.cleanup()
         sampled.cleanup()
@@ -246,7 +246,7 @@ def test_oom_settles_an_attempted_call_row(monkeypatch) -> None:
             torch.randn(2, 4),
             capture=tl.options.CaptureOptions(track_device_memory=True),
         )
-    partial = tl.partial.from_failed_capture(excinfo.value)
+    partial = tl._partial.from_failed_capture(excinfo.value)
     samples = device_memory_samples(partial.trace)
     attempted = [label for label in samples if label.startswith("attempted:")]
     assert attempted, f"no attempted-call row settled: {sorted(samples)}"

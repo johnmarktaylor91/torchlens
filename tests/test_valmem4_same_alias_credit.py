@@ -103,7 +103,7 @@ class _Offsets(nn.Module):
 def _validate(model: nn.Module, x: torch.Tensor, **options: Any) -> bool:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return bool(tl.validate(model, x, scope="forward", random_seed=0, **options))
+        return bool(tl.validate(model, x, scope="forward", seed=0, **options))
 
 
 # ---------------------------------------------------------------------------
@@ -210,7 +210,7 @@ def test_a_cloned_parameter_is_still_charged_on_same() -> None:
 def test_a_user_trace_still_charges_parameter_copies() -> None:
     torch.manual_seed(0)
     model, x = nn.Linear(256, 256), torch.randn(2, 256)
-    capture = CaptureOptions(layers_to_save="all", save_arg_values=True, save_budget=_BELOW_WEIGHTS)
+    capture = CaptureOptions(layers_to_save="all", save_args=True, save_budget=_BELOW_WEIGHTS)
     with warnings.catch_warnings(), pytest.raises(SaveBudgetExceededError):
         warnings.simplefilter("ignore")
         tl.trace(model, x, capture=capture)
@@ -240,15 +240,15 @@ def _validate_corrupted(corrupt: Any) -> tuple[bool, list[str]]:
 
     def runner(*args: Any, **kwargs: Any) -> Any:
         trace = real_runner(*args, **kwargs)
-        if kwargs["save_arg_values"]:
+        if kwargs["save_args"]:
             corrupt(trace)
         return trace
 
     def observe(trace: Any) -> None:
         failure = get_validation_failure(trace) if trace is not None else None
         if failure is not None:
-            checks.append(failure.check)
-        checks.extend(item.check for item in get_validation_diagnostics(trace) or ())
+            checks.append(failure.check_name)
+        checks.extend(item.check_name for item in get_validation_diagnostics(trace) or ())
 
     torch.manual_seed(0)
     model, x = _Offsets(), torch.randn(4, 6)
@@ -258,7 +258,7 @@ def _validate_corrupted(corrupt: Any) -> tuple[bool, list[str]]:
     ):
         warnings.simplefilter("ignore")
         verdict = _user_public_impls._validate_forward_pass_torch(
-            model, x, random_seed=0, output_device="same", _trace_observer=observe
+            model, x, seed=0, output_device="same", _trace_observer=observe
         )
     return bool(verdict), checks
 

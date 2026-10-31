@@ -160,7 +160,7 @@ def _probe_rng_bracket() -> Iterator[None]:
     # ``torch.cuda.is_available()`` alone re-created the visible-but-unusable
     # CUDA abort on pure-CPU captures (the snapshot never touches CUDA until
     # the process has actually initialized it, and latches on a failed read).
-    from ...utils.rng import log_current_rng_states, set_rng_from_saved_states
+    from ..._utils.rng import log_current_rng_states, set_rng_from_saved_states
 
     saved_states = log_current_rng_states(torch_only=True)
     try:
@@ -185,7 +185,7 @@ class BeltReport:
     not be measured, so it is neither belt-patched nor proven mode-visible.
     A stale pre-wrap reference to it would lose ops with zero signal while
     the capture still reports ``capture_verified=True``. Consumers
-    (``torchlens.utils.doctor()`` and ``torchlens.compat.report()``) surface
+    (``torchlens.report.doctor()`` and ``torchlens.compat.report()``) surface
     these rows; the details make the failure actionable per build.
     """
 
@@ -235,7 +235,7 @@ def _resolve_namespace(namespace_name: str) -> Any | None:
 def _derive() -> tuple[BeltReport, dict[int, Any]]:
     """Measure the protocol-invisible wrapped set on the running build."""
 
-    from ...constants import get_orig_torch_funcs
+    from ..._constants import get_orig_torch_funcs
 
     inventory = get_orig_torch_funcs(include_torchvision=False)
     statically_visible: set[int] = set()

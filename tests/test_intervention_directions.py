@@ -1,6 +1,6 @@
 """The native contrastive direction builder and its library converters.
 
-``torchlens.intervention.direction_from_pairs`` on a tiny seeded model, checked
+``torchlens.intervention.fit_direction`` on a tiny seeded model, checked
 against oracles computed without TorchLens: forward hooks read the rows, and
 each method's math is re-derived independently (an eigendecomposition for
 ``"pca"``, an L-BFGS solve of the same objective for ``"logistic"``). The
@@ -23,8 +23,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention import Direction, _directions, direction_from_pairs
-from torchlens.selection_subspace import BasisProvenance
+from torchlens._selection_subspace import BasisProvenance
+from torchlens.intervention import Direction, _directions, fit_direction
 
 _HIDDEN = 8
 _SITE = "layers.1"
@@ -132,18 +132,18 @@ def _logistic_oracle(positive: torch.Tensor, negative: torch.Tensor) -> torch.Te
 def test_mean_diff_is_the_mean_row_difference(stack: dict[str, Any]) -> None:
     """``mean_diff`` is ``(pos - neg).mean(0)`` of the hooked last-token rows, bit for bit."""
 
-    direction = direction_from_pairs(stack["pos"], stack["neg"], _SITE)
+    direction = fit_direction(stack["pos"], stack["neg"], _SITE)
     positive, negative = stack["rows"]
     assert isinstance(direction, Direction)
     assert direction.vector.dtype == torch.float32
     assert torch.equal(direction.vector, (positive - negative).mean(dim=0))
-    assert direction.n_pairs == 6 and direction.site == _SITE
+    assert direction.num_pairs == 6 and direction.site == _SITE
 
 
 def test_pca_is_the_top_eigenvector_of_the_differences(stack: dict[str, Any]) -> None:
     """``pca`` is the top eigenvector of D^T D, unit norm, signed toward the positives."""
 
-    direction = direction_from_pairs(stack["pos"], stack["neg"], _SITE, "pca")
+    direction = fit_direction(stack["pos"], stack["neg"], _SITE, "pca")
     positive, negative = stack["rows"]
     deltas = (positive - negative).double()
     _values, vectors = torch.linalg.eigh(deltas.T @ deltas)
@@ -162,7 +162,7 @@ def test_logistic_matches_an_independent_solve(pairs: int) -> None:
     pos_ids, neg_ids = _ids(pairs, 3), _ids(pairs, 4)
     pos, neg = _trace(model, pos_ids), _trace(model, neg_ids)
     try:
-        direction = direction_from_pairs(pos, neg, _SITE, "logistic")
+        direction = fit_direction(pos, neg, _SITE, "logistic")
     finally:
         pos.cleanup()
         neg.cleanup()
@@ -176,7 +176,7 @@ def test_logistic_matches_an_independent_solve(pairs: int) -> None:
 def test_provenance_reuses_the_basis_record(stack: dict[str, Any]) -> None:
     """The record is a BasisProvenance whose digest re-derives from the vector."""
 
-    direction = direction_from_pairs(stack["pos"], stack["neg"], _SITE, "pca")
+    direction = fit_direction(stack["pos"], stack["neg"], _SITE, "pca")
     record = direction.provenance
     canonical = direction.vector.double().reshape(1, -1)
     digest = hashlib.sha256()
@@ -184,8 +184,8 @@ def test_provenance_reuses_the_basis_record(stack: dict[str, Any]) -> None:
     digest.update(canonical.numpy().tobytes())
     assert isinstance(record, BasisProvenance)
     assert record.sha256 == digest.hexdigest()
-    assert (record.method, record.n_vectors, record.space_dim, record.dim) == ("pca", 1, 8, -1)
-    assert f"site={_SITE!r}" in record.origin and "n_pairs=6" in record.origin
+    assert (record.method, record.num_vectors, record.space_dim, record.dim) == ("pca", 1, 8, -1)
+    assert f"site={_SITE!r}" in record.origin and "num_pairs=6" in record.origin
     assert "pairs_sha256=" in record.origin
     assert "sha256=" in repr(direction) and "tensor" not in repr(direction)
 
@@ -196,11 +196,11 @@ def test_sequence_of_traces_equals_one_batched_trace(stack: dict[str, Any]) -> N
     model = stack["model"]
     singles = [_trace(model, stack["pos_ids"][i : i + 1]) for i in range(6)]
     try:
-        split = direction_from_pairs(singles, stack["neg"], _SITE, "pca")
+        split = fit_direction(singles, stack["neg"], _SITE, "pca")
     finally:
         for trace in singles:
             trace.cleanup()
-    batched = direction_from_pairs(stack["pos"], stack["neg"], _SITE, "pca")
+    batched = fit_direction(stack["pos"], stack["neg"], _SITE, "pca")
     torch.testing.assert_close(split.vector, batched.vector, atol=1e-6, rtol=0)
 
 
@@ -213,7 +213,7 @@ def test_padded_rows_read_the_last_real_token(stack: dict[str, Any]) -> None:
     mask[2, 2:] = 0
     pos, neg = _trace(model, stack["pos_ids"], mask), _trace(model, stack["neg_ids"], mask)
     try:
-        direction = direction_from_pairs(pos, neg, _SITE)
+        direction = fit_direction(pos, neg, _SITE)
     finally:
         pos.cleanup()
         neg.cleanup()
@@ -226,7 +226,7 @@ def test_steer_edit_adds_the_scaled_vector(stack: dict[str, Any]) -> None:
     """``direction.steer(m)`` placed at the site adds ``m * vector`` to its output."""
 
     model = stack["model"]
-    direction = direction_from_pairs(stack["pos"], stack["neg"], _SITE, "pca")
+    direction = fit_direction(stack["pos"], stack["neg"], _SITE, "pca")
     with torch.no_grad():
         steered = tl.when(tl.module(_SITE), direction.steer(3.0)).bind(model)(stack["pos_ids"])
     handle = model.layers[1].register_forward_hook(lambda _m, _a, out: out + 3.0 * direction.vector)
@@ -262,7 +262,7 @@ def test_to_steering_vectors_wraps_the_vector(
         "steering_vectors",
         _fake_module("steering_vectors", SteeringVector=SteeringVector),
     )
-    direction = direction_from_pairs(stack["pos"], stack["neg"], _SITE)
+    direction = fit_direction(stack["pos"], stack["neg"], _SITE)
     result = direction.to_steering_vectors()
     assert list(result.layer_activations) == [1] and result.layer_type == "decoder_block"
     assert torch.equal(result.layer_activations[1], direction.vector)
@@ -278,7 +278,7 @@ def test_to_repeng_wraps_the_vector(stack: dict[str, Any], monkeypatch: pytest.M
             self.directions = directions
 
     monkeypatch.setitem(sys.modules, "repeng", _fake_module("repeng", ControlVector=ControlVector))
-    direction = direction_from_pairs(stack["pos"], stack["neg"], _SITE)
+    direction = fit_direction(stack["pos"], stack["neg"], _SITE)
     result = direction.to_repeng(model_type="tiny")
     assert result.model_type == "tiny" and list(result.directions) == [1]
     assert result.directions[1].dtype.name == "float32"
@@ -295,7 +295,7 @@ def test_to_dialz_wraps_the_vector(stack: dict[str, Any], monkeypatch: pytest.Mo
             self.directions = directions
 
     monkeypatch.setitem(sys.modules, "dialz", _fake_module("dialz", SteeringVector=SteeringVector))
-    direction = direction_from_pairs(stack["pos"], stack["neg"], _SITE)
+    direction = fit_direction(stack["pos"], stack["neg"], _SITE)
     result = direction.to_dialz(model_type="tiny")
     assert result.model_type == "tiny" and list(result.directions) == [1]
     assert result.directions[1].dtype.name == "float32"
@@ -319,16 +319,16 @@ def test_builder_refusals(stack: dict[str, Any]) -> None:
     """Each builder refusal carries its code and a remedy."""
 
     pos, neg = stack["pos"], stack["neg"]
-    assert _code(lambda: direction_from_pairs(pos, neg, _SITE, "svd")) == "direction_method_unknown"
-    assert _code(lambda: direction_from_pairs([], neg, _SITE)) == "direction_pairs_empty"
-    assert _code(lambda: direction_from_pairs(pos, pos, _SITE)) == "direction_pairs_identical"
+    assert _code(lambda: fit_direction(pos, neg, _SITE, "svd")) == "direction_method_unknown"
+    assert _code(lambda: fit_direction([], neg, _SITE)) == "direction_pairs_empty"
+    assert _code(lambda: fit_direction(pos, pos, _SITE)) == "direction_pairs_identical"
     assert (
-        _code(lambda: direction_from_pairs(pos, neg, _SITE, read_token_index=[1, 2]))
+        _code(lambda: fit_direction(pos, neg, _SITE, read_token_index=[1, 2]))
         == "direction_read_token_count"
     )
     short = _trace(stack["model"], stack["neg_ids"][:4])
     try:
-        assert _code(lambda: direction_from_pairs(pos, short, _SITE)) == "direction_pairs_mismatch"
+        assert _code(lambda: fit_direction(pos, short, _SITE)) == "direction_pairs_mismatch"
     finally:
         short.cleanup()
 
@@ -359,7 +359,7 @@ def test_reader_refusals(stack: dict[str, Any]) -> None:
         capture=tl.options.CaptureOptions(layers_to_save=["head"]),
     )
     try:
-        assert _code(lambda: direction_from_pairs(unsaved, stack["neg"], _SITE)) == (
+        assert _code(lambda: fit_direction(unsaved, stack["neg"], _SITE)) == (
             "direction_site_unsaved"
         )
     finally:
@@ -375,7 +375,7 @@ def test_logistic_refuses_when_unconverged(
 
     monkeypatch.setattr(_directions, "_LOGISTIC_MAX_ITER", 1)
     assert (
-        _code(lambda: direction_from_pairs(stack["pos"], stack["neg"], _SITE, "logistic"))
+        _code(lambda: fit_direction(stack["pos"], stack["neg"], _SITE, "logistic"))
         == "direction_logistic_unconverged"
     )
 
@@ -383,10 +383,10 @@ def test_logistic_refuses_when_unconverged(
 def test_library_layer_refusals(stack: dict[str, Any]) -> None:
     """A site without an index needs layer=; a layer that disagrees is refused."""
 
-    direction = direction_from_pairs(stack["pos"], stack["neg"], _SITE)
+    direction = fit_direction(stack["pos"], stack["neg"], _SITE)
     assert direction.library_layer() == 1 and direction.library_layer(1) == 1
     assert _code(lambda: direction.library_layer(0)) == "direction_layer_mismatch"
     assert _code(lambda: direction.library_layer(True)) == "direction_layer_unknown"
-    head = direction_from_pairs(stack["pos"], stack["neg"], "head")
+    head = fit_direction(stack["pos"], stack["neg"], "head")
     assert _code(head.library_layer) == "direction_layer_unknown"
     assert head.library_layer(1) == 1

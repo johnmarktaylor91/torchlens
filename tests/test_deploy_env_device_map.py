@@ -19,8 +19,8 @@ from torchlens.compat import report
 def test_device_map_row_absent_reads_pass_ok() -> None:
     """No hf_device_map: undetected pass/ok."""
 
-    row = report(nn.Linear(4, 2), torch.randn(1, 4)).row("accelerate_device_map_auto")
-    assert (row.detected, row.status, row.severity) == (False, "pass", "ok")
+    row = report(nn.Linear(4, 2), torch.randn(1, 4)).check("accelerate_device_map_auto")
+    assert (row.is_detected, row.status, row.severity) == (False, "pass", "ok")
 
 
 def test_device_map_row_single_execution_device_reads_pass_info() -> None:
@@ -28,13 +28,13 @@ def test_device_map_row_single_execution_device_reads_pass_info() -> None:
 
     model = nn.Linear(4, 2)
     model.hf_device_map = {"": "cpu"}
-    row = report(model, torch.randn(1, 4)).row("accelerate_device_map_auto")
-    assert (row.detected, row.status, row.severity) == (True, "pass", "info")
+    row = report(model, torch.randn(1, 4)).check("accelerate_device_map_auto")
+    assert (row.is_detected, row.status, row.severity) == (True, "pass", "info")
 
     offload_model = nn.Linear(4, 2)
     offload_model.hf_device_map = {"encoder": 0, "decoder": "cpu", "head": "disk"}
-    offload_row = report(offload_model, torch.randn(1, 4)).row("accelerate_device_map_auto")
-    assert (offload_row.detected, offload_row.status) == (True, "pass")
+    offload_row = report(offload_model, torch.randn(1, 4)).check("accelerate_device_map_auto")
+    assert (offload_row.is_detected, offload_row.status) == (True, "pass")
 
 
 def test_device_map_row_multi_device_stays_known_broken() -> None:
@@ -42,8 +42,8 @@ def test_device_map_row_multi_device_stays_known_broken() -> None:
 
     model = nn.Linear(4, 2)
     model.hf_device_map = {"encoder": 0, "decoder": 1}
-    row = report(model, torch.randn(1, 4)).row("accelerate_device_map_auto")
-    assert (row.detected, row.status, row.severity) == (True, "known_broken", "error")
+    row = report(model, torch.randn(1, 4)).check("accelerate_device_map_auto")
+    assert (row.is_detected, row.status, row.severity) == (True, "known_broken", "error")
 
 
 @pytest.mark.heavy

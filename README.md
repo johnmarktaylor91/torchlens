@@ -214,7 +214,7 @@ act = tl.pluck(model, x, 'relu_1_2')   # returns tensor directly
 # Batch extraction across a dataset (any iterable of unbatched samples works)
 dataset = [torch.randn(3, 224, 224) for _ in range(8)]
 tl.extract_dataset(model, dataset, layers=['relu_1_2', 'conv2d_3_7'],
-                   batch_size=32, output_dir='torchlens-activations/')
+                   batch_size=32, path='torchlens-activations/')
 ```
 
 **Performance note:** With `halt=` and `tl.record`, capture can run *faster
@@ -229,7 +229,7 @@ model over many forwards or through `generate()`, skip capture entirely with
 Save and load traces portably:
 
 ```python
-tl.save(log, 'my_trace')
+log.save('my_trace')
 loaded = tl.load('my_trace')
 ```
 
@@ -391,7 +391,7 @@ scaled = tl.trace(model, x, save=tl.func('relu'),
 
 Available helpers: `tl.zero_ablate`, `tl.mean_ablate`,
 `torchlens.intervention.scramble_elements`, `tl.steer`, `tl.scale`, `tl.clamp`,
-`tl.noise`, `tl.project_onto`, `tl.project_off`, `tl.swap_with`, `tl.splice_module`.
+`tl.add_noise`, `tl.project_onto`, `tl.project_out`, `tl.swap_with`, `tl.splice_module`.
 
 For post-hoc DAG replay and isolated experiments, capture with
 `intervention_ready=True` and use `log.fork()` + `log.push()` /
@@ -412,7 +412,7 @@ Compare multiple runs side by side with `tl.bundle`:
 clean_log = tl.trace(model, x)
 patched_log = tl.trace(model, x,
                        intervene=tl.when(tl.func('relu'), tl.zero_ablate()))
-bundle = tl.bundle({'clean': clean_log, 'patched': patched_log}, baseline='clean')
+bundle = tl.Bundle({'clean': clean_log, 'patched': patched_log}, baseline='clean')
 bundle.compare_at('relu_1_2')   # one site; a multi-site selector must resolve uniquely
 ```
 
@@ -495,13 +495,13 @@ documented in [`docs/`](docs/).
 
 Every trace already carries per-op timings, FLOPs, and memory; `profile()`
 presents them per op, module, or call, sorted and truncated how you like, and
-`honesty()` names the clock and instrumentation state behind every number
+`evidence_labels()` names the clock and instrumentation state behind every number
 instead of just saying "measured":
 
 ```python
 prof_log = tl.trace(model, torch.randn(1, 3, 64, 64))
-print(prof_log.profile(level='module', sort_by='flops', top_k=8))
-print(prof_log.profile().honesty())
+print(prof_log.profile(level='module', sort_by='flops', k=8))
+print(prof_log.profile().evidence_labels())
 
 # Nsight-ready: wrap each captured op in an identity-carrying NVTX range (CUDA only;
 # without CUDA, emit_nvtx=True is refused with a typed error)
@@ -514,7 +514,7 @@ Dataset-level statistics stream in constant memory -- including *exact*
 full-data linear CKA, not a minibatch approximation:
 
 ```python
-stats = tl.aggregate(
+stats = tl.stats.aggregate(
     model,
     [torch.rand(1, 3, 64, 64) for _ in range(2)],   # any iterable of inputs
     metrics={'relu_1_2': tl.stats.Aggregator(tl.stats.Mean(), tl.stats.Norm()),
@@ -528,11 +528,11 @@ you like; discovery helpers list what there is to ask for:
 
 ```python
 from torchlens.fastlog import Recorder
-from torchlens.utils import list_modules, list_ops
+from torchlens._utils import list_modules, list_ops
 
 with Recorder(model, save=tl.func('relu')) as rec:
     for step in range(2):                    # your optimizer loop
-        rec.log(torch.rand(1, 3, 64, 64))    # sparse capture of this step
+        rec(torch.rand(1, 3, 64, 64))        # sparse capture of this step
 
 print(list_modules(model)[:3])               # every module address + class
 print(list_ops(model, torch.randn(1, 3, 64, 64))[:3])   # op counts per forward
@@ -608,11 +608,11 @@ pinning model weights or module names:
 # `model` and `x` are your model and a representative example input.
 import torchlens as tl
 
-pinned = tl.assert_unchanged(model, x, expected=None)  # prints and returns a hash
-tl.assert_unchanged(model, x, pinned)  # raises if the architecture changes
+pinned = tl.fingerprint.assert_unchanged(model, x, expected=None)  # prints and returns a hash
+tl.fingerprint.assert_unchanged(model, x, pinned)  # raises if the architecture changes
 ```
 
-See [`tl.hash`](docs/reference/hash.md) for trace-level hashing and its structural scope.
+See [`tl.fingerprint`](docs/reference/hash.md) for trace-level hashing and its structural scope.
 
 ## Compatibility
 
@@ -681,7 +681,7 @@ saved activations are unaffected either way.
 | [docs/performance.md](docs/performance.md) | Speed knobs and benchmark numbers |
 | [docs/reference/debug.md](docs/reference/debug.md) | Trace diagnostics: lineage, non-finites, costs, and gradients |
 | [docs/reference/export.md](docs/reference/export.md) | Static, profiling, tabular, and tracker exports (incl. the interactive HTML viewer) |
-| [docs/reference/stats.md](docs/reference/stats.md) | Streaming dataset statistics: `tl.stats` accumulators and `tl.aggregate` |
+| [docs/reference/stats.md](docs/reference/stats.md) | Streaming dataset statistics: `tl.stats` accumulators and `tl.stats.aggregate` |
 | [docs/native-torch.md](docs/native-torch.md) | What native torch tooling is authoritative for, with recipes |
 | [docs/migration/from_hooks.md](docs/migration/from_hooks.md) | Honest two-way comparison with forward hooks |
 | [docs/reference/hash.md](docs/reference/hash.md) | Provisional structural hashes and CI architecture pins |

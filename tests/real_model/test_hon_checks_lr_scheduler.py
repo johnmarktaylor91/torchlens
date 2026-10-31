@@ -34,7 +34,7 @@ def _train(order: str) -> tuple[ChecksSession, torch.optim.Optimizer, list[str]]
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
     session = ChecksSession(model, optimizer)
     session.register_change_check()
-    session.register_nonfinite_gradient_check()
+    session.register_nonfinite_grad_check()
     images, labels = torch.randn(2, 3, 32, 32), torch.tensor([1, 7])
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

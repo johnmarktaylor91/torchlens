@@ -15,11 +15,11 @@ from ..bundle import Bundle
 from ..errors import TorchLensWarning
 from .hooks import HookContext
 from .selectors import BaseSelector, func, label
-from .spec import InterventionSpec, when
+from .spec import Recipe, when
 from .types import Edit
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 SWEEP_NAME = "sweep"
 
@@ -27,7 +27,7 @@ SWEEP_NAME = "sweep"
 def sweep(
     model: nn.Module,
     x: Any,
-    at: str | BaseSelector | Callable[[Any], bool] | MissingType = MISSING,
+    site: str | BaseSelector | Callable[[Any], bool] | MissingType = MISSING,
     values: Iterable[Any] | MissingType = MISSING,
     *,
     input_kwargs: dict[Any, Any] | None = None,
@@ -43,11 +43,11 @@ def sweep(
         PyTorch module to capture.
     x:
         Positional input argument or argument container passed to ``tl.trace``.
-    at:
+    site:
         Intervention site target. Strings match either an exact TorchLens label
         or a function name; selectors and predicate callables are used directly.
     values:
-        Replacement values to sweep at ``at``.
+        Replacement values to sweep at ``site``.
     input_kwargs:
         Optional keyword inputs passed to ``model.forward``.
     names:
@@ -76,7 +76,7 @@ def sweep(
         collides with ``"baseline"``, or an explicit ``intervene`` argument
         is supplied.
     TypeError
-        If ``at`` cannot be used as a capture-time intervention predicate.
+        If ``site`` cannot be used as a capture-time intervention predicate.
     """
 
     # Resolve positional `values` (may be MISSING if it was skipped when param was keyword-only)
@@ -99,33 +99,33 @@ def sweep(
     # C03 spec door: the ONE immutable InterventionSpec is accepted unchanged
     # as sweep values -- one member per spec, each captured with
     # intervene=<that spec>. Site and action already live inside each spec,
-    # so at= must be omitted, and mixing spec and plain values is refused
-    # (a plain value NEEDS at=, a spec FORBIDS it; guessing per-element
+    # so site= must be omitted, and mixing spec and plain values is refused
+    # (a plain value NEEDS site=, a spec FORBIDS it; guessing per-element
     # would silently re-target half the sweep).
     from collections.abc import Iterable as _EarlyIterable
     from typing import cast as _cast
 
     early_values = list(_cast("_EarlyIterable[Any]", values))
-    spec_count = sum(isinstance(value, InterventionSpec) for value in early_values)
+    spec_count = sum(isinstance(value, Recipe) for value in early_values)
     if spec_count:
         if spec_count != len(early_values):
             raise InvalidArgumentError(
                 f"sweep() received {spec_count} InterventionSpec values mixed "
                 f"with {len(early_values) - spec_count} plain replacement "
                 "values; a sweep is either one site swept over plain values "
-                "(at=..., values=[v1, v2]) or one member per spec "
+                "(site=..., values=[v1, v2]) or one member per spec "
                 "(values=[spec1, spec2])",
                 code="sweep_spec_values_mixed",
-                remedy="pass all-spec values without at=, or all-plain values with at=",
+                remedy="pass all-spec values without site=, or all-plain values with site=",
                 argument="values",
             )
-        if at is not MISSING:
+        if site is not MISSING:
             raise InvalidArgumentError(
-                "sweep(at=..., values=[InterventionSpec, ...]) conflicts: each "
-                "spec already names its own WHERE and action, so at= has "
+                "sweep(site=..., values=[InterventionSpec, ...]) conflicts: each "
+                "spec already names its own WHERE and action, so site= has "
                 "nothing sound to address",
                 code="sweep_spec_at_conflict",
-                remedy="drop at= when sweeping over InterventionSpec values",
+                remedy="drop site= when sweeping over InterventionSpec values",
                 argument="at",
             )
         return _sweep_over_specs(
@@ -138,15 +138,15 @@ def sweep(
             **trace_kwargs,
         )
 
-    if at is MISSING:
+    if site is MISSING:
         raise ArgumentTypeError(
-            "sweep() is missing its required at site target",
+            "sweep() is missing its required site target",
             code="sweep_site_missing",
-            remedy="pass at as a label, selector, or predicate callable",
+            remedy="pass site as a label, selector, or predicate callable",
             argument="at",
         )
     else:
-        resolved_at = at
+        resolved_at = site
 
     # At this point both resolved_at and values are fully resolved (not MISSING).
     from typing import cast
@@ -209,7 +209,7 @@ def sweep(
 def _sweep_over_specs(
     model: nn.Module,
     x: Any,
-    specs: list[InterventionSpec],
+    specs: list[Recipe],
     *,
     names: Sequence[str] | None,
     include_baseline: bool = False,
@@ -260,7 +260,7 @@ def _sweep_over_specs(
         baseline,
         traces,
         params={
-            "spec_digests": [spec.spec_digest for spec in specs],
+            "spec_digests": [spec.digest for spec in specs],
             "include_baseline": include_baseline,
         },
     )

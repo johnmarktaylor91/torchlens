@@ -227,7 +227,7 @@ def _check_entry(entry: CorpusEntry) -> None:
             assert not leaves
             status = backward_status(trace)
             assert status.state in ("grad_disabled", "grad_enabled_unobserved")
-            assert status.n_backward_passes == 0
+            assert status.num_backward_passes == 0
             return
         assert leaves
         if entry.id in BACKWARD_RAISES:

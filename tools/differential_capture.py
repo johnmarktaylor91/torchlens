@@ -181,7 +181,7 @@ def _build_mode_name_table() -> dict[int, str]:
     """
     import torch
 
-    from torchlens.constants import get_orig_torch_funcs
+    from torchlens._constants import get_orig_torch_funcs
 
     table: dict[int, str] = {}
     for namespace_name, func_name in get_orig_torch_funcs():

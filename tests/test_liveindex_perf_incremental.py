@@ -19,8 +19,8 @@ import torch
 from torch import nn
 
 from benchmarks.live_index_append_counters import counting, synthetic_stream
+from torchlens._ir.live_index import LiveIndex
 from torchlens.fastlog import Recorder
-from torchlens.ir.live_index import LiveIndex
 
 
 @dataclass(frozen=True)
@@ -179,7 +179,7 @@ def test_recorder_folds_repeat_labels_without_rebuilding(fail_on: int | None) ->
         Recorder(_Chain(fail_on), save=_save_ops, on_forward_error="return_partial") as recorder,
     ):
         for _ in range(3):
-            recorder.log(torch.ones(2))
+            recorder(torch.ones(2))
         index = recorder._capture_events.live_index
     assert tally.counts["reseen_append"] > 0
     assert tally.counts["reseen_append_rebuilds"] == 0

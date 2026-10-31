@@ -12,16 +12,15 @@ import math
 import pytest
 import torch
 
-from torchlens.observability import (
+from torchlens._observability import (
     DEFAULT_DESCRIPTOR,
     Histogram,
     HistogramDescriptor,
-    Spine,
-    StatKernelError,
+    RunningStats,
     merge_histogram_results,
     merge_spine_results,
 )
-from torchlens.observability._kernels import (
+from torchlens._observability._kernels import (
     INT32_COUNT_MAX,
     histogram_result_from_vector,
     merge_spine_vectors,
@@ -29,10 +28,11 @@ from torchlens.observability._kernels import (
     spine_result_from_vector,
     spine_vector,
 )
+from torchlens.errors import StatKernelError
 
 
-def _spine_of(*tensors: torch.Tensor) -> Spine:
-    spine = Spine()
+def _spine_of(*tensors: torch.Tensor) -> RunningStats:
+    spine = RunningStats()
     for tensor in tensors:
         spine.update(tensor)
     return spine
@@ -115,7 +115,7 @@ class TestSpineMerge:
 
     def test_merge_type_refusal(self) -> None:
         with pytest.raises(StatKernelError) as excinfo:
-            Spine().merge("nope")  # type: ignore[arg-type]
+            RunningStats().merge("nope")  # type: ignore[arg-type]
         assert excinfo.value.fields["code"] == "stat_merge_incompatible"
 
 
@@ -256,7 +256,7 @@ class TestDtypes:
 
     def test_complex_refuses_typed(self) -> None:
         with pytest.raises(StatKernelError) as excinfo:
-            Spine().update(torch.complex(torch.ones(2), torch.ones(2)))
+            RunningStats().update(torch.complex(torch.ones(2), torch.ones(2)))
         assert excinfo.value.fields["code"] == "stat_dtype_unsupported"
         with pytest.raises(StatKernelError) as excinfo2:
             Histogram().update(torch.complex(torch.ones(2), torch.ones(2)))
@@ -291,7 +291,7 @@ class TestRngIsolation:
         torch.manual_seed(1234)
         before = torch.get_rng_state().clone()
         data = torch.arange(-100.0, 100.0)
-        spine = Spine()
+        spine = RunningStats()
         spine.update(data)
         spine.merge(_spine_of(data))
         spine.result()

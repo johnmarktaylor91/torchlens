@@ -35,13 +35,13 @@ import torch
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _LAZY_MODULE_CASES = (
-    ("fastlog", "record"),
-    ("intervention", "func"),
+    ("fastlog", "DryRun"),
+    ("intervention", "BoundModel"),
     ("user_funcs", "trace"),
-    ("data_classes", "Buffer"),
-    # r7 R81: the documented tl.autoroute.output spelling used to resolve
-    # only by import-order side effect (no lazy row).
-    ("autoroute", "output"),
+    # The record classes left the private data-classes package for tl.types.
+    ("types", "Buffer"),
+    # tl.viz members resolve only through its lazy table (no eager import).
+    ("viz", "attention"),
 )
 
 #: Third-party packages a bare ``import torchlens`` must never pull. FROZEN and
@@ -364,14 +364,13 @@ for facade_name, module_path in facades.items():
 # tip without any gate noticing -- the hand-list-outgrown-by-the-live-walk
 # failure class the oracles harness exists to catch.
 assert collisions == {
-    "accessors": [],
+    "appliances": [],
     # F29: the agent inspection surface -- children are cli plus
     # underscore-private modules; __all__ never collides with a child.
     "agent": [],
-    # T47/T48 (2026-08-28): attribution deliberately exports its onebackward
-    # child module (tl.attribution.onebackward is the documented door to the
-    # one-backward read surface), the fastlog/intervention pattern.
-    "attribution": ["onebackward"], "autoroute": ["input", "output"],
+    # The visuals rename removed the tl.attribution.onebackward export; the
+    # child module stays importable by its full path.
+    "attribution": [],
     "backends": [],
     # Entry/facade repair (workstream A10): the integration and appliance
     # namespaces gained root reachability rows; bridge/callbacks export
@@ -380,34 +379,37 @@ assert collisions == {
     # notebook deliberately exports its three real child modules (the
     # ``torchlens.bridge`` idiom: CardTree IR, the cards, the frontier query).
     "bridge": [
-        "brain_score", "captum", "depyf", "dialz", "gradcam", "hf",
-        "huggingface", "inseq", "lit", "mcp", "profiler", "pyreft",
-        "repeng", "rsatoolbox", "sae", "sae_lens", "shap",
-        "steering_vectors", "treescope",
+        "brain_score", "captum", "depyf", "dialz", "huggingface_hub", "inseq",
+        "lit", "mcp", "profiler", "pyreft", "pytorch_grad_cam", "repeng",
+        "rsatoolbox", "sae", "sae_lens", "shap", "steering_vectors",
+        "transformers", "treescope",
         # F21 tvscope B8: the per-site xarray/NeuroidAssembly adapter module.
         "xarray",
     ],
-    "brainpipe": [],
     "callbacks": ["lightning"],
     "neuro": [],
-    "notebook": ["cards", "cardtree", "frontier"],
     "captured_run": [],
     "compat": ["lovely", "torchextractor", "torchshow"],
-    "data_classes": [], "dataset_extraction": [], "debug": [], "distributed": [],
+    "dataset_extraction": [], "debug": [], "distributed": [],
     "errors": [], "examples": [],
     "experimental": ["dagua", "node_styles"], "export": [],
     # T48 reconcile: intervention's __all__ gained the compose child module
-    # (F02 stochastic-edit family) alongside sites.
-    "fastlog": ["dry_run", "recover"], "intervention": ["compose", "sites"],
-    "hash": [], "io": [], "ir": [], "merged": [], "observers": [], "options": [],
-    "partial": [], "quantities": [], "report": [], "repgeom": [],
+    # (F02 stochastic-edit family). The 2.x rename removed sites and renamed
+    # reference to population, the name of its defining child module (the
+    # function is bound over the submodule attribute at package import, as
+    # compose is).
+    "fastlog": ["dry_run", "recover"], "intervention": ["compose", "population"],
+    "fingerprint": [], "io": [], "observers": [], "options": [],
+    "report": [], "repgeom": [],
     "receptive_field": ["rules"], "stats": [],
     # C04: the transforms facade's children are all underscore-private.
     "transforms": [],
     "types": [], "user_funcs": [],
-    # F29: tl.utils gained a root row (the docs teach tl.utils.doctor()).
-    "utils": [],
-    "validation": [], "visualization": [], "viz": [],
+    "validation": [], "visualization": [],
+    # Visuals rename: tl.viz exports its nodes child module (the node-visual
+    # factories namespace), and the feature_maps function shares its module's
+    # name; the package imports the function eagerly, so the root keeps it.
+    "viz": ["feature_maps", "nodes"],
 }
 
 """
@@ -644,7 +646,7 @@ def test_bare_import_defers_lazified_feature_modules() -> None:
     _run_import_script(
         "import sys; import torchlens; "
         "blocked = ('torchlens.fastlog', 'torchlens.intervention', "
-        "'torchlens.user_funcs', 'torchlens.data_classes'); "
+        "'torchlens.user_funcs', 'torchlens._data_classes'); "
         "assert not any(name == prefix or name.startswith(prefix + '.') "
         "for prefix in blocked for name in sys.modules)"
     )
@@ -708,7 +710,7 @@ def test_torchvision_model_trace_still_covers_torchvision_ops() -> None:
     torchvision_models = pytest.importorskip("torchvision.models")
 
     import torchlens as tl
-    from torchlens.constants import TORCHVISION_FUNCS, get_orig_torch_funcs
+    from torchlens._constants import TORCHVISION_FUNCS, get_orig_torch_funcs
 
     wrapped_targets = set(get_orig_torch_funcs())
     assert set(TORCHVISION_FUNCS).issubset(wrapped_targets)
@@ -717,7 +719,7 @@ def test_torchvision_model_trace_still_covers_torchvision_ops() -> None:
     x = torch.randn(1, 3, 32, 32)
     trace = tl.trace(model, x, save=tl.func("conv2d"))
 
-    assert trace.num_layers > 0
+    assert len(trace.layers) > 0
     assert any(op.func_name == "conv2d" for op in trace.ops)
 
 

@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
+from torchlens._data_classes.layer import Layer
 from torchlens.visualization._render_common import GRADIENT_ARROW_COLOR
 
 
@@ -18,8 +18,8 @@ def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
     )
 

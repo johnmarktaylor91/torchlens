@@ -90,7 +90,7 @@ def test_reentered_recording_backward_restores_tensor_backward() -> None:
 
     trace = _armed_trace()
     original_backward = torch.Tensor.backward
-    context = trace.recording_backward()
+    context = trace.capture_backward()
     try:
         with context:
             with context:
@@ -189,7 +189,7 @@ def test_backward_finalize_drains_pending_cpu_async_copies() -> None:
     CUDA copy event (CPU-only hosts record no real events).
     """
 
-    from torchlens.utils import tensor_utils
+    from torchlens._utils import tensor_utils
 
     class _FenceSpy:
         """Pending-copy stand-in recording whether it was synchronized."""
@@ -226,8 +226,8 @@ def test_backward_graph_task_id_routes_through_torch_compat(
     ``getattr(torch._C, "_current_graph_task_id", None)`` probe bypassed it.
     """
 
+    from torchlens._utils import _torch_compat
     from torchlens.backends.torch import tensor_tracking
-    from torchlens.utils import _torch_compat
 
     assert hasattr(_torch_compat, "HAS_CURRENT_GRAPH_TASK_ID")
     assert "HAS_CURRENT_GRAPH_TASK_ID" in _torch_compat._CAPABILITY_ATTRS
@@ -242,7 +242,7 @@ def test_backward_graph_task_id_routes_through_torch_compat(
 
 @pytest.mark.parametrize("save_mode", ["reference", "view"])
 def test_legacy_grad_slot_stores_snapshot_not_alias(save_mode: str) -> None:
-    """``Op.log_tensor_grad`` snapshots the observed gradient under all modes.
+    """``Op._log_tensor_grad`` snapshots the observed gradient under all modes.
 
     The legacy backward-hook write went through ``safe_copy(save_mode=...)``,
     which returns a storage ALIAS under ``reference``/``view``. Output-layer
@@ -326,7 +326,7 @@ def test_saved_grad_hook_clones_once_and_transforms_once() -> None:
     )
     trace.log_backward(_loss(trace))
 
-    from torchlens.ir.events import OpGradObserved
+    from torchlens._ir.events import OpGradObserved
 
     grad_events = [e for e in trace.backward_events if isinstance(e, OpGradObserved)]
     fired = [

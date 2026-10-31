@@ -6,17 +6,17 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any
 
-from torchlens import constants
+from torchlens import _constants as constants
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
+from torchlens._data_classes.trace import Trace
 from torchlens._io import FieldPolicy
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.grad_fn_call import GradFnCall
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
-from torchlens.data_classes.trace import Trace
 
 # Static contract checks over constants only: cheap enough for the commit-level
 # gate, which is exactly where a schema drift has to become visible (the
@@ -256,7 +256,7 @@ def test_field_order_names_are_unique_and_backed() -> None:
         duplicates = _duplicates(case.field_order)
         assert not duplicates, f"{case.name} FIELD_ORDER duplicates: {duplicates}"
 
-        portable_fields = set(case.cls.PORTABLE_STATE_SPEC)
+        portable_fields = set(case.cls._PORTABLE_STATE_SPEC)
         class_fields = set(dir(case.cls))
         missing_backing = [
             field
@@ -272,7 +272,7 @@ def test_portable_state_display_fields_are_in_field_order_or_documented() -> Non
     for case in FIELD_ORDER_CASES:
         portable_display_fields = {
             field
-            for field, policy in case.cls.PORTABLE_STATE_SPEC.items()
+            for field, policy in case.cls._PORTABLE_STATE_SPEC.items()
             if policy not in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}
         }
         missing_from_order = portable_display_fields - set(case.field_order)
@@ -288,7 +288,7 @@ def test_field_order_drop_policy_fields_are_documented() -> None:
         dropped_in_order = {
             field
             for field in case.field_order
-            if case.cls.PORTABLE_STATE_SPEC.get(field)
+            if case.cls._PORTABLE_STATE_SPEC.get(field)
             in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}
         }
         assert dropped_in_order == case.dropped_display_fields, (
@@ -313,7 +313,7 @@ def test_known_glossary_aliases_have_backed_field_order_names() -> None:
 
     assert "has_op" in constants.GRAD_FN_LOG_FIELD_ORDER
     assert "is_intervening" not in constants.GRAD_FN_LOG_FIELD_ORDER
-    assert "has_op" in GradFn.PORTABLE_STATE_SPEC
+    assert "has_op" in GradFn._PORTABLE_STATE_SPEC
 
 
 def _duplicates(values: Collection[str]) -> list[str]:

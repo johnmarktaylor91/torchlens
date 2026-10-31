@@ -142,7 +142,7 @@ _GREP_SKIP_PREFIXES = (
     "_decomp",
     "_prims",
     "_meta_registrations",
-    "utils/_sympy",
+    "_utils/_sympy",
 )
 
 # (relative source path, attribute name) pairs reviewed 2026-08-14:
@@ -617,7 +617,7 @@ class TestUnwrapSafety:
     def test_admission_epoch_check_refuses_unwrapped_process(self):
         # R54 second half: a capture admitted AFTER a concurrent unwrap
         # completes must refuse typed rather than run an unlogged forward.
-        from torchlens._errors import CaptureContextError
+        from torchlens._errors import CaptureNotActiveError
         from torchlens.backends.torch.backend import TorchBackend
 
         _ensure_wrapped()
@@ -625,7 +625,7 @@ class TestUnwrapSafety:
         saved = _state._is_decorated
         try:
             _state._is_decorated = False
-            with pytest.raises(CaptureContextError) as exc_info:
+            with pytest.raises(CaptureNotActiveError) as exc_info:
                 with TorchBackend().active_logging(session):
                     pass
             assert exc_info.value.fields["code"] == "wrappers_removed_before_capture"
@@ -689,7 +689,7 @@ class TestUnwrapSafety:
 
 
 def _has_fastpath_flag() -> bool:
-    from torchlens.utils import _torch_compat
+    from torchlens._utils import _torch_compat
 
     return bool(getattr(_torch_compat, "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG", False))
 
@@ -779,9 +779,9 @@ def test_import_callback_unwrap_race_cannot_corrupt_shim_state(
 
     import threading
 
+    from torchlens._utils import _torch_compat
     from torchlens.backends.torch import identity_shims
     from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-    from torchlens.utils import _torch_compat
 
     if not _torch_compat.HAS_ATTENTION_CAUSAL_BIAS:
         pytest.skip("causal-bias site absent on this torch")
@@ -1069,8 +1069,8 @@ def _inventory_namespaces() -> list[tuple[str, Any]]:
     those the gate was structurally unable to fail.
     """
 
-    from torchlens.constants import get_orig_torch_funcs
-    from torchlens.utils._torch_compat import get_optional_torch_namespace
+    from torchlens._constants import get_orig_torch_funcs
+    from torchlens._utils._torch_compat import get_optional_torch_namespace
 
     resolved: list[tuple[str, Any]] = []
     for ns_name in sorted({ns for ns, _ in get_orig_torch_funcs()}):
@@ -1140,8 +1140,8 @@ def test_curated_roster_rows_resolve_to_live_sites() -> None:
     is removed.
     """
 
-    from torchlens.constants import get_orig_torch_funcs
-    from torchlens.utils._torch_compat import get_optional_torch_namespace
+    from torchlens._constants import get_orig_torch_funcs
+    from torchlens._utils._torch_compat import get_optional_torch_namespace
 
     _ensure_wrapped()
     dead: set[tuple[str, str]] = set()

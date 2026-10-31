@@ -4,12 +4,12 @@
 user-held Trace, and validation ENTRY unconditionally writes the failure side
 channel: ``reset_validation_failure`` sets ``_last_validation_failure = None``
 on every run (``validation/core.py``), and non-failing diagnostics accumulate
-in ``_validation_diagnostics``. Neither name had a ``PORTABLE_STATE_SPEC`` /
+in ``_validation_diagnostics``. Neither name had a ``_PORTABLE_STATE_SPEC`` /
 ``FIELD_POLICY`` row, so the portable scrub's undeclared-field audit rejected
 them and a plain validate-then-save sequence died with
 
-    TorchLensIOError: Trace._last_validation_failure is missing from
-    PORTABLE_STATE_SPEC
+    ArtifactError: Trace._last_validation_failure is missing from
+    _PORTABLE_STATE_SPEC
 
 Both are session-time diagnostics carried on the trace as a side channel --
 the ``_fast_run_session`` class -- so they are declared ``FieldPolicy.DROP``.
@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.field_policy import FieldPolicy
+from torchlens._data_classes.field_policy import FieldPolicy
 from torchlens.validation.diagnostics import (
     TRACE_DIAGNOSTICS_ATTR,
     TRACE_FAILURE_ATTR,
@@ -73,7 +73,7 @@ def test_validate_then_save_round_trips(tmp_path) -> None:
     # Validation entry writes the side channel unconditionally, even on a pass.
     assert TRACE_FAILURE_ATTR in trace.__dict__
     path = tmp_path / "validated.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     # DROP scrubs the VALUE to None (the key stays, like every other DROP
     # row); no session-time diagnostic reaches the portable artifact.
@@ -92,16 +92,18 @@ def test_save_after_a_recorded_failure_payload_round_trips(tmp_path) -> None:
     trace, _ = _traced()
     record_validation_failure(
         trace,
-        ValidationFailure(check="probe_check", message="probe message", extra={"op": "relu_1_1"}),
+        ValidationFailure(
+            check_name="probe_check", message="probe message", extra={"op": "relu_1_1"}
+        ),
     )
     record_validation_diagnostic(
         trace,
-        ValidationDiagnostic(check="probe_diag", message="probe diag", extra={"n": 1}),
+        ValidationDiagnostic(check_name="probe_diag", message="probe diag", extra={"n": 1}),
     )
     assert isinstance(trace.__dict__[TRACE_FAILURE_ATTR], ValidationFailure)
     assert trace.__dict__[TRACE_DIAGNOSTICS_ATTR]
     path = tmp_path / "failed_validation.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     # The whole record is gone -- not a partially-portable ValidationFailure.
     for name in _SIDE_CHANNEL_ATTRS:
@@ -118,7 +120,7 @@ def test_repeated_validate_save_cycles_stay_saveable(tmp_path) -> None:
     trace, ground_truth = _traced()
     for index in range(3):
         trace.validate_forward_pass([ground_truth])
-        tl.save(trace, str(tmp_path / f"cycle_{index}.tlspec"))
+        trace.save(str(tmp_path / f"cycle_{index}.tlspec"))
 
 
 def test_side_channel_survives_plain_pickle_like_fast_run_session() -> None:
@@ -133,7 +135,7 @@ def test_side_channel_survives_plain_pickle_like_fast_run_session() -> None:
     import pickle
 
     trace, _ = _traced()
-    record_validation_failure(trace, ValidationFailure(check="probe_check"))
+    record_validation_failure(trace, ValidationFailure(check_name="probe_check"))
     restored = pickle.loads(pickle.dumps(trace))
     assert TRACE_FAILURE_ATTR in restored.__dict__
 

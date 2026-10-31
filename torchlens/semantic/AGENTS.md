@@ -9,11 +9,11 @@
   `reset()`, `using()` (contextvar-scoped extra recipes), `list()`, `info()`,
   `snapshot()`, `mark_current_registry_as_builtins()`.
 - View machinery: `FacetView` (a `Mapping` built per record), `Facet`,
-  `AttentionHeadView`, `FacetSpec`, `TransformPrimitive`, `FacetRecipe`,
+  `AttentionHeadView`, `FacetSpec`, `TransformPrimitive`, `FacetFunction`,
   `FacetMenuItem`, `FacetRegistrySnapshot`, `FacetCapabilityFlags`.
 - Absence is typed, never silent: `MissingFacet`, `MissingFacetError`,
   `MissingGradient`, `AbsenceReason`.
-- TransformerLens-style names: `enable_transformerlens_aliases()` /
+- TransformerLens-style names: `enable_transformer_lens_aliases()` /
   `transformer_lens_aliases_enabled()` toggle `_TRANSFORMERLENS_ALIAS_TO_NATIVE`.
 - Registry state is module-global (`_REGISTRY`, `_REGISTRY_VERSION`); `using()`
   layers recipes through the `_CONTEXT_RECIPES` contextvar.
@@ -24,12 +24,12 @@
   vocabulary (architecture knowledge stays in recipes). The reconstructed lens
   is VALIDATED against the captured last-block `resid_post` -> logits pair and
   refuses (`LogitLensError`) on mismatch; `lens=` supplies a user lens,
-  `validate=False` is the explicit opt-out. Results: `LogitLensResult` /
+  `verify=False` is the explicit opt-out. Results: `LogitLens` /
   `LogitLensEntry` (`stacked()`, `top_tokens()`, `summary()`). All spellings
   DOCUMENTED-UNSTABLE.
 
 ## coverage.py
-- `facet_coverage(trace)` -> `FacetCoverageReport` (`ModuleCoverageRow` per
+- `facet_coverage(trace)` (public as `tl.facets.coverage`) -> `FacetCoverageReport` (`ModuleCoverageRow` per
   module): recipes matched, readable facets, typed absences, structural-only
   candidates, and disclosed `unresolved` rows for multi-call facet refusals.
   Input to `tools/facet_maintenance/` (proposals only; recipes are NEVER
@@ -64,7 +64,7 @@
   silently: it parses into the index map or the walk stops at it, named.
 
 ## recipes/ subpackage
-- Builtin recipes live in `attention.py`, `embedding.py`, `lm_head.py`,
+- Builtin recipes live in `attention.py`, `embedding_module.py`, `lm_head.py`,
   `mlp.py`, `norm.py`, `residual.py`; each function is registered with a
   `@register(...)` decorator at import time (e.g. `gpt2_attention`,
   `gated_mlp`, `layer_norm`, `transformer_residuals`, `language_model_head`).

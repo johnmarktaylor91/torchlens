@@ -4,7 +4,7 @@ A comprehensive audit found two defense-in-depth gaps in the default-deny
 callable/import resolution for attacker-controllable ``.tlspec`` bundles:
 
 * E1 (MEDIUM): the hard module denylists (``_DENIED_MODULES`` in
-  ``torchlens.utils._callable_safety`` and its mirrored
+  ``torchlens._utils._callable_safety`` and its mirrored
   ``_DENIED_FOREIGN_MODULES`` in ``torchlens._io._safe_unpickle``) omitted the
   stdlib exec/spawn/install class, so under ``trust_custom_callables=True`` the
   resolver handed back live callables for e.g. ``pdb:run`` / ``timeit:timeit``
@@ -29,9 +29,9 @@ import pytest
 import torch
 
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
+from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_import_ref
-from torchlens.utils._callable_safety import is_pure_forward_callable
 
 # The exec/spawn/install stdlib refs the audit proved resolvable under trust.
 _EXEC_SPAWN_INSTALL_REFS = [

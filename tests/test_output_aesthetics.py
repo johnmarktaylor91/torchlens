@@ -154,7 +154,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_section(f"Model: {name} — {description}", level=1))
 
     # Log the forward pass
-    log = trace_fn(model, x, capture=CaptureOptions(random_seed=42))
+    log = trace_fn(model, x, capture=CaptureOptions(seed=42))
 
     # ===== A. Trace Overview =====
     out.write(_section("A. Trace Overview", level=2))
@@ -215,7 +215,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_capture("log.modules.summary()", log.modules.summary()))
 
     # Multi-pass module info (for recurrent models)
-    if log.is_recurrent:
+    if log.graph.is_recurrent:
         for ml in log.modules:
             if ml.num_calls > 1 and ml.address != "self":
                 out.write(
@@ -325,8 +325,8 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 pass
 
         # Show that buffer is also accessible as a layer (isinstance check)
-        from torchlens.data_classes.buffer import Buffer
-        from torchlens.data_classes.op import Op
+        from torchlens._data_classes.buffer import Buffer
+        from torchlens._data_classes.op import Op
 
         out.write(f"  isinstance(log.buffers[0], Buffer): {isinstance(first_buf, Buffer)}\n")
         out.write(f"  isinstance(log.buffers[0], Op): {isinstance(first_buf, Op)}\n")
@@ -381,7 +381,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 break
 
     # ===== D.1 Layer =====
-    if log.is_recurrent and len(log.layer_logs) > 0:
+    if log.graph.is_recurrent and len(log.layer_logs) > 0:
         out.write(_section("D.1 Layer (multi-pass)", level=3))
         for ll in log.layer_logs.values():
             if ll.num_passes > 1:
@@ -438,7 +438,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_section("F.2 Op field dump", level=3))
     tensor_for_dump = None
     for entry in log.layer_list:
-        if entry.uses_params:
+        if entry.has_params:
             tensor_for_dump = entry
             break
     if tensor_for_dump is None:
@@ -447,7 +447,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_field_dump(tensor_for_dump, f"Op: {tensor_for_dump.layer_label}"))
 
     # F.3 Layer (multi-pass)
-    if log.is_recurrent and len(log.layer_logs) > 0:
+    if log.graph.is_recurrent and len(log.layer_logs) > 0:
         out.write(_section("F.3 Layer field dump (multi-pass)", level=3))
         ll_for_dump = None
         for ll in log.layer_logs.values():
@@ -493,7 +493,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
         out.write(_section("G. Gradient System (save_grads=True + backward)", level=2))
         try:
             grad_log = trace_fn(
-                model, x, capture=tl.options.CaptureOptions(save_grads=True, random_seed=42)
+                model, x, capture=tl.options.CaptureOptions(save_grads=True, seed=42)
             )
             output_label = grad_log.output_layers[0]
             output_tensor = grad_log[output_label].out
@@ -1030,7 +1030,7 @@ def _build_latex_report() -> str:
 
     for name, model_cls, x, description in AESTHETIC_TEXT_MODELS:
         model = model_cls()
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(random_seed=42))
+        log = trace_fn(model, x, capture=tl.options.CaptureOptions(seed=42))
         doc.write(f"\\subsection{{{_tex_escape(name)} --- {_tex_escape(description)}}}\n\n")
 
         # A. Model Summary
@@ -1073,7 +1073,7 @@ def _build_latex_report() -> str:
         doc.write(_verbatim_box("D. Last Layer — repr(log[-1])", repr(log[-1])))
 
         # D.1 Layer (multi-pass)
-        if log.is_recurrent and len(log.layer_logs) > 0:
+        if log.graph.is_recurrent and len(log.layer_logs) > 0:
             for ll in log.layer_logs.values():
                 if ll.num_passes > 1:
                     doc.write(
@@ -1085,7 +1085,7 @@ def _build_latex_report() -> str:
                     break
 
         # Multi-pass module
-        if log.is_recurrent:
+        if log.graph.is_recurrent:
             for ml in log.modules:
                 if ml.num_calls > 1 and ml.address != "self":
                     ops_text = repr(ml) + "\n\n"
@@ -1145,7 +1145,7 @@ def _build_latex_report() -> str:
         # Op field dump — pick a layer with params
         tensor_for_dump = None
         for entry in log.layer_list:
-            if entry.uses_params:
+            if entry.has_params:
                 tensor_for_dump = entry
                 break
         if tensor_for_dump is None:
@@ -1402,7 +1402,7 @@ def _vis(
         view=vis_mode,
         depth=depth,
         code_panel=code_panel,
-        random_seed=42,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
             container_path=opj(VIS_DIR, filename),
             save_only=True,
@@ -1429,15 +1429,15 @@ def _vis_grad(
     """
     pdf_path = Path(VIS_DIR) / f"{filename}.pdf"
     pdf_path.unlink(missing_ok=True)
-    log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True, random_seed=42))
+    log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True, seed=42))
     output = log[log.output_layers[0]].out
     output.sum().backward()
     log.draw(
         vis_mode=vis_mode,
         vis_call_depth=depth,
-        vis_outpath=opj(VIS_DIR, filename),
+        path=opj(VIS_DIR, filename),
         vis_save_only=True,
-        vis_fileformat="pdf",
+        file_format="pdf",
         direction=direction,
     )
     _assert_generated_pdf(pdf_path)
@@ -1577,8 +1577,8 @@ class TestVisualizationBugfixes:
         try:
             log.draw(
                 vis_save_only=True,
-                vis_outpath=str(outpath),
-                vis_fileformat="pdf",
+                path=str(outpath),
+                file_format="pdf",
             )
 
             assert outpath.with_suffix(".pdf").exists()
@@ -1617,8 +1617,8 @@ class TestVisualizationBugfixes:
             with pytest.raises(GraphvizRenderError):
                 log.draw(
                     vis_save_only=True,
-                    vis_outpath=str(outpath),
-                    vis_fileformat="pdf",
+                    path=str(outpath),
+                    file_format="pdf",
                 )
 
             # On failure the DOT source (saved at vis_outpath) is KEPT for debugging,
@@ -1667,14 +1667,14 @@ class TestVisualizationBugfixes:
         try:
             node_mark = log.draw(
                 vis_save_only=True,
-                vis_outpath=opj(VIS_DIR, "test_intervention_node_mark"),
-                vis_fileformat="dot",
+                path=opj(VIS_DIR, "test_intervention_node_mark"),
+                file_format="dot",
                 vis_intervention_mode="node_mark",
             )
             as_node = log.draw(
                 vis_save_only=True,
-                vis_outpath=opj(VIS_DIR, "test_intervention_as_node"),
-                vis_fileformat="dot",
+                path=opj(VIS_DIR, "test_intervention_as_node"),
+                file_format="dot",
                 vis_intervention_mode="as_node",
             )
             assert "#7B1FA2" in node_mark and "tl_edited" in node_mark
@@ -1726,7 +1726,7 @@ class TestVisModuleListFormat:
         log = trace_fn(model, torch.randn(2, 10))
         pdf_path = Path(VIS_DIR) / "test_nested_modules.pdf"
         pdf_path.unlink(missing_ok=True)
-        dot = log.draw(vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_nested_modules"))
+        dot = log.draw(vis_save_only=True, path=opj(VIS_DIR, "test_nested_modules"))
         # A no-op renderer would return "" and write nothing; assert real output.
         assert isinstance(dot, str) and "digraph" in dot
         _assert_generated_pdf(pdf_path)

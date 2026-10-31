@@ -19,8 +19,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._ir.events import BackwardPassEnd, BackwardPassStart
 from torchlens.backends.torch import backward as backward_mod, tensor_tracking as tracking_mod
-from torchlens.ir.events import BackwardPassEnd, BackwardPassStart
 
 _HAS_GRAPH_TASK_ID = hasattr(torch._C, "_current_graph_task_id")
 
@@ -96,14 +96,14 @@ def test_star_journal_only_close_then_immediate_read_fences_before_records(monke
 
     monkeypatch.setattr(backward_mod, "_materialize_backward_projections", recording_materialize)
     monkeypatch.setattr(backward_mod, "synchronize_pending_cpu_async_copies", recording_fence)
-    assert len(trace.backward_passes) == 0
+    assert len(trace.autograd.backward_passes) == 0
     assert materialize_calls == []
     assert backward_mod._backward_finalize_pending(trace)
 
     # First post-pass read: FINALIZE runs fully, fence strictly before the
     # projection makes records reachable.
     monkeypatch.setattr(backward_mod, "_current_backward_graph_task_id", lambda: None)
-    passes = trace.backward_passes
+    passes = trace.autograd.backward_passes
     assert len(passes) == 1
     assert materialize_calls[0] == "fence"
     assert "materialize" in materialize_calls
@@ -152,12 +152,12 @@ def test_star_engine_drain_and_sync_point_project_identical_records(monkeypatch)
     assert drain_paths.count("engine_drain") == 1
     assert sync_paths == ["sync_point"]
 
-    from torchlens.ir.events import OpGradObserved
+    from torchlens._ir.events import OpGradObserved
 
     # Implicit (unmanaged) passes carry no walked grad-fn hooks; their
     # projected records are the pass records plus op/param gradient events.
-    drained_passes = list(drained.backward_passes)
-    synced_passes = list(synced.backward_passes)
+    drained_passes = list(drained.autograd.backward_passes)
+    synced_passes = list(synced.autograd.backward_passes)
     assert len(drained_passes) == len(synced_passes) == 1
 
     def _op_grad_payloads(trace: tl.Trace) -> dict[tuple[str, int], torch.Tensor]:
@@ -210,7 +210,7 @@ def test_engine_drain_journals_close_without_any_read() -> None:
     # FINALIZE deferred by construction (the drain runs inside the engine
     # invocation); the first read settles it.
     assert backward_mod._backward_finalize_pending(trace)
-    assert len(trace.backward_passes) == 1
+    assert len(trace.autograd.backward_passes) == 1
     assert not backward_mod._backward_finalize_pending(trace)
     trace.cleanup()
 
@@ -336,7 +336,7 @@ def test_finalize_never_runs_inside_an_engine_invocation(monkeypatch) -> None:
     trace = _plain_trace()
     _run_unmanaged_backward(trace)
     backward_mod._close_implicit_backward_pass_if_open(trace)
-    assert len(trace.backward_passes) == 1
+    assert len(trace.autograd.backward_passes) == 1
     assert observed, "materialize never observed"
     assert all(task_id is None for task_id in observed)
     trace.cleanup()

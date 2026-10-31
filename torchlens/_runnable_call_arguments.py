@@ -8,6 +8,14 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ._runnable import (
+    CallableRegistryEntry,
+    RunnableCallDescriptor,
+    RunnableErrorCode,
+    SparseRunDescriptor,
+    TensorSlotDescriptor,
+    TensorSlotRole,
+)
 from ._runnable_retention import _fail_open_unless_admitted
 from ._runnable_state import (
     _OUTPUT_COUNT_FLOOR,
@@ -20,14 +28,6 @@ from .errors import (
     RunCapabilityUnavailableError,
     RunPreconditionError,
     RuntimeSignatureDriftError,
-)
-from .runnable import (
-    CallableRegistryEntry,
-    RunnableCallDescriptor,
-    RunnableErrorCode,
-    SparseRunDescriptor,
-    TensorSlotDescriptor,
-    TensorSlotRole,
 )
 
 if TYPE_CHECKING:

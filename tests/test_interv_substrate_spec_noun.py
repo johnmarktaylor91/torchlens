@@ -14,8 +14,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import Recipe
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
-from torchlens.intervention import InterventionSpec
 from torchlens.intervention.spec import classify_where
 
 
@@ -45,7 +45,7 @@ def _ready_trace(model: nn.Module) -> tl.Trace:
 
 def test_when_returns_immutable_public_spec() -> None:
     spec = tl.when(tl.func("relu"), tl.scale(0.0))
-    assert isinstance(spec, InterventionSpec)
+    assert isinstance(spec, Recipe)
     assert len(spec.rules) == 1
     assert spec.rules[0].rule_id.startswith("r-")
     with pytest.raises((AttributeError, TypeError)):
@@ -59,15 +59,15 @@ def test_rule_ids_distinguish_action_arguments() -> None:
     in any edit parameter must produce different canonical identity.
     """
 
-    low = tl.when(tl.func("relu"), tl.noise(std=0.1))
-    high = tl.when(tl.func("relu"), tl.noise(std=0.9))
+    low = tl.when(tl.func("relu"), tl.add_noise(std=0.1))
+    high = tl.when(tl.func("relu"), tl.add_noise(std=0.9))
     assert low.rules[0].rule_id != high.rules[0].rule_id
-    assert low.spec_digest != high.spec_digest
+    assert low.digest != high.digest
 
 
 def test_merge_preserves_rule_ids_and_refuses_duplicates() -> None:
     a = tl.when(tl.func("relu"), tl.scale(0.0))
-    b = tl.when(tl.func("linear"), tl.noise(std=0.1))
+    b = tl.when(tl.func("linear"), tl.add_noise(std=0.1))
     merged = a.merge(b)
     assert [rule.rule_id for rule in merged.rules] == [
         a.rules[0].rule_id,
@@ -98,7 +98,7 @@ def test_where_term_must_be_callable() -> None:
 
 def test_spec_clauses_must_be_intervention_rules() -> None:
     with pytest.raises(ArgumentTypeError) as excinfo:
-        InterventionSpec(rules=("not a rule",))  # type: ignore[arg-type]
+        Recipe(rules=("not a rule",))  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "intervention_rule_type_invalid"
 
 
@@ -217,7 +217,7 @@ def test_sweep_spec_values_conflicts_refuse_typed() -> None:
         sweep(model, torch.randn(2, 4), values=[spec, 0.5])
     assert excinfo.value.fields["code"] == "sweep_spec_values_mixed"
     with pytest.raises(InvalidArgumentError) as excinfo:
-        sweep(model, torch.randn(2, 4), at="relu", values=[spec])
+        sweep(model, torch.randn(2, 4), site="relu", values=[spec])
     assert excinfo.value.fields["code"] == "sweep_spec_at_conflict"
 
 
@@ -227,7 +227,7 @@ def test_sweep_values_ride_typed_helper_specs() -> None:
     from torchlens.intervention.sweep import sweep
 
     model = _TinyModel()
-    bundle = sweep(model, torch.randn(2, 4), at="relu", values=[0.0, 1.5])
+    bundle = sweep(model, torch.randn(2, 4), site="relu", values=[0.0, 1.5])
     member_values = [float(trace["relu_1_2"].out.flatten()[0]) for trace in bundle.members.values()]
     assert member_values == [0.0, 1.5]
 
@@ -236,7 +236,7 @@ def test_backward_rules_of_multi_clause_spec_not_dropped() -> None:
     """A multi-clause spec's backward rule builds its sticky backward hook."""
 
     model = _TinyModel()
-    spec = tl.when(tl.grad_fn(type="relu"), tl.grad_zero()).merge(
+    spec = tl.when(tl.grad_fn(name="relu"), tl.zero_grad()).merge(
         tl.when(tl.in_module("fc1"), tl.scale(1.0))
     )
     x = torch.randn(2, 4, requires_grad=True)

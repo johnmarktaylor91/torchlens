@@ -73,7 +73,7 @@ def test_raw_nan_aborts_even_when_transform_sanitizes() -> None:
             capture=tl.options.CaptureOptions(raise_on_nan=True),
             save=tl.options.SaveOptions(activation_transform=sanitize),
         )
-    outcome = tl.partial.from_failed_capture(exc_info.value).trace.outcome
+    outcome = tl._partial.from_failed_capture(exc_info.value).trace.outcome
     assert outcome.status is CaptureStatus.ABORTED_NONFINITE
 
 
@@ -87,7 +87,7 @@ def test_no_frontier_halt_settles_failed_finalize(monkeypatch) -> None:
 
     import torchlens.backends.torch.ops as torch_ops
     from torchlens import _state
-    from torchlens.fastlog._halt import HaltSignal
+    from torchlens.fastlog._halt import StopSignal
 
     original = torch_ops.evaluate_halt_stop
 
@@ -108,12 +108,12 @@ def test_no_frontier_halt_settles_failed_finalize(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match="could not identify a tensor frontier") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=_halt_and_orphan)
-    assert isinstance(exc_info.value.__cause__, HaltSignal)
+    assert isinstance(exc_info.value.__cause__, StopSignal)
     outcome = captured[0].outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
     assert outcome.phase is CapturePhase.FINALIZE
-    assert "halted finalization failed" in (outcome.settlement_note or "")
+    assert "halted finalization failed" in (outcome.note or "")
 
 
 def test_never_fired_halt_predicate_stays_complete() -> None:
@@ -141,12 +141,12 @@ def test_cooked_halted_trace_refuses_runnable_save_and_live_replay(tmp_path) -> 
         halt=halt_on_relu,
     )
     cooked = recording.to_trace()
-    assert cooked.outcome.status is CaptureStatus.HALTED
+    assert cooked.outcome.status is CaptureStatus.STOPPED
 
     from torchlens.errors import RunnablePreflightError
 
     with pytest.raises(RunnablePreflightError):
-        tl.save(cooked, tmp_path / "cooked_halted.tlspec", level="runnable", overwrite=True)
+        cooked.save(tmp_path / "cooked_halted.tlspec", level="runnable", overwrite=True)
     with pytest.raises(CaptureOutcomeError) as exc_info:
         cooked.push()
     assert exc_info.value.fields["code"] == "N5"
@@ -158,7 +158,7 @@ def test_cooked_halted_trace_refuses_runnable_save_and_live_replay(tmp_path) -> 
 
 
 def test_memory_error_in_postprocess_settles_failed(monkeypatch) -> None:
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
 
     captured: list = []
 
@@ -189,7 +189,7 @@ def test_gated_entries_consult_the_chokepoint() -> None:
     consumer of the capability table.
     """
 
-    validation_source = (TORCHLENS_DIR / "data_classes" / "_trace_validation.py").read_text(
+    validation_source = (TORCHLENS_DIR / "_data_classes" / "_trace_validation.py").read_text(
         encoding="utf-8"
     )
     gate_calls = re.findall(r'require_capture_capability\(self, "([a-z_]+)"\)', validation_source)

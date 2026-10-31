@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 from ..._errors import InvalidArgumentError
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 __all__ = [
     "SOURCE_FAMILIES",

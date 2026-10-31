@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.bridge.hf as hf_bridge
+import torchlens.bridge.transformers as hf_bridge
 import torchlens.user_funcs as user_funcs
 
 
@@ -127,7 +127,7 @@ def test_dict_transform_override_skips_multimodal_autoroute(
         nn.Linear(1, 1),
         {"text": "hello", "images": _pil_image()},
         capture=tl.options.CaptureOptions(
-            transform=lambda value: torch.ones(1), layers_to_save="none"
+            input_transform=lambda value: torch.ones(1), layers_to_save="none"
         ),
     )
 

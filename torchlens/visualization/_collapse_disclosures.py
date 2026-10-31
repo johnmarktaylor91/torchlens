@@ -13,12 +13,12 @@ import warnings
 import weakref
 from typing import TYPE_CHECKING
 
+from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
-from ..utils.display import user_stacklevel
 
 if TYPE_CHECKING:
+    from .._data_classes.trace import Trace
     from .._literals import CollapseLiteral
-    from ..data_classes.trace import Trace
     from .collapse_optimizer import OptimizerResult
     from .collapse_plan import RenderContext
 

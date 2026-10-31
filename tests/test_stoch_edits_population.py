@@ -10,17 +10,18 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.intervention import OneDatum, PerRowDatums, reference
+from torchlens.intervention import population
+from torchlens.intervention.population import OneDatum, PerRowDatums
 
 
 def test_origin_is_required_and_nonempty() -> None:
     """D2/DIS-3: a population without recorded provenance refuses typed."""
 
     with pytest.raises(Exception) as excinfo:
-        reference(torch.randn(3, 2), origin="")
+        population(torch.randn(3, 2), origin="")
     assert excinfo.value.fields["code"] == "population_origin_required"
     with pytest.raises(Exception) as excinfo:
-        reference(torch.randn(3, 2), origin="   ")
+        population(torch.randn(3, 2), origin="   ")
     assert excinfo.value.fields["code"] == "population_origin_required"
 
 
@@ -28,26 +29,26 @@ def test_tensor_stack_members_are_axis0_slices_with_content_digest() -> None:
     """The noun's documented stacking contract + the mandatory D11 digest."""
 
     stack = torch.arange(12, dtype=torch.float32).reshape(3, 4)
-    ref = reference(stack, origin="unit stack")
+    ref = population(stack, origin="unit stack")
     assert len(ref) == 3
     assert ref.kind == "tensor"
     assert ref.digest_kind == "content"
     assert torch.equal(ref.members[1], stack[1])
     # Same bytes + same origin -> same identity; different origin -> different.
-    twin = reference(stack.clone(), origin="unit stack")
-    assert twin.population_identity == ref.population_identity
-    other = reference(stack.clone(), origin="different provenance")
-    assert other.population_identity != ref.population_identity
+    twin = population(stack.clone(), origin="unit stack")
+    assert twin.identity == ref.identity
+    other = population(stack.clone(), origin="different provenance")
+    assert other.identity != ref.identity
 
 
 def test_member_sequence_heterogeneous_refuses() -> None:
     """A donor population is one homogeneous stack."""
 
     with pytest.raises(Exception) as excinfo:
-        reference([torch.randn(3), torch.randn(4)], origin="x")
+        population([torch.randn(3), torch.randn(4)], origin="x")
     assert excinfo.value.fields["code"] == "population_heterogeneous"
     with pytest.raises(Exception) as excinfo:
-        reference([torch.randn(3), torch.randn(3).to(torch.float64)], origin="x")
+        population([torch.randn(3), torch.randn(3).to(torch.float64)], origin="x")
     assert excinfo.value.fields["code"] == "population_heterogeneous"
 
 
@@ -55,7 +56,7 @@ def test_datum_count_mismatch_refuses() -> None:
     """Every member carries exactly one datum, aligned by order."""
 
     with pytest.raises(Exception) as excinfo:
-        reference(torch.randn(3, 2), origin="x", data=["a", "b"])
+        population(torch.randn(3, 2), origin="x", data=["a", "b"])
     assert excinfo.value.fields["code"] == "population_datum_count_mismatch"
 
 
@@ -64,10 +65,10 @@ def test_empty_and_unsupported_sources_refuse() -> None:
     """Zero members and non-population sources refuse typed."""
 
     with pytest.raises(Exception) as excinfo:
-        reference(torch.randn(0, 4), origin="x")
+        population(torch.randn(0, 4), origin="x")
     assert excinfo.value.fields["code"] == "population_empty"
     with pytest.raises(Exception) as excinfo:
-        reference(12345, origin="x")
+        population(12345, origin="x")
     assert excinfo.value.fields["code"] == "population_source_invalid"
 
 
@@ -76,12 +77,12 @@ def test_reducers_are_deterministic_tensors() -> None:
     """D3: mean/std are reductions over the member stack, never draws."""
 
     stack = torch.stack([torch.zeros(4), torch.ones(4) * 2.0])
-    ref = reference(stack, origin="means")
+    ref = population(stack, origin="means")
     assert torch.equal(ref.mean(), torch.ones(4))
     assert torch.allclose(ref.std(), torch.full((4,), 2.0**0.5))
     # over='all' reduces to a scalar; explicit axes keepdim-reduce.
     assert ref.mean("all").ndim == 0
-    per_axis = reference(torch.arange(8, dtype=torch.float32).reshape(2, 4), origin="ax")
+    per_axis = population(torch.arange(8, dtype=torch.float32).reshape(2, 4), origin="ax")
     reduced = per_axis.mean(0)
     assert tuple(reduced.shape) == (1,)
 
@@ -90,7 +91,7 @@ def test_reducer_accumulates_reduced_precision_in_float32() -> None:
     """A11: bf16 members accumulate in float32 and cast back."""
 
     members = torch.randn(64, 8).to(torch.bfloat16)
-    ref = reference(members, origin="bf16 pop")
+    ref = population(members, origin="bf16 pop")
     result = ref.mean()
     assert result.dtype == torch.bfloat16
     oracle = members.to(torch.float32).mean(dim=0).to(torch.bfloat16)
@@ -102,7 +103,7 @@ def test_reducer_agreement_and_refusals() -> None:
     """Conditioned reductions honor agreement classes; empty classes refuse."""
 
     stack = torch.stack([torch.zeros(3), torch.ones(3), torch.ones(3) * 4.0])
-    ref = reference(stack, origin="classes", data=["a", "b", "b"])
+    ref = population(stack, origin="classes", data=["a", "b", "b"])
     conditioned = ref.mean(group_by=lambda d: d, matching=OneDatum("b"))
     assert torch.allclose(conditioned, torch.full((3,), 2.5))
     with pytest.raises(Exception) as excinfo:
@@ -133,7 +134,7 @@ def test_trace_backed_population_records_address_identity() -> None:
         ops: dict[str, object] = {}
         layer_labels: tuple[str, ...] = ()
 
-    ref = reference([_TraceLike(), _TraceLike()], origin="two runs")
+    ref = population([_TraceLike(), _TraceLike()], origin="two runs")
     assert ref.kind == "trace"
     assert ref.digest_kind == "address"
     assert len(ref) == 2

@@ -31,7 +31,7 @@ from torch.nn import Module
 
 from torchlens.attribution._core import InputKwargs, _AttributionTarget, _target_repr
 from torchlens.attribution._eval_maps import _DOCS_POINTER, _attribution_tensor, _map_similarity
-from torchlens.attribution._result import AttributionError, AttributionResult, AttributionWarning
+from torchlens.attribution._result import Attribution, AttributionError, AttributionWarning
 
 RandomizationKind: TypeAlias = Literal["cascading", "independent"]
 
@@ -60,14 +60,14 @@ class RandomizationStep:
         ``keep_maps=False``.
     """
 
-    layer: str
-    randomized: tuple[str, ...]
+    module_address: str
+    randomized_module_addresses: tuple[str, ...]
     similarities: dict[str, float | None]
     values: Tensor | None
 
 
 @dataclass(frozen=True)
-class RandomizationResult:
+class RandomizationTest:
     """The outcome of a model-parameter randomization test.
 
     Attributes
@@ -88,7 +88,7 @@ class RandomizationResult:
     """
 
     randomization: str
-    layers: tuple[str, ...]
+    module_addresses: tuple[str, ...]
     original_attribution: Tensor
     steps: tuple[RandomizationStep, ...]
     settings: dict[str, Any]
@@ -121,7 +121,7 @@ class RandomizationResult:
         """Compact representation without dumping tensors."""
 
         return (
-            f"RandomizationResult(randomization={self.randomization!r}, layers={len(self.layers)}, "
+            f"RandomizationResult(randomization={self.randomization!r}, layers={len(self.module_addresses)}, "
             f"spearman={self.similarity('spearman')!r})"
         )
 
@@ -295,13 +295,13 @@ def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settin
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-    method: Callable[..., AttributionResult | Tensor],
+    method: Callable[..., Attribution | Tensor],
     method_kwargs: dict[str, Any] | None = None,
     randomization: RandomizationKind = "cascading",
     layers: str | list[str] | tuple[str, ...] | None = None,
     seed: int = 0,
-    keep_maps: bool = True,
-) -> RandomizationResult:
+    keep_values: bool = True,
+) -> RandomizationTest:
     """Re-initialize layers top down and measure how each map changes.
 
     The model-parameter randomization test of Adebayo et al. (2018): on a
@@ -338,7 +338,7 @@ def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settin
     seed
         Seed of the re-initialization draws (default 0), drawn inside a forked
         random state that is restored afterwards.
-    keep_maps
+    keep_values
         Keep every randomized map in ``steps`` (default ``True``); past
         256 MiB of kept maps the test warns once and names
         ``keep_maps=False``.
@@ -390,11 +390,11 @@ def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settin
                 raise _no_layers_ran(model, code="attribution_randomization_layer_invalid")
         else:
             names = _validate_layers(model, layers)
-        plan = _RandomizationPlan(tuple(names), randomization, keep_maps)
+        plan = _RandomizationPlan(tuple(names), randomization, keep_values)
         steps, init_notes = _randomize_steps(model, plan, _run, original)
-    return RandomizationResult(
+    return RandomizationTest(
         randomization=randomization,
-        layers=tuple(names),
+        module_addresses=tuple(names),
         original_attribution=original,
         steps=tuple(steps),
         settings={
@@ -403,7 +403,7 @@ def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settin
             "method": getattr(method, "__name__", repr(method)),
             "target": _target_repr(target),
             "initialization": "reset_parameters, else normal(0, 0.02)",
-            "keep_maps": keep_maps,
+            "keep_maps": keep_values,
         },
         extra={
             "measures": ("spearman", "spearman_abs", "ssim"),

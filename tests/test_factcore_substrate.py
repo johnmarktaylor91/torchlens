@@ -11,13 +11,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.report import (
-    GRAINS,
-    capture_fingerprint,
-    compute_aggregation,
-    factcore,
-    health_facts,
-)
+from torchlens.report._compute_truth import compute_aggregation
+from torchlens.report._factcore import GRAINS, capture_fingerprint, factcore
+from torchlens.report._health import health_facts
 
 
 class _Loop(nn.Module):
@@ -93,7 +89,7 @@ def test_capture_fingerprint_stable_and_discriminating(loop_trace, tmp_path) -> 
 
     fingerprint = capture_fingerprint(loop_trace)
     assert fingerprint.startswith("fc1-")
-    tl.save(loop_trace, tmp_path / "bundle.tlspec")
+    loop_trace.save(tmp_path / "bundle.tlspec")
     loaded = tl.load(tmp_path / "bundle.tlspec")
     assert capture_fingerprint(loaded) == fingerprint
     other = tl.trace(nn.Linear(4, 4).eval(), torch.randn(2, 4))
@@ -122,7 +118,7 @@ def test_compute_face_partition_and_coverage_totality(loop_trace) -> None:
     by_dtype_sum = sum(value for _, value in aggregation.by_dtype)
     assert by_dtype_sum == row_sum
     assert dict(aggregation.execution_modes).get("forward", 0) == row_sum
-    assert int(loop_trace.total_flops_forward) == row_sum
+    assert int(loop_trace.cost.total_flops_forward) == row_sum
 
 
 def test_compute_face_one_linear_external_oracle() -> None:
@@ -167,7 +163,7 @@ def test_health_three_states() -> None:
 
     selective = tl.trace(model, torch.randn(2, 4), save=tl.func("relu"))
     facts = selective.health_facts
-    assert facts.unexamined > 0
+    assert facts.num_unexamined_ops > 0
     assert selective.nonfinite_verdict == "not_checked"  # partial clean never upgrades
 
 
@@ -181,7 +177,7 @@ def test_health_facts_persist_and_serve_on_load(tmp_path) -> None:
     live = trace.health_facts
     assert live.verdict == "found"
     assert "health_facts" in trace.annotations
-    tl.save(trace, tmp_path / "poisoned.tlspec")
+    trace.save(tmp_path / "poisoned.tlspec")
     loaded = tl.load(tmp_path / "poisoned.tlspec")
     served = loaded.health_facts
     assert served.basis == "persisted"
@@ -228,10 +224,10 @@ def test_memory_scopes_at_capture_vs_retained_now(loop_trace) -> None:
     """D8: at_capture is a capture fact; retained_now describes THIS object."""
 
     memory = factcore(loop_trace).memory
-    assert memory.retained_now_bytes <= memory.at_capture_bytes
-    assert memory.at_capture_saved_ops >= memory.retained_now_present_ops
+    assert memory.retained_bytes <= memory.captured_bytes
+    assert memory.captured_saved_ops >= memory.retained_present_ops
     # Live full-save trace: everything the capture retained is still here.
-    assert memory.retained_now_bytes == memory.at_capture_bytes
+    assert memory.retained_bytes == memory.captured_bytes
 
 
 def test_factcore_grain_vocabulary_is_closed() -> None:
@@ -250,14 +246,14 @@ def test_scope_label_on_payload_stripped_artifact(tmp_path) -> None:
 
     model = _Loop().eval()
     trace = tl.trace(model, torch.randn(2, 4))
-    at_capture = factcore(trace).memory.at_capture_bytes
+    at_capture = factcore(trace).memory.captured_bytes
     assert at_capture > 0
-    tl.save(trace, tmp_path / "stripped.tlspec", include_outs=False)
+    trace.save(tmp_path / "stripped.tlspec", include_outs=False)
     loaded = tl.load(tmp_path / "stripped.tlspec")
 
     memory = factcore(loaded).memory
-    assert memory.retained_now_bytes == 0
-    assert memory.at_capture_bytes == at_capture
+    assert memory.retained_bytes == 0
+    assert memory.captured_bytes == at_capture
 
     bom = loaded.bill_of_materials()
     assert int(bom["activations"]["retained_now_memory"]) == 0

@@ -1,7 +1,7 @@
 # `tl.attribution` reference
 
 `tl.attribution` provides input and intermediate-layer attribution methods directly on
-PyTorch modules. Each call returns `AttributionResult(method, values, target_repr, extra)`.
+PyTorch modules. Each call returns `Attribution(method, values, target_repr, extra)`.
 `target` is an output-class index, a callable that maps model output to one scalar tensor, or a
 [`SiteTarget`](#site-targets-sitetarget) naming a hidden layer's output; the layer methods name a
 module from `dict(model.named_modules())` and also accept [integer inputs](#integer-inputs-token-ids)
@@ -70,7 +70,7 @@ AttributionResult(method='input_x_grad', values=Tensor(shape=(1, 2), dtype=torch
 ## `integrated_gradients`
 
 `tl.attribution.integrated_gradients(model, inputs, input_kwargs=None, *, target=...,
-n_steps=50, baseline=None)` integrates input gradients along a straight path from `baseline`
+num_steps=50, baseline=None)` integrates input gradients along a straight path from `baseline`
 (zeros by default). Baseline choice changes the interpretation. Every result computes the
 endpoint `target_delta = f(input) - f(baseline)` and reports `attribution_sum` plus the signed
 `completeness_residual = attribution_sum - target_delta`; callers can therefore inspect the IG
@@ -83,7 +83,7 @@ import torchlens as tl
 
 model = nn.Linear(2, 2, bias=False)
 with torch.no_grad(): model.weight.copy_(torch.eye(2))
-print(tl.attribution.integrated_gradients(model, torch.tensor([[1.0, 2.0]]), target=0, n_steps=4))
+print(tl.attribution.integrated_gradients(model, torch.tensor([[1.0, 2.0]]), target=0, num_steps=4))
 ```
 
 Output:
@@ -128,7 +128,7 @@ trace.cleanup()
 
 ## `smoothgrad`
 
-`tl.attribution.smoothgrad(model, inputs, input_kwargs=None, *, target=..., n_samples=25,
+`tl.attribution.smoothgrad(model, inputs, input_kwargs=None, *, target=..., num_samples=25,
 noise_level=0.1, seed=None)` averages saliency across Gaussian-noised inputs. Supplying `seed`
 makes the noise deterministic without changing the global torch RNG state.
 
@@ -139,7 +139,7 @@ import torchlens as tl
 
 model = nn.Linear(2, 2, bias=False)
 with torch.no_grad(): model.weight.copy_(torch.eye(2))
-print(tl.attribution.smoothgrad(model, torch.tensor([[1.0, 2.0]]), target=0, n_samples=3, seed=0))
+print(tl.attribution.smoothgrad(model, torch.tensor([[1.0, 2.0]]), target=0, num_samples=3, seed=0))
 ```
 
 Output:
@@ -277,7 +277,7 @@ maps agree.
 ## `layer_integrated_gradients`
 
 `tl.attribution.layer_integrated_gradients(model, inputs, input_kwargs=None, *, target=...,
-layer=..., baseline=None, n_steps=50)` applies the integrated-gradients path rule to a named
+layer=..., baseline=None, num_steps=50)` applies the integrated-gradients path rule to a named
 intermediate activation. See [`integrated_gradients`](#integrated_gradients) for input-level IG.
 
 ```python
@@ -286,7 +286,7 @@ from torch import nn
 import torchlens as tl
 
 model = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 2))
-print(tl.attribution.layer_integrated_gradients(model, torch.ones(1, 2), target=0, layer="0", n_steps=4))
+print(tl.attribution.layer_integrated_gradients(model, torch.ones(1, 2), target=0, layer="0", num_steps=4))
 ```
 
 Output:
@@ -298,7 +298,7 @@ AttributionResult(method='layer_integrated_gradients', values=Tensor(shape=(1, 2
 ## `layer_conductance`
 
 `tl.attribution.layer_conductance(model, inputs, input_kwargs=None, *, target=..., layer=...,
-baseline=None, n_steps=50)` decomposes input integrated gradients onto the selected hidden
+baseline=None, num_steps=50)` decomposes input integrated gradients onto the selected hidden
 units along the input path. It uses the same baseline and step controls as
 [`layer_integrated_gradients`](#layer_integrated_gradients).
 
@@ -308,7 +308,7 @@ from torch import nn
 import torchlens as tl
 
 model = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 2))
-print(tl.attribution.layer_conductance(model, torch.ones(1, 2), target=0, layer="0", n_steps=4))
+print(tl.attribution.layer_conductance(model, torch.ones(1, 2), target=0, layer="0", num_steps=4))
 ```
 
 Output:
@@ -323,7 +323,7 @@ AttributionResult(method='layer_conductance', values=Tensor(shape=(1, 2), dtype=
 the graph: it returns a callable for `Trace.draw(color_by=...)` that paints each attributed
 layer's reduced magnitude onto its module-output node and leaves every other node unencoded
 (the legend carries the `n/a = unencoded` note). `source` is one layer-scoped
-`AttributionResult` (its `extra["layer"]` anchors it), an iterable of them, or an explicit
+`Attribution` (its `extra["layer"]` anchors it), an iterable of them, or an explicit
 mapping from `model.named_modules()` name or trace layer label to a result, tensor, or real
 scalar. `reduce` is closed vocabulary: `"abs_sum"` (default), `"abs_mean"`, `"sum"`, `"max"`.
 Unknown keys and unknown reductions raise `AttributionError` naming the fix. A module fired
@@ -360,7 +360,7 @@ To render, pass the callable to the ordinary encoding channel — the legend dis
 callable source and the min/mid/max ramp:
 
 ```text
-trace.draw(color_by=tl.attribution.overlay(trace, results), vis_outpath="attribution_graph")
+trace.draw(color_by=tl.attribution.overlay(trace, results), path="attribution_graph")
 ```
 
 ## `layer_attribution`
@@ -417,7 +417,7 @@ class TokenClassifier(nn.Module):
 torch.manual_seed(0)
 model = TokenClassifier()
 ids = torch.tensor([[1, 4, 2, 7]])
-result = tl.attribution.layer_integrated_gradients(model, ids, target=1, layer="mix", n_steps=16)
+result = tl.attribution.layer_integrated_gradients(model, ids, target=1, layer="mix", num_steps=16)
 print(tuple(result.values.shape), result.extra["integer_input_layers"])
 ```
 
@@ -493,13 +493,13 @@ compares the measured effects with the claim.
 ### Deletion and insertion curves (`deletion_curve`, `insertion_curve`)
 
 `tl.attribution.deletion_curve(model, inputs, input_kwargs=None, *, target, attribution,
-baseline="zeros", n_steps=20, features="auto", patch_size=8)` ranks the input features by
-attribution (highest first, per example) and replaces the top `floor(k * F / n_steps)` of them
+baseline="zeros", num_steps=20, features="auto", patch_size=8)` ranks the input features by
+attribution (highest first, per example) and replaces the top `floor(k * F / num_steps)` of them
 with the baseline at step `k`, recording the target score after each step: the
 most-relevant-first curve of Samek et al. (2017) and the deletion metric of Petsiuk et al.
 (2018). `insertion_curve` (Petsiuk et al., 2018) starts from the baseline and reveals the top
-features of the input instead. The `CurveResult` holds `fractions`, `scores`
-(`(n_steps + 1, B)`: one column per example for an integer target, one column for a callable
+features of the input instead. The `PerturbationCurve` holds `fractions`, `scores`
+(`(num_steps + 1, B)`: one column per example for an integer target, one column for a callable
 target), `area` (trapezoid rule over the fractions; lower is better for deletion, higher for
 insertion) and `aopc`, the mean score change from the start (`mean_k(s_0 - s_k)` for deletion,
 `mean_k(s_k - s_0)` for insertion; higher is better for both). Per-example values are in
@@ -512,7 +512,7 @@ insertion) and `aopc`, the mean score change from the start (`mean_k(s_0 - s_k)`
   `"elements"` (every scalar). `"auto"` picks pixels for `N, C, H, W` inputs, tokens for
   `N, T, D` inputs, elements otherwise. Several floating-point inputs share one ranking.
 
-Each step is a recorded intervention. `curve.steps[k].intervention` holds the step's edits as
+Each step is a recorded intervention. `curve.steps[k].build_interventions` holds the step's edits as
 `(selection, edit)` pairs, one per evaluated input that holds any baseline value:
 `tl.units(<input layer>, <baseline mask>)` with `tl.replace_with(<baseline>)`. A curve point
 therefore comes with the exact edit that produced it, and it replays through the intervention
@@ -531,14 +531,14 @@ with torch.no_grad():
     model.bias.zero_()
 x = torch.ones(1, 4)
 result = tl.attribution.input_x_grad(model, x, target=0)
-curve = tl.attribution.deletion_curve(model, x, target=0, attribution=result, n_steps=4)
+curve = tl.attribution.deletion_curve(model, x, target=0, attribution=result, num_steps=4)
 print(curve.scores[:, 0].tolist(), curve.aopc)
 
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 fork = trace.fork()
-for selection, edit in curve.steps[1].intervention:
+for selection, edit in curve.steps[1].build_interventions:
     fork.do(selection, edit)
-print(fork[fork.output_layers[0]].out.item(), curve.steps[1].inputs.tolist())
+print(fork[fork.output_layers[0]].out.item(), curve.steps[1].build_inputs.tolist())
 ```
 
 Output:
@@ -548,7 +548,7 @@ Output:
 1.5 [[0.0, 1.0, 1.0, 1.0]]
 ```
 
-`step.inputs` and `step.baseline_mask` show the perturbed input and which elements hold the
+`step.build_inputs` and `step.build_baseline_mask` show the perturbed input and which elements hold the
 baseline. To compare against chance, evaluate a random ranking the same way
 (`attribution=torch.rand_like(x)`). Curves score the model output, so a `SiteTarget` refuses
 (`attribution_site_target_unsupported`); an attribution that does not cover the input (layer
@@ -558,7 +558,7 @@ refuses `attribution_eval_setting_invalid`, each naming a spelling that works.
 ### The randomization test (`randomization_test`)
 
 `tl.attribution.randomization_test(model, inputs, input_kwargs=None, *, target, method,
-method_kwargs=None, randomization="cascading", layers=None, seed=0, keep_maps=True)` is the
+method_kwargs=None, randomization="cascading", layers=None, seed=0, keep_values=True)` is the
 model-parameter randomization test of Adebayo et al. (2018), "Sanity checks for saliency
 maps": it re-initializes layers from the output side (`"cascading"`: cumulatively;
 `"independent"`: one at a time), re-runs `method` and compares each map with the original.
@@ -577,7 +577,7 @@ torch.manual_seed(0)
 mlp = nn.Sequential(nn.Linear(4, 8), nn.Tanh(), nn.Linear(8, 2))
 x = torch.randn(3, 4)
 check = tl.attribution.randomization_test(mlp, x, target=1, method=tl.attribution.saliency)
-print(check.layers, [step.randomized for step in check.steps])
+print(check.module_addresses, [step.randomized_module_addresses for step in check.steps])
 print(len(check.similarity("spearman")), check.similarity("ssim"))
 ```
 
@@ -596,14 +596,14 @@ state, so the caller's model (parameters and gradients) and the global random st
 unchanged. `method` is called as `method(model_copy, inputs, input_kwargs, target=target,
 **method_kwargs)`; pass `method_kwargs={"layer": ...}` to `grad_cam` so every map uses the
 same layer. Each `RandomizationStep` keeps its map in `values`; past 256 MiB of kept maps the
-test warns once (`attribution_randomization_maps_large`) and names `keep_maps=False`. Unknown
+test warns once (`attribution_randomization_maps_large`) and names `keep_values=False`. Unknown
 layers refuse `attribution_randomization_layer_invalid`, and so does a method under which no
 module with parameters runs (the test would otherwise randomize nothing and pass).
 
 ### ROAD: remove and debias (`road_curve`)
 
 `tl.attribution.road_curve(model, inputs, input_kwargs=None, *, target, attribution,
-ranking="most_relevant_first", n_steps=20, features="auto", patch_size=8, noise_std=0.01,
+ranking="most_relevant_first", num_steps=20, features="auto", patch_size=8, noise_std=0.01,
 seed=0)` is ROAD (Rong et al., 2022, "A Consistent and Efficient Evaluation Strategy for
 Attribution Methods"). It is the deletion curve above with one change: a removed pixel does not
 take a constant baseline, whose shape would tell the model where the mask is, but the weighted
@@ -611,7 +611,7 @@ mean of its 8 neighbours (1/6 for the direct neighbours, 1/12 for the diagonals,
 the border), solved jointly for all removed pixels of a channel, plus Gaussian noise of
 `noise_std` (0.01, the authors' reference value). `ranking="most_relevant_first"` (MoRF) removes
 the most attributed features first, `"least_relevant_first"` (LeRF) the least attributed. The
-result is a `CurveResult` with `metric="road"`; each step's `intervention` holds
+result is a `PerturbationCurve` with `metric="road"`; each step's `intervention` holds
 `tl.units(<input layer>, <mask>)` with `tl.replace_with(<that step's imputed values>)`, so every
 point replays like any curve step. The noise of a step comes from a local generator seeded by
 `seed` and the step, so a step recomputes to the same values and the global random state is
@@ -631,9 +631,9 @@ with torch.no_grad():
 x = torch.ones(1, 1, 3, 3)
 x[0, 0, 1, 1] = 4.0
 result = tl.attribution.input_x_grad(model, x, target=0)
-road = tl.attribution.road_curve(model, x, target=0, attribution=result, n_steps=9, noise_std=0.0)
-print(road.metric, [round(value, 4) for value in road.scores[:2, 0].tolist()])
-print(round(road.steps[1].inputs[0, 0, 1, 1].item(), 4), road.settings["ranking"])
+road = tl.attribution.road_curve(model, x, target=0, attribution=result, num_steps=9, noise_std=0.0)
+print(road.kind, [round(value, 4) for value in road.scores[:2, 0].tolist()])
+print(round(road.steps[1].build_inputs[0, 0, 1, 1].item(), 4), road.settings["ranking"])
 ```
 
 Output:
@@ -649,8 +649,8 @@ is 1, so the score falls from 60 to `60 - 5 * 4 + 5 * 1 = 45`.
 ### Auditing internal attributions (`causal_audit`)
 
 `tl.attribution.causal_audit(model, inputs, input_kwargs=None, *, claim, target=None,
-corrupted=None, metric=None, edges=None, k=5, ablation="zero", controls=("bottom", "random"),
-random_draws=10, per_unit=True, seed=0)` tests an internal attribution causally. The `claim` is
+corrupted_input=None, metric=None, edges=None, k=5, edit="zero", controls=("bottom", "random"),
+num_random_draws=10, per_unit=True, seed=0)` tests an internal attribution causally. The `claim` is
 one of four kinds: a layer attribution (`layer_attribution`, `layer_integrated_gradients`,
 `layer_conductance`), for a model output target or for a [`SiteTarget`](#site-targets-sitetarget),
 whose values score every unit of one hidden site; a direct-logit-attribution table from
@@ -658,16 +658,16 @@ whose values score every unit of one hidden site; a direct-logit-attribution tab
 one-backward read table from `tl.attribution.read` ([below](#one-backward-read-tables)); or an
 EDGE table of edge attribution patching scores from `torchlens.mechinterp.edge_scores`
 ([below](#edge-tables-edge-attribution-patching)). A layer claim needs the `target=` it was
-computed for; an EDGE table needs the `corrupted=` and `metric=` it was scored with.
+computed for; an EDGE table needs the `corrupted_input=` and `metric=` it was scored with.
 The audit ablates each unit alone (unit ablation, Meyes et al., 2019) and measures the target's
 change, `score(original) - score(ablated)`, the same sign as an activation-times-gradient claim.
 It then ablates the `k` units with the largest claimed magnitude together, beside two controls:
-the `k` units with the smallest claimed magnitude (`"bottom"`) and `random_draws` seeded random
+the `k` units with the smallest claimed magnitude (`"bottom"`) and `num_random_draws` seeded random
 sets of `k` (`"random"`). `rank_agreement` is the Spearman correlation of the claimed and
 measured per-unit effects; each set reports its claimed sum next to its measured joint effect.
 
 Every ablation runs through the intervention engine on an intervention-ready trace. The rows
-run as one `torchlens.experiment.site_sweep` with one candidate per unit,
+run as one `torchlens.experiment.sweep_sites` with one candidate per unit,
 `tl.units(<site>, <mask>)` (the replay engine, nothing retained), wherever one edit serves every
 unit: every ablation of a layer claim, and zero ablation of a table. Each row's value equals
 ablating that unit alone on its own `trace.fork().do(...)`, exactly. Sets, and a table's `"mean"`
@@ -700,13 +700,13 @@ with torch.no_grad():
     model.fc2.bias.zero_()
 x = torch.tensor([[1.0, 2.0, 3.0]])
 claim = tl.attribution.layer_attribution(model, x, target=0, layer="fc1")
-audit = tl.attribution.causal_audit(model, x, claim=claim, target=0, k=2, random_draws=3)
-print([(row.unit, row.claimed_effect, row.measured_effect) for row in audit.units])
-print(audit.rank_agreement, [(item.kind, item.units, item.measured_effect) for item in audit.sets[:2]])
+audit = tl.attribution.causal_audit(model, x, claim=claim, target=0, k=2, num_random_draws=3)
+print([(row.index, row.claimed_effect, row.measured_effect) for row in audit.units])
+print(audit.rank_agreement, [(item.kind, item.indices, item.measured_effect) for item in audit.sets[:2]])
 
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 fork = trace.fork()
-for selection, edit in audit.set_of("top")[0].intervention:
+for selection, edit in audit.set_of("top")[0].build_interventions:
     fork.do(selection, edit)
 print(audit.original_score - fork[fork.output_layers[0]].out.item())
 ```
@@ -722,7 +722,7 @@ Output:
 On this linear model every claim is exact, so agreement is 1.0 and the sets add up; on a
 nonlinear model the gap between a set's claimed sum and its measured effect is the finding.
 
-- `ablation`: `"zero"` (default; `tl.zero_ablate()`), `"mean"` (each unit's mean over the
+- `edit`: `"zero"` (default; `tl.zero_ablate()`), `"mean"` (each unit's mean over the
   batch, through `tl.replace_with`), or a number or tensor broadcast to the site (a baseline
   activation). Mean ablation over a batch of one changes nothing.
 - Units are the site's elements after the batch axis; a unit is ablated in every example, and
@@ -743,8 +743,8 @@ A claim the audit cannot ground refuses `attribution_audit_claim_unsupported`: a
 input-level result, a site whose module runs more than once, a direct-logit row with no captured
 site, and the read tables described below. A claim whose values do not have the site's output
 shape on these inputs, that was computed for another target, or whose logits are not this run's,
-refuses `attribution_audit_claim_misaligned`; bad `k`, `ablation`, `controls` or `random_draws`
-refuse `attribution_eval_setting_invalid`, and so do `corrupted=`, `metric=` and `edges=` given
+refuses `attribution_audit_claim_misaligned`; bad `k`, `edit`, `controls` or `num_random_draws`
+refuse `attribution_eval_setting_invalid`, and so do `corrupted_input=`, `metric=` and `edges=` given
 for a claim that is not an EDGE table. Each refusal names a spelling that works.
 
 #### Direct-logit-attribution tables
@@ -765,7 +765,7 @@ answer and `vs` tokens; the row's claimed effect is its values summed the same w
   recomputes it.
 - The constant row has no site, so it is not ablated: `extra["constant_row"]` reports its claimed
   sum, and `extra["native_score"]` the table's native sum (rows plus constant).
-- Under zero ablation the per-row ablations run as one `torchlens.experiment.site_sweep` (one
+- Under zero ablation the per-row ablations run as one `torchlens.experiment.sweep_sites` (one
   candidate per component site, the replay engine, nothing retained); other ablations and the
   sets use one fork each. A unit is `(row,)`, the row's index in the table.
 - Direct logit attribution reads a component's direct path only; the ablation also removes what
@@ -798,7 +798,7 @@ torch.manual_seed(0)
 model = TinyLM().eval()
 ids = torch.tensor([[1, 2, 3]])
 claim = torchlens.mechinterp.direct_logit_contributions(tl.trace(model, ids), answer=1, vs=2)
-audit = tl.attribution.causal_audit(model, ids, claim=claim, k=1, random_draws=2)
+audit = tl.attribution.causal_audit(model, ids, claim=claim, k=1, num_random_draws=2)
 for row in audit.units:
     print(row.component, round(row.claimed_effect, 3), round(row.measured_effect, 3))
 print(round(audit.extra["constant_row"], 3), round(audit.rank_agreement, 3))
@@ -828,11 +828,11 @@ ablates each `ACT` row's site, or each element of it, and measures the target th
 taken for; pass that target as `target=`, the same `tl.attribution.seed(...)`. A unit is
 `(row,)` at site grain or `(row, *element)` at element grain, the row being its index in
 `table.rows()` and the element indexed after the batch axis. Under zero ablation every unit,
-each element included, is one candidate of the audit's `site_sweep` (an element as
+each element included, is one candidate of the audit's `sweep_sites` (an element as
 `tl.units(<site>, <mask>)`), so the sweep's effect table holds one member per unit.
 
 - One target per audit: a table read for several targets refuses and names
-  `claim=claim.for_target("t0")`. A `target=` that is not the table's recorded seed, or a table
+  `claim=claim.target("t0")`. A `target=` that is not the table's recorded seed, or a table
   whose site shapes differ from these inputs, refuses `attribution_audit_claim_misaligned`.
 - Rows whose status is not `ok` carry no score; they are listed in `extra["rows_not_audited"]` as
   `(site, status)` and not ablated.
@@ -851,7 +851,7 @@ model = nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 x = torch.randn(2, 3)
 target = tl.attribution.seed("output_1", index=(0, 1))
 table = tl.attribution.read(tl.trace(model, x), target=target, frozen=None)
-audit = tl.attribution.causal_audit(model, x, claim=table, target=target, k=1, random_draws=2)
+audit = tl.attribution.causal_audit(model, x, claim=table, target=target, k=1, num_random_draws=2)
 for row in audit.units:
     print(row.site, round(row.claimed_effect, 4), round(row.measured_effect, 4))
 print(audit.rank_agreement)
@@ -873,7 +873,7 @@ smooth nonlinearities, or a read with a frozen linearization, the gap is the fin
 
 #### EDGE tables (edge attribution patching)
 
-A `ReadTable` from `torchlens.mechinterp.edge_scores(model, inputs, *, corrupted, metric)` holds one
+A `ReadTable` from `torchlens.mechinterp.edge_scores(model, inputs, *, corrupted_input, metric)` holds one
 `EDGE` row per edge `s->t` of the component graph, addressed by the edge's name
 (`"a0.h1->m1"`). Its score, `(s_corrupt - s_clean) . dM/d(input of t)` summed over positions and
 reduced over examples (EAP, or EAP-IG along the input path), estimates what patching the edge
@@ -887,10 +887,10 @@ name and its `site` the op whose value the patch writes (the receiver's input, o
 receiver one head's slice of the projection output).
 
 - Alignment: an EDGE table records neither its corrupted inputs nor its metric (its rows cannot
-  be re-scored), so pass the `corrupted=` and `metric=` that `edge_scores` was given; they keep
+  be re-scored), so pass the `corrupted_input=` and `metric=` that `edge_scores` was given; they keep
   `edge_scores`' meanings. The audit rebuilds the component graph on these inputs and checks what
   the table does record: its example count, its method and reduction, every `ok` row's edge name
-  and sender shape. A missing `corrupted=` or `metric=`, corrupted inputs of another shape, a
+  and sender shape. A missing `corrupted_input=` or `metric=`, corrupted inputs of another shape, a
   metric that does not return one value per example or one scalar, a table scored on other inputs,
   an edge name the graph does not have, or a `target=` refuses `attribution_audit_claim_misaligned`.
   The audit cannot check that `metric=` is the very function the table was scored with; a wrong
@@ -908,8 +908,8 @@ receiver one head's slice of the projection output).
 - `edges=` audits only the named rows (edge names or `ComponentEdge` objects; default every `ok`
   row). A GPT-2 small table has 34,957 rows, and one patch there costs 0.5 to 8 s on 4 CPU cores,
   so past 1024 rows the audit warns once (`attribution_audit_units_many`) and names `edges=` with
-  the largest rows, or `per_unit=False`. `ablation=` does not apply: an edge is patched, not
-  ablated (`settings["ablation"]` is `"edge_patch"`).
+  the largest rows, or `per_unit=False`. `edit=` does not apply: an edge is patched, not
+  ablated (`settings["edit"]` is `"edge_patch"`).
 - Each row's and set's `intervention` holds the `(selection, value)` pairs `patch_edges` wrote,
   one per receiver in the order it wrote them, read from the fork that measured the row or set (the
   EDGE selection of the receiver's input edge with the value substituted there, or the ACT
@@ -935,17 +935,17 @@ def metric(logits):
     return logits[:, -1, 1] - logits[:, -1, 2]
 
 
-claim = torchlens.mechinterp.edge_scores(model, clean, corrupted=corrupted, metric=metric)
+claim = torchlens.mechinterp.edge_scores(model, clean, corrupted_input=corrupted, metric=metric)
 largest = sorted(claim.rows(), key=lambda row: -abs(row.score))[:6]
 audit = tl.attribution.causal_audit(
     model,
     clean,
     claim=claim,
-    corrupted=corrupted,
+    corrupted_input=corrupted,
     metric=metric,
     edges=[row.address[0] for row in largest],
     k=2,
-    random_draws=1,
+    num_random_draws=1,
 )
 for row in audit.units:
     print(row.component, round(row.claimed_effect, 4), round(row.measured_effect, 4))
@@ -1033,8 +1033,8 @@ import torchlens as tl
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(3, 8), nn.Tanh(), nn.Linear(8, 2)).eval()
 x = torch.randn(1, 3)
-coarse = tl.attribution.integrated_gradients(model, x, target=0, n_steps=2)
-fine = tl.attribution.integrated_gradients(model, x, target=0, n_steps=64)
+coarse = tl.attribution.integrated_gradients(model, x, target=0, num_steps=2)
+fine = tl.attribution.integrated_gradients(model, x, target=0, num_steps=64)
 assert fine.extra["residual_rel"] < coarse.extra["residual_rel"]
 assert coarse.extra["baseline"].abs().sum() == 0  # the default zeros baseline, disclosed
 ```
@@ -1056,15 +1056,15 @@ naming sprint; the doc of record is
 
 ## Attribution graphs (`build_graph`, `AttributionGraph`)
 
-`tl.attribution.build_graph(trace, transcoders, *, embedding, target=None, max_n_logits=10,
-desired_logit_prob=0.95, demeaned_logits=True, logits_at=None, frozen)` builds the attribution
+`tl.attribution.build_graph(trace, transcoders, *, embedding, target=None, max_num_logits=10,
+logit_probability_coverage=0.95, demeaned_logits=True, logits_at=None, frozen)` builds the attribution
 graph of one prompt's capture: the direct linear effects between transcoder features, error
 nodes, token embeddings and target logits, with transcoder features in place of MLP outputs and
 attention patterns and normalisation scales held at their captured values. Documented-unstable.
 
 - `transcoders` maps each MLP module name to a transcoder: an object with `encode(x)`, `W_enc`
-  `(d_in, n_features)`, `b_enc`, `W_dec` `(n_features, d_out)` and `b_dec`, the object
-  `tl.splice_module(transcoder, input="in")` splices in for that MLP. A cross-layer transcoder
+  `(d_in, num_features)`, `b_enc`, `W_dec` `(num_features, d_out)` and `b_dec`, the object
+  `tl.splice_module(transcoder, input_route="in")` splices in for that MLP. A cross-layer transcoder
   gives `W_dec` and `b_dec` as mappings from MLP module names to tensors, one per MLP output its
   features write.
 - `frozen` names the modules (or op labels) held at their captured values: every attention
@@ -1072,20 +1072,20 @@ attention patterns and normalisation scales held at their captured values. Docum
   `frozen=()` is the spelling for a model with neither. Every MLP output a transcoder writes is
   always held, and its feature and error nodes explain it.
 - `target=None` picks the most probable logits at the last position until their probabilities
-  reach `desired_logit_prob`, at most `max_n_logits`; a list of token ids names them. With
+  reach `logit_probability_coverage`, at most `max_num_logits`; a list of token ids names them. With
   `demeaned_logits=True` a logit node is its logit minus the mean logit. `logits_at` takes a
   `SiteTarget` naming the module whose output holds the logits (for example the logits before a
   final softcap).
 
 The result, `tl.attribution.AttributionGraph`, has one `GraphNode` (`kind`, `site`, `position`,
-`feature`, `token`) per row and column of `adjacency_matrix`, in the order features, errors,
+`feature_index`, `token`) per row and column of `adjacency_matrix`, in the order features, errors,
 tokens, logits; rows are targets and columns sources. `node_values` holds each feature's
 pre-activation and each logit node's value. Every feature and logit node is accounted for: its
 row of `adjacency_matrix` plus `constants["encoder_bias"]`, `constants["decoder_bias"]` and
 `constants["other"]` equals its value. `other` is what is not a node (the model's own biases,
 position embeddings); a large `other` on a node means a path to it bypasses the graph, for
 example an attention pattern left unfrozen. `error_vectors` holds each MLP output minus its
-reconstruction, `active_features` and `activation_values` the feature nodes, and
+reconstruction, `active_feature_indices` and `feature_activations` the feature nodes, and
 `capture_outcome` and `disclosures` what the capture's completeness verdict says.
 
 ```python
@@ -1129,7 +1129,7 @@ torch.manual_seed(0)
 model = Tiny().eval()
 trace = tl.trace(model, torch.tensor([[1, 4, 2]]))
 graph = tl.attribution.build_graph(
-    trace, {"mlp": Transcoder(model.mlp)}, embedding="embed", frozen=(), target=[3]
+    trace, {"mlp": Transcoder(model.mlp)}, embedding_module="embed", frozen=(), target=[3]
 )
 print(graph.node_counts)
 logit = graph.node_indices("logit")[0]
@@ -1146,7 +1146,7 @@ class Letters:
 
 
 path = Path(globals().get("DOCS_TMPDIR", "/tmp")) / "tiny-graph.json"
-exported = graph.to_neuronpedia(slug="tiny-graph", scan="tiny", tokenizer=Letters(), path=path)
+exported = graph.to_neuronpedia(slug="tiny-graph", model_id="tiny", tokenizer=Letters(), path=path)
 print(exported["metadata"]["prompt_tokens"], len(exported["nodes"]), len(exported["links"]))
 assert json.loads(path.read_text()) == exported
 
@@ -1157,8 +1157,8 @@ print(painted)
 
 ### Exporting to Neuronpedia (`AttributionGraph.to_neuronpedia`)
 
-`graph.to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_threshold=0.8,
-edge_threshold=0.98, path=None)` returns the graph, pruned, as a JSON-ready dict in
+`graph.to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_influence_coverage=0.8,
+edge_influence_coverage=0.98, path=None)` returns the graph, pruned, as a JSON-ready dict in
 Neuronpedia's published attribution-graph schema, and writes it to `path` when one is given.
 Documented-unstable. The schema is `apps/webapp/app/api/graph/graph-schema.json` in
 [Neuronpedia's repository](https://github.com/hijohnnylin/neuronpedia) at commit
@@ -1167,15 +1167,15 @@ Graph" 1.0.0), the same schema as Neuronpedia's [graph validator](https://www.ne
 Node ids, node fields and the direction of links follow circuit-tracer's own writer, so the file
 opens in Neuronpedia's graph viewer the way a circuit-tracer graph does.
 
-- `slug` is the graph's name on Neuronpedia and `scan` is Neuronpedia's model id (for example
+- `slug` is the graph's name on Neuronpedia and `model_id` is Neuronpedia's model id (for example
   `"gemma-2-2b"`); the graph stores neither.
 - `tokenizer` is anything with `decode(ids) -> str`, usually the model's Hugging Face
   tokenizer: it turns each input token and each target logit into the strings the viewer shows.
   `prompt=None` decodes the input tokens together.
 - Pruning is circuit-tracer's rule. A node's influence is its total effect on the logits,
   weighted by their probabilities, through the row-normalised absolute adjacency. Nodes are kept
-  in order of influence until `node_threshold` of the total is covered, edges likewise until
-  `edge_threshold`; token and logit nodes are always kept, and feature and error nodes left
+  in order of influence until `node_influence_coverage` of the total is covered, edges likewise until
+  `edge_influence_coverage`; token and logit nodes are always kept, and feature and error nodes left
   without kept edges are dropped. A node's `influence` field is the share of the total covered
   up to and including it. Nodes at every position are exported, the first (often BOS) included.
 - A feature's `layer` is its transcoder's index in `transcoder_sites`, an error node's is its
@@ -1201,7 +1201,7 @@ over every position, on that module's output nodes; every other node stays unenc
   `graph_value` that is unknown or given with a source that is not a graph
   (`attribution_overlay_argument_invalid`).
 
-The example above ends with the overlay; `trace.draw(color_by=color_by, vis_outpath="graph")`
+The example above ends with the overlay; `trace.draw(color_by=color_by, path="graph")`
 renders it.
 
 ### Uploading to Neuronpedia (`upload_to_neuronpedia`)
@@ -1212,13 +1212,13 @@ Documented-unstable. `exported` is the dict `to_neuronpedia` returned or the pat
 it wrote. It follows Neuronpedia's documented two-step upload
 ([API reference](https://www.neuronpedia.org/api-doc), "Upload Graph 1/2" and "Upload Graph
 2/2"): `POST /api/graph/signed-put` returns a signed upload address, the JSON is sent there,
-and `POST /api/graph/save-to-db` saves the graph under its `scan` and `slug`. It uses the
+and `POST /api/graph/save-to-db` saves the graph under its `model_id` and `slug`. It uses the
 standard library only.
 
 - The key is sent in the `x-api-key` header (Neuronpedia shows it under Settings) and is never
   written into a message, `repr` or log.
 - Before any request the graph is checked against the export's structure
-  (`attribution_graph_contract_invalid`), its `slug` and `scan` against the characters the
+  (`attribution_graph_contract_invalid`), its `slug` and `model_id` against the characters the
   server takes (letters, digits, `_`, `.`, `-`), and its size against the server's limits of
   1,024 to 104,857,600 bytes (`neuronpedia_upload_argument_invalid`, also raised for a missing
   key or an unreadable file).
@@ -1227,10 +1227,10 @@ standard library only.
   `neuronpedia_upload_response_invalid`.
 
 `direction.upload_to_neuronpedia(*, api_key, scan, vector_label, layer=None,
-hook_type="resid_post", steer_strength=1.0)` publishes a `tl.intervention.Direction` the same
+hook_type="resid_post", default_steering_strength=1.0)` publishes a `tl.intervention.Direction` the same
 way through Neuronpedia's "Create Vector" endpoint (`POST /api/vector/new`). `layer` defaults to
 the trailing index of the direction's site label, as `to_repeng` reads it; `hook_type` is
-`"resid_post"` (a decoder block's output) or `"resid_pre"` (its input); `steer_strength` is the
+`"resid_post"` (a decoder block's output) or `"resid_pre"` (its input); `default_steering_strength` is the
 default steering strength Neuronpedia offers, from -100 to 100. Documented-unstable.
 
 ```text
@@ -1255,10 +1255,10 @@ near-zero output change certifies nothing, so the denominator always rides besid
 `tl.attribution.noise_tunnel(inputs, input_kwargs=None, *, ...)` runs ANY kit method on noised
 copies of the input and aggregates (`"mean"`, `"mean_square"`, population `"variance"`). Two
 routes, no registry: the PRIMITIVE `attribute=` (a closed callable
-`(inputs, input_kwargs) -> AttributionResult`; bind settings with `functools.partial`) and the
+`(inputs, input_kwargs) -> Attribution`; bind settings with `functools.partial`) and the
 SUGAR `method=` (any kit-contract callable, plus `model=`, `target=`, and ONE explicit
 `method_kwargs=dict(...)` mapping echoed verbatim into the result). The keyword splat is dead:
-a wrapper and its child can both own `n_samples` and `seed`, and only an explicit mapping can
+a wrapper and its child can both own `num_samples` and `seed`, and only an explicit mapping can
 say which is which. `stdevs` is ABSOLUTE and required; integer ids, masks, booleans, and
 strings pass through unnoised; repeated tensor references share ONE noised object.
 `noise_tunnel(method=smoothgrad)` refuses (SmoothGrad IS the tunnel over `saliency` with
@@ -1274,7 +1274,7 @@ index drawn per example per sample, shared across every attributed leaf). The es
 pinned to the reference `InputBaselineXGradient` convention -- gradient at the interpolated
 point times (noised input minus drawn baseline) -- by a stored-draw oracle. The residual
 disclosure is labeled Monte-Carlo DIAGNOSTICS, never a completeness guarantee. Defaults:
-`n_samples=25`, `stdevs=0.0`; full draws stored only on request (`store_draws=True`).
+`num_samples=25`, `stdevs=0.0`; full draws stored only on request (`store_draws=True`).
 
 ### `guided_backprop` and `deconvolution`
 
@@ -1306,9 +1306,9 @@ aggregate (disclosed).
 
 `tl.attribution.infidelity(model, inputs, input_kwargs=None, *, target, attribution, ...)`
 measures `E[(sum(attr * dx) - (f(x) - f(x - dx)))^2]` with a USABLE named default
-(`perturb="gaussian"`, `noise_std=0.003`, `n_samples=10`), the named `"square_removal"`, and a
+(`perturb="gaussian"`, `noise_std=0.003`, `num_samples=10`), the named `"square_removal"`, and a
 fully compatible callable escape. Both unnormalized (primary) and normalized values return in
-one frozen `MetricResult`; out-of-range perturbations WARN (coded); layer-space/CAM-shaped
+one frozen `AttributionMetric`; out-of-range perturbations WARN (coded); layer-space/CAM-shaped
 values refuse with the input-space expansion recipe. Infidelity judges the perturbation as
 much as the attribution. "Lower is better" only under identical target / baseline /
 perturbation / radius / norm / normalization / sample bank -- the qualification rides in every
@@ -1337,23 +1337,23 @@ zero all prompt-token embeddings; encoders with a reliable pad token and special
 pad content tokens while scaffolding specials at their true embeddings
 (`keep_special_tokens=True`); anything unreliable falls back to zeros-all with a NAMED
 disclosure (a missing pad token is never guessed). `n_steps=128` fixed default;
-`n_steps="auto"` runs the 64-128-256-512 ladder stopping ONLY on the dual criterion
+`num_steps="auto"` runs the 64-128-256-512 ladder stopping ONLY on the dual criterion
 (residual AND max(L1, L2) successive-grid stability, both <= 1%; rank stability is banned as
 a signal). `converged=False` is a first-class outcome with a footer line the user cannot
 miss. A bare int target is the vocab id at the final non-padding position, warning in the one
 band where it is also a valid position index. `steps_per_batch=8` rides the randomized
 batching audit. Rendering: the typed `TokenAttributionPayload` (zero-centered diverging score
 domain, mandatory footer lines) feeds the future tviz renderer; until then `show()` returns
-the escaped-table fallback. `TokenAttributionResult` freezes text, ids, raw + display tokens
+the escaped-table fallback. `TokenAttribution` freezes text, ids, raw + display tokens
 (wordpieces are never silently merged), offsets, masks, scores, the full `(L, D)` values, the
 exact baseline, provenance, truncation (explicit only, warned), steps, audit evidence, cost,
 and the convergence record.
 
 ### `SiteStash` and the epsilon-LRP litmus
 
-`tl.attribution.SiteStash` is the ENTIRE permanent LRP-adjacent surface: a forward/backward
-pairing store (`stash`/`fetch`, LIFO pairing proven on reused modules, leftovers disclosed).
-There is no rule registry, no composites, no canonizers -- the cleanroom epsilon-LRP recipe
+TorchLens has no public LRP surface. The recipe uses `SiteStash`, an internal forward/backward
+pairing store in `torchlens.attribution._stash` (`stash`/`fetch`, LIFO pairing proven on reused
+modules, leftovers disclosed); it is not exported from `tl.attribution`. There is no rule registry, no composites, no canonizers -- the cleanroom epsilon-LRP recipe
 with its per-site conservation ledger lives in
 [`docs/recipes/lrp_epsilon_litmus.md`](../recipes/lrp_epsilon_litmus.md).
 

@@ -96,13 +96,13 @@ exactly, 225 linear records (7 per decoder layer x 32 + head).
 
 Raw text works structure-only:
 `tl.trace(meta_lm, "hello world", capture=tl.options.CaptureOptions(structure_only=True))`
-(or `tl.bridge.hf.trace_text(..., tokenizer=tok, capture=...)`) tokenizes,
+(or `tl.bridge.transformers.trace_text(..., tokenizer=tok, capture=...)`) tokenizes,
 keeps the ids' shape on meta, and passes a meta ALL-ONES attention mask.
 Padded prompts (a mask that is not all ones) refuse typed
 `structure_only_text_mask_not_all_ones`. Whether the mask path is value-free
 depends on the attention backend, and TorchLens never switches it for you:
 under `attn_implementation="eager"` or the TorchLens backend
-(`tl.bridge.hf.register_attention(model)`) the capture traces and discharges
+(`tl.bridge.transformers.register_attention(model)`) the capture traces and discharges
 CORROBORATED against the real text-route run (measured on distilgpt2,
 Qwen2.5-0.5B and pythia-160m, digests equal); under the default `sdpa`
 backend transformers reads the mask's values to decide whether to skip it,

@@ -56,7 +56,7 @@ def test_runnable_save_refuses_intervention_replaced_capture(tmp_path: Path) -> 
     )
     assert any(bool(getattr(op, "intervention_replaced", False)) for op in trace.layer_list)
     with pytest.raises(RunnablePreflightError) as excinfo:
-        tl.save(trace, tmp_path / "intervened.tlspec", level="runnable")
+        trace.save(tmp_path / "intervened.tlspec", level="runnable")
     assert excinfo.value.fields.get("code") == "sparse_preflight_failed"
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
     assert "user_intervention_not_replayable" in diagnostics
@@ -76,6 +76,6 @@ def test_runnable_save_allows_zero_match_intervention(tmp_path: Path) -> None:
             capture=_CAPTURE,
         )
     assert not any(bool(getattr(op, "intervention_replaced", False)) for op in trace.layer_list)
-    tl.save(trace, tmp_path / "plain.tlspec", level="runnable")
+    trace.save(tmp_path / "plain.tlspec", level="runnable")
     loaded = tl.load(tmp_path / "plain.tlspec")
     assert loaded.readiness is not None

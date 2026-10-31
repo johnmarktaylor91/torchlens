@@ -8,7 +8,7 @@ from enum import Enum
 from fractions import Fraction
 from typing import TYPE_CHECKING, ClassVar, Literal, cast
 
-from ..selection import _SelectionOperand
+from .._selection import _SelectionOperand
 from ._errors import ReceptiveFieldError, ReceptiveFieldValidationError
 
 if TYPE_CHECKING:
@@ -428,7 +428,7 @@ class ReceptiveFieldBox(_SelectionOperand):
         never a fuzzy mask.
         """
 
-        from ..selection import _selection_from_box
+        from .._selection import _selection_from_box
 
         return _selection_from_box(self)
 
@@ -503,7 +503,7 @@ class ReceptiveFieldBox(_SelectionOperand):
 
 
 @dataclass(frozen=True)
-class GradientReceptiveField(_SelectionOperand):
+class GradReceptiveField(_SelectionOperand):
     """Empirical receptive-field influence set measured by autograd."""
 
     __match_args__: ClassVar[tuple[str, ...]] = (
@@ -571,7 +571,7 @@ class GradientReceptiveField(_SelectionOperand):
         (relation=``exact`` w.r.t. the empirical mask), unchanged by lifting.
         """
 
-        from ..selection import _selection_from_gradient
+        from .._selection import _selection_from_gradient
 
         return _selection_from_gradient(self)
 
@@ -625,9 +625,9 @@ class ReceptiveFieldValidation:
         "op_label",
         "unit",
         "geometric",
-        "gradient",
+        "grad",
         "violations",
-        "n_violations",
+        "num_violations",
         "per_axis_excess",
         "slack_per_axis",
         "cross_batch",
@@ -639,9 +639,9 @@ class ReceptiveFieldValidation:
     op_label: str
     unit: tuple[int, ...]
     geometric: Mapping[str, ReceptiveFieldBox]
-    gradient: Mapping[str, GradientReceptiveField]
+    grad: Mapping[str, GradReceptiveField]
     violations: tuple[ReceptiveFieldViolation, ...]
-    n_violations: int
+    num_violations: int
     per_axis_excess: tuple[int, ...] | None
     slack_per_axis: tuple[int, ...] | None
     cross_batch: Literal["none", "geometric", "undeclared"]
@@ -661,9 +661,9 @@ class ReceptiveFieldValidation:
             If counts or diagnostics are structurally invalid.
         """
 
-        if self.n_violations < len(self.violations):
+        if self.num_violations < len(self.violations):
             raise ValueError("n_violations must be at least the listed violation count.")
-        if self.n_violations < 0:
+        if self.num_violations < 0:
             raise ValueError("n_violations must be non-negative.")
 
     @property
@@ -726,7 +726,7 @@ class ReceptiveFieldProfile:
 
 
 __all__ = [
-    "GradientReceptiveField",
+    "GradReceptiveField",
     "GridLayout",
     "ReceptiveField",
     "ReceptiveFieldAlignment",

@@ -31,8 +31,8 @@ import torch
 import torch.nn as nn
 
 import torchlens
-from torchlens.postprocess import control_flow
-from torchlens.utils import introspection
+from torchlens._postprocess import control_flow
+from torchlens._utils import introspection
 
 # ---------------------------------------------------------------------------
 # Test models
@@ -285,7 +285,7 @@ class TestCudaProbeGating:
     def test_no_cuda_calls_when_unavailable(self) -> None:
         """On a CPU-only run, ``empty_cache`` and ``is_available`` see at most one call."""
 
-        from torchlens.utils import tensor_utils
+        from torchlens._utils import tensor_utils
 
         # Reset the module-level cache so we observe the first call this test
         # makes (the conftest may have warmed it up earlier in the session).
@@ -317,7 +317,7 @@ class TestCudaProbeGating:
     def test_cached_value_short_circuits_subsequent_lookups(self) -> None:
         """Once cached, ``_is_cuda_available`` does not reach the torch API again."""
 
-        from torchlens.utils import tensor_utils
+        from torchlens._utils import tensor_utils
 
         tensor_utils._cuda_available = None
         with mock.patch.object(torch.cuda, "is_available", return_value=False) as fake_avail:
@@ -345,7 +345,7 @@ class TestCudaProbeGating:
         a GPU training loop dropping the warm allocator arena).
         """
 
-        from torchlens.utils import tensor_utils
+        from torchlens._utils import tensor_utils
 
         tensor_utils._cuda_available = None
         # Don't mock torch.cuda.is_available so the genuine probe is used.

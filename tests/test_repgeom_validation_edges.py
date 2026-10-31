@@ -73,20 +73,20 @@ def test_classical_mds_refuses_malformed_distance_matrices() -> None:
 
 @pytest.mark.smoke
 def test_classical_mds_validates_option_values_and_stimulus_counts() -> None:
-    """n_components, min_n, input_kind, and stimulus floors are all enforced."""
+    """n_components, min_stimuli, input_kind, and stimulus floors are all enforced."""
 
     good = _distances(8)
 
     with pytest.raises(ValueError, match="n_components"):
         tl.repgeom.classical_mds(good, 0, input_kind="distances")
-    with pytest.raises(ValueError, match="min_n"):
-        tl.repgeom.classical_mds(good, min_n=2, input_kind="distances")
+    with pytest.raises(ValueError, match="min_stimuli"):
+        tl.repgeom.classical_mds(good, min_stimuli=2, input_kind="distances")
     with pytest.raises(ValueError, match="input_kind"):
         tl.repgeom.classical_mds(good, input_kind="magic")
     with pytest.raises(ValueError, match="at least 3 stimuli"):
-        tl.repgeom.classical_mds(_distances(2), input_kind="distances", min_n=3)
+        tl.repgeom.classical_mds(_distances(2), input_kind="distances", min_stimuli=3)
     with pytest.raises(ValueError, match="too few stimuli"):
-        tl.repgeom.classical_mds(_distances(5), input_kind="distances", min_n=6)
+        tl.repgeom.classical_mds(_distances(5), input_kind="distances", min_stimuli=6)
 
 
 @pytest.mark.parametrize("scale", [1e-12, 1e-6, 1.0, 1e6, 1e12])
@@ -149,10 +149,10 @@ def test_classical_mds_refuses_rank_deficient_input() -> None:
 
 @pytest.mark.smoke
 def test_scree_and_effective_dimensionality_validate_options() -> None:
-    """scree min_n floor and variance_threshold bounds are enforced."""
+    """scree min_stimuli floor and variance_threshold bounds are enforced."""
 
-    with pytest.raises(ValueError, match="min_n"):
-        tl.repgeom.scree(np.ones((4, 2)), min_n=2)
+    with pytest.raises(ValueError, match="min_stimuli"):
+        tl.repgeom.scree(np.ones((4, 2)), min_stimuli=2)
     with pytest.raises(ValueError, match="variance_threshold"):
         tl.repgeom.effective_dimensionality(_distances(6), variance_threshold=1.5)
     with pytest.raises(ValueError, match="variance_threshold"):

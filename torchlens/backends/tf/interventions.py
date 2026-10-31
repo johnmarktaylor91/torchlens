@@ -8,7 +8,7 @@ capture spine:
 1. Module-boundary sites (``tl.module`` / ``tl.in_module`` conditions)
    substitute Keras/`tf.Module` call outputs through the existing module
    ``__call__`` patch.
-2. Op-level sites (``tl.func`` / ``tl.label`` / ``tl.contains`` conditions)
+2. Op-level sites (``tl.func`` / ``tl.label`` / ``tl.label_contains`` conditions)
    substitute returns of a curated registry of python entry points that
    Keras-3 eager execution actually flows through.
 
@@ -28,14 +28,14 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from ...intervention.selectors import BaseSelector
-from ...intervention.types import Edit, InterventionDecision
-from ...ir.intervention import FireResult
-from ...ir.op_record import amend_module_exit_intervention
-from ...postprocess._selective_save import (
+from ..._ir.intervention import FireResult
+from ..._ir.op_record import amend_module_exit_intervention
+from ..._postprocess._selective_save import (
     _STATIC_INTERVENTION_SELECTOR_KINDS,
     reject_selector_outside_kinds,
 )
+from ...intervention.selectors import BaseSelector
+from ...intervention.types import Edit, InterventionDecision
 from ..registry import BackendUnsupportedError
 
 # Alias of the neutral authority table (the ``output`` drop is declared
@@ -192,7 +192,7 @@ def normalize_tf_interventions(intervene: Any, tf: Any) -> TFInterventionPlan:
             raise BackendUnsupportedError(
                 "tf backend supports trace(intervene=...) built from "
                 "tl.when(selector, action) with static selectors such as tl.func, "
-                "tl.label, tl.module, tl.in_module, tl.contains, and boolean "
+                "tl.label, tl.module, tl.in_module, tl.label_contains, and boolean "
                 "composites; value-dependent callable conditions need predicate-time "
                 "semantics the tf preview does not implement."
             )

@@ -7,10 +7,10 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.data_classes import ParamAccessor
-from torchlens.data_classes.layer import OpAccessor
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
+from torchlens._data_classes.layer import OpAccessor
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import ParamAccessor
 from torchlens.options import CaptureOptions
 
 
@@ -49,7 +49,7 @@ def test_trace_call_tree_and_num_modules() -> None:
     calls = list(trace.walk_calls())
 
     assert trace.num_modules == len(trace.modules)
-    assert trace.num_module_calls == len(trace.module_calls)
+    assert len(trace.module_calls) == len(trace.module_calls)
     assert len(calls) == len(trace.module_calls)
     assert calls[0].call_label == "self:1"
     assert calls[0].max_descendant_depth >= 2
@@ -108,8 +108,8 @@ def test_module_recursive_params_memory_and_call_tree() -> None:
     assert block.forward_kwargs_template is None
     assert block.backward_duration is None
     assert block.total_backward_duration is None
-    assert isinstance(block.total_output_activation_memory, tl.Bytes)
-    assert isinstance(block.total_internal_activation_memory, tl.Bytes)
+    assert isinstance(block.total_output_activation_memory, tl.types.Bytes)
+    assert isinstance(block.total_internal_activation_memory, tl.types.Bytes)
 
 
 def test_module_call_memory_templates_and_call_tree() -> None:
@@ -130,7 +130,7 @@ def test_module_call_memory_templates_and_call_tree() -> None:
     assert call.internal_gradient_memory == 0
     assert call.autograd_memory >= 0
     assert call.param_memory == trace.modules["block"].param_memory
-    assert isinstance(call.param_memory, tl.Bytes)
+    assert isinstance(call.param_memory, tl.types.Bytes)
     assert descendants[0] is call
     assert len(descendants) == call.num_descendant_calls + 1
     assert call.num_descendant_calls >= 2

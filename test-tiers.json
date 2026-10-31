@@ -4,6 +4,7 @@
   "command": [
     "uv",
     "run",
+    "--no-project",
     "--python",
     "3.11",
     "--with-requirements",
@@ -31,6 +32,17 @@
         "tests/test_themes.py"
       ]
     }
+  },
+  "worker_lane": {
+    "seconds": 300,
+    "cpus": 1,
+    "args": [
+      "tests/test_themes.py",
+      "-o",
+      "addopts=",
+      "-x",
+      "--tb=short"
+    ]
   },
   "pre_merge": {
     "seconds": 12000,

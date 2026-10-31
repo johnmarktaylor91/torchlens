@@ -13,10 +13,10 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from ..data_classes._site_key import ROOT_CALL_INSTANCE, SITE_KEY_PREFIX, parse_site_key
+from .._data_classes._site_key import ROOT_CALL_INSTANCE, SITE_KEY_PREFIX, parse_site_key
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: Raw-label survival pattern (mirrors the roster sweep in invariants.py):
 #: a raw label leaking into any site-key COMPONENT is an unresolvable

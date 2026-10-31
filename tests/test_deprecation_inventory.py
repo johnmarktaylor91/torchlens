@@ -17,7 +17,7 @@ until the policy is consciously changed.
 
 Deliberately NOT covered (they are not API deprecation shims):
 
-- torch-version compatibility (``torchlens/utils/_torch_compat.py`` HAS_*
+- torch-version compatibility (``torchlens/_utils/_torch_compat.py`` HAS_*
   capability flags and guarded fallbacks);
 - artifact-format compatibility (the tlspec version floor, legacy-save
   loading, the load-path folding of legacy conditional edge keys, legacy

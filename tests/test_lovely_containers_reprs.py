@@ -85,7 +85,7 @@ def test_accessors_point_never_dump(deep_trace) -> None:
     for accessor in (deep_trace.layers, deep_trace.params, deep_trace.modules, deep_trace.buffers):
         line = repr(accessor)
         assert "\n" not in line
-        assert ".head()" in line and ".find()" in line
+        assert ".head()" in line and ".search()" in line
     assert "buffers" in repr(deep_trace.layers)  # composition note names buffers
     view = str(deep_trace.layers)
     assert len(view.splitlines()) <= 24  # voice rule 9 collection budget
@@ -98,7 +98,7 @@ def test_accessor_head_and_find(deep_trace) -> None:
 
     head = deep_trace.layers.head(3)
     assert len(head) == 3
-    found = deep_trace.params.find("weight")
+    found = deep_trace.params.search("weight")
     assert found and all("weight" in p.address for p in found)
 
 
@@ -113,7 +113,7 @@ def test_partial_trace_badge_first() -> None:
 
     with pytest.raises(Exception) as exc_info:
         tl.trace(_Boom(), torch.randn(2, 2))
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
     line = repr(partial)
     assert line.startswith("PartialTrace [partial]")
     card = str(partial)
@@ -228,7 +228,7 @@ _AUTO_REPR_ALLOWED = {
     # C06-owned re-exports (bounded descriptors; ownership seam):
     "HistogramDescriptor",
     "HistogramResult",
-    "SpineResult",
+    "RunningStatsResult",
     # C02/F08/F09-owned bounded FACT rows (measured <=320 chars on a real
     # capture; the unbounded containers FactCore / ComputeAggregation /
     # IdentityIndex got designed reprs in F10):
@@ -257,9 +257,7 @@ _AUTO_REPR_ALLOWED = {
     "InstrumentedRateRow",
     "MachineBalance",
     "MfuProvenance",
-    "NextStep",
     "PeakRow",
-    "RateCalibration",
     "RooflineRow",
     "SixNDFacts",
     "SurfaceEntry",

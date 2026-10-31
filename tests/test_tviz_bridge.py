@@ -15,7 +15,9 @@ from pathlib import Path
 import pytest
 import torch
 
-import torchlens.tviz as tviz
+import torchlens
+import torchlens.errors
+import torchlens.transformer as tviz
 
 
 def _views(n_layers: int = 2) -> list[tviz.AttentionView]:
@@ -57,7 +59,7 @@ def test_rectangular_axes_refuse_the_bridge() -> None:
         heads=(0, 1),
         layer="dec.0.cross",
     )
-    with pytest.raises(tviz.TvizError) as excinfo:
+    with pytest.raises(torchlens.errors.RenderError) as excinfo:
         tviz.circuitsvis_payload([view])
     assert excinfo.value.fields["code"] == "tv_record_invalid"
 
@@ -65,7 +67,7 @@ def test_rectangular_axes_refuse_the_bridge() -> None:
 def test_oversized_payload_refuses_typed() -> None:
     """Above the ceiling the handoff refuses with the measured size."""
 
-    with pytest.raises(tviz.TvizError) as excinfo:
+    with pytest.raises(torchlens.errors.RenderError) as excinfo:
         tviz.circuitsvis_attention(_views(), max_bytes=64)
     error = excinfo.value
     assert error.fields["code"] == "tv_bridge_payload_too_large"
@@ -80,7 +82,7 @@ def test_oversized_payload_refuses_typed() -> None:
 def test_missing_bridge_dependency_refuses_typed() -> None:
     """circuitsvis absent -> tv_bridge_unavailable naming the native path."""
 
-    with pytest.raises(tviz.TvizError) as excinfo:
+    with pytest.raises(torchlens.errors.RenderError) as excinfo:
         tviz.circuitsvis_attention(_views())
     assert excinfo.value.fields["code"] == "tv_bridge_unavailable"
 
@@ -88,7 +90,7 @@ def test_missing_bridge_dependency_refuses_typed() -> None:
 def test_native_path_unaffected_by_bridge_state(tmp_path: Path) -> None:
     """Composition row 14: static rendering never depends on the bridge."""
 
-    artifact = tviz.render_attention(_views()[0], tmp_path / "native.svg")
+    artifact = torchlens.viz.attention(_views()[0], tmp_path / "native.svg")
     assert artifact.paths[0].exists()
     assert "<image" not in artifact.paths[0].read_text()
 

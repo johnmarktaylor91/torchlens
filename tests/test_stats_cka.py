@@ -70,7 +70,7 @@ def test_streaming_cka_matches_one_shot() -> None:
     for start, stop in zip(boundaries, boundaries[1:]):
         accumulator.update(a[start:stop], b[start:stop])
 
-    assert accumulator.result() == pytest.approx(cka(a, b), abs=1e-12)
+    assert accumulator.compute() == pytest.approx(cka(a, b), abs=1e-12)
 
 
 def test_cka_degenerate_input_returns_nan() -> None:
@@ -91,7 +91,7 @@ def test_cross_covariance_matches_direct_computation() -> None:
     accumulator.update(a[4:], b[4:])
     expected = (a - a.mean(dim=0)).T @ (b - b.mean(dim=0)) / (a.shape[0] - 1)
 
-    torch.testing.assert_close(accumulator.result(), expected, atol=1e-12, rtol=1e-12)
+    torch.testing.assert_close(accumulator.compute(), expected, atol=1e-12, rtol=1e-12)
 
 
 def test_cross_covariance_refuses_mismatched_rows() -> None:
@@ -165,7 +165,7 @@ def test_aggregate_grad_output_metric_raises_clear_key_error() -> None:
 
 
 def test_cka_results_name_the_measure_variant_they_compute() -> None:
-    """One-shot cka and CKA.result carry the similarity-repository id (U56.3)."""
+    """One-shot cka and CKA.compute carry the similarity-repository id (U56.3)."""
 
     import json
     import pickle
@@ -178,7 +178,7 @@ def test_cka_results_name_the_measure_variant_they_compute() -> None:
     one_shot = cka(a, b)
     streaming = CKA()
     streaming.update(a, b)
-    streamed = streaming.result()
+    streamed = streaming.compute()
     for score in (one_shot, streamed):
         assert isinstance(score, SimilarityScore) and isinstance(score, float)
         assert score.similarity_repository_id == LINEAR_CKA_ID == CKA.similarity_repository_id

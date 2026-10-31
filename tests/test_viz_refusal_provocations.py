@@ -88,5 +88,5 @@ def test_graphviz_render_failure_refuses_typed(
 
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", _boom)
     with pytest.raises(GraphvizRenderError) as exc_info:
-        small_trace.draw(vis_outpath=str(tmp_path / "g"), vis_save_only=True)
+        small_trace.draw(path=str(tmp_path / "g"), vis_save_only=True)
     assert exc_info.value.fields["code"] == "graphviz_render_failed"

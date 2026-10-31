@@ -13,6 +13,7 @@ foreign to answer a negative (pickle-safety).
 from __future__ import annotations
 
 import contextlib
+import importlib
 import pickle
 import sys
 
@@ -20,7 +21,11 @@ import pytest
 
 import torchlens as tl
 from torchlens._errors import FacadeTeachingError, MissingDependencyError
-from torchlens.utils.facade import DependencyGate, facade_dir, resolve_facade_attr
+from torchlens._utils.facade import DependencyGate, facade_dir, resolve_facade_attr
+
+#: The notebook facade left the root surface (private package); its facade
+#: behaviour is still pinned through the module itself.
+_NOTEBOOK = importlib.import_module("torchlens._notebook")
 
 # ---------------------------------------------------------------------------
 # The mechanism, exercised through a synthetic namespace (every step).
@@ -34,7 +39,7 @@ def _resolve(name: str, **overrides: object) -> object:
         "owner": "torchlens._synthetic",
         "name": name,
         "module_globals": {},
-        "lazy_attrs": {"real": ("torchlens.utils.facade", "facade_dir")},
+        "lazy_attrs": {"real": ("torchlens._utils.facade", "facade_dir")},
         "redirects": {"moved": "use tl.new_home.moved"},
         "refusals": {"never": "deliberately unsupported; use other_tool"},
         "dependencies": {},
@@ -50,7 +55,7 @@ def test_step1_underscore_short_circuits_plain() -> None:
         _resolve(
             "_moved",
             redirects={"_moved": "never consulted"},
-            lazy_attrs={"_moved": ("torchlens.utils.facade", "facade_dir")},
+            lazy_attrs={"_moved": ("torchlens._utils.facade", "facade_dir")},
         )
     assert type(excinfo.value) is AttributeError
 
@@ -71,7 +76,7 @@ def test_step2_redirect_beats_real_name_and_needs_no_dependency() -> None:
     with pytest.raises(FacadeTeachingError):
         _resolve(
             "moved",
-            lazy_attrs={"moved": ("torchlens.utils.facade", "facade_dir")},
+            lazy_attrs={"moved": ("torchlens._utils.facade", "facade_dir")},
             dependencies={"moved": DependencyGate("not_a_real_pkg_xyz", "pip install nothing")},
         )
 
@@ -147,14 +152,22 @@ def test_typed_errors_pickle_with_fields() -> None:
 
 
 def test_root_reachability_rows_resolve() -> None:
-    """tl.bridge / tl.callbacks / tl.neuro / tl.notebook / tl.load_extraction resolve."""
+    """tl.bridge / tl.callbacks / tl.neuro resolve; tl.load reads extractions.
+
+    The notebook namespace is private and the extraction reader folded into
+    ``tl.load``: neither is a root name, and the old extraction spelling teaches
+    the new one.
+    """
 
     assert tl.bridge.__name__ == "torchlens.bridge"
     assert tl.callbacks.__name__ == "torchlens.callbacks"
     assert tl.neuro.__name__ == "torchlens.neuro"
-    assert tl.notebook.__name__ == "torchlens.notebook"
-    assert callable(tl.load_extraction)
-    assert "load_extraction" in tl.__all__
+    assert "notebook" not in tl.__all__ and not hasattr(tl, "notebook")
+    assert callable(tl.load) and "load" in tl.__all__
+    assert "load_extraction" not in tl.__all__
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        tl.load_extraction  # noqa: B018 - attribute access IS the assertion.
+    assert "torchlens.load" in str(excinfo.value)
 
 
 def test_root_underscore_rows_are_gone() -> None:
@@ -169,7 +182,7 @@ def test_root_underscore_rows_are_gone() -> None:
 def test_hasattr_never_explodes_across_namespaces() -> None:
     """hasattr answers False (never raises) on every facade namespace."""
 
-    for namespace in (tl, tl.neuro, tl.notebook, tl.bridge, tl.callbacks):
+    for namespace in (tl, tl.neuro, _NOTEBOOK, tl.bridge, tl.callbacks):
         assert hasattr(namespace, "definitely_not_a_real_name_xyz") is False
         assert hasattr(namespace, "_ipython_canary_method_should_not_exist_") is False
 
@@ -186,7 +199,7 @@ def test_appliance_probes_import_nothing_foreign() -> None:
     before = {name for name in foreign if name in sys.modules}
     for name in ("anything", "not_a_neuro_name", "__wrapped__"):
         assert hasattr(tl.neuro, name) is False
-        assert hasattr(tl.notebook, name) is False
+        assert hasattr(_NOTEBOOK, name) is False
     # F22: "datasets"/"rdms" are REAL gated neuro names now. Probing them --
     # and RESOLVING them where the extra is installed -- must still import
     # none of the foreign packages (the neuro modules import them lazily
@@ -202,7 +215,7 @@ def test_appliance_probes_import_nothing_foreign() -> None:
 def test_dir_lists_real_public_names_and_nothing_else() -> None:
     """dir() stops advertising implementation imports on every facade."""
 
-    for namespace in (tl, tl.neuro, tl.notebook, tl.bridge, tl.callbacks):
+    for namespace in (tl, tl.neuro, _NOTEBOOK, tl.bridge, tl.callbacks):
         listed = dir(namespace)
         assert "importlib" not in listed
         assert "annotations" not in listed

@@ -10,11 +10,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._errors import InvalidArgumentError
 from torchlens._io import PreReleaseArtifactError
 from torchlens._io.prerelease import activate_prerelease_fields
-from torchlens.postprocess._site_key import SiteKeyMinter
-from torchlens.validation import MetadataInvariantError, check_metadata_invariants
+from torchlens._postprocess._site_key import SiteKeyMinter
+from torchlens.errors import MetadataInvariantError
+from torchlens.validation import check_metadata_invariants
 
 
 class _Tied(nn.Module):
@@ -44,7 +44,7 @@ def test_g1_roundtrip_bundle_writer(tmp_path) -> None:
     assert all(isinstance(key, str) for key in saved_keys.values())
     path = tmp_path / "sites.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
     assert _keys(loaded) == saved_keys
 
@@ -70,7 +70,7 @@ def test_g2_loaded_recompute_byte_parity(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "parity.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
     minter = SiteKeyMinter()
     for label in loaded.op_labels:
@@ -92,7 +92,7 @@ def test_g3_forged_key_fails_is1_and_is2(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "forged.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
     assert check_metadata_invariants(loaded)
     # Malformed forgery -> I-S1.
@@ -112,7 +112,7 @@ def test_g3_label_bearing_forged_key_fails_sweep(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "label_forged.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
     loaded.ops["relu_1_2:1"].site_key = "s1|act_raw|relu||9"
     with pytest.raises(MetadataInvariantError, match="survived postprocessing"):
@@ -130,7 +130,7 @@ def test_g4_marked_bundle_refuses_switch_off(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "marked.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
     with pytest.raises(PreReleaseArtifactError, match="pre-release field marker"):
         tl.load(str(path))
 
@@ -147,32 +147,15 @@ def test_g4_marked_streaming_artifact_refuses_switch_off(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# G5: legacy load -- a real (switch-off) v7 artifact loads with
-# site_key=None everywhere; consumers behave per the consumer matrix
+# G5: legacy load -- the real (switch-off) v7 artifact was written by
+# torchlens 2.x, which this release does not read: it refuses typed
 # ---------------------------------------------------------------------------
 
 
-def test_g5_legacy_v7_artifact_loads_keyless_and_refuses_typed() -> None:
-    import warnings
+def test_g5_legacy_v7_artifact_refuses_as_2x() -> None:
     from pathlib import Path
 
-    fixture = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
-    with warnings.catch_warnings():
-        # The checked-in pre-bump artifact loads with the age advisory.
-        warnings.simplefilter("ignore")
-        loaded = tl.load(str(fixture))  # real v7 write: site_key was DROPped
-    assert set(_keys(loaded).values()) == {None}
-    # Out of the invariant's declared domain: validation skips, never reds.
-    assert check_metadata_invariants(loaded)
-    # Consumer matrix: accessors and the join profile refuse typed.
-    with pytest.raises(InvalidArgumentError) as site_exc:
-        _ = loaded["linear_1_1"].site_key
-    assert site_exc.value.fields["code"] == "site_key_unavailable"
-    with pytest.raises(InvalidArgumentError) as peers_exc:
-        _ = loaded["linear_1_1"].site_peers
-    assert peers_exc.value.fields["code"] == "site_key_unavailable"
-    from torchlens.postprocess._site_join import site_profile
+    from _refuses_as_2x import assert_refuses_as_2x
 
-    with pytest.raises(InvalidArgumentError) as profile_exc:
-        site_profile(loaded)
-    assert profile_exc.value.fields["code"] == "site_key_unavailable"
+    fixture = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
+    assert_refuses_as_2x(fixture)

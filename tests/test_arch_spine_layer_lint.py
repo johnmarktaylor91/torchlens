@@ -304,7 +304,7 @@ def test_torch_privates_license_is_declared_and_shrink_only() -> None:
     undeclared = sorted(touching - TORCH_PRIVATE_LICENSED_PACKAGES)
     assert undeclared == [], (
         f"packages touching torch._/_torch_compat without a license row: {undeclared} "
-        "-- route the probe through torchlens/utils/_torch_compat.py and add the "
+        "-- route the probe through torchlens/_utils/_torch_compat.py and add the "
         "package to TORCH_PRIVATE_LICENSED_PACKAGES only with a reviewed reason"
     )
     stale = sorted(TORCH_PRIVATE_LICENSED_PACKAGES - touching)

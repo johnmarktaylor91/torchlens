@@ -42,9 +42,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
+from torchlens._utils import rng as rng_utils
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens.utils import rng as rng_utils
 
 pytestmark = pytest.mark.skipif(
     not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
@@ -63,7 +63,7 @@ def _branch(x: torch.Tensor, value: float) -> torch.Tensor:
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Capture a runnable-ready trace under a fixed seed."""
 
-    return tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    return tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
 
 
 def _host_rng_consumed(model: nn.Module, x: torch.Tensor) -> bool:

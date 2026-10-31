@@ -25,8 +25,8 @@ import weakref
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.trace import Trace
 
 #: Structural signature row type: ``(num_layers, num_params,
 #: num_params_trainable, num_params_frozen, ops_signature, wiring_digest)``.
@@ -90,7 +90,7 @@ def _module_structural_signature(module: Module) -> StructuralSignature:
         for layer in module.layers
     )
     return (
-        int(module.num_layers),
+        len(module.layer_labels),
         int(module.num_params),
         int(module.num_params_trainable),
         int(module.num_params_frozen),
@@ -315,7 +315,7 @@ class MemberFingerprintCache:
             for layer in module.layers
         )
         signature: StructuralSignature = (
-            int(module.num_layers),
+            len(module.layer_labels),
             int(module.num_params),
             int(module.num_params_trainable),
             int(module.num_params_frozen),

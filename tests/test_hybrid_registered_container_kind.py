@@ -19,9 +19,9 @@ from typing import Any
 import pytest
 import torch
 
+from torchlens._ir.container import _CONTAINER_REGISTRY, register_container
+from torchlens._ir.container_registry import _build_container_spec
 from torchlens._runnable_execution import _container_kind, _container_leaf_paths
-from torchlens.ir.container import _CONTAINER_REGISTRY, register_container
-from torchlens.ir.container_registry import _build_container_spec
 
 
 @dataclasses.dataclass

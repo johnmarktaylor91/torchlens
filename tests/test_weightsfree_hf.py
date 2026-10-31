@@ -37,7 +37,7 @@ def _structure(model, ids):
 
 
 def _gate(real_trace, meta_trace) -> tuple[bool, object]:
-    digest_equal = tl.hash.trace(real_trace) == tl.hash.trace(meta_trace)
+    digest_equal = tl.fingerprint.trace(real_trace) == tl.fingerprint.trace(meta_trace)
     discharge = meta_trace.discharge_against(real_trace)
     return digest_equal, discharge
 

@@ -77,7 +77,7 @@ def _graph_nodes(root: torch.Tensor) -> dict[int, Any]:
 
 def _single_pass(trace: Any) -> Any:
     status = backward_status(trace)
-    (attribution,) = status.attributions
+    (attribution,) = status.flops_attributions
     rows = sum(row.flops for row in attribution.rows)
     assert rows + attribution.unattributed_flops == attribution.executed_flops
     return attribution
@@ -113,7 +113,7 @@ def test_multi_root_backward_walks_each_root_in_the_capture_it_reaches(entry: st
         assert set(trace2.grad_fn_logs) == graph2.keys()
         cases = ((trace1, root1, 2 * 5 * 4 * 3), (trace2, root2, 2 * 5 * 3 * 2))
         for trace, root, closed_form in cases:
-            (record,) = trace.backward_passes
+            (record,) = trace.autograd.backward_passes
             assert list(record.root_grad_fn_ids) == [id(root.grad_fn)]
             attribution = _single_pass(trace)
             assert attribution.executed_flops == closed_form
@@ -142,7 +142,7 @@ def test_one_capture_with_two_roots_walks_both() -> None:
         expected = _graph_nodes(root1) | _graph_nodes(root2)
         torch.autograd.backward([root1, root2])
         assert set(trace.grad_fn_logs) == expected.keys()
-        (record,) = trace.backward_passes
+        (record,) = trace.autograd.backward_passes
         assert list(record.root_grad_fn_ids) == [id(root1.grad_fn), id(root2.grad_fn)]
         assert len(record.root_meta) == 2
         attribution = _single_pass(trace)
@@ -202,9 +202,9 @@ def _census_refs(
     ``own_ops_only`` keeps the nodes whose forward op this trace recorded.
     """
 
-    record = trace.backward_passes[pass_index - 1]
+    record = trace.autograd.backward_passes[pass_index - 1]
     refs = set()
-    for op in record.dispatched_ops:
+    for op in record.aten_ops:
         ref = op.grad_fn_call_ref
         grad_fn = None if ref is None else trace.grad_fn_logs.get(ref[0])
         if grad_fn is not None and (grad_fn.has_op or not own_ops_only):
@@ -259,7 +259,7 @@ def test_three_readers_charge_each_capture_its_own_marker() -> None:
         assert unpacked
         assert {(call, pass_) for _, call, pass_ in unpacked} == {(2, 2)}
         assert unpacked <= _census_refs(trace1, 2, own_ops_only=False)
-        assert backward_status(trace1).attributions[1].unattributed_flops == 0
+        assert backward_status(trace1).flops_attributions[1].unattributed_flops == 0
     finally:
         trace1.cleanup()
         trace2.cleanup()

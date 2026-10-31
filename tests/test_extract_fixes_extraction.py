@@ -27,10 +27,11 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
-from torchlens.dataset_extraction import extract_dataset, load_extraction
+from torchlens._utils._torch_compat import TorchCapabilityWarning
+from torchlens.dataset_extraction import load_extraction
 from torchlens.errors._base import TorchLensWarning
-from torchlens.utils._torch_compat import TorchCapabilityWarning
 
 
 class _AbsPosModel(nn.Module):
@@ -103,7 +104,7 @@ def test_load_extraction_passes_mmap_and_weights_only(
         stimuli,
         ["relu"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         progress=False,
         shard_format="pt",
     )
@@ -149,7 +150,7 @@ def test_pt_shard_reader_mmaps_a_path_object(tmp_path: Path) -> None:
         stimuli,
         ["relu"],
         batch_size=4,
-        output_dir=out_dir,
+        path=out_dir,
         progress=False,
         shard_format="pt",
     )
@@ -173,7 +174,7 @@ def test_stimulus_ids_in_memory_refuses_typed() -> None:
             progress=False,
         )
     assert excinfo.value.fields["code"] == "extraction_stimulus_ids_in_memory_unsupported"
-    assert "output_dir" in str(excinfo.value)
+    assert "requires path=" in str(excinfo.value)
 
 
 @pytest.mark.smoke
@@ -328,7 +329,7 @@ def test_completed_resume_is_a_true_noop(tmp_path: Path) -> None:
     stimuli = torch.randn(4, 3)
     out_dir = tmp_path / "artifact"
     extract_dataset(
-        model, stimuli, ["relu"], batch_size=2, output_dir=out_dir, device="cpu", progress=False
+        model, stimuli, ["relu"], batch_size=2, path=out_dir, device="cpu", progress=False
     )
     n_forwards = len(forward_calls)
     n_moves = len(to_calls)
@@ -340,7 +341,7 @@ def test_completed_resume_is_a_true_noop(tmp_path: Path) -> None:
         stimuli,
         ["relu"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         device="cpu",
         resume=True,
         progress=False,
@@ -439,7 +440,7 @@ def test_gpt2_class_mapping_batch_derivation_is_exact() -> None:
     envelope = BatchEnvelope(
         args=(),
         kwargs={"input_ids": ids, "attention_mask": mask},
-        row_count=2,
+        num_rows=2,
         mask=mask,
         disclosure={"kind": "test"},
     )

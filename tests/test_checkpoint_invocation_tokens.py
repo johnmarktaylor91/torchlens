@@ -22,9 +22,9 @@ from torch.utils.checkpoint import checkpoint
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._ir.events import CheckpointInvocationObserved
 from torchlens.backends.torch import backward as backward_mod
 from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
-from torchlens.ir.events import CheckpointInvocationObserved
 
 
 class _OneCheckpoint(nn.Module):
@@ -228,7 +228,7 @@ def test_unmatched_backward_warn_sets_d4_and_warn_once_preserved() -> None:
     foreign = torch.randn(3, requires_grad=True)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        with trace.recording_backward():
+        with trace.capture_backward():
             (foreign * 2).sum().backward()
     unmatched = [w for w in caught if "did not" in str(w.message)]
     assert len(unmatched) == 1
@@ -362,7 +362,7 @@ def test_witness_rides_ordinary_save_at_v8(tmp_path) -> None:
     trace = _captured(_OneCheckpoint(), torch.randn(3, 4))
     assert trace.checkpoint_invocation_witness["token_count"] == 1
     path = tmp_path / "ckpt_plain.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.checkpoint_invocation_witness is not None
     assert loaded.checkpoint_invocation_witness["token_count"] == 1

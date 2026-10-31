@@ -189,7 +189,7 @@ def test_tlspec_roundtrip_still_loads(tmp_path: object) -> None:
     x = torch.randn(2, 4)
     log = tl.trace(model, x, save=tl.func("relu"))
     path = str(tmp_path) + "/roundtrip.tlspec"  # type: ignore[operator]
-    tl.save(log, path)
+    log.save(path)
     loaded = tl.load(path)
     assert loaded.backend == "torch"
     assert loaded.summary()

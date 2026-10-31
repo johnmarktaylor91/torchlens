@@ -14,7 +14,7 @@ manifest schema instead of a hand-list:
 
 Contract, pinned from the probed loader surface (2026-08-15): every
 structural corruption must be refused with a torchlens-typed
-``TorchLensIOError`` — never a silent success, never an untyped stack trace.
+``ArtifactError`` — never a silent success, never an untyped stack trace.
 The one ledgered tolerance: ``_OPTIONAL_KEYS`` may be ABSENT
 (legacy-manifest compatibility) but still type-check when present. The
 former ``tlspec_version``-deletion wart (untyped ``FileNotFoundError`` out
@@ -36,7 +36,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.errors import TorchLensIOError
+from torchlens.errors import ArtifactError
 
 pytestmark = pytest.mark.heavy
 
@@ -70,7 +70,7 @@ def seed_artifact(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     log = tl.trace(model, torch.rand(2, 4))
     try:
-        tl.save(log, str(path))
+        log.save(str(path))
         yield path
     finally:
         log.cleanup()
@@ -122,7 +122,7 @@ def test_every_toplevel_key_deletion_is_adjudicated(seed_artifact: Path, tmp_pat
         else:
             try:
                 tl.load(str(artifact))
-            except TorchLensIOError:
+            except ArtifactError:
                 pass
             else:
                 outcomes.append(key)
@@ -134,7 +134,7 @@ def test_every_toplevel_key_deletion_is_adjudicated(seed_artifact: Path, tmp_pat
 
 
 def test_every_toplevel_key_type_swap_is_typed_refusal(seed_artifact: Path, tmp_path: Path) -> None:
-    """Swapping each discovered key's type must raise TorchLensIOError."""
+    """Swapping each discovered key's type must raise ArtifactError."""
 
     survivors: list[str] = []
     for key in _manifest_keys(seed_artifact):
@@ -146,7 +146,7 @@ def test_every_toplevel_key_type_swap_is_typed_refusal(seed_artifact: Path, tmp_
         _rewrite_manifest(artifact, swap)
         try:
             tl.load(str(artifact))
-        except TorchLensIOError:
+        except ArtifactError:
             pass
         except Exception as exc:  # noqa: BLE001 - adjudicating the full surface
             survivors.append(f"{key} -> untyped {type(exc).__name__}")
@@ -172,7 +172,7 @@ def test_tensor_entry_mutations_are_typed_refusals(
 
     artifact = _corrupt_copy(seed_artifact, tmp_path)
     _rewrite_manifest(artifact, lambda data: data["tensors"][0].__setitem__(field, value))
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         tl.load(str(artifact))
 
 
@@ -188,7 +188,7 @@ def test_seeded_truncations_are_typed_refusals(seed_artifact: Path, tmp_path: Pa
         (artifact / "manifest.json").write_bytes(manifest_bytes[:cut])
         try:
             tl.load(str(artifact))
-        except TorchLensIOError:
+        except ArtifactError:
             continue
         pytest.fail(
             f"manifest truncated at byte {cut} loaded silently (seed {_TRUNCATION_SEED}; reproduce with TORCHLENS_FUZZ_SEED)"
@@ -199,7 +199,7 @@ def test_seeded_truncations_are_typed_refusals(seed_artifact: Path, tmp_path: Pa
         (artifact / "metadata.pkl").write_bytes(metadata_bytes[:cut])
         try:
             tl.load(str(artifact))
-        except TorchLensIOError:
+        except ArtifactError:
             continue
         pytest.fail(
             f"metadata truncated at byte {cut} loaded silently (seed {_TRUNCATION_SEED}; reproduce with TORCHLENS_FUZZ_SEED)"
@@ -227,7 +227,7 @@ def test_seeded_manifest_byte_flips_never_escape_untyped(
         (artifact / "manifest.json").write_bytes(bytes(flipped))
         try:
             loaded = tl.load(str(artifact))
-        except TorchLensIOError:
+        except ArtifactError:
             continue
         except Exception as exc:  # noqa: BLE001 - adjudicating the full surface
             escapes.append(f"case {index} offset {offset}: {type(exc).__name__}: {exc}")
@@ -252,7 +252,7 @@ def test_non_utf8_manifest_byte_is_typed_refusal(seed_artifact: Path, tmp_path: 
     corrupted = bytearray((seed_artifact / "manifest.json").read_bytes())
     corrupted[len(corrupted) // 2] = 0xFF
     (artifact / "manifest.json").write_bytes(bytes(corrupted))
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         tl.load(str(artifact))
 
 
@@ -265,14 +265,14 @@ def test_blob_corruption_is_typed_refusal(seed_artifact: Path, tmp_path: Path) -
 
     artifact = _corrupt_copy(seed_artifact, tmp_path)
     (artifact / "blobs" / first).unlink()
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         tl.load(str(artifact))
 
     artifact = _corrupt_copy(seed_artifact, tmp_path)
     blob_path = artifact / "blobs" / first
     blob_bytes = blob_path.read_bytes()
     blob_path.write_bytes(blob_bytes[: len(blob_bytes) // 2])
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         tl.load(str(artifact))
 
     artifact = _corrupt_copy(seed_artifact, tmp_path)
@@ -280,5 +280,5 @@ def test_blob_corruption_is_typed_refusal(seed_artifact: Path, tmp_path: Path) -
     flipped = bytearray(blob_path.read_bytes())
     flipped[len(flipped) // 2] ^= 0xFF
     blob_path.write_bytes(bytes(flipped))
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         tl.load(str(artifact))

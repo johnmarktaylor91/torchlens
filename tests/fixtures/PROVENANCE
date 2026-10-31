@@ -18,3 +18,14 @@ reason: FW2-B item 12-B. The original bytes embedded builtin facet recipe FUNCTI
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 recorded: 2026-09-02
+
+generator: byte copy of tests/agent_surface_goldens/clean.tlspec as committed before that path
+  was captured again under the current release (written by torchlens 2.34.1 through
+  tests/test_agent_surface_helpers.py save_clean_artifact); never regenerated
+artifact: tests/fixtures/tlspec_v9/clean.tlspec (RepeatedBlockNet, save=tl.func("relu"); tlspec 9)
+reason: the agent-surface goldens follow a capture made by the current release, while the
+  2.x refusal tests (tests/test_pristine_evidence.py and
+  tests/test_schema_v10_contract_and_goldens.py) need the original 2.x bytes as their input.
+env: py3.10-torch2.13.0
+torch: 2.13.0+cu130
+recorded: 2026-10-31

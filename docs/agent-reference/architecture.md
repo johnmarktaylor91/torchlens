@@ -22,19 +22,19 @@ Key entry points:
   `trace.grouping`, with the load-validated `grouping_policy_v1` stamp on
   `trace.grouping_policy` (C1-C8 coherence; degrade-settlement monotonic).
   Persisted rows are live as of the tlspec v8 bump (load-validated); join/fold
-  machinery in `torchlens/postprocess/_site_key.py` / `_site_join.py` /
+  machinery in `torchlens/_postprocess/_site_key.py` / `_site_join.py` /
   `_grouping_stamp.py`.
 - Quickstart input ladder (F17; spellings DOCUMENTED-UNSTABLE): trace/summary/
   render share one resolver -- real input XOR `input_size=` (flat tuple /
   sequence / keyword-to-shape mapping; seed-0 local synthesis; fail-closed
-  dtype facts, `torchlens.quickstart.InputSpec` override) XOR zero-arg
+  dtype facts, `torchlens.types.InputSpec` override) XOR zero-arg
   inference (the exact verified trace is consumed, never recaptured).
   Synthesized rungs persist `InputProvenance` inside the existing
   `Trace.input_preprocessor` KEEP field; `decode_output`/`output_table`
   refuse `nongold_semantics_unavailable` on synthesized values; first raw
   read warns once (`nongold_raw_value_read`). `torchlens.user_funcs.render`
   is the one-call facade (metadata-only pinned eval/no-grad, state-hash
-  verified restore, `collapse="auto"` there only, detached `RenderResult`,
+  verified restore, `collapse="auto"` there only, detached `Drawing`,
   never auto-opens). Lazy: gold/declared rungs materialize during the one
   captured forward with truthful totals; zero-arg refuses before probing.
   Doc: `docs/quickstart.md`.
@@ -51,7 +51,7 @@ Key entry points:
   typed naming its successor (`REMOVED_SUMMARY_OPTIONS`/`REMOVED_SUMMARY_LEVELS`
   in `report/_summary_config.py`); `fma1` refuses `flop_convention_unavailable`
   when underivable. One-call input precedence: args XOR `input_size=` XOR
-  zero-input (reuses `infer_input_shape`'s verified trace, synthesis
+  zero-input (reuses `guess_input_shape`'s verified trace, synthesis
   disclosed). Result API: `render`/`print`/`details`/`to_pandas`/
   `to_markdown`/`to_html` + scalar raw ints; survives model/Trace teardown;
   `trace.provenance()` serves the relocated preamble byte-exact;
@@ -64,7 +64,7 @@ Key entry points:
   JSON-serializable `torchlens.agent_trace.v1` dump (capture honesty facts,
   counts, pass-qualified op rows with graph edges, module hierarchy, embedded
   navigation guide; payloads never inlined; `max_ops` truncation disclosed).
-  `tl.report.explain(trace, max_tokens=N)` budget-prunes the text report by
+  `trace.explain(max_tokens=N)` budget-prunes the text report by
   whole sections low-value-first with a disclosed `Truncation` section;
   capture-status honesty facts and partial-capture failure evidence never
   drop. The report is prose only: its machine projection is `trace.to_agent_json()`.
@@ -103,14 +103,14 @@ Key entry points:
   `tl.neuro.compare(source, target, analyses=("rsa", "ridge", "cka"))` is
   ungated and numpy-only, reads each site once (never re-runs the model),
   and returns descriptive scores plus `table()`/`disagreement()`/`to_dict()`;
-  `n_resamples=` adds `tl.repgeom.ScoreInterval`s (stimulus bootstrap, also
-  standalone as `tl.repgeom.rdm_compare_interval` / `cka_interval`);
+  `num_resamples=` adds `tl.repgeom.ScoreInterval`s (stimulus bootstrap, also
+  standalone as `tl.repgeom.compare_rdms_interval` / `cka_interval`);
   `tl.repgeom.metric_disagreement(scores)` ranks sites per metric and flags
   opposite orders. Doc: `docs/reference/neuro.md`.
-- Transformer pictures (`torchlens.tviz`; every spelling DOCUMENTED-UNSTABLE
+- Transformer pictures (`torchlens.transformer`; every spelling DOCUMENTED-UNSTABLE
   pending the naming session): typed session-only display records
   (`AttentionView`/`TokenScores`/`PredictionTrajectory`/`PredictionTable`/
-  `TokenMetrics`/`ScoreDecomposition`/`CausalReceipt`/`Annotation`/`Artifact`)
+  `TokenMetrics`/`ScoreDecomposition`/`CausalReceipt`/`Annotation`/`SavedFigure`)
   under matplotlib renderers resolved at CALL time (`tv_matplotlib_missing`
   prints the `torchlens[viz]` install command; zero-dependency SVG/HTML token
   emitters keep bare installs alive). Attention views read the semantic
@@ -123,7 +123,7 @@ Key entry points:
   kind, and effects never recolor attention cells. `score_decomposition`
   enforces the hard sum-to-score invariant (`tv_decomposition_unclosed`).
   Bridges: payload-bounded `circuitsvis_attention` + the `bertviz_tuple`
-  parity oracle. FIX-H shipped in `tl.viz.render_heatmap` (nearest-neighbor
+  parity oracle. FIX-H shipped in `tl.viz.heatmap` (nearest-neighbor
   cells, separate `row_labels=`/`col_labels=`, post-selection omission
   marker). Doc: `docs/reference/tviz.md`.
 - Structure-only capture (DOCUMENTED-UNSTABLE; D8 GRANTED — weights-free
@@ -141,14 +141,14 @@ Key entry points:
   `Trace.check_plan(plan)` are the facade + audit verbs. Doc:
   `docs/reference/weightsfree_capture.md`.
 - Selection algebra (L6; core spellings slate-ratified subject to D7, rest
-  DOCUMENTED-UNSTABLE): `tl.Selection` (composable query AST) /
-  `selection.resolve(trace)` -> `tl.ResolvedSelection` (frozen, trace-bound,
+  DOCUMENTED-UNSTABLE): `tl.Selector` (composable query AST) /
+  `selection.resolve(trace)` -> `tl.Selection` (frozen, trace-bound,
   session-only). Operators `| & - ~` + reflected, no `__xor__`; two-level
   denotation (family + elements, zero-mask entries retained); region
   producers (BaseSelector, RF box/gradient, FacetSpec, Op, Layer) implement
   `__selection__`; kinds ACT|PARAM|EDGE closed; refusals ride
-  `SelectionError` (`selection_*` codes). Producers `tl.units`/`tl.params`/
-  `tl.random_selection`; value producers `tl.top_k`/`tl.top_fraction`/
+  `SelectionError` (`selection_*` codes). Producers `tl.units`/`tl.param`/
+  `tl.random_like`; value producers `tl.top_k`/`tl.top_fraction`/
   `tl.threshold`/`tl.sign` (read the resolution trace's retained
   activations at resolve time, exact-as-set, `within=None` = every retained
   tensor site, unsaved payloads refuse `value_not_saved`, complex ordered
@@ -165,7 +165,7 @@ Key entry points:
   `trace.between(sources, sinks)` presents the same region as a
   `TraceSlice` (frozen presenter, never a Trace: member ops, internal
   edges, EXPLICIT `boundary_in_edges`/`boundary_out_edges`, no
-  save/replay/validate — `tl.save` refuses `slice_save_unsupported`;
+  save/replay/validate — `Trace.save` refuses `slice_save_unsupported`;
   `__selection__` lifts it back into the algebra);
   `trace.subgraph(selection)` is the general slice door for any ACT region.
   statistic; the single-capture form is `sign(site,'zero')`); comparative
@@ -176,7 +176,7 @@ Key entry points:
   (cross-pass range/variance on recurrent layers, pass-qualified, >= 2
   window passes per layer or `population_too_small`, masks land on every
   window pass-site); subspace producer `tl.subspace(within, basis, *,
-  origin=, method=, dim=, tol=)` (do() edits the COMPONENT along the basis
+  origin=, method=, dim=, atol=)` (do() edits the COMPONENT along the basis
   span, resolve() reports the SUPPORT SET; mandatory basis provenance with sha256 digest riding
   `provenance.source` and do() audits; extent mismatch on the bound axis
   refuses `basis_dim_mismatch`, never broadcast/truncate; geometry-only
@@ -188,7 +188,7 @@ Key entry points:
   re-binds ACT selections across runs on L1 site keys, same-policy captures
   only (`selection_alignment_invalid`, closed six-reason set); `do()` still
   refuses foreign resolved selections typed. Parameter substitution
-  (DOCUMENTED-UNSTABLE): `fork.do(tl.params(name, mask=None), edit)` applies
+  (DOCUMENTED-UNSTABLE): `fork.do(tl.param(name, mask=None), edit)` applies
   the edit "as if" the parameter were changed, replay engine only — the value
   each consumer sees is substituted at its derived occurrence address via the
   tier-(ii) edge-substitution store (`substitution_kind="param"`; cone
@@ -213,7 +213,7 @@ Key entry points:
   string/`tl.label` addressing; `selection_unresolvable` /
   `multipass_bare_label` on `tl.units`); single-pass bare labels stay
   accepted and `log[label].__selection__()` is the all-passes spelling.
-- Edge substitution (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.edges` is the
+- Edge substitution (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.graph.edges` is the
   dataflow edge family (EdgeUseRecords; requires an `intervention_ready`
   capture, refusal `edge_provenance_unavailable`; canonical occurrence
   address `(child_func_call_id, arg_kind, arg_path)`).
@@ -225,7 +225,7 @@ Key entry points:
   entries FAIL validation (`edge_intervention_boundary`).
 - Backward residuals (L9; DOCUMENTED-UNSTABLE): per-fire timing -- one clock
   (`perf_counter`), per-node keyed-LIFO pairing, stamps on the runtime
-  `GradFnFired` event only; live-only `trace.grad_fn_fire_timings` (loaded
+  `GradFnFired` event only; live-only `trace.autograd.grad_fn_fire_timings` (loaded
   traces refuse `grad_fn_fire_timing_unavailable`); as of the tlspec v8
   coordinated bump the persisted GradFnCall timing fields carry the per-fire
   `perf_counter` semantics, discriminated by the persisted
@@ -238,11 +238,11 @@ Key entry points:
   Implicit-boundary: journal/scavenge/finalize split with the finalize guard
   in-routine (never inside an engine invocation), identity-checked
   engine-drain close callback, sync-point backstop always armed,
-  `BackwardPassEnd.close_path` sidecar-only disclosure. Grouped floor:
+  `torchlens._ir.events.BackwardPassEnd.close_path` sidecar-only disclosure. Grouped floor:
   `trace.grad_fn_site_summary` per-site backward rollups (read-only L1
   consumption).
 - Predicate runtime extension point (DOCUMENTED-UNSTABLE, S4 seam):
-  `torchlens.ir.predicate_registry` — `PredicateProtocol` (one positional
+  `torchlens._ir.predicate_registry` — `PredicateProtocol` (one positional
   concrete `RecordContext`), `coerce_predicate(value, slot="save"|"halt"|"until")`
   (raw callables incl. `BaseSelector` returned BY IDENTITY; registered names
   via a slot-aware enforcing wrapper), `register_predicate(name)` (no
@@ -253,14 +253,14 @@ Key entry points:
   errors for unsaved payload reads. Forward exceptions default to
   `on_forward_error="raise"`; `on_forward_error="attach_partial"` attaches
   `exc.partial_recording` and re-raises, while `on_forward_error="return_partial"` returns a
-  failed partial `Recording`. Failed partials set `status="partial_error"`, `failed=True`,
-  string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields.
+  failed partial `Recording`. Failed partials set `status="partial_error"`, `is_failed=True`,
+  string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields.
   user-op failures exclude the failing call; TL-side capture failures may include a
   skipped/partial current-call event. Trace failed captures separately expose
-  `exc.partial_log`, recoverable with `tl.partial.from_failed_capture(exc)`.
+  `exc.partial_log`, recoverable with `tl._partial.from_failed_capture(exc)`.
 - Every capture product carries one settled typed outcome: `Trace.outcome` /
   `Recording.outcome` / `PartialTrace.outcome` return a frozen `CaptureOutcome`
-  (COMPLETE / HALTED / ABORTED_NONFINITE / FAILED+phase / UNATTESTED / UNKNOWN),
+  (COMPLETE / STOPPED / ABORTED_NONFINITE / FAILED+phase / UNATTESTED / UNKNOWN),
   persisted as `_capture_outcome` (tlspec v7) and validated fail-closed at load.
   Capability gates N1-N5 branch on `tl.errors.CaptureOutcomeError.fields["code"]`;
   swallowed halt/nonfinite signals raise `tl.errors.StopSignalSwallowedError`.
@@ -283,14 +283,14 @@ Key entry points:
   model output. Doc of record:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
-  importing `torchlens.kernel_telemetry` installs `gpu_kernels` views over
+  importing `torchlens._kernel_telemetry` installs `gpu_kernels` views over
   the ATen execution profile; rows persist as of tlspec v8 (`FieldPolicy.KEEP`)
   and counts are lower bounds wherever `mode_paused_interior` is non-empty.
   Doc of record: `docs/reference/kernel_telemetry.md`.
 - Lazy decoration: `torchlens/backends/torch/model_prep.py:_ensure_model_prepared()` calls
   `wrap_torch()` and the belt/rescue stale-reference machinery
 - Forward-pass orchestration: `torchlens/capture/trace.py`
-- Postprocess: `torchlens/postprocess/__init__.py` current 26-step pipeline (declared
+- Postprocess: `torchlens/_postprocess/__init__.py` current 26-step pipeline (declared
   contract keys `0`..`20` plus fractional inserts `11.5`/`11.75`/`15.5`/`16.5`/`17.5` in
   `postprocess/_contracts.py::POSTPROCESS_STEP_CONTRACTS`)
 - Portable I/O: `torchlens/_io/bundle.py`, `torchlens/_io/tlspec.py`, `torchlens/io/__init__.py`
@@ -376,13 +376,13 @@ recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
 # D18: eval-mode BatchNorm is runnable on the default live path (no value-changing
 # buffer writes); train-mode buffer writers refuse with the typed BufferSinkRoutingError
-# (RunnableErrorCode.BUFFER_SINK_ROUTING_MUTABLE, provisional/documented-unstable).
+# (code "buffer_sink_routing_mutable", provisional/documented-unstable).
 run_result = torch_trace.run(inputs=x, seed=42)
 runnable_path = "architecture.tlspec"
-tl.save(torch_trace, runnable_path, level="runnable", include_weights=True)
+torch_trace.save(runnable_path, level="runnable", include_weights=True)
 loaded_trace = tl.load(runnable_path)
 verified = loaded_trace.run(inputs=x, seed=42, on_divergence="raise")
-overview_svg = torch_trace.draw(collapse="auto", vis_fileformat="svg", vis_save_only=True)
+overview_svg = torch_trace.draw(collapse="auto", file_format="svg", vis_save_only=True)
 module_scores = torch_trace.module_collapse_order
 
 # Influence geometry follows the real captured DAG in both directions.

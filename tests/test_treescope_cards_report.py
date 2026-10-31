@@ -59,7 +59,7 @@ def clean_log() -> object:
 def _write(log: object, path: Path, *, share_safe: bool = False, **kwargs: object) -> str:
     """Write one report and return its text."""
 
-    options = tl.export.ReportOptions(deterministic=True, share_safe=share_safe)
+    options = tl.options.HtmlReportOptions(deterministic=True, share_safe=share_safe)
     tl.export.html(log, path, options=options, **kwargs)
     return path.read_text(encoding="utf-8")
 
@@ -208,7 +208,7 @@ def test_partial_trace_report_is_first_class(tmp_path: Path) -> None:
     try:
         tl.trace(Dies(), torch.randn(2, 4))
     except RuntimeError as error:
-        partial = tl.partial.from_failed_capture(error)
+        partial = tl._partial.from_failed_capture(error)
     assert partial is not None
     text = _write(partial, tmp_path / "p.html")
     assert "FAILED CAPTURE" in text
@@ -232,7 +232,7 @@ def test_graph_fallback_warns_and_labels(
     monkeypatch.setattr(report_module, "_draw_svg", lambda *args, **kwargs: None)
     path = tmp_path / "fb.html"
     with pytest.warns(UserWarning) as caught:
-        tl.export.html(clean_log, path, options=tl.export.ReportOptions(deterministic=True))
+        tl.export.html(clean_log, path, options=tl.options.HtmlReportOptions(deterministic=True))
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
     assert "report_graph_fallback" in codes
     text = path.read_text(encoding="utf-8")

@@ -53,10 +53,10 @@ def _graph(name: str) -> tl.attribution.graph.AttributionGraph:
     return tl.attribution.build_graph(
         tl.trace(model, torch.tensor([fx.TOKENS])),
         transcoders,
-        embedding="embed",
+        embedding_module="embed",
         frozen=fx.frozen_names(n_layers),
-        max_n_logits=2,
-        desired_logit_prob=0.99,
+        max_num_logits=2,
+        logit_probability_coverage=0.99,
     )
 
 
@@ -70,7 +70,7 @@ def graphs() -> Iterator[dict[str, tl.attribution.graph.AttributionGraph]]:
 
 
 def _export(graph, **kwargs) -> dict:
-    return graph.to_neuronpedia(slug="fixture", scan="tiny", tokenizer=TOKENIZER, **kwargs)
+    return graph.to_neuronpedia(slug="fixture", model_id="tiny", tokenizer=TOKENIZER, **kwargs)
 
 
 # ---------------------------------------------------------------- independent answer key
@@ -84,13 +84,13 @@ def _expected_ids(graph) -> list[str]:
     for index, node in enumerate(graph.nodes):
         if node.kind == "feature":
             layer = graph.transcoder_sites.index(node.site)
-            ids.append(f"{layer}_{node.feature}_{node.position}")
+            ids.append(f"{layer}_{node.feature_index}_{node.position}")
         elif node.kind == "error":
             ids.append(f"{graph.error_sites.index(node.site)}_-1_{node.position}")
         elif node.kind == "token":
-            ids.append(f"E_{node.token}_{node.position}")
+            ids.append(f"E_{node.token_id}_{node.position}")
         else:
-            ids.append(f"{n_layers + 1}_{node.token}_{node.position}")
+            ids.append(f"{n_layers + 1}_{node.token_id}_{node.position}")
         assert index == len(ids) - 1
     return ids
 
@@ -119,7 +119,9 @@ def _numpy_threshold(scores: np.ndarray, share: float) -> float:
     return float(ordered[min(index, len(ordered) - 1)])
 
 
-def _numpy_kept(graph, node_threshold=0.8, edge_threshold=0.98) -> tuple[set, set]:
+def _numpy_kept(
+    graph, node_influence_coverage=0.8, edge_influence_coverage=0.98
+) -> tuple[set, set]:
     """Kept node ids and (source, target) id pairs by the pruning rule, in numpy."""
 
     influence = _numpy_influence(graph)[0]
@@ -129,14 +131,14 @@ def _numpy_kept(graph, node_threshold=0.8, edge_threshold=0.98) -> tuple[set, se
     n_inner = n - len(graph.node_indices("token")) - len(graph.node_indices("logit"))
     weights = np.zeros(n)
     weights[n - len(graph.node_indices("logit")) :] = graph.logit_probabilities.numpy()
-    node_mask = influence >= _numpy_threshold(influence, node_threshold)
+    node_mask = influence >= _numpy_threshold(influence, node_influence_coverage)
     node_mask[n_inner:] = True
     pruned = adjacency * node_mask[:, None] * node_mask[None, :]
     absolute = np.abs(pruned)
     normalized = absolute / np.maximum(absolute.sum(axis=1, keepdims=True), 1e-10)
     reach = weights @ (np.linalg.inv(np.eye(n) - normalized) - np.eye(n)) + weights
     scores = normalized * reach[:, None]
-    edge_mask = scores >= _numpy_threshold(scores.flatten(), edge_threshold)
+    edge_mask = scores >= _numpy_threshold(scores.flatten(), edge_influence_coverage)
     while True:
         before = node_mask.copy()
         edge_mask &= node_mask[:, None] & node_mask[None, :]
@@ -220,35 +222,35 @@ def test_node_fields_follow_the_reference_layout(graphs) -> None:
     for i in graph.node_indices("feature"):
         node = graph.nodes[i]
         layer = graph.transcoder_sites.index(node.site)
-        got = by_id.get(f"{layer}_{node.feature}_{node.position}")
+        got = by_id.get(f"{layer}_{node.feature_index}_{node.position}")
         if got is None:
             continue
-        assert got["feature"] == (layer + node.feature) * (layer + node.feature + 1) // 2 + (
-            node.feature
-        )
+        assert got["feature"] == (layer + node.feature_index) * (
+            layer + node.feature_index + 1
+        ) // 2 + (node.feature_index)
         assert (got["layer"], got["ctx_idx"]) == (str(layer), node.position)
         assert got["feature_type"] == "cross layer transcoder"
-        assert got["jsNodeId"] == f"{layer}_{node.feature}-0"
-        assert got["activation"] == graph.activation_values[i].item()
+        assert got["jsNodeId"] == f"{layer}_{node.feature_index}-0"
+        assert got["activation"] == graph.feature_activations[i].item()
     for i in graph.node_indices("token"):
         node = graph.nodes[i]
-        got = by_id[f"E_{node.token}_{node.position}"]
+        got = by_id[f"E_{node.token_id}_{node.position}"]
         assert (got["feature"], got["layer"], got["feature_type"]) == (
             node.position,
             "E",
             "embedding",
         )
-        assert got["jsNodeId"] == f"E_{node.token}-{node.position}"
+        assert got["jsNodeId"] == f"E_{node.token_id}-{node.position}"
     for k, i in enumerate(graph.node_indices("logit")):
         node = graph.nodes[i]
         probability = graph.logit_probabilities[k].item()
-        got = by_id[f"4_{node.token}_{fx.N_POS - 1}"]
+        got = by_id[f"4_{node.token_id}_{fx.N_POS - 1}"]
         assert (got["layer"], got["feature_type"], got["jsNodeId"]) == (
             "4",
             "logit",
-            f"L_{node.token}-{fx.N_POS - 1}",
+            f"L_{node.token_id}-{fx.N_POS - 1}",
         )
-        assert got["clerp"] == f'Output "<{node.token}>" (p={probability:.3f})'
+        assert got["clerp"] == f'Output "<{node.token_id}>" (p={probability:.3f})'
         assert (got["token_prob"], got["is_target_logit"]) == (probability, k == 0)
     errors = [
         node for node in exported["nodes"] if node["feature_type"] == "mlp reconstruction error"
@@ -293,7 +295,9 @@ def test_bos_position_nodes_are_exported(graphs) -> None:
                 if not node.startswith("E_") and int(node.rsplit("_", 1)[1]) == 0
             }
             exported = _export(
-                graphs[name], node_threshold=node_threshold, edge_threshold=edge_threshold
+                graphs[name],
+                node_influence_coverage=node_threshold,
+                edge_influence_coverage=edge_threshold,
             )
             got = {
                 node["node_id"]
@@ -308,16 +312,16 @@ def test_bos_position_nodes_are_exported(graphs) -> None:
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"node_threshold": 1.5},
-        {"edge_threshold": -0.1},
+        {"node_influence_coverage": 1.5},
+        {"edge_influence_coverage": -0.1},
         {"slug": ""},
         {"tokenizer": object()},
     ],
-    ids=["node_threshold", "edge_threshold", "slug", "tokenizer"],
+    ids=["node_influence_coverage", "edge_influence_coverage", "slug", "tokenizer"],
 )
 def test_refuses_invalid_arguments(graphs, kwargs) -> None:
-    settings = {"slug": "fixture", "scan": "tiny", "tokenizer": TOKENIZER, **kwargs}
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    settings = {"slug": "fixture", "model_id": "tiny", "tokenizer": TOKENIZER, **kwargs}
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         graphs["F1"].to_neuronpedia(**settings)
     assert excinfo.value.fields["code"] == "attribution_graph_export_argument_invalid"
     assert "Remedy:" in str(excinfo.value)
@@ -325,7 +329,7 @@ def test_refuses_invalid_arguments(graphs, kwargs) -> None:
 
 def _without_token_ids(graph):
     nodes = tuple(
-        dataclasses.replace(node, token=None) if node.kind == "token" else node
+        dataclasses.replace(node, token_id=None) if node.kind == "token" else node
         for node in graph.nodes
     )
     return dataclasses.replace(graph, nodes=nodes)
@@ -358,7 +362,7 @@ def _with_cycle(graph):
     ids=["no_token_ids", "unaligned_layers", "non_finite", "no_influence", "cycle"],
 )
 def test_refuses_graphs_the_schema_cannot_express(graphs, change) -> None:
-    with pytest.raises(tl.attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         _export(change(graphs["F1"]))
     assert excinfo.value.fields["code"] == "attribution_graph_export_unsupported"
     assert "Remedy:" in str(excinfo.value)
@@ -396,7 +400,7 @@ def test_contract_check_refuses_broken_exports(graphs) -> None:
         "bool_weight",
     )
     for change in changes:
-        with pytest.raises(tl.attribution.AttributionError) as excinfo:
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
             check_contract(_broken(exported, change))
         assert excinfo.value.fields["code"] == "attribution_graph_contract_invalid", change
         assert "Remedy:" in str(excinfo.value), change

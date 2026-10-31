@@ -16,6 +16,7 @@ from support.fp8_guard import permit_cpu_float8_allocation
 from torch import nn
 
 import torchlens as tl
+from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
 from torchlens._extraction import (
     apply_pool,
@@ -26,7 +27,7 @@ from torchlens._extraction import (
     trim_batch,
 )
 from torchlens._extraction.ragged import RaggedBatch
-from torchlens.dataset_extraction import extract_dataset, relabel_extraction
+from torchlens.dataset_extraction import relabel_extraction
 
 
 def _model() -> nn.Module:
@@ -70,7 +71,7 @@ def test_checksums_vocabulary_refuses() -> None:
             _model(),
             torch.randn(4, 3),
             ["relu"],
-            output_dir="/tmp/never-created-f18",
+            path="/tmp/never-created-f18",
             checksums="paranoid",
             progress=False,
         )
@@ -85,7 +86,7 @@ def test_shard_format_vocabulary_refuses(tmp_path) -> None:
             _model(),
             torch.randn(4, 3),
             ["relu"],
-            output_dir=tmp_path,
+            path=tmp_path,
             shard_format="npz",
             progress=False,
         )
@@ -401,7 +402,7 @@ def test_relabel_refuses_incomplete_and_mislengthed(tmp_path) -> None:
         torch.randn(4, 3),
         ["relu"],
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         stimulus_ids=["a", "b", "c", "d"],
     )
@@ -431,7 +432,7 @@ def test_relabel_rewrites_sidecar_with_audit(tmp_path) -> None:
         torch.randn(4, 3),
         ["relu"],
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         stimulus_ids=["a", "b", "c", "d"],
     )
@@ -455,7 +456,7 @@ def test_stimulus_ids_reject_empty_and_non_strings() -> None:
             _model(),
             torch.randn(2, 3),
             ["relu"],
-            output_dir="/tmp/never-created-f18-ids",
+            path="/tmp/never-created-f18-ids",
             stimulus_ids=["a", ""],
             progress=False,
         )
@@ -495,7 +496,7 @@ def test_selector_transform_mapping_refuses() -> None:
             _model(),
             torch.randn(4, 3),
             tl.func("relu"),
-            transform={"a": torch.abs},
+            output_transform={"a": torch.abs},
             progress=False,
         )
     assert _code(excinfo) == "extraction_selector_transform_mapping_unsupported"

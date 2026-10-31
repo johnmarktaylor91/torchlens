@@ -1,6 +1,6 @@
 """Contrastive directions built natively from paired traces.
 
-:func:`direction_from_pairs` reads one row per prompt at one site from the
+:func:`fit_direction` reads one row per prompt at one site from the
 positive and the negative traces and fits a direction with one of three
 methods. The math lives here only: the steering-vectors, repeng and dialz
 bridges convert the returned :class:`Direction` to their library objects
@@ -19,7 +19,7 @@ Methods (rows are ``[n_pairs, hidden]``, ``D = positive - negative``):
   (steering-vectors' ``logistic_aggregator`` with its scikit-learn defaults).
 
 The provenance record is the subspace producer's
-:class:`~torchlens.selection_subspace.BasisProvenance` (origin, method,
+:class:`~torchlens._selection_subspace.BasisProvenance` (origin, method,
 geometry and the sha256 content digest of the canonical float64 vector); the
 origin also records the site, pair count, read position and a digest of the
 rows the direction was fitted on.
@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
-from ..selection_subspace import BasisProvenance, _basis_digest
+from .._selection_subspace import BasisProvenance, _basis_digest
 
 if TYPE_CHECKING:
     from .types import Edit
@@ -78,7 +78,7 @@ class Direction:
     vector: torch.Tensor
     site: str
     method: str
-    n_pairs: int
+    num_pairs: int
     read_token_index: ReadIndex
     model_type: str | None
     provenance: BasisProvenance
@@ -87,28 +87,28 @@ class Direction:
         """Return a one-line summary without the tensor values."""
 
         return (
-            f"Direction(site={self.site!r}, method={self.method!r}, n_pairs={self.n_pairs}, "
+            f"Direction(site={self.site!r}, method={self.method!r}, num_pairs={self.num_pairs}, "
             f"dim={self.vector.shape[0]}, sha256={self.provenance.sha256[:16]})"
         )
 
-    def steer(self, magnitude: float = 1.0) -> Edit:
-        """Return the edit that adds ``magnitude * vector`` on the trailing axis.
+    def steer(self, strength: float = 1.0) -> Edit:
+        """Return the edit that adds ``strength * vector`` on the trailing axis.
 
         Parameters
         ----------
-        magnitude:
+        strength:
             Scalar multiplier.
 
         Returns
         -------
         Edit
-            ``torchlens.steer(vector, magnitude, feature_axis=-1)``; place it
+            ``torchlens.steer(vector, strength, dim=-1)``; place it
             with ``tl.when(tl.module(direction.site), ...)``.
         """
 
         from .helpers import steer
 
-        return steer(self.vector, magnitude, feature_axis=-1)
+        return steer(self.vector, strength, dim=-1)
 
     def to_steering_vectors(
         self, *, layer: int | None = None, layer_type: str = "decoder_block"
@@ -158,11 +158,11 @@ class Direction:
         self,
         *,
         api_key: str,
-        scan: str,
-        vector_label: str,
+        model_id: str,
+        name: str,
         layer: int | None = None,
         hook_type: str = "resid_post",
-        steer_strength: float = 1.0,
+        default_steering_strength: float = 1.0,
     ) -> str:
         """Upload this vector to Neuronpedia and return its page's URL.
 
@@ -177,9 +177,9 @@ class Direction:
         ----------
         api_key:
             Your Neuronpedia API key (under Settings on neuronpedia.org).
-        scan:
+        model_id:
             Neuronpedia's model id, for example ``"gemma-2-2b"``.
-        vector_label:
+        name:
             The name Neuronpedia shows for the vector.
         layer:
             Decoder layer (0-based). Defaults to the trailing index of the
@@ -187,7 +187,7 @@ class Direction:
         hook_type:
             ``"resid_post"`` (a decoder block's output, the default) or
             ``"resid_pre"`` (its input).
-        steer_strength:
+        default_steering_strength:
             The default steering strength Neuronpedia offers, from -100 to 100.
 
         Returns
@@ -212,11 +212,11 @@ class Direction:
         return upload_vector(
             self.vector,
             api_key=api_key,
-            scan=scan,
+            scan=model_id,
             layer=self.library_layer(layer),
             hook_type=hook_type,
-            vector_label=vector_label,
-            steer_strength=steer_strength,
+            vector_label=name,
+            steer_strength=default_steering_strength,
         )
 
     def to_dialz(self, *, layer: int | None = None, model_type: str | None = None) -> Any:
@@ -285,7 +285,7 @@ class Direction:
         return layer
 
 
-def direction_from_pairs(
+def fit_direction(
     pos_traces: Any,
     neg_traces: Any,
     site: Any,
@@ -351,8 +351,8 @@ def direction_from_pairs(
         rows_digest.update(rows.detach().cpu().double().numpy().tobytes())
     site_name = str(label)
     origin = (
-        f"direction_from_pairs(site={site_name!r}, method={method!r}, "
-        f"n_pairs={positive.shape[0]}, read_token_index={read_token_index!r}, "
+        f"fit_direction(site={site_name!r}, method={method!r}, "
+        f"num_pairs={positive.shape[0]}, read_token_index={read_token_index!r}, "
         f"pairs_sha256={rows_digest.hexdigest()})"
     )
     canonical = vector.detach().cpu().to(torch.float64).reshape(1, -1)
@@ -360,16 +360,16 @@ def direction_from_pairs(
         origin=origin,
         method=method,
         sha256=_basis_digest(canonical),
-        n_vectors=1,
+        num_vectors=1,
         space_dim=int(canonical.shape[1]),
         dim=-1,
-        tol=0.0,
+        atol=0.0,
     )
     return Direction(
         vector=vector,
         site=site_name,
         method=method,
-        n_pairs=int(positive.shape[0]),
+        num_pairs=int(positive.shape[0]),
         read_token_index=read_token_index,
         model_type=_model_type(positives[0]),
         provenance=provenance,
@@ -615,10 +615,10 @@ def _newton_step(
 def _model_type(trace: Any) -> str | None:
     """Return the traced model's ``config.model_type``, or ``None``."""
 
-    from ..data_classes._runtime_handles import source_model_from_trace
+    from .._data_classes._runtime_handles import source_model_from_trace
 
     found = getattr(getattr(source_model_from_trace(trace), "config", None), "model_type", None)
     return found if isinstance(found, str) else None
 
 
-__all__ = ["Direction", "direction_from_pairs"]
+__all__ = ["Direction", "fit_direction"]

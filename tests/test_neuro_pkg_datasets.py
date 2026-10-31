@@ -84,7 +84,7 @@ def _extraction_dir(tmp_path: Path, n_stimuli: int = 6) -> Path:
         stimuli,
         ["conv", "bn"],
         batch_size=3,
-        output_dir=out_dir,
+        path=out_dir,
         stimulus_ids=[f"img_{index:02d}" for index in range(n_stimuli)],
         progress=False,
     )

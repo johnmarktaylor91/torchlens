@@ -16,7 +16,7 @@ This module is two things:
    TRACE-shaped identifier -- reach-ins into TorchLens's own central object.
    The per-package ledger is exact-equality in BOTH directions: adding one
    fails, and fixing one requires lowering the row (shrink-only). A package
-   with NO row must stay at zero, which is how ``merged/`` (fail-closed by
+   with NO row must stay at zero, which is how ``_merged/`` (fail-closed by
    ethos) and the clean packages are held.
 2. the regression pins for the fixed presenter seam.
 
@@ -37,8 +37,8 @@ from pathlib import Path
 import pytest
 from _source_corpus import package_ast, package_files
 
-from torchlens.merged._errors import MergeInputError
-from torchlens.merged._presenter import MergedTrace, _rank_raw_to_final_op_labels
+from torchlens._merged._errors import MergeInputError
+from torchlens._merged._presenter import MergedTrace, _rank_raw_to_final_op_labels
 
 # Module-wide smoke dropped (r3settle2 budget lint): the repo-wide reach-in
 # count scan below measures over the 5s smoke partition; per-test marks.
@@ -65,16 +65,16 @@ _TRACE_IDENTIFIERS = frozenset(
     }
 )
 
-#: Packages whose reach-in count MUST stay zero. ``merged/`` is fail-closed by
+#: Packages whose reach-in count MUST stay zero. ``_merged/`` is fail-closed by
 #: contract (docs/reference/merged_trace_contract.md): a rank core that cannot
 #: answer refuses typed, so no silent-default read belongs there.
 #: ``distributed/`` is the positive control the b5 hunt found clean.
-_FAIL_CLOSED_PACKAGES = frozenset({"merged", "distributed"})
+_FAIL_CLOSED_PACKAGES = frozenset({"_merged", "distributed"})
 
 #: Per-package count of private string reach-ins on trace-shaped bases, seeded
 #: from the tree at b5 fixplan time. EXACT in both directions; a package
 #: without a row must stay at zero. To discharge rows, replace the reach-in
-#: with a declared seam (see ``merged/_presenter.py``'s
+#: with a declared seam (see ``_merged/_presenter.py``'s
 #: ``_rank_raw_to_final_op_labels``: direct private read, absence typed) or
 #: with a public accessor, then lower the count here.
 _TRACE_REACHIN_LEDGER: dict[str, int] = {
@@ -107,7 +107,7 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # pre-forward buffer values, so the None default is the correct "no
     # channel" reading (net +1 against a discharged older site).
     "_io": 26,
-    "autoroute": 2,
+    "_autoroute": 2,
     "backends/jax": 7,
     "backends/mlx": 21,
     "backends/paddle": 20,
@@ -190,7 +190,7 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # reach-ins (getattr + setattr) and _trace_validation.py's new
     # `_loaded_from_bundle` read converted to direct private reads guarded
     # by try/except AttributeError.
-    "data_classes": 25,
+    "_data_classes": 25,
     "experimental": 1,
     "fastlog": 2,
     # 43 -> 44 (2026-08-17 privprobes reconcile, d4a2b8a6 one-shot-warning
@@ -205,13 +205,13 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # _retain_layers_to_save_output_parents flag now reads it from the
     # session-only _rerun_save_request through the instance dict.
     "intervention": 40,
-    "ir": 2,
+    "_ir": 2,
     # 5 -> 8 (2026-08-16 l2/l3 merge-gate reconcile, 5f0a4f8d aten wave 0):
     # _primitive_profile.py reads the optional DROP-gated
     # `_primitive_op_profile` store (x2) and `_capture_events` stream; absent
     # on non-aten / loaded traces, so the None default is the correct
     # "no primitive layer" reading.
-    "postprocess": 8,
+    "_postprocess": 8,
     "report": 1,
     # 7 -> 6 (2026-08-14 fixwave-2 reconcile): one reach-in discharged upstream.
     # 6 -> 0 (fast2 ci-fix reconcile): every repgeom reach-in (the
@@ -221,10 +221,10 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # reads guarded by try/except AttributeError; no row left to hold --
     # same zero-row convention as a package that never had a reach-in.
     # 0 -> 2 (2026-08-14 fixwave-2 reconcile, R40 viz hardening): the shared
-    # `_visualizer_dir` scratch-dir helpers moved into utils/display.py; the
+    # `_visualizer_dir` scratch-dir helpers moved into _utils/display.py; the
     # attribute is genuinely optional session state (absent until the first
     # render), so the None default is the correct "no scratch dir yet" reading.
-    "utils": 2,
+    "_utils": 2,
     # 23 -> 24 (2026-08-15 r3settle reconcile): _invariants_payloads.py reads
     # the optional `_trace_core` op-store seam, absent on loaded/preview
     # traces, so the None default is the correct "no sealed core" reading.
@@ -327,7 +327,7 @@ def test_trace_reachin_counts_match_the_ledger_exactly() -> None:
         f"{grew}. `getattr(trace, '_x', default)` is invisible to SLF001 and "
         "fail-open: a renamed field degrades silently. Read the declared "
         "attribute directly (SLF001-visible, AttributeError on rename) or add a "
-        "typed seam like merged/_presenter.py::_rank_raw_to_final_op_labels. "
+        "typed seam like _merged/_presenter.py::_rank_raw_to_final_op_labels. "
         f"Offending sites: { {p: found[p] for p in grew} }"
     )
     shrank = {
@@ -343,7 +343,7 @@ def test_trace_reachin_counts_match_the_ledger_exactly() -> None:
 
 
 def test_fail_closed_packages_hold_zero_reachins() -> None:
-    """`merged/` and `distributed/` carry no silent-default Trace reads."""
+    """`_merged/` and `distributed/` carry no silent-default Trace reads."""
 
     found = _scan_package()
     offenders = {

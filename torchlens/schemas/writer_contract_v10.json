@@ -24,7 +24,7 @@
    "witness_family_registry": "witness_family_registry_v2"
   },
   "component_specs": {
-   "torchlens.data_classes.aten_op.AtenOp": {
+   "torchlens._data_classes.aten_op.AtenOp": {
     "algorithmic_flops": "keep",
     "autocast_context": "keep",
     "backward_epoch_index": "keep",
@@ -58,12 +58,12 @@
     "sequence": "keep",
     "view_copy_kind": "keep"
    },
-   "torchlens.data_classes.aten_op.OpRef": {
+   "torchlens._data_classes.aten_op.OpRef": {
     "func_call_id": "keep",
     "op_label": "keep",
     "op_row_index": "keep"
    },
-   "torchlens.data_classes.aten_op._ModePausedInteriorGap": {
+   "torchlens._data_classes.aten_op._ModePausedInteriorGap": {
     "capture_phase": "keep",
     "kind": "keep",
     "owner_func_call_id": "keep",
@@ -72,13 +72,13 @@
     "sequence_after": "keep",
     "sequence_before": "keep"
    },
-   "torchlens.data_classes.aten_op._PrimitiveOpProfile": {
+   "torchlens._data_classes.aten_op._PrimitiveOpProfile": {
     "_event_owner_evidence": "keep",
     "aten_event_watermark": "keep",
     "mode_paused_interior": "keep",
     "primitive_ops": "keep"
    },
-   "torchlens.data_classes.backward_pass.BackwardPass": {
+   "torchlens._data_classes.backward_pass.BackwardPass": {
     "_source_trace_ref": "weakref_strip",
     "backward_call_context": "keep",
     "duration": "keep",
@@ -100,7 +100,7 @@
     "status": "keep",
     "trigger": "keep"
    },
-   "torchlens.data_classes.buffer.Buffer": {
+   "torchlens._data_classes.buffer.Buffer": {
     "_initial_value": "keep",
     "_source_ref": "weakref_strip",
     "activation_memory": "keep",
@@ -124,16 +124,16 @@
     "shape": "keep",
     "versions": "keep"
    },
-   "torchlens.data_classes.buffer.BufferAccessor": {
+   "torchlens._data_classes.buffer.BufferAccessor": {
     "_dict": "keep",
     "_list": "keep",
     "_source_ref": "weakref_strip"
    },
-   "torchlens.data_classes.derived_grad.DerivedGradAccessor": {
+   "torchlens._data_classes.derived_grad.DerivedGradAccessor": {
     "_dict": "keep",
     "_list": "keep"
    },
-   "torchlens.data_classes.derived_grad.DerivedGradRecord": {
+   "torchlens._data_classes.derived_grad.DerivedGradRecord": {
     "argnum": "keep",
     "aval": "keep",
     "dtype_ref": "keep",
@@ -143,11 +143,11 @@
     "provenance": "keep",
     "source": "keep"
    },
-   "torchlens.data_classes.derived_grad.IntermediateDerivedGradAccessor": {
+   "torchlens._data_classes.derived_grad.IntermediateDerivedGradAccessor": {
     "_dict": "keep",
     "_list": "keep"
    },
-   "torchlens.data_classes.derived_grad.IntermediateDerivedGradRecord": {
+   "torchlens._data_classes.derived_grad.IntermediateDerivedGradRecord": {
     "aval": "keep",
     "dtype_ref": "keep",
     "grad": "blob",
@@ -155,7 +155,7 @@
     "op_label": "keep",
     "provenance": "keep"
    },
-   "torchlens.data_classes.func_call_location.FuncCallLocation": {
+   "torchlens._data_classes.func_call_location.FuncCallLocation": {
     "_call_line": "keep",
     "_code_context": "keep",
     "_code_context_labeled": "keep",
@@ -175,7 +175,7 @@
     "line_number": "keep",
     "source_loading_enabled": "keep"
    },
-   "torchlens.data_classes.grad_fn.GradFn": {
+   "torchlens._data_classes.grad_fn.GradFn": {
     "_source_trace_ref": "weakref_strip",
     "backward_docstring": "keep",
     "backward_duration": "keep",
@@ -230,13 +230,13 @@
     "type": "keep",
     "type_index": "keep"
    },
-   "torchlens.data_classes.grad_fn.GradFnCallAccessor": {
+   "torchlens._data_classes.grad_fn.GradFnCallAccessor": {
     "_dict": "keep",
     "_label": "keep",
     "_list": "keep",
     "_source_ref": "weakref_strip"
    },
-   "torchlens.data_classes.grad_fn_call.GradFnCall": {
+   "torchlens._data_classes.grad_fn_call.GradFnCall": {
     "_source_trace_ref": "weakref_strip",
     "_time_finished": "keep",
     "_time_started": "keep",
@@ -252,7 +252,7 @@
     "ordinal": "keep",
     "timestamp": "keep"
    },
-   "torchlens.data_classes.layer.Layer": {
+   "torchlens._data_classes.layer.Layer": {
     "_is_in_conditional_body": "keep",
     "_param_barcodes": "keep",
     "_param_logs": "keep",
@@ -354,17 +354,17 @@
     "type_index": "keep",
     "visualizer_path": "keep"
    },
-   "torchlens.data_classes.layer.LayerAccessor": {
+   "torchlens._data_classes.layer.LayerAccessor": {
     "_dict": "keep",
     "_list": "keep",
     "_source_ref": "weakref_strip"
    },
-   "torchlens.data_classes.layer.OpAccessor": {
+   "torchlens._data_classes.layer.OpAccessor": {
     "_dict": "keep",
     "_list": "keep",
     "_source_ref": "weakref_strip"
    },
-   "torchlens.data_classes.module.Module": {
+   "torchlens._data_classes.module.Module": {
     "_attribute_writes": "drop",
     "_buffer_accessor": "drop",
     "_facets_cache": "drop",
@@ -458,13 +458,13 @@
     "total_output_gradient_memory": "keep",
     "training": "keep"
    },
-   "torchlens.data_classes.module.ModuleAccessor": {
+   "torchlens._data_classes.module.ModuleAccessor": {
     "_alias_dict": "keep",
     "_dict": "keep",
     "_list": "keep",
     "_pass_dict": "keep"
    },
-   "torchlens.data_classes.module.ModuleCall": {
+   "torchlens._data_classes.module.ModuleCall": {
     "_facets_cache": "drop",
     "_forward_args_template": "drop",
     "_forward_kwargs_template": "drop",
@@ -525,12 +525,12 @@
     "output_structure": "keep",
     "param_memory": "keep"
    },
-   "torchlens.data_classes.module.ModuleCallAccessor": {
+   "torchlens._data_classes.module.ModuleCallAccessor": {
     "_dict": "keep",
     "_list": "keep",
     "_source_ref": "weakref_strip"
    },
-   "torchlens.data_classes.op.GradientRecord": {
+   "torchlens._data_classes.op.GradientRecord": {
     "backward_pass_index": "keep",
     "dtype": "keep",
     "grad": "blob",
@@ -541,7 +541,7 @@
     "timestamp": "keep",
     "transformed_grad": "blob"
    },
-   "torchlens.data_classes.op.Op": {
+   "torchlens._data_classes.op.Op": {
     "_address_normalized": "keep",
     "_arg_expressions_cache": "drop",
     "_construction_done": "drop",
@@ -745,12 +745,12 @@
     "var_names": "keep",
     "visualizer_path": "keep"
    },
-   "torchlens.data_classes.param.ParamAccessor": {
+   "torchlens._data_classes.param.ParamAccessor": {
     "_dict": "keep",
     "_list": "keep",
     "_rehydrate_on_iter": "drop"
    },
-   "torchlens.data_classes.prehook.ModuleInputSnapshot": {
+   "torchlens._data_classes.prehook.ModuleInputSnapshot": {
     "_args": "blob_recursive",
     "_kwargs": "blob_recursive",
     "capture_complete": "keep",
@@ -759,7 +759,7 @@
     "summary": "keep",
     "tensor_observations": "keep"
    },
-   "torchlens.data_classes.prehook.PreHookEffect": {
+   "torchlens._data_classes.prehook.PreHookEffect": {
     "after_fingerprint": "keep",
     "before_fingerprint": "keep",
     "change_kinds": "keep",
@@ -775,7 +775,7 @@
     "scope": "keep",
     "with_kwargs": "keep"
    },
-   "torchlens.data_classes.prehook.TensorInputObservation": {
+   "torchlens._data_classes.prehook.TensorInputObservation": {
     "alias_group": "keep",
     "device": "keep",
     "dtype": "keep",
@@ -790,7 +790,7 @@
     "source_op": "keep",
     "version": "drop"
    },
-   "torchlens.data_classes.trace.Conditional": {
+   "torchlens._data_classes.trace.Conditional": {
     "arms": "keep",
     "fired_arm_index": "keep",
     "fired_arm_kind": "keep",
@@ -798,11 +798,11 @@
     "source_file": "keep",
     "source_line": "keep"
    },
-   "torchlens.data_classes.trace.ConditionalAccessor": {
+   "torchlens._data_classes.trace.ConditionalAccessor": {
     "_dict": "keep",
     "_list": "keep"
    },
-   "torchlens.data_classes.trace.ConditionalEvent": {
+   "torchlens._data_classes.trace.ConditionalEvent": {
     "_arm_bool_indices": "keep",
     "_arm_test_structures": "keep",
     "_bool_layers_raw": "keep",
@@ -820,7 +820,7 @@
     "source_file": "keep",
     "test_span": "keep"
    },
-   "torchlens.data_classes.trace.Trace": {
+   "torchlens._data_classes.trace.Trace": {
     "_activation_transform_repr": "keep",
     "_active_backward_pass_index": "drop",
     "_ambiguous_lookup_keys": "keep",
@@ -1166,6 +1166,111 @@
     "transform_repr": "keep",
     "verbose": "keep"
    },
+   "torchlens._ir.container.ContainerSpec": {
+    "aux_data": "blob_recursive",
+    "child_specs": "blob_recursive",
+    "fields": "keep",
+    "keys": "blob_recursive",
+    "kind": "keep",
+    "length": "keep",
+    "literal_value": "blob_recursive",
+    "lossy_reconstruction": "keep",
+    "type_module": "keep",
+    "type_qualname": "keep"
+   },
+   "torchlens._ir.container.DataclassField": {
+    "name": "keep"
+   },
+   "torchlens._ir.container.DictKey": {
+    "key": "keep"
+   },
+   "torchlens._ir.container.HFKey": {
+    "key": "keep"
+   },
+   "torchlens._ir.container.NamedField": {
+    "name": "keep"
+   },
+   "torchlens._ir.container.TupleIndex": {
+    "index": "keep"
+   },
+   "torchlens._ir.container_registry.ContainerLeafOccurrence": {
+    "occ_index": "keep",
+    "path": "blob_recursive",
+    "producer_op_label": "keep",
+    "tensor_identity": "keep"
+   },
+   "torchlens._ir.container_registry.ContainerRecord": {
+    "first_seen_event_index": "keep",
+    "label": "keep",
+    "object_kind": "keep",
+    "ordinal": "keep",
+    "roles": "keep",
+    "snapshots": "blob_recursive"
+   },
+   "torchlens._ir.container_registry.ContainerSnapshot": {
+    "leaf_occurrences": "blob_recursive",
+    "observed_at_event_index": "keep",
+    "phase": "keep",
+    "reconstructable": "keep",
+    "role": "keep",
+    "site": "blob_recursive",
+    "site_alias_event_indices": "keep",
+    "site_aliases": "blob_recursive",
+    "spec": "blob_recursive"
+   },
+   "torchlens._ir.container_registry.FuncSite": {
+    "func_call_id": "keep",
+    "position": "blob_recursive"
+   },
+   "torchlens._ir.container_registry.ModelSite": {
+    "model_ref": "keep",
+    "position": "blob_recursive"
+   },
+   "torchlens._ir.container_registry.ModuleSite": {
+    "module_call_label": "keep",
+    "position": "blob_recursive"
+   },
+   "torchlens._ir.events._AtenExecutionContext": {
+    "autocast": "keep",
+    "backend": "keep",
+    "compile_stance": "keep",
+    "completeness_witness_mode": "keep",
+    "deterministic_algorithms": "keep",
+    "device_capability": "keep",
+    "device_model": "keep",
+    "grad_mode": "keep",
+    "inference_mode": "keep",
+    "module_training_summary": "keep",
+    "owner_thread_coverage": "keep",
+    "pytorch_version": "keep",
+    "sdpa_policy": "keep",
+    "tf32_matmul_policy": "keep"
+   },
+   "torchlens._ir.events._AtenTensorFact": {
+    "container_path": "keep",
+    "device": "keep",
+    "dtype": "keep",
+    "layout": "keep",
+    "logical_version": "keep",
+    "requires_grad": "keep",
+    "shape": "keep",
+    "storage_alias_group": "keep",
+    "stride": "keep",
+    "tensor_impl_capability": "keep"
+   },
+   "torchlens._kernel_telemetry.KernelLaunch": {
+    "attribution_status": "keep",
+    "device": "keep",
+    "duration": "keep",
+    "launch_name": "keep",
+    "runtime_correlation": "keep",
+    "stream": "keep"
+   },
+   "torchlens._kernel_telemetry._TelemetryPayload": {
+    "_available": "keep",
+    "_launches": "keep",
+    "_relations": "keep"
+   },
    "torchlens.intervention.types.Edit": {
     "args": "keep",
     "batch_independent": "keep",
@@ -1199,111 +1304,6 @@
     "timestamp": "keep",
     "timing": "keep",
     "tuple_index": "keep"
-   },
-   "torchlens.ir.container.ContainerSpec": {
-    "aux_data": "blob_recursive",
-    "child_specs": "blob_recursive",
-    "fields": "keep",
-    "keys": "blob_recursive",
-    "kind": "keep",
-    "length": "keep",
-    "literal_value": "blob_recursive",
-    "lossy_reconstruction": "keep",
-    "type_module": "keep",
-    "type_qualname": "keep"
-   },
-   "torchlens.ir.container.DataclassField": {
-    "name": "keep"
-   },
-   "torchlens.ir.container.DictKey": {
-    "key": "keep"
-   },
-   "torchlens.ir.container.HFKey": {
-    "key": "keep"
-   },
-   "torchlens.ir.container.NamedField": {
-    "name": "keep"
-   },
-   "torchlens.ir.container.TupleIndex": {
-    "index": "keep"
-   },
-   "torchlens.ir.container_registry.ContainerLeafOccurrence": {
-    "occ_index": "keep",
-    "path": "blob_recursive",
-    "producer_op_label": "keep",
-    "tensor_identity": "keep"
-   },
-   "torchlens.ir.container_registry.ContainerRecord": {
-    "first_seen_event_index": "keep",
-    "label": "keep",
-    "object_kind": "keep",
-    "ordinal": "keep",
-    "roles": "keep",
-    "snapshots": "blob_recursive"
-   },
-   "torchlens.ir.container_registry.ContainerSnapshot": {
-    "leaf_occurrences": "blob_recursive",
-    "observed_at_event_index": "keep",
-    "phase": "keep",
-    "reconstructable": "keep",
-    "role": "keep",
-    "site": "blob_recursive",
-    "site_alias_event_indices": "keep",
-    "site_aliases": "blob_recursive",
-    "spec": "blob_recursive"
-   },
-   "torchlens.ir.container_registry.FuncSite": {
-    "func_call_id": "keep",
-    "position": "blob_recursive"
-   },
-   "torchlens.ir.container_registry.ModelSite": {
-    "model_ref": "keep",
-    "position": "blob_recursive"
-   },
-   "torchlens.ir.container_registry.ModuleSite": {
-    "module_call_label": "keep",
-    "position": "blob_recursive"
-   },
-   "torchlens.ir.events._AtenExecutionContext": {
-    "autocast": "keep",
-    "backend": "keep",
-    "compile_stance": "keep",
-    "completeness_witness_mode": "keep",
-    "deterministic_algorithms": "keep",
-    "device_capability": "keep",
-    "device_model": "keep",
-    "grad_mode": "keep",
-    "inference_mode": "keep",
-    "module_training_summary": "keep",
-    "owner_thread_coverage": "keep",
-    "pytorch_version": "keep",
-    "sdpa_policy": "keep",
-    "tf32_matmul_policy": "keep"
-   },
-   "torchlens.ir.events._AtenTensorFact": {
-    "container_path": "keep",
-    "device": "keep",
-    "dtype": "keep",
-    "layout": "keep",
-    "logical_version": "keep",
-    "requires_grad": "keep",
-    "shape": "keep",
-    "storage_alias_group": "keep",
-    "stride": "keep",
-    "tensor_impl_capability": "keep"
-   },
-   "torchlens.kernel_telemetry.KernelLaunch": {
-    "attribution_status": "keep",
-    "device": "keep",
-    "duration": "keep",
-    "launch_name": "keep",
-    "runtime_correlation": "keep",
-    "stream": "keep"
-   },
-   "torchlens.kernel_telemetry._TelemetryPayload": {
-    "_available": "keep",
-    "_launches": "keep",
-    "_relations": "keep"
    }
   },
   "contract_schema": "torchlens.writer_contract.v1",
@@ -1320,7 +1320,7 @@
   "record_contracts": {
    "aten_op": {
     "aliases": [],
-    "class": "torchlens.data_classes.aten_op.AtenOp",
+    "class": "torchlens._data_classes.aten_op.AtenOp",
     "field_policies": {
      "algorithmic_flops": "keep",
      "autocast_context": "keep",
@@ -1426,7 +1426,7 @@
    },
    "backward_pass": {
     "aliases": [],
-    "class": "torchlens.data_classes.backward_pass.BackwardPass",
+    "class": "torchlens._data_classes.backward_pass.BackwardPass",
     "field_policies": {
      "_source_trace_ref": "weakref_strip",
      "backward_call_context": "keep",
@@ -1496,7 +1496,7 @@
    },
    "buffer": {
     "aliases": [],
-    "class": "torchlens.data_classes.buffer.Buffer",
+    "class": "torchlens._data_classes.buffer.Buffer",
     "field_policies": {
      "_initial_value": "keep",
      "_source_ref": "weakref_strip",
@@ -1572,7 +1572,7 @@
    },
    "func_call_location": {
     "aliases": [],
-    "class": "torchlens.data_classes.func_call_location.FuncCallLocation",
+    "class": "torchlens._data_classes.func_call_location.FuncCallLocation",
     "field_policies": {
      "_call_line": "keep",
      "_code_context": "keep",
@@ -1653,7 +1653,7 @@
    },
    "grad_fn": {
     "aliases": [],
-    "class": "torchlens.data_classes.grad_fn.GradFn",
+    "class": "torchlens._data_classes.grad_fn.GradFn",
     "field_policies": {
      "_source_trace_ref": "weakref_strip",
      "backward_docstring": "keep",
@@ -1822,7 +1822,7 @@
    },
    "grad_fn_call": {
     "aliases": [],
-    "class": "torchlens.data_classes.grad_fn_call.GradFnCall",
+    "class": "torchlens._data_classes.grad_fn_call.GradFnCall",
     "field_policies": {
      "_source_trace_ref": "weakref_strip",
      "_time_finished": "keep",
@@ -1874,7 +1874,7 @@
    },
    "layer": {
     "aliases": [],
-    "class": "torchlens.data_classes.layer.Layer",
+    "class": "torchlens._data_classes.layer.Layer",
     "field_policies": {
      "_is_in_conditional_body": "keep",
      "_param_barcodes": "keep",
@@ -2168,7 +2168,7 @@
    },
    "module": {
     "aliases": [],
-    "class": "torchlens.data_classes.module.Module",
+    "class": "torchlens._data_classes.module.Module",
     "field_policies": {
      "_attribute_writes": "drop",
      "_buffer_accessor": "drop",
@@ -2444,7 +2444,7 @@
    },
    "module_call": {
     "aliases": [],
-    "class": "torchlens.data_classes.module.ModuleCall",
+    "class": "torchlens._data_classes.module.ModuleCall",
     "field_policies": {
      "_facets_cache": "drop",
      "_forward_args_template": "drop",
@@ -2617,7 +2617,7 @@
    },
    "op": {
     "aliases": [],
-    "class": "torchlens.data_classes.op.Op",
+    "class": "torchlens._data_classes.op.Op",
     "field_policies": {
      "_address_normalized": "keep",
      "_arg_expressions_cache": "drop",
@@ -3177,7 +3177,7 @@
    },
    "param": {
     "aliases": [],
-    "class": "torchlens.data_classes.param.Param",
+    "class": "torchlens._data_classes.param.Param",
     "field_policies": {
      "_derived_grad_payload": "keep",
      "_derived_grad_record_path": "keep",
@@ -3341,7 +3341,7 @@
      "detached_patch_epoch",
      "detached_patch_policy"
     ],
-    "class": "torchlens.data_classes.trace.Trace",
+    "class": "torchlens._data_classes.trace.Trace",
     "field_policies": {
      "_activation_transform_repr": "keep",
      "_active_backward_pass_index": "drop",
@@ -4101,5 +4101,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "8f04983185f9d9638f005d6fa1acc591a291563f40beba8b2fc781bc9e0a8a5f"
+ "writer_contract_digest": "ad27e4069d8b1fc942412a7a2362a5aaaf1240d8e027b8c91894e4410c0aad2e"
 }

@@ -21,8 +21,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
-from torchlens.selection_subspace import BasisProvenance
+from torchlens._selection_subspace import BasisProvenance
+from torchlens.errors import SelectionError
 
 _RELU = "relu_1_2"
 _SIGMOID = "sigmoid_1_4"
@@ -87,7 +87,7 @@ def test_sparse_direction_selects_exactly_its_support(log):
     expected[:, [1, 4]] = True
     assert torch.equal(entry.mask, expected)
     assert entry.provenance.relation == "exact"
-    assert entry.selected_count == 4
+    assert entry.num_selected == 4
 
 
 def test_multi_vector_basis_unions_row_supports(log):
@@ -106,7 +106,7 @@ def test_dense_direction_supports_the_whole_axis(log):
     """A dense direction resolves to the whole site — the documented set claim."""
 
     resolved = tl.subspace(_RELU, torch.ones(_D), origin="dense test direction").resolve(log)
-    assert resolved[0].selected_count == 2 * _D
+    assert resolved[0].num_selected == 2 * _D
     assert bool(resolved[0].mask.all())
 
 
@@ -114,7 +114,7 @@ def test_tol_is_a_strict_support_threshold(log):
     """Weights with |w| <= tol contribute no support; |w| > tol do."""
 
     direction = torch.tensor([0.25, 0.5, -0.25, -0.5, 0.25, 0.5])
-    resolved = tl.subspace(_RELU, direction, origin="tol test", tol=0.25).resolve(log)
+    resolved = tl.subspace(_RELU, direction, origin="tol test", atol=0.25).resolve(log)
     expected = torch.zeros(2, _D, dtype=torch.bool)
     expected[:, [1, 3, 5]] = True
     assert torch.equal(resolved[0].mask, expected)
@@ -129,7 +129,7 @@ def test_resolution_is_geometry_only_unsaved_sites_resolve(model):
         resolved = tl.subspace(_RELU, _sparse_direction(), origin="unsaved-site test").resolve(
             trace
         )
-        assert resolved[0].selected_count == 4
+        assert resolved[0].num_selected == 4
     finally:
         trace.cleanup()
 
@@ -169,7 +169,7 @@ def test_provenance_source_carries_origin_method_geometry_and_digest(log):
 
     basis = _sparse_direction()
     resolved = tl.subspace(
-        _RELU, basis, origin="linear probe, run 42", method="probe", tol=0.1
+        _RELU, basis, origin="linear probe, run 42", method="probe", atol=0.1
     ).resolve(log)
     source = resolved[0].provenance.source
     assert "origin='linear probe, run 42'" in source
@@ -197,7 +197,7 @@ def test_provenance_record_fields_and_repr(log):
     selection = tl.subspace(_RELU, _sparse_direction(), origin="repr test", method="manual")
     record = selection._node.provenance
     assert isinstance(record, BasisProvenance)
-    assert (record.n_vectors, record.space_dim, record.dim, record.tol) == (1, _D, -1, 0.0)
+    assert (record.num_vectors, record.space_dim, record.dim, record.atol) == (1, _D, -1, 0.0)
     assert record.origin == "repr test"
     assert len(record.sha256) == 64
     assert "origin='repr test'" in repr(selection)
@@ -297,7 +297,7 @@ def test_non_act_within_refuses_kind_incompatible():
     """PARAM populations refuse selection_kind_incompatible."""
 
     with pytest.raises(SelectionError) as excinfo:
-        tl.subspace(tl.params("encoder.weight"), torch.ones(_D), origin="param probe")
+        tl.subspace(tl.param("encoder.weight"), torch.ones(_D), origin="param probe")
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 
@@ -326,7 +326,7 @@ def test_sub_tol_row_refuses_at_construction():
 
     basis = torch.stack([torch.full((_D,), 0.01), torch.ones(_D)])
     with pytest.raises(ValueError, match="vacuous"):
-        tl.subspace(_RELU, basis, origin="sub-tol row", tol=0.05)
+        tl.subspace(_RELU, basis, origin="sub-tol row", atol=0.05)
 
 
 def test_bad_parameters_refuse():
@@ -335,7 +335,7 @@ def test_bad_parameters_refuse():
     with pytest.raises(ValueError, match="dim"):
         tl.subspace(_RELU, torch.ones(_D), origin="x", dim=True)
     with pytest.raises(ValueError, match="non-negative"):
-        tl.subspace(_RELU, torch.ones(_D), origin="x", tol=-1.0)
+        tl.subspace(_RELU, torch.ones(_D), origin="x", atol=-1.0)
     with pytest.raises(ValueError, match="method"):
         tl.subspace(_RELU, torch.ones(_D), origin="x", method="")
 
@@ -347,7 +347,7 @@ def test_basis_is_canonicalized_defensively(log):
     selection = tl.subspace(_RELU, basis, origin="mutation test")
     basis[0] = 99.0
     resolved = selection.resolve(log)
-    assert resolved[0].selected_count == 4  # still {1, 4} x batch 2
+    assert resolved[0].num_selected == 4  # still {1, 4} x batch 2
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +395,7 @@ def test_bare_layer_label_on_multipass_layer_supports_every_pass():
         direction = torch.tensor([1.0, 0.0, 0.0, 1.0])
         resolved = tl.subspace("tanh_1_2", direction, origin="recurrent probe").resolve(trace)
         assert len(resolved) == 3  # one entry per pass
-        assert {entry.site_key for entry in resolved} == {
+        assert {entry.key for entry in resolved} == {
             ("tanh_1_2", 1),
             ("tanh_1_2", 2),
             ("tanh_1_2", 3),

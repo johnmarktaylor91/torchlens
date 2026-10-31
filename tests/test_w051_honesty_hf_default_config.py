@@ -21,8 +21,8 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 pytest.importorskip("transformers")
 
@@ -117,7 +117,7 @@ def test_use_cache_false_container_contract_capture_settles_verified(input_ids) 
     trace = _capture(model, input_ids, capture_container_structure=True)
     result = trace.run(inputs=input_ids)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.poisoned is False
+    assert result.report.is_poisoned is False
     assert type(result.output).__name__ == "CausalLMOutputWithCrossAttentions"
     with torch.no_grad():
         live = model(input_ids)
@@ -134,7 +134,7 @@ def test_use_cache_false_default_capture_settles_verified(input_ids) -> None:
     trace = _capture(model, input_ids)
     result = trace.run(inputs=input_ids)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.poisoned is False
+    assert result.report.is_poisoned is False
     assert type(result.output).__name__ == "CausalLMOutputWithCrossAttentions"
     with torch.no_grad():
         live = model(input_ids)

@@ -6,13 +6,13 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
 from torchlens._errors import AmbiguousOpLookupError
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
 
 
 class StrictAccessorModel(torch.nn.Module):
@@ -188,11 +188,11 @@ def test_legacy_param_restore_refuses_below_floor() -> None:
     states by the strict-binder suites.
     """
 
-    from torchlens._io import ArtifactVersionBelowFloorError
+    from torchlens._io import ArtifactTooOldError
 
     first = Param.__new__(Param)
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="tlspec_version=6"):
+    with pytest.raises(ArtifactTooOldError, match="tlspec_version=6"):
         first.__setstate__(_legacy_param_state("left.weight"))
 
 
@@ -225,7 +225,7 @@ def test_grad_fns_accessor_returns_grad_fn_for_pass_label() -> None:
 
     trace = _strict_trace()
     trace[trace.output_layers[0]].out.sum().backward()
-    grad_fn = trace.grad_fns[0]
+    grad_fn = trace.autograd.grad_fns[0]
 
-    assert isinstance(trace.grad_fns[f"{grad_fn.label}:1"], GradFn)
-    assert trace.grad_fns[f"{grad_fn.label}:1"] is grad_fn
+    assert isinstance(trace.autograd.grad_fns[f"{grad_fn.label}:1"], GradFn)
+    assert trace.autograd.grad_fns[f"{grad_fn.label}:1"] is grad_fn

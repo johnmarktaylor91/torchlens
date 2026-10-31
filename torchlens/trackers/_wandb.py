@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..observability import HistogramDescriptor
+from .._observability import HistogramDescriptor
 from ._errors import SinkProtocolError, TrackersError
 from ._records import HistogramPoint, ScalarPoint, TextPoint
 
@@ -56,7 +56,7 @@ def _wandb_module() -> Any:
 class WandbSink:
     """Native wandb receiver over an existing ``wandb.Run``."""
 
-    def __init__(self, run: Any) -> None:
+    def __init__(self, to: Any) -> None:
         """Wrap an existing run object (never calls ``wandb.init`` itself).
 
         Activation is a visible call in user source: constructing the run is
@@ -64,16 +64,16 @@ class WandbSink:
         memo 3.16).
         """
 
-        if not callable(getattr(run, "log", None)):
+        if not callable(getattr(to, "log", None)):
             raise SinkProtocolError(
-                f"WandbSink needs a live wandb Run (got {type(run).__name__}); "
+                f"WandbSink needs a live wandb Run (got {type(to).__name__}); "
                 "it never calls wandb.init itself -- constructing the run is "
                 "the user's visible enablement act.",
                 code="tracker_sink_invalid",
                 sink="WandbSink",
                 remedy="Pass the object returned by wandb.init(...).",
             )
-        self._run = run
+        self._run = to
         self._closed = False
 
     def capabilities(self) -> frozenset[str]:

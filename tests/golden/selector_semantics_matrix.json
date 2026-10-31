@@ -744,7 +744,7 @@
   "relu_1_2",
   "relu_2_4"
  ],
- "sites_default_fanout/conv/not_func_missing": "ERROR:SiteAmbiguityError",
+ "sites_default_fanout/conv/not_func_missing": "ERROR:AmbiguousSiteError",
  "spec/and_func_inmodule": {
   "capture_repr": "(tl.func('relu') & tl.in_module('features'))",
   "direction": null,
@@ -759,123 +759,123 @@
   "spec_kind": "and"
  },
  "spec/and_nested_three": {
-  "capture_repr": "(tl.func('relu') & tl.in_module('features') & tl.contains('relu'))",
+  "capture_repr": "(tl.func('relu') & tl.in_module('features') & tl.label_contains('relu'))",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "(tl.func('relu') & tl.in_module('features') & tl.contains('relu'))",
+  "hooks_repr": "(tl.func('relu') & tl.in_module('features') & tl.label_contains('relu'))",
   "kind": "and",
   "resolver_direction": null,
   "resolver_labels": [
    "relu_1_2"
   ],
-  "resolver_repr": "(tl.func('relu') & tl.in_module('features') & tl.contains('relu'))",
+  "resolver_repr": "(tl.func('relu') & tl.in_module('features') & tl.label_contains('relu'))",
   "spec_kind": "and"
  },
  "spec/contains_lower": {
-  "capture_repr": "tl.contains('relu')",
+  "capture_repr": "tl.label_contains('relu')",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.contains('relu')",
+  "hooks_repr": "tl.label_contains('relu')",
   "kind": "contains",
   "resolver_direction": null,
   "resolver_labels": [
    "relu_1_2",
    "relu_2_4"
   ],
-  "resolver_repr": "tl.contains('relu')",
+  "resolver_repr": "tl.label_contains('relu')",
   "spec_kind": "contains"
  },
  "spec/contains_mixed": {
-  "capture_repr": "tl.contains('Conv2d')",
+  "capture_repr": "tl.label_contains('Conv2d')",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.contains('Conv2d')",
+  "hooks_repr": "tl.label_contains('Conv2d')",
   "kind": "contains",
   "resolver_direction": null,
   "resolver_labels": [
    "conv2d_1_1",
    "conv2d_2_3"
   ],
-  "resolver_repr": "tl.contains('Conv2d')",
+  "resolver_repr": "tl.label_contains('Conv2d')",
   "spec_kind": "contains"
  },
  "spec/contains_raw_sub": {
-  "capture_repr": "tl.contains('_raw')",
+  "capture_repr": "tl.label_contains('_raw')",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.contains('_raw')",
+  "hooks_repr": "tl.label_contains('_raw')",
   "kind": "contains",
   "resolver_direction": null,
   "resolver_labels": [],
-  "resolver_repr": "tl.contains('_raw')",
+  "resolver_repr": "tl.label_contains('_raw')",
   "spec_kind": "contains"
  },
  "spec/contains_upper": {
-  "capture_repr": "tl.contains('RELU')",
+  "capture_repr": "tl.label_contains('RELU')",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.contains('RELU')",
+  "hooks_repr": "tl.label_contains('RELU')",
   "kind": "contains",
   "resolver_direction": null,
   "resolver_labels": [
    "relu_1_2",
    "relu_2_4"
   ],
-  "resolver_repr": "tl.contains('RELU')",
+  "resolver_repr": "tl.label_contains('RELU')",
   "spec_kind": "contains"
  },
  "spec/dict_output_at_aux0": {
-  "capture_repr": "tl.output_at(('aux', 0))",
+  "capture_repr": "tl.intervention.output_at(('aux', 0))",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.output_at(('aux', 0))",
+  "hooks_repr": "tl.intervention.output_at(('aux', 0))",
   "kind": "output_at",
   "resolver_direction": null,
   "resolver_labels": [
    "output_2"
   ],
-  "resolver_repr": "tl.output_at(('aux', 0))",
+  "resolver_repr": "tl.intervention.output_at(('aux', 0))",
   "spec_kind": "output_at"
  },
  "spec/dict_output_at_aux1": {
-  "capture_repr": "tl.output_at(('aux', 1))",
+  "capture_repr": "tl.intervention.output_at(('aux', 1))",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.output_at(('aux', 1))",
+  "hooks_repr": "tl.intervention.output_at(('aux', 1))",
   "kind": "output_at",
   "resolver_direction": null,
   "resolver_labels": [
    "output_3"
   ],
-  "resolver_repr": "tl.output_at(('aux', 1))",
+  "resolver_repr": "tl.intervention.output_at(('aux', 1))",
   "spec_kind": "output_at"
  },
  "spec/dict_output_at_logits": {
-  "capture_repr": "tl.output_at(('logits',))",
+  "capture_repr": "tl.intervention.output_at(('logits',))",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.output_at(('logits',))",
+  "hooks_repr": "tl.intervention.output_at(('logits',))",
   "kind": "output_at",
   "resolver_direction": null,
   "resolver_labels": [
    "output_1"
   ],
-  "resolver_repr": "tl.output_at(('logits',))",
+  "resolver_repr": "tl.intervention.output_at(('logits',))",
   "spec_kind": "output_at"
  },
  "spec/dict_output_name": {
-  "capture_repr": "tl.output('logits')",
+  "capture_repr": "tl.model_output('logits')",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.output('logits')",
+  "hooks_repr": "tl.model_output('logits')",
   "kind": "output",
   "resolver_direction": null,
   "resolver_labels": [],
-  "resolver_repr": "tl.output('logits')",
+  "resolver_repr": "tl.model_output('logits')",
   "spec_kind": "output"
  },
  "spec/dictin_input_at_a": {
-  "capture_repr": "tl.input_at(('a',))",
+  "capture_repr": "tl.model_input(('a',))",
   "direction": null,
   "hooks_repr": "ERROR:SelectorCapabilityError",
   "kind": "input_at",
@@ -883,11 +883,11 @@
   "resolver_labels": [
    "input_1"
   ],
-  "resolver_repr": "tl.input_at(('a',))",
+  "resolver_repr": "tl.model_input(('a',))",
   "spec_kind": "input_at"
  },
  "spec/dictin_input_at_b": {
-  "capture_repr": "tl.input_at(('b',))",
+  "capture_repr": "tl.model_input(('b',))",
   "direction": null,
   "hooks_repr": "ERROR:SelectorCapabilityError",
   "kind": "input_at",
@@ -895,17 +895,17 @@
   "resolver_labels": [
    "input_2"
   ],
-  "resolver_repr": "tl.input_at(('b',))",
+  "resolver_repr": "tl.model_input(('b',))",
   "spec_kind": "input_at"
  },
  "spec/dictin_input_at_missing": {
-  "capture_repr": "tl.input_at(('zzz',))",
+  "capture_repr": "tl.model_input(('zzz',))",
   "direction": null,
   "hooks_repr": "ERROR:SelectorCapabilityError",
   "kind": "input_at",
   "resolver_direction": null,
   "resolver_labels": [],
-  "resolver_repr": "tl.input_at(('zzz',))",
+  "resolver_repr": "tl.model_input(('zzz',))",
   "spec_kind": "input_at"
  },
  "spec/facet_named": {
@@ -1037,13 +1037,13 @@
   "spec_kind": "in_module"
  },
  "spec/input_at_0": {
-  "capture_repr": "tl.input_at((0,))",
+  "capture_repr": "tl.model_input((0,))",
   "direction": null,
   "hooks_repr": "ERROR:SelectorCapabilityError",
   "kind": "input_at",
   "resolver_direction": null,
   "resolver_labels": [],
-  "resolver_repr": "tl.input_at((0,))",
+  "resolver_repr": "tl.model_input((0,))",
   "spec_kind": "input_at"
  },
  "spec/label_final": {
@@ -1186,29 +1186,29 @@
   "spec_kind": "not"
  },
  "spec/nt_output_at_extra": {
-  "capture_repr": "tl.output_at(('extra',))",
+  "capture_repr": "tl.intervention.output_at(('extra',))",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.output_at(('extra',))",
+  "hooks_repr": "tl.intervention.output_at(('extra',))",
   "kind": "output_at",
   "resolver_direction": null,
   "resolver_labels": [
    "output_2"
   ],
-  "resolver_repr": "tl.output_at(('extra',))",
+  "resolver_repr": "tl.intervention.output_at(('extra',))",
   "spec_kind": "output_at"
  },
  "spec/nt_output_at_main": {
-  "capture_repr": "tl.output_at(('main',))",
+  "capture_repr": "tl.intervention.output_at(('main',))",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.output_at(('main',))",
+  "hooks_repr": "tl.intervention.output_at(('main',))",
   "kind": "output_at",
   "resolver_direction": null,
   "resolver_labels": [
    "output_1"
   ],
-  "resolver_repr": "tl.output_at(('main',))",
+  "resolver_repr": "tl.intervention.output_at(('main',))",
   "spec_kind": "output_at"
  },
  "spec/or_funcs": {
@@ -1228,25 +1228,25 @@
   "spec_kind": "or"
  },
  "spec/output_at_0": {
-  "capture_repr": "tl.output_at((0,))",
+  "capture_repr": "tl.intervention.output_at((0,))",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.output_at((0,))",
+  "hooks_repr": "tl.intervention.output_at((0,))",
   "kind": "output_at",
   "resolver_direction": null,
   "resolver_labels": [],
-  "resolver_repr": "tl.output_at((0,))",
+  "resolver_repr": "tl.intervention.output_at((0,))",
   "spec_kind": "output_at"
  },
  "spec/output_index": {
-  "capture_repr": "tl.output(0)",
+  "capture_repr": "tl.model_output(0)",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.output(0)",
+  "hooks_repr": "tl.model_output(0)",
   "kind": "output",
   "resolver_direction": null,
   "resolver_labels": [],
-  "resolver_repr": "tl.output(0)",
+  "resolver_repr": "tl.model_output(0)",
   "spec_kind": "output"
  },
  "spec/preceded_by_conv": {
@@ -1258,65 +1258,65 @@
   "spec_kind": "preceded_by"
  },
  "spec/regex_anchored": {
-  "capture_repr": "tl.regex('^conv2d_2')",
+  "capture_repr": "tl.label_matches('^conv2d_2')",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.regex('^conv2d_2')",
+  "hooks_repr": "tl.label_matches('^conv2d_2')",
   "kind": "regex",
   "resolver_direction": null,
   "resolver_labels": [
    "conv2d_2_3"
   ],
-  "resolver_repr": "tl.regex('^conv2d_2')",
+  "resolver_repr": "tl.label_matches('^conv2d_2')",
   "spec_kind": "regex"
  },
  "spec/regex_lower": {
-  "capture_repr": "tl.regex('relu_\\\\d')",
+  "capture_repr": "tl.label_matches('relu_\\\\d')",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.regex('relu_\\\\d')",
+  "hooks_repr": "tl.label_matches('relu_\\\\d')",
   "kind": "regex",
   "resolver_direction": null,
   "resolver_labels": [
    "relu_1_2",
    "relu_2_4"
   ],
-  "resolver_repr": "tl.regex('relu_\\\\d')",
+  "resolver_repr": "tl.label_matches('relu_\\\\d')",
   "spec_kind": "regex"
  },
  "spec/regex_raw_anchor": {
-  "capture_repr": "tl.regex('_raw$')",
+  "capture_repr": "tl.label_matches('_raw$')",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.regex('_raw$')",
+  "hooks_repr": "tl.label_matches('_raw$')",
   "kind": "regex",
   "resolver_direction": null,
   "resolver_labels": [],
-  "resolver_repr": "tl.regex('_raw$')",
+  "resolver_repr": "tl.label_matches('_raw$')",
   "spec_kind": "regex"
  },
  "spec/regex_upper": {
-  "capture_repr": "tl.regex('RELU')",
+  "capture_repr": "tl.label_matches('RELU')",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.regex('RELU')",
+  "hooks_repr": "tl.label_matches('RELU')",
   "kind": "regex",
   "resolver_direction": null,
   "resolver_labels": [],
-  "resolver_repr": "tl.regex('RELU')",
+  "resolver_repr": "tl.label_matches('RELU')",
   "spec_kind": "regex"
  },
  "spec/split_contains_mul": {
-  "capture_repr": "tl.contains('mul')",
+  "capture_repr": "tl.label_contains('mul')",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.contains('mul')",
+  "hooks_repr": "tl.label_contains('mul')",
   "kind": "contains",
   "resolver_direction": null,
   "resolver_labels": [
    "mul_1_3"
   ],
-  "resolver_repr": "tl.contains('mul')",
+  "resolver_repr": "tl.label_contains('mul')",
   "spec_kind": "contains"
  },
  "spec/split_func_chunk_out1": {
@@ -1333,29 +1333,29 @@
   "spec_kind": "func"
  },
  "spec/split_output_0": {
-  "capture_repr": "tl.output(0)",
+  "capture_repr": "tl.model_output(0)",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.output(0)",
+  "hooks_repr": "tl.model_output(0)",
   "kind": "output",
   "resolver_direction": null,
   "resolver_labels": [
    "chunk_1_1"
   ],
-  "resolver_repr": "tl.output(0)",
+  "resolver_repr": "tl.model_output(0)",
   "spec_kind": "output"
  },
  "spec/split_output_1": {
-  "capture_repr": "tl.output(1)",
+  "capture_repr": "tl.model_output(1)",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "tl.output(1)",
+  "hooks_repr": "tl.model_output(1)",
   "kind": "output",
   "resolver_direction": null,
   "resolver_labels": [
    "chunk_2_2"
   ],
-  "resolver_repr": "tl.output(1)",
+  "resolver_repr": "tl.model_output(1)",
   "spec_kind": "output"
  },
  "spec/vmap_transform_any": {
@@ -1451,27 +1451,27 @@
   "spec_kind": "backward_pass"
  },
  "spec_bwd/bwd_and_direction_agnostic": {
-  "capture_repr": "(tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None}) & tl.contains('relu'))",
+  "capture_repr": "(tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None}) & tl.label_contains('relu'))",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "(tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None}) & tl.contains('relu'))",
+  "hooks_repr": "(tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None}) & tl.label_contains('relu'))",
   "kind": "and",
   "resolver_direction": null,
   "resolver_labels": [
    "relu_back_1_9",
    "relu_back_2_11"
   ],
-  "resolver_repr": "(tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None}) & tl.contains('relu'))",
+  "resolver_repr": "(tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None}) & tl.label_contains('relu'))",
   "spec_kind": "and"
  },
  "spec_bwd/bwd_input_at_and_grad_output": {
-  "capture_repr": "(tl.input_at((0,)) & tl.grad_kind('grad_output'))",
+  "capture_repr": "(tl.model_input((0,)) & tl.grad_kind('grad_output'))",
   "direction": null,
   "hooks_repr": "ERROR:SelectorCapabilityError",
   "kind": "and",
   "resolver_direction": null,
   "resolver_labels": [],
-  "resolver_repr": "(tl.input_at((0,)) & tl.grad_kind('grad_output'))",
+  "resolver_repr": "(tl.model_input((0,)) & tl.grad_kind('grad_output'))",
   "spec_kind": "and"
  },
  "spec_bwd/bwd_not_accumulate": {
@@ -1498,25 +1498,25 @@
   "spec_kind": "not"
  },
  "spec_bwd/bwd_output0_and_grad_input": {
-  "capture_repr": "(tl.output(0) & tl.grad_kind('grad_input'))",
+  "capture_repr": "(tl.model_output(0) & tl.grad_kind('grad_input'))",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "(tl.output(0) & tl.grad_kind('grad_input'))",
+  "hooks_repr": "(tl.model_output(0) & tl.grad_kind('grad_input'))",
   "kind": "and",
   "resolver_direction": null,
   "resolver_labels": [],
-  "resolver_repr": "(tl.output(0) & tl.grad_kind('grad_input'))",
+  "resolver_repr": "(tl.model_output(0) & tl.grad_kind('grad_input'))",
   "spec_kind": "and"
  },
  "spec_bwd/bwd_output_at_and_grad_input": {
-  "capture_repr": "(tl.output_at((0,)) & tl.grad_kind('grad_input'))",
+  "capture_repr": "(tl.intervention.output_at((0,)) & tl.grad_kind('grad_input'))",
   "direction": null,
   "hooks_direction": null,
-  "hooks_repr": "(tl.output_at((0,)) & tl.grad_kind('grad_input'))",
+  "hooks_repr": "(tl.intervention.output_at((0,)) & tl.grad_kind('grad_input'))",
   "kind": "and",
   "resolver_direction": null,
   "resolver_labels": [],
-  "resolver_repr": "(tl.output_at((0,)) & tl.grad_kind('grad_input'))",
+  "resolver_repr": "(tl.intervention.output_at((0,)) & tl.grad_kind('grad_input'))",
   "spec_kind": "and"
  },
  "spec_bwd/bwd_plain_label": {
@@ -1545,16 +1545,16 @@
   "spec_kind": "grad_fn"
  },
  "spec_bwd/grad_fn_label_exact": {
-  "capture_repr": "tl.grad_fn_label('relu_back_1_9')",
+  "capture_repr": "tl.intervention.grad_fn_label('relu_back_1_9')",
   "direction": "backward",
   "hooks_direction": "backward",
-  "hooks_repr": "tl.grad_fn_label('relu_back_1_9')",
+  "hooks_repr": "tl.intervention.grad_fn_label('relu_back_1_9')",
   "kind": "grad_fn_label",
   "resolver_direction": "backward",
   "resolver_labels": [
    "relu_back_1_9"
   ],
-  "resolver_repr": "tl.grad_fn_label('relu_back_1_9')",
+  "resolver_repr": "tl.intervention.grad_fn_label('relu_back_1_9')",
   "spec_kind": "grad_fn_label"
  },
  "spec_bwd/grad_fn_label_pattern": {

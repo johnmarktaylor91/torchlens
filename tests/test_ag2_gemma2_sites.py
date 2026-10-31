@@ -127,10 +127,10 @@ def _build(model, transcoders, *, scales: bool = True):
     return tl.attribution.build_graph(
         trace,
         transcoders,
-        embedding="model.embed_tokens",
+        embedding_module="model.embed_tokens",
         logits_at=tl.attribution.SiteTarget("lm_head"),
-        max_n_logits=3,
-        desired_logit_prob=0.99,
+        max_num_logits=3,
+        logit_probability_coverage=0.99,
         frozen=_frozen_ops(trace, scales=scales),
     )
 
@@ -186,10 +186,10 @@ def _key(model, transcoders, graph, monkeypatch) -> torch.Tensor:
         if node.kind == "feature":
             layer = int(node.site.split(".")[2])
             reader = transcoders[node.site]
-            value = reader.pre(inputs[layer][0, node.position])[node.feature]
+            value = reader.pre(inputs[layer][0, node.position])[node.feature_index]
         elif node.kind == "logit":
             z = pre_softcap["z"][0, -1]
-            value = z[node.token] - z.mean()
+            value = z[node.token_id] - z.mean()
         else:
             continue
         grads = torch.autograd.grad(value, sources, retain_graph=True, allow_unused=True)
@@ -207,8 +207,8 @@ def _key(model, transcoders, graph, monkeypatch) -> torch.Tensor:
                 reader = transcoders[f"model.layers.{layer}.mlp"]
                 if source.kind == "feature":
                     vec = (
-                        acts[layer][source.position, source.feature]
-                        * reader.W_dec[write][source.feature]
+                        acts[layer][source.position, source.feature_index]
+                        * reader.W_dec[write][source.feature_index]
                     )
                 else:
                     recon = acts[layer][source.position] @ reader.W_dec[write] + reader.b_dec[write]

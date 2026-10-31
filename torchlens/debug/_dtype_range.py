@@ -7,32 +7,32 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import DebugReport, rows_of
+from .._debug_report import Report, rows_of
 from ._audit import AuditFinding, AuditSeverity
 from ._common import _compute_ops, _op_label, _safe_out
 from ._nan import _module_address, _nonfinite_kind
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
 
 @dataclass(frozen=True)
-class DTypeRangeAudit(DebugReport):
+class DTypeRangeReport(Report):
     """Coverage-bounded dtype range audit result.
 
     Attributes
     ----------
     findings:
         Evidence-backed findings following the :class:`AuditFinding` shape.
-    n_ops_audited:
+    num_audited_ops:
         Operations with one saved native tensor payload that was inspected.
-    n_ops_total:
+    num_ops:
         Compute and output operations present in the trace.
     """
 
     findings: tuple[AuditFinding, ...]
-    n_ops_audited: int
-    n_ops_total: int
+    num_audited_ops: int
+    num_ops: int
 
     _prints_repr = True
 
@@ -44,7 +44,7 @@ class DTypeRangeAudit(DebugReport):
     def _report_coverage(self) -> str | None:
         """What this report did and did not examine."""
 
-        return f"{self.n_ops_audited} of {self.n_ops_total} ops audited"
+        return f"{self.num_audited_ops} of {self.num_ops} ops audited"
 
     def _report_findings(self) -> list[str]:
         """One-line findings for the card, most severe first."""
@@ -66,9 +66,9 @@ class DTypeRangeAudit(DebugReport):
             ``n_ops_audited / n_ops_total``, or ``0.0`` for an empty trace.
         """
 
-        if self.n_ops_total == 0:
+        if self.num_ops == 0:
             return 0.0
-        return self.n_ops_audited / self.n_ops_total
+        return self.num_audited_ops / self.num_ops
 
     def __repr__(self) -> str:
         """Return a compact coverage-honest summary.
@@ -80,8 +80,8 @@ class DTypeRangeAudit(DebugReport):
         """
 
         return (
-            f"DTypeRangeAudit(findings={len(self.findings)}, "
-            f"coverage={self.n_ops_audited}/{self.n_ops_total})"
+            f"DTypeRangeReport(findings={len(self.findings)}, "
+            f"coverage={self.num_audited_ops}/{self.num_ops})"
         )
 
 
@@ -91,7 +91,7 @@ def _finding(
     severity: AuditSeverity,
     check: str,
     message: str,
-    follow_up: str = "tl.debug.dtype_range_audit(trace)",
+    follow_up: str = "tl.debug.dtype_range(trace)",
 ) -> AuditFinding:
     """Build one dtype finding with recorded operation provenance.
 
@@ -252,12 +252,12 @@ def _wider_input_dtypes(op: Any, output_dtype: torch.dtype) -> tuple[torch.dtype
     return tuple(wider)
 
 
-def dtype_range_audit(
+def dtype_range(
     trace: Trace,
     *,
     max_fraction: float = 0.9,
     subnormal_fraction_threshold: float = 0.1,
-) -> DTypeRangeAudit:
+) -> DTypeRangeReport:
     """Audit saved activations for numeric-range and precision hazards.
 
     Non-finite classification reuses the same classifier as
@@ -279,7 +279,7 @@ def dtype_range_audit(
 
     Returns
     -------
-    DTypeRangeAudit
+    DTypeRangeReport
         Structured findings and audited/total operation coverage.
 
     Raises
@@ -369,7 +369,7 @@ def dtype_range_audit(
                 )
             )
 
-    return DTypeRangeAudit(tuple(findings), n_ops_audited, len(ops))
+    return DTypeRangeReport(tuple(findings), n_ops_audited, len(ops))
 
 
-__all__ = ["DTypeRangeAudit", "dtype_range_audit"]
+__all__ = ["DTypeRangeReport", "dtype_range"]

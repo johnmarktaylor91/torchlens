@@ -13,7 +13,7 @@ from torchlens.intervention.errors import (
     DirectActivationWriteWarning,
     EngineDispatchError,
     ModelMismatchError,
-    MutateInPlaceWarning,
+    TraceMutationWarning,
 )
 from torchlens.io import TraceState, suppress_mutate_warnings
 from torchlens.options import CaptureOptions, InterventionOptions
@@ -123,7 +123,7 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
     """Root mutators warn once, with call-level and session-level suppression."""
 
     log, _ = _capture()
-    with pytest.warns(MutateInPlaceWarning):
+    with pytest.warns(TraceMutationWarning):
         log.set(tl.func("relu"), torch.zeros(2, 3))
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
@@ -208,8 +208,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     """``do`` dispatches to replay, rerun, set-only, and top-level alias paths."""
 
     replay_log, _ = _capture()
-    replay_result = tl.do(
-        replay_log,
+    replay_result = replay_log.do(
         {tl.func("relu"): _zero_hook},
         intervention=InterventionOptions(confirm_mutation=True),
     )

@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.op import Op
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.op import Op
+    from torchlens._data_classes.trace import Trace
 
 
 def _ordered_ops(trace: Trace) -> list[Op]:
@@ -85,7 +85,7 @@ def _op_label(op: Op) -> str:
 
     Reading the per-pass ``label`` on an aggregate recurrent ``Layer`` trips the
     deliberate ``ValueError`` multi-pass tripwire, so route through the shared
-    :func:`~torchlens.utils._multipass_access.get_multipass_attr` helper (the one
+    :func:`~torchlens._utils._multipass_access.get_multipass_attr` helper (the one
     documented pattern for the whole sprint) and fall back to the aggregate
     ``layer_label``, which is the honest identifier for a multi-pass Layer.
 
@@ -100,7 +100,7 @@ def _op_label(op: Op) -> str:
         Op label, or the aggregate ``layer_label`` for a multi-pass Layer.
     """
 
-    from ..utils._multipass_access import get_multipass_attr
+    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(op, "label", None, multipass=None)
     if isinstance(label, str) and label:
@@ -142,7 +142,7 @@ def _resolve_op(trace: Trace, op_or_label: Any) -> tuple[Op | None, str | None]:
         Resolved op and error message.
     """
 
-    from ..utils._multipass_access import is_multipass_layer
+    from .._utils._multipass_access import is_multipass_layer
 
     candidate = op_or_label
     if not (hasattr(candidate, "parents") and hasattr(candidate, "children")):

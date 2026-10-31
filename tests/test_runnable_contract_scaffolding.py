@@ -7,8 +7,7 @@ from dataclasses import fields
 
 import pytest
 
-from torchlens.errors import ReattachError, RunnableTLSPECError, StateBindingError
-from torchlens.runnable import (
+from torchlens._runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
     LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
     RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
@@ -20,15 +19,15 @@ from torchlens.runnable import (
     CallExecutionContext,
     InitializerPolicy,
     InputAttestationFingerprint,
-    ReadinessReport,
     RunnableCallDescriptor,
     RunnableErrorCode,
     RunnableTraceProtocol,
-    RunReport,
     SparseRunDescriptor,
     StateSlotRole,
     WitnessCompleteness,
 )
+from torchlens.errors import ReattachError, RunnableTLSPECError, StateBindingError
+from torchlens.types import ReadinessReport, RunReport
 
 
 @pytest.mark.smoke
@@ -172,9 +171,9 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
         "path_faithfulness",
         "first_mismatch",
         "numeric_attestation",
-        "poisoned",
+        "is_poisoned",
         "nondeterministic_sources",
-        "state_carried",
+        "has_carried_state",
         "truncation",
         "truncated",
         "stopped_at",
@@ -197,7 +196,7 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
 # conflict matrix is bound by CODE LIST, never by count.
 
 _S1_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
-    "torchlens.runnable": (
+    "torchlens._runnable": (
         "WITNESS_FAMILY_REGISTRY",
         "WITNESS_GAP_REGISTRY",
         "CANONICAL_INITIALIZER_BY_ROLE",
@@ -266,7 +265,7 @@ def test_trace_run_satisfies_protocol_minimum() -> None:
     existing typed consumer keeps compiling while unstable keywords incubate.
     """
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
     protocol_params = inspect.signature(RunnableTraceProtocol.run).parameters
     concrete = inspect.signature(Trace.run)
@@ -302,7 +301,7 @@ def test_run_door_conflict_matrix_codes_present_in_door_source() -> None:
     from pathlib import Path
 
     package_root = Path(__file__).resolve().parent.parent / "torchlens"
-    door_source = (package_root / "data_classes" / "_trace_validation.py").read_text(
+    door_source = (package_root / "_data_classes" / "_trace_validation.py").read_text(
         encoding="utf-8"
     )
     enum_values = {member.value for member in RunnableErrorCode}

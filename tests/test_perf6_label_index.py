@@ -19,8 +19,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir import selector_eval
 from torchlens.intervention import resolver
-from torchlens.ir import selector_eval
 
 
 class _Net(nn.Module):

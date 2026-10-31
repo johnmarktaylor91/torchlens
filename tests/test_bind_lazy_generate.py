@@ -177,7 +177,7 @@ def test_pure_generator_steers_every_step() -> None:
     assert report is not None
     assert report.status == "fired"
     assert report.door == "generate"
-    assert report.fire_count == 2
+    assert report.num_fires == 2
     assert report.zero_fire_rule_ids == ()
     assert report.cleanup == "removed"
     _assert_clean(model)
@@ -190,7 +190,7 @@ def test_lazy_tail_steers_eager_and_lazy_forwards() -> None:
     bound = _add_one().bind(model)
     assert _values(bound.generate(torch.ones(1))) == [[4.0], [10.0]]
     assert bound.last_report is not None
-    assert bound.last_report.fire_count == 2
+    assert bound.last_report.num_fires == 2
     assert bound.last_report.status == "fired"
     _assert_clean(model)
 
@@ -208,7 +208,7 @@ def test_steering_is_scoped_to_the_generator_body() -> None:
     with pytest.raises(StopIteration):
         next(gen)
     assert bound.last_report is not None
-    assert bound.last_report.fire_count == 2
+    assert bound.last_report.num_fires == 2
 
 
 def test_open_lazy_output_holds_the_binding() -> None:
@@ -224,7 +224,7 @@ def test_open_lazy_output_holds_the_binding() -> None:
     list(gen)
     assert _values([bound(torch.ones(1))]) == [[4.0]]
     assert bound.last_report is not None
-    assert bound.last_report.fire_count == 1
+    assert bound.last_report.num_fires == 1
     assert bound.last_report.door == "call"
 
 
@@ -239,7 +239,7 @@ def test_early_close_settles_and_removes_hooks() -> None:
     report = bound.last_report
     assert report is not None
     assert report.status == "fired"
-    assert report.fire_count == 1
+    assert report.num_fires == 1
     assert report.error is None
     _assert_clean(model)
     with pytest.raises(StopIteration):
@@ -259,7 +259,7 @@ def test_exception_mid_iteration_settles_error_report() -> None:
     report = bound.last_report
     assert report is not None
     assert report.status == "error"
-    assert report.fire_count == 1
+    assert report.num_fires == 1
     assert report.error is not None and "ValueError" in report.error
     _assert_clean(model)
     assert _values([bound(torch.ones(1))]) == [[4.0]]
@@ -276,7 +276,7 @@ def test_throw_into_lazy_output_settles_error_report() -> None:
         gen.throw(KeyError("stop"))
     assert bound.last_report is not None
     assert bound.last_report.status == "error"
-    assert bound.last_report.fire_count == 1
+    assert bound.last_report.num_fires == 1
     _assert_clean(model)
 
 
@@ -303,7 +303,7 @@ def test_zero_fire_disclose_settles_quietly() -> None:
     assert _values(bound.generate(torch.ones(1))) == [[1.0]]
     assert bound.last_report is not None
     assert bound.last_report.status == "no_fire"
-    assert bound.last_report.fire_count == 0
+    assert bound.last_report.num_fires == 0
 
 
 def test_plain_lazy_iterator_steers_every_step() -> None:
@@ -313,7 +313,7 @@ def test_plain_lazy_iterator_steers_every_step() -> None:
     bound = _add_one().bind(model)
     assert _values(bound.generate(torch.ones(1))) == [[4.0], [10.0]]
     assert bound.last_report is not None
-    assert bound.last_report.fire_count == 2
+    assert bound.last_report.num_fires == 2
     _assert_clean(model)
 
 
@@ -326,7 +326,7 @@ def test_abandoned_lazy_output_releases_the_binding() -> None:
     del gen
     gc.collect()
     assert bound.last_report is not None
-    assert bound.last_report.fire_count == 0
+    assert bound.last_report.num_fires == 0
     _assert_clean(model)
     assert _values([bound(torch.ones(1))]) == [[4.0]]
 

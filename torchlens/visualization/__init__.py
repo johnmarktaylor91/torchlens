@@ -6,23 +6,17 @@ The experimental Dagua renderer is available from
 
 from typing import Any
 
-from .node_spec import NodeSpec, render_lines_to_html
-
 _USER_FUNC_EXPORTS = {
     "draw_backward",
     "draw_combined",
     "show_bundle_graph",
     "show_model_graph",
-    "summary",
 }
 
 #: Surgery-visuals doors (lane F43; DOCUMENTED-UNSTABLE spellings): lazy so
 #: ``import torchlens.visualization`` never pays for the audit derivation.
 _SURGERY_EXPORTS = {
     "render_surgery": "surgery_visuals",
-    "surgery_census": "surgery_visuals",
-    "surgery_facts": "surgery_visuals",
-    "surgery_diff": "_surgery_diff",
 }
 
 
@@ -68,15 +62,9 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
-    "NodeSpec",
-    "render_lines_to_html",
     "draw_backward",
     "draw_combined",
     "render_surgery",
     "show_bundle_graph",
     "show_model_graph",
-    "summary",
-    "surgery_census",
-    "surgery_diff",
-    "surgery_facts",
 ]

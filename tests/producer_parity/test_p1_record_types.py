@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 import torchlens as tl
-from torchlens.ir.op_record import (
+from torchlens._ir.op_record import (
     AMENDMENT_FAMILIES,
     PATH_TO_FLAT,
     TYPED_CONSTRUCTORS,
@@ -39,7 +39,7 @@ from torchlens.ir.op_record import (
     op_record_from_event,
     validate_amendment,
 )
-from torchlens.ir.op_record_scatter import (
+from torchlens._ir.op_record_scatter import (
     CELL_SOURCES,
     EXTRA_KEY_CHANNELS,
 )
@@ -49,7 +49,7 @@ from torchlens.ir.op_record_scatter import (
 
 
 def test_three_way_manifest_closure() -> None:
-    from torchlens.data_classes.op import _OP_SLOT_NAMES
+    from torchlens._data_classes.op import _OP_SLOT_NAMES
 
     manifest_keys = set(CELL_SOURCES)
     slot_keys = set(_OP_SLOT_NAMES)
@@ -63,11 +63,11 @@ def test_three_way_manifest_closure() -> None:
 def test_manifest_regenerate_and_diff() -> None:
     from tools.generate_op_record_manifest import generate
 
-    generated = Path("torchlens/ir/op_record_manifest.py").read_text()
+    generated = Path("torchlens/_ir/op_record_manifest.py").read_text()
     assert generated == generate(), (
         "generated manifest is stale — run python -m tools.generate_op_record_manifest"
     )
-    from torchlens.ir.op_record_manifest import CELL_SOURCE_MANIFEST
+    from torchlens._ir.op_record_manifest import CELL_SOURCE_MANIFEST
 
     assert CELL_SOURCE_MANIFEST == CELL_SOURCES
 
@@ -199,8 +199,8 @@ def _journal_events(model, inputs) -> list:
     inverse adapter.
     """
 
-    import torchlens.postprocess as postprocess_module
-    import torchlens.postprocess._materialize as materialize_module
+    import torchlens._postprocess as postprocess_module
+    import torchlens._postprocess._materialize as materialize_module
 
     from ._oracle_adapter import op_event_from_record
 
@@ -233,7 +233,7 @@ def test_scatter_is_the_single_ingest_truth(tmp_path: Path) -> None:
     by the temporal-baseline comparator (P0 archive, 6.2b).
     """
 
-    import torchlens.ir.op_record_scatter as scatter_module
+    import torchlens._ir.op_record_scatter as scatter_module
 
     from ._models import SCENARIOS
     from ._snapshot import run_scenario
@@ -287,7 +287,7 @@ def test_scatter_is_the_single_ingest_truth(tmp_path: Path) -> None:
 def test_ingest_inputs_v1_reserves_aten_lane_and_covers_step0_reads() -> None:
     import json
 
-    from torchlens.postprocess._ingest_contract import (
+    from torchlens._postprocess._ingest_contract import (
         INGEST_CONTRACT_ROWS,
         IngestInputs,
         JournalView,

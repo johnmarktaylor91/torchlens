@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+import torchlens.report
 from torchlens.backends.torch import _op_markers
 
 
@@ -112,14 +113,15 @@ def test_session_records_op_join_markers() -> None:
     name (name matching is forbidden from the join).
     """
 
-    from torchlens import observability as obs
+    from torchlens import _observability as obs
+    from torchlens._observability._kineto import extract_events
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
     x = torch.randn(2, 4)
     with obs.session() as sess:
         log = tl.trace(model, x)
     assert sess.result is not None and sess.result.facts["mode"] == "owned"
-    extraction = obs.extract_events(sess.closed_profiler)
+    extraction = extract_events(sess.closed_profiler)
     assert extraction.path in ("in_memory", "chrome_stream")
     key_markers = [
         e for e in extraction.events if e.kind == "marker" and e.name.startswith("torchlens::op::")
@@ -137,11 +139,9 @@ def test_native_chrome_artifact_and_sidecar(tmp_path) -> None:
 
     import json
 
-    from torchlens import observability as obs
-
     model = nn.Sequential(nn.Linear(8, 8), nn.ReLU()).eval()
     path = tmp_path / "native.json"
-    result = obs.native_profile(model, torch.randn(2, 8), native_chrome_path=path)
+    result = torchlens.report.kernel_profile(model, torch.randn(2, 8), native_chrome_path=path)
     native = json.loads(path.read_text())
     assert "traceEvents" in native  # torch's own artifact, not rewritten
     sidecar = json.loads((tmp_path / "native.json.torchlens-map.json").read_text())
@@ -154,13 +154,14 @@ def test_native_chrome_artifact_and_sidecar(tmp_path) -> None:
 def test_borrowed_session_never_closed_and_joinable() -> None:
     """Borrowed mode: markers land in the caller's profiler; we never close it."""
 
-    from torchlens import observability as obs
+    from torchlens import _observability as obs
+    from torchlens._observability._native_profile import join_session
 
     model = nn.Sequential(nn.Linear(8, 8), nn.ReLU()).eval()
     with torch.profiler.profile() as prof, obs.session(mode="borrowed", profiler=prof) as sess:
         log = tl.trace(model, torch.randn(2, 8))
     # The borrowed profiler closed AFTER the session exited without touching it.
-    join = obs.join_session(sess, log)
+    join = join_session(sess, log)
     assert join.facts["n_markers"] >= 2
     assert join.availability == "empty"  # CPU-only: honest, with reason
     assert "device" in (join.coverage.reason or "")

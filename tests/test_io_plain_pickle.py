@@ -77,7 +77,7 @@ def _build_trace(seed: int = 0) -> Trace:
     return trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=seed),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=seed),
     )
 
 
@@ -175,9 +175,9 @@ def test_old_style_pickle_without_io_format_version_refuses_typed(
     with pickle_path.open("wb") as handle:
         pickle.dump(trace, handle)
 
-    from torchlens._io import ArtifactVersionBelowFloorError
+    from torchlens._io import ArtifactTooOldError
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
         with pickle_path.open("rb") as handle:
             pickle.load(handle)
 
@@ -284,7 +284,7 @@ def test_plain_pickle_buffer_model_round_trips() -> None:
 def test_standalone_buffer_pickle_round_trips() -> None:
     """A standalone ``Buffer`` (holding a source-trace weakref) must pickle."""
 
-    from torchlens.data_classes.buffer import Buffer
+    from torchlens._data_classes.buffer import Buffer
 
     torch.manual_seed(0)
     model = _BufferModel()
@@ -295,7 +295,7 @@ def test_standalone_buffer_pickle_round_trips() -> None:
     restored = pickle.loads(pickle.dumps(buffers[0]))
     assert isinstance(restored, Buffer)
     # The live weakref must not survive; it is rebuilt lazily via the accessor.
-    assert restored.source_trace is None
+    assert restored.trace is None
     assert isinstance(restored.versions, list)
 
 
@@ -342,7 +342,7 @@ def test_trace_setstate_absent_container_fields_restore_typed() -> None:
 def test_op_setstate_absent_container_fields_restore_typed() -> None:
     """Legacy/partial Op state missing container fields must restore typed."""
 
-    from torchlens.data_classes.op import Op
+    from torchlens._data_classes.op import Op
 
     torch.manual_seed(0)
     trace = trace_fn(_TrainableModel(), torch.randn(3, 4))
@@ -387,9 +387,9 @@ def test_backend_address_none_is_preserved_and_pre_floor_refuses() -> None:
     refuse instead of triggering the migration.
     """
 
-    from torchlens._io import TLSPEC_VERSION, ArtifactVersionBelowFloorError
-    from torchlens.data_classes.layer import Layer
-    from torchlens.data_classes.op import Op
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.op import Op
+    from torchlens._io import TLSPEC_VERSION, ArtifactTooOldError
 
     trace = _build_trace()
     op_state = trace.ops[0].__getstate__()
@@ -407,14 +407,14 @@ def test_backend_address_none_is_preserved_and_pre_floor_refuses() -> None:
 
         state["tlspec_version"] = 4
         legacy = factory()
-        with pytest.raises(ArtifactVersionBelowFloorError, match="tlspec_version=4"):
+        with pytest.raises(ArtifactTooOldError, match="tlspec_version=4"):
             legacy.__setstate__(dict(state))
 
 
 def test_setstate_present_but_wrong_typed_container_is_coerced() -> None:
     """Present-but-wrong-typed container fields must be coerced on restore."""
 
-    from torchlens.data_classes.op import Op
+    from torchlens._data_classes.op import Op
 
     torch.manual_seed(0)
     trace = trace_fn(_TrainableModel(), torch.randn(3, 4))
@@ -445,8 +445,8 @@ def test_all_field_order_container_defaults_are_typed() -> None:
     future field added without a typed default in the ``__setstate__`` fill.
     """
 
-    from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
-    from torchlens.data_classes.op import Op
+    from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
+    from torchlens._data_classes.op import Op
 
     torch.manual_seed(0)
     trace = trace_fn(_TrainableModel(), torch.randn(3, 4))
@@ -502,7 +502,7 @@ def test_plain_pickle_preserves_in_memory_outs(tmp_path: Path) -> None:
 
 
 def test_plain_pickle_survives_a_lambda_activation_transform() -> None:
-    """R10-7: a lambda transform= must not crash pickle while tl.save works.
+    """R10-7: a lambda transform= must not crash pickle while Trace.save works.
 
     Fail-before: ``pickle.dumps`` raised ``PicklingError: Can't pickle
     <lambda>`` from the op/layer records; the raw callable fields now
@@ -527,13 +527,13 @@ def test_plain_pickle_survives_a_lambda_input_transform() -> None:
     ``grad_transform``/``_output_transform`` in ``__getstate__`` but missed
     ``_transform`` -- the field the public ``tl.trace(..., transform=...)``
     kwarg populates -- so ``pickle.dumps`` raised ``PicklingError: Can't
-    pickle <lambda>`` while ``tl.save`` succeeded on the same trace.
+    pickle <lambda>`` while ``Trace.save`` succeeded on the same trace.
     """
 
     log = trace_fn(
         _PlainPickleModel(),
         torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(transform=lambda a: a * 2),
+        capture=tl.options.CaptureOptions(input_transform=lambda a: a * 2),
     )
     restored = pickle.loads(pickle.dumps(log))
     assert restored._transform is None

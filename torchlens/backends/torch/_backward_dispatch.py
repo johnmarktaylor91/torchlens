@@ -31,8 +31,8 @@ from typing import Any, TypeVar
 
 import torch
 
+from ..._utils._torch_compat import get_current_autograd_node_fn
 from ...capture.flops import compute_dispatched_op_flops, dispatch_op_family
-from ...utils._torch_compat import get_current_autograd_node_fn
 from ._aten_capture import _capture_backward_aten
 from ._backward_markers import _ACTIVE_BACKWARD_GRAD_FN_REFS, executing_grad_fn_ref
 from ._modes import _TorchLensDispatchMode

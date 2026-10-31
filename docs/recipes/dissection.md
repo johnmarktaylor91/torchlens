@@ -93,7 +93,7 @@ activations = tl.extract_dataset(
 )["relu_1_2"]
 top = tl.stats.TopK(k=10, unit_axis=1)
 top.update(activations)
-ranked = top.result()
+ranked = top.compute()
 print(ranked)
 for unit in range(5):
     print(f"unit {unit}: top images {ranked.example_ids[unit, :5].tolist()}")
@@ -225,11 +225,11 @@ activations = tl.extract_dataset(
 )["layer4"]
 top = tl.stats.TopK(k=100, unit_axis=1)
 top.update(activations)
-scores = soft_wpmi(similarity, top.result().example_ids)
+scores = soft_wpmi(similarity, top.compute().example_ids)
 labels = [concepts[index] for index in scores.argmax(dim=1).tolist()]
 ```
 
-`top.result().example_ids[unit]` are the probe images to look at beside each
+`top.compute().example_ids[unit]` are the probe images to look at beside each
 label. The soft-WPMI step needs only each unit's top image ids and the similarity
 rows of those images, so the activations can be ranked in batches with repeated
 `top.update(...)` calls instead of held all at once.

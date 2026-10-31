@@ -89,7 +89,7 @@ def test_trace_profile_levels_columns_aggregation_and_sorting() -> None:
     ]
     assert features_row["op_count"] == len(features_ops)
     assert features_row["flops"] == sum(int(op.flops_forward or 0) for op in features_ops)
-    assert "TraceProfile" not in repr(trace.profile())
+    assert "ProfileReport(" not in repr(trace.profile())
 
 
 def test_trace_profile_preserves_subsecond_time_for_hotspot_sorting() -> None:
@@ -131,7 +131,7 @@ def test_trace_profile_top_k_truncates_after_sorting() -> None:
 
     trace = tl.trace(ProfileModel().eval(), torch.randn(2, 4))
     full = trace.profile(sort_by="activation_memory").to_pandas()
-    bottlenecks = trace.profile(sort_by="activation_memory", top_k=3).to_pandas()
+    bottlenecks = trace.profile(sort_by="activation_memory", k=3).to_pandas()
 
     assert len(bottlenecks) == 3
     assert bottlenecks["name"].tolist() == full["name"].tolist()[:3]
@@ -161,7 +161,7 @@ def test_trace_profile_honesty_labels_missing_timing_as_unknown() -> None:
     )
     missing_timing_op._internal_set("func_duration", None)
     profile = trace.profile(sort_by="activation_memory")
-    honesty = profile.honesty()
+    honesty = profile.evidence_labels()
     row = honesty.loc[honesty["name"] == missing_timing_op.label].iloc[0]
 
     assert row["time"] == "unknown"

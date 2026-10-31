@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 from ..backends.registry import TORCH_BACKEND_NAME
 
 if TYPE_CHECKING:  # typing only
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: side "output": check against the record's own captured output shape.
 #: side "input": check against the SINGLE parent's captured output shape.
@@ -101,7 +101,7 @@ def _record_output_shape(node: Any) -> tuple[int, ...] | None:
             marker = annotations.get("varying_across_passes")
             if isinstance(marker, dict) and "shape" in marker:
                 return None
-    from ..utils._multipass_access import get_multipass_attr
+    from .._utils._multipass_access import get_multipass_attr
 
     return _usable_shape(get_multipass_attr(node, "shape", None, multipass=None))
 

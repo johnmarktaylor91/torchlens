@@ -45,8 +45,8 @@ from pathlib import Path
 import pytest
 from _source_corpus import package_ast, package_files
 
-from torchlens.merged import MergedErrorCode
-from torchlens.runnable import RunnableErrorCode
+from torchlens._merged import MergedErrorCode
+from torchlens._runnable import RunnableErrorCode
 
 # Per-test smoke marks (the former module-level pytestmark was additive
 # with the census's heavy re-tier and tripped the marker-combination
@@ -536,7 +536,7 @@ def test_every_enum_member_is_reachable_in_source() -> None:
     texts = _iter_python_texts(_PACKAGE_ROOT)
     dead: list[str] = []
     for enum_cls, declaring in (
-        (RunnableErrorCode, _PACKAGE_ROOT / "runnable.py"),
+        (RunnableErrorCode, _PACKAGE_ROOT / "_runnable.py"),
         (MergedErrorCode, _PACKAGE_ROOT / "merged" / "_enums.py"),
     ):
         for member in enum_cls:
@@ -688,14 +688,14 @@ def test_prose_names_and_inert_tables_never_count_as_provocation() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# R65/F9: codeless TorchLensIOError ratchet (shrink-only)                      #
+# R65/F9: codeless ArtifactError ratchet (shrink-only)                      #
 # --------------------------------------------------------------------------- #
 
 # Historical debt (b8-opus F9: 236/243 raise sites code-less). The number may
 # only SHRINK: give a site fields["code"] (and ideally a remedy) and lower the
 # ceiling in the same change. Raising it is a conscious public decision.
 _MAX_CODELESS_IO_RAISES = 237
-_IO_FAMILY_PATTERN = re.compile(r"^(TorchLensIOError|Artifact\w*Error)$")
+_IO_FAMILY_PATTERN = re.compile(r"^(ArtifactError|Artifact\w*Error)$")
 
 
 def _codeless_io_raises() -> list[str]:
@@ -734,7 +734,7 @@ def test_codeless_io_raise_count_only_shrinks() -> None:
     assert offenders, "scanner found no IO-family raises at all (vacuous scan)"
     assert len(offenders) <= _MAX_CODELESS_IO_RAISES, (
         f"{len(offenders)} codeless IO-family raises exceed the ratchet of "
-        f"{_MAX_CODELESS_IO_RAISES}. New TorchLensIOError/Artifact*Error raises "
+        f"{_MAX_CODELESS_IO_RAISES}. New ArtifactError/Artifact*Error raises "
         "must carry fields['code'] (branch-on-fields doctrine); first offenders: "
         + ", ".join(offenders[:10])
     )

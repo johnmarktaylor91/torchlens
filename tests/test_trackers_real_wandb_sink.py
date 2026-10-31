@@ -14,7 +14,7 @@ import pytest
 import torch
 
 import torchlens.trackers as trk
-from torchlens.observability._kernels import DEFAULT_DESCRIPTOR
+from torchlens._observability._kernels import DEFAULT_DESCRIPTOR
 from torchlens.trackers._errors import TrackersError
 
 wandb = pytest.importorskip("wandb")

@@ -12,7 +12,7 @@ import torchlens as tl
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tf.validation import replay_allowlist
 from torchlens.validation.invariants import check_metadata_invariants
-from torchlens.validation.status import ValidationReplayStatus
+from torchlens.validation.status import ValidationStatus
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 
@@ -85,7 +85,7 @@ class PollutingModule(tf.Module):
         return x + 1.0
 
 
-def _validate(trace: Any) -> bool | ValidationReplayStatus:
+def _validate(trace: Any) -> bool | ValidationStatus:
     """Validate a trace through the TensorFlow backend.
 
     Parameters
@@ -95,7 +95,7 @@ def _validate(trace: Any) -> bool | ValidationReplayStatus:
 
     Returns
     -------
-    bool | ValidationReplayStatus
+    bool | ValidationStatus
         Backend validation result.
     """
 
@@ -169,7 +169,7 @@ def test_tf_validation_identity_annotation_passes_legitimate_passthrough() -> No
 
     The graph needs at least one genuinely replayable (non-exempt) node:
     a bare ``tf.identity`` call is the ONLY op, so with Identity exempted as
-    an annotation ``replayed_node_count`` would be 0 and validation would
+    an annotation ``num_replayed_ops`` would be 0 and validation would
     legitimately refuse to call that "passed" (exemptions alone cannot
     produce a passing result -- see ``validation/status.py``'s
     ``no_nodes_replay_validated`` guard). Add a real op so the identity
@@ -230,10 +230,10 @@ def test_tf_validation_reports_unverified_for_pure_allowlist_gap() -> None:
     trace = tl.trace(mostly_unverified, tf.constant([1.0, 2.0]), backend="tf")
     result = _validate(trace)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
-    assert result.pure_unverified_node_count == 1
-    assert result.replayed_node_count == 0
+    assert result.num_pure_unverified_ops == 1
+    assert result.num_replayed_ops == 0
 
 
 def test_tf_validation_fails_on_unclassified_op_type() -> None:
@@ -268,10 +268,10 @@ def test_tf_validation_positive_cnn_and_transformer_report_replay_coverage() -> 
         status = trace.validation_replay_status
 
         assert result is True or (
-            isinstance(result, ValidationReplayStatus) and result.state == "unverified"
+            isinstance(result, ValidationStatus) and result.state == "unverified"
         )
-        assert status.failed_node_count == 0
-        assert status.replayed_node_count > 0
+        assert status.num_failed_ops == 0
+        assert status.num_replayed_ops > 0
         assert getattr(trace, "_tf_validation_result").replayed_histogram
 
 

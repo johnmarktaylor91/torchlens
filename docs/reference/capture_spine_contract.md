@@ -66,7 +66,7 @@ that directly observed the edit (2026-06-02 lesson, kept armed by
 `tests/test_validation_hardening.py`).
 
 **S9 — MERGE LAW.** Every journal lane declares a merge policy
-(`torchlens.ir.capture_events.LANE_MERGE_POLICIES`, total over all lanes);
+(`torchlens._ir.capture_events.LANE_MERGE_POLICIES`, total over all lanes);
 `CaptureEvents.concat` is the ONLY way to combine streams (multi-pass recording,
 failed-partial recovery). Ad-hoc lane splicing is forbidden. Merging preserves the
 source stream's cross-lane chronological order, appends CLONES (the sealed source is
@@ -79,7 +79,7 @@ moves, and the totality test asserts appender coverage.
 append. Backends, projectors, postprocess, indexes, and public objects never mutate a
 lane list directly, with ONE ledgered carve-out: the fastlog ancestry-closure backfill
 (`fastlog/types.py::_backfill_cooked_ancestry`) replaces op-lane cells in place on the
-`copy_for_replay` projection a cook owns (never a sealed stream) and invalidates
+`_copy_for_replay` projection a cook owns (never a sealed stream) and invalidates
 `_amended_fold_cache`. The closed set of in-place op-lane writers is enforced by the
 package-wide AST ledger in `tests/producer_parity/test_op_lane_inplace_writers.py`.
 Derived indexes (`LiveIndex`) are rebuildable caches, never authorities.

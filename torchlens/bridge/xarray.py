@@ -59,7 +59,7 @@ def _assembly_pieces(source: Any, site: str) -> tuple[np.ndarray, dict[str, Any]
     attrs: dict[str, Any] = {
         "source": "torchlens",
         "site": site_matrix.site,
-        "shaping": site_matrix.record.to_json(),
+        "shaping": site_matrix.shaping.to_json(),
     }
     if site_matrix.input_preprocessing is not None:
         attrs["input_preprocessing_verdict"] = site_matrix.input_preprocessing.get(

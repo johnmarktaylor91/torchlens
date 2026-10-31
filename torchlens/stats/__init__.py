@@ -31,23 +31,23 @@ __tl_layer__ = "FACADE"
 # public lovely surfaces on these.
 # C06 observability substrate (explorer D18): the always-on scalar Spine and
 # the fixed signed-log2 Histogram implement StreamingStat, closing the
-# tl.stats Histogram gap -- tl.aggregate gets dataset-mode histograms free.
-# One implementation home (torchlens/observability/_kernels.py); spellings
+# tl.stats Histogram gap -- tl.stats.aggregate gets dataset-mode histograms free.
+# One implementation home (torchlens/_observability/_kernels.py); spellings
 # DOCUMENTED-UNSTABLE pending naming-session ratification.
-from ..observability._kernels import (  # noqa: E402
+from .._observability._kernels import (  # noqa: E402
     Histogram,
     HistogramDescriptor,
     HistogramResult,
-    Spine,
-    SpineResult,
+    RunningStats,
+    RunningStatsResult,
 )
+from ..intervention._metrics import cosine_distance, relative_l1, relative_l2  # noqa: E402
 
 # Reduce-and-discard capture (tl.trace(..., save="stats")) reads back through
 # site_spines; measure_trajectory folds logit-lens trajectory statistics over
 # batches. Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
-from ._capture_stats import site_spines  # noqa: E402
+from ._capture_stats import site_stats  # noqa: E402
 from ._fitted import (  # noqa: E402
-    FittedArtifactError,
     FittedPCA,
     load_fitted,
     save_fitted,
@@ -58,21 +58,12 @@ from ._glance import glance  # noqa: E402
 # Quantile and TopK, with UnitTopK carrying example ids and positions.
 # Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 from ._per_unit import Quantile, TopK, UnitTopK  # noqa: E402
-from ._seams import EchoObserver, echo, summary_cell, treescope_card_fields  # noqa: E402
-from ._stats_render import (  # noqa: E402
-    GLYPH_RAMP_ASCII,
-    GLYPH_RAMP_UNICODE,
-    degrade,
-    format_sig,
-    render_core_line,
-)
+from ._seams import NarrationObserver, narrate  # noqa: E402
 from ._tensor_stats import (  # noqa: E402
-    TENSOR_STATS_SCHEMA_VERSION,
     FamilyEvidence,
     TensorStats,
     tensor_stats,
 )
-from ._trajectory import TrajectoryStats, measure_trajectory  # noqa: E402
 
 # F10 lovely surfaces (items 10-11): glance (FORK-C function form; submodule
 # spelling, root budget frozen), the summary-cell/treescope seam adapters,
@@ -84,12 +75,9 @@ __all__ = [
     "CKA",
     "Covariance",
     "CrossCovariance",
-    "EchoObserver",
+    "NarrationObserver",
     "FamilyEvidence",
-    "FittedArtifactError",
     "FittedPCA",
-    "GLYPH_RAMP_ASCII",
-    "GLYPH_RAMP_UNICODE",
     "Histogram",
     "HistogramDescriptor",
     "HistogramResult",
@@ -98,26 +86,21 @@ __all__ = [
     "PCA",
     "Quantile",
     "SimilarityScore",
-    "Spine",
-    "SpineResult",
+    "RunningStats",
+    "RunningStatsResult",
     "StreamingStat",
-    "TENSOR_STATS_SCHEMA_VERSION",
     "TensorStats",
     "TopK",
-    "TrajectoryStats",
     "UnitTopK",
     "aggregate",
     "cka",
-    "degrade",
-    "echo",
-    "format_sig",
+    "cosine_distance",
+    "narrate",
     "glance",
     "load_fitted",
-    "measure_trajectory",
-    "render_core_line",
+    "relative_l1",
+    "relative_l2",
     "save_fitted",
-    "site_spines",
-    "summary_cell",
+    "site_stats",
     "tensor_stats",
-    "treescope_card_fields",
 ]

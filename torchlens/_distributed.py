@@ -20,7 +20,7 @@ centralises the detection used by *both* surfaces:
   refuses with :class:`DistributedCaptureUnsupportedError` rather than returning
   a wrong trace.
 
-Detection is capability-probed through :mod:`torchlens.utils._torch_compat`
+Detection is capability-probed through :mod:`torchlens._utils._torch_compat`
 (never a ``torch.__version__`` parse) and costs a handful of ``sys.modules``
 lookups when no distributed namespace has been imported, which is the
 overwhelmingly common case.
@@ -41,12 +41,12 @@ from typing import Any
 import torch
 from torch import nn
 
-from .errors._base import CompatibilityError
-from .utils._torch_compat import (
+from ._utils._torch_compat import (
     get_device_mesh_type,
     get_dtensor_type,
     get_pipelining_module_types,
 )
+from .errors._base import CompatibilityError
 
 __all__ = [
     "DistributedCaptureUnsupportedError",

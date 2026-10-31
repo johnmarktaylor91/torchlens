@@ -13,6 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens.errors
 import torchlens.inventory as inv
 
 
@@ -108,7 +109,7 @@ def test_ambiguous_spelling_teaches_working_selectors() -> None:
 
     model = _Branchy().eval()
     result = inv.list_sites(model, torch.randn(2, 8))
-    with pytest.raises(inv.SiteInventoryError) as excinfo:
+    with pytest.raises(torchlens.errors.SiteInventoryError) as excinfo:
         result.resolve("0")
     assert excinfo.value.fields["code"] == "site_selector_ambiguous"
     candidates = excinfo.value.fields["candidates"]
@@ -123,7 +124,7 @@ def test_unknown_spelling_refuses_typed_with_candidates() -> None:
     """Unknown needles refuse typed, nearest candidates disclosed."""
 
     result = inv.list_sites(_Branchy().eval(), torch.randn(2, 8))
-    with pytest.raises(inv.SiteInventoryError) as excinfo:
+    with pytest.raises(torchlens.errors.SiteInventoryError) as excinfo:
         result.resolve("definitely_not_a_site")
     assert excinfo.value.fields["code"] == "site_selector_unknown"
 

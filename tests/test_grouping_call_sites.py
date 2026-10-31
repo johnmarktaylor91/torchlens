@@ -9,7 +9,7 @@ never evidence. Each test traces a tiny model and compares the multiset of
 ``"tanh:3 linear:1x2"`` (one tanh layer with 3 passes, two single-pass linear layers).
 
 Rows 27, 28, 30 and 31 depend on the module-call choice
-(``torchlens.utils._call_site.MODULE_CALL_IS_PASS``, decided True) and run under both values.
+(``torchlens._utils._call_site.MODULE_CALL_IS_PASS``, decided True) and run under both values.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint
 
 import torchlens as tl
+from torchlens._utils import _call_site
 from torchlens.backends.torch.wrappers import wrap_torch
-from torchlens.utils import _call_site
 
 # ---------------------------------------------------------------- helpers
 
@@ -1307,7 +1307,7 @@ def test_row73_layer_over_varying_weights_lists_every_weight() -> None:
     ]
     assert matmul.num_params == 48
     assert matmul.annotations["varying_across_passes"]["params"] == [["ws.0"], ["ws.1"], ["ws.2"]]
-    assert tl.validate(model, _x(), scope="forward", random_seed=0, validate_metadata=True)
+    assert tl.validate(model, _x(), scope="forward", seed=0, validate_metadata=True)
 
 
 def _buffer_passes(build: Callable[[], nn.Module]) -> list[int]:

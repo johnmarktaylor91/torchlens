@@ -120,13 +120,13 @@ def test_bundle_relate_and_artifact_round_trip_read_disclosed(tmp_path) -> None:
     try:
         bundle = Bundle({"ckpt_100": early, "ckpt_200": late})
         bundle.relate(_row(evidence=_envelope({"grade": "verified", "basis": "digest"})))
-        stored = [r for r in bundle.member_relations if r.kind == "successor_of"][0]
+        stored = [r for r in bundle.relations if r.kind == "successor_of"][0]
         assert stored.params["evidence"]["items"][0]["grade"] == "disclosed"
         target = tmp_path / "bundle.tlspec"
         bundle.save(target)
         loaded = tl.load(str(target))
         assert isinstance(loaded, Bundle)
-        row = [r for r in loaded.member_relations if r.kind == "successor_of"][0]
+        row = [r for r in loaded.relations if r.kind == "successor_of"][0]
         item = row.params["evidence"]["items"][0]
         assert item["grade"] == "disclosed"
         assert item[RELATION_DECLARED_GRADE_KEY] == "verified"

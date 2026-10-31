@@ -7,7 +7,7 @@ document in the safetensors header. ``tl.io.read_safetensors(path)`` reads it
 back. The file holds no pickle: safetensors stores raw tensor bytes plus a
 string header, so reading it never executes code.
 
-Source metadata passes through ``tl.save``'s own source-privacy policy (at
+Source metadata passes through ``Trace.save``'s own source-privacy policy (at
 its default: paths reduced to basenames), so no host path reaches the file.
 Metadata follows the writer contract of record (``writer_contract()``): for
 the ``trace`` record and every ``op`` record, each KEEP-policy field whose
@@ -32,7 +32,7 @@ from typing import Any, NoReturn
 import torch
 
 from .._errors import InvalidArgumentError
-from ..utils._torch_symbols import torch_attr
+from .._utils._torch_symbols import torch_attr
 
 __tl_layer__ = "L5"
 
@@ -366,7 +366,7 @@ def _storable(tensor: Any) -> bool:
 
 
 def _portable_trace_state(trace: Any) -> dict[str, Any]:
-    """Return the Trace's state under ``tl.save``'s source-privacy policy.
+    """Return the Trace's state under ``Trace.save``'s source-privacy policy.
 
     The same policy bodies a portable save applies (at its default,
     ``include_source=True``): source-file paths reduce to bare basenames,
@@ -386,13 +386,13 @@ def _portable_trace_state(trace: Any) -> dict[str, Any]:
         A shallow state copy with the privacy policy applied.
     """
 
+    from .._data_classes._state_adapter import state_items
     from .._io._source_privacy import (
         _apply_advisory_source_policy,
         _apply_source_metadata_policy,
         _apply_trace_blob_policy,
     )
     from .._io.scrub import _ScrubOptions
-    from ..data_classes._state_adapter import state_items
 
     state = dict(state_items(trace))
     if isinstance(state.get("annotations"), dict):
@@ -431,10 +431,10 @@ def write_trace_safetensors(trace: Any, path: str | Path) -> Path:
 
     from .. import __version__
     from .._capture_honesty import capture_honesty_facts
+    from .._data_classes._state_adapter import state_items
+    from .._data_classes.trace import Trace
     from .._io import TLSPEC_VERSION
     from .._io.writer_contract import writer_contract, writer_contract_digest
-    from ..data_classes._state_adapter import state_items
-    from ..data_classes.trace import Trace
 
     if not isinstance(trace, Trace):
         raise InvalidArgumentError(
@@ -473,7 +473,7 @@ def write_trace_safetensors(trace: Any, path: str | Path) -> Path:
         "writer_contract_digest": writer_contract_digest(contract),
         "torchlens_version": __version__,
         "records": ["trace", "op"],
-        "source_policy": "tl.save default: source text kept, source paths reduced to basenames",
+        "source_policy": "Trace.save default: source text kept, source paths reduced to basenames",
         "capture_honesty": capture_honesty_facts(trace),
         "op_labels": list(trace.op_labels),
         "trace": trace_fields,

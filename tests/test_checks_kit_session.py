@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens.checks as tc
+import torchlens.errors
 
 
 def _net() -> nn.Module:
@@ -95,11 +96,14 @@ def test_double_attach_and_nested_boundary_refuse_typed() -> None:
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     session = tc.ChecksSession(model, optimizer).attach()
     try:
-        with pytest.raises(tc.CheckLifecycleError) as attach_exc:
+        with pytest.raises(torchlens.errors.CheckLifecycleError) as attach_exc:
             session.attach()
         assert attach_exc.value.fields["code"] == "check_already_attached"
 
-        with session.step(global_step=1), pytest.raises(tc.CheckLifecycleError) as nest_exc:
+        with (
+            session.step(global_step=1),
+            pytest.raises(torchlens.errors.CheckLifecycleError) as nest_exc,
+        ):
             session.step(global_step=2).__enter__()
         assert nest_exc.value.fields["code"] == "check_boundary_nested"
     finally:
@@ -111,7 +115,7 @@ def test_step_family_without_optimizer_refuses_typed() -> None:
 
     session = tc.ChecksSession(_net())
     session.register_change_check()
-    with pytest.raises(tc.CheckConfigError) as exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as exc:
         session.attach()
     assert exc.value.fields["code"] == "check_optimizer_required"
 
@@ -124,7 +128,7 @@ def test_optimizer_overlap_refuses_typed() -> None:
     opt_a = torch.optim.SGD(model.parameters(), lr=0.1)
     opt_b = torch.optim.SGD([model[0].weight], lr=0.01)
     session = tc.ChecksSession(model, [opt_a, opt_b])
-    with pytest.raises(tc.CheckConfigError) as exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as exc:
         session.attach()
     assert exc.value.fields["code"] == "check_optimizer_overlap"
     assert "0.weight" in str(exc.value)
@@ -268,7 +272,7 @@ def test_profile_reports_measured_numbers() -> None:
     """profile() returns min-of-N data with the load recorded (D21)."""
 
     session = tc.ChecksSession(_net())
-    payload = session.profile()
+    payload = session.overhead()
     assert payload["scan_ms_min_of_3"] > 0
     assert payload["n_tensors"] == 4
     assert len(payload["loadavg"]) == 3

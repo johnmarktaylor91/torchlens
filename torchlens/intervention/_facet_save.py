@@ -74,8 +74,8 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
 
         # Capture frames carry module addresses but no class names, so the
         # class is read from the live model of the active capture.
+        from .._data_classes._runtime_handles import source_model_from_trace
         from .._state import active_capture
-        from ..data_classes._runtime_handles import source_model_from_trace
         from ..semantic.facets import info
 
         model = source_model_from_trace(active_capture()[0])

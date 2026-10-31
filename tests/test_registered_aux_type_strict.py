@@ -17,7 +17,7 @@ import pytest
 import torch
 
 from torchlens._input_walk import snapshot_input_boundary
-from torchlens.ir.container import _CONTAINER_REGISTRY, register_container
+from torchlens._ir.container import _CONTAINER_REGISTRY, register_container
 
 
 class _Box:

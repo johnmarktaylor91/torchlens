@@ -61,7 +61,7 @@ class PredicateError(CaptureError, RuntimeError):
         ctx: RecordContext | None = None,
         result: Any = None,
         failures: list[PredicateFailure] | None = None,
-        total_count: int | None = None,
+        num_failures: int | None = None,
         overflow: int = 0,
         **payload: Any,
     ) -> None:
@@ -77,7 +77,7 @@ class PredicateError(CaptureError, RuntimeError):
             Invalid predicate return value, when applicable.
         failures:
             Accumulated predicate failures for deferred reporting.
-        total_count:
+        num_failures:
             Total number of predicate failures observed.
         overflow:
             Number of failures omitted because the failure list was capped.
@@ -92,5 +92,5 @@ class PredicateError(CaptureError, RuntimeError):
         self.ctx = ctx
         self.result = result
         self.failures = failures or []
-        self.total_count = total_count if total_count is not None else len(self.failures)
+        self.total_count = num_failures if num_failures is not None else len(self.failures)
         self.overflow = overflow

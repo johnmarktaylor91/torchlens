@@ -11,8 +11,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
-from torchlens.fastlog import RecoveryError
+from torchlens._io import ArtifactError
+from torchlens.errors import RecoveryError
 
 
 class PersistenceModel(nn.Module):
@@ -30,14 +30,14 @@ class PersistenceModel(nn.Module):
         return torch.relu(self.linear(x))
 
 
-def _write_bundle(path: Path) -> tl.fastlog.Recording:
+def _write_bundle(path: Path) -> tl.Recording:
     """Write a finalized disk-only bundle."""
 
-    return tl.fastlog.record(
+    return tl.record(
         PersistenceModel(),
         torch.ones(1, 3),
         default_op=True,
-        streaming=tl.options.StreamingOptions(bundle_path=path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(bundle_path=path, retain_in_memory=False),
     )
 
 
@@ -48,7 +48,7 @@ def _copy_bundle(source: Path, destination: Path) -> Path:
     return destination
 
 
-def _labels(recording: tl.fastlog.Recording) -> list[str]:
+def _labels(recording: tl.Recording) -> list[str]:
     """Return record labels for equality checks."""
 
     return [record.ctx.label for record in recording.records]
@@ -68,11 +68,11 @@ def test_finalized_bundle_loads_and_recover_returns_identical_not_recovered(
     bundle_path = tmp_path / "final.tlfast"
     original = _write_bundle(bundle_path)
 
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert loaded.recovered is False
-    assert recovered.recovered is False
+    assert loaded.is_recovered is False
+    assert recovered.is_recovered is False
     assert _labels(loaded) == _labels(original)
     assert _labels(recovered) == _labels(loaded)
     assert list(recovered.records)
@@ -99,7 +99,7 @@ def test_load_and_recover_rehydrate_disk_payload_contents(tmp_path: Path) -> Non
     }
     assert original_values, "sanity: at least one record should have captured a raw payload"
 
-    for reload_fn in (tl.fastlog.load, tl.fastlog.recover):
+    for reload_fn in (tl.load, tl.fastlog.recover):
         reloaded = reload_fn(bundle_path)
         rehydrated = [record for record in reloaded.records if record.disk_payload is not None]
         assert rehydrated, f"{reload_fn.__name__} dropped every disk_payload on reload"
@@ -120,7 +120,7 @@ def test_recover_with_missing_manifest_walks_jsonl(tmp_path: Path) -> None:
 
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert len(recovered.records) > 0
 
 
@@ -134,7 +134,7 @@ def test_recover_with_malformed_manifest_uses_jsonl(tmp_path: Path) -> None:
 
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert len(recovered.records) > 0
 
 
@@ -225,12 +225,12 @@ def test_load_rejects_hash_mismatch_in_finalized_bundle(tmp_path: Path) -> None:
     )
     _first_blob(bundle_path).write_bytes(b"corrupt")
 
-    with pytest.raises(TorchLensIOError, match="failed integrity validation"):
-        tl.fastlog.load(bundle_path)
+    with pytest.raises(ArtifactError, match="failed integrity validation"):
+        tl.load(bundle_path)
 
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert recovered.status == "recovered"
     assert any("hash mismatch" in warning for warning in recovered.recovery_warnings)
     assert list(recovered.records)
@@ -250,12 +250,12 @@ def test_load_rejects_incomplete_blob_metadata_in_finalized_bundle(tmp_path: Pat
     lines[0] = json.dumps(first)
     index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    with pytest.raises(TorchLensIOError, match="failed integrity validation"):
-        tl.fastlog.load(bundle_path)
+    with pytest.raises(ArtifactError, match="failed integrity validation"):
+        tl.load(bundle_path)
 
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert recovered.status == "recovered"
     assert any("incomplete blob metadata" in warning for warning in recovered.recovery_warnings)
     assert list(recovered.records)
@@ -319,7 +319,7 @@ def test_recover_oversized_index_refuses_typed(
     (bundle_path / "manifest.json").unlink()
     monkeypatch.setattr(recover_module, "_INDEX_MAX_BYTES", 8)
 
-    with pytest.raises(TorchLensIOError, match="ceiling") as excinfo:
+    with pytest.raises(ArtifactError, match="ceiling") as excinfo:
         tl.fastlog.recover(bundle_path)
     assert excinfo.value.fields["code"] == "fastlog_index_too_large"
 
@@ -335,7 +335,7 @@ def test_recover_depth_bomb_metadata_degrades_to_empty_metadata(tmp_path: Path) 
 
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert len(recovered.records) > 0
 
 
@@ -372,11 +372,11 @@ def test_disk_roundtrip_label_index_deduplicates_same_raw_label(tmp_path: Path) 
     """Disk label indexes persist one entry when ``label == raw_label``."""
 
     bundle_path = tmp_path / "dedup.tlfast"
-    recording = tl.fastlog.record(
+    recording = tl.record(
         PersistenceModel(),
         torch.ones(1, 3),
         save=tl.func("relu"),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
 
     label = recording.records[0].ctx.label
@@ -384,7 +384,7 @@ def test_disk_roundtrip_label_index_deduplicates_same_raw_label(tmp_path: Path) 
 
     assert label_index[label] == [{"blob_id": "0000000001", "pass_index": 1, "record_index": 0}]
 
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
 
     assert loaded.by_label[label] == [(1, 0)]
     assert len(loaded[label]) == 1
@@ -433,11 +433,11 @@ def test_disk_finalize_baseexception_marks_partial(
 
     bundle_path = tmp_path / "interrupted.tlfast"
     with pytest.raises(KeyboardInterrupt):
-        tl.fastlog.record(
+        tl.record(
             PersistenceModel(),
             torch.ones(1, 3),
             default_op=True,
-            streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
 
     assert not bundle_path.exists()
@@ -462,12 +462,12 @@ def test_disk_finalize_refuses_concurrently_created_target(
 
     monkeypatch.setattr(storage_disk_module, "_build_fastlog_manifest", _race_then_build)
 
-    with pytest.raises(TorchLensIOError, match="already exists"):
-        tl.fastlog.record(
+    with pytest.raises(ArtifactError, match="already exists"):
+        tl.record(
             PersistenceModel(),
             torch.ones(1, 3),
             default_op=True,
-            streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
 
     assert list(bundle_path.iterdir()) == []
@@ -481,7 +481,7 @@ def test_recover_refuses_below_floor_bundle_instead_of_resurrecting(tmp_path: Pa
     resurrecting exactly what ``load()`` refuses.
     """
 
-    from torchlens._io import ArtifactVersionBelowFloorError
+    from torchlens._io import ArtifactTooOldError
 
     bundle_path = tmp_path / "oldbundle.tlfast"
     _write_bundle(bundle_path)
@@ -489,7 +489,7 @@ def test_recover_refuses_below_floor_bundle_instead_of_resurrecting(tmp_path: Pa
     manifest["tlspec_version"] = 5
     (bundle_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(ArtifactVersionBelowFloorError):
+    with pytest.raises(ArtifactTooOldError):
         tl.fastlog.recover(bundle_path)
 
 

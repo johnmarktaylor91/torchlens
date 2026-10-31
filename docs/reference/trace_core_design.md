@@ -178,7 +178,7 @@ exposure; partial cores carry `topology_complete=False` and never pretend full
 postprocess ran.
 
 Pack-on-expose dissolves by construction (facades exist from step 0, so `exc.partial_log`
-and `return_diverged` traces are facade-backed automatically), but the escape-path
+and `on_divergence="return"` traces are facade-backed automatically), but the escape-path
 inventory survives: every place a Trace/Op leaves `torchlens.*` mid-postprocess
 (observers, `tap()`, `span()`, validation internals, bridge adapters) is
 inventoried at M0 and covered by oracle scenarios.
@@ -267,7 +267,7 @@ private; computed collapse metadata stays out of serialization.
   2026-08-12 — LIVE group-membership views (immutable, backed by the shared group row;
   reads reflect group state, caller mutation impossible), replacing the historical
   fresh-mutable-copy-per-read barrier. Lands in M7 with the group tables.
-- **`Op.copy()`**: internal output-node synthesis is a builder row append seeded from
+- **`Op._copy_with_shallow_fields()`**: internal output-node synthesis is a builder row append seeded from
   the source row; public `.copy()` is a detached one-row core honoring today's EXACT
   selective share/deep policy (deep metadata; share func/handles/source_trace/RNG
   snapshots/saved args/params/payloads per the documented policy). Copies never share
@@ -391,7 +391,7 @@ is checked against the `row_effects` `deletes` sanction, and released-row
 cell accesses are row-lifecycle events), and — under
 `TORCHLENS_POSTPROCESS_READ_AUDIT=enforce` — undeclared column READS
 (recorded and enforced over the axes matrix in
-`tests/support/postprocess_axes.py`; `Op.copy()`'s whole-schema clone loop
+`tests/support/postprocess_axes.py`; `Op._copy_with_shallow_fields()`'s whole-schema clone loop
 is a tagged row-clone access kind, not per-column reads). Disclosed audit
 residuals: mutables nested in non-builtin custom objects, kind-table
 (non-op-store) cells, and the sealed/fork-view silent skip of the class
@@ -438,7 +438,7 @@ OUT (documented handoffs, never silent):
   substrate wave; additive capability, never leaves a half-migrated representation. If
   sprint capacity remains after M13 it may be picked up; otherwise it is the first named
   handoff.
-- **`Recording`/`RecordingState`/`ActivationRecord`/`GradientRecord` tables**: same
+- **`Recording`/`RecordingState`/`ActivationRecord`/`GradRecord` tables**: same
   anti-pattern, sparse product (K rows, not 10^4-10^6); RAM win negligible, surface risk
   real. Mechanical-later handoff — it reuses the same pools/arena, so later
   decomposition is mechanical. Requires its own memory census and public oracle.
@@ -574,9 +574,9 @@ loaded analysis and runnable traces. Three deterministic byte streams per case:
   kind per name, invalid-access exception class/args/message. Floats via `float.hex()`;
   sets sorted by canonical bytes; dicts as ordered pairs; only documented volatile
   fields masked, each into a named bucket proven against a baseline-vs-baseline run.
-  The documented volatile surface is `torchlens.constants.ARTIFACT_VOLATILE_METADATA_FIELDS`
-  (metadata.pkl: `random_seed`, capture start/end times, `_phase_timings`, the four
-  duration fields, `forward_peak_memory`) plus `ARTIFACT_VOLATILE_MANIFEST_FIELDS`
+  The documented volatile surface is `_ARTIFACT_VOLATILE_METADATA_FIELDS` in `torchlens/_constants.py`
+  (metadata.pkl: `seed`, capture start/end times, `_phase_timings`, the four
+  duration fields, `forward_peak_memory`) plus `_ARTIFACT_VOLATILE_MANIFEST_FIELDS`
   (manifest.json: `created_at`, `rng_state_digests`) — empirically derived from a
   same-seed two-process control; masking anything else is a contract widening that
   needs review.
@@ -584,7 +584,7 @@ loaded analysis and runnable traces. Three deterministic byte streams per case:
   repeated-lookup identity; weakref lifetime while the Trace lives; multi-output shared
   vs output-specific facts; payload object/storage aliases and equal-but-distinct
   tensors; group-default isolation after a per-Op write; every mutable container
-  append/delete/assign behavior; `Op.copy()` selective depth field by field; fork/parent
+  append/delete/assign behavior; `Op._copy_with_shallow_fields()` selective depth field by field; fork/parent
   isolation, rollback, detached backward epoch; direct-write warning count and
   dirty-state transition; source-Trace collection after references drop.
 - **`artifacts-v1.json`** — FIELD_ORDER/RecordSchema digests; exact semantic
@@ -616,7 +616,7 @@ final acceptance.
 | **M8** | Layer as aggregate facade over layer->op relations (kills the ~78-field per-pass copy); Module/ModuleCall/Param/Buffer/FuncCallLocation tables + facades; live-handle/lazy-grad/version/release semantics preserved; Module responsibility decomposition; Trace label maps -> core indexes | per-class oracle |
 | **M9** | **Backward, last**: GradFn/GradFnCall/BackwardPass tables; atomic backward EPOCHS preserving the exact watermark/revision invalidation; projection + validation consumers migrate in ONE commit; no mixed object/core backward state survives | repeated-backward oracle cases |
 | **M10** (parallel from M2) | **Trace decomposition — the deliverable**: 220 fields -> header + owned components; `TraceBuildState` -> named per-phase workspaces; POSTPROCESS_STEP_CONTRACTS become enforced declared read/write sets; C2-style private-family collapses only as lockstep table diffs if needed | <=~60 fields per component |
-| **M11** | Cutover + deletions: COW `Trace.fork()` + transactions; exact public `Op.copy()`; direct semantic serialization (byte-identical artifacts; old-golden loads); facade cache flips strong -> weak-valued (per the M0 lifetime evidence); DELETE forkcopier, standalone compaction passes, legacy writers, the generic core-record state walker | artifacts-v1 + old-golden matrix |
+| **M11** | Cutover + deletions: COW `Trace.fork()` + transactions; exact public `Op._copy_with_shallow_fields()`; direct semantic serialization (byte-identical artifacts; old-golden loads); facade cache flips strong -> weak-valued (per the M0 lifetime evidence); DELETE forkcopier, standalone compaction passes, legacy writers, the generic core-record state walker | artifacts-v1 + old-golden matrix |
 | **M12** | Reserved for the streaming lane ONLY if capacity remains (see section 4; the r2 majority ships it separately). Cut-first, by name | additive only |
 | **M13** | De-bloat with LOC delta reported first-class; docs lockstep (glossary -> canonical copy, CLAUDE.md, AGENTS.md, notebooks/audit, examples); FORK-2 UI-regrouping plan doc; full classics corpus plus downstream Model Menagerie validation; final real-IDE gate | grep-clean of retired names |
 

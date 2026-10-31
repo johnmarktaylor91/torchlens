@@ -9,14 +9,14 @@ from collections.abc import Sequence
 from PIL import Image
 
 
-def montage(images: Sequence[Image.Image], max_n: int, max_size: int = 600) -> Image.Image:
+def montage(images: Sequence[Image.Image], max_items: int, max_size: int = 600) -> Image.Image:
     """Render a PIL image batch as a thumbnail montage.
 
     Parameters
     ----------
     images:
         Input images to render.
-    max_n:
+    max_items:
         Maximum number of images to include.
     max_size:
         Maximum montage width or height.
@@ -29,12 +29,12 @@ def montage(images: Sequence[Image.Image], max_n: int, max_size: int = 600) -> I
     Raises
     ------
     ValueError
-        If ``max_n`` is less than one or ``images`` is empty.
+        If ``max_items`` is less than one or ``images`` is empty.
     """
 
-    if max_n < 1:
+    if max_items < 1:
         raise ValueError("max_n must be at least 1.")
-    shown = list(images[:max_n])
+    shown = list(images[:max_items])
     if not shown:
         raise ValueError("montage requires at least one image.")
 
@@ -51,14 +51,14 @@ def montage(images: Sequence[Image.Image], max_n: int, max_size: int = 600) -> I
     return canvas
 
 
-def text_table(strings: Sequence[str], max_n: int) -> str:
+def text_table(strings: Sequence[str], max_items: int) -> str:
     """Render a text batch as a Graphviz HTML-like table label.
 
     Parameters
     ----------
     strings:
         Text items to render.
-    max_n:
+    max_items:
         Maximum number of strings to include before a ``+N more`` row.
 
     Returns
@@ -69,13 +69,13 @@ def text_table(strings: Sequence[str], max_n: int) -> str:
     Raises
     ------
     ValueError
-        If ``max_n`` is less than one.
+        If ``max_items`` is less than one.
     """
 
-    if max_n < 1:
+    if max_items < 1:
         raise ValueError("max_n must be at least 1.")
 
-    shown = list(strings[:max_n])
+    shown = list(strings[:max_items])
     rows = ["<TR><TD><B>input</B></TD></TR>"]
     rows.extend(
         f"<TR><TD ALIGN='LEFT'>{html.escape(_truncate_text(text, limit=60))}</TD></TR>"

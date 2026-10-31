@@ -11,14 +11,14 @@ def test_session_invoke_and_bundle() -> None:
     """Experimental sessions should capture multiple invocations."""
 
     model = torch.nn.Linear(2, 2)
-    session = tl.experimental.session(model)
+    session = tl.experimental.Session(model=model)
 
     first = session.invoke(torch.ones(1, 2))
     second = session.invoke(torch.zeros(1, 2))
-    bundle = session.bundle()
+    bundle = session.to_bundle()
 
     assert first.session_invocation["index"] == 0
     assert second.session_invocation["index"] == 1
-    assert len(session.logs) == 2
+    assert len(session.traces) == 2
     assert len(bundle) == 2
     assert first.session_logs == [first, second]

@@ -60,7 +60,7 @@ def test_user_namedtuple_saves_with_disclosure_and_loads(tmp_path) -> None:
     log.annotations["user_point"] = _Point(1, 2)
     bundle = tmp_path / "point.tlspec"
     with pytest.warns(UserWarning, match="_Point"):
-        tl.save(log, bundle)
+        log.save(bundle)
     loaded = tl.load(bundle)
     restored = loaded.annotations["user_point"]
     assert type(restored) is tuple
@@ -74,7 +74,7 @@ def test_non_iterable_ctor_subclass_flatten_is_disclosed(tmp_path) -> None:
     log.annotations["weird"] = _WeirdTuple(3, 4)
     bundle = tmp_path / "weird.tlspec"
     with pytest.warns(UserWarning, match="_WeirdTuple"):
-        tl.save(log, bundle)
+        log.save(bundle)
     loaded = tl.load(bundle)
     restored = loaded.annotations["weird"]
     assert type(restored) is tuple
@@ -88,7 +88,7 @@ def test_torch_size_round_trips_unflattened(tmp_path) -> None:
     log.annotations["size"] = torch.Size([2, 3])
     bundle = tmp_path / "size.tlspec"
     with warnings_as_errors_for_flattening():
-        tl.save(log, bundle)
+        log.save(bundle)
     loaded = tl.load(bundle)
     restored = loaded.annotations["size"]
     assert type(restored) is torch.Size
@@ -126,7 +126,7 @@ def test_defaultdict_foreign_factory_is_dropped_with_disclosure(tmp_path) -> Non
     log.annotations["user_dd"] = trapped
     bundle = tmp_path / "dd.tlspec"
     with pytest.warns(UserWarning, match="default_factory"):
-        tl.save(log, bundle)
+        log.save(bundle)
     loaded = tl.load(bundle)
     restored = loaded.annotations["user_dd"]
     assert restored["present"] == 1
@@ -144,7 +144,7 @@ def test_defaultdict_builtin_factory_round_trips(tmp_path) -> None:
     log.annotations["portable_dd"] = portable
     bundle = tmp_path / "dd_builtin.tlspec"
     with warnings_as_errors_for_flattening():
-        tl.save(log, bundle)
+        log.save(bundle)
     loaded = tl.load(bundle)
     restored = loaded.annotations["portable_dd"]
     assert restored["present"] == [1]

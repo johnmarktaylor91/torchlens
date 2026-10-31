@@ -6,8 +6,8 @@ from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .invariants import (
         MetadataInvariantError,
         _module_claim_address,

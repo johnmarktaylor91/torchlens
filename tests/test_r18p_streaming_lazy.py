@@ -17,7 +17,7 @@ import torch
 from safetensors.torch import save_file
 
 import torchlens._io.lazy as lazy
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io.lazy import LazyActivationRef
 from torchlens._io.manifest import sha256_of_file
 from torchlens._io.streaming import BundleStreamWriter
@@ -96,7 +96,7 @@ def test_large_blob_branch_still_detects_corruption(
     corrupted[-1] ^= 0x01
     blob_path.write_bytes(bytes(corrupted))
 
-    with pytest.raises(TorchLensIOError, match="sha256 mismatch"):
+    with pytest.raises(ArtifactError, match="sha256 mismatch"):
         ref.materialize()
 
 
@@ -123,7 +123,7 @@ def test_large_blob_branch_refuses_swap_between_hash_and_load(
 
     monkeypatch.setattr(lazy, "sha256_of_file", swapping_sha256_of_file)
 
-    with pytest.raises(TorchLensIOError, match="changed between integrity check and load"):
+    with pytest.raises(ArtifactError, match="changed between integrity check and load"):
         ref.materialize()
 
 

@@ -8,10 +8,10 @@ from typing import Any
 import torch
 
 from ... import _state
-from ...ir.intervention import FunctionEventInput
-from ...ir.semantics import BackendSemantics
-from ...utils.collections import index_nested
-from ...utils.tensor_utils import tensor_nanequal
+from ..._ir.intervention import FunctionEventInput
+from ..._ir.semantics import BackendSemantics
+from ..._utils.collections import index_nested
+from ..._utils.tensor_utils import tensor_nanequal
 
 
 def detect_torch_alias_contract(

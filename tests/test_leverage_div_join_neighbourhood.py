@@ -20,7 +20,7 @@ import torch
 from test_leverage_div_fixtures import make_insertion_pair
 
 import torchlens as tl
-from torchlens.postprocess._site_join import (
+from torchlens._postprocess._site_join import (
     join_site_profiles,
     occurrence_coordinates,
     site_profile,

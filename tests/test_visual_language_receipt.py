@@ -113,7 +113,7 @@ def test_a_missing_panel_leaves_its_variant_unproven() -> None:
         f"{slide.id}-{panel.name}"
         for slide in deck.deck_slides()
         for panel in slide.panels
-        if panel.kwargs.get("vis_theme") == "dark"
+        if panel.kwargs.get("theme") == "dark"
     }
     assert any(stem.startswith("skins-") for stem in dark)
     receipt = deck.receipt(_records(dark))

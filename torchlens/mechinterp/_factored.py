@@ -383,7 +383,7 @@ class FactoredMatrix:
             self.S.sqrt()[..., :, None] * _transpose(self.V),
         )
 
-    def get_corner(self, k: int = 3) -> torch.Tensor:
+    def corner(self, k: int = 3) -> torch.Tensor:
         """Return the top-left ``k x k`` corner of the product (and of leading dims)."""
 
         corner = self.A[..., :k, :] @ self.B[..., :, :k]

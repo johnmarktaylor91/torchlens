@@ -89,7 +89,7 @@ def test_save_intervention_refuses_failed_capture(tmp_path):
 
     with pytest.raises(RuntimeError, match="mid-forward failure") as excinfo:
         tl.trace(Boom(), torch.randn(2, 4))
-    partial = tl.partial.from_failed_capture(excinfo.value)
+    partial = tl._partial.from_failed_capture(excinfo.value)
     assert partial is not None
     with pytest.raises(CaptureOutcomeError) as gate_exc:
         save_intervention(partial, tmp_path / "spec.tlspec")

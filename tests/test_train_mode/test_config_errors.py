@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import RecordingConfigError
+from torchlens.errors import RecordingConfigError
 
 
 def test_train_mode_save_outs_to_path_errors(tmp_path: Path) -> None:
@@ -20,7 +20,7 @@ def test_train_mode_save_outs_to_path_errors(tmp_path: Path) -> None:
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
             capture=tl.options.CaptureOptions(backward_ready=True),
-            streaming=tl.options.StreamingOptions(bundle_path=tmp_path / "bundle.tl"),
+            streaming=tl.options.StorageOptions(bundle_path=tmp_path / "bundle.tl"),
         )
 
 
@@ -31,7 +31,7 @@ def test_train_mode_streaming_bundle_path_errors(tmp_path: Path) -> None:
         tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
-            streaming=tl.options.StreamingOptions(bundle_path=tmp_path / "bundle.tl"),
+            streaming=tl.options.StorageOptions(bundle_path=tmp_path / "bundle.tl"),
             capture=tl.options.CaptureOptions(backward_ready=True),
         )
 
@@ -40,11 +40,11 @@ def test_train_mode_disk_only_fastlog_errors(tmp_path: Path) -> None:
     """Fastlog backward_ready keeps the existing disk-only RecordingConfigError."""
 
     with pytest.raises(RecordingConfigError, match="disk-only"):
-        tl.fastlog.record(
+        tl.record(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
             backward_ready=True,
-            streaming=tl.options.StreamingOptions(
+            streaming=tl.options.StorageOptions(
                 bundle_path=tmp_path / "bundle.tlfast",
                 retain_in_memory=False,
             ),

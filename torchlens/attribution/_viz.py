@@ -8,7 +8,7 @@ from typing import Any, Literal, TypeAlias
 import torch
 from torch import Tensor
 
-from torchlens.attribution._core import AttributionError, AttributionResult
+from torchlens.attribution._core import Attribution, AttributionError
 
 _OverlayReduce: TypeAlias = Literal["abs_sum", "abs_mean", "sum", "max"]
 _GraphValue: TypeAlias = Literal["influence", "activation"]
@@ -72,7 +72,7 @@ def _graph_site_values(graph: Any, graph_value: str) -> dict[str, list[float]]:
             if node.kind in ("feature", "error"):
                 by_site.setdefault(node.site, []).append(influence[index])
         return by_site
-    activations = graph.activation_values.detach().cpu().tolist()
+    activations = graph.feature_activations.detach().cpu().tolist()
     for index in graph.node_indices("feature"):
         by_site.setdefault(graph.nodes[index].site, []).append(activations[index])
     return by_site
@@ -154,17 +154,17 @@ def _entry_items(source: Any) -> list[tuple[str, Any]]:
         source kind is unsupported.
     """
 
-    if isinstance(source, AttributionResult):
+    if isinstance(source, Attribution):
         source = (source,)
     if isinstance(source, Mapping):
         items: list[tuple[str, Any]] = []
         for key, value in source.items():
-            items.append((key, value.values if isinstance(value, AttributionResult) else value))
+            items.append((key, value.values if isinstance(value, Attribution) else value))
         return items
     if isinstance(source, Iterable):
         items = []
         for result in source:
-            if not isinstance(result, AttributionResult):
+            if not isinstance(result, Attribution):
                 raise AttributionError(
                     "overlay iterables must contain AttributionResult entries; "
                     f"received {type(result).__name__}"

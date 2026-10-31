@@ -31,9 +31,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.utils import rng as rng_module
-from torchlens.utils._torch_compat import autocast_is_enabled
-from torchlens.utils.rng import AutocastRestore, host_nondeterminism_monitor
+from torchlens._utils import rng as rng_module
+from torchlens._utils._torch_compat import autocast_is_enabled
+from torchlens._utils.rng import AutocastRestore, host_nondeterminism_monitor
 
 # Surfaces the monitor patches that are NOT also decorated by ``wrap_torch`` (the torch
 # RNG capture wrappers legitimately outlive a capture until ``unwrap_torch()``).

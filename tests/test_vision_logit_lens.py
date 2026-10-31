@@ -112,7 +112,7 @@ def test_vit_classifier_default_lens_is_validated_and_ends_at_the_logits(
     model, pixels, trace = vit_classifier
     result = logit_lens(trace)
     assert result.lens_source == "classifier_head"
-    assert result.validated is True
+    assert result.is_validated is True
     blocks = [str(m.address) for m in trace.modules if m.class_name == "ViTLayer"]
     assert len(blocks) == 2
     assert [entry.address for entry in result.entries] == blocks
@@ -155,7 +155,7 @@ def test_vit_classifier_lens_validation_is_still_a_tripwire(
             model.classifier.weight.mul_(1.5)
         with pytest.raises(LogitLensError, match="failed validation"):
             logit_lens(trace)
-        assert logit_lens(trace, validate=False).validated is False
+        assert logit_lens(trace, verify=False).is_validated is False
     finally:
         with torch.no_grad():
             model.classifier.weight.copy_(original)
@@ -181,7 +181,7 @@ def test_clip_decodes_vision_blocks_against_label_prompt_features(
     model, inputs, trace = clip_capture
     result = logit_lens(trace)
     assert result.lens_source == "contrastive_head"
-    assert result.validated is True
+    assert result.is_validated is True
     assert [entry.address for entry in result.entries] == [
         "vision_model.encoder.layers.0",
         "vision_model.encoder.layers.1",
@@ -262,7 +262,7 @@ def test_user_lens_with_a_different_recorded_identity_refuses(
     assert "validate=False" in str(excinfo.value)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        result = logit_lens(trace, lens=lens, validate=False)
+        result = logit_lens(trace, lens=lens, verify=False)
     assert result.lens_source == "user" and len(result.entries) == 2
 
 
@@ -301,7 +301,7 @@ def test_identity_less_disagreeing_lens_emits_the_last_layer_agreement_warning(
     assert "lens.model_identity" in coded[0].fields["remedy"]
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        logit_lens(trace, lens=lens, validate=False)
+        logit_lens(trace, lens=lens, verify=False)
 
 
 def test_identity_less_lens_that_reproduces_the_logits_is_silent(

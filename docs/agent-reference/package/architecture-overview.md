@@ -2,7 +2,7 @@
 
 ```
 import torchlens
-  |- exposes 116 top-level public names in __all__
+  |- exposes 87 top-level public names in __all__
   |- eagerly imports ONLY the light spine: options, errors/_state, ir.*,
   |  captured_run, observers, quantities, _deprecations, _errors, _io,
   |  _literals, _save_budget, utils,
@@ -73,13 +73,13 @@ Provisional semantic I/O surface (review-day names):
 log = tl.trace(
     model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
 )
-log.output_table(top_n=5)
+log.output_table(k=5)
 log.to_pandas(include_decoded_output_summary=True)
 
 input_log = tl.trace(
     model,
     raw_text,
-    capture=tl.options.CaptureOptions(transform=text_to_tensor, save_raw_input="small"),
+    capture=tl.options.CaptureOptions(input_transform=text_to_tensor, save_raw_input="small"),
 )
 input_log.draw(show_input_transform_summary=True)
 
@@ -93,15 +93,15 @@ image_log = tl.trace(
     output_style="classification",
 )
 image_log.model_profile
-image_log.output_table(top_n=5)
-tl.repgeom.mds_evolution(image_log, save=mds_layers, min_n=8)
+image_log.output_table(k=5)
+tl.repgeom.mds_evolution(image_log, save=mds_layers, min_stimuli=8)
 tl.repgeom.rdm_evolution(image_log, save=mds_layers)
-tl.viz.feature_map_evolution(image_log, save=mds_layers)
+tl.viz.feature_maps(image_log, save=mds_layers)
 tl.repgeom.scree_evolution(image_log, save=mds_layers)
-image_log.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
-image_log.draw(node_spec_fn=tl.repgeom.rdm_node_spec(max_stimuli=8))
-image_log.draw(node_spec_fn=tl.viz.feature_map_node_spec())
-image_log.draw(node_spec_fn=tl.repgeom.scree_node_spec())
+image_log.draw(node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8))
+image_log.draw(node_spec_fn=tl.viz.nodes.rdm(max_stimuli=8))
+image_log.draw(node_spec_fn=tl.viz.nodes.feature_map())
+image_log.draw(node_spec_fn=tl.viz.nodes.scree())
 ```
 
 Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`

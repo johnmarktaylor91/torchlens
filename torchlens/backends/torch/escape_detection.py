@@ -23,7 +23,7 @@ from typing import Any, Literal, cast
 import torch
 
 from ... import _state
-from ..._errors import TorchLensCaptureGapWarning
+from ..._errors import CaptureGapWarning
 
 EscapeDetectorMode = Literal["off", "shadow"]
 """Supported callable escape-detector rollout modes."""
@@ -260,8 +260,8 @@ def _safe_qualname(value: Any) -> str:
 def _build_export_sites() -> dict[int, tuple[str, ...]]:
     """Build exact raw-id to currently registered torch export-site names."""
 
-    from ...constants import get_orig_torch_funcs
-    from ...utils.introspection import nested_getattr
+    from ..._constants import get_orig_torch_funcs
+    from ..._utils.introspection import nested_getattr
 
     sites: dict[int, list[str]] = {}
     for namespace_name, func_name in get_orig_torch_funcs():
@@ -602,7 +602,7 @@ def _report_escape(
         "capture_verified=False. Rebind after torchlens.backends.torch.wrappers"
         ".wrap_torch() or use a live torch "
         "namespace lookup; escapes with a signal are recovered by the rescue re-run.",
-        TorchLensCaptureGapWarning,
+        CaptureGapWarning,
         stacklevel=2,
     )
 
@@ -661,7 +661,7 @@ def _install_setprofile(guard: _GuardState) -> None:
             "TorchLens found its escape-detector profile hook stranded by a previous "
             "capture's failed teardown and reclaimed it. Any host profiler that was "
             "active below it was already non-functional and is not restored.",
-            TorchLensCaptureGapWarning,
+            CaptureGapWarning,
             stacklevel=2,
         )
         prior = None
@@ -930,7 +930,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                     f"({teardown_exc!r}). The Trace is marked capture_verified=False "
                     "(reason: escape_detector_teardown_failed); a leaked hook may still "
                     "be active in this process.",
-                    TorchLensCaptureGapWarning,
+                    CaptureGapWarning,
                     stacklevel=2,
                 )
         thread_count_end = threading.active_count()
@@ -953,7 +953,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                 "TorchLens observed a thread-count change during capture. The supported proof "
                 "domain is the capture-owner thread; move model tensor work into that thread "
                 "or treat this Trace as unverified.",
-                TorchLensCaptureGapWarning,
+                CaptureGapWarning,
                 stacklevel=2,
             )
         if getattr(trace, "_raw_dynamo_region_detected", False):

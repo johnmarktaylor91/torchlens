@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, NoReturn
 from .forgery_validation import _is_digest, _is_int, _is_sequence, _refuse, _trace_ops
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 _GRAPH_REMEDY = (
     "re-save the artifact from its source capture with one current TorchLens "

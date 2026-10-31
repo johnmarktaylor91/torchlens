@@ -28,7 +28,7 @@ def test_not_checked_surfaces_name_the_option() -> None:
     assert trace.track_nonfinite is False
 
     assert f"health NOT-CHECKED ({TRACK_NONFINITE_HINT})" in str(trace.summary())
-    assert _OPTION in tl.report.explain(trace)
+    assert _OPTION in trace.explain()
 
 
 def test_the_option_on_drops_the_hint() -> None:
@@ -41,7 +41,7 @@ def test_the_option_on_drops_the_hint() -> None:
     )
 
     assert _OPTION not in str(trace.summary())
-    assert _OPTION not in tl.report.explain(trace)
+    assert _OPTION not in trace.explain()
 
 
 def test_settled_verdicts_carry_no_hint() -> None:
@@ -50,4 +50,4 @@ def test_settled_verdicts_carry_no_hint() -> None:
     assert trace.nonfinite_verdict == "checked_and_clean"
 
     assert _OPTION not in str(trace.summary())
-    assert _OPTION not in tl.report.explain(trace)
+    assert _OPTION not in trace.explain()

@@ -16,7 +16,7 @@ from ..errors._base import TorchLensError, TorchLensWarning
 from ..intervention.selectors import facet
 from ..options import CaptureOptions
 from ..user_funcs import trace
-from .facets import Facet, MissingGradient
+from .facets import Facet, MissingGrad
 
 Metric = Callable[[Any], torch.Tensor]
 
@@ -173,7 +173,7 @@ def _fork_rng_devices() -> list[int]:
     pre-fix gate ``utils/rng.py`` documents.
     """
 
-    from ..utils.tensor_utils import _is_cuda_initialized
+    from .._utils.tensor_utils import _is_cuda_initialized
 
     if _is_cuda_initialized() and torch.cuda.is_available():
         return list(range(torch.cuda.device_count()))
@@ -183,7 +183,7 @@ def _fork_rng_devices() -> list[int]:
 def _snapshot_rng() -> dict[str, Any]:
     """Capture the global CPU (and CUDA, when live) RNG state."""
 
-    from ..utils.rng import _snapshot_cuda_rng_states
+    from .._utils.rng import _snapshot_cuda_rng_states
 
     snapshot: dict[str, Any] = {"cpu": torch.get_rng_state()}
     # Initialized-CUDA-only, latch-guarded (R36-4): returns [] on a
@@ -614,7 +614,7 @@ def _trace_kwargs(
 
     The patching helpers cannot work without ``layers_to_save="all"`` (facet
     values must be readable on every candidate module) and
-    ``save_arg_values=True`` (reconstructed facets read saved op args), and
+    ``save_args=True`` (reconstructed facets read saved op args), and
     attribution additionally needs ``save_grads``. These used to be supplied
     only when the caller passed NO ``capture=`` at all -- any user
     ``capture=`` silently dropped every one of them, so facets came up
@@ -643,7 +643,7 @@ def _trace_kwargs(
     if "capture" in kwargs:
         kwargs["capture"] = _compose_required_capture(kwargs["capture"], save_grads=save_grads)
         return kwargs
-    capture_fields: dict[str, Any] = {"layers_to_save": "all", "save_arg_values": True}
+    capture_fields: dict[str, Any] = {"layers_to_save": "all", "save_args": True}
     if save_grads is not None:
         capture_fields["save_grads"] = save_grads
     kwargs["capture"] = CaptureOptions(**capture_fields)
@@ -686,7 +686,7 @@ def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
             f"Patching helpers require capture options {required!r}, but the supplied "
             f"capture= explicitly sets {conflicts!r} to conflicting values. Facet values "
             "must be readable on every candidate module (layers_to_save='all') and "
-            "reconstructed facets read saved op args (save_arg_values=True); a narrower "
+            "reconstructed facets read saved op args (save_args=True); a narrower "
             "capture silently shrinks or empties the patch table. Drop these fields from "
             "capture= (they are filled in automatically) or set them to the required "
             "values."
@@ -978,7 +978,7 @@ def _warn_if_campaign_all_identical(campaign_ledger: Mapping[str, int], where: s
                 "possible, but identical values at EVERY site usually mean the facet is "
                 "anchored on an input-derived op (e.g. an attention-mask view) rather "
                 "than the computation it names. Remedy: inspect "
-                "tl.facets.facet_coverage(trace) and re-anchor the facet before "
+                "tl.facets.coverage(trace) and re-anchor the facet before "
                 "publishing this as a null result",
                 code="patch_campaign_all_identical",
             ),
@@ -1044,7 +1044,7 @@ def _require_effective_patch(
         "plausible-looking null result). This usually means the facet's home op is "
         "not a live-hookable site on this architecture -- for example the facet is "
         "anchored on an aliasing, mask-derived, or input-derived op. Remedy: inspect "
-        "tl.facets.facet_coverage(trace) for this model, choose a facet whose home "
+        "tl.facets.coverage(trace) for this model, choose a facet whose home "
         "is a real computation site, or patch an explicit op site via fork.do().",
         code="patch_ineffective",
     )
@@ -1139,9 +1139,9 @@ def _resolve_input_leaf_by_role(
         silent fallback would rerun an unpatched counterfactual).
     """
 
+    from .._utils.arg_handling import normalize_input_args
+    from .._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
     from ..backends.torch.backend import _get_input_arg_names
-    from ..utils.arg_handling import normalize_input_args
-    from ..utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
 
     args = normalize_input_args(x, model)
     arg_names = _get_input_arg_names(model, args)
@@ -1294,7 +1294,7 @@ def _facet_grad_tensor(value: Any, *, address: str, facet_name: str) -> torch.Te
     """Return a tensor gradient from a facet-like object or raise clearly."""
 
     grad = value.grad if isinstance(value, Facet) else getattr(value, "grad", None)
-    if isinstance(grad, MissingGradient):
+    if isinstance(grad, MissingGrad):
         raise RuntimeError(
             f"Attribution patching requires grad capture for facet {facet_name!r} "
             f"on module {address!r}. {grad.reason}"

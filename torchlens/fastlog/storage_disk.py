@@ -17,13 +17,13 @@ from typing import Any, cast
 import torch
 
 from .. import __version__ as TORCHLENS_VERSION
-from .._io import TLSPEC_VERSION, TorchLensIOError
+from .._io import TLSPEC_VERSION, ArtifactError
 from .._io._durability import fsync_dir, fsync_tree
 from .._io._torch_symbols import torch_attr
 from .._io.manifest import Manifest, TensorEntry
 from .._io.streaming import BundleStreamWriter
-from ..ir.predicate import coerce_deferred_value
-from ..ir.refs import DeviceRef, DtypeRef
+from .._ir.predicate import coerce_deferred_value
+from .._ir.refs import DeviceRef, DtypeRef
 from ._indexes import write_label_index, write_pass_index
 from ._storage_resolver import _resolve_storage
 from .exceptions import PredicateError, RecordingConfigError
@@ -227,7 +227,7 @@ class DiskStorageBackend:
         """
 
         transform = options.grad_transform if kind == "grad" else options.activation_transform
-        save_raw = options.save_raw_gradients if kind == "grad" else options.save_raw_activations
+        save_raw = options.save_raw_grads if kind == "grad" else options.save_raw_activations
         return _resolve_storage(
             tensor,
             spec,
@@ -252,7 +252,7 @@ class DiskStorageBackend:
             manifest = _build_fastlog_manifest(self._tensor_entries)
             manifest.write(self.writer.tmp_path / "manifest.json")
             _tighten_bundle_tree(self.writer.tmp_path)
-        except (OSError, TorchLensIOError, ValueError) as exc:
+        except (OSError, ArtifactError, ValueError) as exc:
             self.abort(_scrubbed_abort_reason("Failed to finalize fastlog bundle", exc))
             raise
         except BaseException as exc:
@@ -278,7 +278,7 @@ class DiskStorageBackend:
         if self.writer.final_path.exists():
             reason = f"Bundle path already exists: {self.writer.final_path}"
             self.abort(reason)
-            raise TorchLensIOError(reason)
+            raise ArtifactError(reason)
         try:
             self.writer.tmp_path.rename(self.writer.final_path)
         except OSError as exc:
@@ -326,7 +326,7 @@ class DiskStorageBackend:
             ("default_op", self.options.default_op),
             ("default_module", self.options.default_module),
         ):
-            if isinstance(default, CaptureSpec) and default.keep_grad:
+            if isinstance(default, CaptureSpec) and default.save_grad:
                 raise RecordingConfigError(
                     f"{name} cannot use keep_grad=True with disk-only fastlog storage"
                 )
@@ -334,7 +334,7 @@ class DiskStorageBackend:
     def _validate_record_keep_grad(self, record: ActivationRecord) -> None:
         """Validate keep_grad constraints before persisting one record."""
 
-        if not record.spec.keep_grad:
+        if not record.spec.save_grad:
             return
         if self.disk_only:
             raise PredicateError(
@@ -372,7 +372,7 @@ class DiskStorageBackend:
                 handle.write("\n")
         except OSError as exc:
             self.abort(_scrubbed_abort_reason("Failed to append fastlog index", exc))
-            raise TorchLensIOError(f"Failed to append fastlog index at {self.index_path}.") from exc
+            raise ArtifactError(f"Failed to append fastlog index at {self.index_path}.") from exc
 
 
 def record_to_json(record: ActivationRecord) -> dict[str, Any]:
@@ -382,7 +382,7 @@ def record_to_json(record: ActivationRecord) -> dict[str, Any]:
         "ctx": _ctx_to_json(record.ctx),
         "spec": _spec_to_json(record.spec),
         "metadata": dict(record.metadata),
-        "recorded_at": record.recorded_at,
+        "recorded_at": record.recorded_time,
     }
 
 
@@ -398,7 +398,7 @@ def record_from_json(data: dict[str, Any]) -> ActivationRecord:
         ctx=ctx,
         spec=spec,
         metadata=metadata,
-        recorded_at=float(data.get("recorded_at", 0.0)),
+        recorded_time=float(data.get("recorded_at", 0.0)),
     )
 
 
@@ -494,7 +494,7 @@ def _spec_to_json(spec: CaptureSpec) -> dict[str, Any]:
     return {
         "save_out": spec.save_out,
         "save_metadata": spec.save_metadata,
-        "keep_grad": spec.keep_grad,
+        "keep_grad": spec.save_grad,
         "device": None if spec.device is None else str(spec.device),
         "dtype": _dtype_to_name(spec.dtype),
         "save_mode": spec.save_mode,
@@ -507,7 +507,7 @@ def _spec_from_json(data: dict[str, Any]) -> CaptureSpec:
     return CaptureSpec(
         save_out=bool(data.get("save_out", True)),
         save_metadata=bool(data.get("save_metadata", True)),
-        keep_grad=bool(data.get("keep_grad", False)),
+        save_grad=bool(data.get("keep_grad", False)),
         device=data.get("device"),
         dtype=_dtype_from_name(data.get("dtype")),
         save_mode=data.get("save_mode", "copy"),
@@ -537,7 +537,7 @@ def _dtype_from_name(name: str | None) -> torch.dtype | None:
         return None
     dtype_obj = torch_attr(str(name))  # r47 secD_1: no lazy ``torch.__getattr__``
     if not isinstance(dtype_obj, torch.dtype):
-        raise TorchLensIOError(f"Unsupported dtype name in fastlog spec: {name!r}.")
+        raise ArtifactError(f"Unsupported dtype name in fastlog spec: {name!r}.")
     return cast(torch.dtype, dtype_obj)
 
 
@@ -545,14 +545,14 @@ def _write_metadata(path: Path, recording: Recording, options: RecordingOptions)
     """Write fastlog JSON metadata."""
 
     metadata = {
-        "n_ops": recording.n_ops,
-        "n_passes": recording.n_passes,
+        "n_ops": recording.num_ops,
+        "n_passes": recording.num_passes,
         "start_times": recording.start_times,
         "end_times": recording.end_times,
-        "predicate_failure_overflow_count": recording.predicate_failure_overflow_count,
-        "halted": recording.halted,
-        "halt_reason": recording.halt_reason,
-        "halts_by_pass": recording.halts_by_pass,
+        "predicate_failure_overflow_count": recording.num_predicate_failure_overflows,
+        "halted": recording.is_stopped,
+        "halt_reason": recording.stop_reason,
+        "halts_by_pass": recording.stops_by_pass,
         "keep_op_repr": recording.keep_op_repr,
         "_activation_transform_repr": recording._activation_transform_repr,
         "save_raw_activations": options.save_raw_activations,

@@ -1,12 +1,12 @@
 """Content fingerprints of the tensors a staged helper closes over (F9).
 
-``tl.steer``, ``tl.mean_ablate``, ``tl.project_onto``, ``tl.project_off`` and
-``tl.swap_with`` keep the caller's tensor by reference (no copy, so a large
+``tl.steer``, ``tl.mean_ablate``, ``tl.project_onto``, ``tl.project_out`` and
+the ``swap_with`` helper keep the caller's tensor by reference (no copy, so a large
 steering bank costs nothing and a loop can update a direction in place). The
 reference also means a later rerun or recipe save would silently use whatever
 the tensor holds THEN, which is not what produced the trace. Each staged entry
 therefore records a full-content digest of those tensors when it is staged
-(``tl.hash.content``: every byte, so ``.data`` and NumPy-view writes that leave
+(``tl.fingerprint.content``: every byte, so ``.data`` and NumPy-view writes that leave
 the version counter alone are seen too), and reruns and ``save_intervention``
 refuse ``helper_tensor_changed_since_capture`` when it moved. Re-staging takes
 the new value deliberately.
@@ -93,7 +93,7 @@ def helper_digests(helper: Edit | None) -> tuple[str, ...] | None:
     _collect(helper.kwargs, tensors)
     if not tensors:
         return None
-    from ..hash import content
+    from ..fingerprint import content
 
     # Staging can happen mid-capture (the predicate door stages at fire time);
     # the digest's copy ops are TorchLens-internal and must not be logged.

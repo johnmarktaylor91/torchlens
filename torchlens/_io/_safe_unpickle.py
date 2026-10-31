@@ -4,7 +4,7 @@ A loaded ``.tlspec`` bundle is UNTRUSTED input. Its ``metadata.pkl`` payload was
 historically read with an *unrestricted* :class:`pickle.Unpickler`, so a crafted
 bundle whose ``metadata.pkl`` carried a ``__reduce__`` / ``os.system`` gadget
 executed arbitrary code at ``pickle.load`` time -- BEFORE the resolver / callable
-safety defenses (:mod:`torchlens.utils._callable_safety` and the runnable
+safety defenses (:mod:`torchlens._utils._callable_safety` and the runnable
 resolver) could ever fire. That is a load-time RCE sitting in front of the entire
 prior hardening effort.
 
@@ -22,8 +22,8 @@ Allowlist policy (fail-closed):
   ``type`` ON THE POSITIVE ``_SAFE_TORCHLENS_TYPES`` ALLOWLIST (vetted-inert metadata
   dataclasses / enums / accessors), or a VETTED-INERT first-party callable: a PUBLIC,
   side-effect-free ``torchlens.*`` facet recipe / transform / helper (e.g.
-  ``torchlens.utils.display.identity``), decided by
-  ``torchlens.utils._callable_safety.is_inert_first_party_callable``. A torchlens
+  ``torchlens._utils.display.identity``), decided by
+  ``torchlens._utils._callable_safety.is_inert_first_party_callable``. A torchlens
   ``type`` is NO LONGER admitted unconditionally: a pickle ``REDUCE`` INVOKES the
   admitted type (or its reconstructed instance) with attacker args, so an
   import-sink type such as ``torchlens.intervention.save.LazyImportRef`` (whose
@@ -33,7 +33,7 @@ Allowlist policy (fail-closed):
   that walks attributes off a torchlens module to reach ``os.system`` (real module
   ``posix``) is denied. Crucially, a pickle ``REDUCE`` INVOKES the admitted callable
   with attacker args, so the pre-r21 blanket "any torchlens-owned callable" policy
-  was a load-time RCE: it trusted the PRIVATE ``torchlens.utils._module_is_installed``
+  was a load-time RCE: it trusted the PRIVATE ``torchlens._utils._module_is_installed``
   (which ``importlib.import_module``s its argument). The narrowed gate is
   deterministic (public-name + side-effect-name guard, no live-registry lookup) and
   admits our vetted first-party code without admitting that gadget.
@@ -128,13 +128,15 @@ from typing import Any, BinaryIO
 
 import torch
 
-from ..utils._callable_safety import (
+from .._utils._callable_safety import (
     _ALLOWED_STDLIB_ROOTS as _CALLABLE_ALLOWED_STDLIB_ROOTS,
     _APPLIANCE_MODULES as _CALLABLE_APPLIANCE_MODULES,
     _DENIED_MODULES as _CALLABLE_DENIED_MODULES,
     _STDLIB_AND_BUILTIN_TOP_LEVEL as _CALLABLE_STDLIB_AND_BUILTIN_TOP_LEVEL,
     is_denied_stdlib_or_builtin_module,
 )
+from ._pre3_module_paths import refuse_pre_3_module_path
+from .format_errors import ArtifactTooOldError
 
 __all__ = ["SafeBundleUnpickler"]
 
@@ -792,7 +794,7 @@ def _is_torchlens_owned(obj: Any) -> bool:
 
 # Extras-gated "appliance" subpackages whose ``__init__`` imports heavy FOREIGN
 # third-party dependencies (rsatoolbox / brainscore_core for ``torchlens.neuro``,
-# IPython / jupyter_client for ``torchlens.notebook``). Unlike the rest of the
+# IPython / jupyter_client for ``torchlens._notebook``). Unlike the rest of the
 # first-party ``torchlens.*`` namespace -- which is safe to import + inspect
 # because it runs only our own already-installed code (see
 # ``_is_torchlens_owned`` above) -- importing one of these two runs foreign
@@ -862,61 +864,61 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         # Portable I/O blob reference (NamedTuple of ids).
         ("torchlens._io", "BlobRef"),
         # Buffer / grad / param / op / layer / module data records + accessors.
-        ("torchlens.data_classes.buffer", "Buffer"),
-        ("torchlens.data_classes.buffer", "BufferAccessor"),
-        ("torchlens.data_classes.derived_grad", "DerivedGradAccessor"),
-        ("torchlens.data_classes.derived_grad", "DerivedGradRecord"),
-        ("torchlens.data_classes.derived_grad", "IntermediateDerivedGradAccessor"),
-        ("torchlens.data_classes.derived_grad", "IntermediateDerivedGradRecord"),
-        ("torchlens.data_classes.func_call_location", "FuncCallLocation"),
-        ("torchlens.data_classes.grad_fn", "GradFn"),
-        ("torchlens.data_classes.grad_fn", "GradFnAccessor"),
-        ("torchlens.data_classes.grad_fn", "GradFnCallAccessor"),
-        ("torchlens.data_classes.grad_fn_call", "GradFnCall"),  # locked rename target
-        ("torchlens.data_classes.layer", "Layer"),
+        ("torchlens._data_classes.buffer", "Buffer"),
+        ("torchlens._data_classes.buffer", "BufferAccessor"),
+        ("torchlens._data_classes.derived_grad", "DerivedGradAccessor"),
+        ("torchlens._data_classes.derived_grad", "DerivedGradRecord"),
+        ("torchlens._data_classes.derived_grad", "IntermediateDerivedGradAccessor"),
+        ("torchlens._data_classes.derived_grad", "IntermediateDerivedGradRecord"),
+        ("torchlens._data_classes.func_call_location", "FuncCallLocation"),
+        ("torchlens._data_classes.grad_fn", "GradFn"),
+        ("torchlens._data_classes.grad_fn", "GradFnAccessor"),
+        ("torchlens._data_classes.grad_fn", "GradFnCallAccessor"),
+        ("torchlens._data_classes.grad_fn_call", "GradFnCall"),  # locked rename target
+        ("torchlens._data_classes.layer", "Layer"),
         # Accessor classes moved to _layer_accessors.py (R43 ratchet split,
         # F16 2026-08-29). New artifacts pickle the new qualnames; the
         # layer-module rows stay so legacy artifacts keep loading through
         # the re-exports.
-        ("torchlens.data_classes._layer_accessors", "LayerAccessor"),
-        ("torchlens.data_classes._layer_accessors", "OpAccessor"),
-        ("torchlens.data_classes.layer", "LayerAccessor"),
-        ("torchlens.data_classes.layer", "OpAccessor"),
-        ("torchlens.data_classes.module", "HookInfo"),
-        ("torchlens.data_classes.module", "Module"),
-        ("torchlens.data_classes.module", "ModuleAccessor"),
-        ("torchlens.data_classes.module", "ModuleCall"),
-        ("torchlens.data_classes.module", "ModuleCallAccessor"),
-        ("torchlens.data_classes.op", "GradientRecord"),
-        ("torchlens.data_classes.op", "GradientRecordAccessor"),
-        ("torchlens.data_classes.op", "Op"),
-        ("torchlens.data_classes.op", "TensorLog"),  # locked rename-map alias of Op
-        ("torchlens.data_classes.param", "Param"),
-        ("torchlens.data_classes.param", "ParamAccessor"),
+        ("torchlens._data_classes._layer_accessors", "LayerAccessor"),
+        ("torchlens._data_classes._layer_accessors", "OpAccessor"),
+        ("torchlens._data_classes.layer", "LayerAccessor"),
+        ("torchlens._data_classes.layer", "OpAccessor"),
+        ("torchlens._data_classes.module", "HookInfo"),
+        ("torchlens._data_classes.module", "Module"),
+        ("torchlens._data_classes.module", "ModuleAccessor"),
+        ("torchlens._data_classes.module", "ModuleCall"),
+        ("torchlens._data_classes.module", "ModuleCallAccessor"),
+        ("torchlens._data_classes.op", "GradientRecord"),
+        ("torchlens._data_classes.op", "GradientRecordAccessor"),
+        ("torchlens._data_classes.op", "Op"),
+        ("torchlens._data_classes.op", "TensorLog"),  # locked rename-map alias of Op
+        ("torchlens._data_classes.param", "Param"),
+        ("torchlens._data_classes.param", "ParamAccessor"),
         # Prehook-provenance snapshots (frozen dataclasses, inert data).
-        ("torchlens.data_classes.prehook", "TensorInputObservation"),
-        ("torchlens.data_classes.prehook", "ModuleInputSnapshot"),
-        ("torchlens.data_classes.prehook", "PreHookEffect"),
+        ("torchlens._data_classes.prehook", "TensorInputObservation"),
+        ("torchlens._data_classes.prehook", "ModuleInputSnapshot"),
+        ("torchlens._data_classes.prehook", "PreHookEffect"),
         # Backward-pass records. __setstate__ is the same inert version-compat
         # field-refill pattern Trace/Op use (default_fill_state); no side effects.
-        ("torchlens.data_classes.backward_pass", "BackwardPass"),
-        ("torchlens.data_classes.backward_pass", "BackwardPassAccessor"),
+        ("torchlens._data_classes.backward_pass", "BackwardPass"),
+        ("torchlens._data_classes.backward_pass", "BackwardPassAccessor"),
         # DROP-gated primitive-profile records (pre-release switch only).
-        ("torchlens.data_classes.aten_op", "AtenOp"),
-        ("torchlens.data_classes.aten_op", "OpRef"),
-        ("torchlens.data_classes.aten_op", "_ModePausedInteriorGap"),
-        ("torchlens.data_classes.aten_op", "_PrimitiveOpProfile"),
-        ("torchlens.ir.events", "_AtenTensorFact"),
-        ("torchlens.ir.events", "_AtenExecutionContext"),
+        ("torchlens._data_classes.aten_op", "AtenOp"),
+        ("torchlens._data_classes.aten_op", "OpRef"),
+        ("torchlens._data_classes.aten_op", "_ModePausedInteriorGap"),
+        ("torchlens._data_classes.aten_op", "_PrimitiveOpProfile"),
+        ("torchlens._ir.events", "_AtenTensorFact"),
+        ("torchlens._ir.events", "_AtenExecutionContext"),
         # Trace + conditional-control-flow data classes.
-        ("torchlens.data_classes.trace", "Conditional"),
-        ("torchlens.data_classes.trace", "ConditionalAccessor"),
-        ("torchlens.data_classes.trace", "ConditionalArm"),
-        ("torchlens.data_classes.trace", "ConditionalEvent"),
-        ("torchlens.data_classes.trace", "ConditionalRoleRef"),
-        ("torchlens.data_classes.trace", "ResolvedPostprocessing"),
-        ("torchlens.data_classes.trace", "ResolvedPreprocessing"),
-        ("torchlens.data_classes.trace", "Trace"),
+        ("torchlens._data_classes.trace", "Conditional"),
+        ("torchlens._data_classes.trace", "ConditionalAccessor"),
+        ("torchlens._data_classes.trace", "ConditionalArm"),
+        ("torchlens._data_classes.trace", "ConditionalEvent"),
+        ("torchlens._data_classes.trace", "ConditionalRoleRef"),
+        ("torchlens._data_classes.trace", "ResolvedPostprocessing"),
+        ("torchlens._data_classes.trace", "ResolvedPreprocessing"),
+        ("torchlens._data_classes.trace", "Trace"),
         # Bundle Super* aligned-view wrappers (locked ``NodeView`` rename target).
         ("torchlens.intervention._super.super_op", "SuperLayer"),
         ("torchlens.intervention._super.super_op", "SuperLayerAccessor"),
@@ -949,44 +951,44 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.intervention.types", "TensorSliceSpec"),
         ("torchlens.intervention.types", "Unsupported"),
         # IR container / container-registry structural descriptors + enums.
-        ("torchlens.ir.container", "ContainerSpec"),
-        ("torchlens.ir.container", "DataclassField"),
-        ("torchlens.ir.container", "DictKey"),
-        ("torchlens.ir.container", "HFKey"),
-        ("torchlens.ir.container", "NamedField"),
-        ("torchlens.ir.container", "TupleIndex"),
-        ("torchlens.ir.container_registry", "ContainerLeafOccurrence"),
-        ("torchlens.ir.container_registry", "ContainerRecord"),
-        ("torchlens.ir.container_registry", "ContainerRegistry"),
-        ("torchlens.ir.container_registry", "ContainerSnapshot"),
-        ("torchlens.ir.container_registry", "FuncSite"),
-        ("torchlens.ir.container_registry", "IdentityEntry"),
-        ("torchlens.ir.container_registry", "ModelSite"),
-        ("torchlens.ir.container_registry", "ModuleSite"),
-        ("torchlens.ir.container_registry", "Phase"),
-        ("torchlens.ir.container_registry", "Role"),
-        ("torchlens.ir.container_registry", "WalkResult"),
+        ("torchlens._ir.container", "ContainerSpec"),
+        ("torchlens._ir.container", "DataclassField"),
+        ("torchlens._ir.container", "DictKey"),
+        ("torchlens._ir.container", "HFKey"),
+        ("torchlens._ir.container", "NamedField"),
+        ("torchlens._ir.container", "TupleIndex"),
+        ("torchlens._ir.container_registry", "ContainerLeafOccurrence"),
+        ("torchlens._ir.container_registry", "ContainerRecord"),
+        ("torchlens._ir.container_registry", "ContainerRegistry"),
+        ("torchlens._ir.container_registry", "ContainerSnapshot"),
+        ("torchlens._ir.container_registry", "FuncSite"),
+        ("torchlens._ir.container_registry", "IdentityEntry"),
+        ("torchlens._ir.container_registry", "ModelSite"),
+        ("torchlens._ir.container_registry", "ModuleSite"),
+        ("torchlens._ir.container_registry", "Phase"),
+        ("torchlens._ir.container_registry", "Role"),
+        ("torchlens._ir.container_registry", "WalkResult"),
         # Device / dtype / tensor / param reference value types.
-        ("torchlens.ir.refs", "DeferredRef"),
-        ("torchlens.ir.refs", "DeviceRef"),
-        ("torchlens.ir.refs", "DtypeRef"),
-        ("torchlens.ir.refs", "ParamRef"),
-        ("torchlens.ir.refs", "ReservedLabel"),
-        ("torchlens.ir.refs", "TensorRef"),
+        ("torchlens._ir.refs", "DeferredRef"),
+        ("torchlens._ir.refs", "DeviceRef"),
+        ("torchlens._ir.refs", "DtypeRef"),
+        ("torchlens._ir.refs", "ParamRef"),
+        ("torchlens._ir.refs", "ReservedLabel"),
+        ("torchlens._ir.refs", "TensorRef"),
         # Physical-quantity value types.
-        ("torchlens.quantities", "Bytes"),
-        ("torchlens.quantities", "Duration"),
-        ("torchlens.quantities", "Flops"),
-        ("torchlens.quantities", "Macs"),
-        ("torchlens.quantities", "Quantity"),
-        ("torchlens.quantities", "_FloatQuantity"),
-        ("torchlens.quantities", "_IntQuantity"),
+        ("torchlens._quantities", "Bytes"),
+        ("torchlens._quantities", "Duration"),
+        ("torchlens._quantities", "Flops"),
+        ("torchlens._quantities", "Macs"),
+        ("torchlens._quantities", "Quantity"),
+        ("torchlens._quantities", "_FloatQuantity"),
+        ("torchlens._quantities", "_IntQuantity"),
         # Semantic facet snapshot + recipe descriptor data types.
         ("torchlens.semantic.facets", "AbsenceReason"),
         ("torchlens.semantic.facets", "FacetCapabilityFlags"),
         ("torchlens.semantic.facets", "FacetContribution"),
+        ("torchlens.semantic.facets", "FacetFunction"),
         ("torchlens.semantic.facets", "FacetMenuItem"),
-        ("torchlens.semantic.facets", "FacetRecipe"),
         ("torchlens.semantic.facets", "FacetRegistrySnapshot"),
         ("torchlens.semantic.facets", "FacetSpec"),
         ("torchlens.semantic.facets", "TransformPrimitive"),
@@ -1132,7 +1134,7 @@ def _safe_getattr(obj: Any, name: Any) -> Any:
         )
     resolved = getattr(obj, name)
     if callable(resolved):
-        from ..utils._callable_safety import is_pure_forward_callable
+        from .._utils._callable_safety import is_pure_forward_callable
 
         if not is_pure_forward_callable(resolved):
             raise pickle.UnpicklingError(
@@ -1176,7 +1178,7 @@ def _safe_load_from_bytes(data: bytes) -> Any:
     # detected via the named ``HAS_SAFE_WEIGHTS_ONLY_LOAD`` capability, surfaced in
     # ``tl.compat.report()`` / ``doctor()``). Imported lazily to keep this early
     # security front door free of import-order coupling (mirrors ``_safe_getattr``).
-    from ..utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
+    from .._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
     if not HAS_SAFE_WEIGHTS_ONLY_LOAD:
         raise pickle.UnpicklingError(
@@ -1373,7 +1375,7 @@ class _DenyMissingDispatch(dict):
     instead raises a bare ``KeyError`` from its ``dispatch[key]`` lookup. Migrating the
     base class to pure-Python (r49, secA_1) must NOT change that observable failure mode
     -- callers (e.g. ``bundle.py::_load_trace_payload``) catch ``pickle.UnpicklingError``
-    to translate a corrupt ``metadata.pkl`` into a clean ``TorchLensIOError``. A missing
+    to translate a corrupt ``metadata.pkl`` into a clean ``ArtifactError``. A missing
     opcode here therefore surfaces as ``UnpicklingError``, matching the C VM.
 
     This hook covers ONLY the unknown-opcode facet. The OTHER corrupt-input facets the
@@ -1452,13 +1454,13 @@ class SafeBundleUnpickler(pickle._Unpickler):
         (1) every corrupt / truncated / malformed STREAM failure surfaces as
         ``pickle.UnpicklingError`` -- which the load sites
         (``bundle.py::_load_trace_payload`` / ``_load_unified_bundle``) translate
-        into a clean :class:`~torchlens._io._errors.TorchLensIOError`; and (2) an
+        into a clean :class:`~torchlens._io._errors.ArtifactError`; and (2) an
         exception raised by APPLICATION code the stream invokes (a REDUCE
         callable, ``__setstate__``, a ``find_class`` module import) propagates RAW
         with its identity intact -- the C VM never relabeled those, and the load
         sites enumerate that family (``TypeError`` / ``ValueError`` /
         ``ImportError`` / ...) to attach the original exception as the DIRECT
-        ``__cause__`` of ``TorchLensIOError`` (the legacy-bundle live-resource
+        ``__cause__`` of ``ArtifactError`` (the legacy-bundle live-resource
         contract).
 
         The pure-Python base VM leaks half (1) as raw builtins (``IndexError`` /
@@ -1484,13 +1486,14 @@ class SafeBundleUnpickler(pickle._Unpickler):
 
         try:
             return super().load()
-        except pickle.UnpicklingError:
+        except (pickle.UnpicklingError, ArtifactTooOldError):
+            # The earlier-major refusal is a typed load verdict, not corruption.
             raise
         except Exception as exc:  # noqa: BLE001 -- locus-classified; see docstring
             if _exception_arose_outside_vm(exc):
                 # Application/reconstruction failure on a well-formed stream: NOT
                 # corruption; never labeled so. Propagate raw so load sites keep
-                # the original type as the DIRECT __cause__ of TorchLensIOError.
+                # the original type as the DIRECT __cause__ of ArtifactError.
                 raise
             raise pickle.UnpicklingError(
                 f"corrupt or malformed pickle stream: {type(exc).__name__}: {exc}"
@@ -1535,6 +1538,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
             If the (possibly renamed) global is not admitted by the allowlist.
         """
 
+        refuse_pre_3_module_path(module)
         module, name = self._rename_map.get((module, name), (module, name))
 
         # Safe wrappers for the two legitimately-needed but individually-dangerous
@@ -1695,14 +1699,14 @@ class SafeBundleUnpickler(pickle._Unpickler):
         # / helper that cannot import/exec/open/spawn): a pickle ``REDUCE`` INVOKES
         # the admitted callable with attacker args, and the pre-r21 blanket
         # ``_is_torchlens_owned`` admission trusted EVERY torchlens-owned callable --
-        # including the private import gadget ``torchlens.utils._module_is_installed``
+        # including the private import gadget ``torchlens._utils._module_is_installed``
         # (``importlib.import_module`` of attacker input == confirmed load-time RCE).
         # The gate is DETERMINISTIC (public-name + side-effect-name guard), never
         # keyed off the live facet registry (that ordering-dependent snapshot was a
         # prior load-failure bug).
         #
         # EXCLUDES the extras-gated appliance packages (``torchlens.neuro`` /
-        # ``torchlens.notebook``): importing THOSE runs foreign third-party code,
+        # ``torchlens._notebook``): importing THOSE runs foreign third-party code,
         # so a global naming one of them must never reach ``super().find_class``
         # here -- it falls through to the foreign-global handling below instead.
         if (
@@ -1726,7 +1730,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
                 )
             # Imported lazily to keep this early security front door free of
             # import-order coupling (mirrors ``_safe_getattr`` above).
-            from ..utils._callable_safety import is_inert_first_party_callable
+            from .._utils._callable_safety import is_inert_first_party_callable
 
             if callable(obj) and _is_torchlens_owned(obj) and is_inert_first_party_callable(obj):
                 return obj
@@ -1850,7 +1854,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
             # tensor-method-descriptor case, the storage-unsafe / ``apply_`` / ``map_``
             # name guards, and torch name/purity). Legit foreign recipe callables/types
             # carry a real, non-torch ``__module__`` and are NOT subject to this gate.
-            from ..utils._callable_safety import (
+            from .._utils._callable_safety import (
                 is_pure_forward_callable,
                 real_callable_module,
             )
@@ -1879,7 +1883,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
             # ``_operator`` callable whose terminal name is not a pure forward operator,
             # even under trust. Parity with the intervention resolver.
             if callable(obj):
-                from ..utils._callable_safety import is_denied_operator_gadget
+                from .._utils._callable_safety import is_denied_operator_gadget
 
                 if is_denied_operator_gadget(obj):
                     raise pickle.UnpicklingError(

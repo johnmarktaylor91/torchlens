@@ -100,24 +100,24 @@ def treescope_card_fields(stats: TensorStats) -> dict[str, Any]:
         "finite_min": stats.finite_min,
         "finite_max": stats.finite_max,
         "mean": stats.mean,
-        "sd": stats.sd,
-        "zero_count": stats.zero_count,
-        "nan_count": stats.nan_count,
-        "posinf_count": stats.posinf_count,
-        "neginf_count": stats.neginf_count,
-        "magnitude_basis": stats.magnitude_basis,
+        "sd": stats.std,
+        "zero_count": stats.num_zero,
+        "nan_count": stats.num_nan,
+        "posinf_count": stats.num_posinf,
+        "neginf_count": stats.num_neginf,
+        "magnitude_basis": stats.is_magnitude_based,
         "evidence": {
             "nonfinite": evidence_token(stats.nonfinite_evidence),
             "extrema": evidence_token(stats.extrema_evidence),
             "mean": evidence_token(stats.mean_evidence),
-            "sd": evidence_token(stats.sd_evidence),
+            "sd": evidence_token(stats.std_evidence),
             "histogram": evidence_token(stats.histogram_evidence),
         },
     }
 
 
 @dataclass
-class EchoObserver:
+class NarrationObserver:
     """Live stats-line echo mounted on the shipped observer surface.
 
     Mounts exactly like a tap
@@ -130,7 +130,7 @@ class EchoObserver:
     """
 
     site: Any = None
-    direction: Literal["forward", "backward", "both"] = "forward"
+    signal: Literal["forward", "backward", "both"] = "forward"
     sink: Callable[[str], None] | None = None
     style: Literal["ascii", "unicode"] = "ascii"
     lines: list[str] = field(default_factory=list)
@@ -146,7 +146,7 @@ class EchoObserver:
         """Record one firing; the observed value passes through unchanged."""
 
         from .._state import pause_logging
-        from ..utils.fail_open import fail_open
+        from .._utils.fail_open import fail_open
 
         with pause_logging():
             address = self._address(hook)
@@ -165,7 +165,7 @@ class EchoObserver:
     def _address(hook: Any) -> str | None:
         """Best-effort site address from the hook context."""
 
-        layer_log = getattr(hook, "layer_log", None)
+        layer_log = getattr(hook, "op", None)
         if layer_log is None:
             return None
         if hasattr(layer_log, "get"):
@@ -173,18 +173,18 @@ class EchoObserver:
         return getattr(layer_log, "label", None) or getattr(layer_log, "layer_label", None)
 
 
-def echo(
+def narrate(
     site: Any,
     *,
     sink: Callable[[str], None] | None = None,
     direction: Literal["forward", "backward", "both"] = "forward",
     style: Literal["ascii", "unicode"] = "ascii",
-) -> EchoObserver:
+) -> NarrationObserver:
     """Create an echo observer (the live line density) for one site.
 
-    Mounts on the shipped hook surface exactly like ``tl.tap``::
+    Mounts on the shipped hook surface exactly like ``tl.observers.tap``::
 
-        obs = tl.stats.echo(tl.func("relu"), sink=print)
+        obs = tl.stats.narrate(tl.func("relu"), sink=print)
         tl.trace(model, x,
                  capture=tl.options.CaptureOptions(
                      intervention_ready=True, hooks=obs))
@@ -197,7 +197,7 @@ def echo(
         Optional per-line consumer (e.g. ``print`` or a logger method);
         lines always also accumulate on ``observer.lines``.
     direction:
-        Hook direction, as on ``tl.tap``.
+        Hook direction, as on ``tl.observers.tap``.
     style:
         Rendering style for the echoed cores.
 
@@ -207,4 +207,4 @@ def echo(
         Callable observer for the ``hooks=`` surface.
     """
 
-    return EchoObserver(site=site, direction=direction, sink=sink, style=style)
+    return NarrationObserver(site=site, signal=direction, sink=sink, style=style)

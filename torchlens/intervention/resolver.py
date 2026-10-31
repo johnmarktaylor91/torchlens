@@ -14,14 +14,14 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 import torch
 
 from .._errors import InvalidArgumentError
-from ..ir.selector_eval import (
+from .._ir.selector_eval import (
     _label_site_index,
     ensure_supported,
     evaluate,
     normalize_selector_like,
     walk_selector,
 )
-from ..utils._callable_safety import (
+from .._utils._callable_safety import (
     _DENIED_MODULES,
     _matches,
     _unwrap_capture_wrapper,
@@ -32,13 +32,13 @@ from ..utils._callable_safety import (
     real_callable_module,
     unsafe_callable_reason,
 )
-from ..utils._torch_compat import resolve_runnable_torch_alias
-from ..utils._torch_symbols import torch_attr
+from .._utils._torch_compat import resolve_runnable_torch_alias
+from .._utils._torch_symbols import torch_attr
 from ._module_alias_guard import refuse_trace_alias_spellings
 from .errors import (
+    AmbiguousSiteError,
     MultiMatchWarning,
     ReplayPreconditionError,
-    SiteAmbiguityError,
     SiteResolutionError,
     UntrustedCallableError,
 )
@@ -54,10 +54,10 @@ from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 if TYPE_CHECKING:
     import pandas as pd
 
-    from torchlens.data_classes.grad_fn import GradFn
-    from torchlens.data_classes.layer import Layer
-    from torchlens.data_classes.op import Op
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.grad_fn import GradFn
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.op import Op
+    from torchlens._data_classes.trace import Trace
 
 SelectorInput = BaseSelector | TargetSpec | FrozenTargetSpec | str
 if TYPE_CHECKING:
@@ -96,7 +96,7 @@ def _internal_torch_builtin_key(
         otherwise ``None``.
     """
 
-    from ..utils._torch_compat import get_variable_functions_class
+    from .._utils._torch_compat import get_variable_functions_class
 
     # r-b4 R26-2: routed through _torch_compat (HAS_VARIABLE_FUNCTIONS_CLASS) --
     # namespace drift used to silently downgrade the recorded replay key to the
@@ -147,7 +147,7 @@ def _resolve_internal_torch_builtin_key(
         or qualname != key.qualname
     ):
         return None
-    from ..utils._torch_compat import get_variable_functions_class
+    from .._utils._torch_compat import get_variable_functions_class
 
     resolved = getattr(get_variable_functions_class(), qualname, None)
     return cast(Callable[..., Any], resolved) if callable(resolved) else None
@@ -206,7 +206,7 @@ def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionReg
 
 # Extras-gated "appliance" subpackages whose ``__init__`` imports heavy FOREIGN
 # third-party dependencies at IMPORT TIME (rsatoolbox / brainscore_core for
-# ``torchlens.neuro``, IPython / jupyter_client for ``torchlens.notebook``).
+# ``torchlens.neuro``, IPython / jupyter_client for ``torchlens._notebook``).
 # Mirrors ``torchlens._io._safe_unpickle._TORCHLENS_APPLIANCE_MODULES`` --
 # duplicated here rather than imported to keep this security boundary free of
 # cross-module import-order coupling. A bundle-supplied ``custom`` key naming
@@ -215,7 +215,7 @@ def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionReg
 # receive the exact same deny-by-default / trust-opt-in treatment as a
 # genuinely foreign import path: denied before import, resolved only under an
 # explicit trust opt-in, decided by NAME alone -- never imported to decide it.
-_TORCHLENS_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens.notebook"})
+_TORCHLENS_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens._notebook"})
 
 
 def _is_torchlens_appliance_module(module: str) -> bool:
@@ -361,7 +361,7 @@ def resolve_function_registry_key(
             # importing it executes its top-level code.
             #
             # EXCEPTION: the extras-gated appliance packages (``torchlens.neuro`` /
-            # ``torchlens.notebook``) import FOREIGN third-party dependencies at
+            # ``torchlens._notebook``) import FOREIGN third-party dependencies at
             # import time, so a path naming one of them is NOT safe to import
             # unconditionally -- it must receive the same treatment as a
             # genuinely foreign import path below (denied before import, resolved
@@ -498,7 +498,7 @@ def resolve_function_registry_key(
                     # a genuinely torchlens-owned callable is auto-trusted ONLY if it
                     # is a vetted-inert first-party symbol (public facet recipe /
                     # transform / intervention helper). A PRIVATE torchlens util --
-                    # notably the ``torchlens.utils:_module_is_installed`` import
+                    # notably the ``torchlens._utils:_module_is_installed`` import
                     # gadget -- or any I/O / import / exec / spawn callable is refused
                     # rather than resolved to a live callable.
                     raise UntrustedCallableError(
@@ -745,7 +745,7 @@ class SiteTable:
     """Result of resolving a selector; ordered, indexable, dataframe-convertible."""
 
     _sites: tuple[Site, ...]
-    query: Any | None = None
+    selector: Any | None = None
 
     def __len__(self) -> int:
         """Return the number of resolved sites.
@@ -784,7 +784,7 @@ class SiteTable:
         """
 
         if isinstance(idx, slice):
-            return SiteTable(self._sites[idx], query=self.query)
+            return SiteTable(self._sites[idx], selector=self.selector)
         return self._sites[idx]
 
     def __repr__(self) -> str:
@@ -821,7 +821,9 @@ class SiteTable:
             Filtered table in original execution order.
         """
 
-        return SiteTable(tuple(site for site in self._sites if predicate(site)), query=self.query)
+        return SiteTable(
+            tuple(site for site in self._sites if predicate(site)), selector=self.selector
+        )
 
     def first(self) -> Site:
         """Return the first resolved site.
@@ -932,7 +934,7 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
 
     Raises
     ------
-    SiteAmbiguityError
+    AmbiguousSiteError
         With ``fields["code"] == "multipass_bare_label_ambiguous"``.
     """
 
@@ -950,7 +952,7 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
         # only the exact bare layer label is the pass-ambiguous address.
         return
     pass_indices = sorted(int(getattr(site, "pass_index", 1) or 1) for site in matched)
-    raise SiteAmbiguityError(
+    raise AmbiguousSiteError(
         multipass_bare_label_message(layer_label, pass_indices),
         code="multipass_bare_label_ambiguous",
         layer_label=layer_label,
@@ -959,8 +961,8 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
 
 
 def resolve_sites(
-    log: Trace,
-    query: SelectorInput,
+    trace: Trace,
+    selector: SelectorInput,
     *,
     strict: bool = False,
     max_fanout: int = 8,
@@ -969,9 +971,9 @@ def resolve_sites(
 
     Parameters
     ----------
-    log:
+    trace:
         Model log whose captured layer-pass records should be searched.
-    query:
+    selector:
         Selector, target spec, frozen target spec, or non-strict bare string.
     strict:
         Whether to reject non-portable query forms.
@@ -985,7 +987,7 @@ def resolve_sites(
 
     Raises
     ------
-    SiteAmbiguityError
+    AmbiguousSiteError
         If more sites resolve than ``max_fanout`` allows.
     SiteResolutionError
         If no site resolves or the query shape is unsupported.
@@ -994,43 +996,43 @@ def resolve_sites(
     if max_fanout is None:
         raise SiteResolutionError("max_fanout=None is not supported; pass an explicit integer.")
     if max_fanout < 1:
-        raise SiteAmbiguityError("max_fanout must be at least 1.")
-    if strict and isinstance(query, str):
+        raise AmbiguousSiteError("max_fanout must be at least 1.")
+    if strict and isinstance(selector, str):
         raise SiteResolutionError(
             "Bare strings are non-portable in strict mode; use tl.label(...), "
             "tl.func(...), or another typed selector."
         )
 
-    selector = _normalize_query(query)
+    selector = _normalize_query(selector)
     matched: tuple[Any, ...]
     if isinstance(selector, FacetSelector):
-        matched = _resolve_facet_sites(log, selector, query)
+        matched = _resolve_facet_sites(trace, selector, selector)
     else:
-        _guard_episode_step_query(log, selector)
-        refuse_trace_alias_spellings(log, selector)
+        _guard_episode_step_query(trace, selector)
+        refuse_trace_alias_spellings(trace, selector)
         direction = _selector_resolution_direction(selector)
-        indexed = _indexed_label_match(log, direction, selector)
+        indexed = _indexed_label_match(trace, direction, selector)
         if indexed is None:
-            sites = tuple(_iter_sites(log, direction))
+            sites = tuple(_iter_sites(trace, direction))
             indexed = _resolve_unchecked(sites, selector, strict=strict)
         matched = indexed
         if not matched:
             raise SiteResolutionError(
-                f"selector {query!r} matched 0 sites. Use log.find_sites(...) to discover labels."
+                f"selector {selector!r} matched 0 sites. Use log.find_sites(...) to discover labels."
             )
         _refuse_bare_multipass_label(selector, matched)
     if len(matched) > max_fanout:
-        raise SiteAmbiguityError(
-            f"site {query!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
+        raise AmbiguousSiteError(
+            f"site {selector!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
             "Pass a larger max_fanout explicitly or use a narrower selector."
         )
     if len(matched) > 1:
         warnings.warn(
-            _multi_match_message(query, matched),
+            _multi_match_message(selector, matched),
             MultiMatchWarning,
             stacklevel=2,
         )
-    return SiteTable(matched, query=query)
+    return SiteTable(matched, selector=selector)
 
 
 def _resolve_facet_sites(
@@ -1236,7 +1238,7 @@ def find_sites(
     if max_fanout is None:
         raise SiteResolutionError("max_fanout=None is not supported; pass an explicit integer.")
     if max_fanout < 1:
-        raise SiteAmbiguityError("max_fanout must be at least 1.")
+        raise AmbiguousSiteError("max_fanout must be at least 1.")
     if strict and isinstance(query, str):
         raise SiteResolutionError(
             "Bare strings are non-portable in strict mode; use tl.label(...), "
@@ -1250,11 +1252,11 @@ def find_sites(
     sites = tuple(_iter_sites(log, direction))
     matched = _resolve_unchecked(sites, selector, strict=strict)
     if len(matched) > max_fanout:
-        raise SiteAmbiguityError(
+        raise AmbiguousSiteError(
             f"site {query!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
             "Pass a larger max_fanout explicitly or use a narrower selector."
         )
-    return SiteTable(matched, query=query)
+    return SiteTable(matched, selector=query)
 
 
 def _guard_episode_step_query(log: Trace, selector: Any) -> None:
@@ -1280,7 +1282,7 @@ def _guard_episode_step_query(log: Trace, selector: Any) -> None:
         ``episode_step_unstamped`` on stamp-less episode artifacts.
     """
 
-    from ..ir.selector_eval import selector_contains_kind
+    from .._ir.selector_eval import selector_contains_kind
 
     if not isinstance(selector, BaseSelector) or not selector_contains_kind(
         selector, "episode_step", unwrap=True
@@ -1292,7 +1294,7 @@ def _guard_episode_step_query(log: Trace, selector: Any) -> None:
         raise SiteResolutionError(
             "at_step(...) names an episode step, but this product carries no "
             "episode declaration: there are no steps to qualify. Re-capture "
-            "with tl.trace(model, x, episode=tl.options.EpisodeSpec(...)), or "
+            "with tl.trace(model, x, episode=tl.options.EpisodeOptions(...)), or "
             "drop the step qualifier.",
             code="episode_step_selector_without_episode",
             remedy="re-capture with episode=, or drop at_step()",

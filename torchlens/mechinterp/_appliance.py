@@ -17,7 +17,7 @@ from typing import Any
 
 from ._factored import FactoredMatrix
 from ._params import ov_circuit, qk_circuit
-from ._scores import FixedPeriodInduction, HeadScoreResult, head_scores
+from ._scores import FixedPeriodInduction, HeadScores, head_scores
 
 __all__ = ["MechInterpAppliance"]
 
@@ -49,7 +49,7 @@ class MechInterpAppliance:
         measure: str = "mul",
         layers: Any = None,
         pattern_source: Any = None,
-    ) -> HeadScoreResult:
+    ) -> HeadScores:
         """Score every head against one taxonomy mask (see :func:`head_scores`)."""
 
         return head_scores(

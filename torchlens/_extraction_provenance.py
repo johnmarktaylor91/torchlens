@@ -66,7 +66,7 @@ def _input_preprocessing_block(
     authority:
         JSON-portable authority record, or ``None`` when none was declared.
     audit:
-        JSON-portable :class:`torchlens.preprocessing.PreprocessingAudit`
+        JSON-portable :class:`torchlens.preprocessing.PreprocessingComparison`
         report, or ``None``.
     verdict:
         ``"verified"`` / ``"mismatch"`` / ``"unknown"``.
@@ -118,7 +118,7 @@ def coerce_input_preprocessing(
         (identification-only disclosure; makes the artifact non-resumable
         across interruptions, mirroring opaque output transforms).
     input_provenance:
-        ``None`` | :class:`torchlens.preprocessing.PreprocessingAudit` |
+        ``None`` | :class:`torchlens.preprocessing.PreprocessingComparison` |
         :class:`torchlens.preprocessing.Resolution` |
         ``ResolvedPreprocessing`` -- a provenance-only stamp for stimuli the
         caller preprocessed outside this run. When both arguments carry
@@ -139,7 +139,7 @@ def coerce_input_preprocessing(
     """
 
     from torchlens._errors import InvalidArgumentError
-    from torchlens.preprocessing import PreprocessingAudit, Resolution, audit as _audit
+    from torchlens.preprocessing import PreprocessingComparison, Resolution, compare as _audit
 
     transform_callable: Any = None
     identity: Any = None
@@ -156,7 +156,7 @@ def coerce_input_preprocessing(
             if input_transform.transform is None:
                 raise InvalidArgumentError(
                     "input_transform received a declaration-only resolution "
-                    f"(source {input_transform.record.source!r}) that carries "
+                    f"(source {input_transform.preprocessing.source!r}) that carries "
                     "no callable, so there is nothing to apply.",
                     code="extraction_input_transform_missing_callable",
                     remedy=(
@@ -165,7 +165,7 @@ def coerce_input_preprocessing(
                         "your own transform and pass the resolution as "
                         "input_provenance= instead"
                     ),
-                    source=input_transform.record.source,
+                    source=input_transform.preprocessing.source,
                 )
             transform_callable = input_transform.transform
             report = _audit(input_transform, input_transform)
@@ -175,17 +175,17 @@ def coerce_input_preprocessing(
             unknown_reasons = list(report.unknown_reasons)
             identity = {
                 "kind": "resolved",
-                "source": input_transform.record.source,
-                "identifier": input_transform.record.identifier,
+                "source": input_transform.preprocessing.source,
+                "identifier": input_transform.preprocessing.identifier,
                 "config_digest": "sha256:"
                 + hashlib.sha256(
-                    _canonical_json(input_transform.record.config).encode()
+                    _canonical_json(input_transform.preprocessing.config).encode()
                 ).hexdigest(),
             }
         else:
             transform_callable = input_transform
             opaque = True
-            from torchlens.data_classes.trace import _scrubbed_transform_repr
+            from torchlens._data_classes.trace import _scrubbed_transform_repr
 
             transform_repr = _scrubbed_transform_repr(input_transform) or "<transform>"
             identity = {"kind": "opaque", "repr": transform_repr}
@@ -194,13 +194,13 @@ def coerce_input_preprocessing(
 
     if input_provenance is not None:
         applied_by = applied_by or "caller"
-        if isinstance(input_provenance, PreprocessingAudit):
+        if isinstance(input_provenance, PreprocessingComparison):
             audit_json = input_provenance.to_json()
             authority_json = audit_json["authority"]
             verdict = input_provenance.verdict
             unknown_reasons = list(input_provenance.unknown_reasons)
         elif isinstance(input_provenance, Resolution):
-            record = input_provenance.record
+            record = input_provenance.preprocessing
             authority_json = {
                 "source": record.source,
                 "identifier": record.identifier,

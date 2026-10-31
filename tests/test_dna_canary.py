@@ -62,7 +62,7 @@ def _fresh_capture() -> tuple[nn.Module, torch.Tensor, tl.Trace]:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
     return model, x, trace
 

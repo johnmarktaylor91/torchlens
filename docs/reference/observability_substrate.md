@@ -1,9 +1,9 @@
 # Observability substrates
 
-`torchlens.observability` is the shared substrate the observe / checks /
+`torchlens._observability` is the shared substrate the observe / checks /
 trackers / explorer / snoop / torchnative surfaces build on. Every spelling in
 it is DOCUMENTED-UNSTABLE pending naming-session ratification; access is
-`import torchlens.observability` (root-facade routing is a later registration).
+`import torchlens._observability` (root-facade routing is a later registration).
 
 ## The per-step history schema
 
@@ -25,7 +25,7 @@ Four normalized layers, one artifact:
   presence vocabulary (`observed | not_scheduled | site_absent | unsupported |
   capture_failed | budget_dropped`), the spine, the sketch, and disclosures.
   Missing is never zero: a non-observed presence may not carry payloads.
-  Gradient streams must stamp `grad_scale` (`scaled | unscaled | unknown`).
+  Gradient streams must stamp `scale_grad` (`scaled | unscaled | unknown`).
 
 Merging: integer counts merge EXACTLY (rank merge, micro-batch folds, time
 coarsening); floating fields merge with a documented stable pairwise algorithm
@@ -46,7 +46,7 @@ coarsening); floating fields merge with a documented stable pairwise algorithm
   `sketch_descriptor_mismatch`.
 
 Both implement the `torchlens.stats` `StreamingStat` protocol and are
-re-exported as `tl.stats.Spine` / `tl.stats.Histogram`, so `tl.aggregate`
+re-exported as `tl.stats.RunningStats` / `tl.stats.Histogram`, so `tl.stats.aggregate`
 gets dataset-mode histograms free. Neither consumes RNG; half/bf16 inputs
 reduce in float32-or-wider with the reduction dtype recorded; complex dtypes
 refuse `stat_dtype_unsupported`.
@@ -118,7 +118,7 @@ records a `user_region` span (and a `torch.profiler.record_function` bracket);
 during a TorchLens capture it rides the SHIPPED `observers.span` record
 surface -- one span vocabulary, never a parallel stack.
 
-`torchlens.observability.session(...)` is the ONE activation knob: owned mode
+`torchlens._observability.session(...)` is the ONE activation knob: owned mode
 creates and closes `torch.profiler.profile`; borrowed mode adds markers
 inside a caller-owned profiler and never steps or closes it; nested sessions
 refuse `profiler_session_nested`; success, halt, and exception paths restore
@@ -133,7 +133,7 @@ partial | joined`).
 
 ## The Kineto join (F27, on this substrate)
 
-`torchlens.observability.native_profile(model, x)` runs ONE save-nothing
+`torchlens.report.kernel_profile(model, x)` runs ONE save-nothing
 capture under the owned session and joins device events to captured ops by
 runtime correlation IDs only (names are display metadata): in-memory
 `_KinetoEvent` extraction behind the feature-detected `_torch_compat`

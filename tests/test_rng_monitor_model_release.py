@@ -27,8 +27,8 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils import rng as rng_utils
 from torchlens.options import CaptureOptions
-from torchlens.utils import rng as rng_utils
 
 _WAIT_SECONDS = 30.0
 

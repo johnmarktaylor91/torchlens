@@ -2,7 +2,7 @@
 
 Split from :mod:`torchlens.options` along the episode option-family seam
 (R43 file-size ratchet); the public spelling stays
-``tl.options.EpisodeSpec`` (re-exported there). Semantics are pinned by the
+``tl.options.EpisodeOptions`` (re-exported there). Semantics are pinned by the
 ratified S2/S6/S7 contracts; the doc of record is
 ``docs/reference/episode_capture.md``.
 """
@@ -12,12 +12,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-__all__ = ["EpisodeSpec"]
+__all__ = ["EpisodeOptions"]
 
 
 @dataclass(frozen=True)
-class EpisodeSpec:
-    """Episode declaration for ``tl.trace(..., episode=EpisodeSpec(...))``.
+class EpisodeOptions:
+    """Episode declaration for ``tl.trace(..., episode=EpisodeOptions(...))``.
 
     Declaring an episode makes ONE wrapped session capture the episode
     product (``capture_kind=episode``): the episode root's ``forward`` steps
@@ -156,7 +156,7 @@ class EpisodeSpec:
     """
 
     stepped_module: Any = None
-    n_steps: int | None = None
+    num_steps: int | None = None
     step_axis: int = -1
     step_output_kind: Literal["tokens", "digest", "none"] = "tokens"
     step_output_from: str | None = None
