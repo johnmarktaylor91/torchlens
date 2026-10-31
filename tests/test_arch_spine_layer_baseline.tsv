@@ -22,7 +22,7 @@ _data_classes.derived_grad	1
 _data_classes.func_call_location	1
 _data_classes.interface	5
 _data_classes.layer	2
-_data_classes.op	11
+_data_classes.op	9
 _data_classes.param	2
 _data_classes.trace	15
 _io._artifact_strings	1
@@ -66,7 +66,7 @@ backends.torch.sources	1
 backends.torch.tensor_tracking	1
 capture.predicates	3
 capture.trace	1
-export	6
+export	5
 facets	1
 fastlog._record_one_shot	1
 fastlog._recorder	3
@@ -76,5 +76,5 @@ fastlog.types	5
 fingerprint	2
 receptive_field._viz	1
 repgeom._node_visuals	3
-validation	2
+validation	1
 validation.backward	1
