@@ -11,9 +11,12 @@ Default validation re-traces the model without the options row, so
 hook rows are judged by the capture itself, the save/load round trip of the
 intervened trace, the typed-refusal, torch-clean and memory oracles.
 
-Hooks attached after capture (``Trace.attach_hooks``, ``Trace.set``) and a
-TorchLens hook removed through its handle mid-pass need a post-capture step
-the runner does not have; they are listed as remaining work, not rows.
+Hooks attached after capture (``Trace.attach_hooks``, ``Trace.set``,
+``fork().do`` on a buffer read, the F45 shape) and a TorchLens hook removed
+through its handle mid-pass need a post-capture step the runner does not
+have; they are listed as remaining work, not rows. A capture-time selector
+cannot name a buffer read: ``tl.label("buffer_1:1")`` is a finalized label,
+refused at capture, which the ``hook_live_final_label`` row pins.
 """
 
 from __future__ import annotations
@@ -110,8 +113,8 @@ OPTIONS: tuple[OptionsSpec, ...] = (
         trace_kwargs=_on_linear(hook_scales, direction="backward"),
     ),
     OptionsSpec(
-        "hook_buffer_read",
-        "a scaling hook on the first read of a never-written buffer (behaviour net F45)",
+        "hook_live_final_label",
+        "a capture-time hook aimed by a finalized label (a buffer read): typed refusal expected",
         trace_kwargs={"intervene": tl.when(tl.label(BUFFER_SITE), hook_scales)},
     ),
     OptionsSpec(
@@ -135,6 +138,8 @@ OPTIONS: tuple[OptionsSpec, ...] = (
 class BufferReader(nn.Module):
     """Read a registered buffer it never writes (the F45 replay-threading shape)."""
 
+    mask: torch.Tensor
+
     def __init__(self) -> None:
         super().__init__()
         self.fc = nn.Linear(WIDTH, WIDTH)
@@ -152,12 +157,10 @@ def _shift_output_hook(_module: nn.Module, _args: tuple[Any, ...], out: Any) -> 
     return out + 1.0
 
 
-def _read_output_hook(module: nn.Module, _args: tuple[Any, ...], out: Any) -> None:
-    module.last_norm = float(out.detach().norm())
-
-
 class TorchHooked(nn.Module):
     """Two linears carrying torch's own pre-hook and forward hooks, left installed."""
+
+    last_norm: float
 
     def __init__(self) -> None:
         super().__init__()
@@ -165,7 +168,11 @@ class TorchHooked(nn.Module):
         self.fc2 = nn.Linear(WIDTH, WIDTH)
         self.fc1.register_forward_pre_hook(_scale_input_pre_hook)
         self.fc1.register_forward_hook(_shift_output_hook)
-        self.fc2.register_forward_hook(_read_output_hook)
+        self.last_norm = 0.0
+        self.fc2.register_forward_hook(self._read_output_hook)
+
+    def _read_output_hook(self, _module: nn.Module, _args: tuple[Any, ...], out: Any) -> None:
+        self.last_norm = float(out.detach().norm())
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.fc2(torch.relu(self.fc1(x)))
@@ -213,7 +220,7 @@ MODELS: tuple[ModelSpec, ...] = (
     _model(
         "hk_buffer_reader",
         BufferReader,
-        "reads a never-written buffer, the site the hook_buffer_read row aims at",
+        "reads a never-written buffer (behaviour net F45); a capture-time label cannot aim at it",
     ),
     _model(
         "hk_torch_hooks",
