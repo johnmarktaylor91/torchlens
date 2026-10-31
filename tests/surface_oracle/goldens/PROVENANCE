@@ -1280,3 +1280,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 72b8140ae019ac73c372ec2627bf5b81fc04c6f5 (dirty)
 recorded: 2026-10-30T02:30:24.174664+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod lane E: runnable contract module is private (torchlens._runnable); Trace.save and load_state_dict signatures; divergence policy strings; removed persistence doors
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470e66967913f671642d4b4eda641ea407ee8124 (dirty)
+recorded: 2026-10-31T03:20:14.448814+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod lane E: runnable contract module is private (torchlens._runnable); Trace.save and load_state_dict signatures; divergence policy strings; removed persistence doors
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470e66967913f671642d4b4eda641ea407ee8124 (dirty)
+recorded: 2026-10-31T03:20:14.478379+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod lane E: runnable contract module is private (torchlens._runnable); Trace.save and load_state_dict signatures; divergence policy strings; removed persistence doors
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470e66967913f671642d4b4eda641ea407ee8124 (dirty)
+recorded: 2026-10-31T03:20:16.841390+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod lane E: runnable contract module is private (torchlens._runnable); Trace.save and load_state_dict signatures; divergence policy strings; removed persistence doors
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470e66967913f671642d4b4eda641ea407ee8124 (dirty)
+recorded: 2026-10-31T03:20:16.882262+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod lane E: runnable contract module is private (torchlens._runnable); Trace.save and load_state_dict signatures; divergence policy strings; removed persistence doors
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470e66967913f671642d4b4eda641ea407ee8124 (dirty)
+recorded: 2026-10-31T03:20:16.909013+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rename codemod lane E: runnable contract module is private (torchlens._runnable); Trace.save and load_state_dict signatures; divergence policy strings; removed persistence doors
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 470e66967913f671642d4b4eda641ea407ee8124 (dirty)
+recorded: 2026-10-31T03:20:16.945363+00:00
