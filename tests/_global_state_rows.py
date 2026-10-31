@@ -1261,7 +1261,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/intervention/sites.py", "__all__"),
         ("torchlens/intervention/spec.py", "__all__"),
         ("torchlens/intervention/spec_compat.py", "__all__"),
-        ("torchlens/intervention/steering.py", "__all__"),
         ("torchlens/intervention/stochastic.py", "__all__"),
         ("torchlens/intervention/sweep.py", "__all__"),
         ("torchlens/intervention/types.py", "__all__"),

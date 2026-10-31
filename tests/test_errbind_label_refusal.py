@@ -19,7 +19,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention.binding import bind_spec_to_model
 from torchlens.intervention.errors import BindingPreflightError, BindingRuntimeError
-from torchlens.intervention.steering import steer_generate
 
 
 def _double(out: torch.Tensor, *, hook: object) -> torch.Tensor:
@@ -146,7 +145,7 @@ def test_live_matchable_label_terms_still_bind_and_fire(cnn, selector) -> None:
 
 
 def test_every_binding_door_refuses_at_bind(cnn) -> None:
-    """spec.bind, bind_spec_to_model and steer_generate refuse before any forward or generate."""
+    """Binding construction refuses labels before any forward or generate."""
 
     model, x = cnn
     spec = tl.when(tl.label("relu_1_2"), _double)
@@ -154,7 +153,7 @@ def test_every_binding_door_refuses_at_bind(cnn) -> None:
         lambda: spec.bind(model),
         lambda: spec.bind(model, on_zero_fire="error"),
         lambda: bind_spec_to_model(spec, model, on_zero_fire="warn"),
-        lambda: steer_generate(model, x, spec),
+        lambda: spec.bind(model).generate(x),
     ):
         with pytest.raises(BindingPreflightError) as excinfo:
             door()

@@ -1,4 +1,4 @@
-"""Decode-step selector on the capture-free bound and steer_generate path (R2-25, N-IV-12).
+"""Decode-step selector on the capture-free bound generation path (R2-25, N-IV-12).
 
 ``torchlens.at_step(k)`` on a bound ``generate`` fires only during
 the k-th forward of the generation (step 0 is the prefill), capture-free. Each
@@ -18,7 +18,6 @@ import torch
 import torchlens as tl
 from torchlens import at_step
 from torchlens.intervention.errors import SelectorCapabilityError
-from torchlens.intervention.steering import steer_generate
 
 transformers = pytest.importorskip("transformers")
 
@@ -113,14 +112,17 @@ def test_op_level_rule_fires_at_one_decode_step(model: torch.nn.Module) -> None:
     torch.testing.assert_close(_scores(result), want, rtol=0.0, atol=1e-6)
 
 
-def test_steer_generate_honours_the_decode_step(model: torch.nn.Module) -> None:
-    """``steer_generate`` (sugar over bind) carries the same step qualifier."""
+def test_bound_steering_honours_the_decode_step(model: torch.nn.Module) -> None:
+    """Bound generation applies a steering direction at the qualified steps."""
 
     direction = torch.ones(16)
     spec = tl.when(tl.module("transformer.h.1") & at_step(0, 3), tl.steer(direction, 2.0, dim=-1))
-    steered = steer_generate(copy.deepcopy(model), _IDS, spec, **_GENERATE)
-    assert steered.report.num_fires == 2
-    assert steered.report.trace is None
+    bound = spec.bind(copy.deepcopy(model))
+    steered = bound.generate(_IDS, **_GENERATE)
+    report = bound.last_report
+    assert report is not None
+    assert report.num_fires == 2
+    assert report.trace is None
 
     def _add(out: torch.Tensor) -> torch.Tensor:
         """The same steering edit, written by hand."""
@@ -128,7 +130,7 @@ def test_steer_generate_honours_the_decode_step(model: torch.nn.Module) -> None:
         return out + 2.0 * direction
 
     want = _oracle_scores(model, ("transformer.h.1",), (0, 3), _add)
-    torch.testing.assert_close(_scores(steered.outputs), want, rtol=0.0, atol=1e-6)
+    torch.testing.assert_close(_scores(steered), want, rtol=0.0, atol=1e-6)
 
 
 def test_step_qualifier_without_binding_or_episode_still_refuses(

@@ -6,8 +6,8 @@ the compatibility facade for Bundle-level comparison tools. Bundle members are o
 `Trace` objects; `tl.Bundle` projects sub-Trace objects across members through
 internal Super* views.
 
-The capture-free lane is `binding.py` (`spec.bind(model)`) with `steering.py`
-(`steer_generate`); which intervention path to use for speed is in
+The capture-free lane is `binding.py` (`spec.bind(model)` and the returned
+binding's `.generate(...)`); which intervention path to use for speed is in
 `docs/guides/fast_paths.md`.
 
 ## Internal Layout
