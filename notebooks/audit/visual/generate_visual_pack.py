@@ -612,15 +612,15 @@ AXES: dict[str, str] = {
     "node_mode:profiling": "node_mode='profiling' (time/memory rows)",
     "node_spec_fn:vision": "node_spec_fn=vision_node_mode (conv-oriented rows)",
     "node_spec_fn:attention": "node_spec_fn=attention_node_mode (attention-oriented rows)",
-    "theme:torchlens": "vis_theme='torchlens' (default)",
-    "theme:paper": "vis_theme='paper'",
-    "theme:dark": "vis_theme='dark'",
-    "theme:colorblind": "vis_theme='colorblind'",
-    "theme:high_contrast": "vis_theme='high_contrast'",
+    "theme:torchlens": "theme='torchlens' (default)",
+    "theme:paper": "theme='paper'",
+    "theme:dark": "theme='dark'",
+    "theme:colorblind": "theme='colorblind'",
+    "theme:high_contrast": "theme='high_contrast'",
     "show_legend": "show_legend=True legend box",
-    "buffers:never": "show_buffer_layers='never'",
-    "buffers:meaningful": "show_buffer_layers='meaningful' (default)",
-    "buffers:always": "show_buffer_layers='always'",
+    "buffers:never": "show_buffers='never'",
+    "buffers:meaningful": "show_buffers='meaningful' (default)",
+    "buffers:always": "show_buffers='always'",
     "containers:labels": "show_containers='labels'",
     "containers:cluster": "show_containers='cluster' (single-owner required; falls back to labels)",
     "containers:collapsed": "show_containers='collapsed' homogeneous-container merge",
@@ -802,7 +802,7 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "demo_model -- show_buffer_layers='always'",
+                        "demo_model -- show_buffers='always'",
                         "demo_model",
                         kwargs={"show_buffer_layers": "always"},
                     )
@@ -838,17 +838,17 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "show_buffer_layers='never'",
+                        "show_buffers='never'",
                         "mixed_buffers",
                         kwargs={"show_buffer_layers": "never"},
                     ),
                     Panel(
-                        "show_buffer_layers='meaningful' (default)",
+                        "show_buffers='meaningful' (default)",
                         "mixed_buffers",
                         kwargs={"show_buffer_layers": "meaningful"},
                     ),
                     Panel(
-                        "show_buffer_layers='always'",
+                        "show_buffers='always'",
                         "mixed_buffers",
                         kwargs={"show_buffer_layers": "always"},
                     ),

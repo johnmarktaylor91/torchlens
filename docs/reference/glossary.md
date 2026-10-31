@@ -1260,7 +1260,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `torchlens.accessors.registered_appliances()` lists the names with their summaries. An
   unknown name refuses `appliance_unknown` and lists the registered names; re-registering a
   name without `replace=True` refuses `appliance_name_taken`; a malformed name or factory
-  refuses `appliance_registration_invalid`. The word clashes with `torchlens.semantic.using(*facets)`
+  refuses `appliance_registration_invalid`. The word clashes with `torchlens.facets.adding(*facets)`
   (a recipe scope); the naming review settles both.
 **Safetensors Trace export** *(spellings documented-unstable)*
 : `tl.export.safetensors(trace, path)` writes one pickle-free `.safetensors` file: every
@@ -2552,7 +2552,7 @@ deprecation shim owed*
   features of the label prompts; `lens_source="contrastive_head"`). A user
   lens may carry `model_identity` (an extraction manifest's identity
   record): a differing measured identity refuses
-  `logit_lens_identity_mismatch` unless `validate=False`; a lens with no
+  `logit_lens_identity_mismatch` unless `verify=False`; a lens with no
   comparable identity warns `logit_lens_identity_unrecorded` when its
   last-layer decode misses the captured logits. Its streaming sibling
   `logit_lens_predictions(trace, ...)` keeps only per-layer top-k, `logsumexp`
