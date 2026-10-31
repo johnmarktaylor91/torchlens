@@ -27,9 +27,8 @@ if TYPE_CHECKING:
 
 from .._capture.projections import LiveOpView
 from .._errors import AmbiguousOpLookupError, InvalidArgumentError
-from .._selection import Selector
 from ..intervention.errors import AmbiguousSiteError
-from ..intervention.selectors import BaseSelector, FacetSelector
+from ..intervention.selectors import BaseSelector
 from ..intervention.types import FrozenTargetSpec, TargetSpec
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .op import Op
@@ -112,6 +111,8 @@ def _names_one_thing(selector: Any) -> bool:
     selector each name one thing; every other selector names a set.
     """
 
+    from ..intervention.selectors import FacetSelector
+
     if isinstance(selector, TargetSpec | FrozenTargetSpec | FacetSelector):
         return True
     return getattr(selector, "selector_kind", None) == "label"
@@ -184,6 +185,8 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         KeyError: No match found.
         ValueError: Ambiguous substring match or invalid index.
     """
+    from .._selection import Selector
+
     if isinstance(ix, Selector):
         return ix._resolve(self)
 
