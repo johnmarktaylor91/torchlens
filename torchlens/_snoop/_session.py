@@ -282,14 +282,10 @@ class EchoSession:
         mode = self._stats_mode
         if mode == "off":
             return None
-        numel = 1
-        for dim in ctx.shape or ():
-            numel *= dim
         if mode == "reuse":
             return reuse_stats(
                 trace,
                 ctx.raw_label or ctx.label,
-                numel,
                 shape=ctx.shape or (),
                 dtype=compact_dtype(ctx.dtype) or "unknown",
                 device=compact_device(ctx.tensor_device) or "unknown",

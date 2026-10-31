@@ -22,6 +22,7 @@ not echo ships (lovely repr, echo, the stats-helper fix, the tripwire).
 
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
@@ -165,7 +166,6 @@ def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> TensorS
 def reuse_stats(
     trace: Any,
     raw_label: str | None,
-    numel: int,
     *,
     shape: tuple[int, ...],
     dtype: str,
@@ -179,10 +179,9 @@ def reuse_stats(
         Active capture trace (either tier).
     raw_label:
         The op's raw capture label (the ``track_nonfinite`` store key).
-    numel:
-        Element count for family evidence.
     shape, dtype, device:
-        Already-recorded tensor metadata; no payload reads.
+        Already-recorded tensor metadata; no payload reads. The element count
+        for family evidence is the product of ``shape``.
 
     Returns
     -------
@@ -194,6 +193,7 @@ def reuse_stats(
 
     if raw_label is None:
         return None
+    numel = math.prod(shape)
     store = getattr(trace, "__dict__", {}).get(_NONFINITE_STORE_ATTR)
     if not isinstance(store, dict):
         return None

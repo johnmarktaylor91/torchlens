@@ -240,6 +240,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "path-filtered export job requested via the packaging-request ledger "
         "(F14 2026-08-28)",
     ),
+    "numpy": (TEST_EXTRA, "core torchlens dependency; a skip means install breakage"),
     "pandas": (OPTIONAL_PREVIEW, "tabular extra"),
     "pandas.api.types": (OPTIONAL_PREVIEW, "tabular extra"),
     "peft": (

@@ -125,10 +125,8 @@ def test_reuse_rung_never_reads_deferred_evidence() -> None:
 
             self.__dict__["_nonfinite_capture"] = {"events": {"op_raw": torch.tensor(True)}}
 
-    assert reuse_stats(FakeTrace(), "op_raw", 10, shape=(10,), dtype="f32", device="cpu") is None
-    assert (
-        reuse_stats(FakeTrace(), "missing_raw", 10, shape=(10,), dtype="f32", device="cpu") is None
-    )
+    assert reuse_stats(FakeTrace(), "op_raw", shape=(10,), dtype="f32", device="cpu") is None
+    assert reuse_stats(FakeTrace(), "missing_raw", shape=(10,), dtype="f32", device="cpu") is None
 
 
 @pytest.mark.smoke_cells("test_two_stage_tripwire_verdict_identity[nan]")
@@ -242,7 +240,7 @@ def test_reused_verdict_is_tensor_stats_with_no_invented_families(verdict: bool)
     """Presence has no census; absence is the exact zero census already paid for."""
 
     trace = SimpleNamespace(_nonfinite_capture={"events": {"raw": verdict}})
-    record = reuse_stats(trace, "raw", 12, shape=(3, 4), dtype="f32", device="cpu")
+    record = reuse_stats(trace, "raw", shape=(3, 4), dtype="f32", device="cpu")
     assert isinstance(record, TensorStats)
     assert record.policy == "reuse"
     assert record.shape == (3, 4) and record.numel == 12

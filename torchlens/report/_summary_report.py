@@ -135,14 +135,8 @@ class SummaryReport(str):
         totals: SummaryTotals,
         capture: CaptureFacts,
         rebuilt: Any = None,
-        stats: Any = None,
-        stats_columns: tuple[str, ...] = (),
     ) -> SummaryReport:
-        """Build the report around the rendered text.
-
-        ``stats`` is the typed observation table behind ``view="stats"``:
-        then ``rows`` serves its rows and ``to_pandas()`` its frame.
-        """
+        """Build the report around the rendered text."""
 
         # The payload is the canonical ASCII contract on every build path
         # (summary D1): a non-ASCII name degrades one character per character.
@@ -151,6 +145,27 @@ class SummaryReport(str):
         report._totals = totals
         report._capture = capture
         report._rebuilt = rebuilt
+        report._stats = None
+        report._stats_columns = ()
+        return report
+
+    @classmethod
+    def _with_stats(
+        cls,
+        text: str,
+        *,
+        data: tuple[tuple[SummaryRow, ...], SummaryTotals, CaptureFacts],
+        stats: Any,
+        stats_columns: tuple[str, ...],
+    ) -> SummaryReport:
+        """Build a ``view="stats"`` report around its typed observation table.
+
+        ``data`` is ``build_summary_data``'s ``(rows, totals, capture)``;
+        ``stats`` then serves ``rows`` and ``to_pandas()``.
+        """
+
+        rows, totals, capture = data
+        report = cls(text, rows=rows, totals=totals, capture=capture)
         report._stats = stats
         report._stats_columns = stats_columns
         return report
