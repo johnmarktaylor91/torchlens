@@ -4042,7 +4042,7 @@
  {
   "ambiguous": false,
   "field": "step_index",
-  "file": "torchlens/_debug/_common.py",
+  "file": "torchlens/debug/_common.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true
@@ -4050,7 +4050,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/_debug/_cost.py",
+  "file": "torchlens/debug/_cost.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -4058,7 +4058,7 @@
  {
   "ambiguous": false,
   "field": "step_index",
-  "file": "torchlens/_debug/_cost.py",
+  "file": "torchlens/debug/_cost.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -4066,7 +4066,7 @@
  {
   "ambiguous": true,
   "field": "policy",
-  "file": "torchlens/_debug/_determinism.py",
+  "file": "torchlens/debug/_determinism.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -4074,7 +4074,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_debug/_first_bad.py",
+  "file": "torchlens/debug/_first_bad.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -4082,7 +4082,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_debug/_flops_vs_dispatch.py",
+  "file": "torchlens/debug/_flops_vs_dispatch.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -4090,7 +4090,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_debug/_grad_fn_walk.py",
+  "file": "torchlens/debug/_grad_fn_walk.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -4098,7 +4098,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/_debug/_graph.py",
+  "file": "torchlens/debug/_graph.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true
@@ -4106,7 +4106,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_debug/_infer_input_shape.py",
+  "file": "torchlens/debug/_infer_input_shape.py",
   "has_default": false,
   "sites": 12,
   "via_getattr": false
@@ -4114,7 +4114,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/_debug/_infer_input_shape.py",
+  "file": "torchlens/debug/_infer_input_shape.py",
   "has_default": false,
   "sites": 5,
   "via_getattr": false
@@ -4122,7 +4122,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_debug/_nan.py",
+  "file": "torchlens/debug/_nan.py",
   "has_default": false,
   "sites": 6,
   "via_getattr": false
@@ -4130,7 +4130,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/_debug/_nan.py",
+  "file": "torchlens/debug/_nan.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true
@@ -4138,7 +4138,7 @@
  {
   "ambiguous": false,
   "field": "step_index",
-  "file": "torchlens/_debug/_nan.py",
+  "file": "torchlens/debug/_nan.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -4146,7 +4146,7 @@
  {
   "ambiguous": false,
   "field": "pass_index",
-  "file": "torchlens/_debug/_nan_backward.py",
+  "file": "torchlens/debug/_nan_backward.py",
   "has_default": false,
   "sites": 3,
   "via_getattr": false
@@ -4154,7 +4154,7 @@
  {
   "ambiguous": false,
   "field": "step_index",
-  "file": "torchlens/_debug/_nan_backward.py",
+  "file": "torchlens/debug/_nan_backward.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true

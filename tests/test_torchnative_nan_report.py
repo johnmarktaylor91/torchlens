@@ -15,8 +15,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._debug import nan_report
 from torchlens._utils._torch_compat import get_cpu_half_kernels_support
+from torchlens.debug import nan_report
 
 
 class DivideByZero(nn.Module):

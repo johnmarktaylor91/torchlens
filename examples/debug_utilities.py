@@ -1,4 +1,4 @@
-"""Short example for ``tl._debug`` helpers."""
+"""Short example for ``tl.debug`` helpers."""
 
 from __future__ import annotations
 

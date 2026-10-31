@@ -967,7 +967,7 @@ class ChecksSession:
                 "tripwire (off by default); under fp16 use a GradScaler, which "
                 "makes this event a harmless skipped step"
             ),
-            follow_up="tl.report.bisect_nan / tl._debug.find_nan on a captured trace",
+            follow_up="tl.report.bisect_nan / tl.debug.find_nan on a captured trace",
         )
         self._record(finding)
         if finding.action == "raise":

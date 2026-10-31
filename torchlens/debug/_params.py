@@ -175,7 +175,7 @@ def compare_params(
     Returns
     -------
     DebugReport
-        Tabular ``tl._debug`` report; ``.to_pandas()`` returns the
+        Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         One row per qualified name with columns ``name``, ``kind``,
         ``status``, ``shape_match``, ``dtype_match``, ``max_abs``,

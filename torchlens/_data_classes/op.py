@@ -2228,7 +2228,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             Theoretical bytes read once from inputs and parameters.
         """
 
-        from .._debug._cost import theoretical_op_bytes
+        from ..debug._cost import theoretical_op_bytes
 
         return theoretical_op_bytes(self)[0]
 
@@ -2247,7 +2247,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             Theoretical bytes written once for the logical output.
         """
 
-        from .._debug._cost import theoretical_op_bytes
+        from ..debug._cost import theoretical_op_bytes
 
         return theoretical_op_bytes(self)[1]
 

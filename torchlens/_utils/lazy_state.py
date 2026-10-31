@@ -1,6 +1,6 @@
 """Shared detection and enumeration of un-materialized lazy module state.
 
-Hoisted from ``torchlens._debug._infer_input_shape`` (quickstart memo wave 1a):
+Hoisted from ``torchlens.debug._infer_input_shape`` (quickstart memo wave 1a):
 the same scan now serves shape inference AND the capture entry gate, and the
 enumeration returns the pending set by ``id()`` -- for parameters, buffers,
 AND modules -- which is exactly the structure the future lazy completion unit

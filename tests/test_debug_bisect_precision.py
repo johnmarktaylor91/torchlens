@@ -1,4 +1,4 @@
-"""Tests for the fp64 precision bisector in torchlens._debug."""
+"""Tests for the fp64 precision bisector in torchlens.debug."""
 
 from __future__ import annotations
 

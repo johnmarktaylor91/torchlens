@@ -56,7 +56,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "merge_visualization_options",
         "visualization_to_render_kwargs",
     ),
-    "torchlens._debug": (
+    "torchlens.debug": (
         "PrecisionRow",
         "AuditFinding",
         "CompileCounts",

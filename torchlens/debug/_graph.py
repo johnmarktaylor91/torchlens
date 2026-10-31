@@ -343,7 +343,7 @@ def compare(
     Returns
     -------
     DebugReport
-        Tabular ``tl._debug`` report; ``.to_pandas()`` returns the
+        Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         One row per pass-qualified op with summary counts in ``df.attrs``.
         The optional view over :func:`compare_rows` (the pandas-free core).
@@ -528,7 +528,7 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Debug
     Returns
     -------
     DebugReport
-        Tabular ``tl._debug`` report; ``.to_pandas()`` returns the
+        Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         Columns are ``op``, ``total_units``, ``dead_count``, ``dead_frac``,
         ``sample_dead_idx``, and ``reason``. The optional view over

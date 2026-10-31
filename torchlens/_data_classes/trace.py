@@ -49,13 +49,13 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
-    from .._debug._audit import TraceAudit
     from .._io.streaming import BundleStreamWriter
     from .._runnable import (
         ArchivedActivation,
         ReadinessReport,
         SparseRunDescriptor,
     )
+    from ..debug._audit import TraceAudit
     from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
 
@@ -985,7 +985,7 @@ class Trace(
             from the operation's existing recorded code context when available.
         """
 
-        from .._debug._nan import find_nan_in_trace
+        from ..debug._nan import find_nan_in_trace
 
         return find_nan_in_trace(self)
 
@@ -998,11 +998,11 @@ class Trace(
 
         Returns
         -------
-        torchlens._debug.TraceAudit
+        torchlens.debug.TraceAudit
             Prioritized findings plus checks run and skipped-check reasons.
         """
 
-        from .._debug._audit import audit_trace
+        from ..debug._audit import audit_trace
 
         return audit_trace(self)
 

@@ -1,6 +1,6 @@
-"""The one typed ``tl._debug`` report object (spelling DOCUMENTED-UNSTABLE).
+"""The one typed ``tl.debug`` report object (spelling DOCUMENTED-UNSTABLE).
 
-Every report-shaped ``tl._debug`` result is a :class:`DebugReport`: the typed
+Every report-shaped ``tl.debug`` result is a :class:`DebugReport`: the typed
 results (``TraceAudit``, ``DeterminismReport``, ``NanReport``, ...) subclass
 it, and the tabular helpers (``hot_path``, ``dead_neurons``, ``compare``,
 ``recompute_candidates``, ``gradient_flow_audit``, ``compare_params``)
@@ -18,8 +18,8 @@ The common surface:
   exact remainder, the exits). Reports that already print a house-voice
   summary keep it unchanged.
 
-The public spelling is ``torchlens._debug.DebugReport``. This module sits at
-the package root (not inside ``torchlens._debug``) so ``torchlens.checks``
+The public spelling is ``torchlens.debug.DebugReport``. This module sits at
+the package root (not inside ``torchlens.debug``) so ``torchlens.checks``
 can subclass it without importing the ``debug`` package, which itself
 imports ``checks``.
 """
@@ -118,7 +118,7 @@ def _plain_leaf(value: Any) -> str:
 
 
 class DebugReport:
-    """Base class of every report-shaped ``tl._debug`` result.
+    """Base class of every report-shaped ``tl.debug`` result.
 
     Subclasses state their lead through three hooks: ``_report_subject``
     (what was examined), ``_report_status`` (the verdict token) and
@@ -289,7 +289,7 @@ def rows_of(records: Sequence[Any]) -> list[dict[str, Any]]:
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
 class _TableReport(DebugReport):
-    """A tabular ``tl._debug`` result: the report HAS the frame.
+    """A tabular ``tl.debug`` result: the report HAS the frame.
 
     ``to_pandas()`` returns a copy of the frame the helper used to return
     (its ``attrs`` included). Never forwards DataFrame methods.

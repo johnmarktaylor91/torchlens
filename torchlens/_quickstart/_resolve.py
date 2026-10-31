@@ -90,7 +90,7 @@ def _grade_for_inference(result: Any) -> str:
 def _resolve_inferred(model: nn.Module, verb: str) -> ResolvedInputs:
     """Run the zero-argument rung: inference search + verified-trace reuse."""
 
-    from .._debug._infer_input_shape import guess_input_shape
+    from ..debug._infer_input_shape import guess_input_shape
 
     result = guess_input_shape(model, return_trace=True)
     if not result.found or result.example_input is None:

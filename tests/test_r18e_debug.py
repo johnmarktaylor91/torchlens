@@ -360,7 +360,7 @@ def test_find_nan_live_label_has_no_raw_namespace_leak() -> None:
             h = torch.log(h - h)
             return self.b(h)
 
-    result = tl._debug.find_nan(_NanMid(), torch.ones(1, 2))
+    result = tl.debug.find_nan(_NanMid(), torch.ones(1, 2))
 
     assert result.found
     assert result.label is not None

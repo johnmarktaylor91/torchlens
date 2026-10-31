@@ -563,7 +563,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # final shape carrying both the A08 W3 raise and the A09 split (measured
     # 2069; next 50-step). Shrink freely, raise consciously.
     "torchlens/_io/scrub.py": 2100,
-    "torchlens/_debug/_infer_input_shape.py": 2250,
+    "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/visualization/_render_nodes.py": 2150,
     # 2100 -> 2150 (2026-10-02 ci-fix fast2 settle): the numpy bounded-scalar

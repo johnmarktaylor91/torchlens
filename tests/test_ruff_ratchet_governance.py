@@ -282,7 +282,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # 442 -> 443 (2026-08-29 T73b re-reconcile, F24): both sides hold 442
     # alone but their remaining ledgered sites are DISJOINT -- F24's one
     # T67f-adjudicated site (check_determinism's documented 9-knob public
-    # door in _debug/_determinism.py; its sibling isolated_capture site was
+    # door in debug/_determinism.py; its sibling isolated_capture site was
     # already paid down to **trace_kwargs at T67f) plus the landed T73b
     # train's own 442 union to 443 on the merged tree. Site-diffed against
     # BOTH parents (the +1 vs the sprint tip is exactly that one door); the

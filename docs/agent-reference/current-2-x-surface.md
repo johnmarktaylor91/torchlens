@@ -1265,8 +1265,8 @@
   `NarrationEvent`/`EchoSession`/sinks and post-hoc `narrate_trace` /
   `narrate_recording` / `narrate_partial`; `Trace.narrate` replays a finished
   capture as narration.
-- `torchlens._debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
-  the submodule is imported as `tl._debug` and is deliberately not in `__all__`.
+- `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
+  the submodule is imported as `tl.debug` and is deliberately not in `__all__`.
 - `tl.receptive_field` is a lazy power-user submodule. `Op`, `Layer`, `ModuleCall`, and
   `Module` expose `receptive_field` and `projective_field` views; `Trace` exposes the matching
   `receptive_fields()` and `projective_fields()` tables.

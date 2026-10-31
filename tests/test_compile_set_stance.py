@@ -479,7 +479,7 @@ def test_count_compiles_missing_counters_refuses_typed(
 ) -> None:
     """A torch runtime without Dynamo counters refuses with the stable code."""
 
-    from torchlens._debug import CompileCountsUnavailableError
+    from torchlens.debug import CompileCountsUnavailableError
 
     monkeypatch.setattr(
         _torch_compat, "get_dynamo_compile_counters", lambda force_probe=False: None

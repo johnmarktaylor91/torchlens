@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._debug import compare_rows, isolated_capture, preserved_rng_state
+from torchlens.debug import compare_rows, isolated_capture, preserved_rng_state
 from torchlens.report import bisect_precision, first_divergence
 
 

@@ -14,7 +14,7 @@ state as a `PartialTrace` for post-mortem inspection. `__all__` is exactly
   `raw_layers` (tuple of raw `Op` records), `outcome` (the settled
   `CaptureOutcome`, see `docs/reference/capture_outcomes.md`),
   `first_nonfinite()`, `audit()` (-> `TraceAudit`, same as
-  `tl._debug.audit_trace`), `draw()`, and `show(method="graph"|"repr"|"html")`.
+  `tl.debug.audit_trace`), `draw()`, and `show(method="graph"|"repr"|"html")`.
 
 ## Gotchas
 

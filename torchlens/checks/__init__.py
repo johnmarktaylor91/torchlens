@@ -23,7 +23,7 @@ The honestly-redefined flagship checks (memo section 1, all measured):
   written -- the only pre-write tripwire under fp32 and bf16.
 
 One-shot parameter-space auditing is ``audit_params`` (also served as
-``tl._debug.audit_params``). Access spelling is ``import torchlens.checks``
+``tl.debug.audit_params``). Access spelling is ``import torchlens.checks``
 for now; root-facade routing is an F35 registration fragment. Every
 spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
 """

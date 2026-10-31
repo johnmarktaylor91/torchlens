@@ -52,7 +52,7 @@ torchlens.contains	torchlens.intervention.selectors	L4	core	1	0
 torchlens._data_classes	torchlens._data_classes	L1	core	0	0
 torchlens.dataset_extraction	torchlens.dataset_extraction	L5	core	0	0
 torchlens.dead	torchlens.selection_values	L4	core	1	0
-torchlens._debug	torchlens._debug	L5	core	0	0
+torchlens.debug	torchlens.debug	L5	core	0	0
 torchlens.decide_recording_of_batch	torchlens.user_funcs	FACADE	facade	1	0
 torchlens.distributed	torchlens.distributed	L3	core	0	0
 torchlens.errors	torchlens.errors	L0	core	0	0

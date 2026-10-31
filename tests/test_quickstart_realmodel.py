@@ -159,7 +159,7 @@ class TestClipBoundaryRider:
     def test_zero_arg_refusal_names_multi_input_and_quotes_the_probe(self, clip: nn.Module) -> None:
         """The CLIP fix: multi_input_required, never a geometric misdiagnosis."""
 
-        from torchlens._debug._infer_input_shape import guess_input_shape
+        from torchlens.debug._infer_input_shape import guess_input_shape
 
         result = guess_input_shape(clip)
         assert result.found is False

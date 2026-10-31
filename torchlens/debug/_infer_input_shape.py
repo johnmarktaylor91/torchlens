@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import torch
 from torch import nn
 
-from torchlens._debug._infer_failure_classify import classify_nongeometric_failure
 from torchlens._errors import ShapeInferenceError
+from torchlens.debug._infer_failure_classify import classify_nongeometric_failure
 
 from .._debug_report import FoundReport
 
@@ -2042,7 +2042,7 @@ def _run_search(
             f"Shape inference was blocked by an unsupported forward error: {delayed_blockers[-1]}",
         )
     # Evidence-led classification (quickstart memo D10, the CLIP fix):
-    # see torchlens/_debug/_infer_failure_classify.py.
+    # see torchlens/debug/_infer_failure_classify.py.
     classified = classify_nongeometric_failure(attempts, _is_skippable_shape_error)
     if classified is not None:
         return _failure_result(cast("FailureReason", classified[0]), attempts, classified[1])

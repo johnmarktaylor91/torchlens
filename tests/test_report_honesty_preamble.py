@@ -61,7 +61,7 @@ def test_profile_and_accessor_tables_carry_honesty(export_trace: tl.Trace) -> No
 def test_debug_dataframes_carry_honesty(export_trace: tl.Trace) -> None:
     """The debug DataFrame family attaches the shared fact block."""
 
-    from torchlens import _debug as debug
+    from torchlens import debug as debug
 
     assert _facts_of(debug.hot_path(export_trace).to_pandas())["capture_status"] == "complete"
     assert (

@@ -108,6 +108,7 @@ _LAZY_ATTRS = {
     "add_noise": ("torchlens.intervention.helpers", "add_noise"),
     "output": ("torchlens.intervention.selectors", "output"),
     "output_at": ("torchlens.intervention.selectors", "output_at"),
+    "debug": ("torchlens.debug", None),
     "report": ("torchlens.report", None),
     "repgeom": ("torchlens.repgeom", None),
     "preceded_by": ("torchlens.intervention.selectors", "preceded_by"),

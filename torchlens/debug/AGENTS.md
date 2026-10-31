@@ -1,11 +1,11 @@
 # debug/ - Implementation Guide
 
-Power-user diagnostics for completed traces. Imported lazily as `tl._debug` and
+Power-user diagnostics for completed traces. Imported lazily as `tl.debug` and
 deliberately NOT in the top-level `__all__`. Everything here is read-only analysis;
 nothing mutates a trace or the capture pipeline.
 
 ## The report object (U42.2; DOCUMENTED-UNSTABLE)
-- Every report-shaped result is a `tl._debug.DebugReport` (defined in
+- Every report-shaped result is a `tl.debug.DebugReport` (defined in
   `torchlens/_debug_report.py`, at the package root so `checks.ParamAudit` can
   subclass it without importing this package): `report_type`, `subject`,
   `status`, `to_dict()`, `to_pandas()`, and `str()` = a bounded card (lead line,

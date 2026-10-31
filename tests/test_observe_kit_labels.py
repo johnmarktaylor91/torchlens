@@ -108,7 +108,7 @@ def test_one_label_across_every_nan_surface() -> None:
     outcome = exc.partial_log.trace.outcome
     assert outcome.boundary_label == error_label
 
-    live = tl._debug.find_nan(_FaultModel(), x)
+    live = tl.debug.find_nan(_FaultModel(), x)
     assert live.found and live.label == error_label
     assert live.label_status == "final"
 

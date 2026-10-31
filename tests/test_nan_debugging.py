@@ -178,7 +178,7 @@ def test_partial_trace_attached_to_generic_forward_exception() -> None:
 def test_find_nan_accepts_explicit_capture_options() -> None:
     """find_nan preserves only explicit capture fields while enabling its diagnostic gate."""
 
-    result = tl._debug.find_nan(
+    result = tl.debug.find_nan(
         NonFiniteFixture(),
         _input_tensor(),
         capture=tl.options.CaptureOptions(inference_only=True),

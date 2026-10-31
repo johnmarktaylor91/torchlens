@@ -2,7 +2,7 @@
 
 C0 correlation/evidence layer for merge-ranks: arming, group-lifetime identity, and
 the membership-lineage audit. Imported lazily as `tl.distributed` and deliberately
-not in the top-level `__all__` (matching `tl._debug`). Explicit `torch.distributed`
+not in the top-level `__all__` (matching `tl.debug`). Explicit `torch.distributed`
 collectives inside a traced forward become first-class boundary nodes; the boundary
 op capture itself lives in `backends/torch/collectives.py`.
 

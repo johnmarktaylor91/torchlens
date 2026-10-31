@@ -1,4 +1,4 @@
-"""The ``tl._debug.audit_params`` door (checks memo 4.4 / D15).
+"""The ``tl.debug.audit_params`` door (checks memo 4.4 / D15).
 
 The implementation lives in :mod:`torchlens.checks` (one scan kernel, two
 spellings: this one-shot audit and the registry's scheduled scan); this

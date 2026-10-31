@@ -8,7 +8,7 @@ training loop -- with no re-execution and no capture context. The walk reads
 
 Spellings are DOCUMENTED-UNSTABLE pending the naming session (the memo's
 ``sketch_grad_fn`` name was an explicit placeholder). The namespace is
-``tl._debug`` by ruling (diagnostic one-off, like ``bisect_nan``).
+``tl.debug`` by ruling (diagnostic one-off, like ``bisect_nan``).
 """
 
 from __future__ import annotations

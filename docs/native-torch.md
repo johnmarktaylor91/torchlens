@@ -16,7 +16,7 @@ instead of paraphrasing it. This page is that map.
 | Device kernel timing | `torch.profiler` (Kineto/CUPTI) | The correlation-ID join lands kernel time on *your named ops and module calls* (`torchlens._observability.native_profile`); every device number still comes from Kineto's instrumentation |
 | Clean micro-benchmarks | `torch.utils.benchmark.Timer` | We locate the hotspot (`tl.report.hot_path`); torch times it clean — whole-model recipe below |
 | OOM autopsy / allocator forensics | `torch.cuda.memory._dump_snapshot` + memory_viz | Tested recipe in [memory_debugging.md](memory_debugging.md); TorchLens never parses the snapshot |
-| Backward-born NaNs, custom-autograd exceptions | `torch.autograd.set_detect_anomaly` | `tl._debug.nan_report` names the forward ORIGIN op free on an existing capture, and prints the detect_anomaly recipe verbatim for the cases it does not cover |
+| Backward-born NaNs, custom-autograd exceptions | `torch.autograd.set_detect_anomaly` | `tl.debug.nan_report` names the forward ORIGIN op free on an existing capture, and prints the detect_anomaly recipe verbatim for the cases it does not cover |
 | Analytic FLOPs by dispatched overload | `torch.utils.flop_counter.FlopCounterMode` | `tl.report.flops_vs_dispatch` runs both registries detached and reports them side by side — never blended, never called "measured" |
 | Module containment (unordered FQN set) | `torch.utils.module_tracker.ModuleTracker` | Strictly weaker than TorchLens module records (no call order, instance map, or reuse identity), but a free independent CI witness |
 | Reference-cycle tensor leaks | `torch.utils.viz._cycles.warn_tensor_cycles` | Named in the memory-debugging recipe page |

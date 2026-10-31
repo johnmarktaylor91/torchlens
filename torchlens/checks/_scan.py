@@ -1,6 +1,6 @@
 """The ONE shared batched tensor-scan kernel (checks memo item 1 / 4.4).
 
-One kernel, two spellings: ``tl._debug.audit_params`` shapes rows into a
+One kernel, two spellings: ``tl.debug.audit_params`` shapes rows into a
 :class:`~torchlens.checks.ParamAudit`, and the registry's scheduled scan
 consumes the same rows with report shaping skipped. Engineering contract
 (memo 4.4): batched per ``(device, dtype)`` group with ~1 host sync per

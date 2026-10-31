@@ -337,7 +337,7 @@ def test_documented_dotted_spellings_resolve() -> None:
 CURATED_NAMESPACE_DOCS = {
     "torchlens.attribution": ("docs/reference/attribution.md",),
     "torchlens.semantic": ("docs/facets.md",),
-    "torchlens._debug": ("docs/reference/debug.md",),
+    "torchlens.debug": ("docs/reference/debug.md",),
 }
 #: ``docs/agent-reference/current-2-x-surface.md`` carries the "Current 2.x Surface"
 #: prose that used to live directly in AGENTS.md (2026-10-01 docs move: "docs: move

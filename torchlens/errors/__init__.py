@@ -240,15 +240,15 @@ _LAZY_EXCEPTION_PATHS = {
         "ContainerReconstructionError",
     ),
     "CompileCountsUnavailableError": (
-        "torchlens._debug._compile_counter",
+        "torchlens.debug._compile_counter",
         "CompileCountsUnavailableError",
     ),
     "GraphBreaksNormalizationError": (
-        "torchlens._debug._graph_breaks",
+        "torchlens.debug._graph_breaks",
         "GraphBreaksNormalizationError",
     ),
     "GraphBreaksUnavailableError": (
-        "torchlens._debug._graph_breaks",
+        "torchlens.debug._graph_breaks",
         "GraphBreaksUnavailableError",
     ),
     "FacadeTeachingError": ("torchlens._errors", "FacadeTeachingError"),
@@ -329,7 +329,7 @@ _LAZY_EXCEPTION_PATHS = {
     "CheckViolationError": ("torchlens.checks._errors", "CheckViolationError"),
     "ReadError": ("torchlens.attribution.onebackward._errors", "ReadError"),
     "ReadInternalError": ("torchlens.attribution.onebackward._errors", "ReadInternalError"),
-    "GradFnWalkError": ("torchlens._debug._grad_fn_walk", "GradFnWalkError"),
+    "GradFnWalkError": ("torchlens.debug._grad_fn_walk", "GradFnWalkError"),
     "ModelExplorerExportError": (
         "torchlens.export._model_explorer._errors",
         "ModelExplorerExportError",

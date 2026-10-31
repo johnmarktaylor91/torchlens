@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import _debug as dbg
+from torchlens import debug as dbg
 
 
 @pytest.fixture(scope="module")

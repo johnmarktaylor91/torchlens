@@ -24,7 +24,7 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Deb
     Returns
     -------
     DebugReport
-        Tabular ``tl._debug`` report; ``.to_pandas()`` returns the
+        Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         Candidate rows with exclusion counts in ``df.attrs``.
     """

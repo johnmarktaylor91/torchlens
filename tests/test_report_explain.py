@@ -138,7 +138,7 @@ def test_explain_and_audit_diagnose_real_partial_failure() -> None:
     assert "mat1 and mat2 shapes cannot be multiplied" in text
     assert str(exc_info.value) in text
     assert "Failing boundary: forward at" in text
-    assert audit == tl._debug.audit_trace(partial)
+    assert audit == tl.debug.audit_trace(partial)
     failure = next(
         finding for finding in audit.findings if finding.check == "partial_capture_exception"
     )

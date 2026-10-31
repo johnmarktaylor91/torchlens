@@ -203,7 +203,7 @@ def submodule_map() -> dict[str, str]:
         "tl.report": "explain(), TraceProfile/build_profile",
         "tl.observers": "log_value(name, value), tap, span: in-forward value recording",
         "tl.compat": "compat.report(model, x): capture-compatibility findings",
-        "tl._debug": "power-user diagnostics (bisect_nan, hot_path, ...)",
+        "tl.debug": "power-user diagnostics (bisect_nan, hot_path, ...)",
         "tl.receptive_field": "lazy influence-geometry submodule",
         "tl.bridge": "optional external-tool adapters (captum, shap, mcp, ...)",
         "tl.agent": "this agent surface (call_tool, guide, registry)",

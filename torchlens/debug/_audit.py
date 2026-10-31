@@ -344,7 +344,7 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
         (
             "dead_neurons",
             "single-trace inactivity is an insufficient-sample signal, not a per-trace health "
-            "verdict; run tl._debug.dead_neurons(trace) across a representative batch",
+            "verdict; run tl.debug.dead_neurons(trace) across a representative batch",
         )
     )
 
@@ -374,7 +374,7 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
                 (
                     "gradient_flow_audit",
                     f"{num_backward} backward passes captured; select one with "
-                    "tl._debug.gradient_flow_audit(trace, bwd=...)",
+                    "tl.debug.gradient_flow_audit(trace, bwd=...)",
                 )
             )
             skipped.append(
@@ -395,7 +395,7 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
                         message=str(row["reason"] or "gradient-flow anomaly"),
                         ops=(str(row["op"]),),
                         modules=(),
-                        follow_up="tl._debug.gradient_flow_audit(trace)",
+                        follow_up="tl.debug.gradient_flow_audit(trace)",
                     )
                 )
             # The backward NaN bisector runs automatically exactly here: ONE

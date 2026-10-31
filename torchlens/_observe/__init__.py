@@ -1,6 +1,6 @@
 """Observe kit (workstream F24): memory truth + diagnostics substrates.
 
-Built on TorchLens's OWN captured records (the sibling ``torchlens._debug``
+Built on TorchLens's OWN captured records (the sibling ``torchlens.debug``
 kit holds the tool-shaped diagnostics: ``check_determinism``,
 ``bisect_nan_backward``, the isolated-rerun harness). This package owns:
 

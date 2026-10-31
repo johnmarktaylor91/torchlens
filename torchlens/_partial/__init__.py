@@ -17,7 +17,7 @@ from ..errors import TorchLensError
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
-    from torchlens._debug._audit import TraceAudit
+    from torchlens.debug._audit import TraceAudit
 
 
 class PartialCaptureLookupError(TorchLensError, ValueError):
@@ -230,7 +230,7 @@ class PartialTrace:
             explicitly skipped because postprocessing did not complete.
         """
 
-        from torchlens._debug._audit import audit_trace
+        from torchlens.debug._audit import audit_trace
 
         return audit_trace(self)
 
