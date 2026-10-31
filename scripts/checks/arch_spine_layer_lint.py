@@ -8,7 +8,7 @@ FACADE-role modules are the one legal upward door (Rule F) and are excluded
 from the denominator exactly as the memo's consensus count excluded the
 eight facade modules.
 
-The baseline (tests/test_arch_spine_layer_baseline.tsv) was recomputed under
+The baseline (scripts/checks/arch_spine_layer_baseline.tsv) was recomputed under
 this tiering AFTER the C01 moves landed, then FROZEN: per-file counts may
 only shrink, and a NEW file may not introduce inversions. Regenerate
 deliberately with TORCHLENS_REGEN_LAYER_BASELINE=1 and review the diff.
@@ -24,9 +24,10 @@ import ast
 import functools
 import os
 import re
+import sys
 from pathlib import Path
 
-import pytest
+from _harness import REPO_ROOT, CheckSkipped, run_checks, use_test_helpers
 
 from torchlens._architecture import (
     LAYER_ORDER,
@@ -35,9 +36,11 @@ from torchlens._architecture import (
     layer_for_module,
 )
 
-REPO = Path(__file__).resolve().parent.parent
+use_test_helpers()
+
+REPO = REPO_ROOT
 PACKAGE_ROOT = REPO / "torchlens"
-BASELINE_PATH = Path(__file__).with_name("test_arch_spine_layer_baseline.tsv")
+BASELINE_PATH = Path(__file__).with_name("arch_spine_layer_baseline.tsv")
 
 #: Root modules not individually mapped resolve through these startswith
 #: families before falling back to the package root's FACADE row.
@@ -213,27 +216,27 @@ def _baseline_counts() -> dict[str, int]:
     return counts
 
 
-def test_eager_upward_inversions_never_increase() -> None:
+def check_eager_upward_inversions_never_increase() -> None:
     findings = _compute_inversions()
     live = {module: len(rows) for module, rows in findings.items()}
     total = sum(live.values())
     print(f"\nLAYER LINT: {total} eager upward inversions across {len(live)} modules")
 
     if os.environ.get("TORCHLENS_REGEN_LAYER_BASELINE") == "1":
-        from _oracle_env import guard_wrap_state_for_golden_update
+        from _oracle_env import guard_wrap_state_for_golden_update  # noqa: E402
 
         # AST-only generation (no capture), but the guard is the structural
         # census rule for every in-process regen flag (SF-53).
         guard_wrap_state_for_golden_update("TORCHLENS_REGEN_LAYER_BASELINE")
         body = "\n".join(f"{module}\t{count}" for module, count in sorted(live.items()))
         BASELINE_PATH.write_text(
-            "# test_arch_spine_layer_baseline.tsv -- FROZEN eager-upward inversion\n"
+            "# arch_spine_layer_baseline.tsv -- FROZEN eager-upward inversion\n"
             "# baseline per module, recomputed under the memo tiering after the C01\n"
             "# moves (item 1). Counts only shrink; regenerate deliberately with\n"
             "# TORCHLENS_REGEN_LAYER_BASELINE=1 and review the diff.\n"
             "module\tcount\n" + body + "\n"
         )
-        pytest.skip("baseline regenerated; review the diff and rerun without the flag")
+        raise CheckSkipped("baseline regenerated; review the diff and rerun without the flag")
 
     baseline = _baseline_counts()
     regressions = {
@@ -256,7 +259,7 @@ def test_eager_upward_inversions_never_increase() -> None:
         print(f"burn-down candidates (baseline -> live): {burned_down}")
 
 
-def test_layer_map_covers_every_package() -> None:
+def check_layer_map_covers_every_package() -> None:
     """Every package directory resolves to a declared layer or role."""
 
     unmapped = sorted(
@@ -269,7 +272,7 @@ def test_layer_map_covers_every_package() -> None:
     assert unmapped == [], f"packages with no layer row: {unmapped}"
 
 
-def test_declared_attributes_agree_with_the_table() -> None:
+def check_declared_attributes_agree_with_the_table() -> None:
     """Where both a module attribute and a table row exist, they agree."""
 
     conflicts = []
@@ -290,7 +293,7 @@ def test_declared_attributes_agree_with_the_table() -> None:
 _TORCH_PRIVATE_PATTERN = re.compile(r"\btorch\._|from torch import _|_torch_compat")
 
 
-def test_torch_privates_license_is_declared_and_shrink_only() -> None:
+def check_torch_privates_license_is_declared_and_shrink_only() -> None:
     """Item 12: packages touching torch privates carry a license row."""
 
     touching: set[str] = set()
@@ -312,3 +315,21 @@ def test_torch_privates_license_is_declared_and_shrink_only() -> None:
         f"license rows whose packages no longer touch torch privates: {stale} "
         "-- the count is shrink-only; delete the stale rows in this change"
     )
+
+
+CHECKS = (
+    check_eager_upward_inversions_never_increase,
+    check_layer_map_covers_every_package,
+    check_declared_attributes_agree_with_the_table,
+    check_torch_privates_license_is_declared_and_shrink_only,
+)
+
+
+def main() -> int:
+    """Run every arch_spine_layer_lint check and return the exit status."""
+
+    return run_checks("arch_spine_layer_lint", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

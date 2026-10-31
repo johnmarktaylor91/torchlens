@@ -232,8 +232,8 @@ CONFLICT_CHECKS: dict[str, Check] = {
     f"{_LEDGER}/PROVENANCE": check_provenance,
     "docs/reference/error_refusal_contract.md": check_contract_tables,
     "docs/reference/warning_contract.md": check_contract_tables,
-    "tests/test_file_size_ratchet.py": check_dict_literal_keys,
-    "tests/test_ruff_ratchet_governance.py": check_dict_literal_keys,
+    "scripts/checks/file_size_ratchet.py": check_dict_literal_keys,
+    "scripts/checks/ruff_ratchet.py": check_dict_literal_keys,
 }
 
 ALL_CHECKS = {**UNION_CHECKS, **CONFLICT_CHECKS}
@@ -428,19 +428,19 @@ CORRUPTING_MERGES = (
     ),
     (
         "size-ratchet-same-key",
-        "tests/test_file_size_ratchet.py",
+        "scripts/checks/file_size_ratchet.py",
         _bump(_DICT_ROW, 0, 50, "    # raised by lane A."),
         _bump(_DICT_ROW, 0, 100, "    # raised by lane B."),
     ),
     (
         "size-ratchet-neighbouring-keys",
-        "tests/test_file_size_ratchet.py",
+        "scripts/checks/file_size_ratchet.py",
         _bump(_DICT_ROW, 0, -50),
         _bump(_DICT_ROW, 1, -50),
     ),
     (
         "ruff-ratchet-neighbouring-keys",
-        "tests/test_ruff_ratchet_governance.py",
+        "scripts/checks/ruff_ratchet.py",
         _bump(_DICT_ROW, 0, -1),
         _bump(_DICT_ROW, 1, -1),
     ),

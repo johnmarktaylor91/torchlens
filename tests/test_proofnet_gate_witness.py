@@ -161,10 +161,8 @@ EXCEPT_SKIP_LEDGER: frozenset[str] = frozenset(
         "test_mlp_recipes.py:127",
         "test_output_aesthetics.py:1647",
         "test_output_aesthetics.py:1699",
-        "test_punchlist_terminology_lint.py:154",
         "test_real_world_models.py:1496",
         "test_real_world_models.py:1728",
-        "test_removed_spelling_lint.py:361",
         "test_tlspec_runnable_r41_crossthread_witness.py:465",
         "test_tlspec_runnable_r69_input_contract.py:776",
         "test_transforms_lib_real_models.py:290",
@@ -227,7 +225,8 @@ def test_except_skip_scanner_is_red_capable(tmp_path: Path) -> None:
 def test_executes_nowhere_tier_only_burns_down() -> None:
     """The unavailable-ok tier IS executes-nowhere: capped, monotone down."""
 
-    from tests.test_skip_audit import IMPORTORSKIP_LEDGER, UNAVAILABLE_OK
+    sys.path.insert(0, str(REPO_ROOT / "scripts" / "checks"))
+    from skip_audit import IMPORTORSKIP_LEDGER, UNAVAILABLE_OK
 
     rows = {
         target: note
