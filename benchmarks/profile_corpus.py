@@ -1,8 +1,9 @@
 """Profile TorchLens phases on classics-corpus models against a plain eager forward.
 
 For each model this script measures, in a fresh subprocess per repeat, the wall
-time and peak resident memory of: a plain eager forward, ``tl.trace`` (capture
-plus postprocess), ``Trace.save`` (portable), ``tl.load`` and ``tl.validate``.
+time and peak resident memory of: a plain eager forward, a first ``tl.trace``
+(capture plus postprocess plus the per-process first-call costs), a second warm
+``tl.trace``, ``Trace.save`` (portable), ``tl.load`` and ``tl.validate``.
 One extra subprocess per model runs the same phases under ``cProfile`` and
 writes ``.prof`` dumps plus a text listing of the top entries by internal and
 cumulative time. Peak memory per phase comes from ``VmHWM`` after resetting the
@@ -44,7 +45,7 @@ DEFAULT_MODELS: tuple[tuple[str, str], ...] = (
     ("hodgkin_huxley_deep", "hodgkin_huxley"),
     ("chain_600_layers", "synthetic:600"),
 )
-PHASES = ("forward", "trace", "save", "load", "validate")
+PHASES = ("forward", "trace", "trace_warm", "save", "load", "validate")
 
 
 def _rss_kib(field: str) -> int:
@@ -121,6 +122,9 @@ def _run_phases(spec: str, out_dir: Path, profile: bool) -> dict[str, Any]:
     def trace() -> None:
         state["trace"] = tl.trace(model, inputs)
 
+    def trace_warm() -> None:
+        state["trace"] = tl.trace(model, inputs)
+
     def save() -> None:
         state["trace"].save(spec_path, level="portable")
 
@@ -135,6 +139,7 @@ def _run_phases(spec: str, out_dir: Path, profile: bool) -> dict[str, Any]:
     runners = {
         "forward": forward,
         "trace": trace,
+        "trace_warm": trace_warm,
         "save": save,
         "load": load,
         "validate": validate,
@@ -212,14 +217,14 @@ def _spawn(spec: str, out_dir: Path, profile: bool) -> dict[str, Any]:
 
 def _summarize(results: dict[str, Any]) -> str:
     lines = [
-        "| model | ops | fwd ms | trace ms | ratio | save ms | load ms | validate ms "
-        "| trace peak MiB | validate peak MiB | spec KiB |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "| model | ops | fwd ms | trace cold ms | trace warm ms | warm ratio | save ms "
+        "| load ms | validate ms | trace peak MiB | validate peak MiB | spec KiB |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for label, rec in results.items():
         reps = [r for r in rec["repeats"] if "error" not in r]
         if not reps:
-            lines.append(f"| {label} | error | | | | | | | | | |")
+            lines.append(f"| {label} | error | | | | | | | | | | |")
             continue
 
         def med(phase: str, key: str = "wall_s") -> float:
@@ -228,9 +233,11 @@ def _summarize(results: dict[str, Any]) -> str:
 
         fwd = med("forward")
         tr = med("trace")
+        warm = med("trace_warm")
         lines.append(
             f"| {label} | {reps[0]['num_ops']} | {fwd * 1e3:.1f} | {tr * 1e3:.1f} "
-            f"| {tr / fwd if fwd else float('nan'):.0f}x | {med('save') * 1e3:.1f} "
+            f"| {warm * 1e3:.1f} | {warm / fwd if fwd else float('nan'):.0f}x "
+            f"| {med('save') * 1e3:.1f} "
             f"| {med('load') * 1e3:.1f} | {med('validate') * 1e3:.1f} "
             f"| {med('trace', 'peak_kib') / 1024:.0f} "
             f"| {med('validate', 'peak_kib') / 1024:.0f} "
