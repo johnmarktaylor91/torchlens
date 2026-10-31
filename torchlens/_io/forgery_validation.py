@@ -621,7 +621,7 @@ def _selection_recipes(trace: Trace) -> tuple[tuple[str, Mapping[str, Any]], ...
     recipes: list[tuple[str, Mapping[str, Any]]] = []
     for op in _trace_ops(trace):
         for record in getattr(op, "interventions", ()) or ():
-            helper = getattr(record, "helper", None)
+            helper = getattr(record, "edit", None)
             recipe = getattr(helper, "selection_recipe", None) if helper is not None else None
             if recipe is None:
                 continue
@@ -630,7 +630,7 @@ def _selection_recipes(trace: Trace) -> tuple[tuple[str, Mapping[str, Any]], ...
                     f"Edit.selection_recipe must be a mapping, got {type(recipe).__name__}",
                     "recipe_type",
                 )
-            helper_name = getattr(helper, "helper_name", None)
+            helper_name = getattr(helper, "name", None)
             if not isinstance(helper_name, str):
                 _audit_invalid(
                     "Edit.selection_recipe has no string helper_name anchor",

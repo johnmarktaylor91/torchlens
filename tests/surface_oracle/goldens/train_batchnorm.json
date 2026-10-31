@@ -358,9 +358,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_1:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_1",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -643,9 +643,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "batchnorm_1_2:1",
-    "label_short": "batchnorm_1:1",
+    "short_label": "batchnorm_1:1",
     "layer_label": "batchnorm_1_2",
-    "layer_label_short": "batchnorm_1",
+    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "leaf_module_ops": {
      "__set__": []
@@ -932,9 +932,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_1:1",
-    "label_short": "buffer_1:1",
+    "short_label": "buffer_1:1",
     "layer_label": "buffer_1",
-    "layer_label_short": "buffer_1",
+    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -1163,9 +1163,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_2:1",
-    "label_short": "buffer_2:1",
+    "short_label": "buffer_2:1",
     "layer_label": "buffer_2",
-    "layer_label_short": "buffer_2",
+    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -1415,9 +1415,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_3:1",
-    "label_short": "buffer_3:1",
+    "short_label": "buffer_3:1",
     "layer_label": "buffer_3",
-    "layer_label_short": "buffer_3",
+    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -1661,9 +1661,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_4:1",
-    "label_short": "buffer_4:1",
+    "short_label": "buffer_4:1",
     "layer_label": "buffer_4",
-    "layer_label_short": "buffer_4",
+    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -1900,9 +1900,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_5:1",
-    "label_short": "buffer_5:1",
+    "short_label": "buffer_5:1",
     "layer_label": "buffer_5",
-    "layer_label_short": "buffer_5",
+    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -2152,9 +2152,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_6:1",
-    "label_short": "buffer_6:1",
+    "short_label": "buffer_6:1",
     "layer_label": "buffer_6",
-    "layer_label_short": "buffer_6",
+    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -2397,9 +2397,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -2621,9 +2621,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -2888,9 +2888,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -4023,13 +4023,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_1:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_1:1"
     },
     "layer_label": "add_1_1",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -9,
@@ -4461,13 +4461,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "batchnorm_1_2:1",
-    "label_short": "batchnorm_1:1",
+    "short_label": "batchnorm_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "batchnorm_1_2:1"
     },
     "layer_label": "batchnorm_1_2",
-    "layer_label_short": "batchnorm_1",
+    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "lookup_keys": [
      -5,
@@ -4830,13 +4830,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_1:1",
-    "label_short": "buffer_1:1",
+    "short_label": "buffer_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_1:1"
     },
     "layer_label": "buffer_1",
-    "layer_label_short": "buffer_1",
+    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "lookup_keys": [
      -10,
@@ -5163,13 +5163,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_2:1",
-    "label_short": "buffer_2:1",
+    "short_label": "buffer_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_2:1"
     },
     "layer_label": "buffer_2",
-    "layer_label_short": "buffer_2",
+    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "lookup_keys": [
      -8,
@@ -5491,13 +5491,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_3:1",
-    "label_short": "buffer_3:1",
+    "short_label": "buffer_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_3:1"
     },
     "layer_label": "buffer_3",
-    "layer_label_short": "buffer_3",
+    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "lookup_keys": [
      -7,
@@ -5821,13 +5821,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_4:1",
-    "label_short": "buffer_4:1",
+    "short_label": "buffer_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_4:1"
     },
     "layer_label": "buffer_4",
-    "layer_label_short": "buffer_4",
+    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "lookup_keys": [
      -6,
@@ -6176,13 +6176,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_5:1",
-    "label_short": "buffer_5:1",
+    "short_label": "buffer_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_5:1"
     },
     "layer_label": "buffer_5",
-    "layer_label_short": "buffer_5",
+    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "lookup_keys": [
      -4,
@@ -6542,13 +6542,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_6:1",
-    "label_short": "buffer_6:1",
+    "short_label": "buffer_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_6:1"
     },
     "layer_label": "buffer_6",
-    "layer_label_short": "buffer_6",
+    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "lookup_keys": [
      -3,
@@ -6873,13 +6873,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -11,
@@ -7226,13 +7226,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -7612,13 +7612,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -9657,9 +9657,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_1:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_1",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -9942,9 +9942,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "batchnorm_1_2:1",
-    "label_short": "batchnorm_1:1",
+    "short_label": "batchnorm_1:1",
     "layer_label": "batchnorm_1_2",
-    "layer_label_short": "batchnorm_1",
+    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "leaf_module_ops": {
      "__set__": []
@@ -10231,9 +10231,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_1:1",
-    "label_short": "buffer_1:1",
+    "short_label": "buffer_1:1",
     "layer_label": "buffer_1",
-    "layer_label_short": "buffer_1",
+    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -10462,9 +10462,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_2:1",
-    "label_short": "buffer_2:1",
+    "short_label": "buffer_2:1",
     "layer_label": "buffer_2",
-    "layer_label_short": "buffer_2",
+    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -10714,9 +10714,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_3:1",
-    "label_short": "buffer_3:1",
+    "short_label": "buffer_3:1",
     "layer_label": "buffer_3",
-    "layer_label_short": "buffer_3",
+    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -10960,9 +10960,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_4:1",
-    "label_short": "buffer_4:1",
+    "short_label": "buffer_4:1",
     "layer_label": "buffer_4",
-    "layer_label_short": "buffer_4",
+    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -11199,9 +11199,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_5:1",
-    "label_short": "buffer_5:1",
+    "short_label": "buffer_5:1",
     "layer_label": "buffer_5",
-    "layer_label_short": "buffer_5",
+    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -11451,9 +11451,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_6:1",
-    "label_short": "buffer_6:1",
+    "short_label": "buffer_6:1",
     "layer_label": "buffer_6",
-    "layer_label_short": "buffer_6",
+    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -11696,9 +11696,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -11920,9 +11920,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -12187,9 +12187,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -13322,13 +13322,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_1:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_1:1"
     },
     "layer_label": "add_1_1",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -9,
@@ -13760,13 +13760,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "batchnorm_1_2:1",
-    "label_short": "batchnorm_1:1",
+    "short_label": "batchnorm_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "batchnorm_1_2:1"
     },
     "layer_label": "batchnorm_1_2",
-    "layer_label_short": "batchnorm_1",
+    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "lookup_keys": [
      -5,
@@ -14129,13 +14129,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_1:1",
-    "label_short": "buffer_1:1",
+    "short_label": "buffer_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_1:1"
     },
     "layer_label": "buffer_1",
-    "layer_label_short": "buffer_1",
+    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "lookup_keys": [
      -10,
@@ -14462,13 +14462,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_2:1",
-    "label_short": "buffer_2:1",
+    "short_label": "buffer_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_2:1"
     },
     "layer_label": "buffer_2",
-    "layer_label_short": "buffer_2",
+    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "lookup_keys": [
      -8,
@@ -14790,13 +14790,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_3:1",
-    "label_short": "buffer_3:1",
+    "short_label": "buffer_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_3:1"
     },
     "layer_label": "buffer_3",
-    "layer_label_short": "buffer_3",
+    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "lookup_keys": [
      -7,
@@ -15120,13 +15120,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_4:1",
-    "label_short": "buffer_4:1",
+    "short_label": "buffer_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_4:1"
     },
     "layer_label": "buffer_4",
-    "layer_label_short": "buffer_4",
+    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "lookup_keys": [
      -6,
@@ -15475,13 +15475,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_5:1",
-    "label_short": "buffer_5:1",
+    "short_label": "buffer_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_5:1"
     },
     "layer_label": "buffer_5",
-    "layer_label_short": "buffer_5",
+    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "lookup_keys": [
      -4,
@@ -15841,13 +15841,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_6:1",
-    "label_short": "buffer_6:1",
+    "short_label": "buffer_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_6:1"
     },
     "layer_label": "buffer_6",
-    "layer_label_short": "buffer_6",
+    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "lookup_keys": [
      -3,
@@ -16172,13 +16172,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -11,
@@ -16525,13 +16525,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -16911,13 +16911,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -18932,9 +18932,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_1:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_1",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -19217,9 +19217,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "batchnorm_1_2:1",
-    "label_short": "batchnorm_1:1",
+    "short_label": "batchnorm_1:1",
     "layer_label": "batchnorm_1_2",
-    "layer_label_short": "batchnorm_1",
+    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "leaf_module_ops": {
      "__set__": []
@@ -19506,9 +19506,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_1:1",
-    "label_short": "buffer_1:1",
+    "short_label": "buffer_1:1",
     "layer_label": "buffer_1",
-    "layer_label_short": "buffer_1",
+    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -19737,9 +19737,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_2:1",
-    "label_short": "buffer_2:1",
+    "short_label": "buffer_2:1",
     "layer_label": "buffer_2",
-    "layer_label_short": "buffer_2",
+    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -19989,9 +19989,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_3:1",
-    "label_short": "buffer_3:1",
+    "short_label": "buffer_3:1",
     "layer_label": "buffer_3",
-    "layer_label_short": "buffer_3",
+    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -20235,9 +20235,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_4:1",
-    "label_short": "buffer_4:1",
+    "short_label": "buffer_4:1",
     "layer_label": "buffer_4",
-    "layer_label_short": "buffer_4",
+    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -20474,9 +20474,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_5:1",
-    "label_short": "buffer_5:1",
+    "short_label": "buffer_5:1",
     "layer_label": "buffer_5",
-    "layer_label_short": "buffer_5",
+    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -20726,9 +20726,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_6:1",
-    "label_short": "buffer_6:1",
+    "short_label": "buffer_6:1",
     "layer_label": "buffer_6",
-    "layer_label_short": "buffer_6",
+    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -20971,9 +20971,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -21195,9 +21195,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -21462,9 +21462,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -22597,13 +22597,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_1:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_1:1"
     },
     "layer_label": "add_1_1",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -9,
@@ -23035,13 +23035,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "batchnorm_1_2:1",
-    "label_short": "batchnorm_1:1",
+    "short_label": "batchnorm_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "batchnorm_1_2:1"
     },
     "layer_label": "batchnorm_1_2",
-    "layer_label_short": "batchnorm_1",
+    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "lookup_keys": [
      -5,
@@ -23404,13 +23404,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_1:1",
-    "label_short": "buffer_1:1",
+    "short_label": "buffer_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_1:1"
     },
     "layer_label": "buffer_1",
-    "layer_label_short": "buffer_1",
+    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "lookup_keys": [
      -10,
@@ -23737,13 +23737,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_2:1",
-    "label_short": "buffer_2:1",
+    "short_label": "buffer_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_2:1"
     },
     "layer_label": "buffer_2",
-    "layer_label_short": "buffer_2",
+    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "lookup_keys": [
      -8,
@@ -24065,13 +24065,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_3:1",
-    "label_short": "buffer_3:1",
+    "short_label": "buffer_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_3:1"
     },
     "layer_label": "buffer_3",
-    "layer_label_short": "buffer_3",
+    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "lookup_keys": [
      -7,
@@ -24395,13 +24395,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_4:1",
-    "label_short": "buffer_4:1",
+    "short_label": "buffer_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_4:1"
     },
     "layer_label": "buffer_4",
-    "layer_label_short": "buffer_4",
+    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "lookup_keys": [
      -6,
@@ -24750,13 +24750,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_5:1",
-    "label_short": "buffer_5:1",
+    "short_label": "buffer_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_5:1"
     },
     "layer_label": "buffer_5",
-    "layer_label_short": "buffer_5",
+    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "lookup_keys": [
      -4,
@@ -25116,13 +25116,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_6:1",
-    "label_short": "buffer_6:1",
+    "short_label": "buffer_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_6:1"
     },
     "layer_label": "buffer_6",
-    "layer_label_short": "buffer_6",
+    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "lookup_keys": [
      -3,
@@ -25447,13 +25447,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -11,
@@ -25800,13 +25800,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -26186,13 +26186,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -28171,9 +28171,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_1:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_1",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -28456,9 +28456,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "batchnorm_1_2:1",
-    "label_short": "batchnorm_1:1",
+    "short_label": "batchnorm_1:1",
     "layer_label": "batchnorm_1_2",
-    "layer_label_short": "batchnorm_1",
+    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "leaf_module_ops": {
      "__set__": []
@@ -28745,9 +28745,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_1:1",
-    "label_short": "buffer_1:1",
+    "short_label": "buffer_1:1",
     "layer_label": "buffer_1",
-    "layer_label_short": "buffer_1",
+    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -28976,9 +28976,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_2:1",
-    "label_short": "buffer_2:1",
+    "short_label": "buffer_2:1",
     "layer_label": "buffer_2",
-    "layer_label_short": "buffer_2",
+    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -29228,9 +29228,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_3:1",
-    "label_short": "buffer_3:1",
+    "short_label": "buffer_3:1",
     "layer_label": "buffer_3",
-    "layer_label_short": "buffer_3",
+    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -29474,9 +29474,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_4:1",
-    "label_short": "buffer_4:1",
+    "short_label": "buffer_4:1",
     "layer_label": "buffer_4",
-    "layer_label_short": "buffer_4",
+    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -29713,9 +29713,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_5:1",
-    "label_short": "buffer_5:1",
+    "short_label": "buffer_5:1",
     "layer_label": "buffer_5",
-    "layer_label_short": "buffer_5",
+    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -29965,9 +29965,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_6:1",
-    "label_short": "buffer_6:1",
+    "short_label": "buffer_6:1",
     "layer_label": "buffer_6",
-    "layer_label_short": "buffer_6",
+    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -30210,9 +30210,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -30434,9 +30434,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -30701,9 +30701,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -31836,13 +31836,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_1:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_1:1"
     },
     "layer_label": "add_1_1",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -9,
@@ -32274,13 +32274,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "batchnorm_1_2:1",
-    "label_short": "batchnorm_1:1",
+    "short_label": "batchnorm_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "batchnorm_1_2:1"
     },
     "layer_label": "batchnorm_1_2",
-    "layer_label_short": "batchnorm_1",
+    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "lookup_keys": [
      -5,
@@ -32643,13 +32643,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_1:1",
-    "label_short": "buffer_1:1",
+    "short_label": "buffer_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_1:1"
     },
     "layer_label": "buffer_1",
-    "layer_label_short": "buffer_1",
+    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "lookup_keys": [
      -10,
@@ -32976,13 +32976,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_2:1",
-    "label_short": "buffer_2:1",
+    "short_label": "buffer_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_2:1"
     },
     "layer_label": "buffer_2",
-    "layer_label_short": "buffer_2",
+    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "lookup_keys": [
      -8,
@@ -33304,13 +33304,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_3:1",
-    "label_short": "buffer_3:1",
+    "short_label": "buffer_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_3:1"
     },
     "layer_label": "buffer_3",
-    "layer_label_short": "buffer_3",
+    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "lookup_keys": [
      -7,
@@ -33634,13 +33634,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_4:1",
-    "label_short": "buffer_4:1",
+    "short_label": "buffer_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_4:1"
     },
     "layer_label": "buffer_4",
-    "layer_label_short": "buffer_4",
+    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "lookup_keys": [
      -6,
@@ -33989,13 +33989,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_5:1",
-    "label_short": "buffer_5:1",
+    "short_label": "buffer_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_5:1"
     },
     "layer_label": "buffer_5",
-    "layer_label_short": "buffer_5",
+    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "lookup_keys": [
      -4,
@@ -34355,13 +34355,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_6:1",
-    "label_short": "buffer_6:1",
+    "short_label": "buffer_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "buffer_6:1"
     },
     "layer_label": "buffer_6",
-    "layer_label_short": "buffer_6",
+    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "lookup_keys": [
      -3,
@@ -34686,13 +34686,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -11,
@@ -35039,13 +35039,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -35425,13 +35425,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_3:1"
     },
     "layer_label": "relu_1_3",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -37456,9 +37456,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_1:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_1",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -37741,9 +37741,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "batchnorm_1_2:1",
-    "label_short": "batchnorm_1:1",
+    "short_label": "batchnorm_1:1",
     "layer_label": "batchnorm_1_2",
-    "layer_label_short": "batchnorm_1",
+    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "leaf_module_ops": {
      "__set__": []
@@ -38030,9 +38030,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_1:1",
-    "label_short": "buffer_1:1",
+    "short_label": "buffer_1:1",
     "layer_label": "buffer_1",
-    "layer_label_short": "buffer_1",
+    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -38261,9 +38261,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_2:1",
-    "label_short": "buffer_2:1",
+    "short_label": "buffer_2:1",
     "layer_label": "buffer_2",
-    "layer_label_short": "buffer_2",
+    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -38513,9 +38513,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_3:1",
-    "label_short": "buffer_3:1",
+    "short_label": "buffer_3:1",
     "layer_label": "buffer_3",
-    "layer_label_short": "buffer_3",
+    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -38759,9 +38759,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_4:1",
-    "label_short": "buffer_4:1",
+    "short_label": "buffer_4:1",
     "layer_label": "buffer_4",
-    "layer_label_short": "buffer_4",
+    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -38998,9 +38998,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_5:1",
-    "label_short": "buffer_5:1",
+    "short_label": "buffer_5:1",
     "layer_label": "buffer_5",
-    "layer_label_short": "buffer_5",
+    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -39250,9 +39250,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "buffer_6:1",
-    "label_short": "buffer_6:1",
+    "short_label": "buffer_6:1",
     "layer_label": "buffer_6",
-    "layer_label_short": "buffer_6",
+    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "leaf_module_ops": {
      "__set__": []
@@ -39495,9 +39495,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -39719,9 +39719,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -39973,9 +39973,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_3:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_3",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -41094,10 +41094,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_1:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "add_1_1",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -9,
@@ -41480,10 +41480,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "batchnorm_1_2:1",
-    "label_short": "batchnorm_1:1",
+    "short_label": "batchnorm_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "batchnorm_1_2",
-    "layer_label_short": "batchnorm_1",
+    "short_layer_label": "batchnorm_1",
     "layer_type": "batchnorm",
     "lookup_keys": [
      -5,
@@ -41846,10 +41846,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_1:1",
-    "label_short": "buffer_1:1",
+    "short_label": "buffer_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_1",
-    "layer_label_short": "buffer_1",
+    "short_layer_label": "buffer_1",
     "layer_type": "buffer",
     "lookup_keys": [
      -10,
@@ -42164,10 +42164,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_2:1",
-    "label_short": "buffer_2:1",
+    "short_label": "buffer_2:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_2",
-    "layer_label_short": "buffer_2",
+    "short_layer_label": "buffer_2",
     "layer_type": "buffer",
     "lookup_keys": [
      -8,
@@ -42489,10 +42489,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_3:1",
-    "label_short": "buffer_3:1",
+    "short_label": "buffer_3:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_3",
-    "layer_label_short": "buffer_3",
+    "short_layer_label": "buffer_3",
     "layer_type": "buffer",
     "lookup_keys": [
      -7,
@@ -42816,10 +42816,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_4:1",
-    "label_short": "buffer_4:1",
+    "short_label": "buffer_4:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_4",
-    "layer_label_short": "buffer_4",
+    "short_layer_label": "buffer_4",
     "layer_type": "buffer",
     "lookup_keys": [
      -6,
@@ -43151,10 +43151,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_5:1",
-    "label_short": "buffer_5:1",
+    "short_label": "buffer_5:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_5",
-    "layer_label_short": "buffer_5",
+    "short_layer_label": "buffer_5",
     "layer_type": "buffer",
     "lookup_keys": [
      -4,
@@ -43497,10 +43497,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "buffer_6:1",
-    "label_short": "buffer_6:1",
+    "short_label": "buffer_6:1",
     "layer": "<raises AttributeError>",
     "layer_label": "buffer_6",
-    "layer_label_short": "buffer_6",
+    "short_layer_label": "buffer_6",
     "layer_type": "buffer",
     "lookup_keys": [
      -3,
@@ -43825,10 +43825,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -11,
@@ -44158,10 +44158,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -44509,10 +44509,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_3:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "relu_1_3",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,

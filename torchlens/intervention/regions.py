@@ -680,7 +680,7 @@ def _evaluate_instance(
         edge = next(e for e in instance.exits if e.parent == label)
         exit_values[label] = _consumed_value(trace, graph.ops[edge.parent], graph.ops[edge.child])
 
-    is_splice = isinstance(edit, Edit) and edit.helper_name == "splice_module"
+    is_splice = isinstance(edit, Edit) and edit.name == "splice_module"
     if is_splice and dict(edit.metadata).get("input_route") == "in":
         module = edit.args[0]
         entries = _entry_values(trace, graph, instance)
@@ -916,12 +916,12 @@ def _commit_region_occurrence(
         func_call_id=child_op.func_call_id,
         container_path=tuple(child_op.container_path or ()),
         engine="replay",
-        helper=None,
+        edit=None,
         site_label=child_op.layer_label,
         timing="post",
         direction="forward",
-        helper_name=(
-            edit.helper_name if isinstance(edit, Edit) else getattr(edit, "__name__", "region_edit")
+        edit_name=(
+            edit.name if isinstance(edit, Edit) else getattr(edit, "__name__", "region_edit")
         ),
         replaced=False,
         edge_address=tuple(address),
@@ -1035,7 +1035,7 @@ def apply_region_do(
         ],
         exits=applied,
         instances=per_instance,
-        edit=(edit.helper_name if isinstance(edit, Edit) else getattr(edit, "__name__", "value")),
+        edit=(edit.name if isinstance(edit, Edit) else getattr(edit, "__name__", "value")),
         execution_effect=_REGION_EXECUTION_EFFECT,
         effect_closure=effect_disclosure,
         source="current_transaction",

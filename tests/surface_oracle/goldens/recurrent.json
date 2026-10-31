@@ -118,9 +118,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -379,9 +379,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "<raises InvalidArgumentError>",
-    "label_short": "<raises InvalidArgumentError>",
+    "short_label": "<raises InvalidArgumentError>",
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -627,9 +627,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -896,9 +896,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "<raises InvalidArgumentError>",
-    "label_short": "<raises InvalidArgumentError>",
+    "short_label": "<raises InvalidArgumentError>",
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "leaf_module_ops": {
      "__set__": []
@@ -2103,13 +2103,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -8,
@@ -2492,13 +2492,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -7,
@@ -2909,13 +2909,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:2",
-    "label_short": "linear_1:2",
+    "short_label": "linear_1:2",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -5,
@@ -3326,13 +3326,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:3",
-    "label_short": "linear_1:3",
+    "short_label": "linear_1:3",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -3,
@@ -3696,13 +3696,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -4073,13 +4073,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:1",
-    "label_short": "tanh_1:1",
+    "short_label": "tanh_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -6,
@@ -4446,13 +4446,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:2",
-    "label_short": "tanh_1:2",
+    "short_label": "tanh_1:2",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -4,
@@ -4815,13 +4815,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:3",
-    "label_short": "tanh_1:3",
+    "short_label": "tanh_1:3",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -2,
@@ -6316,9 +6316,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -6577,9 +6577,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "<raises InvalidArgumentError>",
-    "label_short": "<raises InvalidArgumentError>",
+    "short_label": "<raises InvalidArgumentError>",
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -6825,9 +6825,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -7094,9 +7094,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "<raises InvalidArgumentError>",
-    "label_short": "<raises InvalidArgumentError>",
+    "short_label": "<raises InvalidArgumentError>",
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "leaf_module_ops": {
      "__set__": []
@@ -8301,13 +8301,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -8,
@@ -8690,13 +8690,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -7,
@@ -9107,13 +9107,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:2",
-    "label_short": "linear_1:2",
+    "short_label": "linear_1:2",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -5,
@@ -9524,13 +9524,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:3",
-    "label_short": "linear_1:3",
+    "short_label": "linear_1:3",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -3,
@@ -9894,13 +9894,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -10271,13 +10271,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:1",
-    "label_short": "tanh_1:1",
+    "short_label": "tanh_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -6,
@@ -10644,13 +10644,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:2",
-    "label_short": "tanh_1:2",
+    "short_label": "tanh_1:2",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -4,
@@ -11013,13 +11013,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:3",
-    "label_short": "tanh_1:3",
+    "short_label": "tanh_1:3",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -2,
@@ -12513,9 +12513,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -12774,9 +12774,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "<raises InvalidArgumentError>",
-    "label_short": "<raises InvalidArgumentError>",
+    "short_label": "<raises InvalidArgumentError>",
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -13022,9 +13022,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -13291,9 +13291,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "<raises InvalidArgumentError>",
-    "label_short": "<raises InvalidArgumentError>",
+    "short_label": "<raises InvalidArgumentError>",
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "leaf_module_ops": {
      "__set__": []
@@ -14498,13 +14498,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -8,
@@ -14887,13 +14887,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -7,
@@ -15304,13 +15304,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:2",
-    "label_short": "linear_1:2",
+    "short_label": "linear_1:2",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -5,
@@ -15721,13 +15721,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:3",
-    "label_short": "linear_1:3",
+    "short_label": "linear_1:3",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -3,
@@ -16091,13 +16091,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -16468,13 +16468,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:1",
-    "label_short": "tanh_1:1",
+    "short_label": "tanh_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -6,
@@ -16841,13 +16841,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:2",
-    "label_short": "tanh_1:2",
+    "short_label": "tanh_1:2",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -4,
@@ -17210,13 +17210,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:3",
-    "label_short": "tanh_1:3",
+    "short_label": "tanh_1:3",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -2,
@@ -18649,9 +18649,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -18910,9 +18910,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "<raises InvalidArgumentError>",
-    "label_short": "<raises InvalidArgumentError>",
+    "short_label": "<raises InvalidArgumentError>",
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -19158,9 +19158,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -19427,9 +19427,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "<raises InvalidArgumentError>",
-    "label_short": "<raises InvalidArgumentError>",
+    "short_label": "<raises InvalidArgumentError>",
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "leaf_module_ops": {
      "__set__": []
@@ -20634,13 +20634,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -8,
@@ -21023,13 +21023,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -7,
@@ -21440,13 +21440,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:2",
-    "label_short": "linear_1:2",
+    "short_label": "linear_1:2",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -5,
@@ -21857,13 +21857,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:3",
-    "label_short": "linear_1:3",
+    "short_label": "linear_1:3",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_1"
     },
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -3,
@@ -22227,13 +22227,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -22604,13 +22604,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:1",
-    "label_short": "tanh_1:1",
+    "short_label": "tanh_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -6,
@@ -22977,13 +22977,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:2",
-    "label_short": "tanh_1:2",
+    "short_label": "tanh_1:2",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -4,
@@ -23346,13 +23346,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:3",
-    "label_short": "tanh_1:3",
+    "short_label": "tanh_1:3",
     "layer": {
      "__ref__": "Layer",
      "label": "tanh_1_2"
     },
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -2,
@@ -24855,9 +24855,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -25116,9 +25116,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "<raises InvalidArgumentError>",
-    "label_short": "<raises InvalidArgumentError>",
+    "short_label": "<raises InvalidArgumentError>",
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -25364,9 +25364,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -25622,9 +25622,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "<raises InvalidArgumentError>",
-    "label_short": "<raises InvalidArgumentError>",
+    "short_label": "<raises InvalidArgumentError>",
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "leaf_module_ops": {
      "__set__": []
@@ -26829,10 +26829,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -8,
@@ -27196,10 +27196,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -7,
@@ -27591,10 +27591,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:2",
-    "label_short": "linear_1:2",
+    "short_label": "linear_1:2",
     "layer": "<raises AttributeError>",
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -5,
@@ -27986,10 +27986,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_1:3",
-    "label_short": "linear_1:3",
+    "short_label": "linear_1:3",
     "layer": "<raises AttributeError>",
     "layer_label": "linear_1_1",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -3,
@@ -28338,10 +28338,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -28684,10 +28684,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:1",
-    "label_short": "tanh_1:1",
+    "short_label": "tanh_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -6,
@@ -29037,10 +29037,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:2",
-    "label_short": "tanh_1:2",
+    "short_label": "tanh_1:2",
     "layer": "<raises AttributeError>",
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -4,
@@ -29386,10 +29386,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "tanh_1_2:3",
-    "label_short": "tanh_1:3",
+    "short_label": "tanh_1:3",
     "layer": "<raises AttributeError>",
     "layer_label": "tanh_1_2",
-    "layer_label_short": "tanh_1",
+    "short_layer_label": "tanh_1",
     "layer_type": "tanh",
     "lookup_keys": [
      -2,

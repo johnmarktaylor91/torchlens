@@ -835,11 +835,11 @@ def _build_trace_predicate_context(
     history = tuple(getattr(trace, "_predicate_history", ()))
     raw_label = fields_dict["_label_raw"]
     module_address = fields_dict.get("module")
-    module_pass_index = None
+    module_pass_number = None
     if isinstance(module_address, tuple) and len(module_address) == 2:
-        module_address, module_pass_index = module_address
+        module_address, module_pass_number = module_address
     module_address = None if module_address is None else str(module_address)
-    module_pass_index = None if module_pass_index is None else int(module_pass_index)
+    module_pass_number = None if module_pass_number is None else int(module_pass_number)
     return build_op_record_context(
         kind="op",
         label=raw_label,
@@ -867,7 +867,7 @@ def _build_trace_predicate_context(
         sample_id=None,
         address=module_address,
         module_type=None,
-        module_pass_index=module_pass_index,
+        module_pass_number=module_pass_number,
         is_transform=bool(fields_dict.get("is_transform", False)),
         transform_kind=fields_dict.get("transform_kind"),
     )

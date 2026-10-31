@@ -1659,9 +1659,9 @@ def _ensure_module_output_tensor_logged(
             "_tracing_finished": False,
             "_construction_done": False,
             "label": None,
-            "label_short": None,
+            "short_label": None,
             "layer_label": None,
-            "layer_label_short": None,
+            "short_layer_label": None,
             "type": layer_type,
             "type_index": type_index,
             "pass_index": 1,
@@ -2364,7 +2364,7 @@ def module_forward_decorator(
                     "label": f"{frame.address}:enter:{frame.pass_index}",
                     "address": frame.address,
                     "module_type": frame.module_type,
-                    "module_pass_index": frame.pass_index,
+                    "module_pass_number": frame.pass_index,
                 },
                 module_stack=state.module_stack,
                 history=tuple(state.history),
@@ -2454,7 +2454,7 @@ def module_forward_decorator(
                         "label": f"{frame.address}:exit:{frame.pass_index}",
                         "address": frame.address,
                         "module_type": frame.module_type,
-                        "module_pass_index": frame.pass_index,
+                        "module_pass_number": frame.pass_index,
                     },
                     module_stack=state.module_stack,
                     history=tuple(state.history),
@@ -2584,7 +2584,7 @@ def module_forward_decorator(
                         "label": f"{frame.address}:exit:{frame.pass_index}",
                         "address": frame.address,
                         "module_type": _module_type(module),
-                        "module_pass_index": frame.pass_index,
+                        "module_pass_number": frame.pass_index,
                         # tl.module evaluates capture-time subjects through
                         # output_of_module_calls, so a module-boundary halt
                         # (incl. compiled stop_after= module addresses) can only

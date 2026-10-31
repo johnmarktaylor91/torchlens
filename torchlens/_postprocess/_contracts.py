@@ -842,9 +842,9 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
         writes=frozenset(
             (
                 "label",
-                "label_short",
+                "short_label",
                 "layer_label",
-                "layer_label_short",
+                "short_layer_label",
                 "step_index",
                 "type_index",
             )
@@ -1004,9 +1004,9 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "is_orphan",
                 "is_output",
                 "label",
-                "label_short",
+                "short_label",
                 "layer_label",
-                "layer_label_short",
+                "short_layer_label",
                 "module",
                 "module_call_stack",
                 "modules",
@@ -1487,9 +1487,9 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "is_transform",
                 "kwargs_template",
                 "label",
-                "label_short",
+                "short_label",
                 "layer_label",
-                "layer_label_short",
+                "short_layer_label",
                 "lookup_keys",
                 "max_distance_from_input",
                 "max_distance_to_output",
@@ -2805,13 +2805,13 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
             frozenset(
                 (
                     "label",
-                    "label_short",
+                    "short_label",
                     "layer_label",
-                    "layer_label_short",
+                    "short_layer_label",
                     "token:label_maps",
                 )
             ),
-            "step 11 consumes/refines label, label_short, layer_label, layer_label_short, ... after step 8 writes",
+            "step 11 consumes/refines label, short_label, layer_label, short_layer_label, ... after step 8 writes",
         ),
         ("8", "11.75"): PinnedPair(
             "columns",
@@ -2873,14 +2873,14 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
             frozenset(
                 (
                     "label",
-                    "label_short",
+                    "short_label",
                     "layer_label",
-                    "layer_label_short",
+                    "short_layer_label",
                     "step_index",
                     "type_index",
                 )
             ),
-            "step 18 consumes/refines label, label_short, layer_label, layer_label_short, ... after step 8 writes",
+            "step 18 consumes/refines label, short_label, layer_label, short_layer_label, ... after step 8 writes",
         ),
         ("9", "10"): PinnedPair(
             "tokens",

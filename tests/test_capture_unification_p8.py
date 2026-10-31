@@ -34,7 +34,7 @@ def _minimal_context(**updates: Any) -> RecordContext:
         "func_name": "add",
         "address": None,
         "module_type": None,
-        "module_pass_index": None,
+        "module_pass_number": None,
         "module_stack": (),
         "recent_events": (),
         "recent_ops": (),

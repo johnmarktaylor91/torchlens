@@ -168,7 +168,7 @@ def test_tensor_free_rule_identity_keeps_its_released_format() -> None:
 
     helper = tl.scale(2.0)
     spec = tl.when(tl.func("relu"), helper)
-    expected = f"helper:{helper.helper_name}:{helper.args!r}:{helper.kwargs!r}"
+    expected = f"helper:{helper.name}:{helper.args!r}:{helper.kwargs!r}"
     assert spec.rules[0].action_repr == expected
 
 

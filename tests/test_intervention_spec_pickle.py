@@ -63,7 +63,7 @@ def test_builtin_helper_spec_pickle_rebuilds_factory() -> None:
     spec = tl.zero_ablate()
     restored = pickle.loads(pickle.dumps(spec))
     assert isinstance(restored, Edit)
-    assert restored.helper_name == spec.helper_name
+    assert restored.name == spec.name
     assert restored.factory is not None
     hook = restored()
     out = hook(torch.ones(3), hook=None)
@@ -131,13 +131,13 @@ def test_add_and_replace_with_pickle_round_trip() -> None:
     that raised ``intervention_helper_unknown`` at restore."""
 
     added = pickle.loads(pickle.dumps(tl.add(1.5)))
-    assert added.helper_name == "add"
+    assert added.name == "add"
     assert added.args == (1.5,)
     assert callable(added.factory)
 
     replacement = torch.ones(2)
     replaced = pickle.loads(pickle.dumps(tl.replace_with(replacement)))
-    assert replaced.helper_name == "replace_with"
+    assert replaced.name == "replace_with"
     assert torch.equal(replaced.args[0], replacement)
     assert callable(replaced.factory)
 

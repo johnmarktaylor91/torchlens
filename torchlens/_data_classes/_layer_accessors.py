@@ -130,7 +130,7 @@ class OpAccessor(Accessor["Op"]):
             only_op = next(iter(self._dict.values()))
             if key in {
                 only_op.layer_label,
-                only_op.layer_label_short,
+                only_op.short_layer_label,
                 only_op._label_raw,
                 only_op.raw_label,
             }:
@@ -138,7 +138,7 @@ class OpAccessor(Accessor["Op"]):
         parent_matches = [
             op_log
             for op_log in self._dict.values()
-            if key in {op_log.layer_label, op_log.layer_label_short}
+            if key in {op_log.layer_label, op_log.short_layer_label}
         ]
         if len(parent_matches) > 1:
             parent_label = parent_matches[0].layer_label
@@ -152,7 +152,7 @@ class OpAccessor(Accessor["Op"]):
         for op_log in self._dict.values():
             if key in {
                 op_log.label,
-                op_log.label_short,
+                op_log.short_label,
                 op_log._label_raw,
                 op_log.raw_label,
             }:
@@ -218,7 +218,7 @@ class LayerAccessor(Accessor["Layer"]):
         if key in self._dict:
             return self._dict[key]
         matches = [
-            layer for layer in self._list if key in {layer.layer_label, layer.layer_label_short}
+            layer for layer in self._list if key in {layer.layer_label, layer.short_layer_label}
         ]
         if len(matches) == 1:
             return matches[0]

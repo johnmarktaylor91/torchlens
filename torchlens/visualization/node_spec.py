@@ -322,7 +322,7 @@ def _is_downstream(
         return pass_label in cone_pass_labels
     cone_match_labels = {
         str(getattr(layer_log, "layer_label", "")),
-        str(getattr(layer_log, "layer_label_short", "")),
+        str(getattr(layer_log, "short_layer_label", "")),
     }
     cone_match_labels.update(str(label) for label in getattr(layer_log, "call_labels", ()) or ())
     return bool(cone_match_labels & cone_labels)

@@ -128,7 +128,7 @@ def test_singleton_fallback_strips_raw_capture_sentinel() -> None:
     _finalize_single_op(trace, op_log, "input_1_1_raw", 0, None)
 
     assert op_log.layer_label == "input_1_1"
-    assert op_log.layer_label_short == "input_1_1"
+    assert op_log.short_layer_label == "input_1_1"
     assert op_log.label == "input_1_1:1"
     assert op_log._label_raw == "input_1_1_raw"
     # Torch parity (second-pass convention): ``_layer_label_raw`` carries the

@@ -452,7 +452,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 continue
             if dict(helper.metadata).get("batch_coherent"):
                 raise InvalidArgumentError(
-                    f"edit {helper.helper_name!r} reads or exchanges the WHOLE "
+                    f"edit {helper.name!r} reads or exchanges the WHOLE "
                     "batch at fire time, but this trace was captured in forward "
                     "chunks (chunked_forward=True): each fire would see one "
                     "chunk and treat it as the full batch",
@@ -846,7 +846,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             edit_names = tuple(str(rule["action"]) for rule in rules)
             selection_repr = " | ".join(str(rule["where"]) for rule in rules)
             fired_action_reprs = {
-                _canonical_repr(record.helper) for record in fires if record.helper is not None
+                _canonical_repr(record.edit) for record in fires if record.edit is not None
             }
             zero_fire_rule_ids = tuple(
                 str(rule["rule_id"])
@@ -862,7 +862,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 str(
                     getattr(
                         pair_edit,
-                        "helper_name",
+                        "name",
                         getattr(pair_edit, "__name__", type(pair_edit).__name__),
                     )
                 )
@@ -874,7 +874,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             rules = ()
             edit_name = getattr(
                 value_or_hook,
-                "helper_name",
+                "name",
                 getattr(value_or_hook, "__name__", type(value_or_hook).__name__),
             )
             edit_names = (str(edit_name),)
@@ -1530,7 +1530,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 "kind": "EDGE",
                 "selection_repr": repr(selection),
                 "resolve_digest": resolved_edges.digest,
-                "edit": getattr(edit, "helper_name", getattr(edit, "__name__", "value")),
+                "edit": getattr(edit, "name", getattr(edit, "__name__", "value")),
                 **payload,
             }
         )
@@ -1582,7 +1582,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 "kind": "PARAM",
                 "selection_repr": repr(selection),
                 "resolve_digest": resolved_params.digest,
-                "edit": getattr(edit, "helper_name", getattr(edit, "__name__", "value")),
+                "edit": getattr(edit, "name", getattr(edit, "__name__", "value")),
                 **payload,
             }
         )
@@ -1620,12 +1620,12 @@ class TraceInterventionMixin(_TraceMixinBase):
                 if derived.factory is None:
                     raise _apply_invalid(
                         "not_maskable",
-                        f"edit {derived.helper_name!r} has no runtime factory.",
+                        f"edit {derived.name!r} has no runtime factory.",
                         site=op.label,
                     )
                 hook_callable = derived.factory()
                 helper_spec: Edit | None = derived
-                helper_name = derived.helper_name
+                helper_name = derived.name
             else:
                 hook_callable = derived
                 helper_spec = None
@@ -1655,11 +1655,11 @@ class TraceInterventionMixin(_TraceMixinBase):
                     func_call_id=op.func_call_id,
                     container_path=tuple(op.container_path or ()),
                     engine="replay",
-                    helper=helper_spec,
+                    edit=helper_spec,
                     site_label=op.layer_label,
                     timing="post",
                     direction="forward",
-                    helper_name=helper_name,
+                    edit_name=helper_name,
                     run_ctx=context.run_ctx if hasattr(context, "run_ctx") else None,
                     replaced=applied is not saved,
                 )

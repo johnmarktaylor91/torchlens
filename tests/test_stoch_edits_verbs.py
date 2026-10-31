@@ -226,8 +226,8 @@ def test_mask_equivariance_law() -> None:
     expected[:, 1:3] = baseline[permutation][:, 1:3]
     assert torch.allclose(fork["relu_1_2"].out, expected)
     fire = list(fork.ops["relu_1_2"].interventions or ())[-1]
-    assert fire.helper is not None
-    metadata = dict(fire.helper.metadata)
+    assert fire.edit is not None
+    metadata = dict(fire.edit.metadata)
     assert "selection_mask_digest" in metadata
     assert metadata["selection_mask_rows_equal"] is True
     # Per-row-differing masks refuse typed, stably across seeds.

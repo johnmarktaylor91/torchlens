@@ -103,7 +103,7 @@ def _fired_site(label: str, *edits: Any) -> SimpleNamespace:
     """Return a stand-in site whose fire records name ``edits``."""
 
     records = [
-        FireRecord(target_label=label, helper=edit, timestamp=float(index))
+        FireRecord(target_label=label, edit=edit, timestamp=float(index))
         for index, edit in enumerate(edits)
     ]
     return SimpleNamespace(label=label, layer_label=label, interventions=records)

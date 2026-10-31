@@ -648,7 +648,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
     assert refs
     assert isinstance(refs[0], FireRecord)
     assert refs[0].direction == "backward"
-    assert isinstance(refs[0].helper, Edit)
+    assert isinstance(refs[0].edit, Edit)
 
 
 def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
@@ -1151,7 +1151,7 @@ def test_intervene_trace_round_trips_transient_dedup_state(
 
     assert replaced_ops
     assert any(
-        record.helper_name == helper_name for op in replaced_ops for record in op.interventions
+        record.edit_name == helper_name for op in replaced_ops for record in op.interventions
     )
 
 

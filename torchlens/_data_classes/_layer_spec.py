@@ -26,7 +26,7 @@ _LAYER_MIRROR_SPEC: dict[str, tuple[str, Any]] = {
         name: (name, None)
         for name in (
             "layer_label",
-            "layer_label_short",
+            "short_layer_label",
             "layer_type",
             "type_index",
             "step_index",
@@ -122,7 +122,7 @@ _LAYER_MIRROR_SPEC: dict[str, tuple[str, Any]] = {
 #: the handful of genuinely stored fields read from ``__dict__``.
 _LAYER_STATE_ORDER: tuple[str, ...] = (
     "layer_label",
-    "layer_label_short",
+    "short_layer_label",
     "layer_type",
     "type_index",
     "step_index",

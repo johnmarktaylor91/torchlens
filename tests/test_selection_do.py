@@ -93,7 +93,7 @@ def test_leaf_site_masked_edit_via_rf_intersection(log):
     assert not torch.equal(fork["output_1"].out, log["output_1"].out)
     # FireRecord disclosure matches the hook path
     records = list(fork["input_1"].interventions)
-    assert records and records[0].helper_name == "zero_ablate" and records[0].replaced
+    assert records and records[0].edit_name == "zero_ablate" and records[0].replaced
     assert fork["input_1"].is_edited
 
 
@@ -215,7 +215,7 @@ def test_mask_never_enters_keep_fields_and_recipe_policy(log):
     ]
     assert hook_specs, "the derived edit must ride the hook plan as a Edit"
     derived = hook_specs[-1]
-    assert derived.helper_name == "zero_ablate"  # helper identity preserved
+    assert derived.name == "zero_ablate"  # helper identity preserved
     assert derived.selection_recipe is not None
     assert derived.selection_recipe["resolve_digest"]
     # the mask lives only in the runtime factory closure, which never persists

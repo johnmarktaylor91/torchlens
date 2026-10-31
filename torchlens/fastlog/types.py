@@ -444,7 +444,7 @@ _RAW_METADATA_FIELDS = (
     "func_name",
     "address",
     "module_type",
-    "module_pass_index",
+    "module_pass_number",
     "module_stack",
     "parent_labels",
     "input_output_address",

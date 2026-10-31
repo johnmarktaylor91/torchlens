@@ -57,7 +57,7 @@ def main() -> None:
     edited.attach_hooks(tl.func("relu"), tl.splice_module(SAEStyleSplice()))
     edited.push()
 
-    assert edited.last_run_records()[-1].helper_name == "splice_module"
+    assert edited.last_run_records()[-1].edit_name == "splice_module"
     assert not torch.allclose(log.layer_list[-1].out, edited.layer_list[-1].out)
 
 

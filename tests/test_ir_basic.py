@@ -323,7 +323,7 @@ def _build_ir_instances() -> dict[str, object]:
         func_name="linear",
         address="layer",
         module_type="Linear",
-        module_pass_index=1,
+        module_pass_number=1,
         module_stack=(module_frame,),
         recent_events=(),
         recent_ops=(),

@@ -477,7 +477,7 @@ def _run_predicate_forward_with_root_frame(
             "label": "root:enter:1",
             "address": "",
             "module_type": type(model).__name__,
-            "module_pass_index": root_frame.pass_index,
+            "module_pass_number": root_frame.pass_index,
         },
         module_stack=state.module_stack,
         history=tuple(state.history),
@@ -531,7 +531,7 @@ def _run_predicate_forward_with_root_frame(
                 "label": "root:exit:1",
                 "address": "",
                 "module_type": type(model).__name__,
-                "module_pass_index": root_frame.pass_index,
+                "module_pass_number": root_frame.pass_index,
             },
             module_stack=state.module_stack,
             history=tuple(state.history),
@@ -863,7 +863,7 @@ def _get_op_nums_from_user_labels(
             matching_layer_passes = [
                 layer_entry
                 for layer_entry in getattr(self, "layer_list", [])
-                if layer_key in {layer_entry.layer_label, layer_entry.layer_label_short}
+                if layer_key in {layer_entry.layer_label, layer_entry.short_layer_label}
             ]
             if matching_layer_passes:
                 raw_layer_nums_to_save.update(

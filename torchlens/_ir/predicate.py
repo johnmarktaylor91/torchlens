@@ -151,7 +151,7 @@ class RecordContext:
         Nearest active module address.
     module_type
         Nearest active module class name.
-    module_pass_index
+    module_pass_number
         Call index for the nearest active module.
     module_stack
         Active module frames from outermost to innermost.
@@ -221,7 +221,7 @@ class RecordContext:
     func_name: str | None
     address: str | None
     module_type: str | None
-    module_pass_index: int | None
+    module_pass_number: int | None
     module_stack: tuple[Any, ...]
     recent_events: tuple[RecordContext, ...]
     recent_ops: tuple[RecordContext, ...]

@@ -1515,10 +1515,10 @@ def _reconcile_rerun_hook_fires(
             fired.update(str(result.plan_id) for result in fire_results)
             continue
         fallback_fired.update(
-            str(record.helper_name)
+            str(record.edit_name)
             for record in (getattr(op, "interventions", None) or ())
             if getattr(record, "direction", None) == "forward"
-            and getattr(record, "helper_name", None) is not None
+            and getattr(record, "edit_name", None) is not None
         )
     total_fired = sum(fired.values()) + sum(fallback_fired.values())
     unfired: list[str] = []

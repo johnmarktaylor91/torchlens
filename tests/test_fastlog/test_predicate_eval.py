@@ -164,7 +164,7 @@ def test_record_context_constructor_is_schema_source_of_truth() -> None:
         "func_name": "relu",
         "address": "encoder",
         "module_type": "Linear",
-        "module_pass_index": 1,
+        "module_pass_number": 1,
         "parent_labels": ("input_1_raw",),
         "tensor": tensor,
         "output_index": 0,

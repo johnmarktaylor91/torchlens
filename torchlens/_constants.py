@@ -358,9 +358,9 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "_construction_done",
     # Other labeling info
     "label",
-    "label_short",
+    "short_label",
     "layer_label",
-    "layer_label_short",
+    "short_layer_label",
     "type",
     "type_index",
     "pass_index",
@@ -577,7 +577,7 @@ LAYER_LOG_FIELD_ORDER = [
     #
     # Identity & labeling
     "layer_label",
-    "layer_label_short",
+    "short_layer_label",
     "layer_type",
     "type_index",
     "step_index",

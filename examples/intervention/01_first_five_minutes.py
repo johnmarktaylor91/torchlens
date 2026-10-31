@@ -65,7 +65,7 @@ def main() -> None:
     clean_out = log.layer_list[-1].out
     edited_out = edited.layer_list[-1].out
     assert not torch.allclose(clean_out, edited_out)
-    assert edited.last_run_records()[-1].helper_name == "zero_ablate"
+    assert edited.last_run_records()[-1].edit_name == "zero_ablate"
 
 
 if __name__ == "__main__":

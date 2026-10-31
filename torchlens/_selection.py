@@ -1712,7 +1712,7 @@ def _build_selection_do_plan(
     # A bare tl.subspace(...) target is projection-valued: the edit acts on
     # the component along the basis (resolve() still reports the support).
     projection = subspace_projection_of(selection_like)
-    if projection is None and getattr(edit, "helper_name", None) == "set_affine_coordinates":
+    if projection is None and getattr(edit, "name", None) == "set_affine_coordinates":
         from .intervention._affine_source import needs_subspace
 
         # Refuse at do(), before anything is staged: a [k, d] map needs a basis.
@@ -1782,10 +1782,10 @@ def _build_selection_do_plan(
             }
             for entry in resolved
         ],
-        "edit": getattr(edit, "helper_name", getattr(edit, "__name__", repr(type(edit)))),
+        "edit": getattr(edit, "name", getattr(edit, "__name__", repr(type(edit)))),
     }
     source_identity = getattr(edit, "kwargs", None)
-    if getattr(edit, "helper_name", None) == "patch_from" and source_identity:
+    if getattr(edit, "name", None) == "patch_from" and source_identity:
         audit["patch_source"] = dict(source_identity)
     return resolved, plan, audit
 

@@ -1110,7 +1110,7 @@ def _helper_spec(
     """
 
     return Edit(
-        helper_name=helper_name,
+        name=helper_name,
         args=args,
         kwargs=tuple(sorted((kwargs or {}).items())),
         kind=kind,  # type: ignore[arg-type]
@@ -1171,14 +1171,14 @@ def helper_from_serialized(
             return import_resolver(import_path)()
 
         return Edit(
-            helper_name=str(data.get("name", "import_ref")),
+            name=str(data.get("name", "import_ref")),
             portability="import_ref",
             factory=factory,
             metadata=(("import_path", import_path),),
         )
     if portability == "opaque_audit":
         return Edit(
-            helper_name=data.get("name", "opaque_audit"),
+            name=data.get("name", "opaque_audit"),
             portability="opaque_audit",
             metadata=(("repr", data.get("repr", "")), ("executable", False)),
             is_batch_independent=bool(data.get("is_batch_independent", False)),
@@ -1449,7 +1449,7 @@ def _non_executable_builtin_placeholder(
         )
 
     return Edit(
-        helper_name=name,
+        name=name,
         portability="opaque_audit",
         kind=cast(Any, data.get("kind", "forward")),
         direction=cast(Any, data.get("direction")),

@@ -23,7 +23,7 @@ def _overlay_candidate_labels(trace: Any) -> set[str]:
 
     candidates: set[str] = set(getattr(trace, "op_labels", ()) or ())
     for node in getattr(trace, "layer_list", ()) or ():
-        for attr in ("layer_label", "label", "layer_label_short", "label_short"):
+        for attr in ("layer_label", "label", "short_layer_label", "short_label"):
             value = getattr(node, attr, None)
             if isinstance(value, str):
                 candidates.add(value)
@@ -189,8 +189,8 @@ def external_overlay_value(node: Any, scores: OverlayScores | Callable[[Any], An
     candidates = (
         getattr(node, "layer_label", None),
         getattr(node, "label", None),
-        getattr(node, "layer_label_short", None),
-        getattr(node, "label_short", None),
+        getattr(node, "short_layer_label", None),
+        getattr(node, "short_label", None),
     )
     for candidate in candidates:
         if isinstance(candidate, str) and candidate in scores:

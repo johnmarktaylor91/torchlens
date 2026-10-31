@@ -195,7 +195,7 @@ _NON_NUMERIC_FIELDS = frozenset(
     {
         # Identity / naming strings.
         "layer_label",
-        "layer_label_short",
+        "short_layer_label",
         # L1 grouping surface (site keys + across-pass shape summary): a
         # percent-escaped position key, a live peer view, and a plain-data
         # summary STRING ("2->4") — none is an encodable magnitude. The
@@ -206,7 +206,7 @@ _NON_NUMERIC_FIELDS = frozenset(
         "shape_summary",
         "layer_type",
         "label",
-        "label_short",
+        "short_label",
         "fx_label",
         "fx_qualpath",
         "lookup_keys",

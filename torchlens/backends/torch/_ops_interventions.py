@@ -328,7 +328,7 @@ def _apply_predicate_mode_interventions_to_outputs(
             sample_id=state.sample_id,
             address=module_frame.address if module_frame else None,
             module_type=module_frame.module_type if module_frame else None,
-            module_pass_index=module_frame.pass_index if module_frame else None,
+            module_pass_number=module_frame.pass_index if module_frame else None,
             is_transform=func_name in TRANSFORM_FUNC_NAMES,
             transform_kind=func_name if func_name in TRANSFORM_FUNC_NAMES else None,
         )

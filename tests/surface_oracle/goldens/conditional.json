@@ -135,9 +135,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_2:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_2",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -383,9 +383,9 @@
     "is_scalar_bool": true,
     "is_terminal_bool": true,
     "label": "gt_1_4:1",
-    "label_short": "gt_1:1",
+    "short_label": "gt_1:1",
     "layer_label": "gt_1_4",
-    "layer_label_short": "gt_1",
+    "short_layer_label": "gt_1",
     "layer_type": "gt",
     "leaf_module_ops": {
      "__set__": []
@@ -623,9 +623,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -843,9 +843,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -1112,9 +1112,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "rand_1_1:1",
-    "label_short": "rand_1:1",
+    "short_label": "rand_1:1",
     "layer_label": "rand_1_1",
-    "layer_label_short": "rand_1",
+    "short_layer_label": "rand_1",
     "layer_type": "rand",
     "leaf_module_ops": {
      "__set__": []
@@ -1352,9 +1352,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "sigmoid_1_5:1",
-    "label_short": "sigmoid_1:1",
+    "short_label": "sigmoid_1:1",
     "layer_label": "sigmoid_1_5",
-    "layer_label_short": "sigmoid_1",
+    "short_layer_label": "sigmoid_1",
     "layer_type": "sigmoid",
     "leaf_module_ops": {
      "__set__": []
@@ -1601,9 +1601,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "sum_1_3:1",
-    "label_short": "sum_1:1",
+    "short_label": "sum_1:1",
     "layer_label": "sum_1_3",
-    "layer_label_short": "sum_1",
+    "short_layer_label": "sum_1",
     "layer_type": "sum",
     "leaf_module_ops": {
      "__set__": []
@@ -2300,13 +2300,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_2:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
     },
     "layer_label": "add_1_2",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -5,
@@ -2660,13 +2660,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "gt_1_4:1",
-    "label_short": "gt_1:1",
+    "short_label": "gt_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "gt_1_4:1"
     },
     "layer_label": "gt_1_4",
-    "layer_label_short": "gt_1",
+    "short_layer_label": "gt_1",
     "layer_type": "gt",
     "lookup_keys": [
      -3,
@@ -2975,13 +2975,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -7,
@@ -3317,13 +3317,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -3682,13 +3682,13 @@
     "kwargs_summary": "device=device(type='cpu')",
     "kwargs_template": null,
     "label": "rand_1_1:1",
-    "label_short": "rand_1:1",
+    "short_label": "rand_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "rand_1_1:1"
     },
     "layer_label": "rand_1_1",
-    "layer_label_short": "rand_1",
+    "short_layer_label": "rand_1",
     "layer_type": "rand",
     "lookup_keys": [
      -6,
@@ -4046,13 +4046,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "sigmoid_1_5:1",
-    "label_short": "sigmoid_1:1",
+    "short_label": "sigmoid_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "sigmoid_1_5:1"
     },
     "layer_label": "sigmoid_1_5",
-    "layer_label_short": "sigmoid_1",
+    "short_layer_label": "sigmoid_1",
     "layer_type": "sigmoid",
     "lookup_keys": [
      -2,
@@ -4406,13 +4406,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "sum_1_3:1",
-    "label_short": "sum_1:1",
+    "short_label": "sum_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "sum_1_3:1"
     },
     "layer_label": "sum_1_3",
-    "layer_label_short": "sum_1",
+    "short_layer_label": "sum_1",
     "layer_type": "sum",
     "lookup_keys": [
      -4,
@@ -5695,9 +5695,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_2:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_2",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -5943,9 +5943,9 @@
     "is_scalar_bool": true,
     "is_terminal_bool": true,
     "label": "gt_1_4:1",
-    "label_short": "gt_1:1",
+    "short_label": "gt_1:1",
     "layer_label": "gt_1_4",
-    "layer_label_short": "gt_1",
+    "short_layer_label": "gt_1",
     "layer_type": "gt",
     "leaf_module_ops": {
      "__set__": []
@@ -6183,9 +6183,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -6403,9 +6403,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -6672,9 +6672,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "rand_1_1:1",
-    "label_short": "rand_1:1",
+    "short_label": "rand_1:1",
     "layer_label": "rand_1_1",
-    "layer_label_short": "rand_1",
+    "short_layer_label": "rand_1",
     "layer_type": "rand",
     "leaf_module_ops": {
      "__set__": []
@@ -6912,9 +6912,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "sigmoid_1_5:1",
-    "label_short": "sigmoid_1:1",
+    "short_label": "sigmoid_1:1",
     "layer_label": "sigmoid_1_5",
-    "layer_label_short": "sigmoid_1",
+    "short_layer_label": "sigmoid_1",
     "layer_type": "sigmoid",
     "leaf_module_ops": {
      "__set__": []
@@ -7161,9 +7161,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "sum_1_3:1",
-    "label_short": "sum_1:1",
+    "short_label": "sum_1:1",
     "layer_label": "sum_1_3",
-    "layer_label_short": "sum_1",
+    "short_layer_label": "sum_1",
     "layer_type": "sum",
     "leaf_module_ops": {
      "__set__": []
@@ -7860,13 +7860,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_2:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
     },
     "layer_label": "add_1_2",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -5,
@@ -8220,13 +8220,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "gt_1_4:1",
-    "label_short": "gt_1:1",
+    "short_label": "gt_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "gt_1_4:1"
     },
     "layer_label": "gt_1_4",
-    "layer_label_short": "gt_1",
+    "short_layer_label": "gt_1",
     "layer_type": "gt",
     "lookup_keys": [
      -3,
@@ -8535,13 +8535,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -7,
@@ -8877,13 +8877,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -9242,13 +9242,13 @@
     "kwargs_summary": "device=device(type='cpu')",
     "kwargs_template": null,
     "label": "rand_1_1:1",
-    "label_short": "rand_1:1",
+    "short_label": "rand_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "rand_1_1:1"
     },
     "layer_label": "rand_1_1",
-    "layer_label_short": "rand_1",
+    "short_layer_label": "rand_1",
     "layer_type": "rand",
     "lookup_keys": [
      -6,
@@ -9606,13 +9606,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "sigmoid_1_5:1",
-    "label_short": "sigmoid_1:1",
+    "short_label": "sigmoid_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "sigmoid_1_5:1"
     },
     "layer_label": "sigmoid_1_5",
-    "layer_label_short": "sigmoid_1",
+    "short_layer_label": "sigmoid_1",
     "layer_type": "sigmoid",
     "lookup_keys": [
      -2,
@@ -9966,13 +9966,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "sum_1_3:1",
-    "label_short": "sum_1:1",
+    "short_label": "sum_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "sum_1_3:1"
     },
     "layer_label": "sum_1_3",
-    "layer_label_short": "sum_1",
+    "short_layer_label": "sum_1",
     "layer_type": "sum",
     "lookup_keys": [
      -4,
@@ -11247,9 +11247,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_2:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_2",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -11495,9 +11495,9 @@
     "is_scalar_bool": true,
     "is_terminal_bool": true,
     "label": "gt_1_4:1",
-    "label_short": "gt_1:1",
+    "short_label": "gt_1:1",
     "layer_label": "gt_1_4",
-    "layer_label_short": "gt_1",
+    "short_layer_label": "gt_1",
     "layer_type": "gt",
     "leaf_module_ops": {
      "__set__": []
@@ -11735,9 +11735,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -11955,9 +11955,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -12224,9 +12224,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "rand_1_1:1",
-    "label_short": "rand_1:1",
+    "short_label": "rand_1:1",
     "layer_label": "rand_1_1",
-    "layer_label_short": "rand_1",
+    "short_layer_label": "rand_1",
     "layer_type": "rand",
     "leaf_module_ops": {
      "__set__": []
@@ -12464,9 +12464,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "sigmoid_1_5:1",
-    "label_short": "sigmoid_1:1",
+    "short_label": "sigmoid_1:1",
     "layer_label": "sigmoid_1_5",
-    "layer_label_short": "sigmoid_1",
+    "short_layer_label": "sigmoid_1",
     "layer_type": "sigmoid",
     "leaf_module_ops": {
      "__set__": []
@@ -12713,9 +12713,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "sum_1_3:1",
-    "label_short": "sum_1:1",
+    "short_label": "sum_1:1",
     "layer_label": "sum_1_3",
-    "layer_label_short": "sum_1",
+    "short_layer_label": "sum_1",
     "layer_type": "sum",
     "leaf_module_ops": {
      "__set__": []
@@ -13412,13 +13412,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_2:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
     },
     "layer_label": "add_1_2",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -5,
@@ -13772,13 +13772,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "gt_1_4:1",
-    "label_short": "gt_1:1",
+    "short_label": "gt_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "gt_1_4:1"
     },
     "layer_label": "gt_1_4",
-    "layer_label_short": "gt_1",
+    "short_layer_label": "gt_1",
     "layer_type": "gt",
     "lookup_keys": [
      -3,
@@ -14087,13 +14087,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -7,
@@ -14429,13 +14429,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -14794,13 +14794,13 @@
     "kwargs_summary": "device=device(type='cpu')",
     "kwargs_template": null,
     "label": "rand_1_1:1",
-    "label_short": "rand_1:1",
+    "short_label": "rand_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "rand_1_1:1"
     },
     "layer_label": "rand_1_1",
-    "layer_label_short": "rand_1",
+    "short_layer_label": "rand_1",
     "layer_type": "rand",
     "lookup_keys": [
      -6,
@@ -15158,13 +15158,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "sigmoid_1_5:1",
-    "label_short": "sigmoid_1:1",
+    "short_label": "sigmoid_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "sigmoid_1_5:1"
     },
     "layer_label": "sigmoid_1_5",
-    "layer_label_short": "sigmoid_1",
+    "short_layer_label": "sigmoid_1",
     "layer_type": "sigmoid",
     "lookup_keys": [
      -2,
@@ -15518,13 +15518,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "sum_1_3:1",
-    "label_short": "sum_1:1",
+    "short_label": "sum_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "sum_1_3:1"
     },
     "layer_label": "sum_1_3",
-    "layer_label_short": "sum_1",
+    "short_layer_label": "sum_1",
     "layer_type": "sum",
     "lookup_keys": [
      -4,
@@ -16801,9 +16801,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_2:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_2",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -17049,9 +17049,9 @@
     "is_scalar_bool": true,
     "is_terminal_bool": true,
     "label": "gt_1_4:1",
-    "label_short": "gt_1:1",
+    "short_label": "gt_1:1",
     "layer_label": "gt_1_4",
-    "layer_label_short": "gt_1",
+    "short_layer_label": "gt_1",
     "layer_type": "gt",
     "leaf_module_ops": {
      "__set__": []
@@ -17289,9 +17289,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -17509,9 +17509,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -17778,9 +17778,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "rand_1_1:1",
-    "label_short": "rand_1:1",
+    "short_label": "rand_1:1",
     "layer_label": "rand_1_1",
-    "layer_label_short": "rand_1",
+    "short_layer_label": "rand_1",
     "layer_type": "rand",
     "leaf_module_ops": {
      "__set__": []
@@ -18018,9 +18018,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "sigmoid_1_5:1",
-    "label_short": "sigmoid_1:1",
+    "short_label": "sigmoid_1:1",
     "layer_label": "sigmoid_1_5",
-    "layer_label_short": "sigmoid_1",
+    "short_layer_label": "sigmoid_1",
     "layer_type": "sigmoid",
     "leaf_module_ops": {
      "__set__": []
@@ -18267,9 +18267,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "sum_1_3:1",
-    "label_short": "sum_1:1",
+    "short_label": "sum_1:1",
     "layer_label": "sum_1_3",
-    "layer_label_short": "sum_1",
+    "short_layer_label": "sum_1",
     "layer_type": "sum",
     "leaf_module_ops": {
      "__set__": []
@@ -18966,13 +18966,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_2:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
     },
     "layer_label": "add_1_2",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -5,
@@ -19326,13 +19326,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "gt_1_4:1",
-    "label_short": "gt_1:1",
+    "short_label": "gt_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "gt_1_4:1"
     },
     "layer_label": "gt_1_4",
-    "layer_label_short": "gt_1",
+    "short_layer_label": "gt_1",
     "layer_type": "gt",
     "lookup_keys": [
      -3,
@@ -19641,13 +19641,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -7,
@@ -19983,13 +19983,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -20348,13 +20348,13 @@
     "kwargs_summary": "device=device(type='cpu')",
     "kwargs_template": null,
     "label": "rand_1_1:1",
-    "label_short": "rand_1:1",
+    "short_label": "rand_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "rand_1_1:1"
     },
     "layer_label": "rand_1_1",
-    "layer_label_short": "rand_1",
+    "short_layer_label": "rand_1",
     "layer_type": "rand",
     "lookup_keys": [
      -6,
@@ -20712,13 +20712,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "sigmoid_1_5:1",
-    "label_short": "sigmoid_1:1",
+    "short_label": "sigmoid_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "sigmoid_1_5:1"
     },
     "layer_label": "sigmoid_1_5",
-    "layer_label_short": "sigmoid_1",
+    "short_layer_label": "sigmoid_1",
     "layer_type": "sigmoid",
     "lookup_keys": [
      -2,
@@ -21072,13 +21072,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "sum_1_3:1",
-    "label_short": "sum_1:1",
+    "short_label": "sum_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "sum_1_3:1"
     },
     "layer_label": "sum_1_3",
-    "layer_label_short": "sum_1",
+    "short_layer_label": "sum_1",
     "layer_type": "sum",
     "lookup_keys": [
      -4,
@@ -22369,9 +22369,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_2:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_2",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -22617,9 +22617,9 @@
     "is_scalar_bool": true,
     "is_terminal_bool": true,
     "label": "gt_1_4:1",
-    "label_short": "gt_1:1",
+    "short_label": "gt_1:1",
     "layer_label": "gt_1_4",
-    "layer_label_short": "gt_1",
+    "short_layer_label": "gt_1",
     "layer_type": "gt",
     "leaf_module_ops": {
      "__set__": []
@@ -22857,9 +22857,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -23077,9 +23077,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -23335,9 +23335,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "rand_1_1:1",
-    "label_short": "rand_1:1",
+    "short_label": "rand_1:1",
     "layer_label": "rand_1_1",
-    "layer_label_short": "rand_1",
+    "short_layer_label": "rand_1",
     "layer_type": "rand",
     "leaf_module_ops": {
      "__set__": []
@@ -23575,9 +23575,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "sigmoid_1_5:1",
-    "label_short": "sigmoid_1:1",
+    "short_label": "sigmoid_1:1",
     "layer_label": "sigmoid_1_5",
-    "layer_label_short": "sigmoid_1",
+    "short_layer_label": "sigmoid_1",
     "layer_type": "sigmoid",
     "leaf_module_ops": {
      "__set__": []
@@ -23824,9 +23824,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "sum_1_3:1",
-    "label_short": "sum_1:1",
+    "short_label": "sum_1:1",
     "layer_label": "sum_1_3",
-    "layer_label_short": "sum_1",
+    "short_layer_label": "sum_1",
     "layer_type": "sum",
     "leaf_module_ops": {
      "__set__": []
@@ -24499,10 +24499,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_2:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "add_1_2",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -5,
@@ -24844,10 +24844,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "gt_1_4:1",
-    "label_short": "gt_1:1",
+    "short_label": "gt_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "gt_1_4",
-    "layer_label_short": "gt_1",
+    "short_layer_label": "gt_1",
     "layer_type": "gt",
     "lookup_keys": [
      -3,
@@ -25156,10 +25156,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -7,
@@ -25480,10 +25480,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -25828,10 +25828,10 @@
     "kwargs_summary": "device=device(type='cpu')",
     "kwargs_template": null,
     "label": "rand_1_1:1",
-    "label_short": "rand_1:1",
+    "short_label": "rand_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "rand_1_1",
-    "layer_label_short": "rand_1",
+    "short_layer_label": "rand_1",
     "layer_type": "rand",
     "lookup_keys": [
      -6,
@@ -26172,10 +26172,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "sigmoid_1_5:1",
-    "label_short": "sigmoid_1:1",
+    "short_label": "sigmoid_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "sigmoid_1_5",
-    "layer_label_short": "sigmoid_1",
+    "short_layer_label": "sigmoid_1",
     "layer_type": "sigmoid",
     "lookup_keys": [
      -2,
@@ -26514,10 +26514,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "sum_1_3:1",
-    "label_short": "sum_1:1",
+    "short_label": "sum_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "sum_1_3",
-    "layer_label_short": "sum_1",
+    "short_layer_label": "sum_1",
     "layer_type": "sum",
     "lookup_keys": [
      -4,

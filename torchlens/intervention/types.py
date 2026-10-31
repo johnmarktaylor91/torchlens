@@ -190,7 +190,7 @@ class Edit:
         "selection_recipe": FieldPolicy.BLOB_RECURSIVE,
     }
 
-    helper_name: str
+    name: str
     args: tuple[Any, ...] = ()
     kwargs: tuple[tuple[str, Any], ...] = ()
     kind: HelperKind = "forward"
@@ -214,7 +214,7 @@ class Edit:
             Stable helper name.
         """
 
-        return self.helper_name
+        return self.name
 
     def __repr__(self) -> str:
         """Render the public spelling of this edit (``tl.Edit`` is its public name).
@@ -249,7 +249,7 @@ class Edit:
         """
 
         if self.factory is None:
-            raise TypeError(f"Edit {self.helper_name!r} has no hook factory")
+            raise TypeError(f"Edit {self.name!r} has no hook factory")
         return self.factory()
 
     def __getstate__(self) -> dict[str, Any]:
@@ -282,7 +282,7 @@ class Edit:
             from .helpers import rebuild_builtin_helper
 
             rebuilt = rebuild_builtin_helper(
-                state["helper_name"],
+                state["name"],
                 tuple(state.get("args", ())),
                 dict(state.get("kwargs", ())),
             )
@@ -443,7 +443,7 @@ class FireRecord:
         "func_call_id": FieldPolicy.KEEP,
         "container_path": FieldPolicy.KEEP,
         "engine": FieldPolicy.KEEP,
-        "helper": FieldPolicy.KEEP,
+        "edit": FieldPolicy.KEEP,
         "site_label": FieldPolicy.KEEP,
         "timing": FieldPolicy.KEEP,
         "direction": FieldPolicy.KEEP,
@@ -451,7 +451,7 @@ class FireRecord:
         "seed": FieldPolicy.KEEP,
         "determinism_note": FieldPolicy.KEEP,
         "timestamp": FieldPolicy.KEEP,
-        "backward_pass_index": FieldPolicy.KEEP,
+        "backward_pass_number": FieldPolicy.KEEP,
         "call_index": FieldPolicy.KEEP,
         "grad_kind": FieldPolicy.KEEP,
         "tuple_index": FieldPolicy.KEEP,
@@ -466,15 +466,15 @@ class FireRecord:
     func_call_id: int | None = None
     container_path: tuple[OutputPathComponent, ...] = ()
     engine: str | None = None
-    helper: Edit | None = None
+    edit: Edit | None = None
     site_label: str | None = None
     timing: Literal["pre", "post"] | None = None
     direction: Literal["forward", "backward"] | None = None
-    helper_name: str | None = None
+    edit_name: str | None = None
     seed: int | None = None
     determinism_note: str | None = None
     timestamp: float | None = None
-    backward_pass_index: int | None = None
+    backward_pass_number: int | None = None
     call_index: int | None = None
     grad_kind: Literal["grad_input", "grad_output"] | None = None
     tuple_index: int | None = None

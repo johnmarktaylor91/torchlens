@@ -67,11 +67,11 @@ class OrphanAccessor(Accessor[Op]):
             if key
             in {
                 orphan.layer_label,
-                orphan.layer_label_short,
+                orphan.short_layer_label,
                 orphan.label,
-                orphan.label_short,
+                orphan.short_label,
                 orphan.layer_label,
-                orphan.layer_label_short,
+                orphan.short_layer_label,
                 orphan._label_raw,
             }
         ]
@@ -85,11 +85,11 @@ class OrphanAccessor(Accessor[Op]):
                 label is not None and key.lower() in str(label).lower()
                 for label in (
                     orphan.layer_label,
-                    orphan.layer_label_short,
+                    orphan.short_layer_label,
                     orphan.label,
-                    orphan.label_short,
+                    orphan.short_label,
                     orphan.layer_label,
-                    orphan.layer_label_short,
+                    orphan.short_layer_label,
                     orphan._label_raw,
                 )
             )
@@ -416,7 +416,7 @@ class TraceOpAccessor(Accessor[Op]):
         direct = self._resolve_pass_qualified(key)
         if direct is not None:
             return [direct]
-        return [op for op in self._list if key in {op.layer_label, op.layer_label_short}]
+        return [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
 
     def _ensure_alias_indexes(self) -> _AliasIndexes | None:
         """Build the alias reverse indexes once, or report them unavailable.
@@ -466,7 +466,7 @@ class TraceOpAccessor(Accessor[Op]):
                 for alias in self._final_aliases(op):
                     _claim_alias(final_index, collisions, alias, op)
                 raw_index.setdefault(op.raw_label, op)
-                for alias in {op.layer_label, op.layer_label_short}:
+                for alias in {op.layer_label, op.short_layer_label}:
                     layer_alias_index.setdefault(alias, []).append(op)
         except Exception:
             self._alias_index_unavailable = True
@@ -477,7 +477,7 @@ class TraceOpAccessor(Accessor[Op]):
     def _final_aliases(self, op: Op) -> list[Any]:
         """Return the final-tier aliases of one Op (see ``_ensure_alias_indexes``)."""
 
-        aliases = [op.label, op.label_short]
+        aliases = [op.label, op.short_label]
         label_raw = op._label_raw
         # Only a SUFFIXED raw label is final-tier: ``x_raw`` cannot be a final
         # label. An unsuffixed ``_label_raw`` has the raw-spelling shape and is
@@ -485,7 +485,7 @@ class TraceOpAccessor(Accessor[Op]):
         if _is_suffixed_raw_label(label_raw):
             aliases.append(label_raw)
         if self._layer_num_calls.get(op.layer_label, 0) == 1:
-            aliases.extend((op.layer_label, op.layer_label_short))
+            aliases.extend((op.layer_label, op.short_layer_label))
         return aliases
 
     def _resolve_substring_by_scan(self, key: str) -> Op | None:
@@ -501,7 +501,7 @@ class TraceOpAccessor(Accessor[Op]):
         for op in self._list:
             if key == op.raw_label:
                 return op
-        parent_matches = [op for op in self._list if key in {op.layer_label, op.layer_label_short}]
+        parent_matches = [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
         return self._resolve_parent_matches(parent_matches)
 
     @staticmethod

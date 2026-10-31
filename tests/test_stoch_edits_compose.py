@@ -53,7 +53,7 @@ def test_flattening_is_syntactic_and_audit_visible() -> None:
     nested = compose(tl.scale(2.0), compose(tl.clamp(high=0.5), tl.scale(0.5)))
     flat = compose(tl.scale(2.0), tl.clamp(high=0.5), tl.scale(0.5))
     assert nested == flat
-    assert [leaf.helper_name for leaf in nested.args] == ["scale", "clamp", "scale"]
+    assert [leaf.name for leaf in nested.args] == ["scale", "clamp", "scale"]
     assert dict(nested.metadata)["compose_leaves"] == "scale|clamp|scale"
 
 
@@ -85,16 +85,16 @@ def test_one_fire_one_record_with_ordered_leaves() -> None:
     fork.do(tl.label("relu_1_2"), compose(tl.scale(3.0), tl.clamp(high=1.0)))
     fires = list(fork.ops["relu_1_2"].interventions or ())
     assert len(fires) == 1, "one composed fire, never one record per leaf"
-    assert fires[0].helper is not None
-    assert fires[0].helper.helper_name == "compose"
-    assert dict(fires[0].helper.metadata)["compose_leaves"] == "scale|clamp"
+    assert fires[0].edit is not None
+    assert fires[0].edit.name == "compose"
+    assert dict(fires[0].edit.metadata)["compose_leaves"] == "scale|clamp"
 
 
 def test_flags_and_combine_and_seeded_stochastic_leaf_allowed() -> None:
     """Flags AND-combine; a SEEDED stochastic leaf composes (granularity mixing legal)."""
 
     seeded = compose(tl.scale(2.0), tl.add_noise(0.1, seed=7))
-    assert [leaf.helper_name for leaf in seeded.args] == ["scale", "add_noise"]
+    assert [leaf.name for leaf in seeded.args] == ["scale", "add_noise"]
     assert seeded.is_batch_independent is True
     baseline_flags = compose(tl.scale(2.0), tl.mean_ablate())
     assert baseline_flags.is_batch_independent is False, "mean_ablate self-mean couples the batch"
@@ -118,7 +118,7 @@ def test_pickle_round_trip_preserves_leaf_order() -> None:
     spec = compose(tl.scale(2.0), tl.clamp(high=0.5), tl.scale(0.25))
     restored = pickle.loads(pickle.dumps(spec))
     assert restored == spec
-    assert [leaf.helper_name for leaf in restored.args] == ["scale", "clamp", "scale"]
+    assert [leaf.name for leaf in restored.args] == ["scale", "clamp", "scale"]
     assert restored.factory is not None, "the registry re-derives the runtime factory"
 
 

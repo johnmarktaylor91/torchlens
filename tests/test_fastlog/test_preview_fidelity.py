@@ -104,7 +104,7 @@ def test_preview_node_spec_consumes_short_label_keys() -> None:
         type(
             "ShortLabelOnlyLayer",
             (),
-            {"layer_label": "missing_label", "layer_label_short": "relu_1"},
+            {"layer_label": "missing_label", "short_layer_label": "relu_1"},
         )(),
         NodeSpec(lines=["relu"]),
     )

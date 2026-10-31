@@ -283,7 +283,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "RecordContext.func_name": "F",
     "RecordContext.address": "F",
     "RecordContext.module_type": "F",
-    "RecordContext.module_pass_index": "F",
+    "RecordContext.module_pass_number": "F",
     "RecordContext.module_stack": "F",
     "RecordContext.recent_events": R_JOURNAL,
     "RecordContext.recent_ops": R_JOURNAL,

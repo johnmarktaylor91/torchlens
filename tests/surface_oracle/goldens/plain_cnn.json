@@ -166,9 +166,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
+    "short_label": "conv2d_1:1",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
+    "short_layer_label": "conv2d_1",
     "layer_type": "conv2d",
     "leaf_module_ops": {
      "__set__": [
@@ -434,9 +434,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -658,9 +658,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -925,9 +925,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -2035,13 +2035,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
+    "short_label": "conv2d_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "conv2d_1_1:1"
     },
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
+    "short_layer_label": "conv2d_1",
     "layer_type": "conv2d",
     "lookup_keys": [
      -3,
@@ -2400,13 +2400,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -4,
@@ -2748,13 +2748,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -3127,13 +3127,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_2:1"
     },
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -4367,9 +4367,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
+    "short_label": "conv2d_1:1",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
+    "short_layer_label": "conv2d_1",
     "layer_type": "conv2d",
     "leaf_module_ops": {
      "__set__": [
@@ -4635,9 +4635,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -4859,9 +4859,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -5126,9 +5126,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -6236,13 +6236,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
+    "short_label": "conv2d_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "conv2d_1_1:1"
     },
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
+    "short_layer_label": "conv2d_1",
     "layer_type": "conv2d",
     "lookup_keys": [
      -3,
@@ -6601,13 +6601,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -4,
@@ -6949,13 +6949,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -7328,13 +7328,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_2:1"
     },
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -8559,9 +8559,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
+    "short_label": "conv2d_1:1",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
+    "short_layer_label": "conv2d_1",
     "layer_type": "conv2d",
     "leaf_module_ops": {
      "__set__": [
@@ -8827,9 +8827,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -9051,9 +9051,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -9318,9 +9318,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -10428,13 +10428,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
+    "short_label": "conv2d_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "conv2d_1_1:1"
     },
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
+    "short_layer_label": "conv2d_1",
     "layer_type": "conv2d",
     "lookup_keys": [
      -3,
@@ -10793,13 +10793,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -4,
@@ -11141,13 +11141,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -11520,13 +11520,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_2:1"
     },
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -12694,9 +12694,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
+    "short_label": "conv2d_1:1",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
+    "short_layer_label": "conv2d_1",
     "layer_type": "conv2d",
     "leaf_module_ops": {
      "__set__": [
@@ -12962,9 +12962,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -13186,9 +13186,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -13453,9 +13453,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -14563,13 +14563,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
+    "short_label": "conv2d_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "conv2d_1_1:1"
     },
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
+    "short_layer_label": "conv2d_1",
     "layer_type": "conv2d",
     "lookup_keys": [
      -3,
@@ -14928,13 +14928,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -4,
@@ -15276,13 +15276,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -15655,13 +15655,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_2:1"
     },
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,
@@ -16903,9 +16903,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
+    "short_label": "conv2d_1:1",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
+    "short_layer_label": "conv2d_1",
     "layer_type": "conv2d",
     "leaf_module_ops": {
      "__set__": [
@@ -17171,9 +17171,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -17395,9 +17395,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -17649,9 +17649,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -18734,10 +18734,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "conv2d_1_1:1",
-    "label_short": "conv2d_1:1",
+    "short_label": "conv2d_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "conv2d_1_1",
-    "layer_label_short": "conv2d_1",
+    "short_layer_label": "conv2d_1",
     "layer_type": "conv2d",
     "lookup_keys": [
      -3,
@@ -19096,10 +19096,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -4,
@@ -19424,10 +19424,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -19768,10 +19768,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_2:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "relu_1_2",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -2,

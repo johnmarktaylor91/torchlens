@@ -1444,9 +1444,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         _tracing_finished: Any
         _construction_done: Any
         label: Any
-        label_short: Any
+        short_label: Any
         layer_label: Any
-        layer_label_short: Any
+        short_layer_label: Any
         type: Any
         type_index: Any
         pass_index: Any
@@ -1608,9 +1608,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         "_construction_done": FieldPolicy.DROP,
         "_is_in_conditional_body": FieldPolicy.KEEP,
         "label": FieldPolicy.KEEP,
-        "label_short": FieldPolicy.KEEP,
+        "short_label": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
-        "layer_label_short": FieldPolicy.KEEP,
+        "short_layer_label": FieldPolicy.KEEP,
         "type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
         "pass_index": FieldPolicy.KEEP,

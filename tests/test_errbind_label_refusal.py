@@ -54,7 +54,7 @@ def cnn() -> tuple[_Counted, torch.Tensor]:
 
 REFUSED = {
     "label_final": lambda: tl.label("relu_1_2"),
-    "label_short": lambda: tl.label("relu_1"),
+    "short_label": lambda: tl.label("relu_1"),
     "label_pass": lambda: tl.label("conv2d_2_3:1"),
     "label_short_pass": lambda: tl.label("relu_1:1"),
     "label_unknown": lambda: tl.label("nonexistent"),

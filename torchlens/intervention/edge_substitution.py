@@ -172,10 +172,10 @@ def _edit_hook(edit: Any, site_label: str) -> tuple[Any, Edit | None, str]:
         if edit.factory is None:
             raise _apply_invalid(
                 "not_maskable",
-                f"edit {edit.helper_name!r} has no runtime factory.",
+                f"edit {edit.name!r} has no runtime factory.",
                 site=site_label,
             )
-        return edit.factory(), edit, edit.helper_name
+        return edit.factory(), edit, edit.name
     if callable(edit):
         return edit, None, getattr(edit, "__name__", "hook")
     if not isinstance(edit, torch.Tensor):
@@ -196,7 +196,7 @@ def _edit_hook(edit: Any, site_label: str) -> tuple[Any, Edit | None, str]:
     spec = replace_with(edit)
     if spec.factory is None:
         raise RuntimeError("replace_with spec lost its factory")
-    return spec.factory(), spec, spec.helper_name
+    return spec.factory(), spec, spec.name
 
 
 def apply_edge_substitution_do(
@@ -303,7 +303,7 @@ def apply_edge_substitution_do(
                 func_call_id=child_op.func_call_id,
                 container_path=tuple(child_op.container_path or ()),
                 engine="replay",
-                helper=(
+                edit=(
                     dataclasses.replace(
                         helper_spec,
                         selection_recipe={
@@ -317,7 +317,7 @@ def apply_edge_substitution_do(
                 site_label=child_op.layer_label,
                 timing="post",
                 direction="forward",
-                helper_name=helper_name,
+                edit_name=helper_name,
                 # Edge substitution replaces no node's OUTPUT: the child's
                 # output is derived by re-execution, so the node-level
                 # corroboration key must not fire.

@@ -593,7 +593,7 @@ class TFEagerCaptureSession:
             func_name=op_type_text,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=module_frames,
             recent_events=(),
             recent_ops=(),

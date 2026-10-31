@@ -520,7 +520,7 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
     assert torch.equal(sigmoid.out, torch.sigmoid(replacement.out))
     assert replacement.is_edited is True
     assert replacement.interventions[-1].replaced is True
-    assert replacement.interventions[-1].helper_name == "splice_module"
+    assert replacement.interventions[-1].edit_name == "splice_module"
     assert check_metadata_invariants(log) is True
     for module_call_label, module_call in log.module_calls.items():
         assert module_call.call_parent != module_call_label

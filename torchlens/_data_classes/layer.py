@@ -391,7 +391,7 @@ class Layer(_SelectionOperand):
         # (``_install_layer_mirror_descriptors``); declared here so static
         # analysis sees the public surface.
         layer_label: Any
-        layer_label_short: Any
+        short_layer_label: Any
         layer_type: Any
         type_index: Any
         step_index: Any
@@ -479,7 +479,7 @@ class Layer(_SelectionOperand):
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_is_in_conditional_body": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
-        "layer_label_short": FieldPolicy.KEEP,
+        "short_layer_label": FieldPolicy.KEEP,
         "layer_type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
         "step_index": FieldPolicy.KEEP,
@@ -1555,9 +1555,9 @@ class Layer(_SelectionOperand):
         return cast(str, self._single_pass_or_error("label"))
 
     @property
-    def label_short(self) -> str:
+    def short_label(self) -> str:
         """For single-pass layers, return the short pass-qualified label."""
-        return cast(str, self._single_pass_or_error("label_short"))
+        return cast(str, self._single_pass_or_error("short_label"))
 
     @property
     def params(self) -> Any:

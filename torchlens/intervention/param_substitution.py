@@ -632,7 +632,7 @@ def _param_fire_record(
         func_call_id=child_op.func_call_id,
         container_path=tuple(child_op.container_path or ()),
         engine="replay",
-        helper=(
+        edit=(
             dataclasses.replace(
                 helper_spec,
                 selection_recipe={
@@ -650,7 +650,7 @@ def _param_fire_record(
         site_label=child_op.layer_label,
         timing="post",
         direction="forward",
-        helper_name=helper_name,
+        edit_name=helper_name,
         # Parameter substitution replaces no node's OUTPUT: the child's
         # output is derived by re-execution, so the node-level
         # corroboration key must not fire (same rule as edge substitution).

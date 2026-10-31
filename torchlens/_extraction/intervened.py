@@ -167,7 +167,7 @@ def _refuse_batch_dependent(rule: Any) -> None:
     helper = _rule_helper(rule)
     if helper is not None and bool(helper.is_batch_independent):
         return
-    name = helper.helper_name if helper is not None else rule.action_repr
+    name = helper.name if helper is not None else rule.action_repr
     raise InvalidArgumentError(
         f"Intervention action {name!r} does not declare is_batch_independent=True. "
         "Extraction stores one row per stimulus, so an edit whose value reads "

@@ -471,7 +471,7 @@ def _build_record_context(
         func_name=_read_field(data, "func_name"),
         address=_read_field(data, "address"),
         module_type=_read_field(data, "module_type"),
-        module_pass_index=_read_field(data, "module_pass_index"),
+        module_pass_number=_read_field(data, "module_pass_number"),
         module_stack=stack,
         recent_events=recent_events,
         recent_ops=_recent_ops_for_event(recent_events, include_source_events),
@@ -1000,9 +1000,9 @@ _OPLOG_FIELDS_KNOWN_LATE = frozenset(
     {
         "final_out",
         "layer_label",
-        "layer_label_short",
+        "short_layer_label",
         "label",
-        "label_short",
+        "short_label",
     }
 )
 

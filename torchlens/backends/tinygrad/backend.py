@@ -1090,7 +1090,7 @@ class TinygradBackend:
             func_name=func_name,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=(),
             recent_events=(),
             recent_ops=(),

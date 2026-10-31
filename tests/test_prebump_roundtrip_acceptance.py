@@ -515,17 +515,17 @@ def test_l6_selection_family_roundtrip(tmp_path) -> None:
     fork = _selection_fork()
     live_audit = fork.intervention_audit
     live_recipe = next(
-        record.helper.selection_recipe
+        record.edit.selection_recipe
         for record in fork["relu_1_2"].ops[0].interventions
-        if record.helper is not None
+        if record.edit is not None
     )
     assert live_recipe["resolve_digest"]
     loaded = _plain_roundtrip(fork, tmp_path, "selection")
     assert loaded.intervention_audit == live_audit
     loaded_recipe = next(
-        record.helper.selection_recipe
+        record.edit.selection_recipe
         for record in loaded["relu_1_2"].ops[0].interventions
-        if record.helper is not None
+        if record.edit is not None
     )
     assert loaded_recipe == live_recipe
     gen2 = _second_generation(loaded, tmp_path, "selection")

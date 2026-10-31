@@ -196,7 +196,7 @@ def keep_grad(edit: Any) -> Any:
     if isinstance(edit, Edit):
         if edit.kind != "forward" or edit.direction == "backward" or edit.factory is None:
             raise InvalidArgumentError(
-                f"keep_grad() got {edit.helper_name!r}, which is not a forward edit with a "
+                f"keep_grad() got {edit.name!r}, which is not a forward edit with a "
                 "runtime hook; the check applies to the values a forward edit writes",
                 code="keep_grad_edit_invalid",
                 remedy=f"wrap a forward edit, e.g. tl.intervention.keep_grad(tl.scale(2.0)) "
@@ -205,7 +205,7 @@ def keep_grad(edit: Any) -> Any:
             )
         return dataclasses.replace(
             edit,
-            factory=_checked_factory(edit.factory, edit.helper_name),
+            factory=_checked_factory(edit.factory, edit.name),
             portability="opaque_audit",
             metadata=tuple(edit.metadata) + (("keep_grad", True),),
         )

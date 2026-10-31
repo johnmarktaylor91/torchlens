@@ -109,7 +109,7 @@ def test_paddle_zero_ablate_e2e_changes_downstream_and_validates() -> None:
     assert relu.is_edited is True
     fire_records = list(relu.interventions)
     assert fire_records and fire_records[0].replaced is True
-    assert fire_records[0].helper_name == "zero_ablate"
+    assert fire_records[0].edit_name == "zero_ablate"
 
     downstream_delta = np.abs(_output_op(plain).out.numpy() - _output_op(ablated).out.numpy()).max()
     assert downstream_delta > 1.0

@@ -393,11 +393,11 @@ def _log_output_tensor_info(
 
     # Other labeling info
     fields_dict["layer_label"] = None
-    fields_dict["layer_label_short"] = None
+    fields_dict["short_layer_label"] = None
     fields_dict["label"] = None
-    fields_dict["label_short"] = None
+    fields_dict["short_label"] = None
     fields_dict["layer_label"] = None
-    fields_dict["layer_label_short"] = None
+    fields_dict["short_layer_label"] = None
     fields_dict["type"] = layer_type
     fields_dict["_layer_label_raw"] = _label_raw
     fields_dict["type_index"] = type_index

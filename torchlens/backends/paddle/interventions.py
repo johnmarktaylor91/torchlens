@@ -180,11 +180,11 @@ class PaddleInterventionRuntime:
             func_call_id=ctx.func_call_id,
             container_path=container_path,
             engine="paddle_wrapper",
-            helper=helper_spec,
+            edit=helper_spec,
             site_label=ctx.label_raw,
             timing="post",
             direction="forward",
-            helper_name=helper_spec.helper_name if helper_spec is not None else None,
+            edit_name=helper_spec.name if helper_spec is not None else None,
             timestamp=time.time(),
             call_index=ctx.raw_index,
             replaced=replaced,
@@ -338,7 +338,7 @@ class PaddleInterventionRuntime:
         """
 
         paddle = self._backend.paddle
-        name = helper.helper_name
+        name = helper.name
         args = tuple(helper.args)
         if name == "zero_ablate":
             return lambda out: paddle.zeros_like(out)

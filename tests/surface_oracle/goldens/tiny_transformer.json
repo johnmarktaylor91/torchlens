@@ -132,9 +132,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_27:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_27",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -396,9 +396,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_2_34:1",
-    "label_short": "add_2:1",
+    "short_label": "add_2:1",
     "layer_label": "add_2_34",
-    "layer_label_short": "add_2",
+    "short_layer_label": "add_2",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -687,9 +687,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "contiguous_1_7:1",
-    "label_short": "contiguous_1:1",
+    "short_label": "contiguous_1:1",
     "layer_label": "contiguous_1_7",
-    "layer_label_short": "contiguous_1",
+    "short_layer_label": "contiguous_1",
     "layer_type": "contiguous",
     "leaf_module_ops": {
      "__set__": []
@@ -966,9 +966,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_1_26:1",
-    "label_short": "dropout_1:1",
+    "short_label": "dropout_1:1",
     "layer_label": "dropout_1_26",
-    "layer_label_short": "dropout_1",
+    "short_layer_label": "dropout_1",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -1249,9 +1249,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_2_31:1",
-    "label_short": "dropout_2:1",
+    "short_label": "dropout_2:1",
     "layer_label": "dropout_2_31",
-    "layer_label_short": "dropout_2",
+    "short_layer_label": "dropout_2",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -1534,9 +1534,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_3_33:1",
-    "label_short": "dropout_3:1",
+    "short_label": "dropout_3:1",
     "layer_label": "dropout_3_33",
-    "layer_label_short": "dropout_3",
+    "short_layer_label": "dropout_3",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -1816,9 +1816,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_1_8:1",
-    "label_short": "getitem_1:1",
+    "short_label": "getitem_1:1",
     "layer_label": "getitem_1_8",
-    "layer_label_short": "getitem_1",
+    "short_layer_label": "getitem_1",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -2093,9 +2093,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_2_9:1",
-    "label_short": "getitem_2:1",
+    "short_label": "getitem_2:1",
     "layer_label": "getitem_2_9",
-    "layer_label_short": "getitem_2",
+    "short_layer_label": "getitem_2",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -2370,9 +2370,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_3_10:1",
-    "label_short": "getitem_3:1",
+    "short_label": "getitem_3:1",
     "layer_label": "getitem_3_10",
-    "layer_label_short": "getitem_3",
+    "short_layer_label": "getitem_3",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -2623,9 +2623,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -2904,9 +2904,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "layernorm_1_28:1",
-    "label_short": "layernorm_1:1",
+    "short_label": "layernorm_1:1",
     "layer_label": "layernorm_1_28",
-    "layer_label_short": "layernorm_1",
+    "short_layer_label": "layernorm_1",
     "layer_type": "layernorm",
     "leaf_module_ops": {
      "__set__": [
@@ -3212,9 +3212,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "layernorm_2_35:1",
-    "label_short": "layernorm_2:1",
+    "short_label": "layernorm_2:1",
     "layer_label": "layernorm_2_35",
-    "layer_label_short": "layernorm_2",
+    "short_layer_label": "layernorm_2",
     "layer_type": "layernorm",
     "leaf_module_ops": {
      "__set__": [
@@ -3528,9 +3528,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_1_2:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer_label": "linear_1_2",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": []
@@ -3829,9 +3829,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_2_23:1",
-    "label_short": "linear_2:1",
+    "short_label": "linear_2:1",
     "layer_label": "linear_2_23",
-    "layer_label_short": "linear_2",
+    "short_layer_label": "linear_2",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": []
@@ -4124,9 +4124,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_3_29:1",
-    "label_short": "linear_3:1",
+    "short_label": "linear_3:1",
     "layer_label": "linear_3_29",
-    "layer_label_short": "linear_3",
+    "short_layer_label": "linear_3",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -4431,9 +4431,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_4_32:1",
-    "label_short": "linear_4:1",
+    "short_label": "linear_4:1",
     "layer_label": "linear_4_32",
-    "layer_label_short": "linear_4",
+    "short_layer_label": "linear_4",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -4688,9 +4688,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -4976,9 +4976,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "permute_1_21:1",
-    "label_short": "permute_1:1",
+    "short_label": "permute_1:1",
     "layer_label": "permute_1_21",
-    "layer_label_short": "permute_1",
+    "short_layer_label": "permute_1",
     "layer_type": "permute",
     "leaf_module_ops": {
      "__set__": []
@@ -5245,9 +5245,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_30:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_30",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -5515,9 +5515,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "reshape_1_22:1",
-    "label_short": "reshape_1:1",
+    "short_label": "reshape_1:1",
     "layer_label": "reshape_1_22",
-    "layer_label_short": "reshape_1",
+    "short_layer_label": "reshape_1",
     "layer_type": "reshape",
     "leaf_module_ops": {
      "__set__": []
@@ -5790,9 +5790,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "scaleddotproductattention_1_20:1",
-    "label_short": "scaleddotproductattention_1:1",
+    "short_label": "scaleddotproductattention_1:1",
     "layer_label": "scaleddotproductattention_1_20",
-    "layer_label_short": "scaleddotproductattention_1",
+    "short_layer_label": "scaleddotproductattention_1",
     "layer_type": "scaleddotproductattention",
     "leaf_module_ops": {
      "__set__": []
@@ -6080,9 +6080,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "squeeze_1_6:1",
-    "label_short": "squeeze_1:1",
+    "short_label": "squeeze_1:1",
     "layer_label": "squeeze_1_6",
-    "layer_label_short": "squeeze_1",
+    "short_layer_label": "squeeze_1",
     "layer_type": "squeeze",
     "leaf_module_ops": {
      "__set__": []
@@ -6353,9 +6353,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_1_1:1",
-    "label_short": "transpose_1:1",
+    "short_label": "transpose_1:1",
     "layer_label": "transpose_1_1",
-    "layer_label_short": "transpose_1",
+    "short_layer_label": "transpose_1",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -6634,9 +6634,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_2_5:1",
-    "label_short": "transpose_2:1",
+    "short_label": "transpose_2:1",
     "layer_label": "transpose_2_5",
-    "layer_label_short": "transpose_2",
+    "short_layer_label": "transpose_2",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -6915,9 +6915,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_3_12:1",
-    "label_short": "transpose_3:1",
+    "short_label": "transpose_3:1",
     "layer_label": "transpose_3_12",
-    "layer_label_short": "transpose_3",
+    "short_layer_label": "transpose_3",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -7192,9 +7192,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_4_14:1",
-    "label_short": "transpose_4:1",
+    "short_label": "transpose_4:1",
     "layer_label": "transpose_4_14",
-    "layer_label_short": "transpose_4",
+    "short_layer_label": "transpose_4",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -7469,9 +7469,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_5_16:1",
-    "label_short": "transpose_5:1",
+    "short_label": "transpose_5:1",
     "layer_label": "transpose_5_16",
-    "layer_label_short": "transpose_5",
+    "short_layer_label": "transpose_5",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -7740,9 +7740,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_6_25:1",
-    "label_short": "transpose_6:1",
+    "short_label": "transpose_6:1",
     "layer_label": "transpose_6_25",
-    "layer_label_short": "transpose_6",
+    "short_layer_label": "transpose_6",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -8022,9 +8022,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "unflatten_1_3:1",
-    "label_short": "unflatten_1:1",
+    "short_label": "unflatten_1:1",
     "layer_label": "unflatten_1_3",
-    "layer_label_short": "unflatten_1",
+    "short_layer_label": "unflatten_1",
     "layer_type": "unflatten",
     "leaf_module_ops": {
      "__set__": []
@@ -8299,9 +8299,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "unsqueeze_1_4:1",
-    "label_short": "unsqueeze_1:1",
+    "short_label": "unsqueeze_1:1",
     "layer_label": "unsqueeze_1_4",
-    "layer_label_short": "unsqueeze_1",
+    "short_layer_label": "unsqueeze_1",
     "layer_type": "unsqueeze",
     "leaf_module_ops": {
      "__set__": []
@@ -8575,9 +8575,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_1_11:1",
-    "label_short": "view_1:1",
+    "short_label": "view_1:1",
     "layer_label": "view_1_11",
-    "layer_label_short": "view_1",
+    "short_layer_label": "view_1",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -8847,9 +8847,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_2_13:1",
-    "label_short": "view_2:1",
+    "short_label": "view_2:1",
     "layer_label": "view_2_13",
-    "layer_label_short": "view_2",
+    "short_layer_label": "view_2",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -9119,9 +9119,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_3_15:1",
-    "label_short": "view_3:1",
+    "short_label": "view_3:1",
     "layer_label": "view_3_15",
-    "layer_label_short": "view_3",
+    "short_layer_label": "view_3",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -9394,9 +9394,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_4_17:1",
-    "label_short": "view_4:1",
+    "short_label": "view_4:1",
     "layer_label": "view_4_17",
-    "layer_label_short": "view_4",
+    "short_layer_label": "view_4",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -9671,9 +9671,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_5_18:1",
-    "label_short": "view_5:1",
+    "short_label": "view_5:1",
     "layer_label": "view_5_18",
-    "layer_label_short": "view_5",
+    "short_layer_label": "view_5",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -9948,9 +9948,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_6_19:1",
-    "label_short": "view_6:1",
+    "short_label": "view_6:1",
     "layer_label": "view_6_19",
-    "layer_label_short": "view_6",
+    "short_layer_label": "view_6",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -10220,9 +10220,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_7_24:1",
-    "label_short": "view_7:1",
+    "short_label": "view_7:1",
     "layer_label": "view_7_24",
-    "layer_label_short": "view_7",
+    "short_layer_label": "view_7",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -14528,13 +14528,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_27:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_27:1"
     },
     "layer_label": "add_1_27",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -10,
@@ -14924,13 +14924,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_2_34:1",
-    "label_short": "add_2:1",
+    "short_label": "add_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_2_34:1"
     },
     "layer_label": "add_2_34",
-    "layer_label_short": "add_2",
+    "short_layer_label": "add_2",
     "layer_type": "add",
     "lookup_keys": [
      -3,
@@ -15321,13 +15321,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "contiguous_1_7:1",
-    "label_short": "contiguous_1:1",
+    "short_label": "contiguous_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "contiguous_1_7:1"
     },
     "layer_label": "contiguous_1_7",
-    "layer_label_short": "contiguous_1",
+    "short_layer_label": "contiguous_1",
     "layer_type": "contiguous",
     "lookup_keys": [
      -30,
@@ -15724,13 +15724,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_1_26:1",
-    "label_short": "dropout_1:1",
+    "short_label": "dropout_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "dropout_1_26:1"
     },
     "layer_label": "dropout_1_26",
-    "layer_label_short": "dropout_1",
+    "short_layer_label": "dropout_1",
     "layer_type": "dropout",
     "lookup_keys": [
      -11,
@@ -16136,13 +16136,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_2_31:1",
-    "label_short": "dropout_2:1",
+    "short_label": "dropout_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "dropout_2_31:1"
     },
     "layer_label": "dropout_2_31",
-    "layer_label_short": "dropout_2",
+    "short_layer_label": "dropout_2",
     "layer_type": "dropout",
     "lookup_keys": [
      -6,
@@ -16550,13 +16550,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_3_33:1",
-    "label_short": "dropout_3:1",
+    "short_label": "dropout_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "dropout_3_33:1"
     },
     "layer_label": "dropout_3_33",
-    "layer_label_short": "dropout_3",
+    "short_layer_label": "dropout_3",
     "layer_type": "dropout",
     "lookup_keys": [
      -4,
@@ -16950,13 +16950,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_1_8:1",
-    "label_short": "getitem_1:1",
+    "short_label": "getitem_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "getitem_1_8:1"
     },
     "layer_label": "getitem_1_8",
-    "layer_label_short": "getitem_1",
+    "short_layer_label": "getitem_1",
     "layer_type": "getitem",
     "lookup_keys": [
      -29,
@@ -17346,13 +17346,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_2_9:1",
-    "label_short": "getitem_2:1",
+    "short_label": "getitem_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "getitem_2_9:1"
     },
     "layer_label": "getitem_2_9",
-    "layer_label_short": "getitem_2",
+    "short_layer_label": "getitem_2",
     "layer_type": "getitem",
     "lookup_keys": [
      -28,
@@ -17742,13 +17742,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_3_10:1",
-    "label_short": "getitem_3:1",
+    "short_label": "getitem_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "getitem_3_10:1"
     },
     "layer_label": "getitem_3_10",
-    "layer_label_short": "getitem_3",
+    "short_layer_label": "getitem_3",
     "layer_type": "getitem",
     "lookup_keys": [
      -27,
@@ -18078,13 +18078,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -37,
@@ -18501,13 +18501,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "layernorm_1_28:1",
-    "label_short": "layernorm_1:1",
+    "short_label": "layernorm_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "layernorm_1_28:1"
     },
     "layer_label": "layernorm_1_28",
-    "layer_label_short": "layernorm_1",
+    "short_layer_label": "layernorm_1",
     "layer_type": "layernorm",
     "lookup_keys": [
      -9,
@@ -18950,13 +18950,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "layernorm_2_35:1",
-    "label_short": "layernorm_2:1",
+    "short_label": "layernorm_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "layernorm_2_35:1"
     },
     "layer_label": "layernorm_2_35",
-    "layer_label_short": "layernorm_2",
+    "short_layer_label": "layernorm_2",
     "layer_type": "layernorm",
     "lookup_keys": [
      -2,
@@ -19391,13 +19391,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_2:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_2:1"
     },
     "layer_label": "linear_1_2",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -35,
@@ -19812,13 +19812,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_2_23:1",
-    "label_short": "linear_2:1",
+    "short_label": "linear_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_2_23:1"
     },
     "layer_label": "linear_2_23",
-    "layer_label_short": "linear_2",
+    "short_layer_label": "linear_2",
     "layer_type": "linear",
     "lookup_keys": [
      -14,
@@ -20231,13 +20231,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_3_29:1",
-    "label_short": "linear_3:1",
+    "short_label": "linear_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_3_29:1"
     },
     "layer_label": "linear_3_29",
-    "layer_label_short": "linear_3",
+    "short_layer_label": "linear_3",
     "layer_type": "linear",
     "lookup_keys": [
      -8,
@@ -20664,13 +20664,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_4_32:1",
-    "label_short": "linear_4:1",
+    "short_label": "linear_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_4_32:1"
     },
     "layer_label": "linear_4_32",
-    "layer_label_short": "linear_4",
+    "short_layer_label": "linear_4",
     "layer_type": "linear",
     "lookup_keys": [
      -5,
@@ -21042,13 +21042,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -21450,13 +21450,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "permute_1_21:1",
-    "label_short": "permute_1:1",
+    "short_label": "permute_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "permute_1_21:1"
     },
     "layer_label": "permute_1_21",
-    "layer_label_short": "permute_1",
+    "short_layer_label": "permute_1",
     "layer_type": "permute",
     "lookup_keys": [
      -16,
@@ -21844,13 +21844,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_30:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_30:1"
     },
     "layer_label": "relu_1_30",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -7,
@@ -22238,13 +22238,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "reshape_1_22:1",
-    "label_short": "reshape_1:1",
+    "short_label": "reshape_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "reshape_1_22:1"
     },
     "layer_label": "reshape_1_22",
-    "layer_label_short": "reshape_1",
+    "short_layer_label": "reshape_1",
     "layer_type": "reshape",
     "lookup_keys": [
      -15,
@@ -22674,13 +22674,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "scaleddotproductattention_1_20:1",
-    "label_short": "scaleddotproductattention_1:1",
+    "short_label": "scaleddotproductattention_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "scaleddotproductattention_1_20:1"
     },
     "layer_label": "scaleddotproductattention_1_20",
-    "layer_label_short": "scaleddotproductattention_1",
+    "short_layer_label": "scaleddotproductattention_1",
     "layer_type": "scaleddotproductattention",
     "lookup_keys": [
      -17,
@@ -23080,13 +23080,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "squeeze_1_6:1",
-    "label_short": "squeeze_1:1",
+    "short_label": "squeeze_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "squeeze_1_6:1"
     },
     "layer_label": "squeeze_1_6",
-    "layer_label_short": "squeeze_1",
+    "short_layer_label": "squeeze_1",
     "layer_type": "squeeze",
     "lookup_keys": [
      -31,
@@ -23475,13 +23475,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_1_1:1",
-    "label_short": "transpose_1:1",
+    "short_label": "transpose_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_1_1:1"
     },
     "layer_label": "transpose_1_1",
-    "layer_label_short": "transpose_1",
+    "short_layer_label": "transpose_1",
     "layer_type": "transpose",
     "lookup_keys": [
      -36,
@@ -23881,13 +23881,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_2_5:1",
-    "label_short": "transpose_2:1",
+    "short_label": "transpose_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_2_5:1"
     },
     "layer_label": "transpose_2_5",
-    "layer_label_short": "transpose_2",
+    "short_layer_label": "transpose_2",
     "layer_type": "transpose",
     "lookup_keys": [
      -32,
@@ -24285,13 +24285,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_3_12:1",
-    "label_short": "transpose_3:1",
+    "short_label": "transpose_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_3_12:1"
     },
     "layer_label": "transpose_3_12",
-    "layer_label_short": "transpose_3",
+    "short_layer_label": "transpose_3",
     "layer_type": "transpose",
     "lookup_keys": [
      -25,
@@ -24685,13 +24685,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_4_14:1",
-    "label_short": "transpose_4:1",
+    "short_label": "transpose_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_4_14:1"
     },
     "layer_label": "transpose_4_14",
-    "layer_label_short": "transpose_4",
+    "short_layer_label": "transpose_4",
     "layer_type": "transpose",
     "lookup_keys": [
      -23,
@@ -25085,13 +25085,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_5_16:1",
-    "label_short": "transpose_5:1",
+    "short_label": "transpose_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_5_16:1"
     },
     "layer_label": "transpose_5_16",
-    "layer_label_short": "transpose_5",
+    "short_layer_label": "transpose_5",
     "layer_type": "transpose",
     "lookup_keys": [
      -21,
@@ -25483,13 +25483,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_6_25:1",
-    "label_short": "transpose_6:1",
+    "short_label": "transpose_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_6_25:1"
     },
     "layer_label": "transpose_6_25",
-    "layer_label_short": "transpose_6",
+    "short_layer_label": "transpose_6",
     "layer_type": "transpose",
     "lookup_keys": [
      -12,
@@ -25895,13 +25895,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "unflatten_1_3:1",
-    "label_short": "unflatten_1:1",
+    "short_label": "unflatten_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "unflatten_1_3:1"
     },
     "layer_label": "unflatten_1_3",
-    "layer_label_short": "unflatten_1",
+    "short_layer_label": "unflatten_1",
     "layer_type": "unflatten",
     "lookup_keys": [
      -34,
@@ -26297,13 +26297,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "unsqueeze_1_4:1",
-    "label_short": "unsqueeze_1:1",
+    "short_label": "unsqueeze_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "unsqueeze_1_4:1"
     },
     "layer_label": "unsqueeze_1_4",
-    "layer_label_short": "unsqueeze_1",
+    "short_layer_label": "unsqueeze_1",
     "layer_type": "unsqueeze",
     "lookup_keys": [
      -33,
@@ -26697,13 +26697,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_1_11:1",
-    "label_short": "view_1:1",
+    "short_label": "view_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_1_11:1"
     },
     "layer_label": "view_1_11",
-    "layer_label_short": "view_1",
+    "short_layer_label": "view_1",
     "layer_type": "view",
     "lookup_keys": [
      -26,
@@ -27095,13 +27095,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_2_13:1",
-    "label_short": "view_2:1",
+    "short_label": "view_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_2_13:1"
     },
     "layer_label": "view_2_13",
-    "layer_label_short": "view_2",
+    "short_layer_label": "view_2",
     "layer_type": "view",
     "lookup_keys": [
      -24,
@@ -27493,13 +27493,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_3_15:1",
-    "label_short": "view_3:1",
+    "short_label": "view_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_3_15:1"
     },
     "layer_label": "view_3_15",
-    "layer_label_short": "view_3",
+    "short_layer_label": "view_3",
     "layer_type": "view",
     "lookup_keys": [
      -22,
@@ -27896,13 +27896,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_4_17:1",
-    "label_short": "view_4:1",
+    "short_label": "view_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_4_17:1"
     },
     "layer_label": "view_4_17",
-    "layer_label_short": "view_4",
+    "short_layer_label": "view_4",
     "layer_type": "view",
     "lookup_keys": [
      -20,
@@ -28302,13 +28302,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_5_18:1",
-    "label_short": "view_5:1",
+    "short_label": "view_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_5_18:1"
     },
     "layer_label": "view_5_18",
-    "layer_label_short": "view_5",
+    "short_layer_label": "view_5",
     "layer_type": "view",
     "lookup_keys": [
      -19,
@@ -28708,13 +28708,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_6_19:1",
-    "label_short": "view_6:1",
+    "short_label": "view_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_6_19:1"
     },
     "layer_label": "view_6_19",
-    "layer_label_short": "view_6",
+    "short_layer_label": "view_6",
     "layer_type": "view",
     "lookup_keys": [
      -18,
@@ -29106,13 +29106,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_7_24:1",
-    "label_short": "view_7:1",
+    "short_label": "view_7:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_7_24:1"
     },
     "layer_label": "view_7_24",
-    "layer_label_short": "view_7",
+    "short_layer_label": "view_7",
     "layer_type": "view",
     "lookup_keys": [
      -13,
@@ -34395,9 +34395,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_27:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_27",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -34659,9 +34659,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_2_34:1",
-    "label_short": "add_2:1",
+    "short_label": "add_2:1",
     "layer_label": "add_2_34",
-    "layer_label_short": "add_2",
+    "short_layer_label": "add_2",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -34950,9 +34950,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "contiguous_1_7:1",
-    "label_short": "contiguous_1:1",
+    "short_label": "contiguous_1:1",
     "layer_label": "contiguous_1_7",
-    "layer_label_short": "contiguous_1",
+    "short_layer_label": "contiguous_1",
     "layer_type": "contiguous",
     "leaf_module_ops": {
      "__set__": []
@@ -35229,9 +35229,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_1_26:1",
-    "label_short": "dropout_1:1",
+    "short_label": "dropout_1:1",
     "layer_label": "dropout_1_26",
-    "layer_label_short": "dropout_1",
+    "short_layer_label": "dropout_1",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -35512,9 +35512,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_2_31:1",
-    "label_short": "dropout_2:1",
+    "short_label": "dropout_2:1",
     "layer_label": "dropout_2_31",
-    "layer_label_short": "dropout_2",
+    "short_layer_label": "dropout_2",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -35797,9 +35797,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_3_33:1",
-    "label_short": "dropout_3:1",
+    "short_label": "dropout_3:1",
     "layer_label": "dropout_3_33",
-    "layer_label_short": "dropout_3",
+    "short_layer_label": "dropout_3",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -36079,9 +36079,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_1_8:1",
-    "label_short": "getitem_1:1",
+    "short_label": "getitem_1:1",
     "layer_label": "getitem_1_8",
-    "layer_label_short": "getitem_1",
+    "short_layer_label": "getitem_1",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -36356,9 +36356,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_2_9:1",
-    "label_short": "getitem_2:1",
+    "short_label": "getitem_2:1",
     "layer_label": "getitem_2_9",
-    "layer_label_short": "getitem_2",
+    "short_layer_label": "getitem_2",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -36633,9 +36633,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_3_10:1",
-    "label_short": "getitem_3:1",
+    "short_label": "getitem_3:1",
     "layer_label": "getitem_3_10",
-    "layer_label_short": "getitem_3",
+    "short_layer_label": "getitem_3",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -36886,9 +36886,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -37167,9 +37167,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "layernorm_1_28:1",
-    "label_short": "layernorm_1:1",
+    "short_label": "layernorm_1:1",
     "layer_label": "layernorm_1_28",
-    "layer_label_short": "layernorm_1",
+    "short_layer_label": "layernorm_1",
     "layer_type": "layernorm",
     "leaf_module_ops": {
      "__set__": [
@@ -37475,9 +37475,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "layernorm_2_35:1",
-    "label_short": "layernorm_2:1",
+    "short_label": "layernorm_2:1",
     "layer_label": "layernorm_2_35",
-    "layer_label_short": "layernorm_2",
+    "short_layer_label": "layernorm_2",
     "layer_type": "layernorm",
     "leaf_module_ops": {
      "__set__": [
@@ -37791,9 +37791,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_1_2:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer_label": "linear_1_2",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": []
@@ -38092,9 +38092,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_2_23:1",
-    "label_short": "linear_2:1",
+    "short_label": "linear_2:1",
     "layer_label": "linear_2_23",
-    "layer_label_short": "linear_2",
+    "short_layer_label": "linear_2",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": []
@@ -38387,9 +38387,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_3_29:1",
-    "label_short": "linear_3:1",
+    "short_label": "linear_3:1",
     "layer_label": "linear_3_29",
-    "layer_label_short": "linear_3",
+    "short_layer_label": "linear_3",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -38694,9 +38694,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_4_32:1",
-    "label_short": "linear_4:1",
+    "short_label": "linear_4:1",
     "layer_label": "linear_4_32",
-    "layer_label_short": "linear_4",
+    "short_layer_label": "linear_4",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -38951,9 +38951,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -39239,9 +39239,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "permute_1_21:1",
-    "label_short": "permute_1:1",
+    "short_label": "permute_1:1",
     "layer_label": "permute_1_21",
-    "layer_label_short": "permute_1",
+    "short_layer_label": "permute_1",
     "layer_type": "permute",
     "leaf_module_ops": {
      "__set__": []
@@ -39508,9 +39508,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_30:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_30",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -39778,9 +39778,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "reshape_1_22:1",
-    "label_short": "reshape_1:1",
+    "short_label": "reshape_1:1",
     "layer_label": "reshape_1_22",
-    "layer_label_short": "reshape_1",
+    "short_layer_label": "reshape_1",
     "layer_type": "reshape",
     "leaf_module_ops": {
      "__set__": []
@@ -40053,9 +40053,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "scaleddotproductattention_1_20:1",
-    "label_short": "scaleddotproductattention_1:1",
+    "short_label": "scaleddotproductattention_1:1",
     "layer_label": "scaleddotproductattention_1_20",
-    "layer_label_short": "scaleddotproductattention_1",
+    "short_layer_label": "scaleddotproductattention_1",
     "layer_type": "scaleddotproductattention",
     "leaf_module_ops": {
      "__set__": []
@@ -40343,9 +40343,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "squeeze_1_6:1",
-    "label_short": "squeeze_1:1",
+    "short_label": "squeeze_1:1",
     "layer_label": "squeeze_1_6",
-    "layer_label_short": "squeeze_1",
+    "short_layer_label": "squeeze_1",
     "layer_type": "squeeze",
     "leaf_module_ops": {
      "__set__": []
@@ -40616,9 +40616,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_1_1:1",
-    "label_short": "transpose_1:1",
+    "short_label": "transpose_1:1",
     "layer_label": "transpose_1_1",
-    "layer_label_short": "transpose_1",
+    "short_layer_label": "transpose_1",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -40897,9 +40897,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_2_5:1",
-    "label_short": "transpose_2:1",
+    "short_label": "transpose_2:1",
     "layer_label": "transpose_2_5",
-    "layer_label_short": "transpose_2",
+    "short_layer_label": "transpose_2",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -41178,9 +41178,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_3_12:1",
-    "label_short": "transpose_3:1",
+    "short_label": "transpose_3:1",
     "layer_label": "transpose_3_12",
-    "layer_label_short": "transpose_3",
+    "short_layer_label": "transpose_3",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -41455,9 +41455,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_4_14:1",
-    "label_short": "transpose_4:1",
+    "short_label": "transpose_4:1",
     "layer_label": "transpose_4_14",
-    "layer_label_short": "transpose_4",
+    "short_layer_label": "transpose_4",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -41732,9 +41732,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_5_16:1",
-    "label_short": "transpose_5:1",
+    "short_label": "transpose_5:1",
     "layer_label": "transpose_5_16",
-    "layer_label_short": "transpose_5",
+    "short_layer_label": "transpose_5",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -42003,9 +42003,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_6_25:1",
-    "label_short": "transpose_6:1",
+    "short_label": "transpose_6:1",
     "layer_label": "transpose_6_25",
-    "layer_label_short": "transpose_6",
+    "short_layer_label": "transpose_6",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -42285,9 +42285,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "unflatten_1_3:1",
-    "label_short": "unflatten_1:1",
+    "short_label": "unflatten_1:1",
     "layer_label": "unflatten_1_3",
-    "layer_label_short": "unflatten_1",
+    "short_layer_label": "unflatten_1",
     "layer_type": "unflatten",
     "leaf_module_ops": {
      "__set__": []
@@ -42562,9 +42562,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "unsqueeze_1_4:1",
-    "label_short": "unsqueeze_1:1",
+    "short_label": "unsqueeze_1:1",
     "layer_label": "unsqueeze_1_4",
-    "layer_label_short": "unsqueeze_1",
+    "short_layer_label": "unsqueeze_1",
     "layer_type": "unsqueeze",
     "leaf_module_ops": {
      "__set__": []
@@ -42838,9 +42838,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_1_11:1",
-    "label_short": "view_1:1",
+    "short_label": "view_1:1",
     "layer_label": "view_1_11",
-    "layer_label_short": "view_1",
+    "short_layer_label": "view_1",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -43110,9 +43110,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_2_13:1",
-    "label_short": "view_2:1",
+    "short_label": "view_2:1",
     "layer_label": "view_2_13",
-    "layer_label_short": "view_2",
+    "short_layer_label": "view_2",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -43382,9 +43382,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_3_15:1",
-    "label_short": "view_3:1",
+    "short_label": "view_3:1",
     "layer_label": "view_3_15",
-    "layer_label_short": "view_3",
+    "short_layer_label": "view_3",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -43657,9 +43657,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_4_17:1",
-    "label_short": "view_4:1",
+    "short_label": "view_4:1",
     "layer_label": "view_4_17",
-    "layer_label_short": "view_4",
+    "short_layer_label": "view_4",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -43934,9 +43934,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_5_18:1",
-    "label_short": "view_5:1",
+    "short_label": "view_5:1",
     "layer_label": "view_5_18",
-    "layer_label_short": "view_5",
+    "short_layer_label": "view_5",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -44211,9 +44211,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_6_19:1",
-    "label_short": "view_6:1",
+    "short_label": "view_6:1",
     "layer_label": "view_6_19",
-    "layer_label_short": "view_6",
+    "short_layer_label": "view_6",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -44483,9 +44483,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_7_24:1",
-    "label_short": "view_7:1",
+    "short_label": "view_7:1",
     "layer_label": "view_7_24",
-    "layer_label_short": "view_7",
+    "short_layer_label": "view_7",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -48791,13 +48791,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_27:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_27:1"
     },
     "layer_label": "add_1_27",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -10,
@@ -49187,13 +49187,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_2_34:1",
-    "label_short": "add_2:1",
+    "short_label": "add_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_2_34:1"
     },
     "layer_label": "add_2_34",
-    "layer_label_short": "add_2",
+    "short_layer_label": "add_2",
     "layer_type": "add",
     "lookup_keys": [
      -3,
@@ -49584,13 +49584,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "contiguous_1_7:1",
-    "label_short": "contiguous_1:1",
+    "short_label": "contiguous_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "contiguous_1_7:1"
     },
     "layer_label": "contiguous_1_7",
-    "layer_label_short": "contiguous_1",
+    "short_layer_label": "contiguous_1",
     "layer_type": "contiguous",
     "lookup_keys": [
      -30,
@@ -49987,13 +49987,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_1_26:1",
-    "label_short": "dropout_1:1",
+    "short_label": "dropout_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "dropout_1_26:1"
     },
     "layer_label": "dropout_1_26",
-    "layer_label_short": "dropout_1",
+    "short_layer_label": "dropout_1",
     "layer_type": "dropout",
     "lookup_keys": [
      -11,
@@ -50399,13 +50399,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_2_31:1",
-    "label_short": "dropout_2:1",
+    "short_label": "dropout_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "dropout_2_31:1"
     },
     "layer_label": "dropout_2_31",
-    "layer_label_short": "dropout_2",
+    "short_layer_label": "dropout_2",
     "layer_type": "dropout",
     "lookup_keys": [
      -6,
@@ -50813,13 +50813,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_3_33:1",
-    "label_short": "dropout_3:1",
+    "short_label": "dropout_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "dropout_3_33:1"
     },
     "layer_label": "dropout_3_33",
-    "layer_label_short": "dropout_3",
+    "short_layer_label": "dropout_3",
     "layer_type": "dropout",
     "lookup_keys": [
      -4,
@@ -51213,13 +51213,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_1_8:1",
-    "label_short": "getitem_1:1",
+    "short_label": "getitem_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "getitem_1_8:1"
     },
     "layer_label": "getitem_1_8",
-    "layer_label_short": "getitem_1",
+    "short_layer_label": "getitem_1",
     "layer_type": "getitem",
     "lookup_keys": [
      -29,
@@ -51609,13 +51609,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_2_9:1",
-    "label_short": "getitem_2:1",
+    "short_label": "getitem_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "getitem_2_9:1"
     },
     "layer_label": "getitem_2_9",
-    "layer_label_short": "getitem_2",
+    "short_layer_label": "getitem_2",
     "layer_type": "getitem",
     "lookup_keys": [
      -28,
@@ -52005,13 +52005,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_3_10:1",
-    "label_short": "getitem_3:1",
+    "short_label": "getitem_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "getitem_3_10:1"
     },
     "layer_label": "getitem_3_10",
-    "layer_label_short": "getitem_3",
+    "short_layer_label": "getitem_3",
     "layer_type": "getitem",
     "lookup_keys": [
      -27,
@@ -52341,13 +52341,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -37,
@@ -52764,13 +52764,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "layernorm_1_28:1",
-    "label_short": "layernorm_1:1",
+    "short_label": "layernorm_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "layernorm_1_28:1"
     },
     "layer_label": "layernorm_1_28",
-    "layer_label_short": "layernorm_1",
+    "short_layer_label": "layernorm_1",
     "layer_type": "layernorm",
     "lookup_keys": [
      -9,
@@ -53213,13 +53213,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "layernorm_2_35:1",
-    "label_short": "layernorm_2:1",
+    "short_label": "layernorm_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "layernorm_2_35:1"
     },
     "layer_label": "layernorm_2_35",
-    "layer_label_short": "layernorm_2",
+    "short_layer_label": "layernorm_2",
     "layer_type": "layernorm",
     "lookup_keys": [
      -2,
@@ -53654,13 +53654,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_2:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_2:1"
     },
     "layer_label": "linear_1_2",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -35,
@@ -54075,13 +54075,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_2_23:1",
-    "label_short": "linear_2:1",
+    "short_label": "linear_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_2_23:1"
     },
     "layer_label": "linear_2_23",
-    "layer_label_short": "linear_2",
+    "short_layer_label": "linear_2",
     "layer_type": "linear",
     "lookup_keys": [
      -14,
@@ -54494,13 +54494,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_3_29:1",
-    "label_short": "linear_3:1",
+    "short_label": "linear_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_3_29:1"
     },
     "layer_label": "linear_3_29",
-    "layer_label_short": "linear_3",
+    "short_layer_label": "linear_3",
     "layer_type": "linear",
     "lookup_keys": [
      -8,
@@ -54927,13 +54927,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_4_32:1",
-    "label_short": "linear_4:1",
+    "short_label": "linear_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_4_32:1"
     },
     "layer_label": "linear_4_32",
-    "layer_label_short": "linear_4",
+    "short_layer_label": "linear_4",
     "layer_type": "linear",
     "lookup_keys": [
      -5,
@@ -55305,13 +55305,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -55713,13 +55713,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "permute_1_21:1",
-    "label_short": "permute_1:1",
+    "short_label": "permute_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "permute_1_21:1"
     },
     "layer_label": "permute_1_21",
-    "layer_label_short": "permute_1",
+    "short_layer_label": "permute_1",
     "layer_type": "permute",
     "lookup_keys": [
      -16,
@@ -56107,13 +56107,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_30:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_30:1"
     },
     "layer_label": "relu_1_30",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -7,
@@ -56501,13 +56501,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "reshape_1_22:1",
-    "label_short": "reshape_1:1",
+    "short_label": "reshape_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "reshape_1_22:1"
     },
     "layer_label": "reshape_1_22",
-    "layer_label_short": "reshape_1",
+    "short_layer_label": "reshape_1",
     "layer_type": "reshape",
     "lookup_keys": [
      -15,
@@ -56937,13 +56937,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "scaleddotproductattention_1_20:1",
-    "label_short": "scaleddotproductattention_1:1",
+    "short_label": "scaleddotproductattention_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "scaleddotproductattention_1_20:1"
     },
     "layer_label": "scaleddotproductattention_1_20",
-    "layer_label_short": "scaleddotproductattention_1",
+    "short_layer_label": "scaleddotproductattention_1",
     "layer_type": "scaleddotproductattention",
     "lookup_keys": [
      -17,
@@ -57343,13 +57343,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "squeeze_1_6:1",
-    "label_short": "squeeze_1:1",
+    "short_label": "squeeze_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "squeeze_1_6:1"
     },
     "layer_label": "squeeze_1_6",
-    "layer_label_short": "squeeze_1",
+    "short_layer_label": "squeeze_1",
     "layer_type": "squeeze",
     "lookup_keys": [
      -31,
@@ -57738,13 +57738,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_1_1:1",
-    "label_short": "transpose_1:1",
+    "short_label": "transpose_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_1_1:1"
     },
     "layer_label": "transpose_1_1",
-    "layer_label_short": "transpose_1",
+    "short_layer_label": "transpose_1",
     "layer_type": "transpose",
     "lookup_keys": [
      -36,
@@ -58144,13 +58144,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_2_5:1",
-    "label_short": "transpose_2:1",
+    "short_label": "transpose_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_2_5:1"
     },
     "layer_label": "transpose_2_5",
-    "layer_label_short": "transpose_2",
+    "short_layer_label": "transpose_2",
     "layer_type": "transpose",
     "lookup_keys": [
      -32,
@@ -58548,13 +58548,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_3_12:1",
-    "label_short": "transpose_3:1",
+    "short_label": "transpose_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_3_12:1"
     },
     "layer_label": "transpose_3_12",
-    "layer_label_short": "transpose_3",
+    "short_layer_label": "transpose_3",
     "layer_type": "transpose",
     "lookup_keys": [
      -25,
@@ -58948,13 +58948,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_4_14:1",
-    "label_short": "transpose_4:1",
+    "short_label": "transpose_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_4_14:1"
     },
     "layer_label": "transpose_4_14",
-    "layer_label_short": "transpose_4",
+    "short_layer_label": "transpose_4",
     "layer_type": "transpose",
     "lookup_keys": [
      -23,
@@ -59348,13 +59348,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_5_16:1",
-    "label_short": "transpose_5:1",
+    "short_label": "transpose_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_5_16:1"
     },
     "layer_label": "transpose_5_16",
-    "layer_label_short": "transpose_5",
+    "short_layer_label": "transpose_5",
     "layer_type": "transpose",
     "lookup_keys": [
      -21,
@@ -59746,13 +59746,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_6_25:1",
-    "label_short": "transpose_6:1",
+    "short_label": "transpose_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_6_25:1"
     },
     "layer_label": "transpose_6_25",
-    "layer_label_short": "transpose_6",
+    "short_layer_label": "transpose_6",
     "layer_type": "transpose",
     "lookup_keys": [
      -12,
@@ -60158,13 +60158,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "unflatten_1_3:1",
-    "label_short": "unflatten_1:1",
+    "short_label": "unflatten_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "unflatten_1_3:1"
     },
     "layer_label": "unflatten_1_3",
-    "layer_label_short": "unflatten_1",
+    "short_layer_label": "unflatten_1",
     "layer_type": "unflatten",
     "lookup_keys": [
      -34,
@@ -60560,13 +60560,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "unsqueeze_1_4:1",
-    "label_short": "unsqueeze_1:1",
+    "short_label": "unsqueeze_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "unsqueeze_1_4:1"
     },
     "layer_label": "unsqueeze_1_4",
-    "layer_label_short": "unsqueeze_1",
+    "short_layer_label": "unsqueeze_1",
     "layer_type": "unsqueeze",
     "lookup_keys": [
      -33,
@@ -60960,13 +60960,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_1_11:1",
-    "label_short": "view_1:1",
+    "short_label": "view_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_1_11:1"
     },
     "layer_label": "view_1_11",
-    "layer_label_short": "view_1",
+    "short_layer_label": "view_1",
     "layer_type": "view",
     "lookup_keys": [
      -26,
@@ -61358,13 +61358,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_2_13:1",
-    "label_short": "view_2:1",
+    "short_label": "view_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_2_13:1"
     },
     "layer_label": "view_2_13",
-    "layer_label_short": "view_2",
+    "short_layer_label": "view_2",
     "layer_type": "view",
     "lookup_keys": [
      -24,
@@ -61756,13 +61756,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_3_15:1",
-    "label_short": "view_3:1",
+    "short_label": "view_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_3_15:1"
     },
     "layer_label": "view_3_15",
-    "layer_label_short": "view_3",
+    "short_layer_label": "view_3",
     "layer_type": "view",
     "lookup_keys": [
      -22,
@@ -62159,13 +62159,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_4_17:1",
-    "label_short": "view_4:1",
+    "short_label": "view_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_4_17:1"
     },
     "layer_label": "view_4_17",
-    "layer_label_short": "view_4",
+    "short_layer_label": "view_4",
     "layer_type": "view",
     "lookup_keys": [
      -20,
@@ -62565,13 +62565,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_5_18:1",
-    "label_short": "view_5:1",
+    "short_label": "view_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_5_18:1"
     },
     "layer_label": "view_5_18",
-    "layer_label_short": "view_5",
+    "short_layer_label": "view_5",
     "layer_type": "view",
     "lookup_keys": [
      -19,
@@ -62971,13 +62971,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_6_19:1",
-    "label_short": "view_6:1",
+    "short_label": "view_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_6_19:1"
     },
     "layer_label": "view_6_19",
-    "layer_label_short": "view_6",
+    "short_layer_label": "view_6",
     "layer_type": "view",
     "lookup_keys": [
      -18,
@@ -63369,13 +63369,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_7_24:1",
-    "label_short": "view_7:1",
+    "short_label": "view_7:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_7_24:1"
     },
     "layer_label": "view_7_24",
-    "layer_label_short": "view_7",
+    "short_layer_label": "view_7",
     "layer_type": "view",
     "lookup_keys": [
      -13,
@@ -68710,9 +68710,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_27:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_27",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -68974,9 +68974,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_2_34:1",
-    "label_short": "add_2:1",
+    "short_label": "add_2:1",
     "layer_label": "add_2_34",
-    "layer_label_short": "add_2",
+    "short_layer_label": "add_2",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -69265,9 +69265,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "contiguous_1_7:1",
-    "label_short": "contiguous_1:1",
+    "short_label": "contiguous_1:1",
     "layer_label": "contiguous_1_7",
-    "layer_label_short": "contiguous_1",
+    "short_layer_label": "contiguous_1",
     "layer_type": "contiguous",
     "leaf_module_ops": {
      "__set__": []
@@ -69544,9 +69544,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_1_26:1",
-    "label_short": "dropout_1:1",
+    "short_label": "dropout_1:1",
     "layer_label": "dropout_1_26",
-    "layer_label_short": "dropout_1",
+    "short_layer_label": "dropout_1",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -69827,9 +69827,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_2_31:1",
-    "label_short": "dropout_2:1",
+    "short_label": "dropout_2:1",
     "layer_label": "dropout_2_31",
-    "layer_label_short": "dropout_2",
+    "short_layer_label": "dropout_2",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -70112,9 +70112,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_3_33:1",
-    "label_short": "dropout_3:1",
+    "short_label": "dropout_3:1",
     "layer_label": "dropout_3_33",
-    "layer_label_short": "dropout_3",
+    "short_layer_label": "dropout_3",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -70394,9 +70394,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_1_8:1",
-    "label_short": "getitem_1:1",
+    "short_label": "getitem_1:1",
     "layer_label": "getitem_1_8",
-    "layer_label_short": "getitem_1",
+    "short_layer_label": "getitem_1",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -70671,9 +70671,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_2_9:1",
-    "label_short": "getitem_2:1",
+    "short_label": "getitem_2:1",
     "layer_label": "getitem_2_9",
-    "layer_label_short": "getitem_2",
+    "short_layer_label": "getitem_2",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -70948,9 +70948,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_3_10:1",
-    "label_short": "getitem_3:1",
+    "short_label": "getitem_3:1",
     "layer_label": "getitem_3_10",
-    "layer_label_short": "getitem_3",
+    "short_layer_label": "getitem_3",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -71201,9 +71201,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -71482,9 +71482,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "layernorm_1_28:1",
-    "label_short": "layernorm_1:1",
+    "short_label": "layernorm_1:1",
     "layer_label": "layernorm_1_28",
-    "layer_label_short": "layernorm_1",
+    "short_layer_label": "layernorm_1",
     "layer_type": "layernorm",
     "leaf_module_ops": {
      "__set__": [
@@ -71790,9 +71790,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "layernorm_2_35:1",
-    "label_short": "layernorm_2:1",
+    "short_label": "layernorm_2:1",
     "layer_label": "layernorm_2_35",
-    "layer_label_short": "layernorm_2",
+    "short_layer_label": "layernorm_2",
     "layer_type": "layernorm",
     "leaf_module_ops": {
      "__set__": [
@@ -72106,9 +72106,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_1_2:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer_label": "linear_1_2",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": []
@@ -72407,9 +72407,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_2_23:1",
-    "label_short": "linear_2:1",
+    "short_label": "linear_2:1",
     "layer_label": "linear_2_23",
-    "layer_label_short": "linear_2",
+    "short_layer_label": "linear_2",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": []
@@ -72702,9 +72702,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_3_29:1",
-    "label_short": "linear_3:1",
+    "short_label": "linear_3:1",
     "layer_label": "linear_3_29",
-    "layer_label_short": "linear_3",
+    "short_layer_label": "linear_3",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -73009,9 +73009,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_4_32:1",
-    "label_short": "linear_4:1",
+    "short_label": "linear_4:1",
     "layer_label": "linear_4_32",
-    "layer_label_short": "linear_4",
+    "short_layer_label": "linear_4",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -73266,9 +73266,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -73554,9 +73554,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "permute_1_21:1",
-    "label_short": "permute_1:1",
+    "short_label": "permute_1:1",
     "layer_label": "permute_1_21",
-    "layer_label_short": "permute_1",
+    "short_layer_label": "permute_1",
     "layer_type": "permute",
     "leaf_module_ops": {
      "__set__": []
@@ -73823,9 +73823,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_30:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_30",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -74093,9 +74093,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "reshape_1_22:1",
-    "label_short": "reshape_1:1",
+    "short_label": "reshape_1:1",
     "layer_label": "reshape_1_22",
-    "layer_label_short": "reshape_1",
+    "short_layer_label": "reshape_1",
     "layer_type": "reshape",
     "leaf_module_ops": {
      "__set__": []
@@ -74368,9 +74368,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "scaleddotproductattention_1_20:1",
-    "label_short": "scaleddotproductattention_1:1",
+    "short_label": "scaleddotproductattention_1:1",
     "layer_label": "scaleddotproductattention_1_20",
-    "layer_label_short": "scaleddotproductattention_1",
+    "short_layer_label": "scaleddotproductattention_1",
     "layer_type": "scaleddotproductattention",
     "leaf_module_ops": {
      "__set__": []
@@ -74658,9 +74658,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "squeeze_1_6:1",
-    "label_short": "squeeze_1:1",
+    "short_label": "squeeze_1:1",
     "layer_label": "squeeze_1_6",
-    "layer_label_short": "squeeze_1",
+    "short_layer_label": "squeeze_1",
     "layer_type": "squeeze",
     "leaf_module_ops": {
      "__set__": []
@@ -74931,9 +74931,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_1_1:1",
-    "label_short": "transpose_1:1",
+    "short_label": "transpose_1:1",
     "layer_label": "transpose_1_1",
-    "layer_label_short": "transpose_1",
+    "short_layer_label": "transpose_1",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -75212,9 +75212,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_2_5:1",
-    "label_short": "transpose_2:1",
+    "short_label": "transpose_2:1",
     "layer_label": "transpose_2_5",
-    "layer_label_short": "transpose_2",
+    "short_layer_label": "transpose_2",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -75493,9 +75493,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_3_12:1",
-    "label_short": "transpose_3:1",
+    "short_label": "transpose_3:1",
     "layer_label": "transpose_3_12",
-    "layer_label_short": "transpose_3",
+    "short_layer_label": "transpose_3",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -75770,9 +75770,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_4_14:1",
-    "label_short": "transpose_4:1",
+    "short_label": "transpose_4:1",
     "layer_label": "transpose_4_14",
-    "layer_label_short": "transpose_4",
+    "short_layer_label": "transpose_4",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -76047,9 +76047,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_5_16:1",
-    "label_short": "transpose_5:1",
+    "short_label": "transpose_5:1",
     "layer_label": "transpose_5_16",
-    "layer_label_short": "transpose_5",
+    "short_layer_label": "transpose_5",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -76318,9 +76318,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_6_25:1",
-    "label_short": "transpose_6:1",
+    "short_label": "transpose_6:1",
     "layer_label": "transpose_6_25",
-    "layer_label_short": "transpose_6",
+    "short_layer_label": "transpose_6",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -76600,9 +76600,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "unflatten_1_3:1",
-    "label_short": "unflatten_1:1",
+    "short_label": "unflatten_1:1",
     "layer_label": "unflatten_1_3",
-    "layer_label_short": "unflatten_1",
+    "short_layer_label": "unflatten_1",
     "layer_type": "unflatten",
     "leaf_module_ops": {
      "__set__": []
@@ -76877,9 +76877,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "unsqueeze_1_4:1",
-    "label_short": "unsqueeze_1:1",
+    "short_label": "unsqueeze_1:1",
     "layer_label": "unsqueeze_1_4",
-    "layer_label_short": "unsqueeze_1",
+    "short_layer_label": "unsqueeze_1",
     "layer_type": "unsqueeze",
     "leaf_module_ops": {
      "__set__": []
@@ -77153,9 +77153,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_1_11:1",
-    "label_short": "view_1:1",
+    "short_label": "view_1:1",
     "layer_label": "view_1_11",
-    "layer_label_short": "view_1",
+    "short_layer_label": "view_1",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -77425,9 +77425,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_2_13:1",
-    "label_short": "view_2:1",
+    "short_label": "view_2:1",
     "layer_label": "view_2_13",
-    "layer_label_short": "view_2",
+    "short_layer_label": "view_2",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -77697,9 +77697,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_3_15:1",
-    "label_short": "view_3:1",
+    "short_label": "view_3:1",
     "layer_label": "view_3_15",
-    "layer_label_short": "view_3",
+    "short_layer_label": "view_3",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -77972,9 +77972,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_4_17:1",
-    "label_short": "view_4:1",
+    "short_label": "view_4:1",
     "layer_label": "view_4_17",
-    "layer_label_short": "view_4",
+    "short_layer_label": "view_4",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -78249,9 +78249,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_5_18:1",
-    "label_short": "view_5:1",
+    "short_label": "view_5:1",
     "layer_label": "view_5_18",
-    "layer_label_short": "view_5",
+    "short_layer_label": "view_5",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -78526,9 +78526,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_6_19:1",
-    "label_short": "view_6:1",
+    "short_label": "view_6:1",
     "layer_label": "view_6_19",
-    "layer_label_short": "view_6",
+    "short_layer_label": "view_6",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -78798,9 +78798,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_7_24:1",
-    "label_short": "view_7:1",
+    "short_label": "view_7:1",
     "layer_label": "view_7_24",
-    "layer_label_short": "view_7",
+    "short_layer_label": "view_7",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -83106,13 +83106,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_27:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_1_27:1"
     },
     "layer_label": "add_1_27",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -10,
@@ -83502,13 +83502,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_2_34:1",
-    "label_short": "add_2:1",
+    "short_label": "add_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "add_2_34:1"
     },
     "layer_label": "add_2_34",
-    "layer_label_short": "add_2",
+    "short_layer_label": "add_2",
     "layer_type": "add",
     "lookup_keys": [
      -3,
@@ -83899,13 +83899,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "contiguous_1_7:1",
-    "label_short": "contiguous_1:1",
+    "short_label": "contiguous_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "contiguous_1_7:1"
     },
     "layer_label": "contiguous_1_7",
-    "layer_label_short": "contiguous_1",
+    "short_layer_label": "contiguous_1",
     "layer_type": "contiguous",
     "lookup_keys": [
      -30,
@@ -84302,13 +84302,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_1_26:1",
-    "label_short": "dropout_1:1",
+    "short_label": "dropout_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "dropout_1_26:1"
     },
     "layer_label": "dropout_1_26",
-    "layer_label_short": "dropout_1",
+    "short_layer_label": "dropout_1",
     "layer_type": "dropout",
     "lookup_keys": [
      -11,
@@ -84714,13 +84714,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_2_31:1",
-    "label_short": "dropout_2:1",
+    "short_label": "dropout_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "dropout_2_31:1"
     },
     "layer_label": "dropout_2_31",
-    "layer_label_short": "dropout_2",
+    "short_layer_label": "dropout_2",
     "layer_type": "dropout",
     "lookup_keys": [
      -6,
@@ -85128,13 +85128,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_3_33:1",
-    "label_short": "dropout_3:1",
+    "short_label": "dropout_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "dropout_3_33:1"
     },
     "layer_label": "dropout_3_33",
-    "layer_label_short": "dropout_3",
+    "short_layer_label": "dropout_3",
     "layer_type": "dropout",
     "lookup_keys": [
      -4,
@@ -85528,13 +85528,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_1_8:1",
-    "label_short": "getitem_1:1",
+    "short_label": "getitem_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "getitem_1_8:1"
     },
     "layer_label": "getitem_1_8",
-    "layer_label_short": "getitem_1",
+    "short_layer_label": "getitem_1",
     "layer_type": "getitem",
     "lookup_keys": [
      -29,
@@ -85924,13 +85924,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_2_9:1",
-    "label_short": "getitem_2:1",
+    "short_label": "getitem_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "getitem_2_9:1"
     },
     "layer_label": "getitem_2_9",
-    "layer_label_short": "getitem_2",
+    "short_layer_label": "getitem_2",
     "layer_type": "getitem",
     "lookup_keys": [
      -28,
@@ -86320,13 +86320,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_3_10:1",
-    "label_short": "getitem_3:1",
+    "short_label": "getitem_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "getitem_3_10:1"
     },
     "layer_label": "getitem_3_10",
-    "layer_label_short": "getitem_3",
+    "short_layer_label": "getitem_3",
     "layer_type": "getitem",
     "lookup_keys": [
      -27,
@@ -86656,13 +86656,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "input_1:1"
     },
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -37,
@@ -87079,13 +87079,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "layernorm_1_28:1",
-    "label_short": "layernorm_1:1",
+    "short_label": "layernorm_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "layernorm_1_28:1"
     },
     "layer_label": "layernorm_1_28",
-    "layer_label_short": "layernorm_1",
+    "short_layer_label": "layernorm_1",
     "layer_type": "layernorm",
     "lookup_keys": [
      -9,
@@ -87528,13 +87528,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "layernorm_2_35:1",
-    "label_short": "layernorm_2:1",
+    "short_label": "layernorm_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "layernorm_2_35:1"
     },
     "layer_label": "layernorm_2_35",
-    "layer_label_short": "layernorm_2",
+    "short_layer_label": "layernorm_2",
     "layer_type": "layernorm",
     "lookup_keys": [
      -2,
@@ -87969,13 +87969,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_2:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_1_2:1"
     },
     "layer_label": "linear_1_2",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -35,
@@ -88390,13 +88390,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_2_23:1",
-    "label_short": "linear_2:1",
+    "short_label": "linear_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_2_23:1"
     },
     "layer_label": "linear_2_23",
-    "layer_label_short": "linear_2",
+    "short_layer_label": "linear_2",
     "layer_type": "linear",
     "lookup_keys": [
      -14,
@@ -88809,13 +88809,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_3_29:1",
-    "label_short": "linear_3:1",
+    "short_label": "linear_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_3_29:1"
     },
     "layer_label": "linear_3_29",
-    "layer_label_short": "linear_3",
+    "short_layer_label": "linear_3",
     "layer_type": "linear",
     "lookup_keys": [
      -8,
@@ -89242,13 +89242,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_4_32:1",
-    "label_short": "linear_4:1",
+    "short_label": "linear_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "linear_4_32:1"
     },
     "layer_label": "linear_4_32",
-    "layer_label_short": "linear_4",
+    "short_layer_label": "linear_4",
     "layer_type": "linear",
     "lookup_keys": [
      -5,
@@ -89620,13 +89620,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "output_1:1"
     },
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -90028,13 +90028,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "permute_1_21:1",
-    "label_short": "permute_1:1",
+    "short_label": "permute_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "permute_1_21:1"
     },
     "layer_label": "permute_1_21",
-    "layer_label_short": "permute_1",
+    "short_layer_label": "permute_1",
     "layer_type": "permute",
     "lookup_keys": [
      -16,
@@ -90422,13 +90422,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_30:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "relu_1_30:1"
     },
     "layer_label": "relu_1_30",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -7,
@@ -90816,13 +90816,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "reshape_1_22:1",
-    "label_short": "reshape_1:1",
+    "short_label": "reshape_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "reshape_1_22:1"
     },
     "layer_label": "reshape_1_22",
-    "layer_label_short": "reshape_1",
+    "short_layer_label": "reshape_1",
     "layer_type": "reshape",
     "lookup_keys": [
      -15,
@@ -91252,13 +91252,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "scaleddotproductattention_1_20:1",
-    "label_short": "scaleddotproductattention_1:1",
+    "short_label": "scaleddotproductattention_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "scaleddotproductattention_1_20:1"
     },
     "layer_label": "scaleddotproductattention_1_20",
-    "layer_label_short": "scaleddotproductattention_1",
+    "short_layer_label": "scaleddotproductattention_1",
     "layer_type": "scaleddotproductattention",
     "lookup_keys": [
      -17,
@@ -91658,13 +91658,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "squeeze_1_6:1",
-    "label_short": "squeeze_1:1",
+    "short_label": "squeeze_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "squeeze_1_6:1"
     },
     "layer_label": "squeeze_1_6",
-    "layer_label_short": "squeeze_1",
+    "short_layer_label": "squeeze_1",
     "layer_type": "squeeze",
     "lookup_keys": [
      -31,
@@ -92053,13 +92053,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_1_1:1",
-    "label_short": "transpose_1:1",
+    "short_label": "transpose_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_1_1:1"
     },
     "layer_label": "transpose_1_1",
-    "layer_label_short": "transpose_1",
+    "short_layer_label": "transpose_1",
     "layer_type": "transpose",
     "lookup_keys": [
      -36,
@@ -92459,13 +92459,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_2_5:1",
-    "label_short": "transpose_2:1",
+    "short_label": "transpose_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_2_5:1"
     },
     "layer_label": "transpose_2_5",
-    "layer_label_short": "transpose_2",
+    "short_layer_label": "transpose_2",
     "layer_type": "transpose",
     "lookup_keys": [
      -32,
@@ -92863,13 +92863,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_3_12:1",
-    "label_short": "transpose_3:1",
+    "short_label": "transpose_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_3_12:1"
     },
     "layer_label": "transpose_3_12",
-    "layer_label_short": "transpose_3",
+    "short_layer_label": "transpose_3",
     "layer_type": "transpose",
     "lookup_keys": [
      -25,
@@ -93263,13 +93263,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_4_14:1",
-    "label_short": "transpose_4:1",
+    "short_label": "transpose_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_4_14:1"
     },
     "layer_label": "transpose_4_14",
-    "layer_label_short": "transpose_4",
+    "short_layer_label": "transpose_4",
     "layer_type": "transpose",
     "lookup_keys": [
      -23,
@@ -93663,13 +93663,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_5_16:1",
-    "label_short": "transpose_5:1",
+    "short_label": "transpose_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_5_16:1"
     },
     "layer_label": "transpose_5_16",
-    "layer_label_short": "transpose_5",
+    "short_layer_label": "transpose_5",
     "layer_type": "transpose",
     "lookup_keys": [
      -21,
@@ -94061,13 +94061,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_6_25:1",
-    "label_short": "transpose_6:1",
+    "short_label": "transpose_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "transpose_6_25:1"
     },
     "layer_label": "transpose_6_25",
-    "layer_label_short": "transpose_6",
+    "short_layer_label": "transpose_6",
     "layer_type": "transpose",
     "lookup_keys": [
      -12,
@@ -94473,13 +94473,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "unflatten_1_3:1",
-    "label_short": "unflatten_1:1",
+    "short_label": "unflatten_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "unflatten_1_3:1"
     },
     "layer_label": "unflatten_1_3",
-    "layer_label_short": "unflatten_1",
+    "short_layer_label": "unflatten_1",
     "layer_type": "unflatten",
     "lookup_keys": [
      -34,
@@ -94875,13 +94875,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "unsqueeze_1_4:1",
-    "label_short": "unsqueeze_1:1",
+    "short_label": "unsqueeze_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "unsqueeze_1_4:1"
     },
     "layer_label": "unsqueeze_1_4",
-    "layer_label_short": "unsqueeze_1",
+    "short_layer_label": "unsqueeze_1",
     "layer_type": "unsqueeze",
     "lookup_keys": [
      -33,
@@ -95275,13 +95275,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_1_11:1",
-    "label_short": "view_1:1",
+    "short_label": "view_1:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_1_11:1"
     },
     "layer_label": "view_1_11",
-    "layer_label_short": "view_1",
+    "short_layer_label": "view_1",
     "layer_type": "view",
     "lookup_keys": [
      -26,
@@ -95673,13 +95673,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_2_13:1",
-    "label_short": "view_2:1",
+    "short_label": "view_2:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_2_13:1"
     },
     "layer_label": "view_2_13",
-    "layer_label_short": "view_2",
+    "short_layer_label": "view_2",
     "layer_type": "view",
     "lookup_keys": [
      -24,
@@ -96071,13 +96071,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_3_15:1",
-    "label_short": "view_3:1",
+    "short_label": "view_3:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_3_15:1"
     },
     "layer_label": "view_3_15",
-    "layer_label_short": "view_3",
+    "short_layer_label": "view_3",
     "layer_type": "view",
     "lookup_keys": [
      -22,
@@ -96474,13 +96474,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_4_17:1",
-    "label_short": "view_4:1",
+    "short_label": "view_4:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_4_17:1"
     },
     "layer_label": "view_4_17",
-    "layer_label_short": "view_4",
+    "short_layer_label": "view_4",
     "layer_type": "view",
     "lookup_keys": [
      -20,
@@ -96880,13 +96880,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_5_18:1",
-    "label_short": "view_5:1",
+    "short_label": "view_5:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_5_18:1"
     },
     "layer_label": "view_5_18",
-    "layer_label_short": "view_5",
+    "short_layer_label": "view_5",
     "layer_type": "view",
     "lookup_keys": [
      -19,
@@ -97286,13 +97286,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_6_19:1",
-    "label_short": "view_6:1",
+    "short_label": "view_6:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_6_19:1"
     },
     "layer_label": "view_6_19",
-    "layer_label_short": "view_6",
+    "short_layer_label": "view_6",
     "layer_type": "view",
     "lookup_keys": [
      -18,
@@ -97684,13 +97684,13 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_7_24:1",
-    "label_short": "view_7:1",
+    "short_label": "view_7:1",
     "layer": {
      "__ref__": "Layer",
      "label": "view_7_24:1"
     },
     "layer_label": "view_7_24",
-    "layer_label_short": "view_7",
+    "short_layer_label": "view_7",
     "layer_type": "view",
     "lookup_keys": [
      -13,
@@ -102981,9 +102981,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_1_27:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer_label": "add_1_27",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -103245,9 +103245,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "add_2_34:1",
-    "label_short": "add_2:1",
+    "short_label": "add_2:1",
     "layer_label": "add_2_34",
-    "layer_label_short": "add_2",
+    "short_layer_label": "add_2",
     "layer_type": "add",
     "leaf_module_ops": {
      "__set__": []
@@ -103536,9 +103536,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "contiguous_1_7:1",
-    "label_short": "contiguous_1:1",
+    "short_label": "contiguous_1:1",
     "layer_label": "contiguous_1_7",
-    "layer_label_short": "contiguous_1",
+    "short_layer_label": "contiguous_1",
     "layer_type": "contiguous",
     "leaf_module_ops": {
      "__set__": []
@@ -103815,9 +103815,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_1_26:1",
-    "label_short": "dropout_1:1",
+    "short_label": "dropout_1:1",
     "layer_label": "dropout_1_26",
-    "layer_label_short": "dropout_1",
+    "short_layer_label": "dropout_1",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -104098,9 +104098,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_2_31:1",
-    "label_short": "dropout_2:1",
+    "short_label": "dropout_2:1",
     "layer_label": "dropout_2_31",
-    "layer_label_short": "dropout_2",
+    "short_layer_label": "dropout_2",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -104383,9 +104383,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "dropout_3_33:1",
-    "label_short": "dropout_3:1",
+    "short_label": "dropout_3:1",
     "layer_label": "dropout_3_33",
-    "layer_label_short": "dropout_3",
+    "short_layer_label": "dropout_3",
     "layer_type": "dropout",
     "leaf_module_ops": {
      "__set__": [
@@ -104665,9 +104665,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_1_8:1",
-    "label_short": "getitem_1:1",
+    "short_label": "getitem_1:1",
     "layer_label": "getitem_1_8",
-    "layer_label_short": "getitem_1",
+    "short_layer_label": "getitem_1",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -104942,9 +104942,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_2_9:1",
-    "label_short": "getitem_2:1",
+    "short_label": "getitem_2:1",
     "layer_label": "getitem_2_9",
-    "layer_label_short": "getitem_2",
+    "short_layer_label": "getitem_2",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -105219,9 +105219,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "getitem_3_10:1",
-    "label_short": "getitem_3:1",
+    "short_label": "getitem_3:1",
     "layer_label": "getitem_3_10",
-    "layer_label_short": "getitem_3",
+    "short_layer_label": "getitem_3",
     "layer_type": "getitem",
     "leaf_module_ops": {
      "__set__": []
@@ -105472,9 +105472,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "leaf_module_ops": {
      "__set__": []
@@ -105753,9 +105753,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "layernorm_1_28:1",
-    "label_short": "layernorm_1:1",
+    "short_label": "layernorm_1:1",
     "layer_label": "layernorm_1_28",
-    "layer_label_short": "layernorm_1",
+    "short_layer_label": "layernorm_1",
     "layer_type": "layernorm",
     "leaf_module_ops": {
      "__set__": [
@@ -106061,9 +106061,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "layernorm_2_35:1",
-    "label_short": "layernorm_2:1",
+    "short_label": "layernorm_2:1",
     "layer_label": "layernorm_2_35",
-    "layer_label_short": "layernorm_2",
+    "short_layer_label": "layernorm_2",
     "layer_type": "layernorm",
     "leaf_module_ops": {
      "__set__": [
@@ -106377,9 +106377,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_1_2:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer_label": "linear_1_2",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": []
@@ -106678,9 +106678,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_2_23:1",
-    "label_short": "linear_2:1",
+    "short_label": "linear_2:1",
     "layer_label": "linear_2_23",
-    "layer_label_short": "linear_2",
+    "short_layer_label": "linear_2",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": []
@@ -106973,9 +106973,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_3_29:1",
-    "label_short": "linear_3:1",
+    "short_label": "linear_3:1",
     "layer_label": "linear_3_29",
-    "layer_label_short": "linear_3",
+    "short_layer_label": "linear_3",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -107280,9 +107280,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "linear_4_32:1",
-    "label_short": "linear_4:1",
+    "short_label": "linear_4:1",
     "layer_label": "linear_4_32",
-    "layer_label_short": "linear_4",
+    "short_layer_label": "linear_4",
     "layer_type": "linear",
     "leaf_module_ops": {
      "__set__": [
@@ -107537,9 +107537,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "leaf_module_ops": {
      "__set__": []
@@ -107813,9 +107813,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "permute_1_21:1",
-    "label_short": "permute_1:1",
+    "short_label": "permute_1:1",
     "layer_label": "permute_1_21",
-    "layer_label_short": "permute_1",
+    "short_layer_label": "permute_1",
     "layer_type": "permute",
     "leaf_module_ops": {
      "__set__": []
@@ -108082,9 +108082,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "relu_1_30:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer_label": "relu_1_30",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "leaf_module_ops": {
      "__set__": []
@@ -108352,9 +108352,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "reshape_1_22:1",
-    "label_short": "reshape_1:1",
+    "short_label": "reshape_1:1",
     "layer_label": "reshape_1_22",
-    "layer_label_short": "reshape_1",
+    "short_layer_label": "reshape_1",
     "layer_type": "reshape",
     "leaf_module_ops": {
      "__set__": []
@@ -108627,9 +108627,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "scaleddotproductattention_1_20:1",
-    "label_short": "scaleddotproductattention_1:1",
+    "short_label": "scaleddotproductattention_1:1",
     "layer_label": "scaleddotproductattention_1_20",
-    "layer_label_short": "scaleddotproductattention_1",
+    "short_layer_label": "scaleddotproductattention_1",
     "layer_type": "scaleddotproductattention",
     "leaf_module_ops": {
      "__set__": []
@@ -108917,9 +108917,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "squeeze_1_6:1",
-    "label_short": "squeeze_1:1",
+    "short_label": "squeeze_1:1",
     "layer_label": "squeeze_1_6",
-    "layer_label_short": "squeeze_1",
+    "short_layer_label": "squeeze_1",
     "layer_type": "squeeze",
     "leaf_module_ops": {
      "__set__": []
@@ -109190,9 +109190,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_1_1:1",
-    "label_short": "transpose_1:1",
+    "short_label": "transpose_1:1",
     "layer_label": "transpose_1_1",
-    "layer_label_short": "transpose_1",
+    "short_layer_label": "transpose_1",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -109471,9 +109471,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_2_5:1",
-    "label_short": "transpose_2:1",
+    "short_label": "transpose_2:1",
     "layer_label": "transpose_2_5",
-    "layer_label_short": "transpose_2",
+    "short_layer_label": "transpose_2",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -109752,9 +109752,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_3_12:1",
-    "label_short": "transpose_3:1",
+    "short_label": "transpose_3:1",
     "layer_label": "transpose_3_12",
-    "layer_label_short": "transpose_3",
+    "short_layer_label": "transpose_3",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -110029,9 +110029,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_4_14:1",
-    "label_short": "transpose_4:1",
+    "short_label": "transpose_4:1",
     "layer_label": "transpose_4_14",
-    "layer_label_short": "transpose_4",
+    "short_layer_label": "transpose_4",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -110306,9 +110306,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_5_16:1",
-    "label_short": "transpose_5:1",
+    "short_label": "transpose_5:1",
     "layer_label": "transpose_5_16",
-    "layer_label_short": "transpose_5",
+    "short_layer_label": "transpose_5",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -110577,9 +110577,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "transpose_6_25:1",
-    "label_short": "transpose_6:1",
+    "short_label": "transpose_6:1",
     "layer_label": "transpose_6_25",
-    "layer_label_short": "transpose_6",
+    "short_layer_label": "transpose_6",
     "layer_type": "transpose",
     "leaf_module_ops": {
      "__set__": []
@@ -110859,9 +110859,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "unflatten_1_3:1",
-    "label_short": "unflatten_1:1",
+    "short_label": "unflatten_1:1",
     "layer_label": "unflatten_1_3",
-    "layer_label_short": "unflatten_1",
+    "short_layer_label": "unflatten_1",
     "layer_type": "unflatten",
     "leaf_module_ops": {
      "__set__": []
@@ -111136,9 +111136,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "unsqueeze_1_4:1",
-    "label_short": "unsqueeze_1:1",
+    "short_label": "unsqueeze_1:1",
     "layer_label": "unsqueeze_1_4",
-    "layer_label_short": "unsqueeze_1",
+    "short_layer_label": "unsqueeze_1",
     "layer_type": "unsqueeze",
     "leaf_module_ops": {
      "__set__": []
@@ -111412,9 +111412,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_1_11:1",
-    "label_short": "view_1:1",
+    "short_label": "view_1:1",
     "layer_label": "view_1_11",
-    "layer_label_short": "view_1",
+    "short_layer_label": "view_1",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -111684,9 +111684,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_2_13:1",
-    "label_short": "view_2:1",
+    "short_label": "view_2:1",
     "layer_label": "view_2_13",
-    "layer_label_short": "view_2",
+    "short_layer_label": "view_2",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -111956,9 +111956,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_3_15:1",
-    "label_short": "view_3:1",
+    "short_label": "view_3:1",
     "layer_label": "view_3_15",
-    "layer_label_short": "view_3",
+    "short_layer_label": "view_3",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -112231,9 +112231,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_4_17:1",
-    "label_short": "view_4:1",
+    "short_label": "view_4:1",
     "layer_label": "view_4_17",
-    "layer_label_short": "view_4",
+    "short_layer_label": "view_4",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -112508,9 +112508,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_5_18:1",
-    "label_short": "view_5:1",
+    "short_label": "view_5:1",
     "layer_label": "view_5_18",
-    "layer_label_short": "view_5",
+    "short_layer_label": "view_5",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -112785,9 +112785,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_6_19:1",
-    "label_short": "view_6:1",
+    "short_label": "view_6:1",
     "layer_label": "view_6_19",
-    "layer_label_short": "view_6",
+    "short_layer_label": "view_6",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -113057,9 +113057,9 @@
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "label": "view_7_24:1",
-    "label_short": "view_7:1",
+    "short_label": "view_7:1",
     "layer_label": "view_7_24",
-    "layer_label_short": "view_7",
+    "short_layer_label": "view_7",
     "layer_type": "view",
     "leaf_module_ops": {
      "__set__": []
@@ -117336,10 +117336,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_1_27:1",
-    "label_short": "add_1:1",
+    "short_label": "add_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "add_1_27",
-    "layer_label_short": "add_1",
+    "short_layer_label": "add_1",
     "layer_type": "add",
     "lookup_keys": [
      -10,
@@ -117700,10 +117700,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "add_2_34:1",
-    "label_short": "add_2:1",
+    "short_label": "add_2:1",
     "layer": "<raises AttributeError>",
     "layer_label": "add_2_34",
-    "layer_label_short": "add_2",
+    "short_layer_label": "add_2",
     "layer_type": "add",
     "lookup_keys": [
      -3,
@@ -118077,10 +118077,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "contiguous_1_7:1",
-    "label_short": "contiguous_1:1",
+    "short_label": "contiguous_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "contiguous_1_7",
-    "layer_label_short": "contiguous_1",
+    "short_layer_label": "contiguous_1",
     "layer_type": "contiguous",
     "lookup_keys": [
      -30,
@@ -118457,10 +118457,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_1_26:1",
-    "label_short": "dropout_1:1",
+    "short_label": "dropout_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "dropout_1_26",
-    "layer_label_short": "dropout_1",
+    "short_layer_label": "dropout_1",
     "layer_type": "dropout",
     "lookup_keys": [
      -11,
@@ -118846,10 +118846,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_2_31:1",
-    "label_short": "dropout_2:1",
+    "short_label": "dropout_2:1",
     "layer": "<raises AttributeError>",
     "layer_label": "dropout_2_31",
-    "layer_label_short": "dropout_2",
+    "short_layer_label": "dropout_2",
     "layer_type": "dropout",
     "lookup_keys": [
      -6,
@@ -119237,10 +119237,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "dropout_3_33:1",
-    "label_short": "dropout_3:1",
+    "short_label": "dropout_3:1",
     "layer": "<raises AttributeError>",
     "layer_label": "dropout_3_33",
-    "layer_label_short": "dropout_3",
+    "short_layer_label": "dropout_3",
     "layer_type": "dropout",
     "lookup_keys": [
      -4,
@@ -119617,10 +119617,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_1_8:1",
-    "label_short": "getitem_1:1",
+    "short_label": "getitem_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "getitem_1_8",
-    "layer_label_short": "getitem_1",
+    "short_layer_label": "getitem_1",
     "layer_type": "getitem",
     "lookup_keys": [
      -29,
@@ -119993,10 +119993,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_2_9:1",
-    "label_short": "getitem_2:1",
+    "short_label": "getitem_2:1",
     "layer": "<raises AttributeError>",
     "layer_label": "getitem_2_9",
-    "layer_label_short": "getitem_2",
+    "short_layer_label": "getitem_2",
     "layer_type": "getitem",
     "lookup_keys": [
      -28,
@@ -120369,10 +120369,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "getitem_3_10:1",
-    "label_short": "getitem_3:1",
+    "short_label": "getitem_3:1",
     "layer": "<raises AttributeError>",
     "layer_label": "getitem_3_10",
-    "layer_label_short": "getitem_3",
+    "short_layer_label": "getitem_3",
     "layer_type": "getitem",
     "lookup_keys": [
      -27,
@@ -120702,10 +120702,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "input_1:1",
-    "label_short": "input_1:1",
+    "short_label": "input_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "input_1",
-    "layer_label_short": "input_1",
+    "short_layer_label": "input_1",
     "layer_type": "input",
     "lookup_keys": [
      -37,
@@ -121099,10 +121099,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "layernorm_1_28:1",
-    "label_short": "layernorm_1:1",
+    "short_label": "layernorm_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "layernorm_1_28",
-    "layer_label_short": "layernorm_1",
+    "short_layer_label": "layernorm_1",
     "layer_type": "layernorm",
     "lookup_keys": [
      -9,
@@ -121522,10 +121522,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "layernorm_2_35:1",
-    "label_short": "layernorm_2:1",
+    "short_label": "layernorm_2:1",
     "layer": "<raises AttributeError>",
     "layer_label": "layernorm_2_35",
-    "layer_label_short": "layernorm_2",
+    "short_layer_label": "layernorm_2",
     "layer_type": "layernorm",
     "lookup_keys": [
      -2,
@@ -121940,10 +121940,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_1_2:1",
-    "label_short": "linear_1:1",
+    "short_label": "linear_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "linear_1_2",
-    "layer_label_short": "linear_1",
+    "short_layer_label": "linear_1",
     "layer_type": "linear",
     "lookup_keys": [
      -35,
@@ -122339,10 +122339,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_2_23:1",
-    "label_short": "linear_2:1",
+    "short_label": "linear_2:1",
     "layer": "<raises AttributeError>",
     "layer_label": "linear_2_23",
-    "layer_label_short": "linear_2",
+    "short_layer_label": "linear_2",
     "layer_type": "linear",
     "lookup_keys": [
      -14,
@@ -122735,10 +122735,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_3_29:1",
-    "label_short": "linear_3:1",
+    "short_label": "linear_3:1",
     "layer": "<raises AttributeError>",
     "layer_label": "linear_3_29",
-    "layer_label_short": "linear_3",
+    "short_layer_label": "linear_3",
     "layer_type": "linear",
     "lookup_keys": [
      -8,
@@ -123145,10 +123145,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "linear_4_32:1",
-    "label_short": "linear_4:1",
+    "short_label": "linear_4:1",
     "layer": "<raises AttributeError>",
     "layer_label": "linear_4_32",
-    "layer_label_short": "linear_4",
+    "short_layer_label": "linear_4",
     "layer_type": "linear",
     "lookup_keys": [
      -5,
@@ -123504,10 +123504,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "output_1:1",
-    "label_short": "output_1:1",
+    "short_label": "output_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "output_1",
-    "layer_label_short": "output_1",
+    "short_layer_label": "output_1",
     "layer_type": "output",
     "lookup_keys": [
      -1,
@@ -123875,10 +123875,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "permute_1_21:1",
-    "label_short": "permute_1:1",
+    "short_label": "permute_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "permute_1_21",
-    "layer_label_short": "permute_1",
+    "short_layer_label": "permute_1",
     "layer_type": "permute",
     "lookup_keys": [
      -16,
@@ -124248,10 +124248,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "relu_1_30:1",
-    "label_short": "relu_1:1",
+    "short_label": "relu_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "relu_1_30",
-    "layer_label_short": "relu_1",
+    "short_layer_label": "relu_1",
     "layer_type": "relu",
     "lookup_keys": [
      -7,
@@ -124619,10 +124619,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "reshape_1_22:1",
-    "label_short": "reshape_1:1",
+    "short_label": "reshape_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "reshape_1_22",
-    "layer_label_short": "reshape_1",
+    "short_layer_label": "reshape_1",
     "layer_type": "reshape",
     "lookup_keys": [
      -15,
@@ -125000,10 +125000,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "scaleddotproductattention_1_20:1",
-    "label_short": "scaleddotproductattention_1:1",
+    "short_label": "scaleddotproductattention_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "scaleddotproductattention_1_20",
-    "layer_label_short": "scaleddotproductattention_1",
+    "short_layer_label": "scaleddotproductattention_1",
     "layer_type": "scaleddotproductattention",
     "lookup_keys": [
      -17,
@@ -125383,10 +125383,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "squeeze_1_6:1",
-    "label_short": "squeeze_1:1",
+    "short_label": "squeeze_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "squeeze_1_6",
-    "layer_label_short": "squeeze_1",
+    "short_layer_label": "squeeze_1",
     "layer_type": "squeeze",
     "lookup_keys": [
      -31,
@@ -125756,10 +125756,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_1_1:1",
-    "label_short": "transpose_1:1",
+    "short_label": "transpose_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "transpose_1_1",
-    "layer_label_short": "transpose_1",
+    "short_layer_label": "transpose_1",
     "layer_type": "transpose",
     "lookup_keys": [
      -36,
@@ -126138,10 +126138,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_2_5:1",
-    "label_short": "transpose_2:1",
+    "short_label": "transpose_2:1",
     "layer": "<raises AttributeError>",
     "layer_label": "transpose_2_5",
-    "layer_label_short": "transpose_2",
+    "short_layer_label": "transpose_2",
     "layer_type": "transpose",
     "lookup_keys": [
      -32,
@@ -126520,10 +126520,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_3_12:1",
-    "label_short": "transpose_3:1",
+    "short_label": "transpose_3:1",
     "layer": "<raises AttributeError>",
     "layer_label": "transpose_3_12",
-    "layer_label_short": "transpose_3",
+    "short_layer_label": "transpose_3",
     "layer_type": "transpose",
     "lookup_keys": [
      -25,
@@ -126898,10 +126898,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_4_14:1",
-    "label_short": "transpose_4:1",
+    "short_label": "transpose_4:1",
     "layer": "<raises AttributeError>",
     "layer_label": "transpose_4_14",
-    "layer_label_short": "transpose_4",
+    "short_layer_label": "transpose_4",
     "layer_type": "transpose",
     "lookup_keys": [
      -23,
@@ -127276,10 +127276,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_5_16:1",
-    "label_short": "transpose_5:1",
+    "short_label": "transpose_5:1",
     "layer": "<raises AttributeError>",
     "layer_label": "transpose_5_16",
-    "layer_label_short": "transpose_5",
+    "short_layer_label": "transpose_5",
     "layer_type": "transpose",
     "lookup_keys": [
      -21,
@@ -127652,10 +127652,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "transpose_6_25:1",
-    "label_short": "transpose_6:1",
+    "short_label": "transpose_6:1",
     "layer": "<raises AttributeError>",
     "layer_label": "transpose_6_25",
-    "layer_label_short": "transpose_6",
+    "short_layer_label": "transpose_6",
     "layer_type": "transpose",
     "lookup_keys": [
      -12,
@@ -128042,10 +128042,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "unflatten_1_3:1",
-    "label_short": "unflatten_1:1",
+    "short_label": "unflatten_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "unflatten_1_3",
-    "layer_label_short": "unflatten_1",
+    "short_layer_label": "unflatten_1",
     "layer_type": "unflatten",
     "lookup_keys": [
      -34,
@@ -128422,10 +128422,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "unsqueeze_1_4:1",
-    "label_short": "unsqueeze_1:1",
+    "short_label": "unsqueeze_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "unsqueeze_1_4",
-    "layer_label_short": "unsqueeze_1",
+    "short_layer_label": "unsqueeze_1",
     "layer_type": "unsqueeze",
     "lookup_keys": [
      -33,
@@ -128799,10 +128799,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_1_11:1",
-    "label_short": "view_1:1",
+    "short_label": "view_1:1",
     "layer": "<raises AttributeError>",
     "layer_label": "view_1_11",
-    "layer_label_short": "view_1",
+    "short_layer_label": "view_1",
     "layer_type": "view",
     "lookup_keys": [
      -26,
@@ -129174,10 +129174,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_2_13:1",
-    "label_short": "view_2:1",
+    "short_label": "view_2:1",
     "layer": "<raises AttributeError>",
     "layer_label": "view_2_13",
-    "layer_label_short": "view_2",
+    "short_layer_label": "view_2",
     "layer_type": "view",
     "lookup_keys": [
      -24,
@@ -129549,10 +129549,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_3_15:1",
-    "label_short": "view_3:1",
+    "short_label": "view_3:1",
     "layer": "<raises AttributeError>",
     "layer_label": "view_3_15",
-    "layer_label_short": "view_3",
+    "short_layer_label": "view_3",
     "layer_type": "view",
     "lookup_keys": [
      -22,
@@ -129928,10 +129928,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_4_17:1",
-    "label_short": "view_4:1",
+    "short_label": "view_4:1",
     "layer": "<raises AttributeError>",
     "layer_label": "view_4_17",
-    "layer_label_short": "view_4",
+    "short_layer_label": "view_4",
     "layer_type": "view",
     "lookup_keys": [
      -20,
@@ -130310,10 +130310,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_5_18:1",
-    "label_short": "view_5:1",
+    "short_label": "view_5:1",
     "layer": "<raises AttributeError>",
     "layer_label": "view_5_18",
-    "layer_label_short": "view_5",
+    "short_layer_label": "view_5",
     "layer_type": "view",
     "lookup_keys": [
      -19,
@@ -130692,10 +130692,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_6_19:1",
-    "label_short": "view_6:1",
+    "short_label": "view_6:1",
     "layer": "<raises AttributeError>",
     "layer_label": "view_6_19",
-    "layer_label_short": "view_6",
+    "short_layer_label": "view_6",
     "layer_type": "view",
     "lookup_keys": [
      -18,
@@ -131068,10 +131068,10 @@
     "kwargs_summary": "",
     "kwargs_template": null,
     "label": "view_7_24:1",
-    "label_short": "view_7:1",
+    "short_label": "view_7:1",
     "layer": "<raises AttributeError>",
     "layer_label": "view_7_24",
-    "layer_label_short": "view_7",
+    "short_layer_label": "view_7",
     "layer_type": "view",
     "lookup_keys": [
      -13,

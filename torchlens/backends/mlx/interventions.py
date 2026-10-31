@@ -261,7 +261,7 @@ def _resolve_helper_applier(spec: Edit, mx: Any) -> MLXHookApplier:
         Curated MLX application of the helper.
     """
 
-    name = spec.helper_name
+    name = spec.name
     kwargs = dict(spec.kwargs)
     identity = f"helper:{name}"
     if name == "zero_ablate":

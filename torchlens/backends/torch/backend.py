@@ -1028,7 +1028,7 @@ class TorchBackend:
             func_name=func_event_input.func_name,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=func_event_input.module_stack,
             recent_events=(),
             recent_ops=(),

@@ -304,8 +304,8 @@ class TraceExportMixin(_TraceMixinBase):
         lead_columns = [
             "layer_label",
             "label",
-            "layer_label_short",
-            "label_short",
+            "short_layer_label",
+            "short_label",
             "layer_type",
         ]
         property_columns = [

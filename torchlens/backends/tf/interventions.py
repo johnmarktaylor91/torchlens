@@ -306,17 +306,17 @@ def _tf_helper_hook(spec: Edit, tf: Any) -> Callable[[Any], Any]:
         TensorFlow replacement callable.
     """
 
-    if spec.helper_name == "zero_ablate":
+    if spec.name == "zero_ablate":
         return lambda out: tf.zeros_like(out)
-    if spec.helper_name == "scale":
+    if spec.name == "scale":
         factor = spec.args[0]
         return lambda out: out * tf.cast(factor, out.dtype)
-    if spec.helper_name == "add":
+    if spec.name == "add":
         delta = spec.args[0]
         return lambda out: out + tf.cast(delta, out.dtype)
     raise BackendUnsupportedError(
         f"tf backend interventions implement the curated helpers zero_ablate, scale, "
-        f"and add; helper {spec.helper_name!r} has no TensorFlow implementation. Pass "
+        f"and add; helper {spec.name!r} has no TensorFlow implementation. Pass "
         "a callable action for custom replacements."
     )
 

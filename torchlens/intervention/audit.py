@@ -73,17 +73,17 @@ def build_fire_record(
     func_call_id: int | None = None,
     container_path: tuple[Any, ...] = (),
     engine: str | None = None,
-    helper: Edit | None = None,
+    edit: Edit | None = None,
     site_label: str | None = None,
     timing: Literal["pre", "post"] | None = None,
     direction: Literal["forward", "backward"] | None = None,
-    helper_name: str | None = None,
+    edit_name: str | None = None,
     run_ctx: dict[str, Any] | None = None,
     previous_notes: tuple[Any, ...] = (),
     seed: Any = _UNSET,
     determinism_note: str | None = None,
     timestamp: float | None = None,
-    backward_pass_index: int | None = None,
+    backward_pass_number: int | None = None,
     call_index: int | None = None,
     grad_kind: Literal["grad_input", "grad_output"] | None = None,
     tuple_index: int | None = None,
@@ -107,10 +107,10 @@ def build_fire_record(
     feed the note lift and are not stored.
     """
 
-    if helper_name is None and helper is not None:
-        helper_name = helper.helper_name
+    if edit_name is None and edit is not None:
+        edit_name = edit.name
     if seed is _UNSET:
-        helper_kwargs = dict(helper.kwargs) if helper is not None else {}
+        helper_kwargs = dict(edit.kwargs) if edit is not None else {}
         seed = helper_kwargs.get("seed")
     if determinism_note is None and run_ctx is not None:
         new_notes = tuple(run_ctx.get("ledger_notes", ()))[len(previous_notes) :]
@@ -122,15 +122,15 @@ def build_fire_record(
         func_call_id=func_call_id,
         container_path=container_path,
         engine=engine,
-        helper=helper,
+        edit=edit,
         site_label=site_label,
         timing=timing,
         direction=direction,
-        helper_name=helper_name,
+        edit_name=edit_name,
         seed=seed,
         determinism_note=determinism_note,
         timestamp=time.monotonic() if timestamp is None else timestamp,
-        backward_pass_index=backward_pass_index,
+        backward_pass_number=backward_pass_number,
         call_index=call_index,
         grad_kind=grad_kind,
         tuple_index=tuple_index,
@@ -519,11 +519,11 @@ def _replay_fire_record(
         func_call_id=site.func_call_id,
         container_path=tuple(site.container_path or ()),
         engine="replay",
-        helper=entry.helper_spec,
+        edit=entry.helper_spec,
         site_label=site.layer_label,
         timing="post",
         direction="forward",
-        helper_name=_hook_name(entry),
+        edit_name=_hook_name(entry),
         run_ctx=run_ctx,
         previous_notes=previous_notes,
         replaced=replaced,

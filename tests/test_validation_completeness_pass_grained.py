@@ -69,7 +69,7 @@ def test_phantom_extra_pass_fails_the_bfs_census_alone() -> None:
     phantom = copy.copy(victim)
     phantom_label = f"{victim.layer_label}:{victim.num_passes + 1}"
     phantom._internal_set("label", phantom_label)
-    phantom._internal_set("label_short", phantom_label)
+    phantom._internal_set("short_label", phantom_label)
     phantom._internal_set("pass_index", victim.num_passes + 1)
     # Unreachable on purpose: no seed lists it, no real op names it as parent.
     log.layer_list.append(phantom)

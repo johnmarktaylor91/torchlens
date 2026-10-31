@@ -96,8 +96,8 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
             tensor_log_entry.label = f"{layer_type}_{type_index}:{pass_index}"
             tensor_log_entry.layer_label = f"{layer_type}_{type_index}"
 
-        tensor_log_entry.label_short = f"{layer_type}_{type_index}:{pass_index}"
-        tensor_log_entry.layer_label_short = f"{layer_type}_{type_index}"
+        tensor_log_entry.short_label = f"{layer_type}_{type_index}:{pass_index}"
+        tensor_log_entry.short_layer_label = f"{layer_type}_{type_index}"
         final_lookup_label = (
             tensor_log_entry.layer_label
             if tensor_log_entry.num_passes == 1
@@ -854,7 +854,7 @@ def _add_lookup_keys_for_layer_entry(
     """Build user-facing lookup keys for a Op and register them.
 
     Keys allow users to access layers via Trace[key]. Multiple key types:
-    - String labels: layer_label, layer_label_short, with/without pass suffix.
+    - String labels: layer_label, short_layer_label, with/without pass suffix.
     - Integer indices: positive (0-based) and negative (Python-style).
     - Module paths: module_pass labels for modules exited by this layer.
     - Addresses: address, input/output address.
@@ -872,18 +872,18 @@ def _add_lookup_keys_for_layer_entry(
         layer_entry._label_raw,
         layer_entry.raw_label,
         layer_entry.layer_label,
-        layer_entry.layer_label_short,
+        layer_entry.short_layer_label,
         layer_entry.label,
-        layer_entry.label_short,
+        layer_entry.short_label,
         tensor_index,
         tensor_index - num_tensors_to_keep,
     ]
     layer_entry.ordinal_index = tensor_index
     primary_label_keys = {
         layer_entry.layer_label,
-        layer_entry.layer_label_short,
+        layer_entry.short_layer_label,
         layer_entry.label,
-        layer_entry.label_short,
+        layer_entry.short_label,
     }
     exact_op_keys = {
         layer_entry._label_raw,
