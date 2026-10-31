@@ -53,7 +53,7 @@ def test_notebook_attribute_access_reports_missing_dependency() -> None:
     with patch.dict("sys.modules", {"IPython": None}):
         # F22 facade contract: unknown names never mask as ImportError --
         # dependency reporting belongs to KNOWN names only.
-        with pytest.raises(AttributeError, match=r"torchlens\.notebook"):
+        with pytest.raises(AttributeError, match=r"torchlens\._notebook"):
             module.anything
 
 
@@ -84,8 +84,9 @@ def test_neuro_import_stays_inert() -> None:
 
     # F22 facade contract: __all__ advertises exactly the dependency-present
     # real names, resolved via find_spec WITHOUT importing the foreign
-    # packages. ``compare`` is numpy-only, so it is always present.
-    expected = {"compare"}
+    # packages. ``compare`` is numpy-only and the extraction-plan names need
+    # no extra, so they are always present.
+    expected = {"ExtractionPlan", "PlanSite", "compare", "export_npz", "plan_extraction"}
     if importlib.util.find_spec("rsatoolbox") is not None:
         expected |= {"datasets", "rdms"}
     if importlib.util.find_spec("brainscore_vision") is not None:

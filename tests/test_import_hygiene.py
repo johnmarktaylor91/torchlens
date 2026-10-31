@@ -35,13 +35,13 @@ import torch
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _LAZY_MODULE_CASES = (
-    ("fastlog", "record"),
-    ("intervention", "site"),
+    ("fastlog", "DryRun"),
+    ("intervention", "BoundModel"),
     ("user_funcs", "trace"),
-    ("data_classes", "Buffer"),
-    # r7 R81: the documented tl._autoroute.output spelling used to resolve
-    # only by import-order side effect (no lazy row).
-    ("autoroute", "output"),
+    # The record classes left the private data-classes package for tl.types.
+    ("types", "Buffer"),
+    # tl.viz members resolve only through its lazy table (no eager import).
+    ("viz", "attention"),
 )
 
 #: Third-party packages a bare ``import torchlens`` must never pull. FROZEN and
@@ -370,7 +370,7 @@ assert collisions == {
     "agent": [],
     # The visuals rename removed the tl.attribution.onebackward export; the
     # child module stays importable by its full path.
-    "attribution": [], "autoroute": ["input", "output"],
+    "attribution": [],
     "backends": [],
     # Entry/facade repair (workstream A10): the integration and appliance
     # namespaces gained root reachability rows; bridge/callbacks export
@@ -388,10 +388,9 @@ assert collisions == {
     ],
     "callbacks": ["lightning"],
     "neuro": [],
-    "notebook": ["cards", "cardtree", "frontier"],
     "captured_run": [],
     "compat": ["lovely", "torchextractor", "torchshow"],
-    "data_classes": [], "dataset_extraction": [], "debug": [], "distributed": [],
+    "dataset_extraction": [], "debug": [], "distributed": [],
     "errors": [], "examples": [],
     "experimental": ["dagua", "node_styles"], "export": [],
     # T48 reconcile: intervention's __all__ gained the compose child module
@@ -400,14 +399,12 @@ assert collisions == {
     # function is bound over the submodule attribute at package import, as
     # compose is).
     "fastlog": ["dry_run", "recover"], "intervention": ["compose", "population"],
-    "hash": [], "io": [], "ir": [], "merged": [], "observers": [], "options": [],
-    "partial": [], "quantities": [], "report": [], "repgeom": [],
+    "fingerprint": [], "io": [], "observers": [], "options": [],
+    "report": [], "repgeom": [],
     "receptive_field": ["rules"], "stats": [],
     # C04: the transforms facade's children are all underscore-private.
     "transforms": [],
     "types": [], "user_funcs": [],
-    # F29: tl._utils gained a root row (the docs teach tl._utils.doctor()).
-    "utils": [],
     "validation": [], "visualization": [],
     # Visuals rename: tl.viz exports its nodes child module (the node-visual
     # factories namespace), and the feature_maps function shares its module's
