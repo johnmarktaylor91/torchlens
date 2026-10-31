@@ -843,9 +843,8 @@
   `subspace_projection_partial_axis`). SUPPORT UNDER resolve(): the basis
   SUPPORT SET (`|w| > atol` on the bound axis, union over rows, expanded
   across other axes; a dense direction supports the WHOLE axis). GRADIENT
-  CONTRACT: `tl.intervention.keep_grad(edit)` (and
-  `InterventionDecision(keep_grad=True)`) raise `edit_detached_from_graph`
-  when an edit writes values with no autograd graph; the verb x door matrix
+  CONTRACT: `tl.intervention.keep_grad(edit)` raises
+  `edit_detached_from_graph` when an edit writes values with no autograd graph; the verb x door matrix
   is `docs/gradient_contract.md`; under differentiable replay a passing
   keep_grad warns `keep_grad_replay_frontier` once per session (no
   upstream gradient there). PORTABLE ROTATION: with a builtin verb the
@@ -1684,6 +1683,7 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.facets.FacetFunction`: Registered facet recipe metadata.
 - `tl.facets.MissingGrad`: Sentinel for a known facet gradient that is not currently saved.
 - `tl.facets.adding`: Temporarily add recipes to snapshots constructed in this context.
+- `tl.facets.describe`: List registered facet function names and declared facets for a class name.
 - `tl.facets.enable_transformer_lens_aliases`: Enable or disable opt-in TransformerLens-style facet aliases.
 - `tl.facets.functions`: List registered recipes, optionally filtered by scope and class-name glob.
 - `tl.mechinterp.HeadScores`: Per-head taxonomy scores.
@@ -1698,6 +1698,13 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.neuro.PlanSite`: One requested site's measured plan row.
 - `tl._observability.RunningStats`: Always-on scalar spine accumulator (StreamingStat; D8).
 - `tl._observability.RunningStatsResult`: Finalized spine statistics for one population.
+- `tl.recording.ActivationRecord`: One retained recording event.
+- `tl.recording.CaptureSpec`: Capture policy returned by predicate callbacks.
+- `tl.recording.GradRecordContext`: Predicate input schema for one recording backward gradient event.
+- `tl.recording.ModuleStackFrame`: One module frame in a predicate record context stack.
+- `tl.recording.Recorder`: Context manager for explicitly captured recording forwards.
+- `tl.recording.cleanup_partial`: Remove partial recording bundles and sibling temp directories.
+- `tl.recording.recover`: Recover a finalized or partial recording bundle.
 - `tl.stats.NarrationObserver`: Live stats-line echo mounted on the shipped observer surface.
 - `tl.stats.RunningStatsResult`: Finalized spine statistics for one population.
 - `tl.stats.narrate`: Create an echo observer (the live line density) for one site.

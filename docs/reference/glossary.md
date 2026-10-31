@@ -608,11 +608,6 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   replay frontier get no gradient; the live door `tl.when(site, keep_grad(edit)).bind(model)(x)`
   reaches them. Which verbs keep the graph under which door: docs/gradient_contract.md.
 
-**InterventionDecision.keep_grad** — *documented-unstable*
-: `True` runs the same check as `torchlens.intervention.keep_grad(edit)` on the decision's hook
-  (`edit_detached_from_graph` at fire time when the written values carry no graph). `False`, the
-  default, checks nothing. MLX refuses `keep_grad=True`.
-
 **torchlens.positions(edit, positions, *, mask=None, assume_no_padding=False, axis=1)** — *documented-unstable*
 : Restricts a same-shape edit to chosen token positions of a `(batch, tokens, ...)` site value
   (token-position editing): `positions` is an int, a list of ints, a slice, a per-row
@@ -3029,6 +3024,7 @@ describe each surface in depth.
 | `tl.errors.MissingFacetError` | Raised when a declared facet needs a different capture to be available |
 | `tl.facets.FacetFunction` | Registered facet recipe metadata |
 | `tl.facets.MissingGrad` | Sentinel for a known facet gradient that is not currently saved |
+| `tl.facets.describe` | List registered facet function names and declared facets for a class name |
 | `tl.facets.enable_transformer_lens_aliases` | Enable or disable opt-in TransformerLens-style facet aliases |
 | `tl.facets.functions` | List registered recipes, optionally filtered by scope and class-name glob |
 | `tl.mechinterp.HeadScores` | Per-head taxonomy scores |
@@ -3042,6 +3038,10 @@ describe each surface in depth.
 | `tl.neuro.PlanSite` | One requested site's measured plan row |
 | `tl.neuro.export_npz` | Export extracted features as npz interchange (D-21) |
 | `tl.neuro.plan_extraction` | Build a measured extraction plan from two real probe captures (D-15) |
+| `tl.recording.ModuleStackFrame` | One module frame in a predicate record context stack |
+| `tl.recording.cleanup_partial` | Remove partial recording bundles and sibling temp directories |
+| `tl.recording.dry_run` | Run predicates over one forward pass without retaining tensor payloads |
+| `tl.recording.recover` | Recover a finalized or partial recording bundle |
 | `tl.stats.RunningStats` | Always-on scalar spine accumulator (StreamingStat; D8) |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
 | `tl._quickstart.Drawing` | Detached one-call render result. Always returned, never None |
