@@ -199,7 +199,9 @@ def test_tinygrad_derived_grads_survive_grouping() -> None:
         capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
-    assert set(grouped.derived_grads.keys()) == set(ungrouped.derived_grads.keys())
+    assert set(grouped.autograd.derived_grads.keys()) == set(
+        ungrouped.autograd.derived_grads.keys()
+    )
     # Records key on final op labels, which differ across the two layouts;
     # compare in raw-label space (the per-op capture identity). Accessors
     # iterate VALUES, not keys (see _data_classes/_accessor_base.py), so

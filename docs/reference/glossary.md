@@ -9,14 +9,35 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : The finalized record of one executed path: operations, dataflow edges, module context, selected
   payloads, and capture metadata. `tl.trace(...)` returns a `Trace`.
 
-**Trace.cost / Trace.graph / Trace.autograd / Trace.source**
-: Read-only concern groups of a `Trace`. `trace.cost` holds compute and timing totals
-  (`total_flops`, `total_macs`, `macs_by_kind`, `overhead_duration`, ...); `trace.graph` holds
-  graph-shape facts (`edges`, `is_recurrent`, `is_dynamic`, `max_ops_per_layer`, degree and edge
-  counts, `orphans`, `tied_param_groups`); `trace.autograd` holds the backward records
-  (`backward_passes`, `grad_fns`, `grad_fn_calls`, `saved_grad_fns`,
-  `intermediate_derived_grads`, ...); `trace.source` holds the model source facts
-  (`class_location`, `forward_location`, `init_location`, `cls`).
+**Trace.provenance / Trace.options / Trace.cost / Trace.source / Trace.health / Trace.graph / Trace.autograd**
+: Read-only concern groups of a `Trace`; every persisted capture fact lives in exactly one group and
+  is stored privately as `_<group>_<leaf>` (tlspec v11). `trace.provenance` says how, when and from
+  what the capture happened (`backend`, `backend_version`, `backend_config`, `kind`, `start_time`,
+  `end_time`, `duration`, `setup_duration`, `cleanup_duration`, `verified`, `verification_reason`,
+  `cache_hit`, `cache_key`, `cache_path`, `recording_kept`, `fingerprint`, `input_signature_hash`,
+  `input_structure`, `input_object_id`, `model_object_id`, `param_hash_quick`, `param_hash_full`,
+  `param_source`, `root_entry_point`, `owner_thread_id`, `thread_count_start`, `thread_count_end`,
+  `thread_activity_detected`, `distributed_scope`, `observer_spans`, `is_appended`, ...) and
+  `trace.provenance.summary()` renders the capture-provenance text block; `trace.options` is the
+  stored snapshot of the capture options (`mode`, `save`, `save_grads`, `save_mode`, `save_args`,
+  `save_raw_input`, `save_transformed_output`, `save_rng`, `save_source_context`,
+  `source_context_lines`, `backward_ready`, `inference_only`, `structure_only`, `grouping`,
+  `grouping_policy`, `seed`, `on_nonfinite`, `input_transform`, `activation_transform`,
+  `grad_transform`, `output_device`, `verbose`, `chunk_size`, ...); `trace.cost` holds compute,
+  memory and timing totals (`total_flops`, `total_macs`, `macs_by_kind`, `forward_duration`,
+  `backward_durations`, `func_calls_duration`, `overhead_duration`, `forward_peak_memory`,
+  `total_activation_memory`, `total_param_memory`, `total_grad_memory`, `saved_grad_memory`, ...);
+  `trace.source` holds the model source facts (`class_name`, `class_qualname`, `class_file`,
+  `class_line`, `class_docstring`, `init_signature`, `forward_signature`, `frames`, `snapshots`,
+  `class_location`, `forward_location`, `init_location`, `cls`); `trace.health` holds the honesty
+  diagnostics (`completeness_verified`, `completeness_mode`, `num_witness_events`,
+  `num_accounted_witness_events`, `num_unaccounted_witness_events`, `escape_detector_verified`,
+  `escape_detector_mode`, `num_escape_detector_events`, ...); `trace.graph` holds graph-shape
+  facts (`edges`, `is_recurrent`, `is_dynamic`, `conditionals`, `conditional_records`,
+  `stop_frontier`, `op_equivalence_classes`, `relationship_evidence`, `structure_evidence`,
+  `manual_tensor_connections`, `orphans`, `tied_param_groups`, ...); `trace.autograd` holds the
+  backward records (`backward_passes`, `grad_fns`, `grad_fn_calls`, `grad_fn_order`,
+  `has_backward_pass`, `has_grads`, `derived_grads`, `backward_root_grad_fn_object_ids`, ...).
 
 **Trace.params filters and totals**
 : `trace.params.trainable`, `.frozen`, `.executed` and `.unexecuted` are parameter collections;
