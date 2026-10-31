@@ -1619,15 +1619,6 @@ shims, by declared contract. Each carries the same tag at its definition.
   re-keying a visible schema event. Persists as of tlspec v8 with
   byte-exact recomputation at load; older artifacts are wholly keyless.
 
-**Layer.site_key** — *unstable — no deprecation shim owed*
-: The layer's single site key iff every op in the layer shares exactly one.
-  A site-SPANNING layer (a loop inside one module call, including
-  root-context loops) refuses typed
-  `layer_site_ambiguous` — read per-pass keys via `.ops[k].site_key`.
-  Site-uniformity and pass-uniformity are DIFFERENT axes: a reused-module
-  multi-pass layer has one key. Legacy pre-site-key artifacts refuse typed
-  `site_key_unavailable`, never a `None` read.
-
 **Layer.site_peers** — *unstable — no deprecation shim owed*
 : Layers sharing any of this layer's site keys within the trace (the
   reused-relu cohort surface), computed live per call and never persisted.

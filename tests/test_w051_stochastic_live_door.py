@@ -14,6 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens.intervention import population, sample_from
 from torchlens.intervention.population import OneDatum
 from torchlens.intervention.stochastic import _mint_donor_group_id, sampling_records
@@ -77,7 +78,7 @@ def test_live_door_matches_replay_door() -> None:
         site_key, pass_index, _step = coordinate
         assert isinstance(site_key, str) and site_key.startswith("s1|")
         assert pass_index == 1
-    assert {live["relu_1_2"].site_key, live["relu_2_4"].site_key} == {
+    assert {layer_site_key(live["relu_1_2"]), layer_site_key(live["relu_2_4"])} == {
         coordinate[0] for coordinate, _d in replay
     }, "the stamped live key IS the key postprocess mints"
 

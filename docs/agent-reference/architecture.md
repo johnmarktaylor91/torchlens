@@ -13,9 +13,8 @@ Key entry points:
   retained op carries the portable structural-position key `op.site_key`
   (`site_key_v1`, minted at grouping time on every backend,
   policy-independent, the cross-capture bridging relation);
-  `Layer.site_key` / `Layer.site_peers` / `Layer.shape_summary` are the
-  Layer surface (typed refusals `layer_site_ambiguous` /
-  `site_key_unavailable`); `grouping=` is the closed-vocabulary knob
+  `Layer.site_peers` / `Layer.shape_summary` are the Layer surface (typed
+  refusal `site_key_unavailable`; per-pass keys read as `layer.ops[k].site_key`); `grouping=` is the closed-vocabulary knob
   ("structural" default, which on torch is call-site grouping,
   `detector="callsite_v1"`, rule in `docs/guides/grouping.md`; others
   refuse typed pre-D1/S2) mirrored on

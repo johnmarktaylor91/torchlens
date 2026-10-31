@@ -24,6 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens.errors import SelectionError
 
 _RELU = "relu_1_2"
@@ -365,7 +366,7 @@ def test_structural_site_key_mismatch_refuses():
     subject = tl.trace(_A(), torch.randn(1, 4))
     reference = tl.trace(_C(), torch.randn(1, 4))
     try:
-        assert subject["linear_1_1"].site_key != reference["linear_1_1"].site_key
+        assert layer_site_key(subject["linear_1_1"]) != layer_site_key(reference["linear_1_1"])
         with pytest.raises(SelectionError) as excinfo:
             tl.changed(reference, "linear_1_1").resolve(subject)
         # Since leverage B4 the guarded join is the pairing authority: the

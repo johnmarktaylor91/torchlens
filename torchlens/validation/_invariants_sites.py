@@ -144,6 +144,7 @@ def _check_layer_site_coherence(ml: Trace, name: str) -> None:
     tripwire exists to catch.
     """
 
+    from .._data_classes._layer_sites import layer_site_key
     from .._errors import InvalidArgumentError
     from .invariants import MetadataInvariantError
 
@@ -154,22 +155,22 @@ def _check_layer_site_coherence(ml: Trace, name: str) -> None:
         member_keys = {op.site_key for _, op in layer.ops.items()}
         member_keys.discard(None)
         if len(member_keys) == 1:
-            accessor_value = layer.site_key
+            accessor_value = layer_site_key(layer)
             expected = next(iter(member_keys))
             if accessor_value != expected:
                 raise MetadataInvariantError(
                     name,
-                    f"I-S3': Layer '{layer_label}'.site_key returned "
+                    f"I-S3': layer_site_key('{layer_label}') returned "
                     f"{accessor_value!r}, expected {expected!r}",
                 )
         elif len(member_keys) > 1:
             try:
-                silently_read = layer.site_key
+                silently_read = layer_site_key(layer)
             except InvalidArgumentError:
                 continue
             raise MetadataInvariantError(
                 name,
                 f"I-S3': Layer '{layer_label}' spans {len(member_keys)} sites "
-                f"but site_key silently returned {silently_read!r} instead of "
+                f"but layer_site_key silently returned {silently_read!r} instead of "
                 "the typed ambiguity refusal",
             )

@@ -701,9 +701,8 @@
   keys across instances). It is a BRIDGING relation (cross-capture joins on
   position, never proven source identity: per-call-instance cardinality guard
   + source-location witness + corroborated/positional/refused verdict tiers,
-  internal until S2). `Layer.site_key` returns the single shared key or
-  refuses typed `layer_site_ambiguous` (within-call recurrence groups span
-  sites); `Layer.site_peers` indexes same-site layers live; keyless legacy
+  internal until S2). Per-pass keys read as `layer.ops[k].site_key`
+  (within-call recurrence groups span sites); `Layer.site_peers` indexes same-site layers live; keyless legacy
   artifacts refuse `site_key_unavailable`. `Layer.shape_summary` is the
   derived across-pass shape string ("2->4" monotone / "2-4" min-max /
   first->last full shapes; contains `->`, escape at render). The

@@ -17,6 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import site
+from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens._errors import ArgumentTypeError
 from torchlens.intervention.errors import SelectorCapabilityError
 from torchlens.intervention.site_keys import mint_keys_in_execution_order
@@ -100,7 +101,7 @@ def test_post_hoc_resolution_by_components_and_key() -> None:
     log = _ready(_TinyModel())
     by_type = log.resolve_sites(site(func="relu"))
     assert by_type.labels() == ("relu_1_2",)
-    key = log["relu_1_2"].site_key
+    key = layer_site_key(log["relu_1_2"])
     assert log.resolve_sites(site(key)).labels() == ("relu_1_2",)
     by_module = log.resolve_sites(site(module_path="fc1"))
     assert "linear_1_1" in by_module.labels()
@@ -145,7 +146,7 @@ def test_live_site_intervention_fires_at_the_right_site() -> None:
         for row in log.state_history
         if isinstance(row, dict) and row.get("op") == "intervention_event"
     ]
-    assert events[-1]["site_keys"] == [log["relu_1_2"].site_key]
+    assert events[-1]["site_keys"] == [layer_site_key(log["relu_1_2"])]
 
 
 @pytest.mark.smoke
@@ -163,7 +164,7 @@ def test_live_minted_keys_match_posthoc_keys() -> None:
         for row in log.state_history
         if isinstance(row, dict) and row.get("op") == "intervention_event"
     ]
-    assert events[-1]["site_keys"] == [log["relu_1_2"].site_key]
+    assert events[-1]["site_keys"] == [layer_site_key(log["relu_1_2"])]
 
 
 @pytest.mark.parametrize("model_cls", [_TinyModel, _ReusedModule, _Recurrent])

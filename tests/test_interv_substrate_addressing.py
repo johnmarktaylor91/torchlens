@@ -22,6 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens._postprocess._site_join import join_site_profiles, site_profile
 
 
@@ -64,7 +65,7 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
     base, inserted = _capture_pair()
     rows = join_site_profiles(site_profile(base), site_profile(inserted))
 
-    relu_key = base["relu_1_2"].site_key
+    relu_key = layer_site_key(base["relu_1_2"])
     assert relu_key is not None
 
     # POSITIVE CONTROL that must FAIL to detect: naive key-set membership
@@ -84,7 +85,7 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
     assert row.verdict.value == "refused_cardinality"
 
     # Unaffected structural positions stay joined.
-    fc1_key = base["linear_1_1"].site_key
+    fc1_key = layer_site_key(base["linear_1_1"])
     assert rows[fc1_key].joined
 
 
@@ -130,7 +131,7 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     manifest = spec.metadata["target_manifest"]
     assert manifest, "manifest missing"
     assert all("resolved_site_keys" in entry for entry in manifest)
-    assert manifest[0]["resolved_site_keys"] == [base["relu_1_2"].site_key]
+    assert manifest[0]["resolved_site_keys"] == [layer_site_key(base["relu_1_2"])]
 
     # Same trace: EXACT, empty drift.
     same = check_spec_compat(spec, base)
