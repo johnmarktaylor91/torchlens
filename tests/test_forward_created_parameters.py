@@ -315,15 +315,17 @@ def test_hand_written_init_on_a_prepared_parameter_is_model_dataflow() -> None:
     x = _x()
     model = InitInForward(lambda w: nn.init.uniform_(w, -0.1, 0.1))
     trace = tl.trace(copy.deepcopy(model), x)
-    mutations = [layer for layer in trace.layers if layer.type == "uniform"]
-    assert mutations, [layer.label for layer in trace.layers]
-    assert all([p.address for p in layer.params] == ["weight"] for layer in mutations)
+    mutations = [
+        layer
+        for layer in trace.layers
+        if layer.type == "uniform" and [p.address for p in layer.params] == ["weight"]
+    ]
+    assert len(mutations) == 1, [
+        (layer.label, layer.type, [p.address for p in layer.params]) for layer in trace.layers
+    ]
     (linear,) = [layer for layer in trace.layers if layer.type == "linear"]
     parent_labels = [trace[parent].label for parent in linear.parents]
-    assert any(layer.label in parent_labels for layer in mutations), (
-        [layer.label for layer in mutations],
-        parent_labels,
-    )
+    assert mutations[0].label in parent_labels, (mutations[0].label, parent_labels)
     assert "weight" not in [p.address for p in linear.params]
     assert _creation_rows(trace) == []
     assert all(
