@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import contextlib
 import glob
-import importlib
 import io
 import json
 import os
@@ -51,12 +50,12 @@ from . import (
     PayloadLoadHints,
     _json,
     raise_if_manifest_below_floor,
-    raise_if_saved_by_older_major,
 )
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
 from ._canonical_pickle import dump_canonical_metadata
 from ._durability import fsync_dir, fsync_tree
 from ._portability_preflight import preflight_metadata_portability
+from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
     _refuse_edge_intervened_save,
@@ -1425,36 +1424,9 @@ def load(
         # carries no tensor table), so it routes before Manifest parsing.
         # Runtimes without this branch refuse the format typed at the closed
         # bundle_format vocabulary check.
-        merged_manifest_path = bundle_path / "manifest.json"
-        if merged_manifest_path.is_file() and not merged_manifest_path.is_symlink():
-            try:
-                # ``read_text`` allocated the entire attacker-sized file BEFORE the
-                # ceiling could refuse it; the bounded path reader reads at most
-                # ``max_bytes + 1``, so discovery cannot be an allocation DoS.
-                candidate = _json.read_bounded(merged_manifest_path)
-            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-                candidate = None
-            if isinstance(candidate, dict):
-                # One refusal for every saved format: a file an earlier major
-                # release wrote is never read (no compatibility reader is carried).
-                raise_if_saved_by_older_major(candidate.get("torchlens_version"), str(bundle_path))
-            if isinstance(candidate, dict) and candidate.get("bundle_format") == "merged-directory":
-                from .._merged._artifact import load_merged
-
-                return load_merged(bundle_path)  # type: ignore[return-value]
-            if (
-                isinstance(candidate, dict)
-                and candidate.get("bundle_format") == "fastlog-directory"
-            ):
-                from ..fastlog.recover import load as load_fastlog
-
-                return load_fastlog(bundle_path)  # type: ignore[return-value]
-            if isinstance(candidate, dict) and _is_extraction_manifest(candidate):
-                # Resolved by name: a static import would pull the extraction
-                # engine (which imports the root facade) into this module's
-                # import cycle for the type checker.
-                extraction = importlib.import_module("torchlens.dataset_extraction")
-                return extraction.load_extraction(bundle_path)
+        routed = load_by_root_manifest(bundle_path)
+        if routed is not NOT_ROUTED:
+            return routed
         from ..io import detect_tlspec_format
 
         tlspec_format = detect_tlspec_format(bundle_path)
@@ -1531,25 +1503,6 @@ def load(
         trust_custom_callables=trust_custom_callables,
         allowed_custom_callable_modules=allowed_custom_callable_modules,
     )
-
-
-def _is_extraction_manifest(candidate: dict[str, Any]) -> bool:
-    """Return whether a directory manifest is a dataset-extraction artifact's.
-
-    Parameters
-    ----------
-    candidate:
-        The parsed ``manifest.json`` mapping.
-
-    Returns
-    -------
-    bool
-        True for the extraction manifest schemas (v1 and v2).
-    """
-
-    from .._data_substrate.artifact import MANIFEST_SCHEMA_V1, MANIFEST_SCHEMA_V2
-
-    return candidate.get("schema") in {MANIFEST_SCHEMA_V1, MANIFEST_SCHEMA_V2}
 
 
 def _load_trace_payload(

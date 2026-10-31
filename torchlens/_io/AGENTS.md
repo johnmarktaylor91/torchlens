@@ -9,6 +9,8 @@ hostile input, and every load path here is fail-closed.
   allowlist while preserving the locked `_RENAMED_PICKLE_GLOBALS` class/module remap; each
   remapped target is still gated through the allowlist.
 - `cleanup_tmp()` removes stale partial-save temp directories.
+- `_root_manifest.load_by_root_manifest()` routes merged, fastlog and extraction directories by
+  their root manifest (after the earlier-major refusal) before `load()` parses a trace manifest.
 
 ## _safe_unpickle.py
 - `SafeBundleUnpickler` is the restricted default-deny unpickler (class allowlist, mirrors
