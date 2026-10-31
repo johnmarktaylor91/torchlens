@@ -61,3 +61,10 @@ change the model or loosen a check. `models/` is excluded from ruff for the same
 
 Each `manifest.json` entry records the entry id, file, constructor and input factory names, tier,
 era, year, the features the census saw, and why it was chosen.
+
+## The behaviour net
+
+`tests/behaviour/` runs every corpus entry (and the toy models) through pairs of the 21
+interaction-matrix features, asserting trace, validate, save, load, loaded-equals-live and a
+plain-forward match in every cell; the smoke-tier entries are its cheap set. A corpus entry is a
+row of that net too, so adding an entry here adds its cells there. See `tests/behaviour/README.md`.
