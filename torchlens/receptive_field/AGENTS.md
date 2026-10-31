@@ -8,7 +8,7 @@ cached on the trace) and then return `ReceptiveFieldView`s — the laziness
 boundary is the property access itself, not the first view query.
 
 ## __init__.py
-- `verify(trace, ...)` is the public tripwire entry point; `self_check()` aliases it.
+- `verify(trace, ...)` is the public tripwire entry point.
 - `ReceptiveFieldVerification.verdict` is tri-state PASS / FAIL / INDETERMINATE;
   INDETERMINATE (unarmed) never reads as a pass via `.passed`.
 - Arming the gradient tripwire needs `requires_grad` inputs, `backward_ready=True`,
