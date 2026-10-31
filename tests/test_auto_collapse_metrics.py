@@ -1347,7 +1347,7 @@ def _draw_source_mode(
 
     return str(
         trace.draw(
-            vis_mode=vis_mode,  # type: ignore[arg-type]
+            rolled=vis_mode == "rolled",
             path=str(tmp_path / name),
             file_format="svg",
             layout="dot",
@@ -1517,7 +1517,7 @@ def _assert_plan_svg_parity(
     )
     out = tmp_path / name
     trace.draw(
-        vis_mode=vis_mode,  # type: ignore[arg-type]
+        rolled=vis_mode == "rolled",
         path=str(out),
         file_format="svg",
         layout="dot",

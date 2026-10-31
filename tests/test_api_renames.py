@@ -49,58 +49,10 @@ class _DummyLog:
         self.render_calls: list[dict[str, Any]] = []
         self.cleaned_up = False
 
-    def draw(
-        self,
-        vis_mode: str = "unrolled",
-        vis_call_depth: int = 1000,
-        path: str = "modelgraph",
-        vis_graph_overrides: dict[str, Any] | None = None,
-        node_mode: str = "default",
-        node_spec_fn: Any = None,
-        collapsed_node_spec_fn: Any = None,
-        collapse_fn: Any = None,
-        collapse: str = "none",
-        skip_fn: Any = None,
-        vis_edge_overrides: dict[str, Any] | None = None,
-        vis_grad_edge_overrides: dict[str, Any] | None = None,
-        vis_module_overrides: dict[str, Any] | None = None,
-        vis_save_only: bool = False,
-        file_format: str = "pdf",
-        show_buffers: bool = False,
-        direction: str = "bottomup",
-        vis_node_placement: str = "auto",
-        vis_renderer: str = "graphviz",
-        theme: str = "torchlens",
-        vis_intervention_mode: str = "node_mark",
-        vis_show_cone: bool = False,
-    ) -> str:
+    def draw(self, path: str | None = None, **kwargs: Any) -> str:
         """Record render kwargs passed by the API under test."""
 
-        self.render_calls.append(
-            {
-                "vis_mode": vis_mode,
-                "vis_call_depth": vis_call_depth,
-                "path": path,
-                "vis_graph_overrides": vis_graph_overrides,
-                "node_mode": node_mode,
-                "node_spec_fn": node_spec_fn,
-                "collapsed_node_spec_fn": collapsed_node_spec_fn,
-                "collapse_fn": collapse_fn,
-                "skip_fn": skip_fn,
-                "vis_edge_overrides": vis_edge_overrides,
-                "vis_grad_edge_overrides": vis_grad_edge_overrides,
-                "vis_module_overrides": vis_module_overrides,
-                "vis_save_only": vis_save_only,
-                "file_format": file_format,
-                "show_buffers": show_buffers,
-                "direction": direction,
-                "vis_node_placement": vis_node_placement,
-                "vis_renderer": vis_renderer,
-                "theme": theme,
-                "vis_intervention_mode": vis_intervention_mode,
-                "vis_show_cone": vis_show_cone,
-            }
-        )
+        self.render_calls.append({"path": path, **kwargs})
         return "graph"
 
     def cleanup(self) -> None:

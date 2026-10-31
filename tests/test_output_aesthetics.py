@@ -1305,7 +1305,7 @@ def _ensure_vis_pdfs_exist():
             model,
             x,
             stem,
-            rolled=vis_mode == "rolled",
+            vis_mode=vis_mode,
             depth=depth,
             direction=direction,
             buffer_layers=buffers,

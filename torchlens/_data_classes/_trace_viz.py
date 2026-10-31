@@ -830,8 +830,8 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
     def to_dagua_graph(
         self: "Trace",
-        vis_mode: str = "unrolled",
-        vis_call_depth: int = 1000,
+        rolled: bool = False,
+        depth: int = 1000,
         show_buffers: bool = False,
         direction: str = "bottomup",
         include_grad_edges: bool | None = None,
@@ -840,7 +840,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         Parameters
         ----------
-        vis_mode, vis_call_depth, show_buffers, direction, include_grad_edges:
+        rolled, depth, show_buffers, direction, include_grad_edges:
             Forwarded unchanged to
             :func:`torchlens.experimental.dagua.trace_to_dagua_graph`.
 
@@ -853,8 +853,8 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         return _impl(
             self,
-            vis_mode=vis_mode,
-            vis_call_depth=vis_call_depth,
+            vis_mode="rolled" if rolled else "unrolled",
+            vis_call_depth=depth,
             show_buffers=show_buffers,
             direction=direction,
             include_grad_edges=include_grad_edges,

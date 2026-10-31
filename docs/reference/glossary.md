@@ -2301,7 +2301,7 @@ shim owed*
 **render_vector_oversize (warning)** — *unstable — no deprecation shim owed*
 : A forward SVG or PDF page past the 14,400 pt per-side vector page ceiling is written exactly as
   requested and warned with its size and the remedies (`collapse='auto'`, `module=`,
-  `vis_call_depth`): warn and obey, never a refusal.
+  `depth=`): warn and obey, never a refusal.
 
 **"shape_summary" node_label_fields token** — *unstable — no deprecation shim owed*
 : Selector token rendering `Layer.shape_summary` (the L1 across-pass shape
@@ -2926,10 +2926,9 @@ deprecation shim owed*
 **`trace.draw(color_by=graph)` with an `AttributionGraph`** — *unstable — no deprecation shim owed*
 : `trace.draw(color_by=graph)` paints an
   attribution graph onto the trace it was built from: each site holding feature or error
-  nodes gets the `reduce` total of its nodes' values over every position. `graph_value`
-  (graph sources only) is `"influence"` (what `None` means: each node's influence on the
-  logits, circuit-tracer's rule) or `"activation"` (feature activations). Refusal codes
-  `attribution_overlay_argument_invalid` and `attribution_overlay_graph_mismatch`.
+  nodes gets the `abs_sum` total of its nodes' influence on the logits over every position
+  (circuit-tracer's rule); a site-to-value mapping paints any other quantity, feature
+  activations included. Refusal code `attribution_overlay_graph_mismatch`.
 
 **`tl.attribution.graph.upload_to_neuronpedia` (publish an exported graph)** — *unstable — no deprecation shim owed*
 : `upload_to_neuronpedia(exported, *, api_key)` publishes the dict `to_neuronpedia` returned

@@ -239,7 +239,7 @@ def test_above_ceiling_fallback_warns_coded(mlp_log: Any, monkeypatch: Any) -> N
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
     assert "lens_budget_above_ceiling_fallback" in codes
     assert not budget.in_band
-    assert "vis_call_depth" in budget.dial
+    assert "depth" in budget.dial
     assert any("estimate" in line for line in budget.disclosure)
 
 

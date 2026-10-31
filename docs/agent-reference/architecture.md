@@ -342,7 +342,7 @@ Key entry points:
   only pathological inputs (raw ops above 20x the constant) still decline outright
   (`collapse_pathological_skip`; `collapse_plan()` refuses `collapse_plan_unavailable`;
   the schedule degrades to one full-graph step). Context reductions (`module=` focus,
-  `vis_call_depth`, rolled mode) genuinely re-admit the quality planner.
+  `depth=`, rolled mode) genuinely re-admit the quality planner.
 
 Common unified capture patterns:
 

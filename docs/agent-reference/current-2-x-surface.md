@@ -487,7 +487,7 @@
   only pathological inputs (raw ops above 20x the constant) still decline outright
   (`collapse_pathological_skip`; `collapse_plan()` refuses `collapse_plan_unavailable`;
   the schedule degrades to one full-graph step). Context reductions (`module=` focus,
-  `vis_call_depth`, rolled mode) genuinely re-admit the quality planner.
+  `depth=`, rolled mode) genuinely re-admit the quality planner.
 - The committed collapse reference SVGs (`docs/images/collapse`) are rendered with libpango
   1.52. Hosts with an older Pango (1.44, the Ubuntu 20.04 packages) lay text out at different
   widths, so `scripts/render_collapse_reference.py --check` and the schema-lockstep

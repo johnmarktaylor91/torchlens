@@ -296,7 +296,7 @@ def test_backward_graph_edges_attach(tmp_path: Path, model_name: str, view: str)
             graph="backward",
             path=str(tmp_path / f"{model_name}_backward_{view}"),
             file_format="dot",
-            vis_mode=view,
+            rolled=view == "rolled",
         ).dot
         _assert_edges_attach(dot, expect_gradient_edges=False)
     finally:
