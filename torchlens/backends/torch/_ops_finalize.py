@@ -125,7 +125,7 @@ def _evaluate_trace_save_predicate(
         Capture decision when selective predicate save is active, otherwise ``None``.
     """
 
-    options = getattr(trace, "_predicate_save_options", None)
+    options = trace.__dict__.get("_predicate_save_options")
     if options is None:
         return None, None
     if options.keep_op is None:

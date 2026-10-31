@@ -63,10 +63,7 @@ def _resolve_boundary_predicate(trace: Any) -> tuple[Any, Any] | None:
 
     if trace is None:
         return None
-    try:
-        predicate_options = trace._predicate_save_options
-    except AttributeError:
-        predicate_options = None
+    predicate_options = trace.__dict__.get("_predicate_save_options")
     predicate_intervene = getattr(predicate_options, "intervene", None)
     predicate_selector = getattr(predicate_intervene, "selector", None)
     if predicate_selector is None:
