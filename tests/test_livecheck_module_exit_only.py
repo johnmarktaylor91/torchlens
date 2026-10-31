@@ -28,7 +28,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._capture import predicates as _capture_predicates
 from torchlens._utils._torch_compat import TorchCapabilityWarning
 from torchlens.backends.torch import (
     _ops_exhaustive,
@@ -499,12 +498,14 @@ def test_validation_verdicts_unchanged_by_the_door() -> None:
 
 # Each hot-path function's home module first, then every module that bound it
 # by from-import (callers call their own copy, so the counter wraps each one).
-# The module-boundary door builds module sites, not per-op sites, so its copy of
-# make_live_site_proxy stays uncounted: these are per-op path counts.
+# These are per-op path counts. The module-boundary door builds module sites and
+# evaluates the module-kind predicate at module exits, through its own copy of
+# make_live_site_proxy and a call-time import of _evaluate_intervene_op from its
+# home; neither is a per-op call, so that copy and that home stay uncounted.
 _COUNTED: dict[str, tuple[Any, ...]] = {
     "make_live_site_proxy": (_intervention_hooks, _ops_interventions, torch_ops),
     "_build_shared_fields_dict": (_ops_shared_fields, _ops_exhaustive, _ops_interventions),
-    "_evaluate_intervene_op": (_capture_predicates, _ops_interventions, torch_ops),
+    "_evaluate_intervene_op": (_ops_interventions, torch_ops),
 }
 
 
