@@ -185,7 +185,7 @@ class CheckReport:
         )
         lines = [heading]
         lines.extend(
-            f"- [{finding.severity}] {finding.check}: {finding.message}"
+            f"- [{finding.severity}] {finding.check_name}: {finding.message}"
             for finding in self.findings[:20]
         )
         if len(self.findings) > 20:

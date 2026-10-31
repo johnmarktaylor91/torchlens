@@ -363,7 +363,7 @@ class CapabilityCard:
     def __repr__(self) -> str:
         """Bounded identity card (F10/D31): rows point, never dump."""
 
-        available = sum(1 for row in self.rows if row.available)
+        available = sum(1 for row in self.rows if row.is_available)
         return (
             f"CapabilityCard({self.object_kind}: {available}/{len(self.rows)} "
             f"available; print() for the card, read .rows)"
@@ -373,8 +373,8 @@ class CapabilityCard:
         """Render the card: available members first, refusals with reasons."""
 
         lines = [f"capability card ({self.object_kind}):"]
-        for row in sorted(self.rows, key=lambda item: (not item.available, item.key)):
-            marker = "ok " if row.available else "NO "
+        for row in sorted(self.rows, key=lambda item: (not item.is_available, item.key)):
+            marker = "ok " if row.is_available else "NO "
             lines.append(f"  {marker} {row.spelling:<44} [{row.cost_class}] {row.reason}")
         return "\n".join(lines)
 

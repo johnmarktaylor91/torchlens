@@ -247,7 +247,7 @@ def _op_columns(event: NarrationEvent) -> list[str]:
         columns.append(f"late={event.late}")
     for key, value in event.extra_labels:
         columns.append(f"{key}={value}")
-    if event.intervened:
+    if event.has_intervention:
         columns.append("[intervened]")
     return columns
 
