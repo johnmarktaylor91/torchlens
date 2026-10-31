@@ -30,8 +30,9 @@ TABLE = Path(__file__).with_name("test_arch_spine_surface_table.tsv")
 
 #: Floor on the deep walk's denominator. Re-keyed 31 Oct 2026 to the decided
 #: round-1 surface (lazy namespaces plus public non-lazy submodules); it may
-#: only go down through a decided surface change.
-DEEP_WALK_FLOOR = 975
+#: only go down through a decided surface change. 975 -> 974: the option
+#: receipt removal (e7449cd47) took tl.options.OptionReceiptEntry off the surface.
+DEEP_WALK_FLOOR = 974
 
 _HEADER = (
     "canonical_path\thome_module\timplementation_layer\tproduct_role\tin_all\tlegacy_top_level"
