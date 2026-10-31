@@ -56,7 +56,7 @@ class Node:
     kind: str
     public: bool
     sig: str = ""
-    brief: str = ""
+    brief: list[str] = field(default_factory=list)
     params: list[str] = field(default_factory=list)
     doc1: str = ""
     doc: str = ""
@@ -467,12 +467,16 @@ def _brief_param(arg: ast.arg, default: ast.expr | None, prefix: str = "") -> st
     text = f"{prefix}{arg.arg}"
     if default is not None:
         short = _default(default)
-        text += f"={short}" if len(short) <= 12 else "=..."
+        text += f"={short}" if len(short) <= 28 else "=..."
     return text
 
 
-def brief_signature(fn: ast.FunctionDef | ast.AsyncFunctionDef, drop_first: bool) -> str:
-    """The row form: argument names, kinds and short defaults, no annotations."""
+def brief_signature(fn: ast.FunctionDef | ast.AsyncFunctionDef, drop_first: bool) -> list[str]:
+    """The row form, one piece per parameter: names, kinds and short defaults, no annotations.
+
+    Underscore-prefixed parameters are left out (they are internals; the full
+    signature in the row's details still lists them).
+    """
 
     args = fn.args
     positional = list(args.posonlyargs) + list(args.args)
@@ -482,7 +486,8 @@ def brief_signature(fn: ast.FunctionDef | ast.AsyncFunctionDef, drop_first: bool
     for i, (arg, default) in enumerate(zip(positional, defaults)):
         if i == 0 and drop_first:
             continue
-        pieces.append(_brief_param(arg, default))
+        if not arg.arg.startswith("_"):
+            pieces.append(_brief_param(arg, default))
         if args.posonlyargs and i == len(args.posonlyargs) - 1:
             pieces.append("/")
     if args.vararg is not None:
@@ -490,10 +495,11 @@ def brief_signature(fn: ast.FunctionDef | ast.AsyncFunctionDef, drop_first: bool
     elif args.kwonlyargs:
         pieces.append("*")
     for arg, default in zip(args.kwonlyargs, args.kw_defaults):
-        pieces.append(_brief_param(arg, default))
+        if not arg.arg.startswith("_"):
+            pieces.append(_brief_param(arg, default))
     if args.kwarg is not None:
         pieces.append(f"**{args.kwarg.arg}")
-    return "(" + ", ".join(pieces) + ")"
+    return pieces
 
 
 def signature(
@@ -557,6 +563,7 @@ class Builder:
         self.deep = deep
         self.nodes: dict[str, Node] = {}
         self.layers = _package_layers(modules)
+        self.roles = _layer_roles(modules)
 
     # -- modules ----------------------------------------------------------
 
@@ -576,7 +583,11 @@ class Builder:
         )
         layer = _layer_for(self.layers, module)
         if layer:
-            node.tags.append(layer)
+            node.tags.append(
+                _layer_tag(
+                    {"implementation_layer": layer, "product_role": self.roles.get(layer, "facade")}
+                )
+            )
         self.nodes[node.id] = node
         if not self.deep:
             return node  # root-scope build: the namespace row only, no members
@@ -721,7 +732,7 @@ class Builder:
             out.brief = brief_signature(init, drop_first=True)
         elif fields:
             out.sig = "(" + ", ".join(fields) + ")"
-            out.brief = "(" + ", ".join(f.split(":")[0] for f in fields) + ")"
+            out.brief = [f.split(":")[0] for f in fields if not f.startswith("_")]
         return out
 
     def _class_member(
@@ -807,7 +818,7 @@ class Builder:
         if kind == "property":
             ret = _annotation(fn.returns)
             sig = f": {ret}" if ret else ""
-            brief = sig
+            brief = []
             params = []
         return Node(
             id=node_id,
@@ -889,6 +900,20 @@ def _package_layers(modules: Modules) -> dict[str, str]:
         if isinstance(key, ast.Constant) and isinstance(val, ast.Constant):
             out[str(key.value)] = str(val.value)
     return out
+
+
+def _layer_roles(modules: Modules) -> dict[str, str]:
+    """``_LAYER_ROLES`` from torchlens/_surface.py (layer -> product role), read statically."""
+
+    surface = modules.get(f"{PACKAGE}._surface")
+    value = getattr(surface.defs.get("_LAYER_ROLES"), "value", None) if surface else None
+    if not isinstance(value, ast.Dict):
+        return {}
+    return {
+        str(k.value): str(v.value)
+        for k, v in zip(value.keys, value.values)
+        if isinstance(k, ast.Constant) and isinstance(v, ast.Constant)
+    }
 
 
 def _layer_for(layers: dict[str, str], module: Module) -> str:
@@ -1043,7 +1068,7 @@ def _compact(node: Node, files: dict[str, int], index: dict[str, int]) -> dict[s
         out["x"] = 1
     if node.sig:
         out["s"] = node.sig
-    if node.brief and node.brief != node.sig:
+    if node.brief:
         out["q"] = node.brief
     if node.params:
         out["a"] = node.params

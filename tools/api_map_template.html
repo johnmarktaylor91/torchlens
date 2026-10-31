@@ -91,9 +91,9 @@ h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 .meta { color: var(--muted); font-size: 12px; }
 .meta code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-radius: var(--r-sm); border: 1px solid var(--grid); }
 .controls { display: flex; flex-wrap: wrap; gap: var(--sp-sm); align-items: center; margin-top: var(--sp-sm); }
-.search { flex: 1 1 260px; display: flex; align-items: center; gap: var(--sp-sm); position: relative; }
+.search { flex: 1 1 200px; display: flex; align-items: center; gap: var(--sp-sm); position: relative; }
 .search input {
-  width: 100%; min-height: 36px; padding: 6px 110px 6px 12px;
+  width: 100%; min-height: 36px; padding: 6px 100px 6px 12px;
   border: 1px solid var(--grid); border-radius: var(--r-md);
   background: var(--surface-2); color: var(--ink); font: 14px var(--font-sans);
 }
@@ -162,6 +162,12 @@ li.node.internal > .row .name { color: var(--muted); font-weight: 500; }
 .sig .pn { color: var(--ink); }
 .sig .kw { color: var(--k-class); }
 .doc1 { flex-basis: 100%; color: var(--muted); font-size: 13px; margin-top: 1px; }
+.doc1 code, .details pre code { font-size: 12.5px; background: var(--surface-2); border-radius: 3px; padding: 0 3px; }
+li.node.open > .row .doc1 code, .details pre code { background: var(--surface); }
+.alias-note { font-size: 12px; color: var(--muted); }
+.alias-note code { font-size: 12px; }
+.more { border: 1px solid var(--grid); background: var(--surface-2); color: var(--accent-ink); border-radius: 3px; font: 12px var(--font-mono); padding: 0 6px; min-height: 22px; cursor: pointer; margin-left: 2px; }
+.more:hover { border-color: var(--muted); }
 .tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--grid); border-radius: 3px; padding: 0 5px; line-height: 16px; }
 .tag.all { border-style: dashed; }
@@ -194,7 +200,8 @@ li.node.internal > .row .name { color: var(--muted); font-weight: 500; }
 .help kbd { font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--grid); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--surface-2); }
 .help .close { position: absolute; top: 6px; right: 6px; min-width: 32px; min-height: 32px; border: 0; background: transparent; cursor: pointer; color: var(--muted); border-radius: var(--r-sm); }
 .help .close:hover { background: var(--grid); color: var(--ink); }
-.legend { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: var(--sp-sm) 0; }
+.legend { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: var(--sp-sm) 0; align-items: start; }
+.legend > .tag, .legend > .badge { justify-self: start; align-self: start; margin-top: 2px; }
 
 footer { color: var(--muted); font-size: 12px; padding: var(--sp-lg); border-top: 1px solid var(--grid); }
 footer code { font-size: 12px; }
@@ -221,21 +228,21 @@ footer code { font-size: 12px; }
   </div>
   <div class="controls">
     <div class="search">
-      <input id="q" type="search" aria-label="Search names, argument names and summaries" placeholder="Search names, argument names, summaries   ( / to focus )" autocomplete="off" spellcheck="false">
+      <input id="q" type="search" aria-label="Search names, argument names and summaries" placeholder="Search names and arguments" title="Press / to focus; matches names, argument names and summaries" autocomplete="off" spellcheck="false">
       <span class="count" id="count" aria-live="polite"></span>
       <button class="clear" id="clear" type="button" aria-label="Clear search" hidden>&#x2715;</button>
     </div>
     <div class="group" role="group" aria-label="Expand to depth">
       <span class="lbl">Expand</span>
-      <button class="btn" type="button" data-depth="1">1</button>
-      <button class="btn" type="button" data-depth="2">2</button>
-      <button class="btn" type="button" data-depth="3">3</button>
-      <button class="btn" type="button" data-depth="99">All</button>
-      <button class="btn" type="button" id="collapse">Collapse</button>
+      <button class="btn" type="button" data-depth="1" title="Open every row one level deep">1</button>
+      <button class="btn" type="button" data-depth="2" title="Open every row two levels deep">2</button>
+      <button class="btn" type="button" data-depth="3" title="Open every row three levels deep">3</button>
+      <button class="btn" type="button" data-depth="99" title="Open every row to the bottom">All</button>
+      <button class="btn" type="button" id="collapse" title="Close every row">Collapse</button>
     </div>
-    <button class="btn" type="button" id="internals" aria-pressed="false" title="Private modules and underscore names">Show internals</button>
-    <button class="btn" type="button" id="theme" aria-label="Theme: automatic">Theme: auto</button>
-    <button class="btn" type="button" id="helpbtn" aria-label="Keys and legend" aria-expanded="false">?</button>
+    <button class="btn" type="button" id="internals" aria-pressed="false" title="Also list private modules and underscore names">Internals</button>
+    <button class="btn" type="button" id="theme" aria-label="Theme: automatic" title="Switch between automatic, light and dark">Theme: auto</button>
+    <button class="btn" type="button" id="helpbtn" aria-label="Help: keys and legend" aria-expanded="false" title="Keys and legend">?</button>
   </div>
 </header>
 
@@ -276,7 +283,15 @@ footer code { font-size: 12px; }
     <span class="badge k-property">property</span><span>read like an attribute; "settable" when it has a setter</span>
     <span class="badge k-field">field</span><span>dataclass field; attribute: other class-level name; constant: UPPER_CASE module value</span>
   </div>
-  <p class="meta">Row signatures show argument names and short defaults; the full typed signature is in the row's details. Tags on root rows name the implementation layer (L0 core to L9 recipe) and whether the name is in <code>__all__</code>. Searching with <code>?q=word</code> in the address bar opens the page on that search.</p>
+  <h3 style="margin-top:12px">Tags</h3>
+  <div class="legend">
+    <span class="tag">L0 core</span><span>implementation layer from <code>torchlens/_architecture.py</code>: L0 to L5 core, L6 appliance, L7 present (presentation), L8 bridge (external tools), L9 recipe</span>
+    <span class="tag">facade</span><span>a thin lazy namespace module, not a layer of its own</span>
+    <span class="tag">legacy root</span><span>a root name implemented at L6 or above, kept until the next major release</span>
+    <span class="tag all">__all__</span><span>dashed: listed in <code>torchlens.__all__</code>; other root names are reachable but undeclared</span>
+    <span class="tag">dataclass</span><span>also: frozen, enum, settable (property with a setter), classmethod, staticmethod, contextmanager</span>
+  </div>
+  <p class="meta">Row signatures show argument names and short defaults, leaving out underscore-prefixed parameters; the full typed signature is in the row's details. <code>MISSING</code> is the TorchLens sentinel for "not passed": the option's own default applies and the call is recorded as omitted. Searching with <code>?q=word</code> in the address bar opens the page on that search.</p>
 </aside>
 
 <script id="api-map-data" type="application/json">/*__DATA__*/</script>
@@ -293,6 +308,7 @@ footer code { font-size: 12px; }
            ["Classes", function (n) { return target(n).k === "class"; }],
            ["Functions", function (n) { return target(n).k === "function"; }],
            ["Namespaces", function (n) { var k = target(n).k; return k === "package" || k === "module"; }],
+           ["Data", function (n) { var k = target(n).k; return k === "constant" || k === "variable"; }],
            ["Other", function () { return true; }]],
     module: [["Classes", function (n) { return target(n).k === "class"; }],
              ["Functions", function (n) { return target(n).k === "function"; }],
@@ -393,6 +409,47 @@ footer code { font-size: 12px; }
     return esc(text);
   }
 
+  // Light reStructuredText: ``code``, :role:`target` and `single` become <code>.
+  function rst(html) {
+    return html
+      .replace(/``([^`]+)``/g, "<code>$1</code>")
+      .replace(/:[a-z]+:`~?([^`]+)`/g, "<code>$1</code>")
+      .replace(/(^|[\s(])`([^`]+)`/g, "$1<code>$2</code>");
+  }
+  var TAG_TITLES = {
+    "facade": "a thin lazy namespace module (not a layer)",
+    "legacy root": "root name implemented at L6 or above; kept until the next major release",
+    "__all__": "listed in torchlens.__all__",
+    "dataclass": "a dataclass: the fields are its constructor arguments",
+    "frozen": "frozen dataclass: instances cannot be changed",
+    "enum": "an enumeration: the members are its values",
+    "settable": "property with a setter",
+    "classmethod": "called on the class; the first argument is the class",
+    "staticmethod": "no implicit first argument",
+    "contextmanager": "use in a with statement",
+    "async": "coroutine function"
+  };
+  var LAYER_WORDS = {core: "the capture engine and its data (L0 to L5)", appliance: "an appliance built on the core (L6)", present: "presentation: rendering and reports (L7)", bridge: "a bridge to an external tool (L8)", recipe: "a recipe over the rest (L9)"};
+  function tagTitle(g) {
+    if (TAG_TITLES[g]) return TAG_TITLES[g];
+    var m = /^(L\d) (\w+)$/.exec(g);
+    if (m) return "implementation layer " + m[1] + ": " + (LAYER_WORDS[m[2]] || m[2]);
+    return "";
+  }
+  function tagHTML(g) {
+    var t = tagTitle(g);
+    return '<span class="tag' + (g === "__all__" ? " all" : "") + '"' + (t ? ' title="' + esc(t) + '"' : "") + '>' + esc(g) + '</span>';
+  }
+  var FOLD_AT = 12, FOLD_SHOW = 8;
+  function renderBrief(pieces, params) {
+    if (!pieces || !pieces.length) return "";
+    if (pieces.length <= FOLD_AT) return '<code class="sig">' + renderSig("(" + pieces.join(", ") + ")", params) + '</code>';
+    var head = renderSig("(" + pieces.slice(0, FOLD_SHOW).join(", ") + ", ", params);
+    var rest = pieces.length - FOLD_SHOW;
+    return '<code class="sig"><span class="sig-short">' + head + '<button class="more" type="button" aria-expanded="false" title="Show the remaining argument names">' + rest + ' more)</button></span>'
+         + '<span class="sig-long" hidden>' + renderSig("(" + pieces.join(", ") + ")", params) + '<button class="more" type="button" aria-expanded="true" title="Fold the argument list">fewer</button></span></code>';
+  }
+
   function renderSig(sig, params) {
     if (!sig) return "";
     var out = esc(sig);
@@ -417,16 +474,18 @@ footer code { font-size: 12px; }
     html += '<span class="badge k-' + esc(kind) + '">' + esc(kind) + '</span>';
     html += '<div class="main">';
     html += '<a class="name" href="#' + esc(path) + '">' + highlight(n.n) + '</a>';
-    var brief = t.q || t.s;
-    if (brief) html += '<code class="sig">' + renderSig(brief, t.a) + '</code>';
+    if (t.q && t.q.length) html += renderBrief(t.q, t.a);
+    else if (t.s && t.k === "property") html += '<code class="sig">' + renderSig(t.s, []) + '</code>';
     // A root alias carries its own layer tag from the surface table; the target's layer tag would repeat it.
     var own = n.t || [];
     var tags = own.concat(n.A !== undefined ? (t.t || []).filter(function (g) { return own.indexOf(g) < 0 && !/^(L\d|FACADE)$/.test(g); }) : []);
-    if (tags.length) {
-      html += '<span class="tags">' + tags.map(function (g) { return '<span class="tag' + (g === "__all__" ? " all" : "") + '">' + esc(g) + '</span>'; }).join("") + '</span>';
-    }
+    if (tags.length) html += '<span class="tags">' + tags.map(tagHTML).join("") + '</span>';
     if (hidden && !state.internals) html += '<span class="count-hidden">+' + hidden + ' internal</span>';
-    if (t.d) html += '<span class="doc1">' + highlight(t.d) + '</span>';
+    if (n.A !== undefined && n.o && n.k !== "root") {
+      var seen = /^(namespace|re-export) of (.+)$/.exec(n.o);
+      if (seen) html += '<span class="alias-note">same as <code>' + esc(seen[2]) + '</code></span>';
+    }
+    if (t.d) html += '<span class="doc1">' + rst(highlight(t.d)) + '</span>';
     html += '</div></div>';
     return html;
   }
@@ -435,7 +494,7 @@ footer code { font-size: 12px; }
     var n = node(id), t = target(n);
     var html = '<div class="details">';
     if (t.s) html += '<p class="label">Signature</p><div class="fullsig mono">' + esc(t.n) + renderSig(t.s, t.a) + '</div>';
-    if (t.D) html += '<pre>' + esc(t.D) + '</pre>';
+    if (t.D) html += '<pre>' + rst(esc(t.D)) + '</pre>';
     else if (!t.d) html += '<p class="note">No docstring.</p>';
     html += '<div class="src">';
     if (t.f !== undefined) html += '<span>defined in <code>' + esc(FILES[t.f]) + (t.l ? ":" + t.l : "") + '</code></span>';
@@ -606,6 +665,12 @@ footer code { font-size: 12px; }
 
   // Tree interaction ----------------------------------------------------
   document.querySelector("main").addEventListener("click", function (ev) {
+    var more = ev.target.closest(".more");
+    if (more) {
+      var sig = more.closest("code.sig");
+      sig.querySelectorAll(".sig-short, .sig-long").forEach(function (x) { x.hidden = !x.hidden; });
+      return;
+    }
     var tog = ev.target.closest(".tog");
     if (tog) { var el = tog.closest("li.node"); openKids(el, !el.classList.contains("open")); return; }
     if (ev.target.closest("a")) return;
@@ -642,7 +707,7 @@ footer code { font-size: 12px; }
   var internalsBtn = document.getElementById("internals");
   function applyInternals() {
     internalsBtn.setAttribute("aria-pressed", state.internals ? "true" : "false");
-    internalsBtn.textContent = state.internals ? "Hide internals" : "Show internals";
+    internalsBtn.textContent = state.internals ? "Internals: on" : "Internals";
     try { localStorage.setItem("tl-api-map:internals", state.internals ? "1" : "0"); } catch (e) {}
     searchText = {};
     if (hits) runSearch(state.query); else renderAll();
