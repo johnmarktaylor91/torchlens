@@ -33,7 +33,7 @@ def check_card(
 
     Parameters
     ----------
-    trace_or_record:
+    trace:
         A ``Trace`` (its ``input_preprocessor`` is read) or a
         ``ResolvedPreprocessing`` record.
     model:

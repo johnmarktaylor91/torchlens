@@ -3472,14 +3472,14 @@ class Trace(
         """Atomically replace this log's run-state from another ``Trace``.
 
         This method is intended for intervention rerun. The rerun engine builds
-        ``new_log`` off to the side and calls this only after validation ops.
+        ``trace`` off to the side and calls this only after validation ops.
         The final state replacement uses one state-restore pass over the new fields
         to minimize torn-state windows. Concurrent reads during rerun are
         unsupported; no lock is taken.
 
         Parameters
         ----------
-        new_log:
+        trace:
             Fully postprocessed fresh log whose graph, layer containers,
             accessors, output metadata, shape/hash fields, and per-pass entries
             should replace this log's current run-state.
@@ -3809,11 +3809,11 @@ class Trace(
         return fail_open(lambda: copy.deepcopy(value), lambda _error: value)
 
     def append_state_from(self, trace: "Trace") -> None:
-        """Merge compatible chunk outs from ``new_log`` into this log.
+        """Merge compatible chunk outs from ``trace`` into this log.
 
         Parameters
         ----------
-        new_log:
+        trace:
             Freshly captured append chunk whose topology and tensor metadata
             have already been validated against this log.
         """

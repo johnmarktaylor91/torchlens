@@ -354,7 +354,7 @@ def safe_card_html(builder: Callable[[], CardNode], *, theme: str = "torchlens")
 
     Parameters
     ----------
-    build:
+    builder:
         Zero-argument card-tree builder.
     theme:
         Themes preset for the scoped CSS.

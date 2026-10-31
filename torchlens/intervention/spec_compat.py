@@ -261,7 +261,7 @@ def check_spec_compat(spec: InterventionSpec, trace: Any) -> SpecCompat:
     ----------
     spec:
         Loaded or in-memory intervention spec.
-    new_log:
+    trace:
         Model log to check.
 
     Returns

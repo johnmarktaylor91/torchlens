@@ -77,7 +77,7 @@ class PredicateError(CaptureError, RuntimeError):
             Invalid predicate return value, when applicable.
         failures:
             Accumulated predicate failures for deferred reporting.
-        total_count:
+        num_failures:
             Total number of predicate failures observed.
         overflow:
             Number of failures omitted because the failure list was capped.

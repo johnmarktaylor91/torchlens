@@ -335,7 +335,7 @@ def flops_report(
         Explicit 6ND ``D`` for the trace door (the comparator's HF
         applicability cannot be established from a trace alone; the line
         is OMITTED without it, never guessed).
-    breakdown_top_k:
+    breakdown_k:
         Depth-1 module rows in the optional breakdown block (0 disables).
     """
 
