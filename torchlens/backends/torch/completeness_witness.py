@@ -70,6 +70,7 @@ from ...errors import ScalarEscapeWarning
 from ._completeness_audited import (
     _EXPECTED_OPAQUE_WRAPPERS,
     AUDITED_COMPLETENESS_BOUNDARIES,
+    LAZY_MODULE_MATERIALIZE_WRAPPER,
     MAX_AUDITED_COMPLETENESS_BOUNDARIES,
 )
 from ._completeness_types import (

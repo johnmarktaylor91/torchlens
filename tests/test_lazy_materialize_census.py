@@ -4,20 +4,30 @@ Torch materializes a pending ``UninitializedParameter`` in place from its lazy p
 ``materialize`` reads the slot's ``.data`` for the device and the dtype before it assigns
 storage, and ``reset_parameters`` then fills the new tensor. The wrapper passes calls whose
 receiver is a pending slot through unlogged (they are constructor plumbing, not model
-dataflow), so the ``aten.detach`` each ``.data`` read emits had no owner and the census
-counted it as a silent drop. The witness now flags those reads as state-view accessor
-dispatches, the same value-free category as a registered buffer's ``.data`` view, so the
-validation backstop's arithmetic (dispatched = captured + orphan-pruned + state-view)
-accounts for them without exempting anything a value could flow through.
+dataflow) and, under the dispatch census, runs them as the audited expected-opaque owner
+``lazy_module:materialize``: the ``aten.detach`` each ``.data`` read emits is accounted to
+that boundary, so the validation backstop's arithmetic (dispatched = captured + orphan-pruned
++ accounted) holds with no tolerance, count or exemption change. The pending-slot state-view
+flag stays as the witness's own account of such a read should one ever reach the dispatcher
+outside the wrapper; it credits pending slots only.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import Any
+
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch.wrappers import wrap_torch
+from torchlens import _state
+from torchlens.backends.torch.completeness_witness import (
+    AUDITED_COMPLETENESS_BOUNDARIES,
+    LAZY_MODULE_MATERIALIZE_WRAPPER,
+)
+from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
 WIDTH = 8
 BATCH = 3
@@ -48,45 +58,66 @@ class LazyAtPrep(nn.Module):
         return self.lazy(torch.relu(self.pre(x)))
 
 
-def _materialization_rows(trace: tl.Trace) -> list[dict[str, object]]:
+@pytest.fixture
+def _armed_witness() -> Iterator[None]:
+    """Arm the dispatch census for one test and restore the process-level modes after."""
+
+    saved_escape = _state._escape_detector_mode
+    saved_witness = _state._completeness_witness_mode
+    unwrap_torch()
+    wrap_torch(completeness_witness=True)
+    yield
+    unwrap_torch()
+    wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
+
+
+def _materialization_owners(trace: tl.Trace) -> list[dict[str, Any]]:
     return [
-        row
-        for row in trace.completeness_diagnostics
-        if row["reason"] == "unowned_dispatch"
-        and str(row["operator"]).startswith(("aten.detach", "aten.alias"))
+        entry
+        for entry in trace.completeness_decompositions
+        if entry["owner_wrapper"] == LAZY_MODULE_MATERIALIZE_WRAPPER
     ]
 
 
-def test_pending_slot_data_reads_are_state_view_accessors_for_a_module_built_in_forward() -> None:
-    wrap_torch(completeness_witness=True)
+def _assert_materialization_is_audited(trace: tl.Trace) -> None:
+    owners = _materialization_owners(trace)
+    assert owners, "the lazy pre-hook materialization ran outside the audited owner"
+    assert all(entry["scope"] == "expected_opaque" for entry in owners)
+    operators = [op for entry in owners for op in entry["aten_ops"]]
+    # weight and bias, device and dtype read each: four value-free views of pending slots
+    assert len(operators) == 4
+    assert all(op.startswith(("aten.detach", "aten.alias")) for op in operators)
+    assert trace.completeness_diagnostics == []
+    assert trace.capture_verified is True
+
+
+def test_the_audited_row_is_the_wrapper_wide_materialization_boundary() -> None:
+    rows = [
+        row
+        for row in AUDITED_COMPLETENESS_BOUNDARIES
+        if row.wrapper_name == LAZY_MODULE_MATERIALIZE_WRAPPER
+    ]
+    assert len(rows) == 1 and rows[0].operator is None and rows[0].reason
+
+
+@pytest.mark.smoke
+def test_materialization_of_a_module_built_in_forward_is_audited(_armed_witness: None) -> None:
     torch.manual_seed(0)
     trace = tl.trace(LazyBuiltInForward().eval(), [torch.randn(BATCH, WIDTH)])
-    rows = _materialization_rows(trace)
-    # weight and bias, device and dtype read each: four value-free views of pending slots
-    assert len(rows) == 4
-    assert all(row["state_view_accessor"] is True for row in rows)
-    assert all(row["mutates"] is False for row in rows)
-    unflagged = [
-        row
-        for row in trace.completeness_diagnostics
-        if row["reason"] == "unowned_dispatch" and row["state_view_accessor"] is not True
-    ]
-    assert unflagged == []
+    _assert_materialization_is_audited(trace)
 
 
-def test_pending_slot_data_reads_are_state_view_accessors_for_a_lazy_module_registered_at_prep() -> (
-    None
-):
-    wrap_torch(completeness_witness=True)
+@pytest.mark.smoke
+def test_materialization_of_a_lazy_module_registered_at_prep_is_audited(
+    _armed_witness: None,
+) -> None:
     torch.manual_seed(0)
     trace = tl.trace(LazyAtPrep().eval(), [torch.randn(BATCH, WIDTH)])
-    rows = _materialization_rows(trace)
-    assert rows, "the lazy pre-hook materialization emitted no unowned view dispatch"
-    assert all(row["state_view_accessor"] is True for row in rows)
+    _assert_materialization_is_audited(trace)
 
 
 def test_a_detach_on_a_materialized_parameter_is_not_credited() -> None:
-    """The flag covers PENDING slots only: a real tensor's unowned view stays a gap."""
+    """The state-view flag covers PENDING slots only: a real tensor's unowned view stays a gap."""
 
     from torchlens.backends.torch._completeness_dispatch_names import (
         _is_buffer_state_view_dispatch,

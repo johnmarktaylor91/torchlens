@@ -987,6 +987,7 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
         "autograd:grad",
         "autograd_function:foreign",
         "jit_script:boundary",
+        "lazy_module:materialize",
     }
     scalar_rows = [row for row in AUDITED_COMPLETENESS_BOUNDARIES if row.operator is not None]
     assert {row.wrapper_name for row in scalar_rows} == {

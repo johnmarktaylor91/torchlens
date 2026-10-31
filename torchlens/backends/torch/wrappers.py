@@ -62,6 +62,7 @@ from ..._utils.tensor_utils import (
     print_override,
     safe_copy,
 )
+from ._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from ._completeness_boundaries import completeness_scope_for_wrapper
 from ._completeness_cross_thread import (
     observe_nonowner_operands,
@@ -1290,9 +1291,20 @@ def torch_func_decorator(
         # a module built inside forward at the wrapped call that first
         # consumes it, through ``late_register_forward_created_parameter``);
         # pass the call through unlogged, mirroring the functorch/dynamo
-        # region guards above. The watched slot is recorded by identity.
+        # region guards above. The watched slot is recorded by identity, and
+        # under the dispatch census the call runs as the audited
+        # ``lazy_module:materialize`` expected-opaque owner, so its ``.data``
+        # reads are accounted constructor plumbing rather than unowned drops.
         if args and isinstance(args[0], torch.Tensor) and _is_uninitialized_param(args[0]):
             note_lazy_slot_materializing(trace, args[0])
+            if _diagnostic_edge_armed():
+                with expected_original_call(
+                    func,
+                    LAZY_MODULE_MATERIALIZE_WRAPPER,
+                    func_name=func_name,
+                    census_scope=completeness_scope_for_wrapper(LAZY_MODULE_MATERIALIZE_WRAPPER),
+                ):
+                    return func(*args, **kwargs)
             return func(*args, **kwargs)
 
         # Usage stats: count every decorated function call during logging.
