@@ -1,7 +1,8 @@
 """Capture-verb fills for the behaviour net: fuller promises and new toy rows.
 
 The features that change how a forward is captured (``halt``, ``multipass``,
-``backward``, ``record``, ``fast_run``, ``rerun``, ``index``, ``recipes``) get
+``backward``, ``record``, ``fast_run``, ``rerun``, ``index``, ``bind``,
+``recipes``) get
 an ``after`` hook that checks the feature's whole promise through the public
 surface, and the toy registry gains rows for model shapes the corpus lacks
 (nested containers in and out, forward hooks installed by the model itself,
@@ -152,8 +153,12 @@ def _expect_pass_census(cell: Cell, name: str, trace: Any) -> None:
     """Pass indexes run 1..num_passes per layer and the recurrent filter is exact."""
 
     layers = list(trace.layers)
-    covered = sum(len(layer.ops) for layer in layers)
-    cell.expect(covered == len(trace.ops), f"{name}: layers hold {covered} of {len(trace.ops)} ops")
+    # ``trace.layers`` also holds the input and output layers, which ``trace.ops`` omits.
+    covered = [op.label for layer in layers for op in layer.ops]
+    twice = sorted({label for label in covered if covered.count(label) > 1})
+    cell.expect(not twice, f"{name}: ops in more than one layer pass: {twice[:6]}")
+    missing = sorted({op.label for op in trace.ops} - set(covered))
+    cell.expect(not missing, f"{name}: ops in no layer: {missing[:6]}")
     repeated = set()
     for layer in layers:
         passes = [op.pass_index for op in layer.ops]
@@ -239,17 +244,28 @@ def _after_backward(cell: Cell) -> None:
     with torch.no_grad():
         torch.manual_seed(SEED)
         frozen = tl.trace(cell.model, cell.fresh_inputs(), **cell.trace_kwargs)
+        reference = _eager_reference(cell) and _plain_leaves(cell)
     cell.expect(frozen.inference_only is True, "a capture under no_grad is not inference_only")
-    if not cell.case.has("stochastic"):
-        cell.expect(
-            _sequence(frozen) == _sequence(trace),
-            f"no_grad capture changed the ops: {_first_difference(_sequence(frozen), _sequence(trace))}",
-        )
+    if reference and not cell.case.has("stochastic"):
+        # Eager itself may take another kernel path under no_grad (fused attention), so the
+        # inference-only capture is held to a no_grad plain forward, not to the grad capture.
+        cell.expect_same_leaves(reference, cell.output_leaves(frozen), "no_grad capture output")
     try:
         frozen.backward(torch.zeros((), requires_grad=True))
     except TorchLensError:
         return
     cell.expect(False, "backward on an inference-only capture did not refuse with a typed error")
+
+
+def _plain_leaves(cell: Cell) -> list[Any]:
+    """Run the cell's model plainly in the current grad mode and return detached leaves."""
+
+    torch.manual_seed(SEED)
+    output = cell.model(*cell.positional_inputs(cell.fresh_inputs()))
+    return [
+        leaf.detach().clone() if isinstance(leaf, torch.Tensor) else leaf
+        for leaf in cell.leaves(output)
+    ]
 
 
 # --- record -------------------------------------------------------------------
@@ -286,21 +302,25 @@ def _eager_reference(cell: Cell) -> list[Any] | None:
 
 
 def _after_fast_run(cell: Cell) -> None:
-    """The fast run equals the captured output and eager bit for bit, twice, verified."""
+    """The fast run equals the captured output and eager bit for bit, twice, unpoisoned."""
 
-    _base_after("fast_run")(cell)
+    from tests.behaviour.features import _no_stochastic
+
+    _no_stochastic(cell)
     trace = cell.require_trace()
+    captured = cell.output_leaves(trace)
     runs = []
     for _ in range(2):
         torch.manual_seed(SEED)
         result = trace.run(inputs=cell.fresh_inputs(), fast=True)
-        cell.expect(not result.report.poisoned, f"fast run poisoned: {result.report!r}")
+        cell.expect(not result.poisoned, f"fast run poisoned: {result.report!r}")
         runs.append(
             [
                 leaf.detach() if isinstance(leaf, torch.Tensor) else leaf
                 for leaf in cell.leaves(result.output)
             ]
         )
+    cell.expect_same_leaves(captured, runs[0], "fast run output")
     cell.expect_same_leaves(runs[0], runs[1], "second fast run")
     eager = _eager_reference(cell)
     if eager is not None:
@@ -339,6 +359,37 @@ def _after_index(cell: Cell) -> None:
     _expect_stable_second_capture(cell)
 
 
+# --- bind ---------------------------------------------------------------------
+
+
+def _after_bind(cell: Cell) -> None:
+    """The bound executor equals the traced edit, both run in grad mode as captures run.
+
+    The base row ran the executor under ``torch.no_grad()``, where eager attention can
+    take a fused kernel the grad-mode trace does not, so a 1e-7 gap was eager's own.
+    """
+
+    from tests.behaviour.features import _no_stochastic, _single_call_module
+
+    _no_stochastic(cell)
+    address = _single_call_module(cell)
+    spec = tl.when(tl.module(address), tl.scale(0.5))
+    bound = spec.bind(cell.model)
+    torch.manual_seed(SEED)
+    bound_leaves = [
+        leaf.detach().clone() if isinstance(leaf, torch.Tensor) else leaf
+        for leaf in cell.leaves(bound(*cell.positional_inputs(cell.fresh_inputs())))
+    ]
+    foreign = sorted(
+        {type(leaf).__name__ for leaf in bound_leaves if not isinstance(leaf, torch.Tensor)}
+    )
+    if foreign:
+        raise _not_applicable(f"the model returns non-tensor objects {foreign}")
+    torch.manual_seed(SEED)
+    steered = tl.trace(cell.model, cell.fresh_inputs(), intervene=spec, on_zero_fire="error")
+    cell.expect_same_leaves(cell.output_leaves(steered), bound_leaves, "bound executor output")
+
+
 # --- recipes ------------------------------------------------------------------
 
 
@@ -362,6 +413,7 @@ _AFTER = {
     "fast_run": _after_fast_run,
     "rerun": _after_rerun,
     "index": _after_index,
+    "bind": _after_bind,
 }
 _PREPARE = {"recipes": _prepare_recipes}
 
