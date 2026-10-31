@@ -2652,9 +2652,9 @@ deprecation shim owed*
   tensors, their raw element count, and the mask zeros (`masked=None` when
   the capture retained no mask values).
 
-**FlopsReport.attention_full_square_ops / TraceProfile.attention_full_square_ops** — *unstable — no deprecation shim owed*
+**FlopsReport.attention_full_square_ops / ProfileReport.attention_full_square_ops** — *unstable — no deprecation shim owed*
 : The count (the `attention_full_square_ops` field) of `scaled_dot_product_attention` ops in the forward FLOP total
-  of a `flops_report` or a `trace.profile()`; when non-zero the report or the
+  of a `flops` or a `trace.profile()`; when non-zero the report or the
   profile footer prints that attention FLOPs count the full query x key
   square and masks / `is_causal` are not discounted. Every attention FLOP
   line carries the same note: the `tl.summary` FLOP cells (marked, with the
@@ -2706,26 +2706,26 @@ deprecation shim owed*
   `AttentionCall` records (`module_name`, `probs`, `num_key_value_heads`,
   `mask_kind`, `sdpa_checked`), and `.nbytes` is the retained total.
 
-**DebugReport (`tl.debug.DebugReport`)** — *unstable — no deprecation shim owed*
+**Report (`tl.report.Report`)** — *unstable — no deprecation shim owed*
 : The one typed result of every report-shaped `tl.debug` helper (U42.2):
   `report_type`, `subject` and `status` (the lead), `to_dict()` (a plain,
   JSON-friendly payload; tensors and graph records summarized, never
   inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:
   lead line, at most five findings, the exact remainder, the exits). The
-  typed results (`TraceAudit`, `DeterminismReport`, `NanReport`,
-  `FindNanResult`, `ParamAudit`, ...) subclass it; those with a house-voice
+  typed results (`HealthReport`, `DeterminismReport`, `NonfiniteReport`,
+  `FindNanResult`, `ParamHealthReport`, ...) subclass it; those with a house-voice
   `__repr__` keep printing it and serve the card as `report.card()`. The
   table helpers `compare`, `compare_params`, `dead_neurons`,
-  `gradient_flow_audit`, `hot_path` and `recompute_candidates` return a
-  tabular `DebugReport` whose `.to_pandas()` is the DataFrame they used to
+  `grad_health`, `hot_path` and `recompute_candidates` return a
+  tabular `Report` whose `.to_pandas()` is the DataFrame they used to
   return (`attrs` included); the report has a table and never is one.
 
-**Trace.profile(group_by="source_line") / TraceProfile.group_by** — *unstable — no deprecation shim owed*
+**Trace.profile(group_by="source_line") / ProfileReport.group_by** — *unstable — no deprecation shim owed*
 : `group_by="source_line"` folds the op rows of `trace.profile()` into one
   row per user source line (`"<file>:<line>"`, the op's recorded call site),
   summing activation bytes, FLOPs and instrumented time; boundary rows fold
   into one `<inputs and outputs>` row, so every additive column sums to the
-  ungrouped op view. Only with `level="op"`. `TraceProfile.group_by` records
+  ungrouped op view. Only with `level="op"`. `ProfileReport.group_by` records
   the key (`None` for one row per op).
 
 **tl.summary("<hub model id>", input_size=...)** — *unstable — no deprecation shim owed*

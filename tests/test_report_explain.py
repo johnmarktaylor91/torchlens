@@ -138,7 +138,7 @@ def test_explain_and_audit_diagnose_real_partial_failure() -> None:
     assert "mat1 and mat2 shapes cannot be multiplied" in text
     assert str(exc_info.value) in text
     assert "Failing boundary: forward at" in text
-    assert audit == tl.debug.audit_trace(partial)
+    assert audit == partial.audit()
     failure = next(
         finding for finding in audit.findings if finding.check == "partial_capture_exception"
     )
@@ -281,7 +281,7 @@ def test_profile_surfaces_unverified_capture() -> None:
     log.capture_verification_reason = "mode_rescue_rerun"
     log.rescue_rerun = True
 
-    profile = tl.report.build_profile(log)
+    profile = tl.report.profile(log)
     assert profile.capture_verified is False
     assert profile.capture_verification_reason == "mode_rescue_rerun"
     assert profile.rescue_rerun is True
@@ -291,7 +291,7 @@ def test_profile_surfaces_unverified_capture() -> None:
     assert "UNVERIFIED" in rendered
     assert "mode_rescue_rerun" in rendered
 
-    clean = tl.report.build_profile(_captured_log())
+    clean = tl.report.profile(_captured_log())
     assert clean.capture_verified is None
     assert "UNVERIFIED" not in repr(clean)
 

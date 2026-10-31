@@ -21,14 +21,13 @@ from torchlens.report import (
     MfuProvenance,
     PeakRow,
     attributed_kernel_utilization,
-    cost_report,
     device_peaks,
-    instrumented_rate,
-    machine_balance,
+    measure_clean_step,
     mfu,
+    overhead,
     roofline,
-    time_clean_step,
 )
+from torchlens.report._cost_perf import instrumented_rate, machine_balance
 
 
 @pytest.fixture(scope="module")
@@ -166,7 +165,7 @@ def test_time_clean_step_discloses_method_and_reruns() -> None:
     """D16: the opt-in helper states plainly that it re-runs the forward."""
 
     model = nn.Linear(4, 4).eval()
-    timing = time_clean_step(model, torch.randn(2, 4), warmup=1, repeats=3)
+    timing = measure_clean_step(model, torch.randn(2, 4), warmup=1, repeats=3)
     assert timing.seconds > 0
     assert timing.n_forwards_run == 4
     assert timing.scope == ("forward",)
@@ -259,9 +258,9 @@ def test_instrumented_rate_is_boxed_and_labeled(small_trace) -> None:
 def test_instrumented_rate_not_in_default_profile(small_trace) -> None:
     """D20: never in any default view."""
 
-    from torchlens.report import build_profile
+    from torchlens.report import profile
 
-    frame = build_profile(small_trace, level="op").to_pandas()
+    frame = profile(small_trace, level="op").to_pandas()
     assert not any("rate" in str(column) for column in frame.columns)
 
 
@@ -273,7 +272,7 @@ def test_compute_rows_reserve_device_attribution_slots(small_trace) -> None:
     """D22: device_time / kernel_time / attribution_status exist on every
     row from day one and stay None until the correlation-ID join."""
 
-    from torchlens.report import compute_aggregation
+    from torchlens.report._compute_truth import compute_aggregation
 
     for row in compute_aggregation(small_trace).rows:
         assert row.device_time is None
@@ -309,7 +308,7 @@ def test_cost_report_measures_and_discloses() -> None:
     """D27: absolute ms first, ratio derived, N forwards disclosed."""
 
     model = nn.Linear(4, 4).eval()
-    result = cost_report(model, torch.randn(2, 4), repeats=2)
+    result = overhead(model, torch.randn(2, 4), repeats=2)
     text = str(result)
     assert "measured on THIS model and host" in text
     assert "forward passes" in text
@@ -323,7 +322,7 @@ def test_cost_report_refuses_unknown_tier() -> None:
     """D25: tiers are public callables, never harness rung names."""
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        cost_report(nn.Linear(2, 2), torch.randn(1, 2), tiers=("raw_forward", "fastlog_halt_25"))
+        overhead(nn.Linear(2, 2), torch.randn(1, 2), tiers=("raw_forward", "fastlog_halt_25"))
     assert excinfo.value.fields["code"] == "cost_report_tier_unknown"
 
 
@@ -340,7 +339,7 @@ def test_remaining_new_codes_are_provoked(small_trace) -> None:
     below where derivable)."""
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        time_clean_step(nn.Linear(2, 2), torch.randn(1, 2), repeats=0)
+        measure_clean_step(nn.Linear(2, 2), torch.randn(1, 2), repeats=0)
     assert excinfo.value.fields["code"] == "clean_step_repeats_invalid"
 
     with pytest.raises(InvalidArgumentError) as excinfo:

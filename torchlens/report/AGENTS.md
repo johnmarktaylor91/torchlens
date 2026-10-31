@@ -14,12 +14,12 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
   `Trace.to_agent_json()` (DOCUMENTED-UNSTABLE). Carries the same
   capture-verification facts as `explain()`; payloads never inlined;
   truncation disclosed, never silent.
-- `_profile.py` — `TraceProfile` + `build_profile(...)`: tabular resource
+- `_profile.py` — `ProfileReport` + `profile(...)`: tabular resource
   profile at `level="op" | "module" | "call"` (durations, FLOPs, params,
   honesty rows, capture-verification banner, call tree). `forward_peak_memory`
   is NOT a profile column — it lives on the Trace itself. pandas is an optional
   dependency resolved lazily via `_require_pandas()` — never import it at module top.
-- `__init__.py` — public surface (`explain`, `TraceProfile`, `build_profile`);
+- `__init__.py` — public surface (`explain`, `ProfileReport`, `profile`);
   `log_value(name, value)` lives in `torchlens.observers` (capture-time writers live
   with the observers; this package holds the readers).
 - `_factcore.py` / `_compute_truth.py` / `_health.py` — the C02 numbers

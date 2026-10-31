@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import DebugReport, rows_of
+from .._debug_report import Report, rows_of
 from ._audit import AuditFinding, AuditSeverity
 from ._common import _compute_ops, _op_label, _safe_out
 from ._nan import _module_address, _nonfinite_kind
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class DTypeRangeAudit(DebugReport):
+class DTypeRangeReport(Report):
     """Coverage-bounded dtype range audit result.
 
     Attributes
@@ -80,7 +80,7 @@ class DTypeRangeAudit(DebugReport):
         """
 
         return (
-            f"DTypeRangeAudit(findings={len(self.findings)}, "
+            f"DTypeRangeReport(findings={len(self.findings)}, "
             f"coverage={self.n_ops_audited}/{self.n_ops_total})"
         )
 
@@ -91,7 +91,7 @@ def _finding(
     severity: AuditSeverity,
     check: str,
     message: str,
-    follow_up: str = "tl.debug.dtype_range_audit(trace)",
+    follow_up: str = "tl.report.dtype_range(trace)",
 ) -> AuditFinding:
     """Build one dtype finding with recorded operation provenance.
 
@@ -252,12 +252,12 @@ def _wider_input_dtypes(op: Any, output_dtype: torch.dtype) -> tuple[torch.dtype
     return tuple(wider)
 
 
-def dtype_range_audit(
+def dtype_range(
     trace: Trace,
     *,
     max_fraction: float = 0.9,
     subnormal_fraction_threshold: float = 0.1,
-) -> DTypeRangeAudit:
+) -> DTypeRangeReport:
     """Audit saved activations for numeric-range and precision hazards.
 
     Non-finite classification reuses the same classifier as
@@ -279,7 +279,7 @@ def dtype_range_audit(
 
     Returns
     -------
-    DTypeRangeAudit
+    DTypeRangeReport
         Structured findings and audited/total operation coverage.
 
     Raises
@@ -369,7 +369,7 @@ def dtype_range_audit(
                 )
             )
 
-    return DTypeRangeAudit(tuple(findings), n_ops_audited, len(ops))
+    return DTypeRangeReport(tuple(findings), n_ops_audited, len(ops))
 
 
-__all__ = ["DTypeRangeAudit", "dtype_range_audit"]
+__all__ = ["DTypeRangeReport", "dtype_range"]

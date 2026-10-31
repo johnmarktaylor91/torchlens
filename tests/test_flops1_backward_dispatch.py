@@ -112,9 +112,9 @@ def _true_mac_flops(trace: Any) -> int:
 
     import re
 
-    from torchlens.report import flops_report
+    from torchlens.report import flops
 
-    match = re.search(r"true MACs: (\d+)", str(flops_report(trace)))
+    match = re.search(r"true MACs: (\d+)", str(flops(trace)))
     assert match is not None
     return 2 * int(match.group(1))
 

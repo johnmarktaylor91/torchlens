@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from torchlens.data_classes.trace import Trace
 
-from .._debug_report import DebugReport, table_report, trace_subject
+from .._debug_report import Report, table_report, trace_subject
 from ._common import _compute_ops, _op_label, _require_pandas
 
 
-def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> DebugReport:
+def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Report:
     """Rank ops by activation memory per forward FLOP.
 
     Parameters
@@ -23,7 +23,7 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Deb
 
     Returns
     -------
-    DebugReport
+    Report
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         Candidate rows with exclusion counts in ``df.attrs``.

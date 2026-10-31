@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import DebugReport, FoundReport
+from .._debug_report import FoundReport, Report
 from ..errors import CaptureError
 
 if TYPE_CHECKING:
@@ -649,7 +649,7 @@ with torch.autograd.set_detect_anomaly(True):
 
 
 @dataclass(frozen=True)
-class NanReport(DebugReport):
+class NonfiniteReport(Report):
     """One-call NaN forensics report (torchnative 6.5 / W3.1).
 
     The pitch is STRUCTURAL: the default capture names the ORIGIN op (not
@@ -737,7 +737,7 @@ class NanReport(DebugReport):
         return "\n".join(lines)
 
 
-def nan_report(subject: Any, x: Any = None, **trace_kwargs: Any) -> NanReport:
+def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> NonfiniteReport:
     """One-call NaN forensics (torchnative 6.5; placeholder spelling).
 
     Consumes an EXISTING trace's queryable nonfinite record first (free);
@@ -758,7 +758,7 @@ def nan_report(subject: Any, x: Any = None, **trace_kwargs: Any) -> NanReport:
 
     Returns
     -------
-    NanReport
+    NonfiniteReport
         Structured findings, coverage disclosure, capture outcome, cost
         tier, AMP disclosure, and the deferred-authority recipe.
     """
@@ -805,7 +805,7 @@ def nan_report(subject: Any, x: Any = None, **trace_kwargs: Any) -> NanReport:
                 "FORWARD checked values only"
             )
 
-    return NanReport(
+    return NonfiniteReport(
         found=bool(finding.found),
         phase="forward",
         kind=str(finding.kind),

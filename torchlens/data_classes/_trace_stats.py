@@ -10,7 +10,7 @@ if TYPE_CHECKING:
         ReceptiveFieldProfile,
         ReceptiveFieldStatus,
     )
-    from ..report._profile import TraceProfile
+    from ..report._profile import ProfileReport
     from ..trace_slice import TraceSlice
     from ..visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from .buffer import BufferAccessor
@@ -674,7 +674,7 @@ class TraceStatsMixin(_TraceMixinBase):
         ascending: bool = False,
         top_k: int | None = None,
         group_by: Literal["source_line"] | None = None,
-    ) -> "TraceProfile":
+    ) -> "ProfileReport":
         """Return a unified resource profile assembled from this trace.
 
         Parameters
@@ -694,7 +694,7 @@ class TraceStatsMixin(_TraceMixinBase):
 
         Returns
         -------
-        torchlens.report.TraceProfile
+        torchlens.report.ProfileReport
             Printable table object that also exposes ``to_pandas()``.
 
         Notes
@@ -703,9 +703,9 @@ class TraceStatsMixin(_TraceMixinBase):
         as relative hotspot guidance, not clean benchmark timings.
         """
 
-        from ..report._profile import build_profile
+        from ..report._profile import profile
 
-        return build_profile(
+        return profile(
             self,
             level=level,
             sort_by=sort_by,

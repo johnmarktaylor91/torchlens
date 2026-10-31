@@ -27,12 +27,12 @@ from typing import Any
 
 import torch
 
-from .._debug_report import DebugReport
+from .._debug_report import Report
 from ..errors import CaptureError
 
 
 @dataclass(frozen=True)
-class FlopsCrossCheck(DebugReport):
+class FlopsCrossCheck(Report):
     """Side-by-side dispatch-formula evidence (never an oracle).
 
     ``native_total`` and ``torchlens_total`` are both fma=2 analytic

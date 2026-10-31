@@ -211,7 +211,7 @@ def test_attention_flop_lines_disclose_the_full_square() -> None:
     assert "attention masks and is_causal are not discounted" in str(report)
     proj = _body_line(str(report), "proj (Linear)")
     assert ATTENTION_MARK not in proj
-    flops = tl.report.flops_report(model, x)
+    flops = tl.report.flops(model, x)
     assert flops.attention_full_square_ops == 1
     assert "full query x key square" in str(flops)
 

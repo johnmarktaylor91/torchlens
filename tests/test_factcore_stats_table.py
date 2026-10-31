@@ -5,7 +5,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.report import STATS_ROW_STATES, StatsTable
+from torchlens.report import StatsTable
+from torchlens.report._stats_table import STATS_ROW_STATES
 
 
 def _model() -> nn.Module:

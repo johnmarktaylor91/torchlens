@@ -2,7 +2,7 @@
 
 > Every spelling on this page is DOCUMENTED-UNSTABLE pending naming-session
 > ratification. The import spelling is `import torchlens.checks`; the one-shot
-> parameter audit is also served as `tl.debug.audit_params`. The kit is
+> parameter audit is also served as `tl.report.param_health`. The kit is
 > STANDALONE and CAPTURE-FREE: it constructs and runs with TorchLens capture
 > entirely off, and the step-check family runs on `torch.compile`'d models.
 
@@ -106,7 +106,7 @@ returns a typed `unavailable` entry in the report, never a silent pass.
   latency, and no finding ever says "learning" or "dead".
 - **The finding names a cone; the frontier names the culprit.** A dead layer
   zeroes the gradient of everything upstream, so the detector names many
-  parameters; each finding's `follow_up` points at `gradient_flow_audit`'s
+  parameters; each finding's `follow_up` points at `grad_health`'s
   module / `is_frontier` column, which resolves the exact dead layer.
 - **Nonfinite policy is site-conditional (the AMP hole, closed both ways).**
   At S-A nonfinite gradients are COLLECTED, never raised -- under fp16 +
@@ -158,17 +158,17 @@ Boundary mode adds what hook-only mode honestly cannot know: caller
 accepted/skipped attribution per attempt. Both modes are first-class; unknown
 or inferred evidence never produces an exact pass.
 
-## One-shot parameter auditing: `audit_params`
+## One-shot parameter auditing: `param_health`
 
 ```python
 import torchlens.checks as checks
 
-audit = checks.audit_params(model)          # also: tl.debug.audit_params(model)
+audit = checks.audit_params(model)          # also: tl.report.param_health(model)
 print(audit)                                # notebook-style summary
 assert not audit.findings                    # healthy fresh model
 ```
 
-`audit_params` takes an `nn.Module` or ANY name->tensor `Mapping` -- a
+`param_health` takes an `nn.Module` or ANY name->tensor `Mapping` -- a
 `state_dict`, flattened optimizer state, EMA shadow weights, a loaded
 checkpoint: same door, same batched scan kernel the session's scheduled scan
 uses. Findings cover signed nonfinite counts, caller-declared bounds, dtype

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from torchlens.data_classes.op import Op
     from torchlens.data_classes.trace import Trace
 
-from .._debug_report import DebugReport, table_report, trace_subject
+from .._debug_report import Report, table_report, trace_subject
 from ._common import (
     _compute_ops,
     _op_from_label,
@@ -30,7 +30,7 @@ LineageDirection = Literal["ancestors", "descendants", "both"]
 
 
 @dataclass(frozen=True)
-class LineageResult(DebugReport):
+class LineageResult(Report):
     """Result returned by :func:`lineage`.
 
     Parameters
@@ -326,7 +326,7 @@ def compare(
     *,
     rtol: float = 1e-5,
     atol: float = 1e-8,
-) -> DebugReport:
+) -> Report:
     """Compare saved dense floating activations across two traces.
 
     Parameters
@@ -342,7 +342,7 @@ def compare(
 
     Returns
     -------
-    DebugReport
+    Report
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         One row per pass-qualified op with summary counts in ``df.attrs``.
@@ -509,7 +509,7 @@ def dead_neurons_rows(
     return rows, attrs
 
 
-def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> DebugReport:
+def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Report:
     """Find units that are inactive or zero-variance in one completed trace.
 
     A single trace is a single example; zero-variance here is an insufficient-sample
@@ -527,7 +527,7 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Debug
 
     Returns
     -------
-    DebugReport
+    Report
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         Columns are ``op``, ``total_units``, ``dead_count``, ``dead_frac``,

@@ -15,7 +15,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import check_determinism
+from torchlens.report import check_determinism
 
 
 class _DropoutModel(nn.Module):

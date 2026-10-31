@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.debug import nan_report
+from torchlens.report import nonfinite_origin
 from torchlens.utils._torch_compat import get_cpu_half_kernels_support
 
 
@@ -38,7 +38,7 @@ def test_posthoc_report_names_origin_free() -> None:
     """Post-hoc: origin op + source line off the existing capture."""
 
     log = tl.trace(DivideByZero(), torch.randn(2, 8))
-    report = nan_report(log)
+    report = nonfinite_origin(log)
     assert report.found
     assert report.kind in ("nan", "inf", "nan+inf")
     assert report.origin_label and "div" in report.origin_label
@@ -57,7 +57,7 @@ def test_clean_report_is_scoped_to_checked_values() -> None:
     """A clean model reports not-found SCOPED, never a blanket 'no NaN'."""
 
     log = tl.trace(nn.Sequential(nn.Linear(8, 8), nn.ReLU()), torch.randn(2, 8))
-    report = nan_report(log)
+    report = nonfinite_origin(log)
     assert not report.found
     assert report.scope_note
     text = report.summary()
@@ -69,7 +69,7 @@ def test_clean_report_is_scoped_to_checked_values() -> None:
 def test_live_tripwire_form() -> None:
     """The live form runs ONE memory-light tripwire forward and discloses it."""
 
-    report = nan_report(DivideByZero(), torch.randn(2, 8))
+    report = nonfinite_origin(DivideByZero(), torch.randn(2, 8))
     assert report.found
     assert report.cost_tier.startswith("diagnostic")
     assert report.coverage_basis == "live_tripwire_first_bad_output"
@@ -84,7 +84,7 @@ def test_amp_disclosure_on_low_precision() -> None:
 
     model = nn.Linear(8, 8).half()
     log = tl.trace(model, torch.randn(2, 8).half())
-    report = nan_report(log)
+    report = nonfinite_origin(log)
     assert report.amp_disclosure and "GradScaler" in report.amp_disclosure
     assert "FORWARD" in report.amp_disclosure
     log.cleanup()
@@ -95,6 +95,6 @@ def test_never_auto_runs_anomaly_mode() -> None:
 
     was_enabled = torch.is_anomaly_enabled()
     log = tl.trace(DivideByZero(), torch.randn(2, 8))
-    nan_report(log)
+    nonfinite_origin(log)
     assert torch.is_anomaly_enabled() == was_enabled
     log.cleanup()

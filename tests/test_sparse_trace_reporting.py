@@ -151,7 +151,7 @@ def test_disk_backed_reports_do_not_materialize_payloads(
     # skip disk-backed payloads without materializing (the monkeypatched
     # materialize would raise).
     assert trace.nonfinite_ops == ()
-    tl.report.health_facts(trace)
+    assert trace.health_facts is not None
     report = tl.report.explain(trace)
     assert isinstance(text, str)
     assert "disk-backed" in html

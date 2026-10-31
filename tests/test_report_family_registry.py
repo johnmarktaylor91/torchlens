@@ -22,10 +22,10 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.report import (
+from torchlens.report._factcore import factcore
+from torchlens.report._registry import (
     SURFACE_REGISTRY,
     capability_card,
-    factcore,
     registry_entry,
     which_do_i_use,
 )
@@ -88,7 +88,7 @@ def partial_trace():
 def test_registry_vocabularies_are_closed() -> None:
     """Every row uses the closed subject/register/invariant/cost vocab."""
 
-    from torchlens.report import COST_CLASSES, INVARIANTS, REGISTERS, SUBJECTS
+    from torchlens.report._registry import COST_CLASSES, INVARIANTS, REGISTERS, SUBJECTS
 
     assert SURFACE_REGISTRY
     keys = [entry.key for entry in SURFACE_REGISTRY]
@@ -267,7 +267,7 @@ def test_metadata_only_members_trigger_no_scan(family_trace, monkeypatch) -> Non
     family_trace.bill_of_materials()
     family_trace.to_agent_json()
     tl.report.cost_tree(family_trace)
-    tl.report.flops_report(family_trace)
+    tl.report.flops(family_trace)
     family_trace.capability_card()
     assert calls == [], f"metadata-only members scanned: {calls}"
 
@@ -282,7 +282,7 @@ def test_family_non_mutation(family_trace) -> None:
     family_trace.bill_of_materials()
     family_trace.to_agent_json()
     tl.report.cost_tree(family_trace)
-    tl.report.flops_report(family_trace)
+    tl.report.flops(family_trace)
     tl.report.backward_status(family_trace)
     tl.report.backward_estimate(family_trace)
     assert torch.equal(torch.get_rng_state(), rng_before)
@@ -292,7 +292,7 @@ def test_shared_facts_object_equal_before_render(family_trace) -> None:
     """Composition row 1: every surface reads THE one FactCore instance."""
 
     assert factcore(family_trace) is factcore(family_trace)
-    report = tl.report.flops_report(family_trace)
+    report = tl.report.flops(family_trace)
     core = factcore(family_trace)
     assert report.forward_flops == int(core.compute.partition_total)
     assert report.params_unique == core.params.total
@@ -302,7 +302,7 @@ def test_health_evidence_survives_annotations_roundtrip(family_trace) -> None:
     """Composition row 8 (session form): a derived health record persists
     on the annotations channel and is served back as the authority."""
 
-    from torchlens.report import HEALTH_FACTS_ANNOTATIONS_KEY, health_facts
+    from torchlens.report._health import HEALTH_FACTS_ANNOTATIONS_KEY, health_facts
 
     derived = health_facts(family_trace)  # the explicit door may scan
     assert HEALTH_FACTS_ANNOTATIONS_KEY in family_trace.annotations

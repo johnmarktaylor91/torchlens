@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import GraphBreaksNormalizationError, GraphBreaksUnavailableError
+from torchlens.errors import GraphBreaksNormalizationError, GraphBreaksUnavailableError
 from torchlens.utils import _torch_compat
 
 

@@ -25,7 +25,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.report import flops_report
+from torchlens.report import flops
 from torchlens.utils._torch_compat import get_mha_fastpath_switch_support
 
 
@@ -70,10 +70,10 @@ def test_model_door_matches_trace_door_on_transformer_encoder() -> None:
         nn.TransformerEncoderLayer(8, 2, 16, batch_first=True), num_layers=2
     ).eval()
     x = torch.randn(2, 5, 8)
-    model_door = flops_report(enc, x)
+    model_door = flops(enc, x)
     trace = tl.trace(enc, x)  # grad enabled: the unfused path, counted exactly
     try:
-        trace_door = flops_report(trace)
+        trace_door = flops(trace)
     finally:
         trace.cleanup()
     assert trace_door.forward_flops > 0
@@ -87,7 +87,7 @@ def test_model_door_counts_multihead_attention_completely() -> None:
     """nn.MultiheadAttention under the model door is COMPLETE, not a lower bound."""
 
     torch.manual_seed(0)
-    report = flops_report(_MhaWrap().eval(), torch.randn(2, 5, 8))
+    report = flops(_MhaWrap().eval(), torch.randn(2, 5, 8))
     assert report.is_lower_bound is False
     assert report.unknown_op_names == ()
     # in_proj (2*10*8*24 + 240) + out_proj (2*10*8*8 + 80) + sdpa (estimated)
@@ -110,7 +110,7 @@ def test_model_door_restores_the_fastpath_switch() -> None:
     try:
         for value in (True, False):
             mha_backend.set_fastpath_enabled(value)
-            flops_report(_MhaWrap().eval(), torch.randn(2, 5, 8))
+            flops(_MhaWrap().eval(), torch.randn(2, 5, 8))
             assert mha_backend.get_fastpath_enabled() is value
     finally:
         mha_backend.set_fastpath_enabled(prior)
@@ -134,7 +134,7 @@ def test_model_door_restores_the_fastpath_switch_after_a_failing_forward() -> No
     try:
         mha_backend.set_fastpath_enabled(True)
         with pytest.raises(Exception, match="boom"):
-            flops_report(_Boom(), torch.randn(2, 3))
+            flops(_Boom(), torch.randn(2, 3))
         assert mha_backend.get_fastpath_enabled() is True
     finally:
         mha_backend.set_fastpath_enabled(prior)
@@ -144,7 +144,7 @@ def test_breakdown_lists_inclusive_mass_that_sums_to_forward() -> None:
     """Nested-module mass is never omitted from the breakdown (3.12c)."""
 
     torch.manual_seed(0)
-    report = flops_report(_Outer().eval(), torch.randn(4, 8))
+    report = flops(_Outer().eval(), torch.randn(4, 8))
     assert report.forward_flops == 2376
     numbers = _breakdown_numbers(report)
     assert sum(numbers) == report.forward_flops
@@ -159,7 +159,7 @@ def test_breakdown_top_k_remainder_keeps_the_partition_exact() -> None:
     """With top_k below the sibling count the hidden mass lands in a remainder row."""
 
     torch.manual_seed(0)
-    report = flops_report(_Outer().eval(), torch.randn(4, 8), breakdown_top_k=1)
+    report = flops(_Outer().eval(), torch.randn(4, 8), breakdown_top_k=1)
     numbers = _breakdown_numbers(report)
     assert sum(numbers) == report.forward_flops
     assert any("more call" in line for line in report.breakdown)
@@ -177,7 +177,7 @@ def test_breakdown_root_direct_ops_are_a_visible_row() -> None:
             return torch.relu(self.lin(x)) @ x.transpose(0, 1)
 
     torch.manual_seed(0)
-    report = flops_report(_Flat().eval(), torch.randn(4, 8))
+    report = flops(_Flat().eval(), torch.randn(4, 8))
     numbers = _breakdown_numbers(report)
     assert sum(numbers) == report.forward_flops
     assert any(

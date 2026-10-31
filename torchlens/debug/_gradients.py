@@ -34,7 +34,7 @@ import torch
 if TYPE_CHECKING:
     from torchlens.data_classes.trace import Trace
 
-from .._debug_report import DebugReport, table_report, trace_subject
+from .._debug_report import Report, table_report, trace_subject
 from ._common import _op_label, _require_pandas, _tensor_unavailable_reason
 
 #: Column order shared by the rows core and the DataFrame view. The first
@@ -396,11 +396,11 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
     grad_scales: Mapping[int, float] | None = None,
     basis: str = "total_norm",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Pandas-free core of :func:`gradient_flow_audit` (agent stage-0 item 4).
+    """Pandas-free core of :func:`grad_health` (agent stage-0 item 4).
 
     The wire path for agent/MCP consumers: plain row dicts plus the attrs
     mapping, importable and runnable without pandas.
-    :func:`gradient_flow_audit` is the optional DataFrame view over this
+    :func:`grad_health` is the optional DataFrame view over this
     core. Empty-result statuses (torch-only subject, no saved gradients,
     missing ``bwd`` selector) return zero rows with the status under
     ``attrs["message"]``.
@@ -540,7 +540,7 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
     return sorted_rows, attrs
 
 
-def gradient_flow_audit(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kwargs + scale stamps + basis selector, all additive by contract
+def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kwargs + scale stamps + basis selector, all additive by contract
     trace: Trace,
     *,
     bwd: int | None = None,
@@ -549,7 +549,7 @@ def gradient_flow_audit(  # noqa: PLR0913 -- the D17 fix-pack public surface: sh
     grad_scale: float | None = None,
     grad_scales: Mapping[int, float] | None = None,
     basis: str = "total_norm",
-) -> DebugReport:
+) -> Report:
     """Audit saved op gradients for vanishing, exploding, and zero gradients.
 
     Parameters
@@ -575,7 +575,7 @@ def gradient_flow_audit(  # noqa: PLR0913 -- the D17 fix-pack public surface: sh
 
     Returns
     -------
-    DebugReport
+    Report
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         Ranked audit rows with counts in ``df.attrs``. The optional view over
@@ -607,7 +607,7 @@ def gradient_flow_audit(  # noqa: PLR0913 -- the D17 fix-pack public surface: sh
     frame = pd.DataFrame(rows, columns=list(_GRAD_AUDIT_COLUMNS))
     frame.attrs.update(attrs)
     return table_report(
-        "gradient_flow_audit",
+        "grad_health",
         frame,
         subject=trace_subject(trace),
         finding_columns=("op", "module", "verdict", "grad_norm"),

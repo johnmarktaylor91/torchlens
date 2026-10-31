@@ -200,7 +200,7 @@ def submodule_map() -> dict[str, str]:
     """The deliberately-unlisted power submodules an agent should know about."""
 
     return {
-        "tl.report": "explain(), TraceProfile/build_profile",
+        "tl.report": "explain(), ProfileReport/build_profile",
         "tl.observers": "log_value(name, value), tap, span: in-forward value recording",
         "tl.compat": "compat.report(model, x): capture-compatibility findings",
         "tl.debug": "power-user diagnostics (bisect_nan, hot_path, ...)",

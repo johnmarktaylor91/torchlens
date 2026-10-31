@@ -11,7 +11,7 @@ from typing import Any, cast
 import torch
 from torch import nn
 
-from .._debug_report import DebugReport, rows_of
+from .._debug_report import Report, rows_of
 from .._errors import _actionable_message, _ActionableErrorMixin
 from .._input_coerce import _coerce_input_args
 from ..errors._base import CompatibilityError
@@ -133,7 +133,7 @@ class GraphBreak:
 
 
 @dataclass(frozen=True)
-class GraphBreakReport(DebugReport):
+class GraphBreakReport(Report):
     """Structured Dynamo graph-break correlation result.
 
     Attributes

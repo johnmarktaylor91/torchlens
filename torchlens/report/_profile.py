@@ -75,7 +75,7 @@ def _weakest_evidence(labels: list[str]) -> str:
 
 
 @dataclass(frozen=True)
-class TraceProfile:
+class ProfileReport:
     """A printable, tabular resource profile assembled from one trace.
 
     Parameters
@@ -872,7 +872,7 @@ def _assemble_level_rows(
     return rows, row_evidence
 
 
-def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascending, top_k, group_by) ARE Trace.profile's public surface
+def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascending, top_k, group_by) ARE Trace.profile's public surface
     trace: Trace,
     *,
     level: ProfileLevel = "op",
@@ -880,7 +880,7 @@ def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, as
     ascending: bool = False,
     top_k: int | None = None,
     group_by: ProfileGroupBy | None = None,
-) -> TraceProfile:
+) -> ProfileReport:
     """Build a unified op, module, or invocation resource profile.
 
     Parameters
@@ -908,8 +908,8 @@ def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, as
 
     Returns
     -------
-    TraceProfile
-        Printable profile object exposing :meth:`TraceProfile.to_pandas`.
+    ProfileReport
+        Printable profile object exposing :meth:`ProfileReport.to_pandas`.
 
     Notes
     -----
@@ -1015,7 +1015,7 @@ def build_profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, as
         # Inclusive rollups: the ``flops`` column is the subtree family
         # there and must never be summed (D5).
         additivity["flops"] = False
-    return TraceProfile(
+    return ProfileReport(
         frame=frame,
         level=level,
         _honesty_frame=honesty_frame,

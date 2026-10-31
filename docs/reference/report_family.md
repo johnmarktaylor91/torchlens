@@ -14,7 +14,7 @@ real fixture in its declared state.
 | `tl.report.explain(trace)` | Narrate this capture: what ran, its health states, and anything unusual. | CAPTURE | NARRATIVE | metadata_only |
 | `trace.profile(sort_by=..., top_k=...)` | Rank me: which ops/modules cost the most time, FLOPs, or memory. | RUN-RESOURCES | RANK | metadata_only |
 | `tl.report.cost_tree(trace)` | Show compute as the module tree with exact self/subtree conservation and fwd/bwd/total FLOPs columns. | RUN-RESOURCES | SHAPE | metadata_only |
-| `tl.report.flops_report(trace_or_model, ...)` | The one-call paper number: analytic forward FLOPs with coverage and params. | RUN-RESOURCES | SHAPE | metadata_only |
+| `tl.report.flops(trace_or_model, ...)` | The one-call paper number: analytic forward FLOPs with coverage and params. | RUN-RESOURCES | SHAPE | metadata_only |
 | `trace.stats_table()` | Observations of ONE captured batch per site: mean/std/zero/NaN fractions. | RUN-VALUES | SHAPE | payload_scan |
 | `trace.audit()` | Judge me: findings with severities, checks run, and skips disclosed. | RUN-HEALTH | VERDICT | payload_scan |
 | `tl.report.health_facts(trace)` | The three-state nonfinite record (found / clean / not-checked) with basis. | RUN-HEALTH | SHAPE | payload_scan |
@@ -24,7 +24,7 @@ real fixture in its declared state.
 | `tl.report.backward_estimate(trace)` | The HYPOTHETICAL training-backward counterfactual behind its named door. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.roofline(trace, ridge_intensity=...)` | Theoretical intensity/work map; bound verdicts are hypotheses. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.instrumented_rate(trace)` | The boxed CPU-only FLOPs-per-instrumented-second triage diagnostic. | RUN-RESOURCES | RANK | metadata_only |
-| `tl.report.cost_report(model, x)` | Measured capture cost on YOUR model and host (never an estimate). | RUN-RESOURCES | SHAPE | new_forward |
+| `tl.report.overhead(model, x)` | Measured capture cost on YOUR model and host (never an estimate). | RUN-RESOURCES | SHAPE | new_forward |
 | `tl.utils.doctor()` | Is my environment healthy: versions, capabilities, degradations. | ENVIRONMENT | VERDICT | env_probe |
 
 ## Refusal conditions
@@ -33,7 +33,7 @@ real fixture in its declared state.
 - `explain`: refuses when never (degrades to a partial-capture diagnosis).
 - `profile`: refuses when the capture failed before finalization.
 - `cost_tree`: refuses when the capture failed before finalization.
-- `flops_report`: refuses when the trace door is passed model-door inputs.
+- `flops`: refuses when the trace door is passed model-door inputs.
 - `stats_table`: refuses when payloads were not retained (typed row states, never fabrication).
 - `audit`: refuses when never (partial captures get the degraded audit).
 - `health_facts`: refuses when never (an underivable basis is the NOT-CHECKED shape).
@@ -43,7 +43,7 @@ real fixture in its declared state.
 - `backward_estimate`: refuses when never (always labeled hypothetical; never an actual-cost slot).
 - `roofline`: refuses when never (uncoverable ops land in the by-reason split).
 - `instrumented_rate`: refuses when every timed op executed on CUDA (host time is not a CUDA rate).
-- `cost_report`: refuses when an unknown tier is requested.
+- `overhead`: refuses when an unknown tier is requested.
 - `doctor`: refuses when never.
 
 ## Honesty invariants per surface
@@ -52,7 +52,7 @@ real fixture in its declared state.
 - `explain`: mints_no_facts, truncation_disclosed
 - `profile`: truncation_disclosed, instrumented_time_labeled, conserves_totals
 - `cost_tree`: conserves_totals, truncation_disclosed
-- `flops_report`: conserves_totals, mints_no_facts
+- `flops`: conserves_totals, mints_no_facts
 - `stats_table`: mints_no_facts, truncation_disclosed
 - `audit`: checks_and_skips_complete
 - `health_facts`: mints_no_facts
@@ -62,5 +62,5 @@ real fixture in its declared state.
 - `backward_estimate`: mints_no_facts
 - `roofline`: mints_no_facts, truncation_disclosed
 - `instrumented_rate`: instrumented_time_labeled
-- `cost_report`: mints_no_facts
+- `overhead`: mints_no_facts
 - `doctor`: checks_and_skips_complete
