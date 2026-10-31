@@ -2943,6 +2943,16 @@ deprecation shim owed*
   `DryRun.contexts`, `DryRun.decisions`, `DryRun.predicate_failures`, `DryRun.filter(...)`,
   `DryRun.print_tree()`, `DryRun.timeline_html()`, `DryRun.to_pandas()`), `tl.recording.stop()` and `tl.recording.StopSignal`. `GradRecordContext.kind`
   names the record kind and `CaptureSpec.save_grad` keeps a payload attached to autograd.
+  `CaptureSpec.save_out` keeps the tensor payload of an event, `CaptureSpec.save_metadata` keeps its
+  non-payload metadata and `CaptureSpec.save_mode` picks the retention mode (`copy`, `reference`,
+  `view` or `cpu_async`). The predicate input for a backward gradient event, `GradRecordContext`,
+  carries `GradRecordContext.grad_fn_class_name`, `GradRecordContext.backward_call_index`,
+  `GradRecordContext.grad_kind` (`grad_input` or `grad_output`), `GradRecordContext.grad_input_index`,
+  `GradRecordContext.grad_output_index`, `GradRecordContext.module_stack`,
+  `GradRecordContext.has_forward_op`, `GradRecordContext.has_op`, `GradRecordContext.order`,
+  `GradRecordContext.event_index`, `GradRecordContext.tensor_device` and the read-only
+  `GradRecordContext.effective_label` (the joined forward label when there is one, else the
+  autograd-node label).
   `tl.types.TraceLike` is the read protocol shared by `Trace` and `Recording`
   (`TraceLike.op_events`, `TraceLike.backward_events`, `TraceLike.event_stream`,
   `TraceLike.sibling_events`, `TraceLike.activation_by_raw_label(raw_label)`,

@@ -242,6 +242,37 @@ PIN_EDITS: dict[str, tuple[tuple[str, str], ...]] = {
             'dot = trace.draw_backward(path="backward")\n',
         ),
     ),
+    "docs/migration/coming_from_torchsnooper.md": (
+        ("fastlog.Recorder(model, narrate=...)", "recording.Recorder(model, narrate=...)"),
+        (
+            "`with tl.fastlog.Recorder(model, narrate=",
+            "`with tl.recording.Recorder(model, narrate=",
+        ),
+    ),
+    "docs/agent-reference/package/newer-2-x-subsystems.md": (
+        ("- `fastlog/`: sparse", "- `recording/`: sparse"),
+    ),
+    "docs/agent-reference/package/subpackages.md": (
+        ("- `capture/` - real-time", "- `_capture/` - real-time"),
+        ("- `fastlog/` - sparse", "- `recording/` - sparse"),
+        ("- `visualization/` - Graphviz", "- `_visualization/` - Graphviz"),
+        ("- `accessors/`, `semantic/`, `observers`", "- `accessors/`, `_semantic/`, `observers`"),
+    ),
+    "docs/agent-reference/package/key-concepts.md": (
+        ("3. `capture/` builds raw", "3. `_capture/` builds raw"),
+    ),
+    "docs/agent-reference/package/files-in-this-directory.md": (
+        ("below — `captured_run.py`,", "below — `_captured_run.py`,"),
+        ("| `user_funcs.py` |", "| `_user_funcs.py` |"),
+    ),
+    "docs/agent-reference/package/architecture-overview.md": (
+        ("  |  captured_run, observers,", "  |  _captured_run, observers,"),
+        ("and visualization (hard-pinned", "and _visualization (hard-pinned"),
+        (
+            "capture, intervention, fastlog, autoroute,",
+            "_capture, intervention, recording, autoroute,",
+        ),
+    ),
     "docs/migration/from_bertviz_ecco.md": (
         ("torchlens.semantic.logit_lens", "torchlens._semantic.logit_lens"),
     ),

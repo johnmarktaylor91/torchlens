@@ -21,7 +21,7 @@ module-containment-refactor).
 ### Data Flow
 1. Decoration intercepts torch function calls.
 2. Barcode nesting detection identifies bottom-level operations.
-3. `capture/` builds raw `Op` entries.
+3. `_capture/` builds raw `Op` entries.
 4. `postprocess/` removes orphans, marks conditionals, detects loops, labels nodes, builds logs.
 5. `Trace` exposes lookup, visualization, validation, save/load, intervention, and summary helpers.
 
