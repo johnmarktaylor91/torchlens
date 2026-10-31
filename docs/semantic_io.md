@@ -15,7 +15,7 @@ time:
 
 ```python
 trace = tl.trace(model, x)
-trace.output_table(top_n=5)
+trace.output_table(k=5)
 trace.decode_output(top_n=3)
 ```
 
@@ -311,7 +311,7 @@ trace = tl.trace(
 )
 
 trace.model_profile
-trace.output_table(top_n=5)
+trace.output_table(k=5)
 tl.repgeom.mds_evolution(trace, save=mds_layers, min_n=8)
 trace.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
 trace.draw(show_input_transform_summary=True)
@@ -340,7 +340,7 @@ core flow runs without downloading external model weights.
 ## Provisional Public Names
 
 - `tl.trace(..., capture=CaptureOptions(output_style=..., output_head=...))`
-- `Trace.output_table(top_n=5, batch_items=None)`
+- `Trace.output_table(k=5, batch_items=None)`
 - `Trace.decode_output(top_n=None)`
 - `Trace.output_postprocessor`
 - `tl.autoroute.output.register(...)`

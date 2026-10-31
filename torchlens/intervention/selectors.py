@@ -52,6 +52,8 @@ _KIND_SPELLINGS: dict[str, str] = {
     "input_at": "model_input",
     "output": "model_output",
     "regex": "label_matches",
+    "grad_fn_label": "intervention.grad_fn_label",
+    "output_at": "intervention.output_at",
 }
 
 

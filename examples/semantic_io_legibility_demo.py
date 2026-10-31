@@ -104,7 +104,7 @@ def print_table(title: str, trace: tl.Trace, *, top_n: int = 2) -> None:
     """
 
     print(f"\n## {title}")
-    print(trace.output_table(top_n=top_n).to_string(index=False))
+    print(trace.output_table(k=top_n).to_string(index=False))
 
 
 def main() -> None:

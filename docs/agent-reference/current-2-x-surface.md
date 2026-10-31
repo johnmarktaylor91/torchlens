@@ -1,6 +1,6 @@
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 116 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 113 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
@@ -335,7 +335,7 @@
   unscoped `tl.head(i)` broadcast) become REFUSED effect rows; the complete
   per-candidate `member_effect_table_v1` (released/refused/failed included)
   persists and `bundle.effects()`/`measure_members()` serve it (member-axis
-  `most_changed`, explicit session-only tier-c `.selection()`).
+  `rank_changes`, explicit session-only tier-c `.to_selection()`).
   `head_ablation_candidates` is the module-scoped v-facet sugar (GQA/MQA
   refuses typed; hand-written-hook oracle beside it). The experiment LEDGER
   (`torchlens.experiment.ledger(path, hypothesis=, metric=)`) is the opt-in

@@ -2,7 +2,7 @@
 
 ```
 import torchlens
-  |- exposes 116 top-level public names in __all__
+  |- exposes 113 top-level public names in __all__
   |- eagerly imports ONLY the light spine: options, errors/_state, ir.*,
   |  captured_run, observers, quantities, _deprecations, _errors, _io,
   |  _literals, _save_budget, utils,
@@ -73,7 +73,7 @@ Provisional semantic I/O surface (review-day names):
 log = tl.trace(
     model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
 )
-log.output_table(top_n=5)
+log.output_table(k=5)
 log.to_pandas(include_decoded_output_summary=True)
 
 input_log = tl.trace(
@@ -93,7 +93,7 @@ image_log = tl.trace(
     output_style="classification",
 )
 image_log.model_profile
-image_log.output_table(top_n=5)
+image_log.output_table(k=5)
 tl.repgeom.mds_evolution(image_log, save=mds_layers, min_n=8)
 tl.repgeom.rdm_evolution(image_log, save=mds_layers)
 tl.viz.feature_map_evolution(image_log, save=mds_layers)

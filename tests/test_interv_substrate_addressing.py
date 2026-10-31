@@ -203,4 +203,4 @@ def test_align_to_survives_label_renumbering_via_corroborated_join() -> None:
     assert entry.key[0] == "linear_2_4"
     # The unchanged-address path still aligns identically (fast path).
     same = selection.align_to(inserted)
-    assert tuple(same)[0].site_key[0] == "linear_1_1"
+    assert tuple(same)[0].key[0] == "linear_1_1"

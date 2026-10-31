@@ -1005,14 +1005,14 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `transform_kind="autograd.Function"`, and `jitscript`, one call to a
   `torch.jit.ScriptFunction` from an eager forward, with `transform_kind="jit.script"`);
   `tl.model_output` selects model outputs, and
-  `tl.output_at` / `tl.model_input` select a nested output or model-input path.
+  `tl.intervention.output_at` / `tl.model_input` select a nested output or model-input path.
 
 **Temporal composition**
 : `tl.followed_by` (retroactive successor) and `tl.preceded_by` (lookback predecessor)
   compose with boolean operators to form temporal predicates over the op stream.
 
 **Backward selectors**
-: `tl.grad_fn` (backward grad_fn), `tl.grad_fn_label` (exact grad_fn label),
+: `tl.grad_fn` (backward grad_fn), `tl.intervention.grad_fn_label` (exact grad_fn label),
   `tl.grad_input` / `tl.grad_output` (backward event tensors), `tl.in_backward_pass`
   (one backward pass number), and `tl.without_op` (grad_fns without a paired forward op;
   the former `intervening` alias is removed).
@@ -1233,9 +1233,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   output container.
 
 **Capture-product bases**
-: `tl.CapturedRun` is the shared base for uncooked and cooked capture projections;
-  `tl.ActivationLookup` is the protocol for raw-label/pass/address activation lookup
-  consumers.
+: `tl.CapturedRun` is the shared base for uncooked and cooked capture projections.
 
 **Namespaces**
 : `tl.fastlog` is the sparse predicate-recording namespace behind `tl.record`;

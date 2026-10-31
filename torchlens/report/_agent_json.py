@@ -117,7 +117,7 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
         if _first_op_site_key(log) is not None:
             steps["sites_table"] = "trace.sites_table()"
         if getattr(log, "decoded_output", None) is not None:
-            steps["output_table"] = "trace.output_table(top_n=5)"
+            steps["output_table"] = "trace.output_table(k=5)"
     logged = (getattr(log, "annotations", {}) or {}).get("logged_values")
     if isinstance(logged, dict) and logged:
         steps["logged_values"] = "trace.logged_values"

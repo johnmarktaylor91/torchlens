@@ -248,7 +248,7 @@ def test_effect_table_survives_save_load_and_unarmed_ledger(tmp_path) -> None:
     # Selections are session-only: the loaded table serves numbers, never
     # a fabricated region.
     with pytest.raises(BundleExperimentError) as excinfo:
-        view.selection()
+        view.to_selection()
     assert excinfo.value.fields["code"] == "effects_selection_unavailable"
 
 
@@ -304,7 +304,7 @@ def test_effects_selection_tier_c_conversion_in_session() -> None:
         model=model,
         x=x,
     )
-    selection = bundle.effects().top(1).selection()
+    selection = bundle.effects().top(1).to_selection()
     resolved = selection.resolve(baseline) if hasattr(selection, "resolve") else None
     assert selection is not None
     assert resolved is None or len(resolved.entries) >= 1

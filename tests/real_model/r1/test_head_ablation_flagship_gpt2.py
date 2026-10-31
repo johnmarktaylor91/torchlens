@@ -67,7 +67,7 @@ def test_head_ablation_flagship_on_pretrained_gpt2(r1_loader, tmp_path: Path) ->
         assert set(rows) == set(candidates)
         assert all(row.resolved_site_count == 1 for row in rows.values())
         assert all(row.status == "completed" for row in rows.values())
-        top_candidate, top_delta = view.rank_changes(top_n=1)[0]
+        top_candidate, top_delta = view.rank_changes(k=1)[0]
         report = bundle.why(top_candidate)
         assert report.lineage_status == "exact"
         assert report.member_suffix and report.member_suffix[0].fire_count >= 1

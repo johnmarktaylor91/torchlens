@@ -9,7 +9,7 @@ DOCUMENTED-UNSTABLE pending the naming session):
   repr**; every card names its exits on a `More:` line.
 - Containers point, records show: collection reprs are one-line
   composition cards (`LayerAccessor(553 layers (539 ops, 14 buffers) |
-  .head() .find() .to_pandas())`), never member dumps.
+  .head() .search() .to_pandas())`), never member dumps.
 
 ## The core line
 

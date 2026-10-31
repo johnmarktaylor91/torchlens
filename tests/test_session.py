@@ -19,6 +19,6 @@ def test_session_invoke_and_bundle() -> None:
 
     assert first.session_invocation["index"] == 0
     assert second.session_invocation["index"] == 1
-    assert len(session.logs) == 2
+    assert len(session.traces) == 2
     assert len(bundle) == 2
     assert first.session_logs == [first, second]

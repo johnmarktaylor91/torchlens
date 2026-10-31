@@ -13,6 +13,7 @@ import torch
 from ._selection import Site
 from ._selection_subspace import BasisProvenance
 from .capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
+from .data_classes._accessor_base import Accessor
 from .data_classes.aten_op import AtenOp, OpRef
 from .data_classes.attribute_write import AttributeWrite
 from .data_classes.backward_pass import BackwardPass
@@ -31,6 +32,7 @@ ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
 GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 __all__ = [
+    "Accessor",
     "ActivationPostfunc",
     "AtenOp",
     "AttributeWrite",

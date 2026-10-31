@@ -87,7 +87,7 @@ def test_flagship_gallery_end_to_end(tmp_path: Path) -> None:
         assert set(per_candidate) == set(candidates)
         assert all(row.resolved_site_count == 1 for row in per_candidate.values())
         assert all(row.status == "completed" for row in per_candidate.values())
-        top_candidate, top_delta = view.rank_changes(top_n=1)[0]
+        top_candidate, top_delta = view.rank_changes(k=1)[0]
         report = bundle.why(top_candidate)
         assert report.lineage_status == "exact"
         assert report.member_suffix, "the variant has no construction suffix"

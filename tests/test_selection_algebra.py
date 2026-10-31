@@ -188,7 +188,7 @@ def test_bool_refusal_pair(log):
     assert resolved.is_empty is False
     element_empty = resolved - resolved
     assert bool(element_empty) is False
-    assert element_empty.empty is True
+    assert element_empty.is_empty is True
     assert len(element_empty) == 1  # family retained
 
 
@@ -226,7 +226,7 @@ def test_law_table(log):
     # involution THROUGH the element-empty intermediate
     full_site = log["relu_1_2"].__selection__().resolve(log)
     complemented = ~full_site
-    assert complemented.empty and _family(complemented) == _family(full_site)
+    assert complemented.is_empty and _family(complemented) == _family(full_site)
     assert (~complemented) == full_site
     assert (~~a) == a
     # symmetric difference spelling

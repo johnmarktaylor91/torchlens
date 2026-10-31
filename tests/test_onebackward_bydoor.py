@@ -75,7 +75,7 @@ class TestSiteGrainRanking:
         bottom = tl.top_k(k=1, by=table, largest=False).resolve(trace)
         lowest = min((row.score, row.address) for row in table.rows())
         (winner,) = [entry for entry in bottom if entry.num_selected]
-        assert winner.site_key == lowest[1]
+        assert winner.key == lowest[1]
 
     @pytest.mark.smoke
     @_requires_gradient_edge
