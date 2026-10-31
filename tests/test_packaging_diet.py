@@ -186,27 +186,15 @@ def test_packaging_metadata_uses_resolvable_gradcam_and_guarded_tinygrad_extra()
     assert "tinygrad = [\"tinygrad>=0.13,<0.14; python_version >= '3.11'\"]" in pyproject_text
 
 
-def test_precommit_hook_entrypoints_use_python3_safe_predicates() -> None:
-    """The hook entrypoints stay on the hardened conditions."""
-
-    project_root = Path(__file__).resolve().parent.parent
-    precommit_text = project_root.joinpath(".pre-commit-config.yaml").read_text()
-
-    assert "entry: python scripts/check_no_breaking_markers.py" not in precommit_text
-    assert "entry: scripts/check_no_breaking_markers.py --commit-msg" in precommit_text
-    assert "entry: scripts/check_no_breaking_markers.py --pre-push" in precommit_text
-
-
 def test_ci_workflows_pin_torch_and_scope_lint_to_owned_paths() -> None:
     """Packaging CI keeps torch pins honest and scopes lint to the owned paths."""
 
     project_root = Path(__file__).resolve().parent.parent
-    nightly_text = project_root.joinpath(".github", "workflows", "nightly.yml").read_text()
     weekly_text = project_root.joinpath(".github", "workflows", "weekly.yml").read_text()
-    lint_text = project_root.joinpath(".github", "workflows", "lint.yml").read_text()
+    lint_text = project_root.joinpath(".github", "workflows", "pr.yml").read_text()
 
-    for workflow_text in (nightly_text, weekly_text):
-        # The torch 2.7 fast-tier leg pins torch AND torchvision as an exact
+    for workflow_text in (weekly_text,):
+        # The torch 2.7 weekly legs pin torch AND torchvision as an exact
         # +cpu pair from ONE resolve (R61): installing torch from the CPU
         # index and then the extras from PyPI alone pulled PyPI's CUDA
         # torchvision build, whose compiled ops do not load against the CPU
@@ -227,7 +215,7 @@ def test_ci_workflows_pin_torch_and_scope_lint_to_owned_paths() -> None:
     assert f"ruff format --check {lint_scope}" in lint_text
     assert f"ruff check {lint_scope}" in lint_text
 
-    # The excluded set moved from lint.yml CLI flags into pyproject's
+    # The excluded set moved from the lint job's CLI flags into pyproject's
     # `[tool.ruff] extend-exclude` so that pre-commit -- which passes explicit
     # staged filenames and therefore ignores CLI --exclude -- reaches the same
     # verdict as this gate. Assert the boundary at its single authority, and that
@@ -259,8 +247,8 @@ def test_ci_workflows_pin_torch_and_scope_lint_to_owned_paths() -> None:
 def test_ruff_pin_is_identical_across_declaration_sites() -> None:
     """The ruff that WRITES the code and the ruff that JUDGES it must be one version.
 
-    Three files independently name a ruff version: pyproject's dev extra, the Lint
-    workflow's install step, and the ruff-pre-commit ``rev``. When they drift, the
+    Three files independently name a ruff version: pyproject's dev extra, the PR
+    workflow's lint install step, and the ruff-pre-commit ``rev``. When they drift, the
     pre-commit formatter rewrites code to a style CI then rejects -- which is exactly
     how the repo accumulated 147 format-stale files under a v0.9.7 hook while CI
     judged with 0.15.4.
@@ -268,7 +256,7 @@ def test_ruff_pin_is_identical_across_declaration_sites() -> None:
 
     project_root = Path(__file__).resolve().parent.parent
     pyproject_text = project_root.joinpath("pyproject.toml").read_text()
-    lint_text = project_root.joinpath(".github", "workflows", "lint.yml").read_text()
+    lint_text = project_root.joinpath(".github", "workflows", "pr.yml").read_text()
     precommit_text = project_root.joinpath(".pre-commit-config.yaml").read_text()
 
     dev_pins = set(re.findall(r'"ruff==([0-9]+\.[0-9]+\.[0-9]+)"', pyproject_text))
@@ -290,7 +278,7 @@ def test_ruff_pin_is_identical_across_declaration_sites() -> None:
     assert len(hook_revs) == 1, f"expected exactly one ruff-pre-commit rev, got {hook_revs}"
     assert dev_pins == ci_pins == hook_revs, (
         "ruff version drift: pyproject dev extra "
-        f"{dev_pins}, lint.yml {ci_pins}, .pre-commit-config.yaml {hook_revs}. "
+        f"{dev_pins}, pr.yml {ci_pins}, .pre-commit-config.yaml {hook_revs}. "
         "The formatter and the gate must be the same ruff."
     )
 
@@ -323,29 +311,27 @@ def test_third_party_actions_are_sha_pinned() -> None:
 
 
 def test_release_job_python_stack_is_hash_locked() -> None:
-    """The release job installs its Python deps hash-verified, wheels-only.
+    """The release build installs its builder hash-verified, wheels-only.
 
-    r4 b2-sol R61 (HIGH): the job exact-pinned python-semantic-release but
-    resolved its TRANSITIVES unpinned and unhashed, then ran the stack with
-    the repo-write App token — a compromised or dependency-confused
-    transitive could push with that token. The job must install from the
-    committed lock with ``--require-hashes`` (every requirement carries
-    ``--hash``) and ``--only-binary :all:`` (no sdist code execution at
-    install time).
+    r4 b2-sol R61 (HIGH): an unpinned, unhashed transitive in the release
+    environment is arbitrary code in the job that builds the published
+    artifacts. The build must install from the committed lock with
+    ``--require-hashes`` (every requirement carries ``--hash``) and
+    ``--only-binary :all:`` (no sdist code execution at install time), and
+    install nothing else.
     """
 
     repo_root = Path(__file__).resolve().parent.parent
     release_yml = (repo_root / ".github" / "workflows" / "release.yml").read_text()
 
     assert "--require-hashes" in release_yml, (
-        "release.yml no longer installs with --require-hashes; the "
-        "semantic-release stack runs with the repo-write token and must be "
-        "byte-audited"
+        "release.yml no longer installs with --require-hashes; the published "
+        "artifacts must be built by a byte-audited builder"
     )
     assert "--only-binary :all:" in release_yml
     assert "release-requirements.txt" in release_yml
-    assert 'pip install "python-semantic-release' not in release_yml, (
-        "release.yml regained a bare unhashed pip install"
+    assert release_yml.count("pip install") == 1, (
+        "release.yml installs something outside the hash lock"
     )
 
     lock_path = repo_root / ".github" / "workflows" / "release-requirements.txt"
@@ -354,7 +340,7 @@ def test_release_job_python_stack_is_hash_locked() -> None:
         line for line in lock_text.splitlines() if re.match(r"^[A-Za-z0-9_.-]+==", line)
     ]
     assert requirement_lines, "release lock lost its pinned requirements"
-    assert any(line.startswith("python-semantic-release==") for line in requirement_lines)
+    assert any(line.startswith("build==") for line in requirement_lines)
 
     # Every pinned requirement must carry at least one hash: pip refuses
     # mixed hashed/unhashed input under --require-hashes, but the lock is
@@ -367,42 +353,24 @@ def test_release_job_python_stack_is_hash_locked() -> None:
     ]
     assert not unhashed, f"release lock entries without hashes: {unhashed}"
 
-    # The lock is only airtight if NOTHING ELSE installs inside the token
-    # scope: build_command formerly ran its own unhashed
-    # `pip install 'build==1.5.0'` after checkout, escaping the lock (grind
-    # r5, P9/R61). The builder must come from the lock (asserted present
-    # here) and build_command must never regain an install.
-    pyproject_text = (repo_root / "pyproject.toml").read_text()
-    match = re.search(r'^build_command = "(.*)"$', pyproject_text, flags=re.MULTILINE)
-    assert match, "no build_command found in pyproject.toml"
-    assert "pip install" not in match.group(1), (
-        "build_command runs its own pip install inside the release token "
-        "scope, escaping the hash lock; add the package to "
-        "release-requirements.txt instead"
+    # The lock is only airtight if nothing else installs in the build job
+    # (asserted above), the builder runs --no-isolation against it (r7 R86:
+    # an isolated build env pip-installs an UNPINNED setuptools from the live
+    # index), and the normalizer decides the published bytes of BOTH
+    # artifacts (r7 R84).
+    release_builds = [
+        line for line in release_yml.splitlines() if re.search(r"python -m build\b", line)
+    ]
+    assert release_builds, "release.yml lost its build invocation"
+    assert all("--no-isolation" in line for line in release_builds), (
+        "release.yml runs `python -m build` without --no-isolation: the "
+        "isolated build env pip-installs an UNPINNED setuptools from the live index"
     )
-    assert any(line.startswith("build==") for line in requirement_lines), (
-        "the release lock no longer pins the `build` builder"
-    )
-
-    # r7 R86 (fable HIGH + opus MED-HIGH, MEASURED): `python -m build`
-    # WITHOUT --no-isolation creates an isolated env and pip-installs the
-    # build backend (setuptools) from the LIVE index at build time -- inside
-    # the token scope, with the repo-write App token persisted in
-    # .git/config. That is arbitrary unpinned code with push access, escaping
-    # the hash lock this test guards. The builder must run --no-isolation
-    # against the hash-locked env, which therefore must pin the backend.
-    assert "--no-isolation" in match.group(1), (
-        "build_command runs `python -m build` without --no-isolation: the "
-        "isolated build env pip-installs an UNPINNED setuptools from the "
-        "live index inside the release token scope"
-    )
-    # r7 R84: the normalizer decides the published bytes of BOTH artifacts;
-    # dropping either argument shipped machine-dependent bytes with the
-    # first signal a post-release nightly red.
-    assert "python scripts/normalize_sdist.py dist/*.tar.gz dist/*.whl" in match.group(1), (
-        "build_command no longer normalizes both artifacts "
+    assert "python scripts/normalize_sdist.py dist/*.tar.gz dist/*.whl" in release_yml, (
+        "release.yml no longer normalizes both artifacts "
         "(scripts/normalize_sdist.py dist/*.tar.gz dist/*.whl)"
     )
+    pyproject_text = (repo_root / "pyproject.toml").read_text()
     setuptools_pins = [line for line in requirement_lines if line.startswith("setuptools==")]
     assert setuptools_pins, (
         "release lock does not pin the setuptools build backend; "
@@ -534,10 +502,9 @@ def test_built_wheel_manifest_is_diet(tmp_path: Path) -> None:
 def test_nightly_gate_installs_release_locked_builder() -> None:
     """The nightly double-build gate installs the release's exact builder (R61).
 
-    SINGLE PIN AUTHORITY: build_command installs NOTHING inside the token
-    scope (asserted by test_release_job_python_stack_is_hash_locked above); the
-    builder comes from the hash-locked release-requirements.txt the release
-    job installs. The nightly gate must install hash-verified from that SAME
+    SINGLE PIN AUTHORITY: the release build installs nothing but the
+    hash-locked release-requirements.txt (asserted by
+    test_release_job_python_stack_is_hash_locked above). The nightly gate must install hash-verified from that SAME
     lock -- a name/version-only install (the old ``uv pip install
     "$BUILD_PIN"``) verified no artifact bytes, and a second builder lock
     would let the gate attest a different builder than the release uses.
@@ -607,11 +574,9 @@ def test_precommit_pin_is_single_valued_and_inside_the_contributor_band() -> Non
 
 # ---------------------------------------------------------------------------
 # Pin-lockstep gates (r7 R87-1): these five assertions previously lived ONLY
-# as inline scripts in lint.yml's actionlint job — a job the repo documents
-# as advisory, so none was PR-blocking and none was locally runnable
-# (`pytest tests/` could not reach them; the "one version authority"
-# doctrine was enforceable only by pushing). They are the same checks,
-# ported verbatim; lint.yml now points here instead of duplicating them.
+# as inline scripts in the old lint workflow's actionlint job, which was
+# advisory, so none was PR-blocking and none was locally runnable. They are
+# the same checks, ported verbatim.
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -625,27 +590,37 @@ def _all_workflow_text() -> str:
 
 
 def test_newest_admitted_torch_literal_lockstep() -> None:
-    """quality.yml's inline torch pins equal tests.yml's newest matrix row.
+    """The mypy, checks, packaging and audit jobs pin the newest matrix torch.
 
-    The newest-admitted torch version is inlined in quality.yml (mypy +
-    dep-audit envs) and repeatedly in tests.yml's matrix with nothing keeping
-    them equal — a matrix bump that skips quality.yml silently type-checks
+    The newest-admitted torch version is inlined in those jobs and repeatedly
+    in the smoke matrix rows (pr.yml plus nightly's smoke-matrix) with nothing
+    keeping them equal — a matrix bump that skips them silently type-checks
     and audits an older torch. (The nightly capture-byte-oracle pin
     deliberately tracks the golden ENV marker instead and is lockstepped by
     test_ci_packaging_gates.)
     """
 
+    import yaml
+
     torch_re = re.compile(r"torch(?:==|: \")(\d+\.\d+\.\d+)\+cpu")
-    tests_versions = torch_re.findall((_WORKFLOWS_DIR / "tests.yml").read_text())
-    quality_versions = torch_re.findall((_WORKFLOWS_DIR / "quality.yml").read_text())
-    assert tests_versions and quality_versions, (
-        "expected torch==X.Y.Z+cpu literals in tests.yml and quality.yml"
+    pr_jobs = yaml.safe_load((_WORKFLOWS_DIR / "pr.yml").read_text())["jobs"]
+    nightly_jobs = yaml.safe_load((_WORKFLOWS_DIR / "nightly.yml").read_text())["jobs"]
+    rows = [
+        *pr_jobs["smoke"]["strategy"]["matrix"]["include"],
+        *nightly_jobs["smoke-matrix"]["strategy"]["matrix"]["include"],
+    ]
+    matrix_versions = [str(row["torch"]).split("+", 1)[0] for row in rows]
+    inline_jobs = [pr_jobs[name] for name in ("type-check", "checks", "packaging")]
+    inline_jobs += [nightly_jobs[name] for name in ("dep-audit", "dep-audit-extras")]
+    inline_versions = torch_re.findall("".join(str(job) for job in inline_jobs))
+    assert matrix_versions and inline_versions, (
+        "expected torch==X.Y.Z+cpu literals in the smoke rows and the inline-pinned jobs"
     )
-    newest = max(tests_versions, key=lambda v: tuple(map(int, v.split("."))))
-    stale = sorted(set(quality_versions) - {newest})
+    newest = max(matrix_versions, key=lambda v: tuple(map(int, v.split("."))))
+    stale = sorted(set(inline_versions) - {newest})
     assert not stale, (
-        f"quality.yml pins torch {stale} but tests.yml's newest-admitted row is {newest}: "
-        "bump them together so type-check/audit run on the newest admitted torch"
+        f"type-check/checks/packaging/audit pin torch {stale} but the newest-admitted "
+        f"smoke row is {newest}: bump them together"
     )
 
 
@@ -656,7 +631,7 @@ def test_pydot_inline_pins_match_the_test_extra_authority() -> None:
     pin authority and the lean .[dev,tabular] legs repeat it inline, so a
     bump that misses a site silently renders goldens with a different pydot.
     The scan covers EVERY workflow file — a hand-enumerated list let
-    mutation.yml's third pin drift unguarded from birth.
+    the old mutation workflow's third pin drift unguarded from birth.
     """
 
     pyproject = (_REPO_ROOT / "pyproject.toml").read_text()
@@ -671,16 +646,16 @@ def test_pydot_inline_pins_match_the_test_extra_authority() -> None:
 
 
 def test_pip_audit_inline_pin_matches_the_dev_extra_authority() -> None:
-    """quality.yml's inline pip-audit pin equals the dev extra's exact pin."""
+    """nightly.yml's inline pip-audit pin equals the dev extra's exact pin."""
 
     pyproject = (_REPO_ROOT / "pyproject.toml").read_text()
     authority = set(re.findall(r'"pip-audit==([0-9][^"]*)"', pyproject))
     assert len(authority) == 1, f"expected ONE pip-audit pin in pyproject: {authority}"
     inline = set(
-        re.findall(r"pip-audit==([0-9][^\"'\s]*)", (_WORKFLOWS_DIR / "quality.yml").read_text())
+        re.findall(r"pip-audit==([0-9][^\"'\s]*)", (_WORKFLOWS_DIR / "nightly.yml").read_text())
     )
     assert inline == authority, (
-        f"quality.yml pip-audit pin {inline} drifted from the dev extra "
+        f"nightly.yml pip-audit pin {inline} drifted from the dev extra "
         f"authority {authority}: the inline copy is the one that actually "
         "audits releases"
     )

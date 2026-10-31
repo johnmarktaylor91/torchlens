@@ -68,8 +68,7 @@ def test_peer_recipe_job_requires_peers_and_fails_on_any_skip() -> None:
     pytest_args = shlex.split(runs[0]["run"].split("-m pytest", 1)[1].replace("\\\n", " "))
     assert not any(arg == "-m" or arg.startswith("-m=") for arg in pytest_args), pytest_args
     check = re.search(
-        r"check_ci_executed_tests\.py\s+\\?\s*"
-        r"\"\$RUNNER_TEMP/peer-recipes\.junit\.xml\"\s+(\d+)\s+(\S+)",
+        r'echo "peer-recipes\.junit\.xml (\d+) (\S+)"',
         _run_text(job),
     )
     assert check, "the leg must attest its junit with the executed-test check"

@@ -188,12 +188,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "POSIX standard-library module: present on every Linux and macOS leg, absent only "
         "on Windows (tests/test_io_platform_save_paths.py)",
     ),
-    "git": (
-        UNAVAILABLE_OK,
-        "gitpython, a python-semantic-release dependency; release-environment-only "
-        "(installed from the hash-locked release-requirements.txt by the lint "
-        "release-defenses job)",
-    ),
     "google.protobuf.json_format": (
         UNAVAILABLE_OK,
         "protobuf JSON parser for the netron-export acceptance contract; ships "
@@ -282,12 +276,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         OPTIONAL_PREVIEW,
         "SAE latent-export consumer (sae-dashboard, no declared extra); nightly.yml "
         "peer-recipes installs it --no-deps and runs tests/test_bridge_real_sae_export.py",
-    ),
-    "semantic_release": (
-        UNAVAILABLE_OK,
-        "python-semantic-release, deliberately in no dev extra; release-environment-"
-        "only (installed from the hash-locked release-requirements.txt by the lint "
-        "release-defenses job, which executes tests/test_no_major_parser.py)",
     ),
     "clearml": (
         UNAVAILABLE_OK,
@@ -1299,10 +1287,8 @@ OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
         "supplementary FLOP-counter cross-oracle (A07); the closed-form and "
         "gpt2/bert pins are the blocking oracles, so absence costs breadth only"
     ),
-    "git": "release-environment-only (hash-locked release-defenses job installs it)",
     "model_explorer": "export-bridge integration target with no declared extra",
     "pennylane": "quantum-ML research-model coverage, deliberately undeclared",
-    "semantic_release": "release-environment-only (release-defenses job)",
     "tensorboard": "export-bridge integration target with no declared extra",
     "tomli": "py<3.11 tomllib backport, only conditionally needed",
     "transformer_lens": "bridge integration without a declared extra",

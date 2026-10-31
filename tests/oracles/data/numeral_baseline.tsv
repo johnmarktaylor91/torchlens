@@ -6047,9 +6047,6 @@ test-docstrings	tests/test_neuro_pkg_matrix.py	11
 test-docstrings	tests/test_neuro_pkg_namespace.py	14
 test-docstrings	tests/test_neuro_pkg_namespace.py	16
 test-docstrings	tests/test_neuro_pkg_rdms.py	15
-test-docstrings	tests/test_no_breaking_markers_arming.py	10
-test-docstrings	tests/test_no_breaking_markers_arming.py	70
-test-docstrings	tests/test_no_breaking_markers_arming.py	86
 test-docstrings	tests/test_no_string_private_getattr.py	67
 test-docstrings	tests/test_no_string_private_getattr.py	96
 test-docstrings	tests/test_node_label_dtype.py	16.

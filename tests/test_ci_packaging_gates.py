@@ -29,9 +29,46 @@ def _load_yaml(path: Path) -> dict:
 
 
 def _smoke_job() -> dict:
-    """Return the smoke job of the Tests workflow."""
+    """Return the pull-request smoke job (the pinned enforcing environment)."""
 
-    return _load_yaml(_WORKFLOWS / "tests.yml")["jobs"]["smoke"]
+    return _load_yaml(_WORKFLOWS / "pr.yml")["jobs"]["smoke"]
+
+
+def _smoke_matrix_job() -> dict:
+    """Return the nightly supported-version smoke matrix job."""
+
+    return _load_yaml(_WORKFLOWS / "nightly.yml")["jobs"]["smoke-matrix"]
+
+
+def _smoke_rows() -> list[dict]:
+    """Return every smoke row: the PR row plus the nightly version matrix."""
+
+    rows = [
+        *_smoke_job()["strategy"]["matrix"]["include"],
+        *_smoke_matrix_job()["strategy"]["matrix"]["include"],
+    ]
+    return [row for row in rows if row.get("scope") == "smoke"]
+
+
+def _floor_step(steps: list[dict], junit_name: str) -> dict | None:
+    """Return the step that declares ``junit_name``'s executed-test floor."""
+
+    return next(
+        (
+            step
+            for step in steps
+            if "legs.floor" in step.get("run", "") and f'"{junit_name} ' in step.get("run", "")
+        ),
+        None,
+    )
+
+
+def _declared_floor(step: dict, junit_name: str) -> list[str]:
+    """Return the floor arguments one step declares for ``junit_name``."""
+
+    match = re.search(rf'echo "{re.escape(junit_name)} ([^"]*)"', step["run"])
+    assert match is not None, f"no floor declared for {junit_name}"
+    return match.group(1).split()
 
 
 def test_exactly_one_smoke_row_enforces_the_byte_oracle_goldens() -> None:
@@ -45,10 +82,8 @@ def test_exactly_one_smoke_row_enforces_the_byte_oracle_goldens() -> None:
     the matrix row and the markers, so bumping either alone goes red.
     """
 
-    rows = [
-        row for row in _smoke_job()["strategy"]["matrix"]["include"] if row.get("scope") == "smoke"
-    ]
-    assert len(rows) >= 6, "the PR-blocking smoke matrix shrank unexpectedly"
+    rows = _smoke_rows()
+    assert len(rows) >= 6, "the smoke matrix shrank unexpectedly"
     enforcing = [row for row in rows if str(row.get("oracle_enforce", "")) == "1"]
     assert len(enforcing) == 1, (
         "exactly one smoke row must declare oracle_enforce so the byte-oracle "
@@ -108,10 +143,12 @@ def test_local_ci_smoke_script_matches_the_enforcing_row() -> None:
     assert run_step["env"]["OMP_NUM_THREADS"] == script.SMOKE_ENV["OMP_NUM_THREADS"]
     assert script.SMOKE_ENV["TORCHLENS_ORACLE_ENFORCE"] == "1"
     assert "-m smoke -n 4" in run_step["run"]
-    floor_step = next(
-        step for step in job["steps"] if "check_ci_executed_tests.py" in step.get("run", "")
-    )
-    assert f"{script.EXECUTED_FLOOR} {script.SKIP_FRACTION}" in floor_step["run"]
+    floor_step = _floor_step(job["steps"], "smoke.junit.xml")
+    assert floor_step is not None, "the PR smoke job lost its executed-test floor"
+    assert _declared_floor(floor_step, "smoke.junit.xml") == [
+        str(script.EXECUTED_FLOOR),
+        str(script.SKIP_FRACTION),
+    ]
 
 
 def test_agent_docs_name_the_ci_parity_script_as_the_commit_gate() -> None:
@@ -162,20 +199,28 @@ def test_every_smoke_row_runs_the_executed_floor_attestation() -> None:
     legs carried this attestation (T13.1).
     """
 
-    steps = _smoke_job()["steps"]
-    run_step = next(step for step in steps if step.get("name", "").startswith("Run smoke tests"))
-    assert "--junitxml" in run_step["run"], "smoke run must emit junit XML"
-    assert run_step["env"]["TORCHLENS_ORACLE_ENFORCE"] == "${{ matrix.oracle_enforce }}", (
+    pr_steps = _smoke_job()["steps"]
+    pr_run = next(step for step in pr_steps if step.get("name", "").startswith("Run smoke tests"))
+    assert pr_run["env"]["TORCHLENS_ORACLE_ENFORCE"] == "${{ matrix.oracle_enforce }}", (
         "the enforce declaration must reach the test process"
     )
-    floor_step = next(
-        (step for step in steps if "check_ci_executed_tests.py" in step.get("run", "")),
-        None,
+    for job in (_smoke_job(), _smoke_matrix_job()):
+        steps = job["steps"]
+        run_step = next(
+            step for step in steps if step.get("name", "").startswith("Run smoke tests")
+        )
+        assert "--junitxml" in run_step["run"], "smoke run must emit junit XML"
+        floor_step = _floor_step(steps, "smoke.junit.xml")
+        assert floor_step is not None, "smoke rows lost the executed-floor attestation"
+        assert floor_step.get("if") == run_step.get("if"), (
+            "the floor must be declared on every row the smoke suite runs on"
+        )
+    # The PR job checks its own floors; the nightly matrix uploads them to attest.
+    assert any("check_ci_executed_tests.py --legs" in step.get("run", "") for step in pr_steps), (
+        "the PR smoke job no longer checks its declared floors"
     )
-    assert floor_step is not None, "smoke rows lost the executed-floor attestation"
-    assert floor_step.get("if") == run_step.get("if"), (
-        "the floor check must run on every row the smoke suite runs on"
-    )
+    nightly = _load_yaml(_WORKFLOWS / "nightly.yml")["jobs"]
+    assert "smoke-matrix" in nightly["attest"]["needs"]
 
 
 def test_precommit_ruff_fix_runs_before_ruff_format() -> None:
@@ -230,7 +275,7 @@ def test_render_byte_oracle_executes_on_a_ci_leg() -> None:
         "the byte-oracle consumer is heavy-marked; without selecting the "
         "heavy marker the step executes nothing"
     )
-    assert "check_ci_executed_tests.py" in step["run"], (
+    assert "legs.floor" in step["run"], (
         "the byte-oracle step must attest the test EXECUTED rather than skipped"
     )
 
@@ -262,10 +307,10 @@ def test_surface_byte_oracle_executes_on_the_enforcing_leg() -> None:
         "the surface byte tests are heavy-marked; without selecting the heavy "
         "marker the step executes nothing"
     )
-    assert "check_ci_executed_tests.py" in step["run"], (
+    assert "legs.floor" in step["run"], (
         "the surface byte step must attest the tests EXECUTED rather than skipped"
     )
-    floor = int(step["run"].rsplit(None, 1)[-1])
+    floor = int(_declared_floor(step, "surface-byte-oracle.junit.xml")[0])
     assert floor >= 6, "the executed floor must cover all six model-axis byte tests"
 
 
@@ -277,7 +322,7 @@ def test_capture_oracle_matrix_enforces_on_a_nightly_leg() -> None:
     assert job is not None, "nightly lost the capture-byte-oracle job (T13.2)"
     runs = "\n".join(step.get("run", "") for step in job["steps"])
     assert "tests/capture_oracle/" in runs and "-m slow" in runs
-    assert "check_ci_executed_tests.py" in runs, (
+    assert "legs.floor" in runs and "capture-byte-oracle" in nightly["attest"]["needs"], (
         "the capture-oracle leg must attest executed tests: the version gate "
         "skips the whole matrix on any non-recording torch, which is exactly "
         "the silent-green this leg exists to prevent"
@@ -300,42 +345,32 @@ def test_capture_oracle_version_gate_strips_the_build_tag() -> None:
     assert not _recording_torch_matches(None, "2.13.0+cpu")
 
 
-def test_release_app_token_is_permission_scoped() -> None:
-    """The minted GitHub App token carries an explicit minimal permission set.
+def test_release_publishes_only_from_a_tag_with_minimal_scope() -> None:
+    """Only a pushed version tag publishes, with exactly the scopes upload needs.
 
-    Without a ``permission-*`` input the token inherits the App
-    installation's FULL permissions and checkout persists it to disk for the
-    whole release job, including third-party pip installs (zizmor
-    ``github-app`` HIGH, T13.3). Contents write is everything the job needs.
+    Nothing in CI computes or commits a version: the maintainer's vX.Y.Z tag
+    is the only trigger, and the publish job holds only ``contents: write``
+    (the GitHub Release) and ``id-token: write`` (PyPI trusted publishing).
     """
 
-    release = _load_yaml(_WORKFLOWS / "release.yml")["jobs"]["release"]
-    token_step = next(
-        step for step in release["steps"] if "create-github-app-token" in step.get("uses", "")
-    )
-    scoped = [key for key in token_step["with"] if key.startswith("permission-")]
-    assert scoped == ["permission-contents"], (
-        "the release App token must be minted with exactly the minimal permission-contents scope"
-    )
-    assert token_step["with"]["permission-contents"] == "write"
+    release = _load_yaml(_WORKFLOWS / "release.yml")
+    triggers = release.get(True) or release.get("on")
+    assert triggers["push"] == {"tags": ["v*"]}, "release.yml must publish only on a pushed tag"
+    publish = release["jobs"]["publish"]
+    assert publish["if"] == "startsWith(github.ref, 'refs/tags/v')"
+    assert publish["permissions"] == {"contents": "write", "id-token": "write"}
+    assert set(publish["needs"]) == {"gates", "build"}
+    build_runs = "\n".join(step.get("run", "") for step in release["jobs"]["build"]["steps"])
+    assert "refusing to publish" in build_runs, "the tag/version agreement check is gone"
 
 
-def test_release_job_bounds_the_app_token_hold() -> None:
-    """The release job declares a timeout so the App token's life is bounded.
+def test_release_jobs_bound_their_credential_hold() -> None:
+    """Every release job declares a timeout well under GitHub's 6-hour default."""
 
-    Without ``timeout-minutes`` the job inherits GitHub's 6-hour default,
-    and a hung pip resolve or PyPI upload keeps a live repo-write credential
-    on the runner for all of it (r7 R82). A healthy release finishes in well
-    under 30 minutes; anything longer is a failure worth killing.
-    """
-
-    release = _load_yaml(_WORKFLOWS / "release.yml")["jobs"]["release"]
-    timeout = release.get("timeout-minutes")
-    assert isinstance(timeout, int), (
-        "the release job must declare timeout-minutes; the 6-hour default "
-        "is a 6-hour repo-write App-token hold"
-    )
-    assert timeout <= 60, f"release timeout-minutes {timeout} exceeds the 1-hour token-hold budget"
+    jobs = _load_yaml(_WORKFLOWS / "release.yml")["jobs"]
+    for name in ("build", "publish"):
+        timeout = jobs[name].get("timeout-minutes")
+        assert isinstance(timeout, int) and timeout <= 60, f"release job {name} timeout {timeout}"
 
 
 def test_mutation_dispatch_inputs_are_validated_whole_string() -> None:
@@ -348,7 +383,7 @@ def test_mutation_dispatch_inputs_are_validated_whole_string() -> None:
     must stay case-only.
     """
 
-    mutation = _load_yaml(_WORKFLOWS / "mutation.yml")["jobs"]
+    mutation = _load_yaml(_WORKFLOWS / "weekly.yml")["jobs"]
     steps = [step for job in mutation.values() for step in job.get("steps", [])]
     slot = next(step for step in steps if "INPUT_ARM_SHARD" in str(step.get("env", {})))
     script = "\n".join(
@@ -368,8 +403,8 @@ def test_non_release_checkouts_do_not_persist_credentials() -> None:
     """Every checkout that never pushes sets ``persist-credentials: false``.
 
     checkout persists its token into ``.git/config`` for ALL later steps by
-    default (zizmor ``artipacked``). Only the release job's checkout may
-    persist — semantic-release pushes the version commit and tag through it.
+    default (zizmor ``artipacked``). No workflow pushes, so no checkout may
+    persist.
     """
 
     offenders = []
@@ -379,12 +414,6 @@ def test_non_release_checkouts_do_not_persist_credentials() -> None:
                 if "actions/checkout@" not in step.get("uses", ""):
                     continue
                 with_block = step.get("with", {})
-                if workflow.name == "release.yml" and job_name == "release":
-                    assert "token" in with_block, (
-                        "the release checkout must authenticate as the App "
-                        "(its push path relies on the persisted scoped token)"
-                    )
-                    continue
                 if with_block.get("persist-credentials") is not False:
                     offenders.append(f"{workflow.name}:{job_name}")
     assert not offenders, (
@@ -393,7 +422,7 @@ def test_non_release_checkouts_do_not_persist_credentials() -> None:
 
 
 def test_a_smoke_row_covers_the_sys_monitoring_python() -> None:
-    """At least one PR-blocking row runs Python >= 3.12.
+    """At least one smoke row runs Python >= 3.12.
 
     Advertised 3.12/3.13 support selects the ``sys.monitoring``
     escape-detection path, which 3.10/3.11 rows can never execute: without a
@@ -401,9 +430,7 @@ def test_a_smoke_row_covers_the_sys_monitoring_python() -> None:
     test had already rotted unnoticed, T13.4).
     """
 
-    rows = [
-        row for row in _smoke_job()["strategy"]["matrix"]["include"] if row.get("scope") == "smoke"
-    ]
+    rows = _smoke_rows()
     versions = [tuple(int(part) for part in str(row["python"]).split(".")) for row in rows]
     assert any(version >= (3, 12) for version in versions), (
         "no smoke row runs Python >= 3.12; the sys.monitoring escape-detection "
@@ -418,7 +445,8 @@ def test_every_advertised_python_classifier_has_a_smoke_row() -> None:
     appearance was nightly's resolution-only ``uv pip compile`` loop, which
     imports nothing — a classifier enforced in metadata while unenforceable
     in CI (grind r5, b10 R85-1, SF-16). Every advertised interpreter must
-    have a PR-blocking smoke row; drop the classifier or add the row.
+    have a smoke row (pr.yml or nightly's smoke matrix); drop the classifier
+    or add the row.
     """
 
     import re
@@ -427,41 +455,39 @@ def test_every_advertised_python_classifier_has_a_smoke_row() -> None:
     pyproject = (_PROJECT_ROOT / "pyproject.toml").read_text()
     advertised = set(re.findall(r'"Programming Language :: Python :: (3\.\d+)"', pyproject))
     assert advertised, "no python-version classifiers found in pyproject.toml"
-    rows = [
-        row for row in _smoke_job()["strategy"]["matrix"]["include"] if row.get("scope") == "smoke"
-    ]
+    rows = _smoke_rows()
     executed = {str(row["python"]) for row in rows}
     unbacked = sorted(advertised - executed)
     assert not unbacked, (
-        f"python classifiers with no PR-blocking smoke row: {unbacked} — "
+        f"python classifiers with no smoke row: {unbacked} — "
         "resolution-only coverage is not execution"
     )
 
 
-def test_packaging_tripwires_run_on_the_nightly_wheel_leg() -> None:
-    """Nightly builds run the wheel-diet and sdist manifest tripwires.
+def test_packaging_tripwires_run_on_every_pull_request() -> None:
+    """The pull-request gate runs the wheel-diet and sdist manifest tripwires.
 
-    The nightly wheel job used to build and smoke-install a wheel WITHOUT
-    running the diet manifest test (slow-marked, weekly-only), so a packaging
-    regression could ship for up to a week before the tripwire fired (T13.5).
+    Both tests are slow-marked, so no tier selection runs them; without a
+    dedicated step a packaging regression could ship for up to a week before
+    the tripwire fired (T13.5).
     """
 
-    wheel_job = _load_yaml(_WORKFLOWS / "nightly.yml")["jobs"]["wheel"]
-    runs = "\n".join(step.get("run", "") for step in wheel_job["steps"])
+    packaging = _load_yaml(_WORKFLOWS / "pr.yml")["jobs"]["packaging"]
+    runs = "\n".join(step.get("run", "") for step in packaging["steps"])
     assert "test_built_wheel_manifest_is_diet" in runs, (
-        "the nightly wheel job must run the wheel-diet tripwire, not just build"
+        "the PR packaging job must run the wheel-diet tripwire"
     )
     assert "test_built_sdist_manifest_is_governed" in runs, (
-        "the nightly wheel job must run the sdist manifest tripwire"
+        "the PR packaging job must run the sdist manifest tripwire"
     )
 
 
 def test_release_job_python_satisfies_requires_python() -> None:
     """The release job builds the shipped artifacts on a supported Python.
 
-    semantic-release's build_command builds the published sdist/wheel on the
-    release job's interpreter; a 3.9 builder produced release artifacts on a
-    Python the package's own requires-python (>=3.10) refuses (T13.7).
+    The build job builds the published sdist/wheel on its interpreter; a 3.9
+    builder once produced release artifacts on a Python the package's own
+    requires-python (>=3.10) refuses (T13.7).
     """
 
     import re
@@ -471,7 +497,7 @@ def test_release_job_python_satisfies_requires_python() -> None:
     assert match is not None, "pyproject must declare a parseable requires-python floor"
     floor = (int(match.group(1)), int(match.group(2)))
 
-    release = _load_yaml(_WORKFLOWS / "release.yml")["jobs"]["release"]
+    release = _load_yaml(_WORKFLOWS / "release.yml")["jobs"]["build"]
     setup = next(step for step in release["steps"] if "setup-python" in step.get("uses", ""))
     version = tuple(int(part) for part in str(setup["with"]["python-version"]).split("."))
     assert version >= floor, (

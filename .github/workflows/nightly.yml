@@ -213,7 +213,6 @@ jobs:
       - name: Run smoke tests and compatibility coverage
         if: matrix.scope == 'smoke'
         env:
-          TORCHLENS_ORACLE_ENFORCE: ${{ matrix.oracle_enforce }}
           # One torch thread per xdist worker: intra-op threads on top of
           # four workers oversubscribe the runner and inflate the duration
           # tripwire's measurements (lane L15). The tripwire aggregates

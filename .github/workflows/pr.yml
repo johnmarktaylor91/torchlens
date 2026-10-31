@@ -169,16 +169,11 @@ jobs:
           TORCH_VERSION: ${{ matrix.torch }}
           TORCHVISION_VERSION: ${{ matrix.torchvision }}
           NUMPY_SPEC: ${{ matrix.numpy }}
-          CONSTRAINTS: ${{ matrix.constraints }}
         run: |
-          # Rows that pin numpy 1.x carry a constraints file for packages that
-          # need numpy 2 without declaring it (see the file's header).
-          constraint_args=()
-          if [ -n "${CONSTRAINTS}" ]; then constraint_args=(-c "${CONSTRAINTS}"); fi
           # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
           # The viz extra (matplotlib, torchshow, lovely-tensors) is installed
           # because tviz is shipped surface with smoke-marked render tests.
-          uv pip install --system "${constraint_args[@]}" \
+          uv pip install --system \
             --index-url https://download.pytorch.org/whl/cpu \
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
