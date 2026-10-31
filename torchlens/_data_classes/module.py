@@ -228,7 +228,7 @@ class ModuleCallAccessor(Accessor["ModuleCall"]):
             if key == only_call.address:
                 return only_call
         for call in self._dict.values():
-            if key == call.call_label:
+            if key == call.label:
                 return call
         parent_matches = [call for call in self._dict.values() if key == call.address]
         if len(parent_matches) > 1:
@@ -313,7 +313,7 @@ class ModuleCall:
         "class_qualname": FieldPolicy.KEEP,
         "cls": FieldPolicy.DROP,
         "call_index": FieldPolicy.KEEP,
-        "call_label": FieldPolicy.KEEP,
+        "label": FieldPolicy.KEEP,
         "ordinal_index": FieldPolicy.KEEP,
         "ops": FieldPolicy.KEEP,
         "input_ops": FieldPolicy.KEEP,
@@ -360,7 +360,7 @@ class ModuleCall:
     class_name: str
     class_qualname: str
     call_index: int
-    call_label: str
+    label: str
     ordinal_index: int
     ops: list[str]
     input_ops: list[str]
@@ -485,7 +485,7 @@ class ModuleCall:
         self.class_name = class_name
         self.class_qualname = class_qualname
         self.call_index = call_index
-        self.call_label = call_label  # e.g. "features.0:1"
+        self.label = call_label  # e.g. "features.0:1"
         self.ordinal_index = ordinal_index
         self.ops = ops  # pass-qualified Op labels
         self.input_layers = input_layers
@@ -913,7 +913,7 @@ class ModuleCall:
             from ..intervention.errors import MultiOutputModuleError
 
             raise MultiOutputModuleError(
-                f"ModuleCall '{self.call_label}' has {len(values)} outputs; "
+                f"ModuleCall '{self.label}' has {len(values)} outputs; "
                 "use .outs[i] or resolve .output_ops[i]."
             )
         return values[0]
@@ -942,7 +942,7 @@ class ModuleCall:
                 for index, label in enumerate(self.output_ops)
             )
             raise MultiOutputModuleError(
-                f"ModuleCall {self.call_label!r} has {len(self.output_ops)} output ops; "
+                f"ModuleCall {self.label!r} has {len(self.output_ops)} output ops; "
                 f"select one candidate explicitly: {candidates or 'none'}."
             )
         trace = self._source_trace
@@ -962,7 +962,7 @@ class ModuleCall:
             from ..intervention.errors import MultiOutputModuleError
 
             raise MultiOutputModuleError(
-                f"ModuleCall {self.call_label!r} has {len(self.output_ops)} output ops."
+                f"ModuleCall {self.label!r} has {len(self.output_ops)} output ops."
             )
         trace = self._source_trace
         if trace is None:
@@ -1041,9 +1041,7 @@ class ModuleCall:
 
         return fail_open(
             lambda: module_call_repr_line(self),
-            lambda _error: (
-                f"<ModuleCall {getattr(self, 'call_label', '<unbound>')}: repr degraded>"
-            ),
+            lambda _error: f"<ModuleCall {getattr(self, 'label', '<unbound>')}: repr degraded>",
         )
 
     def __str__(self) -> str:
@@ -1108,8 +1106,8 @@ class ModuleCall:
             state["address"] = state.pop("module_address")
         if "call_index" not in state and "pass_num" in state:
             state["call_index"] = state.pop("pass_num")
-        if "call_label" not in state and "pass_label" in state:
-            state["call_label"] = state.pop("pass_label")
+        if "label" not in state and "pass_label" in state:
+            state["label"] = state.pop("pass_label")
         if "all_addresses" not in state and "all_module_addresses" in state:
             state["all_addresses"] = state.pop("all_module_addresses")
         if "ops" not in state and "layers" in state:
@@ -2648,7 +2646,7 @@ _MODULE_CALL_STORED_FIELDS: tuple[str, ...] = (
     "class_name",
     "class_qualname",
     "call_index",
-    "call_label",
+    "label",
     "ordinal_index",
     "ops",
     "input_layers",

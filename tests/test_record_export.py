@@ -114,7 +114,7 @@ def test_forward_record_exports_round_trip(record_export_trace: tl.Trace, tmp_pa
     _assert_round_trip(op, ["label", "layer_label", "type"], tmp_path)
     _assert_round_trip(layer, ["layer_label", "layer_type", "num_passes"], tmp_path)
     _assert_round_trip(module, ["layer_label", "layer_type", "num_ops"], tmp_path)
-    _assert_round_trip(module_call, ["address", "call_index", "call_label"], tmp_path)
+    _assert_round_trip(module_call, ["address", "call_index", "label"], tmp_path)
     _assert_round_trip(param, ["address", "name", "num_params"], tmp_path)
     _assert_round_trip(buffer, ["address", "name", "call_index"], tmp_path)
 

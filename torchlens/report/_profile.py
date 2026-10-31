@@ -590,7 +590,7 @@ def _build_call_tree(trace: Trace) -> str:
     calls = sorted(trace.module_calls.values(), key=lambda call: int(call.ordinal_index))
     if not calls:
         return ""
-    calls_by_label = {str(call.call_label): call for call in calls}
+    calls_by_label = {str(call.label): call for call in calls}
     children: dict[str, list[Any]] = {label: [] for label in calls_by_label}
     roots: list[Any] = []
     for call in calls:
@@ -608,7 +608,7 @@ def _build_call_tree(trace: Trace) -> str:
     def visit(call: Any, prefix: str, is_last: bool, is_root: bool) -> None:
         """Append one call and its recorded descendants."""
 
-        label = str(call.call_label)
+        label = str(call.label)
         # ASCII rails: returned report strings are ASCII-canonical (lovely
         # bug 10 / summary-memo string contract).
         connector = "" if is_root else ("`-- " if is_last else "|-- ")
@@ -624,7 +624,7 @@ def _build_call_tree(trace: Trace) -> str:
     for root_index, root in enumerate(roots):
         visit(root, "", root_index == len(roots) - 1, True)
     for call in calls:
-        if str(call.call_label) not in visited:
+        if str(call.label) not in visited:
             visit(call, "", True, True)
     return "\n".join(lines)
 
@@ -844,9 +844,9 @@ def _assemble_level_rows(
         for call in trace.module_calls.values():
             ops = _ops_for_labels(trace, list(getattr(call, "ops", ())))
             row, one_evidence = _rollup_row(
-                (str(getattr(call, "call_label", "")), "call", getattr(call, "num_params", None)),
+                (str(getattr(call, "label", "")), "call", getattr(call, "num_params", None)),
                 ops,
-                {str(call.call_label)},
+                {str(call.label)},
                 context,
             )
             rows.append(row)
@@ -864,7 +864,7 @@ def _assemble_level_rows(
                     getattr(module, "num_params", None),
                 ),
                 ops,
-                {str(call.call_label) for call in module.calls.values()},
+                {str(call.label) for call in module.calls.values()},
                 context,
             )
             rows.append(row)

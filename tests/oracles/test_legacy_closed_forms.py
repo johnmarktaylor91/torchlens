@@ -196,7 +196,7 @@ def _by_label(trace):
     ops = {op.label: op for op in trace.layer_list}
     layers = {layer.layer_label: layer for layer in trace.layers}
     modules = {module.address: module for module in trace.modules}
-    calls = {call.call_label: call for call in trace.module_calls}
+    calls = {call.label: call for call in trace.module_calls}
     return ops, layers, modules, calls
 
 
@@ -324,7 +324,7 @@ def test_op_and_layer_argument_counts(graph_trace, outer_case) -> None:
 
 def test_module_call_forward_argument_counts(outer_case) -> None:
     _, trace, _, _ = outer_case
-    calls = {call.call_label: call for call in trace.module_calls}
+    calls = {call.label: call for call in trace.module_calls}
     # block(x, scale=2.0); block(h); fc(x) twice; head(h).
     expected = {
         "block:1": (1, 1),
@@ -346,13 +346,13 @@ def test_module_call_forward_argument_counts(outer_case) -> None:
 def test_root_call_forward_argument_counts(graph_trace, outer_case) -> None:
     # Outer.forward(x): one positional; Graph.forward(x, y): two.
     _, trace, _, _ = outer_case
-    root = {call.call_label: call for call in trace.module_calls}["self:1"]
+    root = {call.label: call for call in trace.module_calls}["self:1"]
     assert (
         int(root.num_forward_pos_args),
         int(root.num_forward_kwargs),
         int(root.num_forward_args_total),
     ) == (1, 0, 1)
-    root = {call.call_label: call for call in graph_trace.module_calls}["self:1"]
+    root = {call.label: call for call in graph_trace.module_calls}["self:1"]
     assert (int(root.num_forward_pos_args), int(root.num_forward_args_total)) == (2, 2)
 
 

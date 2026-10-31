@@ -764,7 +764,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "class_qualname": StorageBinding(StorageKind.SCALAR, annotation="<class 'str'>"),
         "cls": StorageBinding(StorageKind.RUNTIME, annotation='type[typing.Any] | None'),
         "call_index": StorageBinding(StorageKind.SCALAR, annotation="<class 'int'>"),
-        "call_label": StorageBinding(StorageKind.SCALAR, annotation="<class 'str'>"),
+        "label": StorageBinding(StorageKind.SCALAR, annotation="<class 'str'>"),
         "ordinal_index": StorageBinding(StorageKind.SCALAR, annotation="<class 'int'>"),
         "ops": StorageBinding(StorageKind.EDGE, annotation='list[str]'),
         "num_ops": StorageBinding(StorageKind.COMPUTED),

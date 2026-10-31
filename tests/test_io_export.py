@@ -55,7 +55,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
     "module_pass": [
         "address",
         "call_index",
-        "call_label",
+        "label",
         "num_ops",
         "forward_args_summary",
         "forward_kwargs_summary",

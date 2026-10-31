@@ -284,7 +284,7 @@ def _fresh_module_calls(trace: Trace) -> TraceModuleCallAccessor:
     calls: OrderedDict[str, Any] = OrderedDict()
     for module in trace._module_logs:
         for call in module.calls.values():
-            calls[call.call_label] = call
+            calls[call.label] = call
     return TraceModuleCallAccessor(calls)
 
 
@@ -350,7 +350,7 @@ def test_module_calls_cache_invalidates_on_supported_call_mutation() -> None:
     cached = trace.module_calls
     module = trace.modules["shared"]
     replacement = copy.copy(module.calls[0])
-    replacement.call_label = "shared:replacement"
+    replacement.label = "shared:replacement"
 
     module.calls[1] = replacement
 

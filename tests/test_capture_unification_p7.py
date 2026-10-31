@@ -87,8 +87,7 @@ def _module_call_stacks(trace: tl.Trace) -> dict[str, list[str]]:
     """Return each module call's reconstructed ``module_call_stack``."""
 
     return {
-        module_call.call_label: list(module_call.module_call_stack)
-        for module_call in trace.module_calls
+        module_call.label: list(module_call.module_call_stack) for module_call in trace.module_calls
     }
 
 
