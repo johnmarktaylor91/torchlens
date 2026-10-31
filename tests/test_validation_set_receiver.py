@@ -278,13 +278,18 @@ def _state_by_name(model: nn.Module) -> dict[str, torch.Tensor]:
 def _assert_restored(
     model: nn.Module, objects: dict[str, torch.Tensor], values: dict[str, torch.Tensor]
 ) -> None:
-    """Assert the same tensor objects hold their own storage and pre-call values."""
+    """Assert the same tensor objects hold their own storage, geometry and pre-call values.
+
+    Every model here registers contiguous tensors, so the clones in ``values``
+    carry the original strides.
+    """
 
     live = _state_by_name(model)
     assert live.keys() == objects.keys()
     for name, tensor in live.items():
         assert tensor is objects[name], name
         assert tensor.shape == values[name].shape, name
+        assert tensor.stride() == values[name].stride(), name
         assert torch.equal(tensor, values[name]), name
     pointers = [tensor.untyped_storage().data_ptr() for tensor in live.values()]
     assert len(set(pointers)) == len(pointers), "a restored tensor still aliases another"
@@ -492,4 +497,3 @@ def test_in_place_geometry_writes_return_a_verdict_and_restore(
     values = {name: tensor.detach().clone() for name, tensor in objects.items()}
     assert isinstance(_quiet_validate(model, torch.rand(4)), bool)
     _assert_restored(model, objects, values)
-    assert model.b.stride() == values["b"].stride()
