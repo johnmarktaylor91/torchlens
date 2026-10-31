@@ -32,6 +32,7 @@ from ..._utils.tensor_utils import (
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
 from ._tl import (
+    NO_USER_GRAD_FN,
     get_tensor_label,
     mark_detached_saved_activation,
     pop_same_object_mutation,
@@ -337,7 +338,12 @@ def _log_output_tensor_info(
     # TorchLens bookkeeping ``grad_fn`` read (same r65 receiver aliasing note
     # as the ``_version`` read above).
     with internal_scalar_read():
-        op_grad_fn = user_grad_fn if user_grad_fn is not None else t.grad_fn
+        if user_grad_fn is NO_USER_GRAD_FN:
+            # The user's op returned a leaf (no live node); the safe copy's
+            # ``CloneBackward`` is TorchLens bookkeeping, never the op's handle.
+            op_grad_fn = None
+        else:
+            op_grad_fn = user_grad_fn if user_grad_fn is not None else t.grad_fn
     grad_fn_cls = type(op_grad_fn) if op_grad_fn is not None else None
     fields_dict["grad_fn_class_name"] = None if grad_fn_cls is None else grad_fn_cls.__name__
     fields_dict["grad_fn_class_qualname"] = (

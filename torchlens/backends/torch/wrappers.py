@@ -96,6 +96,7 @@ from ._storage_overlap import (
 )
 from ._tl import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
+    NO_USER_GRAD_FN,
     DescriptorCompatProperty,
     get_tensor_label,
     has_detached_saved_activations,
@@ -1593,9 +1594,17 @@ def torch_func_decorator(
             with internal_scalar_read():
                 live_user_grad_fn = out_orig.grad_fn if isinstance(out_orig, torch.Tensor) else None
             out_orig = safe_copy(out_orig)
-            if live_user_grad_fn is not None and isinstance(out_orig, torch.Tensor):
+            if isinstance(out_orig, torch.Tensor):
+                # A leaf receiver (``x.detach().requires_grad_(True)``) has no
+                # live node: stamp the sentinel so the record carries ``None``
+                # instead of the copy's own ``CloneBackward`` (a phantom handle
+                # no backward can ever visit).
                 try:
-                    setattr(out_orig, "tl_user_grad_fn", live_user_grad_fn)
+                    setattr(
+                        out_orig,
+                        "tl_user_grad_fn",
+                        NO_USER_GRAD_FN if live_user_grad_fn is None else live_user_grad_fn,
+                    )
                 except AttributeError:
                     pass
             out_orig = _parameter_mutation_output_for_logging(

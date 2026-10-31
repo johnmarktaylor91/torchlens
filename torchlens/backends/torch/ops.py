@@ -172,6 +172,7 @@ from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
 from ._param_fingerprint import param_fingerprint
 from ._tl import (
+    NO_USER_GRAD_FN,
     active_label_session_token,
     get_label_list,
     get_live_label_list,
