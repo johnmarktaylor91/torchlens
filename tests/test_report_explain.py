@@ -292,7 +292,7 @@ def test_profile_surfaces_unverified_capture() -> None:
     assert "mode_rescue_rerun" in rendered
 
     clean = tl.report.build_profile(_captured_log())
-    assert clean.capture_verified is None
+    assert clean.is_capture_verified is None
     assert "UNVERIFIED" not in repr(clean)
 
 
