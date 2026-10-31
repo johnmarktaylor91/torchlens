@@ -150,6 +150,12 @@ def test_is_torchlens_code_ignores_filename_spelling() -> None:
     assert not is_torchlens_code(code.replace(co_filename=sibling))
     assert not is_torchlens_code(code.replace(co_filename=__file__))
     assert not is_torchlens_code(code.replace(co_filename="<string>"))
+    # Code objects compare equal across filenames; verdicts must not.
+    inside = compile("x = 1", str(real), "exec")
+    outside = compile("x = 1", __file__, "exec")
+    assert inside == outside
+    assert is_torchlens_code(inside)
+    assert not is_torchlens_code(outside)
 
 
 @pytest.mark.smoke
