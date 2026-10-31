@@ -211,22 +211,22 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens._errors",
         "BackwardStreamUnavailableError",
     ),
-    "AmbiguousBackendError": ("torchlens.backends", "AmbiguousBackendError"),
+    "AmbiguousBackendError": ("torchlens.backends.registry", "AmbiguousBackendError"),
     "BackendCapabilityConformanceError": (
-        "torchlens.backends",
+        "torchlens.backends.registry",
         "BackendCapabilityConformanceError",
     ),
-    "BackendMismatchError": ("torchlens.backends", "BackendMismatchError"),
+    "BackendMismatchError": ("torchlens.backends.registry", "BackendMismatchError"),
     "BackendPayloadUnsupportedError": (
-        "torchlens.backends",
+        "torchlens.backends.registry",
         "BackendPayloadUnsupportedError",
     ),
-    "BackendRegistryError": ("torchlens.backends", "BackendRegistryError"),
+    "BackendRegistryError": ("torchlens.backends.registry", "BackendRegistryError"),
     "BackendRuntimeCompatibilityError": (
-        "torchlens.backends",
+        "torchlens.backends.registry",
         "BackendRuntimeCompatibilityError",
     ),
-    "BackendUnsupportedError": ("torchlens.backends", "BackendUnsupportedError"),
+    "BackendUnsupportedError": ("torchlens.backends.registry", "BackendUnsupportedError"),
     "CaptureAttemptFailedWarning": (
         "torchlens.backends.torch.rescue",
         "CaptureAttemptFailedWarning",
@@ -269,7 +269,7 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens.distributed._recognizer",
         "UncapturedCollectiveOpError",
     ),
-    "UnknownBackendError": ("torchlens.backends", "UnknownBackendError"),
+    "UnknownBackendError": ("torchlens.backends.registry", "UnknownBackendError"),
     "VariantScanTruncationWarning": ("torchlens._robustness", "VariantScanTruncationWarning"),
     "WildcardRecvUnsupportedError": (
         "torchlens.backends.torch.collectives",

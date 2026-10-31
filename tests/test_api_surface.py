@@ -45,8 +45,6 @@ TARGET_ALL = [
     "summary",
     "options",
     "to_disk",
-    "AmbiguousOpLookupError",
-    "ReentrantTraceError",
     "Trace",
     "Layer",
     "Container",
@@ -217,6 +215,8 @@ def test_all_matches_frozen_target_ledger() -> None:
     mandatory basis provenance, DOCUMENTED-UNSTABLE) on top of that. The
     completeness work F39 unhide promotes the shipped streaming-stats
     surface `stats` and `aggregate` (conflict-ledger row 8) = 116.
+    The decided-surface rename moves `AmbiguousOpLookupError` and
+    `ReentrantTraceError` to `tl.errors` = 114.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """
