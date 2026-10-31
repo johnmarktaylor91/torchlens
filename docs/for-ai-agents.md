@@ -144,7 +144,7 @@ bound = tl.when(tl.module("1"), tl.steer(direction, strength=2.0, dim=-1)).bind(
 outputs = [bound(torch.randn(2, 4)) for _ in range(3)]
 
 assert outputs[0].shape == (2, 2)
-assert bound.last_report.fire_count == 1
+assert bound.last_report.num_fires == 1
 ```
 
 Run a capture-time intervention:
@@ -366,7 +366,7 @@ serves); nothing guarantees a response is never trimmed, so always check `trunca
 - Do not assume unsaved payloads can be read later. Re-trace with a wider `save=` predicate or use
   torch `tl.record(...).to_trace()` with the records you need. JAX/tinygrad/Paddle/TF `.tlspec` saves
   materialize array payloads, but loaded traces cannot replay-validate stripped runtime captures;
-  check `trace.validation_replay_status` (`ValidationReplayStatus`) and
+  check `trace.validation_replay_status` (`ValidationStatus`) and
   `trace.payload_load_status`.
   A live importer-owned region can make replay status `unverified`: the trace is available and
   replayable checks passed, but per-op replay is partial and `bool(status)` raises.

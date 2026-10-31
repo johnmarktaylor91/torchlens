@@ -27,9 +27,9 @@ _FACADE_SPELLINGS = (
     "TLSPEC_VERSION",
     "MIN_TLSPEC_VERSION",
     "MIN_TORCHLENS_VERSION_TEXT",
-    "TorchLensIOError",
-    "ArtifactVersionBelowFloorError",
-    "ArtifactVersionAboveRuntimeError",
+    "ArtifactError",
+    "ArtifactTooOldError",
+    "ArtifactTooNewError",
     "ArtifactRuntimeIncompatibleError",
     "UnknownPersistedFieldError",
     "PreReleaseArtifactError",
@@ -51,9 +51,9 @@ _FACADE_SPELLINGS = (
 # The load-hint classes (JaxPayloadLoadHint, PayloadLoadHints) are runtime
 # options, never persisted, so they keep their real defining module.
 _PICKLE_VISIBLE_TYPES = (
-    "TorchLensIOError",
-    "ArtifactVersionBelowFloorError",
-    "ArtifactVersionAboveRuntimeError",
+    "ArtifactError",
+    "ArtifactTooOldError",
+    "ArtifactTooNewError",
     "ArtifactRuntimeIncompatibleError",
     "UnknownPersistedFieldError",
     "PreReleaseArtifactError",
@@ -72,7 +72,7 @@ def test_facade_and_split_modules_serve_the_same_objects() -> None:
     assert tl_io.FieldPolicy is format_contract.FieldPolicy
     assert tl_io.BlobRef is format_contract.BlobRef
     assert tl_io.TLSPEC_VERSION == format_contract.TLSPEC_VERSION
-    assert tl_io.TorchLensIOError is format_errors.TorchLensIOError
+    assert tl_io.ArtifactError is format_errors.ArtifactError
 
 
 def test_pickle_visible_identity_stays_the_facade_path() -> None:

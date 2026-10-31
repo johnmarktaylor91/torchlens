@@ -30,7 +30,7 @@ from .._constants import MODEL_LOG_FIELD_ORDER
 from .._data_classes._state_adapter import state_items, state_new, state_restore
 from .._data_classes.trace import Trace, _scrubbed_transform_repr
 from ..errors._base import TorchLensWarning
-from . import TLSPEC_VERSION, BlobRef, FieldPolicy, TorchLensIOError, prerelease as _prerelease
+from . import TLSPEC_VERSION, ArtifactError, BlobRef, FieldPolicy, prerelease as _prerelease
 from ._source_privacy import (
     _apply_advisory_source_policy,
     _apply_conditional_source_policy,
@@ -242,7 +242,7 @@ def scrub_for_save(
 
     scrubbed_model = _scrub_value(trace, options, memo, blob_specs, blob_counter)
     if not isinstance(scrubbed_model, Trace):
-        raise TorchLensIOError("Portable scrub expected a scrubbed Trace instance.")
+        raise ArtifactError("Portable scrub expected a scrubbed Trace instance.")
 
     scrubbed_state = dict(state_items(scrubbed_model))
     scrubbed_state["tlspec_version"] = TLSPEC_VERSION
@@ -624,7 +624,7 @@ def _reject_payload_mapping_keys(mapping: Mapping[Any, Any], options: _ScrubOpti
     for key in mapping:
         reason = _mapping_key_payload_reason(key, options)
         if reason is not None:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"Cannot save a mapping that uses {reason} as (or inside) a key. "
                 "Tensor payloads are portable only as mapping VALUES, which are "
                 "indexed into the bundle blob manifest; a tensor embedded in a key "
@@ -879,7 +879,7 @@ def _scrub_value(
     """
 
     if _depth > _PORTABLE_WALK_MAX_DEPTH:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Portable metadata exceeds the maximum depth of {_PORTABLE_WALK_MAX_DEPTH}."
         )
 
@@ -930,7 +930,7 @@ def _scrub_value(
         obj_id = id(value)
         cached = memo.get(obj_id)
         if cached is _SCRUB_IN_PROGRESS:
-            raise TorchLensIOError("Portable metadata contains a cycle through a tuple.")
+            raise ArtifactError("Portable metadata contains a cycle through a tuple.")
         if cached is not None:
             return cached
         _pin_in_memo(memo, value)
@@ -988,7 +988,7 @@ def _scrub_value(
         obj_id = id(value)
         cached = memo.get(obj_id)
         if cached is _SCRUB_IN_PROGRESS:
-            raise TorchLensIOError("Portable metadata contains a cycle through a frozenset.")
+            raise ArtifactError("Portable metadata contains a cycle through a frozenset.")
         if cached is not None:
             return cached
         if type(value) is not frozenset:
@@ -1140,7 +1140,7 @@ def _scrub_value(
                         f"FieldPolicy.DROP row) so populating it cannot "
                         f"poison a later save."
                     )
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"{type(value).__name__}.{field_name} is missing from "
                 f"_PORTABLE_STATE_SPEC. Every live state field needs an "
                 f"explicit portability policy before it can be saved."
@@ -1601,7 +1601,7 @@ def _scrub_raw_value_for_save(
         # ``_blobify_recursive_value``) for exactly this class of object.
         return _scrub_value(value, options, memo, blob_specs, blob_counter, stringify_unknown=True)
     if policy != "small":
-        raise TorchLensIOError(f"{policy_name} must be 'small', True, or False.")
+        raise ArtifactError(f"{policy_name} must be 'small', True, or False.")
     return _small_raw_value(value, field_name=field_name)
 
 
@@ -1764,7 +1764,7 @@ def _blobify_tensor_field(
             reason=f"{options.backend_name}_array_audit_null",
         )
     if not options.payload_codec.can_encode(field_value):
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"{type(owner).__name__}.{field_name} expected a codec-encodable payload for "
             "portable blobification, "
             f"got {type(field_value).__name__}."
@@ -1839,7 +1839,7 @@ def _blobify_recursive_value(
     """Blobify tensors recursively inside nested containers."""
 
     if depth > _PORTABLE_WALK_MAX_DEPTH:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Portable payload exceeds the maximum depth of {_PORTABLE_WALK_MAX_DEPTH}."
         )
 
@@ -1878,7 +1878,7 @@ def _blobify_recursive_value(
         obj_id = id(value)
         cached = memo.get(obj_id)
         if cached is _SCRUB_IN_PROGRESS:
-            raise TorchLensIOError("Portable payload contains a cycle through a tuple.")
+            raise ArtifactError("Portable payload contains a cycle through a tuple.")
         if cached is not None:
             return cached
         _pin_in_memo(memo, value)
@@ -1938,7 +1938,7 @@ def _blobify_recursive_value(
         obj_id = id(value)
         cached = memo.get(obj_id)
         if cached is _SCRUB_IN_PROGRESS:
-            raise TorchLensIOError("Portable payload contains a cycle through a frozenset.")
+            raise ArtifactError("Portable payload contains a cycle through a frozenset.")
         if cached is not None:
             return cached
         _pin_in_memo(memo, value)
@@ -2082,7 +2082,7 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         # L6 stage 3: tier-(ii) occurrence-granular substituted-value payloads
         # (BLOB_RECURSIVE under the pre-release switch / from the wave-3 bump).
         return "edge_substitution"
-    raise TorchLensIOError(f"No blob kind mapping defined for {type(owner).__name__}.{field_name}.")
+    raise ArtifactError(f"No blob kind mapping defined for {type(owner).__name__}.{field_name}.")
 
 
 def _blob_label_for_owner(owner: Any) -> str:

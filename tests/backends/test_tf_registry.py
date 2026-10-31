@@ -11,9 +11,9 @@ import torch
 from conftest import tensorflow_backend_modules
 
 import torchlens as tl
-from torchlens.backends import BackendMismatchError
 from torchlens.backends.default_specs import _tf_can_handle
 from torchlens.backends.tf import TFBackend, capabilities as tf_capabilities
+from torchlens.errors import BackendMismatchError
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 
@@ -43,7 +43,7 @@ def test_tf_backend_registered_with_alias_capabilities_and_priority() -> None:
     assert tl.backends.spec("paddle").priority == 40
 
     assert spec.capabilities.backward_capture == tf_capabilities.supports_backward_capture
-    assert spec.capabilities.validation_replay == tf_capabilities.supports_validation_replay
+    assert spec.capabilities.has_validation_replay == tf_capabilities.supports_validation_replay
     assert spec.capabilities.fastlog == tf_capabilities.supports_fastlog
     assert spec.capabilities.interventions == tf_capabilities.supports_intervention
     assert (

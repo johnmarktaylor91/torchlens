@@ -32,7 +32,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens.errors.runnable import NumericAttestationError
+from torchlens.errors.runnable import ReplayValueMismatchError
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
@@ -344,7 +344,7 @@ def test_untainted_archived_mismatch_still_raises(tmp_path: Path) -> None:
     victim = next(key for key in archive if "linear" in key)
     record = archive[victim]
     archive[victim] = dataclasses.replace(record, value=record.value + 0.5)
-    with pytest.raises(NumericAttestationError):
+    with pytest.raises(ReplayValueMismatchError):
         loaded.run(inputs=x.clone(), on_divergence="return")
 
 

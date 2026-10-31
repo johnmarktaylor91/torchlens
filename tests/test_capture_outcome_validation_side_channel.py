@@ -8,7 +8,7 @@ in ``_validation_diagnostics``. Neither name had a ``_PORTABLE_STATE_SPEC`` /
 ``FIELD_POLICY`` row, so the portable scrub's undeclared-field audit rejected
 them and a plain validate-then-save sequence died with
 
-    TorchLensIOError: Trace._last_validation_failure is missing from
+    ArtifactError: Trace._last_validation_failure is missing from
     _PORTABLE_STATE_SPEC
 
 Both are session-time diagnostics carried on the trace as a side channel --
@@ -92,11 +92,13 @@ def test_save_after_a_recorded_failure_payload_round_trips(tmp_path) -> None:
     trace, _ = _traced()
     record_validation_failure(
         trace,
-        ValidationFailure(check="probe_check", message="probe message", extra={"op": "relu_1_1"}),
+        ValidationFailure(
+            check_name="probe_check", message="probe message", extra={"op": "relu_1_1"}
+        ),
     )
     record_validation_diagnostic(
         trace,
-        ValidationDiagnostic(check="probe_diag", message="probe diag", extra={"n": 1}),
+        ValidationDiagnostic(check_name="probe_diag", message="probe diag", extra={"n": 1}),
     )
     assert isinstance(trace.__dict__[TRACE_FAILURE_ATTR], ValidationFailure)
     assert trace.__dict__[TRACE_DIAGNOSTICS_ATTR]
@@ -133,7 +135,7 @@ def test_side_channel_survives_plain_pickle_like_fast_run_session() -> None:
     import pickle
 
     trace, _ = _traced()
-    record_validation_failure(trace, ValidationFailure(check="probe_check"))
+    record_validation_failure(trace, ValidationFailure(check_name="probe_check"))
     restored = pickle.loads(pickle.dumps(trace))
     assert TRACE_FAILURE_ATTR in restored.__dict__
 

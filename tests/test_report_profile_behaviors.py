@@ -64,7 +64,7 @@ def test_profile_honesty_labels_align_with_rows_and_vocabulary(profiled_trace) -
     """honesty() returns per-row provenance labels from the closed vocabulary."""
 
     prof = profile(profiled_trace, level="op", top_k=3)
-    honesty = prof.honesty()
+    honesty = prof.evidence_labels()
     assert list(honesty["name"]) == list(prof.frame["name"])
     # F09 (costreport D2/D9): per-cell evidence with mandatory qualifiers --
     # host time is never bare "measured", parameter counts are a declared
@@ -75,7 +75,7 @@ def test_profile_honesty_labels_align_with_rows_and_vocabulary(profiled_trace) -
         assert set(honesty[column]) <= set(HONESTY_LABELS)
     assert "measured" not in set(honesty["time"])
     # Cached honesty frames are returned as copies, not aliases.
-    assert honesty is not prof.honesty()
+    assert honesty is not prof.evidence_labels()
 
 
 def test_profile_top_k_and_sort_order(profiled_trace) -> None:

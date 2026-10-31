@@ -17,7 +17,7 @@ from torchlens._ir.capture_events import CaptureEvents
 from .. import _state
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
-from .._errors import CaptureContextError, KeywordConflictError
+from .._errors import CaptureNotActiveError, KeywordConflictError
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..capture.config import InternalCaptureConfig
@@ -150,7 +150,7 @@ def _unwrap_ddp_for_fastlog(
     # The lazy probe never imports torch.distributed.fsdp on plain captures.
     fsdp_wrapper_type = get_fsdp_wrapper_type()
     if fsdp_wrapper_type is not None and isinstance(model, fsdp_wrapper_type):
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             "torchlens.fastlog does not support FullyShardedDataParallel (FSDP): "
             "parameters are sharded across ranks and there is no unsharded module to log",
             code="fsdp_capture_unsupported",
@@ -254,7 +254,7 @@ class Recorder:
             Optional callable applied to each retained out copy after
             dtype/device transforms. The callable runs under ``pause_logging``
             and must return a ``torch.Tensor``. Errors are wrapped in
-            :class:`torchlens.TorchLensPostfuncError`.
+            :class:`torchlens.UserTransformError`.
         save_raw_activations:
             When ``False`` and ``activation_transform`` is set, only the
             transformed payload is retained on the record. Defaults to

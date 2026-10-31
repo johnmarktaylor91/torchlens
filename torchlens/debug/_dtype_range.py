@@ -24,15 +24,15 @@ class DTypeRangeReport(Report):
     ----------
     findings:
         Evidence-backed findings following the :class:`AuditFinding` shape.
-    n_ops_audited:
+    num_audited_ops:
         Operations with one saved native tensor payload that was inspected.
-    n_ops_total:
+    num_ops:
         Compute and output operations present in the trace.
     """
 
     findings: tuple[AuditFinding, ...]
-    n_ops_audited: int
-    n_ops_total: int
+    num_audited_ops: int
+    num_ops: int
 
     _prints_repr = True
 
@@ -44,7 +44,7 @@ class DTypeRangeReport(Report):
     def _report_coverage(self) -> str | None:
         """What this report did and did not examine."""
 
-        return f"{self.n_ops_audited} of {self.n_ops_total} ops audited"
+        return f"{self.num_audited_ops} of {self.num_ops} ops audited"
 
     def _report_findings(self) -> list[str]:
         """One-line findings for the card, most severe first."""
@@ -66,9 +66,9 @@ class DTypeRangeReport(Report):
             ``n_ops_audited / n_ops_total``, or ``0.0`` for an empty trace.
         """
 
-        if self.n_ops_total == 0:
+        if self.num_ops == 0:
             return 0.0
-        return self.n_ops_audited / self.n_ops_total
+        return self.num_audited_ops / self.num_ops
 
     def __repr__(self) -> str:
         """Return a compact coverage-honest summary.
@@ -81,7 +81,7 @@ class DTypeRangeReport(Report):
 
         return (
             f"DTypeRangeReport(findings={len(self.findings)}, "
-            f"coverage={self.n_ops_audited}/{self.n_ops_total})"
+            f"coverage={self.num_audited_ops}/{self.num_ops})"
         )
 
 

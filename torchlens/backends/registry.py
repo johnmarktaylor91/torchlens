@@ -194,7 +194,7 @@ class BackendMismatchError(BackendRegistryError):
     default_remedy = "select the backend that owns the supplied model and tensor inputs"
 
 
-class BackendAmbiguityError(BackendRegistryError):
+class AmbiguousBackendError(BackendRegistryError):
     """Raised when backend auto-resolution has multiple equal-priority matches."""
 
     code = "backend_ambiguity"
@@ -257,7 +257,7 @@ class BackendCapabilities:
     ----------
     backward_capture:
         Whether true backward graph capture is supported.
-    validation_replay:
+    has_validation_replay:
         Whether the backend can perform replay validation.
     fastlog:
         Whether sparse ``tl.record`` capture is supported.
@@ -296,7 +296,7 @@ class BackendCapabilities:
     """
 
     backward_capture: bool
-    validation_replay: bool
+    has_validation_replay: bool
     fastlog: bool
     interventions: bool
     rng_replay: bool
@@ -690,5 +690,5 @@ def resolve_backend_spec(
     winners = [spec for spec in matches if spec.priority == max_priority]
     if len(winners) > 1:
         names = ", ".join(sorted(str(spec.name) for spec in winners))
-        raise BackendAmbiguityError(f"backend=None is ambiguous for: {names}.")
+        raise AmbiguousBackendError(f"backend=None is ambiguous for: {names}.")
     return winners[0]

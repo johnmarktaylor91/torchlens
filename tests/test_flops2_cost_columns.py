@@ -34,12 +34,14 @@ def _observed(case: str) -> tuple[Any, Any]:
 
 def _assert_columns_conserve(tree: Any, executed: int) -> None:
     rows = tree.rows
-    assert tree.backward_total == executed
+    assert tree.total_backward_flops == executed
     assert sum(row.self_backward_flops for row in rows) == executed
-    assert sum(row.self_forward_mac_flops for row in rows) == tree.forward_mac_total
+    assert sum(row.self_forward_mac_flops for row in rows) == tree.total_forward_mac_flops
     for row in rows:
-        assert row.self_total_flops == row.self_forward_mac_flops + row.self_backward_flops
-        assert row.subtree_total_flops == (
+        assert (
+            row.self_forward_backward_flops == row.self_forward_mac_flops + row.self_backward_flops
+        )
+        assert row.subtree_forward_backward_flops == (
             row.subtree_forward_mac_flops + row.subtree_backward_flops
         )
     roots = [row for row in rows if row.parent_id is None]
@@ -79,7 +81,7 @@ def test_forward_mac_column_matches_true_macs() -> None:
     trace, _before = _observed("partial_requires_grad")
     try:
         # Three Linear layers on a (2, 16) batch: 2 * 2 * (16*32 + 32*32 + 32*4).
-        assert cost_tree(trace).forward_mac_total == 2 * 2 * (16 * 32 + 32 * 32 + 32 * 4)
+        assert cost_tree(trace).total_forward_mac_flops == 2 * 2 * (16 * 32 + 32 * 32 + 32 * 4)
     finally:
         trace.cleanup()
 
@@ -97,9 +99,9 @@ def test_states_without_a_counted_backward_are_never_zero() -> None:
             (unobserved, "grad_enabled_unobserved", "unknown"),
         ):
             tree = cost_tree(trace)
-            assert tree.backward_state == state and tree.backward_total is None
+            assert tree.backward_state == state and tree.total_backward_flops is None
             assert all(row.self_backward_flops is None for row in tree.rows)
-            assert all(row.self_total_flops is None for row in tree.rows)
+            assert all(row.self_forward_backward_flops is None for row in tree.rows)
             assert f"executed backward: {words}" in str(tree)
             assert "fwd MAC+bwd" not in str(tree)
     finally:

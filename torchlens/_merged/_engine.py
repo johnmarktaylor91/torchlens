@@ -28,7 +28,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-from ..distributed._audit import MembershipLineageVerdict, audit_membership_lineages
+from ..distributed._audit import MembershipLineageVerdict, verify_membership_lineages
 from ..distributed._ledger import InstallEpoch, membership_digest_for_ranks
 from ._enums import (
     TENSORLESS_KINDS,
@@ -177,7 +177,7 @@ class MergeDerivation:
             "ranks": list(self.ranks),
             "expected_ranks": (None if self.expected_ranks is None else list(self.expected_ranks)),
             "joins": [join.to_payload() for join in self.joins],
-            "findings": [finding.to_payload() for finding in self.findings],
+            "findings": [finding.to_dict() for finding in self.findings],
             "audit": {
                 digest: {
                     "status": verdict.status,
@@ -654,7 +654,7 @@ def derive_merge(
         "Mapping[int, InstallEpoch]",
         {rank: ev.install_epoch for rank, ev in evidence.items()},
     )
-    audit = audit_membership_lineages({rank: ev.ledger for rank, ev in evidence.items()}, epochs)
+    audit = verify_membership_lineages({rank: ev.ledger for rank, ev in evidence.items()}, epochs)
     conflicted_memberships = tuple(
         sorted(digest for digest, verdict in audit.items() if verdict.is_conflict)
     )

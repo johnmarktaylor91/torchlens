@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 from .._errors import AmbiguousOpLookupError, InvalidArgumentError
 from ..capture.projections import LiveOpView
-from ..intervention.errors import SiteAmbiguityError
+from ..intervention.errors import AmbiguousSiteError
 from ..intervention.selectors import BaseSelector
 from ..intervention.types import FrozenTargetSpec, TargetSpec
 from ._lookup_keys import _give_user_feedback_about_lookup_key
@@ -130,7 +130,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
 
         table = resolve_sites(self, ix, max_fanout=1)
         if len(table) != 1:
-            raise SiteAmbiguityError(
+            raise AmbiguousSiteError(
                 f"site {ix!r} matched {len(table)} sites, but Trace.__getitem__ requires one."
             )
         return table.first()

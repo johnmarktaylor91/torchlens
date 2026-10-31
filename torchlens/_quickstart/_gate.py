@@ -24,7 +24,7 @@ import warnings
 from collections.abc import Iterator
 from typing import Any
 
-from .._errors import CaptureContextError
+from .._errors import CaptureNotActiveError
 from ..errors._base import TorchLensWarning
 from ._provenance import trace_input_provenance
 
@@ -71,7 +71,7 @@ def require_gold(trace: Any, claim: str) -> None:
 
     Raises
     ------
-    torchlens._errors.CaptureContextError
+    torchlens._errors.CaptureNotActiveError
         Code ``nongold_semantics_unavailable``: the capture's values are
         synthesized, so the claim would be a statement about random numbers
         presented as a statement about data.
@@ -81,7 +81,7 @@ def require_gold(trace: Any, claim: str) -> None:
         return
     provenance = trace_input_provenance(trace)
     origin = provenance.origin if provenance is not None else "unknown"
-    raise CaptureContextError(
+    raise CaptureNotActiveError(
         f"{claim} requires real input values, but this trace's input values "
         f"were synthesized (origin: {origin}). Structure, shapes, parameter "
         f"facts, and costs are all still legitimate reads.",

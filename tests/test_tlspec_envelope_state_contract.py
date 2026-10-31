@@ -39,7 +39,7 @@ import torchlens as tl
 from torchlens._io import (
     MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
-    TorchLensIOError,
+    ArtifactError,
     UnknownPersistedFieldError,
 )
 from torchlens._io.state_contract import governed_artifact_load
@@ -172,7 +172,7 @@ def test_old_writers_direction_on_harvested_bytes(corpus_dir: Path, tmp_path: Pa
 
     import warnings
 
-    from torchlens._io import ArtifactVersionBelowFloorError
+    from torchlens._io import ArtifactTooOldError
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -199,7 +199,7 @@ def test_old_writers_direction_on_harvested_bytes(corpus_dir: Path, tmp_path: Pa
         # through the same typed family (erratum FORK F2 owns the remedy
         # text; this pins that it cannot crash untyped or load wrong).
         assert MIN_TLSPEC_VERSION == 6
-        with pytest.raises(TorchLensIOError):
+        with pytest.raises(ArtifactError):
             tl.load(corpus_dir / "art_v2.16.0_portable")
         # An integer stamp below the floor refuses with the floor-specific type.
         below_floor = tmp_path / "art_below_floor.tlspec"
@@ -208,7 +208,7 @@ def test_old_writers_direction_on_harvested_bytes(corpus_dir: Path, tmp_path: Pa
         manifest = json.loads(manifest_path.read_text())
         manifest["tlspec_version"] = MIN_TLSPEC_VERSION - 1
         manifest_path.write_text(json.dumps(manifest))
-        with pytest.raises(ArtifactVersionBelowFloorError):
+        with pytest.raises(ArtifactTooOldError):
             tl.load(below_floor)
 
 

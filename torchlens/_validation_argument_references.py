@@ -289,7 +289,7 @@ def _record_fallback(trace: Any, reason: str) -> None:
     record_validation_diagnostic(
         trace,
         ValidationDiagnostic(
-            check=FALLBACK_CHECK,
+            check_name=FALLBACK_CHECK,
             message=(
                 "TorchLens validation reran with every argument copied because a "
                 f"parameter changed during the forward: {reason}. The verdict "

@@ -39,13 +39,13 @@ def test_posthoc_report_names_origin_free() -> None:
 
     log = tl.trace(DivideByZero(), torch.randn(2, 8))
     report = nonfinite_origin(log)
-    assert report.found
+    assert report.has_nonfinite
     assert report.kind in ("nan", "inf", "nan+inf")
     assert report.origin_label and "div" in report.origin_label
     assert report.source_line and ":" in report.source_line
     assert report.cost_tier.startswith("free")
     assert report.coverage_basis != "unavailable"
-    assert report.checked > 0
+    assert report.num_checked_ops > 0
     # Defer-by-name INSIDE the output: the authority recipe is verbatim.
     text = report.summary()
     assert "set_detect_anomaly" in text
@@ -58,7 +58,7 @@ def test_clean_report_is_scoped_to_checked_values() -> None:
 
     log = tl.trace(nn.Sequential(nn.Linear(8, 8), nn.ReLU()), torch.randn(2, 8))
     report = nonfinite_origin(log)
-    assert not report.found
+    assert not report.has_nonfinite
     assert report.scope_note
     text = report.summary()
     assert "CHECKED" in text or "checked" in text
@@ -70,7 +70,7 @@ def test_live_tripwire_form() -> None:
     """The live form runs ONE memory-light tripwire forward and discloses it."""
 
     report = nonfinite_origin(DivideByZero(), torch.randn(2, 8))
-    assert report.found
+    assert report.has_nonfinite
     assert report.cost_tier.startswith("diagnostic")
     assert report.coverage_basis == "live_tripwire_first_bad_output"
 

@@ -170,7 +170,7 @@ census result.
 The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
 it does not correlate by clock time. A captured Python call may own several ordered aten operations,
 recorded in `trace.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper whose
-`func_call_id` emits no logged op, produce a `TorchLensCaptureGapWarning`, set
+`func_call_id` emits no logged op, produce a `CaptureGapWarning`, set
 `trace.completeness_witness_verified=False`, and append structured rows to
 `trace.completeness_diagnostics`. Work under `pause_logging()` is outside the census. The documented
 torch.func/functorch transform boundary runs its interior under that paused scope, and fused or opaque
@@ -388,7 +388,7 @@ status = tl.report.backward_status(trace)
 # it needs a gradient, so no input-gradient matmul is dispatched.
 assert status.executed_flops == 2 * 2 * 32 * 4
 print(status.status_line)
-print(status.uncounted_ops)  # the bias-gradient sums and other calls, named, not zeroed
+print(status.uncounted_op_counts)  # the bias-gradient sums and other calls, named, not zeroed
 
 from torch.nn.attention import SDPBackend, sdpa_kernel
 

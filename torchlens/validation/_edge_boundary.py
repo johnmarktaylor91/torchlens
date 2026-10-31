@@ -75,7 +75,7 @@ def _fail_uncorroborated_edge_entries(
             record_validation_failure(
                 trace,
                 ValidationFailure(
-                    check=CHECK_REPLAY,
+                    check_name=CHECK_REPLAY,
                     op_label=target_op.label,
                     func_name=getattr(target_op, "func_name", None),
                     message=(
@@ -100,7 +100,7 @@ def _fail_uncorroborated_edge_entries(
             record_validation_failure(
                 trace,
                 ValidationFailure(
-                    check=CHECK_REPLAY,
+                    check_name=CHECK_REPLAY,
                     op_label=target_op.label,
                     func_name=getattr(target_op, "func_name", None),
                     message=(
@@ -159,7 +159,7 @@ def _splice_edge_substitution_args(
             record_validation_failure(
                 trace,
                 ValidationFailure(
-                    check=CHECK_REPLAY,
+                    check_name=CHECK_REPLAY,
                     op_label=target_op.label,
                     func_name=getattr(target_op, "func_name", None),
                     message=(
@@ -176,7 +176,7 @@ def _splice_edge_substitution_args(
             record_validation_failure(
                 trace,
                 ValidationFailure(
-                    check=CHECK_REPLAY,
+                    check_name=CHECK_REPLAY,
                     op_label=target_op.label,
                     func_name=getattr(target_op, "func_name", None),
                     message=f"edge-substitution payload at {store_key!r} is not a tensor",
@@ -230,7 +230,7 @@ def _reexecute_edge_boundary(
         record_validation_failure(
             trace,
             ValidationFailure(
-                check=CHECK_REPLAY,
+                check_name=CHECK_REPLAY,
                 op_label=target_op.label,
                 func_name=getattr(target_op, "func_name", None),
                 message=(

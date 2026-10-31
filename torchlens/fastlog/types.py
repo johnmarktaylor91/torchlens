@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 import torch
 
-from .._errors import CaptureContextError, InvalidArgumentError
+from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._ir.predicate import EventKind, ModuleStackFrame, RecordContext, RetroactiveCaptureDecision
 from .._utils.tensor_utils import SaveMode
 from ..captured_run import TraceLike
@@ -1050,7 +1050,7 @@ class Recording(TraceLike):
             Keep only the last ``last`` rows.
         select:
             Optional filter: a substring, or a callable over
-            :class:`torchlens._snoop.NarrationEvent` rows.
+            :class:`torchlens.types.NarrationEvent` rows.
 
         Returns
         -------
@@ -1058,7 +1058,7 @@ class Recording(TraceLike):
             Rendered narration block (no trailing newline).
         """
 
-        from .._snoop import narrate_recording
+        from torchlens._snoop._narrate import narrate_recording
 
         return narrate_recording(self, last=last, select=select)
 
@@ -1128,7 +1128,7 @@ class Recording(TraceLike):
         """
 
         if self.is_failed:
-            raise CaptureContextError(
+            raise CaptureNotActiveError(
                 "Recording.to_trace() cannot materialize a failed partial Recording because "
                 "the topology is incomplete; user-op failures exclude the failing call; "
                 "TL-side capture failures may include a skipped/partial current-call event",
@@ -1136,14 +1136,14 @@ class Recording(TraceLike):
                 remedy="fix the failing forward and re-record before converting",
             )
         if not self._captured_run_cores:
-            raise CaptureContextError(
+            raise CaptureNotActiveError(
                 "Recording.to_trace() requires retained capture events; disk-recovered "
                 "recordings do not contain enough topology metadata",
                 code="recording_events_not_retained",
                 remedy="convert the in-session Recording rather than a disk-recovered one",
             )
         if self.num_passes > 1:
-            raise CaptureContextError(
+            raise CaptureNotActiveError(
                 "Recording.to_trace() does not support multi-pass Recordings because "
                 "replaying multiple Recorder(...) passes into one Trace is not yet "
                 "structurally defined",
@@ -1298,7 +1298,7 @@ class Recording(TraceLike):
             if payload is not None:
                 return event.label_raw, payload
 
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             "Recording.to_trace() cannot materialize a halted Recording that retained no "
             "raw activation payload: there is no tensor frontier to bind the halted graph's "
             "output node to",

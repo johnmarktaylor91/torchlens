@@ -180,7 +180,7 @@ class PartialTrace:
             Keep only the last ``last`` rows.
         select:
             Optional filter: a substring, or a callable over
-            :class:`torchlens._snoop.NarrationEvent` rows.
+            :class:`torchlens.types.NarrationEvent` rows.
 
         Returns
         -------
@@ -188,7 +188,7 @@ class PartialTrace:
             Rendered narration block (no trailing newline).
         """
 
-        from .._snoop import narrate_partial
+        from torchlens._snoop._narrate import narrate_partial
 
         return narrate_partial(self, last=last, select=select)
 

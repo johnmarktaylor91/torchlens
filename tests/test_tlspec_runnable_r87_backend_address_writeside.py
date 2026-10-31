@@ -235,7 +235,7 @@ def test_read_write_buffer_model_still_verifies(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     with torch.no_grad():
         oracle = _InPlaceBuffer()(x.clone())
     assert (result.output - oracle).abs().max().item() < 1e-6

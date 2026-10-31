@@ -20,8 +20,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._observability import join_events, register_join_result
+from torchlens._observability import join_events
 from torchlens._observability._kineto import NormalizedEvent
+from torchlens._observability._native_profile import register_join_result
 from torchlens.errors import TorchLensError
 
 

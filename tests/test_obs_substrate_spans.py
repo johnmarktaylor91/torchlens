@@ -15,8 +15,6 @@ import torch
 
 import torchlens
 from torchlens._observability import (
-    ProfilerSessionError,
-    SpanError,
     SpanRegistry,
     region,
     session,
@@ -24,6 +22,7 @@ from torchlens._observability import (
 from torchlens._observability._session import active_session
 from torchlens._observability._spans import MAX_LABEL_LENGTH, escape_label
 from torchlens._registry.kernel import kernel_universe_rows
+from torchlens.errors import ProfilerSessionError, SpanError
 
 _PACKAGE_ROOT = Path(torchlens.__file__).resolve().parent
 

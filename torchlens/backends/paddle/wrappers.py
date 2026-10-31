@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from types import ModuleType
 from typing import Any
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from ... import _state
-from ...backends import BackendUnsupportedError
 
 _ACTIVE_TAP_OBSERVER: object | None = None
 

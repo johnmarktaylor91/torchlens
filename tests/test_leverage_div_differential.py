@@ -1,7 +1,7 @@
 """B4 + B15: join-guarded differential consumers and the diff projection matrix.
 
 ``changed()`` / ``top_changed()`` pair cross-trace occurrences through the
-shipped guarded join (labels leave the join key), and ``diff_report`` settles
+shipped guarded join (labels leave the join key), and ``diff`` settles
 the union of both captures into the closed added / removed / unresolved /
 excluded_machinery / unreachable / zero / changed vocabulary. Join refusals
 are the PRIMARY assertions (gate law).
@@ -18,9 +18,9 @@ from test_leverage_div_fixtures import (
 )
 
 import torchlens as tl
-from torchlens._selection import SelectionError
-from torchlens.differential import diff_report
+from torchlens.errors import SelectionError
 from torchlens.errors._base import TorchLensError
+from torchlens.report import diff
 
 _SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
 
@@ -123,7 +123,7 @@ def test_top_changed_completes_across_live_edit():
 
 
 # ---------------------------------------------------------------------------
-# diff_report: the guarded delta projection (B15 matrix).
+# diff: the guarded delta projection (B15 matrix).
 # ---------------------------------------------------------------------------
 
 
@@ -133,7 +133,7 @@ def test_diff_report_insertion_matrix():
     baseline_model, variant_model, x = make_insertion_pair()
     baseline = tl.trace(baseline_model, x, **_SAVE_ALL)
     variant = tl.trace(variant_model, x, **_SAVE_ALL)
-    report = diff_report(variant, baseline)
+    report = diff(variant, baseline)
     unresolved = report.rows_with_status("unresolved")
     assert unresolved and all("|relu|" in row.site_key for row in unresolved)
     assert all(row.verdict == "refused_cardinality" for row in unresolved)
@@ -151,11 +151,11 @@ def test_diff_report_added_and_removed_are_declared():
     x = torch.rand(1, 2, 3, 3)
     lean = tl.trace(without_tail, x, **_SAVE_ALL)
     full = tl.trace(with_tail, x, **_SAVE_ALL)
-    report = diff_report(full, lean)
+    report = diff(full, lean)
     added = report.rows_with_status("added")
     assert [row.site_key for row in added] == ["s1|tail|conv2d||1"]
     assert added[0].reference_label is None  # one-sided rows carry one side only
-    reverse = diff_report(lean, full)
+    reverse = diff(lean, full)
     removed = reverse.rows_with_status("removed")
     assert [row.site_key for row in removed] == ["s1|tail|conv2d||1"]
     assert removed[0].subject_label is None
@@ -167,7 +167,7 @@ def test_diff_report_unreachable_distinct_from_zero():
     model, x = _plain_pair()
     subject = tl.trace(model, x, **_SAVE_ALL)
     reference = tl.trace(model, x, save=tl.func("conv2d"))
-    report = diff_report(subject, reference)
+    report = diff(subject, reference)
     unreachable = report.rows_with_status("unreachable")
     assert unreachable and all("payload not retained on reference" in r.detail for r in unreachable)
     assert {row.site_key for row in report.rows_with_status("zero")}.isdisjoint(
@@ -182,7 +182,7 @@ def test_diff_report_zero_vs_changed_distinct():
     handle = model.conv2.register_forward_hook(lambda module, args, out: replacement)
     edited = tl.trace(model, x, **_SAVE_ALL)
     handle.remove()
-    report = diff_report(edited, baseline)
+    report = diff(edited, baseline)
     machinery = report.rows_with_status("excluded_machinery")
     assert len(machinery) == 1  # exactly one declared machinery addition
     changed_rows = report.rows_with_status("changed")
@@ -194,7 +194,7 @@ def test_diff_report_self_comparison_refuses():
     model, x = _plain_pair()
     trace = tl.trace(model, x, **_SAVE_ALL)
     with pytest.raises(TorchLensError) as excinfo:
-        diff_report(trace, trace)
+        diff(trace, trace)
     assert excinfo.value.fields["code"] == "differential_subject_is_reference"
 
 
@@ -202,7 +202,7 @@ def test_diff_report_status_vocabulary_closed():
     model, x = _plain_pair()
     subject = tl.trace(model, x, **_SAVE_ALL)
     reference = tl.trace(model, x, **_SAVE_ALL)
-    report = diff_report(subject, reference)
+    report = diff(subject, reference)
     with pytest.raises(TorchLensError) as excinfo:
         report.rows_with_status("modified")
     assert excinfo.value.fields["code"] == "differential_status_invalid"

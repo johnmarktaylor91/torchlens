@@ -22,7 +22,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._runnable_state import snapshot_capture_state
 from torchlens._utils.lazy_state import has_uninitialized_lazy_state, pending_lazy_state
-from torchlens.errors import CaptureContextError
+from torchlens.errors import CaptureNotActiveError
 
 
 def _lazy_mlp() -> nn.Sequential:
@@ -118,7 +118,7 @@ def test_armed_lane_state_baseline_refuses_typed() -> None:
     """snapshot_capture_state refuses pending slots before any mutation."""
 
     model = _lazy_mlp()
-    with pytest.raises(CaptureContextError) as excinfo:
+    with pytest.raises(CaptureNotActiveError) as excinfo:
         snapshot_capture_state(model)
     err = excinfo.value
     assert err.fields["code"] == "state_baseline_unavailable"
@@ -178,7 +178,7 @@ def test_materialized_lazy_param_trace_round_trips_through_save_load(tmp_path) -
     15 re-reads the materialized geometry) is plain instance state with no
     declared portable policy; before it got one, ``Trace.save`` on ANY trace of
     a model holding a lazy module (``nn.LazyLinear`` et al.) raised
-    ``TorchLensIOError: Param._lazy_at_prep is missing from
+    ``ArtifactError: Param._lazy_at_prep is missing from
     _PORTABLE_STATE_SPEC`` -- exactly the shape of model nightly.yml's
     platform-canary step traces with a predicate ``save=``.
     """

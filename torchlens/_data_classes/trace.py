@@ -49,10 +49,11 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
+    from torchlens._runnable import ReadinessReport
+
     from .._io.streaming import BundleStreamWriter
     from .._runnable import (
         ArchivedActivation,
-        ReadinessReport,
         SparseRunDescriptor,
     )
     from ..debug._audit import HealthReport
@@ -1634,7 +1635,7 @@ class Trace(
         # validation ENTRY unconditionally sets `_last_validation_failure`
         # (`reset_validation_failure` writes None on every run), so a plain
         # validate-then-save sequence hit
-        # `TorchLensIOError: Trace._last_validation_failure is missing from
+        # `ArtifactError: Trace._last_validation_failure is missing from
         # _PORTABLE_STATE_SPEC` -- a hard refusal on a completely ordinary
         # workflow. Both attrs are session-time diagnostics carried on the
         # trace as a side channel, exactly the `_fast_run_session` class, and
@@ -3516,18 +3517,18 @@ class Trace(
             validate_loaded_episode_annotations(self)
         _state.register_log(self)
 
-    def replace_state_from(self, new_log: "Trace") -> None:
+    def replace_state_from(self, trace: "Trace") -> None:
         """Atomically replace this log's run-state from another ``Trace``.
 
         This method is intended for intervention rerun. The rerun engine builds
-        ``new_log`` off to the side and calls this only after validation ops.
+        ``trace`` off to the side and calls this only after validation ops.
         The final state replacement uses one state-restore pass over the new fields
         to minimize torn-state windows. Concurrent reads during rerun are
         unsupported; no lock is taken.
 
         Parameters
         ----------
-        new_log:
+        trace:
             Fully postprocessed fresh log whose graph, layer containers,
             accessors, output metadata, shape/hash fields, and per-pass entries
             should replace this log's current run-state.
@@ -3581,10 +3582,10 @@ class Trace(
         # ``annotate(data=...)`` blobs (bare ``layer:``/``op:`` keys) are the
         # user's own attachments and survive like the user annotations above.
         preserved_state["_annotation_blobs"] = self._user_annotation_blobs()
-        replacement_state = dict(state_items(new_log))
+        replacement_state = dict(state_items(trace))
         replacement_state.update(preserved_state)
         replacement_state["annotations"] = self._merge_user_annotations(
-            self._copy_rerun_value(getattr(new_log, "annotations", {})),
+            self._copy_rerun_value(getattr(trace, "annotations", {})),
             preserved_trace_user_annotations,
         )
         state_restore(self, replacement_state)
@@ -3856,17 +3857,17 @@ class Trace(
             return type(value)(**{n: self._copy_rerun_value(getattr(value, n)) for n in names})
         return fail_open(lambda: copy.deepcopy(value), lambda _error: value)
 
-    def _append_state_from(self, new_log: "Trace") -> None:
-        """Merge compatible chunk outs from ``new_log`` into this log.
+    def _append_state_from(self, trace: "Trace") -> None:
+        """Merge compatible chunk outs from ``trace`` into this log.
 
         Parameters
         ----------
-        new_log:
+        trace:
             Freshly captured append chunk whose topology and tensor metadata
             have already been validated against this log.
         """
 
-        new_by_raw = {layer._layer_label_raw: layer for layer in new_log.layer_list}
+        new_by_raw = {layer._layer_label_raw: layer for layer in trace.layer_list}
         old_by_label = {
             key: layer
             for layer in self.layer_list
@@ -3882,10 +3883,10 @@ class Trace(
                 layer._append_tensor_from(new_layer, "transformed_out")
             self._copy_append_last_chunk_fields(layer, new_layer)
             self._refresh_appended_tensor_metadata(layer)
-        self.has_gradients = self.has_gradients or new_log.has_gradients
-        self.random_seed = new_log.random_seed
-        self.input_object_id = new_log.input_object_id
-        self.input_signature_hash = new_log.input_signature_hash
+        self.has_gradients = self.has_gradients or trace.has_gradients
+        self.random_seed = trace.random_seed
+        self.input_object_id = trace.input_object_id
+        self.input_signature_hash = trace.input_signature_hash
         self._rebind_fork_owner_refs()
 
     def _is_append_buffer_side_effect_layer(

@@ -24,7 +24,7 @@ import torchlens as tl
 from torchlens._data_classes._trace_accessors import _TRACE_OP_ACCESSOR_ATTR, TraceOpAccessor
 from torchlens._data_classes.op import Op
 from torchlens._errors import AmbiguousOpLookupError
-from torchlens.validation import MetadataInvariantError
+from torchlens.errors import MetadataInvariantError
 from torchlens.validation.invariants import _check_op_label_resolution
 
 

@@ -133,7 +133,7 @@ partial | joined`).
 
 ## The Kineto join (F27, on this substrate)
 
-`torchlens._observability.native_profile(model, x)` runs ONE save-nothing
+`torchlens.report.kernel_profile(model, x)` runs ONE save-nothing
 capture under the owned session and joins device events to captured ops by
 runtime correlation IDs only (names are display metadata): in-memory
 `_KinetoEvent` extraction behind the feature-detected `_torch_compat`

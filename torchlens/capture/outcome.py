@@ -173,7 +173,7 @@ class StopSignalSwallowedError(CaptureError, RuntimeError):
     forward returned normally: a user ``except``/``except BaseException`` ate
     the control signal, so the capture can never be blessed COMPLETE.
     ``RuntimeError`` lineage (R64-4): it reports an invalid runtime state at
-    the capture boundary, like its ``CaptureContextError`` sibling; it was one
+    the capture boundary, like its ``CaptureNotActiveError`` sibling; it was one
     of only two concrete publicly-raised classes with no builtin lineage.
     """
 

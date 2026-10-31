@@ -18,8 +18,9 @@ from typing import Any
 import torch
 import torch.nn as nn
 
+from torchlens.report import ValidationFailure
 from torchlens.user_funcs import _run_model_and_save_specified_outs
-from torchlens.validation import ValidationFailure, get_validation_failure
+from torchlens.validation import get_validation_failure
 from torchlens.validation.core import validate_saved_outs
 from torchlens.validation.diagnostics import (
     CHECK_GROUND_TRUTH,
@@ -87,7 +88,7 @@ def test_describe_tensor_mismatch_computes_metrics() -> None:
         saved, recomputed, check=CHECK_REPLAY, op_label="op_1", func_name="linear"
     )
 
-    assert failure.check == CHECK_REPLAY
+    assert failure.check_name == CHECK_REPLAY
     assert failure.op_label == "op_1"
     assert failure.func_name == "linear"
     assert failure.saved_shape == (3, 4)
@@ -145,18 +146,18 @@ def test_record_validation_failure_is_first_write_wins() -> None:
 
     trace = type("T", (), {})()
     reset_validation_failure(trace)
-    record_validation_failure(trace, ValidationFailure(check="first"))
-    record_validation_failure(trace, ValidationFailure(check="second"))
+    record_validation_failure(trace, ValidationFailure(check_name="first"))
+    record_validation_failure(trace, ValidationFailure(check_name="second"))
     failure = get_validation_failure(trace)
     assert failure is not None
-    assert failure.check == "first"
+    assert failure.check_name == "first"
 
 
 def test_to_dict_roundtrips_fields() -> None:
     """``to_dict`` exposes every field for ledger/JSON serialization."""
 
     failure = ValidationFailure(
-        check=CHECK_REPLAY,
+        check_name=CHECK_REPLAY,
         op_label="conv2d_3_4",
         func_name="conv2d",
         max_abs_diff=0.1,
@@ -183,7 +184,7 @@ def test_clean_validation_passes_and_records_no_failure() -> None:
     trace = _capture_full_trace(model, x)
     try:
         result = validate_saved_outs(trace, [gt], validate_metadata=True)
-        # validate_saved_outs returns a ValidationReplayStatus (da60a76e); a
+        # validate_saved_outs returns a ValidationStatus (da60a76e); a
         # clean capture must be an explicit "passed", not merely truthy.
         assert result.state == "passed"
         assert get_validation_failure(trace) is None
@@ -228,7 +229,7 @@ def test_regression_replay_diagnostic_carries_real_mismatch() -> None:
         # (2) the failure carries the real mismatch, not repr(False).
         failure = get_validation_failure(trace)
         assert failure is not None
-        assert failure.check == CHECK_REPLAY
+        assert failure.check_name == CHECK_REPLAY
         assert failure.op_label is not None and patched_label.split(":")[0] in failure.op_label
         assert failure.func_name == "__mul__"
         assert failure.saved_shape == (2, 8)
@@ -258,7 +259,7 @@ def test_regression_ground_truth_diagnostic_carries_real_mismatch() -> None:
         assert result.state == "failed"
         failure = get_validation_failure(trace)
         assert failure is not None
-        assert failure.check == CHECK_GROUND_TRUTH
+        assert failure.check_name == CHECK_GROUND_TRUTH
         assert failure.saved_shape == (2, 4)
         assert failure.recomputed_shape == (2, 4)
         assert failure.max_abs_diff is not None

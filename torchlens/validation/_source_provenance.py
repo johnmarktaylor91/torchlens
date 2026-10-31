@@ -114,7 +114,7 @@ def check_source_provenance(
     record_validation_failure(
         trace,
         ValidationFailure(
-            check=CHECK_SOURCE_PROVENANCE,
+            check_name=CHECK_SOURCE_PROVENANCE,
             op_label=op_label,
             func_name=func_name,
             message=message,

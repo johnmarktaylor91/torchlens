@@ -20,7 +20,7 @@ from typing import Any, Literal
 
 from .._errors import InvalidArgumentError
 from ..errors import TorchLensWarning
-from . import TorchLensIOError
+from . import ArtifactError
 
 #: Writer-owned bare ``bundle.json`` section keys. ``_tlspec_prerelease`` is
 #: the historical switched-era marker validated (and refused when stale) by
@@ -66,7 +66,7 @@ def _partition_bundle_sections(metadata: dict[str, Any]) -> dict[str, Any]:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         ``bundle_section_unknown`` for a bare unknown top-level key.
     """
 
@@ -80,7 +80,7 @@ def _partition_bundle_sections(metadata: dict[str, Any]) -> dict[str, Any]:
         else:
             bare_unknown.append(str(key))
     if bare_unknown:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"bundle.json carries unknown bare top-level sections {sorted(bare_unknown)}. "
             "Writer-owned sections are bare; extension sections are namespaced "
             "('<ns>.<name>'), which load opaque and re-save verbatim. A bare "

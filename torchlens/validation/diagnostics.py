@@ -71,13 +71,13 @@ CHECK_RETRACE_MISMATCH = "retrace_mismatch"
 class ValidationFailure:
     """A structured description of the first surfaced validation mismatch.
 
-    Every field is optional so partial information is still useful. ``check`` is
+    Every field is optional so partial information is still useful. ``check_name`` is
     always populated and names which validation phase fired. The tensor-shaped
     fields (``saved_shape`` etc.) are filled in only for the numeric replay /
     ground-truth paths where a saved-vs-expected tensor pair exists.
     """
 
-    check: str
+    check_name: str
     op_label: str | None = None
     func_name: str | None = None
     message: str = ""
@@ -103,7 +103,7 @@ class ValidationFailure:
             saved=(1,64,7,7) f32 vs recomputed=(1,64,7,7) f32"``.
         """
 
-        parts: list[str] = [f"{self.check} mismatch"]
+        parts: list[str] = [f"{self.check_name} mismatch"]
         if self.op_label is not None:
             loc = self.op_label
             if self.func_name:
@@ -143,7 +143,7 @@ class ValidationFailure:
         """Return a plain-dict view suitable for JSON/ledger serialization."""
 
         return {
-            "check": self.check,
+            "check": self.check_name,
             "op_label": self.op_label,
             "func_name": self.func_name,
             "message": self.message,
@@ -168,7 +168,7 @@ class ValidationDiagnostic:
 
     Parameters
     ----------
-    check:
+    check_name:
         Stable name for the validation diagnostic source.
     message:
         Human-readable explanation of the diagnostic.
@@ -176,7 +176,7 @@ class ValidationDiagnostic:
         Additional JSON-friendly context for downstream reporting.
     """
 
-    check: str
+    check_name: str
     message: str
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -189,7 +189,7 @@ class ValidationDiagnostic:
             Stable structured diagnostic payload.
         """
 
-        return {"check": self.check, "message": self.message, "extra": dict(self.extra)}
+        return {"check": self.check_name, "message": self.message, "extra": dict(self.extra)}
 
 
 #: Mirror of the CURRENT run's first failure. The internal validation trace
@@ -428,7 +428,7 @@ def describe_tensor_mismatch(
     """
 
     failure = ValidationFailure(
-        check=check,
+        check_name=check,
         op_label=op_label,
         func_name=func_name,
         message=message,

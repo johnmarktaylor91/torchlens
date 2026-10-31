@@ -77,7 +77,7 @@ def _graph_nodes(root: torch.Tensor) -> dict[int, Any]:
 
 def _single_pass(trace: Any) -> Any:
     status = backward_status(trace)
-    (attribution,) = status.attributions
+    (attribution,) = status.flops_attributions
     rows = sum(row.flops for row in attribution.rows)
     assert rows + attribution.unattributed_flops == attribution.executed_flops
     return attribution
@@ -259,7 +259,7 @@ def test_three_readers_charge_each_capture_its_own_marker() -> None:
         assert unpacked
         assert {(call, pass_) for _, call, pass_ in unpacked} == {(2, 2)}
         assert unpacked <= _census_refs(trace1, 2, own_ops_only=False)
-        assert backward_status(trace1).attributions[1].unattributed_flops == 0
+        assert backward_status(trace1).flops_attributions[1].unattributed_flops == 0
     finally:
         trace1.cleanup()
         trace2.cleanup()

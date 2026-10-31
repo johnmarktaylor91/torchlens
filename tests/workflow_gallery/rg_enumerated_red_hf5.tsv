@@ -8,6 +8,6 @@
 # clean under 5.18.0 -- same 3 rows, same failure signatures, same
 # exact-passed-ID floor, zero new or stale reds).
 row_id	scenario	failure_signature	owner	issue
-RED-RG05-RESID	RG05 numeric residual-stream single-hook parity arm	SiteAmbiguityError: bare label 'add_*' ambiguous (2-pass residual adds on the 5.x graph shape) inside activation_patch_residual_stream	A03	helper must stage pass-qualified residual sites on 5.x captures; the gallery pin test_rg05_* holds the typed settlement meanwhile
+RED-RG05-RESID	RG05 numeric residual-stream single-hook parity arm	AmbiguousSiteError: bare label 'add_*' ambiguous (2-pass residual adds on the 5.x graph shape) inside activation_patch_residual_stream	A03	helper must stage pass-qualified residual sites on 5.x captures; the gallery pin test_rg05_* holds the typed settlement meanwhile
 RED-RG05-MLP	RG05 numeric mlp/attention-output parity arms	PatchApplicationError: every fire refused replaced=False (facet lands on in-place dropout op)	A03	scatter hook must target the pre-dropout site or copy-safe storage
 RED-RG06-GRADFACET	RG06 numeric attribution parity arm	bare RuntimeError: facet 'result' not grad-capable under fused attention (teaching prose, untyped)	A03	type the refusal + wire the backward_ready recapture path; gallery pin test_rg06_* holds settlement

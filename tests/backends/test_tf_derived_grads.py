@@ -9,13 +9,13 @@ import pytest
 from conftest import tensorflow_backend_modules
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
 from torchlens.backends.tf import GradOptions
 from torchlens.backends.tf.backend import TFBackend
 from torchlens.backends.tf.derived_grads import (
     TFIntermediateSignature,
     _tf_trace_intermediate_signatures,
 )
+from torchlens.errors import BackendUnsupportedError
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 

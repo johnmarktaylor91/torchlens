@@ -13,13 +13,11 @@ from torch import nn
 
 from torchlens._observability import (
     EventStream,
-    HistoryArtifactError,
     HistoryCollector,
     StepTruth,
-    WatchLifecycleError,
-    WatchPlanError,
     WatchSettings,
 )
+from torchlens.errors import HistoryArtifactError, WatchLifecycleError, WatchPlanError
 
 
 def _bn_relu_model() -> nn.Sequential:

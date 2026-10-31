@@ -150,7 +150,7 @@ class TestBoundaryTruth:
                 scaler.scale(model(torch.randn(4, 8)).sum()).backward()
                 opt.step()
         report = session.close()
-        assert report.final_sample_forced
+        assert report.is_final_sample_forced
         forced = next(
             p.value for p in sink.scalars if p.tag == "gradients/norm/0.weight" and p.step == 1
         )

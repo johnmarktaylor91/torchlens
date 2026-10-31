@@ -10,7 +10,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import CaptureSpec, GradRecordContext, InvalidStorageError
+from torchlens.errors import InvalidStorageError
+from torchlens.fastlog import CaptureSpec, GradRecordContext
 
 
 class TinyRelu(nn.Module):

@@ -40,12 +40,12 @@ from .format_contract import (
     read_tlspec_version,
 )
 from .format_errors import (
+    ArtifactError,
     ArtifactRuntimeIncompatibleError,
     ArtifactSchemaAgeWarning,
-    ArtifactVersionAboveRuntimeError,
-    ArtifactVersionBelowFloorError,
+    ArtifactTooNewError,
+    ArtifactTooOldError,
     PreReleaseArtifactError,
-    TorchLensIOError,
     UnknownPersistedFieldError,
 )
 from .prerelease import validate_prerelease_state
@@ -62,14 +62,14 @@ __all__ = [
     "TLSPEC_VERSION",
     "ArtifactRuntimeIncompatibleError",
     "ArtifactSchemaAgeWarning",
-    "ArtifactVersionAboveRuntimeError",
-    "ArtifactVersionBelowFloorError",
+    "ArtifactTooNewError",
+    "ArtifactTooOldError",
     "BlobRef",
     "FieldPolicy",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "PreReleaseArtifactError",
-    "TorchLensIOError",
+    "ArtifactError",
     "UnknownPersistedFieldError",
     "above_ceiling_error",
     "below_floor_error",

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._errors import EchoConfigError
+from ._errors import NarrationConfigError
 from ._normalize import normalize_echo, refuse_echo_shaped_predicate
 from ._session import EchoSession
 
@@ -56,7 +56,7 @@ def resolve_echo_capture_options(
     if echo_options is None:
         return None
     if bool(getattr(capture_options, "cache", False)):
-        raise EchoConfigError(
+        raise NarrationConfigError(
             "echo= cannot combine with cache=True: a cache hit replays a stored "
             "product and runs NO forward, so there is nothing live to narrate. "
             "Remedy: drop cache=True, or narrate the cached trace post-hoc via "
@@ -65,7 +65,7 @@ def resolve_echo_capture_options(
             remedy="drop cache=True, or use trace.narrate() post-hoc",
         )
     if chunked:
-        raise EchoConfigError(
+        raise NarrationConfigError(
             "echo= cannot combine with chunked forwards (chunk_size=): the chunk "
             "fan-out runs several forwards into one Trace and per-chunk narration "
             "interleaves. Remedy: trace chunks individually with echo=, or narrate "
@@ -74,7 +74,7 @@ def resolve_echo_capture_options(
             remedy="trace chunks individually, or use trace.narrate() post-hoc",
         )
     if bool(getattr(capture_options, "structure_only", False)) and echo_options.stats != "off":
-        raise EchoConfigError(
+        raise NarrationConfigError(
             "echo stats rungs read tensor values, and structure_only=True captures "
             "no values (every value-bearing claim is a hypothesis). Remedy: use "
             "stats='off' metadata narration, or drop structure_only.",
@@ -104,7 +104,7 @@ def refuse_echo_non_torch(echo: Any, resolved_spec: Any) -> None:
     spec_name = str(resolved_spec.name)
     if spec_name == "torch":
         return
-    raise EchoConfigError(
+    raise NarrationConfigError(
         f"echo= live narration is torch-only in this release; backend "
         f"{spec_name!r} has no narration seams. Remedy: capture on "
         "the torch backend, or narrate post-hoc via trace.narrate().",

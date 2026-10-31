@@ -625,9 +625,9 @@ class ReceptiveFieldValidation:
         "op_label",
         "unit",
         "geometric",
-        "gradient",
+        "grad",
         "violations",
-        "n_violations",
+        "num_violations",
         "per_axis_excess",
         "slack_per_axis",
         "cross_batch",
@@ -639,9 +639,9 @@ class ReceptiveFieldValidation:
     op_label: str
     unit: tuple[int, ...]
     geometric: Mapping[str, ReceptiveFieldBox]
-    gradient: Mapping[str, GradReceptiveField]
+    grad: Mapping[str, GradReceptiveField]
     violations: tuple[ReceptiveFieldViolation, ...]
-    n_violations: int
+    num_violations: int
     per_axis_excess: tuple[int, ...] | None
     slack_per_axis: tuple[int, ...] | None
     cross_batch: Literal["none", "geometric", "undeclared"]
@@ -661,9 +661,9 @@ class ReceptiveFieldValidation:
             If counts or diagnostics are structurally invalid.
         """
 
-        if self.n_violations < len(self.violations):
+        if self.num_violations < len(self.violations):
             raise ValueError("n_violations must be at least the listed violation count.")
-        if self.n_violations < 0:
+        if self.num_violations < 0:
             raise ValueError("n_violations must be non-negative.")
 
     @property

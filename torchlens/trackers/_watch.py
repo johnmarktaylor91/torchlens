@@ -161,14 +161,14 @@ class CloseReport:
     sampled_steps: tuple[int, ...]
     first_step: int | None
     last_step: int | None
-    final_sample_forced: bool
+    is_final_sample_forced: bool
     computed_scalars: int
     computed_histograms: int
     dropped_blocks: int
     sink_rows: tuple[dict[str, Any], ...]
     missing_phases: tuple[str, ...]
     named_skips: tuple[str, ...]
-    disabled: bool = False
+    is_disabled: bool = False
 
     def format(self) -> str:
         """Render the report as plain ASCII lines."""
@@ -177,7 +177,7 @@ class CloseReport:
             f"signals={','.join(self.requested_signals)} sites={self.matched_sites}",
             f"steps sampled={len(self.sampled_steps)} "
             f"first={self.first_step} last={self.last_step} "
-            f"final_sample_forced={self.final_sample_forced}",
+            f"final_sample_forced={self.is_final_sample_forced}",
             f"computed scalars={self.computed_scalars} "
             f"histograms={self.computed_histograms} dropped_blocks={self.dropped_blocks}",
         ]
@@ -191,7 +191,7 @@ class CloseReport:
             lines.append("missing phases: " + ", ".join(self.missing_phases))
         for skip in self.named_skips:
             lines.append(f"skip: {skip}")
-        if self.disabled:
+        if self.is_disabled:
             lines.append(f"DISABLED by {WATCH_DISABLE_ENV}")
         return "\n".join(lines)
 
@@ -969,7 +969,7 @@ class WatchSession:
             sampled_steps=tuple(self._sampled_steps),
             first_step=self._seen_steps[0] if self._seen_steps else None,
             last_step=self._seen_steps[-1] if self._seen_steps else None,
-            final_sample_forced=any(
+            is_final_sample_forced=any(
                 skip.startswith("final_sample_forced") for skip in self._named_skips
             ),
             computed_scalars=self.ledger.computed_scalars,
@@ -978,7 +978,7 @@ class WatchSession:
             sink_rows=tuple(row.as_dict() for row in self.ledger.sinks.values()),
             missing_phases=missing,
             named_skips=tuple(self._named_skips),
-            disabled=self.collector is None,
+            is_disabled=self.collector is None,
         )
 
     def __enter__(self) -> WatchSession:

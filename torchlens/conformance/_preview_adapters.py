@@ -495,13 +495,13 @@ def _rows(
         RosterModel(
             family="matmul_relu_function",
             realism="config_built",
-            build=build_fn,
+            builder=build_fn,
             expected_op_kinds=fn_ops,
         ),
         RosterModel(
             family="mlp_module",
             realism="config_built",
-            build=build_module,
+            builder=build_module,
             expected_op_kinds=module_ops,
         ),
     )

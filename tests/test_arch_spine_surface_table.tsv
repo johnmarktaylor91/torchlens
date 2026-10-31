@@ -4,7 +4,6 @@
 # grandfathered L6+ root names (contraction at next major); the ban on NEW L6+
 # root names is immediate (tests/test_arch_spine_surface.py).
 canonical_path	home_module	implementation_layer	product_role	in_all	legacy_top_level
-torchlens.AmbiguousOpLookupError	torchlens._errors	L0	core	1	0
 torchlens.types.AtenOp	torchlens._data_classes.aten_op	L1	core	1	0
 torchlens.Bundle	torchlens.bundle	L4	core	1	0
 torchlens.types.Bytes	torchlens._quantities	L0	core	1	0
@@ -21,7 +20,6 @@ torchlens._io.PayloadLoadHints	torchlens._io	L1	core	1	0
 torchlens.types.Quantity	torchlens._quantities	L0	core	1	0
 torchlens.Recipe	torchlens.intervention.spec	L4	core	1	0
 torchlens.Recording	torchlens.fastlog	L2	core	1	0
-torchlens.ReentrantTraceError	torchlens._state	L2	core	1	0
 torchlens.Selection	torchlens._selection	FACADE	facade	1	0
 torchlens.Selector	torchlens._selection	FACADE	facade	1	0
 torchlens.Trace	torchlens._data_classes.trace	L1	core	1	0

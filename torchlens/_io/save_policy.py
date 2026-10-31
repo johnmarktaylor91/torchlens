@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
-from . import TorchLensIOError
+from . import ArtifactError
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -37,7 +37,7 @@ def _refuse_incoherent_structure_only_write(scrubbed_state: dict[str, Any]) -> N
         for field_name in _OP_VALUE_PAYLOAD_FIELDS:
             if getattr(entry, field_name, None) is not None:
                 label = getattr(entry, "label", "<unknown>")
-                raise TorchLensIOError(
+                raise ArtifactError(
                     "Refusing to write a structure-only artifact that its own "
                     f"load would refuse: op {label!r} retains a value payload "
                     f"in {field_name!r} under the structure-only marker "

@@ -137,7 +137,7 @@ class DeterminismReport(Report):
         return findings
 
     @property
-    def first_bad_thing(self) -> FirstBadThing:
+    def first_problem(self) -> FirstBadThing:
         """Project the first divergence into the shared vocabulary."""
 
         row = self.first_divergence

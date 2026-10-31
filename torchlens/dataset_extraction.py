@@ -372,7 +372,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     input_provenance:
         Provenance-only stamp (tvscope B4, DOCUMENTED-UNSTABLE spelling) for
         stimuli preprocessed OUTSIDE this run: a
-        :class:`torchlens.preprocessing.PreprocessingAudit` (its verdict
+        :class:`torchlens.preprocessing.PreprocessingComparison` (its verdict
         rides the manifest block), a ``Resolution``, or a
         ``ResolvedPreprocessing`` record (authority-only; verdict stays
         ``unknown`` with ``applied_not_audited`` disclosed). Disk mode only:
@@ -454,7 +454,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         refusals, pool/dtype geometry refusals, and id validation.
     DatasetExtractionResumeError
         When the artifact in ``output_dir`` cannot be safely continued.
-    torchlens.transforms.TransformContractError
+    torchlens.errors.TransformContractError
         When the transform slot cannot be coerced or violates its plan.
 
     Notes
@@ -837,7 +837,6 @@ def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, An
 
 __all__ = [
     "BatchEnvelope",
-    "DatasetExtractionResumeError",
     "LoadedExtraction",
     "RaggedBatch",
     "TokenRows",

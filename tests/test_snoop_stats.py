@@ -18,8 +18,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._snoop import EchoStatsError
 from torchlens._snoop._stats import exact_stats, reuse_stats, sampled_stats
+from torchlens.errors import NarrationStatsError
 from torchlens.options import NarrationOptions
 
 
@@ -61,7 +61,7 @@ def test_exact_rung_refuses_above_numel_budget() -> None:
     original = stats_module.EXACT_NUMEL_BUDGET
     stats_module.EXACT_NUMEL_BUDGET = 8
     try:
-        with pytest.raises(EchoStatsError) as excinfo:
+        with pytest.raises(NarrationStatsError) as excinfo:
             exact_stats(torch.randn(4, 4), identity="budget_refusal")
         assert excinfo.value.fields["code"] == "echo_stats_numel_budget"
         assert "sampled" in excinfo.value.fields["remedy"]
@@ -79,7 +79,7 @@ def test_exact_budget_refusal_fails_the_capture_typed() -> None:
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            with pytest.raises(EchoStatsError):
+            with pytest.raises(NarrationStatsError):
                 tl.trace(
                     nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
                     torch.randn(2, 4),

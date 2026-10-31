@@ -13,7 +13,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._errors import CaptureGapWarning
 from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
@@ -380,7 +380,7 @@ def test_loaded_sparse_run_with_user_state_matches_live_values_and_is_transactio
     assert result.report.state_source is StateSource.USER_STATE_DICT
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert result.report.contract_checks
     assert all(check.passed for check in result.report.contract_checks)
 
@@ -1162,7 +1162,7 @@ def test_shape_divergence_return_mode_finishes_and_poison_marks_result(
 
     assert result.output.shape == (3,)
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     assert result.report.first_mismatch is not None
     assert result.report.first_mismatch.code.value == "input_shape_mismatch"
     assert result.trace._runnable.poisoned is True
@@ -1265,7 +1265,7 @@ def test_incomplete_witness_coverage_is_unverifiable_and_poisoned(
 
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.first_mismatch is None
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert result.trace._runnable.poisoned is True
 
@@ -1296,7 +1296,7 @@ def test_poison_mark_and_first_mismatch_are_monotonic(honesty_artifact: Path) ->
 
     assert second.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert second.report.first_mismatch == first_mismatch
-    assert second.report.poisoned
+    assert second.report.is_poisoned
     with pytest.raises(PathDivergenceError):
         first.trace.run(inputs=torch.ones(2))
 
@@ -1404,7 +1404,7 @@ def _save_alias_runnable(path: Path, *, aliased_capture: bool = True) -> Path:
         )
 
     if aliased_capture:
-        with pytest.warns(TorchLensCaptureGapWarning, match="sparse descriptor cannot encode"):
+        with pytest.warns(CaptureGapWarning, match="sparse descriptor cannot encode"):
             trace = capture_call()
         assert trace.capture_verified is False
         assert trace.capture_verification_reason == "input_boundary_unverifiable"
@@ -1424,7 +1424,7 @@ def test_h3_same_object_aliased_input_with_inplace_fails_closed(tmp_path: Path) 
     assert result.output.tolist() == [4.0, 6.0]
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert result.report.poisoned is True
+    assert result.report.is_poisoned is True
 
 
 def test_h3_view_aliased_distinct_objects_with_inplace_fails_closed(tmp_path: Path) -> None:
@@ -1461,7 +1461,7 @@ def test_h3_readonly_aliased_inputs_fail_closed(tmp_path: Path) -> None:
             return a + b
 
     z = torch.tensor([3.0, 4.0])
-    with pytest.warns(TorchLensCaptureGapWarning, match="sparse descriptor cannot encode"):
+    with pytest.warns(CaptureGapWarning, match="sparse descriptor cannot encode"):
         trace = tl.trace(
             _ReadOnly(),
             [z, z],

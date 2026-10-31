@@ -24,11 +24,8 @@ import mlx.nn as nn  # noqa: E402
 import torchlens as tl  # noqa: E402
 import torchlens.backends.mlx.backend as mlx_backend  # noqa: E402
 import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
-from torchlens.backends import (  # noqa: E402
-    BackendRuntimeCompatibilityError,
-    BackendUnsupportedError,
-)
 from torchlens.backends.mlx import GradOptions  # noqa: E402
+from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError  # noqa: E402
 
 
 class TinyMLP(nn.Module):
@@ -642,7 +639,7 @@ def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
     status = loaded.validate_forward_pass([])
     assert status is loaded.validation_replay_status
     assert status.state == "unavailable"
-    assert status.available is False
+    assert status.is_available is False
     assert status.reason == "loaded_trace_runtime_capture_stripped"
     assert status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):

@@ -144,7 +144,7 @@ def test_axis_permutation_receptive_box_matches_bruteforce(permute: str) -> None
 
     checked = op.receptive_field.check((0, 0, 2, 3))
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0
 
 
 def test_transpose_unequal_extents_accepts_valid_units() -> None:
@@ -165,7 +165,7 @@ def test_transpose_unequal_extents_accepts_valid_units() -> None:
 
     checked = op.receptive_field.check((0, 0, 13, 3))
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0
 
 
 def test_transpose_asymmetric_kernel_projective_matches_bruteforce() -> None:
@@ -200,4 +200,4 @@ def test_transpose_center_unit_and_center_selector_agree() -> None:
 
     checked = op.receptive_field.check(complete)
     assert checked.status is ReceptiveFieldValidationStatus.PASS
-    assert checked.n_violations == 0
+    assert checked.num_violations == 0

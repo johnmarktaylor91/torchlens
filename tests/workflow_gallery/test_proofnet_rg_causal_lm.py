@@ -198,7 +198,7 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
             lambda: patching.activation_patch_residual_stream(
                 model, clean, corrupted, metric, facet_name="resid_post", patch_positions=False
             ),
-            "pass",  # SiteAmbiguityError teaches pass-qualified spellings
+            "pass",  # AmbiguousSiteError teaches pass-qualified spellings
         ),
         "mlp_output": (
             lambda: patching.activation_patch_mlp_output(model, clean, corrupted, metric),
@@ -221,7 +221,7 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
                 invoke()
         exc = excinfo.value
         assert type(exc).__name__ in {
-            "SiteAmbiguityError",
+            "AmbiguousSiteError",
             "PatchApplicationError",
             "SiteResolutionError",
         }, (

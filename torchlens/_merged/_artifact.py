@@ -213,7 +213,7 @@ _SCHEMA_REMEDY = (
 # Bundle-load failures that are INTEGRITY signals (tamper), not environmental
 # degradation. A guarded-unpickler denylist refusal / corrupt pickle stream is
 # raised as ``pickle.UnpicklingError``/``EOFError`` and, at the ``bundle.load``
-# boundary, wrapped into a ``TorchLensIOError`` tagged with this code (A-R58-1).
+# boundary, wrapped into a ``ArtifactError`` tagged with this code (A-R58-1).
 _BUNDLE_INTEGRITY_CODE = "bundle_metadata_integrity_refused"
 
 

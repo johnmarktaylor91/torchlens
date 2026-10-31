@@ -1,7 +1,7 @@
 """The tlspec_version 6 rehydration floor (drop-not-resurrect; first writer 2.31.0).
 
 Artifacts written by torchlens >= 2.31.0 (``tlspec_version >= 6``) load; anything
-older refuses with the typed ``ArtifactVersionBelowFloorError`` naming the
+older refuses with the typed ``ArtifactTooOldError`` naming the
 floor, instead of being resurrected through legacy field-alias ladders.
 """
 
@@ -21,11 +21,11 @@ from torchlens._data_classes.op import Op
 from torchlens._io import (
     MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
+    ArtifactError,
     ArtifactSchemaAgeWarning,
-    TorchLensIOError,
 )
 from torchlens._io._canonical_pickle import dump_canonical_metadata
-from torchlens.errors import ArtifactVersionBelowFloorError
+from torchlens.errors import ArtifactTooOldError
 
 FLOOR_MATCH = "torchlens 2.31.0"
 
@@ -64,10 +64,10 @@ def _build_trace() -> tl.Trace:
 
 @pytest.mark.smoke
 def test_floor_error_is_typed_and_public() -> None:
-    """The floor error is a ``TorchLensIOError`` reachable via ``tl.errors``."""
+    """The floor error is a ``ArtifactError`` reachable via ``tl.errors``."""
 
-    assert issubclass(ArtifactVersionBelowFloorError, TorchLensIOError)
-    assert tl.errors.ArtifactVersionBelowFloorError is ArtifactVersionBelowFloorError
+    assert issubclass(ArtifactTooOldError, ArtifactError)
+    assert tl.errors.ArtifactTooOldError is ArtifactTooOldError
     assert MIN_TLSPEC_VERSION == 6
 
 
@@ -106,7 +106,7 @@ def test_pre_floor_object_states_refuse_typed(cls_and_state: str, version: int |
         state["tlspec_version"] = version
 
     restored = type(source).__new__(type(source))
-    with pytest.raises(ArtifactVersionBelowFloorError, match=FLOOR_MATCH):
+    with pytest.raises(ArtifactTooOldError, match=FLOOR_MATCH):
         restored.__setstate__(state)
 
 
@@ -133,7 +133,7 @@ def test_manifest_missing_kind_still_loads_as_trace(tmp_path: Path) -> None:
     discriminator). Fixes a fast-tier fuzz finding (2026-10,
     ``test_tlspec_parse_fuzz.py::test_every_toplevel_key_deletion_is_adjudicated``):
     this exact shape used to misclassify as ``v2.16_modellog_portable`` and
-    raise a false "pre-tlspec ModelLog format" ``ArtifactVersionBelowFloorError``.
+    raise a false "pre-tlspec ModelLog format" ``ArtifactTooOldError``.
     """
 
     trace = _build_trace()
@@ -164,7 +164,7 @@ def test_manifest_missing_kind_and_below_floor_still_refuses_typed(tmp_path: Pat
     manifest["tlspec_version"] = MIN_TLSPEC_VERSION - 1
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(ArtifactVersionBelowFloorError) as excinfo:
+    with pytest.raises(ArtifactTooOldError) as excinfo:
         tl.load(path)
     # The REAL numeric floor refusal, never the unrelated legacy
     # "pre-tlspec ModelLog format" message a misclassification would give.
@@ -184,7 +184,7 @@ def test_pre_floor_bundle_manifest_refuses_typed(tmp_path: Path) -> None:
     manifest["tlspec_version"] = MIN_TLSPEC_VERSION - 1
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match=FLOOR_MATCH):
+    with pytest.raises(ArtifactTooOldError, match=FLOOR_MATCH):
         tl.load(path)
 
 
@@ -203,7 +203,7 @@ def test_below_floor_refusal_carries_structured_fields(tmp_path: Path) -> None:
     manifest["tlspec_version"] = MIN_TLSPEC_VERSION - 1
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(ArtifactVersionBelowFloorError) as excinfo:
+    with pytest.raises(ArtifactTooOldError) as excinfo:
         tl.load(path)
     fields = excinfo.value.fields
     assert fields["code"] == "artifact_version_below_floor"
@@ -269,7 +269,7 @@ def test_inconsistent_producer_pair_refuses_typed(tmp_path: Path) -> None:
     manifest["torchlens_version"] = "2.32.4"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(TorchLensIOError, match="torchlens_version=2.32.4") as excinfo:
+    with pytest.raises(ArtifactError, match="torchlens_version=2.32.4") as excinfo:
         tl.load(path)
     assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"
 
@@ -286,7 +286,7 @@ def test_real_pre_floor_artifacts_refuse_typed(fixture: str) -> None:
     """Checked-in real pre-floor artifacts refuse with the floor named."""
 
     fixture_path = Path(__file__).parent / fixture
-    with pytest.raises(ArtifactVersionBelowFloorError, match=FLOOR_MATCH):
+    with pytest.raises(ArtifactTooOldError, match=FLOOR_MATCH):
         tl.load(fixture_path, trust_custom_callables=True)
 
 
@@ -300,5 +300,5 @@ def test_legacy_intervention_specs_refuse_on_stored_keywords_not_the_floor() -> 
     fixture_path = Path(__file__).parent / "fixtures" / "tlspec_v2_16"
     with pytest.raises(InvalidArgumentError) as excinfo:
         tl.load(fixture_path / "F1_intervention_default.tlspec", trust_custom_callables=True)
-    assert not isinstance(excinfo.value, ArtifactVersionBelowFloorError)
+    assert not isinstance(excinfo.value, ArtifactTooOldError)
     assert excinfo.value.fields["code"] == "intervention_helper_arguments_invalid"

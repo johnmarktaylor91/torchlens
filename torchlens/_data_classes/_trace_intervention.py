@@ -978,15 +978,15 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         if confirm_mutation or self.parent_run is not None or self._warned_mutate_in_place:
             return
-        from ..intervention.errors import MutateInPlaceWarning
+        from ..intervention.errors import TraceMutationWarning
         from ..options import suppress_mutate_warnings
 
         if suppress_mutate_warnings.is_suppressed:
             return
         warnings.warn(
-            "MutateInPlaceWarning: Trace mutators modify root logs in place. "
+            "TraceMutationWarning: Trace mutators modify root logs in place. "
             "Use log.fork(...) for isolated edits or pass confirm_mutation=True.",
-            MutateInPlaceWarning,
+            TraceMutationWarning,
             stacklevel=3,
         )
         self._warned_mutate_in_place = True
@@ -1502,7 +1502,9 @@ class TraceInterventionMixin(_TraceMixinBase):
     ) -> str:
         """Apply one EDGE-kind selection edit through the edge-substitution path."""
 
-        from .._selection import Selection, SelectionError
+        from torchlens._selection import SelectionError
+
+        from .._selection import Selection
 
         if edit is None:
             raise ValueError(
@@ -1552,7 +1554,9 @@ class TraceInterventionMixin(_TraceMixinBase):
         default on the replay path; rerun/set_only keep refusing typed).
         """
 
-        from .._selection import Selection, SelectionError
+        from torchlens._selection import SelectionError
+
+        from .._selection import Selection
 
         if edit is None:
             raise ValueError(

@@ -92,13 +92,13 @@
   `tl.report.backward_status(trace)` counts them: `executed_flops` is exact for the matmul
   and convolution families at fma2 (FlopCounterMode's convention), per pass in
   `executed_flops_per_pass`, with every other recorded op kind named in `uncounted_ops`.
-  `BackwardPass.flops_attribution` and `backward_status(trace).attributions` charge each
+  `BackwardPass.flops_attribution` and `backward_status(trace).flops_attributions` charge each
   counted call to its GradFn call and forward op (`BackwardFlopsRow`), with an
   `unattributed_flops` bucket naming every call that ran under no recorded node, so rows
   plus bucket equal the executed count; forward kernels replayed under activation
   checkpointing are labeled `recompute_flops` on their row (unknown under `create_graph`).
   `tl.report.cost_tree(trace)` rows gain `self_forward_mac_flops`, `self_backward_flops`
-  and `self_total_flops` (one convention). The count is saved with the pass
+  and `self_forward_backward_flops` (one convention). The count is saved with the pass
   (`BackwardPass.executed_flops_record`), so a loaded trace reads it; a pass that raised has
   no count. All DOCUMENTED-UNSTABLE. `tl.report.backward_estimate(trace)` stays hypothetical.
   Trace-side failed captures expose `exc.partial_log`, recoverable with
@@ -546,7 +546,7 @@
   `wildcard_recv_unsupported`, and `collective_boundary_runnable_unsupported` (runnable save +
   forward-replay validation refuse on collective-crossing traces; metadata invariants run in
   full). The pre-join membership-lineage audit over per-rank ledgers lives in
-  `torchlens.distributed.audit_membership_lineages` and is run by the C1 merge engine. Arming
+  `torchlens.distributed.verify_membership_lineages` and is run by the C1 merge engine. Arming
   relaxes NO tier-(a) refusal: DTensor/TP/FSDP2/PP capture stays refused until the C2/C3 census
   proves fidelity. Distributed rank processes (initialized process group, non-daemonic) are the
   one sanctioned exception to the no-child-process capture guard.
@@ -585,7 +585,7 @@
   (manifest order preserved), payloads are snapshotted at submission (value-at-call-time survives
   later in-place mutation; the worker never runs a wrapped torch op),
   `to_disk(max_pending_bytes=)` (default 256 MiB) BLOCKS capture when the disk falls behind
-  (bounded RAM, measured exact), a failed write latches and raises typed `TorchLensIOError`
+  (bounded RAM, measured exact), a failed write latches and raises typed `ArtifactError`
   marking the temp bundle PARTIAL, and finalize drains every pending write before publish —
   async and sync bundles are byte-identical. `to_disk(async_writes=False)` restores synchronous
   writes; `tl.record` streaming stays synchronous and refuses an explicit `True`.
@@ -633,7 +633,7 @@
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers. Manifest
   schema v2 is backend-aware; non-torch preview bundles may be audit-only or metadata-only.
   Rehydration floor: artifacts stamped `tlspec_version` < 6 refuse to load with the typed
-  `tl.errors.ArtifactVersionBelowFloorError` (drop-not-resurrect; the legacy field-alias
+  `tl.errors.ArtifactTooOldError` (drop-not-resurrect; the legacy field-alias
   ladders are deleted). The first tlspec-6 writer was released torchlens 2.31.0, so 2.31.0 /
   2.32.4 artifacts LOAD (the compat ledger's governed producer windows are the authority;
   the floor is the STAMP, never a release name). Legacy 2.16 intervention specs remain
@@ -1003,7 +1003,7 @@
   Gemma-2 norm/pattern replay); a trace without those maps still refuses
   rather than guess. BOUNDARY: a bare layer label naming a
   multi-pass layer refuses typed — `multipass_bare_label_ambiguous`
-  (`SiteAmbiguityError`) on string/`tl.label` addressing
+  (`AmbiguousSiteError`) on string/`tl.label` addressing
   (do/attach_hooks/push_from/resolve_sites), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
   every pass-qualified spelling; bare labels on single-pass layers stay
@@ -1072,7 +1072,7 @@
   named `module`), the `netron:attachment` companion (four fail-closed vendor guards;
   written beside every file export by default, ruling U09.3; `attachment=False` opts out,
   `attachment=True` refuses the memory-only serve), `baseline=<reference Trace>` per-node
-  `torchlens.diff.*` facts from `torchlens.differential.diff_report` in node metadataProps
+  `torchlens.diff.*` facts from `torchlens.report.diff` in node metadataProps
   and the companion plus the diff summary in the `torchlens.baseline` slot (ruling U09.5;
   a string stays a bare identifier), serve/widget one-liner (`open=True`, extra `torchlens[netron]`), and
   an extent-budget WARN past ~27 ranks. Every artifact stays green under strict
@@ -1247,13 +1247,12 @@
   `torchlens._observability` (~100 names) carries the L5 record schema,
   summary transforms, `HistoryView` (bounded exactly-mergeable training
   history), contact sheets, `measure_ab`, pass peaks, the categorized
-  memory-timeline v2, and the Kineto/native-profile join (`native_profile`;
+  memory-timeline v2, and the Kineto/native-profile join (`kernel_profile`;
   `hot_path(by="device_time")`; `tl.region` correlation). `torchlens._observe`
   is the user-facing verbs door.
 - ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens._ecosystem` --
   `compat_window(...)` (dated support-window ledger; would have caught the
-  v2.33.0-cannot-load-v2.34.1 class), `migrate` (tl.migrate v1,
-  `MigrationReport`/`MigrationStep`), and `plugins` (entry-point discovery
+  v2.33.0-cannot-load-v2.34.1 class), `migrate` (tl.migrate v1), and `plugins` (entry-point discovery
   that NEVER executes third-party code at discovery; kill switch).
   `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
   scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`,
@@ -1262,8 +1261,8 @@
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
-  `NarrationEvent`/`EchoSession`/sinks and post-hoc `narrate_trace` /
-  `narrate_recording` / `narrate_partial`; `Trace.narrate` replays a finished
+  `EchoSession` and the sinks (the event record is `tl.types.NarrationEvent`);
+  `Trace.narrate` replays a finished
   capture as narration.
 - `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
   the submodule is imported as `tl.debug` and is deliberately not in `__all__`.

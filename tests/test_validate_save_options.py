@@ -83,7 +83,7 @@ def test_intervention_scope_honors_save_options() -> None:
 
     model, x = _net_and_input()
     report = tl.validate(model, x, scope="intervention", output_device="cpu", save_budget=None)
-    assert report.invariance is True
+    assert report.is_invariant is True
     with pytest.raises(SaveBudgetExceededError):
         tl.validate(model, x, scope="intervention", save_budget=64)
 
@@ -200,7 +200,7 @@ def test_both_validator_captures_receive_the_save_options() -> None:
 def test_non_torch_backend_refuses_non_default_save_options() -> None:
     """Only the torch validator capture honors the save options."""
 
-    from torchlens.backends import BackendUnsupportedError
+    from torchlens.errors import BackendUnsupportedError
 
     fake_spec = mock.Mock()
     fake_spec.name = "jax"
@@ -260,7 +260,7 @@ def test_cuda_model_validates_with_host_saved_activations(scope: str) -> None:
 
     model, x = _net_and_input("cuda")
     result = tl.validate(model, x, scope=scope, output_device="cpu")
-    assert bool(result) if scope != "intervention" else result.invariance
+    assert bool(result) if scope != "intervention" else result.is_invariant
 
 
 @_CUDA

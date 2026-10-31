@@ -158,7 +158,7 @@ SummaryReport.total_params	int	quantity	num_params	green	tests/oracles/test_lega
 SummaryReport.trainable_params	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryReport.unexecuted_params	int	quantity	num_params_unexecuted	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryReport.unknown_flop_ops	int	quantity	unknown_flop_ops	green	tests/oracles/test_legacy_closed_forms.py::test_summary_counts_unknown_flop_ops (I2)	-
-SummaryTotals.at_capture_bytes	int	quantity	at_capture_bytes	green	tests/oracles/test_legacy_payload_bytes.py::test_payload_byte_totals_at_capture_and_now (I2)	-
+SummaryTotals.captured_bytes	int	quantity	at_capture_bytes	green	tests/oracles/test_legacy_payload_bytes.py::test_payload_byte_totals_at_capture_and_now (I2)	-
 SummaryTotals.flops_forward_fma2	int	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 SummaryTotals.macs_forward	int	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
 SummaryTotals.params_bytes	int	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_summary_parameter_bytes_count_unique_storage (I2)	-
@@ -168,7 +168,7 @@ SummaryTotals.params_per_path_total	int	quantity	num_params_by_path	green	tests/
 SummaryTotals.params_total	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryTotals.params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryTotals.params_unexecuted	int	quantity	num_params_unexecuted	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
-SummaryTotals.retained_now_bytes	int	quantity	retained_now_bytes	green	tests/oracles/test_legacy_payload_bytes.py::test_payload_byte_totals_at_capture_and_now (I2)	-
+SummaryTotals.retained_bytes	int	quantity	retained_now_bytes	green	tests/oracles/test_legacy_payload_bytes.py::test_payload_byte_totals_at_capture_and_now (I2)	-
 Trace.backward_peak_memory	Bytes	quantity	backward_peak_memory	green	tests/oracles/test_legacy_peak_memory_bounds.py::test_cpu_backward_peak_is_the_largest_pass_peak (I1)	-
 TraceGraph.branching_factor	float	quantity	branching_factor	green	tests/test_edge_counts.py::test_linear_chain_edge_counts (I2)	-
 Trace.capture_duration	Duration	quantity	capture_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-

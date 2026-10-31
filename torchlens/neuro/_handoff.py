@@ -760,7 +760,7 @@ def enumerate_extraction_sites(
 
     Raises
     ------
-    torchlens.features.FeatureShapingError
+    torchlens.errors.FeatureShapingError
         For an explicitly requested key absent from the artifact.
     ValueError
         For an explicitly requested stored output that is not

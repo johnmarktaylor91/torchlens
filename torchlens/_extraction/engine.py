@@ -29,6 +29,8 @@ from typing import Any, cast
 import torch
 from torch import nn
 
+from torchlens.transforms._errors import TransformContractError
+
 from .._data_substrate import (
     ArtifactWriter,
     stimulus_ids_digest,
@@ -39,7 +41,6 @@ from .._extraction_provenance import apply_input_transform
 from ..errors._base import TorchLensWarning
 from ..transforms import (
     TransformContext,
-    TransformContractError,
     TransformPipeline,
 )
 from .context import BatchContext, _run_post_store_hooks, validate_row_counts
@@ -895,7 +896,7 @@ def _apply_site_pipeline(
 
     Raises
     ------
-    torchlens.transforms.TransformContractError
+    torchlens.errors.TransformContractError
         ``transform_output_invalid`` when a step returns a non-tensor;
         ``transform_row_axis_violated`` when the stimulus axis changed.
     """
@@ -1156,7 +1157,7 @@ def _validate_against_plan(
 
     Raises
     ------
-    torchlens.transforms.TransformContractError
+    torchlens.errors.TransformContractError
         ``transform_plan_violated`` naming the key, the plan, and the
         observation; the shard is refused BEFORE publication.
     """

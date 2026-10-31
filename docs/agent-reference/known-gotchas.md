@@ -63,7 +63,7 @@
 - Streamed disk writes are ASYNC BY DEFAULT for `trace(storage=tl.to_disk(...))` (spellings
   DOCUMENTED-UNSTABLE): one FIFO worker overlaps blob serialize+write+sha256 with the forward,
   payloads snapshot at submission, `to_disk(max_pending_bytes=)` (256 MiB default) blocks capture
-  when the disk falls behind, a failed write raises typed `TorchLensIOError` + PARTIAL, finalize
+  when the disk falls behind, a failed write raises typed `ArtifactError` + PARTIAL, finalize
   drains before publish, and bundles are byte-identical to sync. `async_writes=False` opts out;
   `tl.record` streaming stays synchronous and refuses an explicit `True`.
 - On torch >= 2.6 (`HAS_SET_STANCE`), every capture holds

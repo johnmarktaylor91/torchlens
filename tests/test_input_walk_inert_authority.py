@@ -522,11 +522,11 @@ def test_nontotal_namedtuple_input_refuses_capture_typed():
     # tolerate that pre-existing disclosure here.
     import warnings as _warnings
 
-    from torchlens._errors import TorchLensCaptureGapWarning
+    from torchlens._errors import CaptureGapWarning
 
     hidden = tuple.__new__(_OneField, (tensor, torch.ones(1)))
     with _warnings.catch_warnings():
-        _warnings.simplefilter("ignore", TorchLensCaptureGapWarning)
+        _warnings.simplefilter("ignore", CaptureGapWarning)
         with pytest.raises(InvalidArgumentError) as excinfo:
             tl.trace(model, hidden)
     assert excinfo.value.fields.get("code") == "input_namedtuple_schema_not_total"

@@ -270,7 +270,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # below the ceiling instead (C06 house pattern): the content doors
     # arrays=/graph= stay flat keywords and the emission plumbing
     # (share_safe/deterministic/vis_call_depth + thumbnail budgets) bundles
-    # into the frozen tl.export.ReportOptions dataclass. Measured 442 at the
+    # into the frozen tl.options.HtmlReportOptions dataclass. Measured 442 at the
     # merged tree (pinned ruff, isolated mode, torchlens/ scope).
     # 2026-08-29 F10 T71d re-reconcile: the union's +1 (envelope_line's
     # 8-arg affix surface in stats/_envelope.py) is PAID DOWN, not held --

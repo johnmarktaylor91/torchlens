@@ -473,7 +473,7 @@ def test_released_param_dead_model_raises_clear_error() -> None:
     gc.collect()
 
     assert model_ref() is None
-    with pytest.raises(errors.PostTraceParamUnavailable, match="source model"):
+    with pytest.raises(errors.ParamReleasedError, match="source model"):
         _ = param_log.value
 
 

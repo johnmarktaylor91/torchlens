@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
-    from ..validation.status import ValidationReplayStatus
+    from ..validation.status import ValidationStatus
     from .trace import Trace
 
     _TraceMixinBase = Trace
@@ -359,7 +359,7 @@ class TraceValidationMixin(_TraceMixinBase):
         ground_truth_output_tensors: list[torch.Tensor] | torch.Tensor,
         verbose: bool = False,
         validate_metadata: bool = True,
-    ) -> Union[bool, "ValidationReplayStatus"]:
+    ) -> Union[bool, "ValidationStatus"]:
         """Validate saved outs against ground-truth model outputs.
 
         Parameters
@@ -378,7 +378,7 @@ class TraceValidationMixin(_TraceMixinBase):
 
         Returns
         -------
-        bool or ValidationReplayStatus
+        bool or ValidationStatus
             ``True`` if validation succeeds. Loaded non-torch traces whose
             runtime replay captures were stripped return an explicit
             unavailable status instead of a pass/fail bool.
@@ -401,7 +401,7 @@ class TraceValidationMixin(_TraceMixinBase):
         require_structure_only_capability(self, "validation_entry")
         _refuse_stats_capture(self, "validation_entry")
         status = self.validation_replay_status
-        if bool(getattr(self, "_loaded_from_bundle", False)) and not status.available:
+        if bool(getattr(self, "_loaded_from_bundle", False)) and not status.is_available:
             setattr(self, "_validation_replay_status", status)
             return status
         spec = get_backend_spec(getattr(self, "backend", "torch"))
@@ -412,41 +412,41 @@ class TraceValidationMixin(_TraceMixinBase):
             validate_metadata=validate_metadata,
         )
         if spec.name == "torch":
-            from ..validation.status import ValidationReplayStatus
+            from ..validation.status import ValidationStatus
 
-            if isinstance(validation_result, ValidationReplayStatus):
+            if isinstance(validation_result, ValidationStatus):
                 setattr(self, "_validation_replay_status", validation_result)
                 if validation_result.state in {"passed", "failed"}:
                     return validation_result.passed
         return validation_result
 
     @property
-    def validation_replay_status(self: "Trace") -> "ValidationReplayStatus":
+    def validation_replay_status(self: "Trace") -> "ValidationStatus":
         """Return replay-validation availability or last completed result.
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Status object distinguishing live replay validation from loaded
             traces whose runtime replay captures were stripped during save.
         """
 
         from ..backends.registry import get_backend_spec
-        from ..validation.status import ValidationReplayStatus
+        from ..validation.status import ValidationStatus
 
         cached_status = getattr(self, "_validation_replay_status", None)
-        if isinstance(cached_status, ValidationReplayStatus):
+        if isinstance(cached_status, ValidationStatus):
             return cached_status
         backend = str(getattr(self, "backend", "torch"))
         if _loaded_non_torch_validation_replay_unavailable(self):
-            return ValidationReplayStatus.unavailable_loaded_runtime_stripped(
+            return ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=backend,
                 payload_load_status=getattr(self, "payload_load_status", None),
             )
         spec = get_backend_spec(backend)
-        if not spec.capabilities.validation_replay:
-            return ValidationReplayStatus.unavailable_unsupported(backend=backend)
-        return ValidationReplayStatus.available_live(backend=backend)
+        if not spec.capabilities.has_validation_replay:
+            return ValidationStatus.unavailable_unsupported(backend=backend)
+        return ValidationStatus.available_live(backend=backend)
 
     @property
     def is_pristine(self: "Trace") -> bool | None:
@@ -588,7 +588,7 @@ class TraceValidationMixin(_TraceMixinBase):
             the run, so repeated ``run()`` calls leave the model bit-identical.
             ``True`` skips the restore: declared-state mutations persist on the
             live model (episode/rollout state accumulation). The report
-            discloses the choice (``report.state_carried``); verification is
+            discloses the choice (``report.has_carried_state``); verification is
             untouched -- the NEXT run from mutated state faces every gate as
             usual. Refuses typed with ``fast=True`` and on loaded providers
             (staged clones have no live model for state to carry into).
@@ -1283,7 +1283,9 @@ class TraceValidationMixin(_TraceMixinBase):
         Trace
             This model log, for chaining.
         """
-        from ..backends.registry import BackendUnsupportedError, get_backend_spec
+        from torchlens.backends.registry import BackendUnsupportedError
+
+        from ..backends.registry import get_backend_spec
         from ..capture.outcome import require_capture_capability
 
         # N3: the backward projection assumes a structurally complete captured
@@ -1332,7 +1334,9 @@ class TraceValidationMixin(_TraceMixinBase):
         Any
             Backward recording context manager.
         """
-        from ..backends.registry import BackendUnsupportedError, get_backend_spec
+        from torchlens.backends.registry import BackendUnsupportedError
+
+        from ..backends.registry import get_backend_spec
         from ..capture.outcome import require_capture_capability
 
         require_capture_capability(self, "backward")

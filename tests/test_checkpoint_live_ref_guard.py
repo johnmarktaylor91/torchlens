@@ -32,7 +32,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._data_classes.param import Param, ParamValueBasis
-from torchlens.errors import CheckpointSeriesLiveParamsError
+from torchlens.errors import ParamEvidenceMissingError
 
 _CODE = "checkpoint_series_live_params"
 _WEIGHT = "0.weight"
@@ -193,10 +193,10 @@ def test_refusal_survives_member_save_load_before_nan_empty_degradation(
     stepped_pair["trace_after"].save(path1)
     loaded = tl.Bundle({"ck0": tl.load(path0), "ck64": tl.load(path1)})
     view = loaded.params[_WEIGHT]
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         _ = view.weight_norm_diff
     _assert_checkpoint_refusal(excinfo, "ck0", "ck64")
-    with pytest.raises(CheckpointSeriesLiveParamsError):
+    with pytest.raises(ParamEvidenceMissingError):
         view.compare()
     # The absent leg names the degradation shape the refusal replaces.
     assert "nothing to compare" in str(excinfo.value)
@@ -208,7 +208,7 @@ def test_refusal_survives_bundle_save_load(ckpt_bundle: Any, tmp_path: Any) -> N
     path = tmp_path / "series.tlspec"
     ckpt_bundle.save(path)
     loaded = tl.load(path)
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         loaded.params[_WEIGHT].aggregate("std")
     _assert_checkpoint_refusal(excinfo, "ck0", "ck64")
 
@@ -244,7 +244,7 @@ def test_version_row_still_orders_members(ckpt_bundle: Any) -> None:
     assert rows[0].kind == "successor_of"
     assert rows[0].named_members() == ("ck64", "ck0")
     # The ordering claim stands; the parameter value claim still refuses.
-    with pytest.raises(CheckpointSeriesLiveParamsError):
+    with pytest.raises(ParamEvidenceMissingError):
         _ = related.params[_WEIGHT].weight_norm_diff
 
 
@@ -290,7 +290,7 @@ def test_bypass_matrix_every_read_hits_the_guard(ckpt_bundle: Any, read: Any) ->
     """direct SuperParam read, diff_pair, aggregate, out/grad: one guard, one code."""
 
     view = ckpt_bundle.params[_WEIGHT]
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         read(view)
     _assert_checkpoint_refusal(excinfo, "ck0", "ck64")
     assert excinfo.value.fields["param_address"] == _WEIGHT
@@ -301,7 +301,7 @@ def test_bundle_at_routes_to_the_same_guard(ckpt_bundle: Any) -> None:
     """Bundle.at(param label) reads funnel through the identical refusal."""
 
     view = ckpt_bundle.at(_WEIGHT)
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         _ = view.out
     assert excinfo.value.fields["code"] == _CODE
 
@@ -315,7 +315,7 @@ def test_refusal_fires_before_tensor_lookup(ckpt_bundle: Any, monkeypatch: Any) 
         "_get_tensor",
         lambda self, member, field: pytest.fail("tensor lookup ran before the guard"),
     )
-    with pytest.raises(CheckpointSeriesLiveParamsError):
+    with pytest.raises(ParamEvidenceMissingError):
         _ = view.out
 
 
@@ -332,7 +332,7 @@ def test_halted_member_still_refuses_param_claim(stepped_pair: dict[str, Any]) -
     halted = tl.trace(model, x, halt=tl.func("relu"))
     assert halted.outcome.status.name == "STOPPED"
     bundle = tl.Bundle({"h": halted, "c": stepped_pair["trace_before"]})
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         _ = bundle.params[_WEIGHT].weight_norm_diff
     _assert_checkpoint_refusal(excinfo, "h", "c")
 
@@ -373,7 +373,7 @@ def test_until_r8b_the_public_read_still_refuses(ckpt_bundle: Any) -> None:
     )
     row_payload = related.relations[0].to_payload()
     assert set(row_payload) == {"kind", "from", "to", "params"}  # no evidence key minted here
-    with pytest.raises(CheckpointSeriesLiveParamsError):
+    with pytest.raises(ParamEvidenceMissingError):
         _ = related.params[_WEIGHT].out
 
 
@@ -397,5 +397,5 @@ def test_weight_norm_diff_docstring_no_longer_promises_diffs(ckpt_bundle: Any) -
 
     view = ckpt_bundle.params[_WEIGHT]
     for attribute in ("weight_norm_diff", "out", "grad"):
-        with pytest.raises(CheckpointSeriesLiveParamsError):
+        with pytest.raises(ParamEvidenceMissingError):
             getattr(view, attribute)

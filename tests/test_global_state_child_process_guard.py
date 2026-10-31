@@ -48,7 +48,7 @@ def test_child_process_capture_refusal_is_typed(monkeypatch: pytest.MonkeyPatch)
     # PID stamp), so the fake must present a parent to read as a child.
     monkeypatch.setattr(mp, "parent_process", lambda: _FakeChild())
 
-    with pytest.raises(tl.errors.CaptureContextError) as refusal:
+    with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
         warn_parallel()
 
     assert refusal.value.fields["code"] == "child_process_capture_unsupported"
@@ -79,7 +79,7 @@ def test_child_process_guard_ignores_spoofed_main_process_name(
     monkeypatch.setattr(mp, "current_process", lambda: _SpoofedChild())
     monkeypatch.setattr(mp, "parent_process", lambda: _SpoofedChild())
 
-    with pytest.raises(tl.errors.CaptureContextError) as refusal:
+    with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
         warn_parallel()
     assert refusal.value.fields["code"] == "child_process_capture_unsupported"
 
@@ -135,7 +135,7 @@ def test_child_process_guard_refuses_fork_inherited_group_stamp(
     # the interpreter's importer) as the rank.
     monkeypatch.setattr(display_mod, "_WARN_PARALLEL_IMPORT_PID", os.getpid() + 1)
     monkeypatch.setitem(display_mod._DIST_GROUP_OBSERVED_PID, "pid", os.getpid() + 1)
-    with pytest.raises(tl.errors.CaptureContextError) as refusal:
+    with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
         warn_parallel()
     assert refusal.value.fields["code"] == "child_process_capture_unsupported"
 
@@ -196,7 +196,7 @@ def test_child_process_guard_import_pid_rank_reclaims_stolen_stamp(
     # reclaim rule is import-PID-only and never readmits a fork child.
     monkeypatch.setattr(display_mod, "_WARN_PARALLEL_IMPORT_PID", os.getpid() + 1)
     monkeypatch.setitem(display_mod._DIST_GROUP_OBSERVED_PID, "pid", stolen_pid)
-    with pytest.raises(tl.errors.CaptureContextError) as refusal:
+    with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
         warn_parallel()
     assert refusal.value.fields["code"] == "child_process_capture_unsupported"
 
@@ -312,7 +312,7 @@ def test_main_process_rank_stamps_ownership_so_fork_children_stay_refused(
     # stamp) must be refused instead of setdefault-ing its own pid.
     monkeypatch.setattr(display_mod.os, "getpid", lambda: real_pid + 1)
     try:
-        with pytest.raises(tl.errors.CaptureContextError) as refusal:
+        with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
             warn_parallel()
     finally:
         monkeypatch.undo()

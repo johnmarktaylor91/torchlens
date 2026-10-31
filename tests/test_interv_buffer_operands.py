@@ -15,7 +15,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._selection import SelectionError
+from torchlens.errors import SelectionError
 
 _CAPTURE = tl.options.CaptureOptions(intervention_ready=True)
 _CONFIRM = tl.options.InterventionOptions(confirm_mutation=True)

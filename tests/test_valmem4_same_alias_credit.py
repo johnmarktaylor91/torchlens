@@ -247,8 +247,8 @@ def _validate_corrupted(corrupt: Any) -> tuple[bool, list[str]]:
     def observe(trace: Any) -> None:
         failure = get_validation_failure(trace) if trace is not None else None
         if failure is not None:
-            checks.append(failure.check)
-        checks.extend(item.check for item in get_validation_diagnostics(trace) or ())
+            checks.append(failure.check_name)
+        checks.extend(item.check_name for item in get_validation_diagnostics(trace) or ())
 
     torch.manual_seed(0)
     model, x = _Offsets(), torch.randn(4, 6)

@@ -14,7 +14,7 @@ pre-fix behavior:
   ``visualizers/`` directory, so a hostile bundle cannot disclose an arbitrary
   local ``.png`` through ``.draw()``.
 * R27-3 -- a recursion blow-up during rehydration surfaces as a typed
-  ``TorchLensIOError``, not a raw ``RecursionError`` escaping ``tl.load``.
+  ``ArtifactError``, not a raw ``RecursionError`` escaping ``tl.load``.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import bundle as bundle_mod
 from torchlens._io.bundle import _mark_partial, _reanchor_visualizer_paths, cleanup_tmp
-from torchlens.errors import TorchLensIOError
+from torchlens.errors import ArtifactError
 
 
 def _tiny() -> nn.Module:
@@ -136,7 +136,7 @@ def test_save_failure_persists_type_name_not_message(tmp_path: Path, monkeypatch
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     spec = tmp_path / "fail.tlspec"
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         trace.save(str(spec))
     reasons = list(tmp_path.glob("fail.tlspec.tmp.*/" + bundle_mod.REASON_SENTINEL))
     assert reasons, "no PARTIAL reason sentinel was written"
@@ -156,7 +156,7 @@ def test_metadata_pkl_byte_ceiling_refuses_oversize(tmp_path: Path, monkeypatch)
 
     spec = _save(tmp_path)
     monkeypatch.setattr(bundle_mod, "_MAX_METADATA_PKL_BYTES", 16)
-    with pytest.raises(TorchLensIOError, match="ceiling"):
+    with pytest.raises(ArtifactError, match="ceiling"):
         tl.load(str(spec))
 
 
@@ -433,5 +433,5 @@ def test_rehydrate_recursion_surfaces_typed(tmp_path: Path, monkeypatch) -> None
         raise RecursionError("maximum recursion depth exceeded")
 
     monkeypatch.setattr(bundle_mod, "rehydrate_trace", _blow_up)
-    with pytest.raises(TorchLensIOError, match="recursion"):
+    with pytest.raises(ArtifactError, match="recursion"):
         tl.load(str(spec))

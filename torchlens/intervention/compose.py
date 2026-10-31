@@ -214,7 +214,7 @@ def compose(*edits: Any) -> Edit:
         factory=factory,
         portability=portability,
         batch_independent=all(leaf.batch_independent for leaf in leaves),
-        compatible_with_append=all(leaf.compatible_with_append for leaf in leaves),
+        compatible_with_append=all(leaf.is_compatible_with_append for leaf in leaves),
         metadata={
             "compose_leaves": "|".join(leaf.helper_name for leaf in leaves),
             "compose_leaf_count": len(leaves),

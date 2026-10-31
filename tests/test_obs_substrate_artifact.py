@@ -12,13 +12,13 @@ from torchlens.observability._artifact import CommittedBlock, HistoryWriter, Ram
 
 from torchlens._observability import (
     Histogram,
-    HistoryArtifactError,
     ObservationRecord,
     RunRecord,
     SiteRecord,
     Spine,
     StepBlockRecord,
 )
+from torchlens.errors import HistoryArtifactError
 from torchlens.trackers import HistoryReader
 
 

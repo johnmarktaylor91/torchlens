@@ -15,9 +15,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TLSPEC_VERSION, ArtifactSchemaAgeWarning, TorchLensIOError
+from torchlens._io import TLSPEC_VERSION, ArtifactError, ArtifactSchemaAgeWarning
 from torchlens._io.tlspec import _TlSpecWriter
-from torchlens.backends import BackendPayloadUnsupportedError
+from torchlens.errors import BackendPayloadUnsupportedError
 from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import _SUPPORTED_JSON_SCHEMA_KEYWORDS, validate_tlspec
@@ -399,7 +399,7 @@ def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="intended_use"):
         validate_tlspec(path)
-    with pytest.raises(TorchLensIOError, match="intended_use"):
+    with pytest.raises(ArtifactError, match="intended_use"):
         tl.load(path)
 
 
@@ -421,7 +421,7 @@ def test_unified_load_rejects_desynchronized_body_index(
         manifest["body_index"][0]["filename"] = "blobs/ghost.safetensors"
     _write_manifest(path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="body_index"):
+    with pytest.raises(ArtifactError, match="body_index"):
         tl.load(path)
 
 
@@ -452,15 +452,15 @@ def test_validate_tlspec_refuses_pre_floor_legacy_modellog_bundle() -> None:
     the typed floor error; legacy 2.16 intervention specs remain accepted.
     """
 
-    from torchlens.errors import ArtifactVersionBelowFloorError
+    from torchlens.errors import ArtifactTooOldError
 
     fixture_path = (
         Path(__file__).parent / "fixtures" / "tlspec_v2_16" / "F2_modellog_tiny_cnn.tlspec"
     )
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
         validate_tlspec(fixture_path)
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
         tl.load(fixture_path)
 
 
@@ -569,14 +569,14 @@ def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Pa
     manifest["tlspec_version"] = TLSPEC_VERSION + 1
     _write_manifest(path, manifest)
 
-    with pytest.raises(TorchLensIOError, match=str(TLSPEC_VERSION + 1)):
+    with pytest.raises(ArtifactError, match=str(TLSPEC_VERSION + 1)):
         tl.load(path)
 
 
 def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
     """Validation enforces the same portable-version ceiling as loading."""
 
-    from torchlens._io import ArtifactVersionAboveRuntimeError
+    from torchlens._io import ArtifactTooNewError
 
     path = tmp_path / "newer_validation_version.tlspec"
     _captured_log().save(path)
@@ -590,7 +590,7 @@ def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
         f"up to {TLSPEC_VERSION}."
     )
 
-    with pytest.raises(ArtifactVersionAboveRuntimeError, match=re.escape(expected)) as excinfo:
+    with pytest.raises(ArtifactTooNewError, match=re.escape(expected)) as excinfo:
         validate_tlspec(path)
     assert excinfo.value.fields["code"] == "artifact_version_above_runtime"
 
@@ -1048,7 +1048,7 @@ def test_schema_v2_materialized_missing_tensors_entry_codec_fails_closed(tmp_pat
     del manifest["tensors"][0]["codec"]
     _write_manifest(path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="codec"):
+    with pytest.raises(ArtifactError, match="codec"):
         tl.load(path)
 
 
@@ -1056,7 +1056,7 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unexpected codec-registry failures surface as ``TorchLensIOError``."""
+    """Unexpected codec-registry failures surface as ``ArtifactError``."""
 
     import torchlens._io.bundle as bundle_module
 
@@ -1069,7 +1069,7 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
 
     monkeypatch.setattr(bundle_module, "get_payload_codec", _exploding_codec_lookup)
 
-    with pytest.raises(TorchLensIOError, match="Failed to resolve the payload codec"):
+    with pytest.raises(ArtifactError, match="Failed to resolve the payload codec"):
         tl.load(path)
 
 

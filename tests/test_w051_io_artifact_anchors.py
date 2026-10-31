@@ -24,7 +24,7 @@ import torch.nn as nn
 from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
 CORPUS = Path(__file__).parent / "release_goldens" / "genuine_release_artifacts.tar.gz"
@@ -72,8 +72,8 @@ def _tampered(
     return target
 
 
-def _assert_refuses(path: Path, code: str, **fields: Any) -> TorchLensIOError:
-    with pytest.raises(TorchLensIOError) as excinfo:
+def _assert_refuses(path: Path, code: str, **fields: Any) -> ArtifactError:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)
     assert excinfo.value.fields["code"] == code, excinfo.value.fields
     for key, expected in fields.items():
@@ -135,7 +135,7 @@ def test_migrated_artifact_keeps_its_witnessed_stamp_lineage(tmp_path: Path) -> 
     assert len(loaded.layer_list) == 151
     # Delete the witness: the same bytes now refuse (the lineage is unproven).
     (artifact / "tl_migration_provenance.json").unlink()
-    with expect_bundle_minor_version_mismatch(), pytest.raises(TorchLensIOError) as excinfo:
+    with expect_bundle_minor_version_mismatch(), pytest.raises(ArtifactError) as excinfo:
         tl.load(artifact)
     assert excinfo.value.fields["code"] in {
         "bundle_manifest_metadata_mismatch",
@@ -419,7 +419,7 @@ def test_absent_root_entry_point_loads_on_v9_and_refuses_from_v10(
     path = _tampered(
         source_bundle, tmp_path / "rep.tlspec", lambda st: st.__setitem__("root_entry_point", None)
     )
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)
     assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"
 
@@ -436,7 +436,7 @@ def test_absent_root_entry_point_refuses_from_the_armed_stamp(
     torch.manual_seed(0)
     trace = tl.trace(_Model(), torch.randn(1, 1, 12, 12))
     trace.root_entry_point = None
-    with governed_artifact_load(), pytest.raises(TorchLensIOError) as excinfo:
+    with governed_artifact_load(), pytest.raises(ArtifactError) as excinfo:
         facts._validate_root_entry_point(trace)
     assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"
     assert excinfo.value.fields["reason"] == "absent_on_current_schema"

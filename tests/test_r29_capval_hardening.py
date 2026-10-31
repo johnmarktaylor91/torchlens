@@ -156,10 +156,11 @@ def _assert_layout_launder_closed(model_factory: Any, tmp_path: Path) -> None:
         return  # fail-closed at save or at divergence: both honest
     max_diff = (result.output - oracle).abs().max().item()
     assert not (
-        result.report.path_faithfulness is PathFaithfulness.VERIFIED and not result.report.poisoned
+        result.report.path_faithfulness is PathFaithfulness.VERIFIED
+        and not result.report.is_poisoned
     ), f"FALSE VERIFIED reopened: layout twin missed oracle 1 by {max_diff}"
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 def test_f1_swap_rebind_layout_read_ceils(tmp_path: Path) -> None:
@@ -184,7 +185,7 @@ def test_f1_pointer_preserving_rebind_stays_verified(tmp_path: Path) -> None:
     )
     oracle = _PointerPreservingRebindLayoutRead().eval()(capture_input.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert (result.output - oracle).abs().max().item() < 1e-6
 
 

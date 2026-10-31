@@ -14,12 +14,12 @@ import pytest
 import torchlens as tl
 from torchlens._data_classes._compaction import _COMPACTED_TRACES
 from torchlens._postprocess.graph_traversal import _remove_orphan_nodes
-from torchlens.backends import BackendUnsupportedError
 from torchlens.backends.jax.backend import (
     _control_parent_labels,
     _data_parent_arg_positions,
     _data_parent_labels,
 )
+from torchlens.errors import BackendUnsupportedError
 from torchlens.intervention.types import EdgeUseRecord
 from torchlens.validation.invariants import MetadataInvariantError
 from torchlens.validation.status import (
@@ -27,7 +27,7 @@ from torchlens.validation.status import (
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
-    ValidationReplayStatus,
+    ValidationStatus,
 )
 
 jax = pytest.importorskip("jax")
@@ -1057,11 +1057,11 @@ def test_jax_validation_reports_synthetic_importer_region_as_unverified() -> Non
 
     result = trace.validate_forward_pass([], validate_metadata=False)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
-    assert result.available is True
-    assert result.replayed_node_count > 0
-    assert result.unverified_node_count == 1
+    assert result.is_available is True
+    assert result.num_replayed_ops > 0
+    assert result.num_unverified_ops == 1
     with pytest.raises(TypeError, match="not a boolean"):
         bool(result)
 
@@ -1091,7 +1091,7 @@ def test_jax_scan_over_cap_imports_unverified_region() -> None:
     assert boundary_ops[0].annotations[REGION_REPLAY_CLASS_KEY] == REGION_REPLAY_CLASS
     assert boundary_ops[0].annotations["jax_region_reason"] == "scan_length_exceeds_unroll_cap"
     assert trace.validate_forward_pass([]).state == "unverified"
-    assert trace.validation_replay_status.unverified_node_count == 1
+    assert trace.validation_replay_status.num_unverified_ops == 1
 
 
 def test_jax_dynamic_while_over_cap_imports_unverified_region() -> None:

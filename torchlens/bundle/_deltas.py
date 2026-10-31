@@ -148,7 +148,7 @@ def _bundle_delta_map(
 
     Raises
     ------
-    BundleRelationshipError
+    BundleComparisonError
         The comparison gate's stable codes (``bundle_gate_ordering_topology``,
         ``bundle_gate_model_axis_unmet``, ``bundle_gate_input_values_differ``,
         ``bundle_gate_input_identity_unproven``) for any (baseline, member)

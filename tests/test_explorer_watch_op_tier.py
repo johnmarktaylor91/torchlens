@@ -16,13 +16,12 @@ import torchlens as tl
 from torchlens._observability import (
     HistoryView,
     StepTruth,
-    WatchLifecycleError,
-    WatchPlanError,
     render_contact_sheet,
     render_fan,
 )
 from torchlens._observability._op_tier import OpTierCollector, split_heads
 from torchlens._observability._quantiles import WatchRenderError
+from torchlens.errors import WatchLifecycleError, WatchPlanError
 
 
 def _model() -> torch.nn.Module:

@@ -11,7 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
-from torchlens.validation.status import ValidationReplayStatus
+from torchlens.validation.status import ValidationStatus
 
 GOLDEN_PATH = Path(__file__).with_name("validation_decisions.json")
 
@@ -378,7 +378,7 @@ def _save_only_mul(ctx: Any) -> bool:
     return ctx.func_name in {"__mul__", "mul"}
 
 
-def _status_for_trace(trace: Any, outputs: list[torch.Tensor]) -> ValidationReplayStatus:
+def _status_for_trace(trace: Any, outputs: list[torch.Tensor]) -> ValidationStatus:
     """Validate a trace and return its cached status.
 
     Parameters
@@ -390,12 +390,12 @@ def _status_for_trace(trace: Any, outputs: list[torch.Tensor]) -> ValidationRepl
 
     Returns
     -------
-    ValidationReplayStatus
+    ValidationStatus
         Cached torch validation status.
     """
 
     result = trace.validate_forward_pass(outputs)
-    if isinstance(result, ValidationReplayStatus):
+    if isinstance(result, ValidationStatus):
         return result
     return trace.validation_replay_status
 
@@ -404,7 +404,7 @@ def _seeded_status_for_trace(
     seed: int,
     trace: Any,
     outputs: list[torch.Tensor],
-) -> ValidationReplayStatus:
+) -> ValidationStatus:
     """Validate a trace after pinning perturbation RNG.
 
     Parameters
@@ -418,7 +418,7 @@ def _seeded_status_for_trace(
 
     Returns
     -------
-    ValidationReplayStatus
+    ValidationStatus
         Cached torch validation status.
     """
 
@@ -426,7 +426,7 @@ def _seeded_status_for_trace(
     return _status_for_trace(trace, outputs)
 
 
-def _case_summary(status: ValidationReplayStatus) -> dict[str, Any]:
+def _case_summary(status: ValidationStatus) -> dict[str, Any]:
     """Build the JSON-stable golden payload for one case.
 
     Parameters
@@ -442,9 +442,9 @@ def _case_summary(status: ValidationReplayStatus) -> dict[str, Any]:
 
     return {
         "state": status.state,
-        "replayed_node_count": status.replayed_node_count,
-        "unverified_node_count": status.unverified_node_count,
-        "failed_node_count": status.failed_node_count,
+        "replayed_node_count": status.num_replayed_ops,
+        "unverified_node_count": status.num_unverified_ops,
+        "failed_node_count": status.num_failed_ops,
         "unverified_reason_counts": dict(status.unverified_reason_counts),
         "exempted_reason_counts": dict(status.exempted_reason_counts),
         "decisions": list(status.decisions),

@@ -21,8 +21,8 @@ from torchlens._data_classes.trace import ResolvedPostprocessing
 from torchlens._io import (
     MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
+    ArtifactError,
     ArtifactSchemaAgeWarning,
-    TorchLensIOError,
     bundle as bundle_io,
 )
 from torchlens._io.manifest import Manifest
@@ -334,7 +334,7 @@ def test_manifest_provenance_sentinel_round_trips_and_tamper_refuses(tmp_path: P
     for forged in ("deadbeef", "unavailable:", "unavailable:not an identifier", "x" * 64):
         manifest["provenance"]["input_hash"] = forged
         _write_manifest(bundle_path, manifest)
-        with pytest.raises(TorchLensIOError, match="input_hash"):
+        with pytest.raises(ArtifactError, match="input_hash"):
             load(bundle_path)
 
 
@@ -498,7 +498,7 @@ def test_bundle_save_strict_default_raises_on_sparse_tensor(tmp_path: Path) -> N
 
     trace = _build_sparse_out_log()
 
-    with pytest.raises(TorchLensIOError, match="sparse"):
+    with pytest.raises(ArtifactError, match="sparse"):
         trace.save(tmp_path / "sparse_bundle.tl")
 
 
@@ -533,7 +533,7 @@ def test_bundle_save_strict_default_raises_on_complex128_tensor(tmp_path: Path) 
     trace = _build_complex_out_log(dtype=torch.complex128)
     bundle_path = tmp_path / "complex128_bundle.tl"
 
-    with pytest.raises(TorchLensIOError, match="complex128"):
+    with pytest.raises(ArtifactError, match="complex128"):
         trace.save(bundle_path)
 
     # The strict allow-list check fires before ``safetensors.torch.save_file()``
@@ -695,7 +695,7 @@ def test_bundle_version_policy_rows(
     if expectation == "python_major_mismatch":
         (bundle_path / "metadata.pkl").write_bytes(b"not a pickle")
         with pytest.warns(UserWarning, match="python_version=999.0.0"):
-            with pytest.raises(TorchLensIOError, match="python_version=999.0.0"):
+            with pytest.raises(ArtifactError, match="python_version=999.0.0"):
                 load(bundle_path)
         return
 
@@ -707,7 +707,7 @@ def test_bundle_version_policy_rows(
         return
 
     if expectation == "raise":
-        with pytest.raises(TorchLensIOError, match=resolved_expected_text or ""):
+        with pytest.raises(ArtifactError, match=resolved_expected_text or ""):
             load(bundle_path)
         return
 
@@ -757,17 +757,17 @@ def test_bundle_load_raises_for_missing_safetensors_backend(
 
     monkeypatch.setattr("torchlens._io.bundle.load_file", _raise_backend_import)
 
-    with pytest.raises(TorchLensIOError, match="Install safetensors>=0.4"):
+    with pytest.raises(ArtifactError, match="Install safetensors>=0.4"):
         load(bundle_path)
 
 
 def test_bundle_load_raises_on_corrupt_manifest(tmp_path: Path) -> None:
-    """Non-JSON manifests should fail with ``TorchLensIOError``."""
+    """Non-JSON manifests should fail with ``ArtifactError``."""
 
     bundle_path, _ = _save_bundle(tmp_path)
     (bundle_path / "manifest.json").write_text("{not valid json", encoding="utf-8")
 
-    with pytest.raises(TorchLensIOError, match="does not parse as JSON"):
+    with pytest.raises(ArtifactError, match="does not parse as JSON"):
         load(bundle_path)
 
 
@@ -779,7 +779,7 @@ def test_bundle_load_raises_on_missing_blob_file(tmp_path: Path) -> None:
     blob_entry = manifest.tensors[0]
     (bundle_path / blob_entry.relative_path).unlink()
 
-    with pytest.raises(TorchLensIOError, match=blob_entry.blob_id):
+    with pytest.raises(ArtifactError, match=blob_entry.blob_id):
         load(bundle_path)
 
 
@@ -790,7 +790,7 @@ def test_bundle_load_raises_on_truncated_safetensors(tmp_path: Path) -> None:
     blob_path = _first_blob_path(bundle_path)
     blob_path.write_bytes(blob_path.read_bytes()[:16])
 
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         load(bundle_path)
 
 
@@ -802,7 +802,7 @@ def test_bundle_load_raises_on_checksum_tamper(tmp_path: Path) -> None:
     blob_entry = manifest.tensors[0]
     _corrupt_blob_byte(bundle_path / blob_entry.relative_path)
 
-    with pytest.raises(TorchLensIOError, match=blob_entry.blob_id):
+    with pytest.raises(ArtifactError, match=blob_entry.blob_id):
         load(bundle_path)
 
 
@@ -811,7 +811,7 @@ def test_bundle_save_overwrite_false_wraps_file_exists_error(tmp_path: Path) -> 
 
     bundle_path, trace = _save_bundle(tmp_path)
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         trace.save(bundle_path)
 
     assert isinstance(excinfo.value.__cause__, FileExistsError)
@@ -853,7 +853,7 @@ def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
     un-sweepable by ``cleanup_tmp()``) and the pre-overwrite backup restore
     (permanently losing the original bundle under an undocumented
     ``.bak.<uuid>`` directory name with a bare ``TypeError`` propagating to
-    the caller instead of a clean ``TorchLensIOError``).
+    the caller instead of a clean ``ArtifactError``).
     """
 
     bundle_path, first_log = _save_bundle(tmp_path, seed=0)
@@ -867,7 +867,7 @@ def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
     # subclass -- patching bare ``pickle.dump`` would no longer intercept it.
     monkeypatch.setattr("torchlens._io.bundle.dump_canonical_metadata", _poisoned_metadata_dump)
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         second_log.save(bundle_path, overwrite=True)
 
     assert isinstance(excinfo.value.__cause__, TypeError)
@@ -900,7 +900,7 @@ def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
 class _NeverEnumeratedError(Exception):
     """Stand-in for a hypothetical future third-party writer failure mode.
 
-    Deliberately NOT a subclass of ``TorchLensIOError``, ``BackendPayloadUnsupportedError``,
+    Deliberately NOT a subclass of ``ArtifactError``, ``BackendPayloadUnsupportedError``,
     or any member of ``save()``'s historical ``(ImportError, OSError, TypeError, ValueError,
     pickle.PickleError)`` tuple, so a test injecting it proves the catch-all safety net
     closes the *class* of "unenumerated exception strands the backup" bug rather than
@@ -943,7 +943,7 @@ def test_bundle_save_overwrite_arbitrary_exception_preserves_original_and_marks_
     # B3R4-R21-2): bare ``pickle.dump`` is no longer on the save path.
     monkeypatch.setattr("torchlens._io.bundle.dump_canonical_metadata", _poisoned_metadata_dump)
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         second_log.save(bundle_path, overwrite=True)
 
     assert excinfo.value.__cause__ is injected_exception
@@ -995,7 +995,7 @@ def test_legacy_multi_trace_bundle_load_typeerror_raises_torchlens_io_error(
     call sites round 5 fixed (``bundle.py`` save, main-trace load,
     ``streaming.py`` finalize). A bare ``TypeError`` (the same failure mode
     ``pickle`` raises for many live-resource/incompatible-global objects)
-    escaped uncaught instead of the documented ``TorchLensIOError``.
+    escaped uncaught instead of the documented ``ArtifactError``.
     """
 
     bundle_path = tmp_path / "legacy_bundle.tl"
@@ -1012,7 +1012,7 @@ def test_legacy_multi_trace_bundle_load_typeerror_raises_torchlens_io_error(
         "torchlens._io.bundle._RenameAwareUnpickler.find_class", _poisoned_find_class
     )
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         load(bundle_path)
 
     assert isinstance(excinfo.value.__cause__, TypeError)
@@ -1237,7 +1237,7 @@ def test_bundle_save_rejects_symlink_target(tmp_path: Path) -> None:
     symlink_path = tmp_path / "bundle_link"
     symlink_path.symlink_to(real_path, target_is_directory=True)
 
-    with pytest.raises(TorchLensIOError, match="symlinked save target"):
+    with pytest.raises(ArtifactError, match="symlinked save target"):
         trace.save(symlink_path)
 
 
@@ -1271,7 +1271,7 @@ def test_unified_load_rejects_symlinked_metadata(tmp_path: Path) -> None:
     member.rename(target)
     member.symlink_to(target)
 
-    with pytest.raises(TorchLensIOError, match="Refusing symlinked metadata"):
+    with pytest.raises(ArtifactError, match="Refusing symlinked metadata"):
         load(bundle_path)
 
 
@@ -1287,8 +1287,8 @@ def test_unified_load_rejects_symlinked_manifest(tmp_path: Path) -> None:
     # r29 F-r28-1: a symlinked manifest is now rejected even earlier, at
     # format-detection (before the loader's own symlink guard), so match the
     # symlink-refusal message point-agnostically -- the assertion still verifies
-    # that a symlinked manifest.json member is refused with TorchLensIOError.
-    with pytest.raises(TorchLensIOError, match="Refusing symlinked"):
+    # that a symlinked manifest.json member is refused with ArtifactError.
+    with pytest.raises(ArtifactError, match="Refusing symlinked"):
         load(bundle_path)
 
 
@@ -1301,7 +1301,7 @@ def test_unified_load_rejects_symlinked_blobs_dir(tmp_path: Path) -> None:
     member.rename(target)
     member.symlink_to(target, target_is_directory=True)
 
-    with pytest.raises(TorchLensIOError, match="Refusing symlinked blobs directory"):
+    with pytest.raises(ArtifactError, match="Refusing symlinked blobs directory"):
         load(bundle_path)
 
 
@@ -1315,7 +1315,7 @@ def test_unified_load_rejects_symlinked_bundle_path(tmp_path: Path) -> None:
     # r29 F-r28-1: a symlinked bundle path is now rejected earlier, at
     # format-detection, so match the symlink-refusal point-agnostically -- the
     # assertion still verifies a symlinked bundle directory is refused.
-    with pytest.raises(TorchLensIOError, match="Refusing symlinked"):
+    with pytest.raises(ArtifactError, match="Refusing symlinked"):
         load(link_path)
 
 
@@ -1339,7 +1339,7 @@ def test_resolve_bundle_blob_path_rejects_symlinked_blobs_dir(tmp_path: Path) ->
     (outside_tree / "0000000001.safetensors").write_bytes(b"payload")
     (bundle_root / "blobs").symlink_to(outside_tree, target_is_directory=True)
 
-    with pytest.raises(TorchLensIOError, match="Refusing symlinked blobs directory"):
+    with pytest.raises(ArtifactError, match="Refusing symlinked blobs directory"):
         resolve_bundle_blob_path(bundle_root, "blobs/0000000001.safetensors")
 
 
@@ -1387,7 +1387,7 @@ def test_bundle_loaded_log_validation_guard_raises(tmp_path: Path) -> None:
     restored = load(bundle_path)
 
     assert restored._loaded_from_bundle is True
-    with pytest.raises(TorchLensIOError, match="portable bundles drop them"):
+    with pytest.raises(ArtifactError, match="portable bundles drop them"):
         restored.validate_forward_pass([])
 
 
@@ -1397,7 +1397,7 @@ def test_bundle_save_rejects_non_tensor_activation_transform_output(tmp_path: Pa
     trace = _build_non_tensor_out_log()
     bundle_path = tmp_path / "non_tensor_bundle.tl"
 
-    with pytest.raises(TorchLensIOError, match="activation_transform outputs"):
+    with pytest.raises(ArtifactError, match="activation_transform outputs"):
         trace.save(bundle_path)
 
     assert not bundle_path.exists()

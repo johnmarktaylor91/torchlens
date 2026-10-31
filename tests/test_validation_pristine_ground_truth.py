@@ -200,7 +200,7 @@ class TestUnwrapLedgerIntegrity:
         return key
 
     def test_poisoned_ledger_refuses_the_pristine_oracle(self) -> None:
-        from torchlens._errors import CaptureContextError
+        from torchlens._errors import CaptureNotActiveError
 
         model = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
         tl.trace(model, torch.randn(2, 4))
@@ -208,7 +208,7 @@ class TestUnwrapLedgerIntegrity:
         key = self._poison()
         try:
             with (
-                pytest.raises(CaptureContextError) as excinfo,
+                pytest.raises(CaptureNotActiveError) as excinfo,
                 pristine_torch_oracle(),
             ):
                 raise AssertionError("oracle must refuse before yielding")

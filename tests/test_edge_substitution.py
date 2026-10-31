@@ -24,7 +24,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._selection import SelectionError, edge_address_of
+from torchlens._selection import edge_address_of
+from torchlens.errors import SelectionError
 from torchlens.validation.core import _check_edge_intervention_boundary
 
 

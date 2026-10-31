@@ -16,8 +16,8 @@ from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._io.tlspec import _TlSpecWriter
-from torchlens.backends import BackendRuntimeCompatibilityError, BackendUnsupportedError
 from torchlens.backends.tinygrad import GradOptions, TinygradBackend, capabilities
+from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
 
 tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor
@@ -440,7 +440,7 @@ def test_tinygrad_spec_registered() -> None:
 
     spec = tl.backends.spec("tinygrad")
     assert spec.capabilities.backward_capture is False
-    assert spec.capabilities.validation_replay is True
+    assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is False
     assert spec.capabilities.interventions is False
     assert spec.capabilities.payload_materialization is True
@@ -890,7 +890,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     )
     assert loaded_status is loaded_portable.validation_replay_status
     assert loaded_status.state == "unavailable"
-    assert loaded_status.available is False
+    assert loaded_status.is_available is False
     assert loaded_status.reason == "loaded_trace_runtime_capture_stripped"
     assert loaded_status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):

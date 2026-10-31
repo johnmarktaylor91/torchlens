@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens._runnable import ContractCheck, ReadinessReport
+
 from ._runnable import (
-    ContractCheck,
     ControlWitness,
     ControlWitnessKind,
-    ReadinessReport,
     ReadinessStatus,
     RunnableErrorCode,
     SparseRunDescriptor,

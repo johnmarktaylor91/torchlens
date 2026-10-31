@@ -65,7 +65,7 @@ def _alignment_invalid(reason: str, message: str, **fields: Any) -> Exception:
         If ``reason`` is outside the closed alignment-reason vocabulary.
     """
 
-    from ._selection import SelectionError
+    from torchlens._selection import SelectionError
 
     if reason not in ALIGNMENT_REASONS:
         raise ValueError(f"unknown selection alignment reason: {reason!r}")

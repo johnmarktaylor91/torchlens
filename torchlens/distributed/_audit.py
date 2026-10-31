@@ -33,7 +33,7 @@ from ._ledger import GroupLifecycleLedger, InstallEpoch, LineageVector
 __all__ = [
     "GROUP_LIFETIME_EVIDENCE_CONFLICT",
     "MembershipLineageVerdict",
-    "audit_membership_lineages",
+    "verify_membership_lineages",
 ]
 
 GROUP_LIFETIME_EVIDENCE_CONFLICT = "group_lifetime_evidence_conflict"
@@ -136,7 +136,7 @@ def _mixed_case_compatible(agreed: LineageVector, candidate: LineageVector) -> t
     return True, "seed discharged against one-generation complete witness"
 
 
-def audit_membership_lineages(
+def verify_membership_lineages(
     rank_ledgers: Mapping[int, GroupLifecycleLedger],
     rank_install_epochs: Mapping[int, InstallEpoch] | None = None,
 ) -> dict[str, MembershipLineageVerdict]:

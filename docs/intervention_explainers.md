@@ -385,7 +385,7 @@ A `.tlspec/` directory contains:
 - `README.md`: a generated human-readable summary.
 
 Load with `torchlens.io.load_intervention_spec(path)` and check a fresh capture with
-`torchlens.validation.check_spec_compat(spec, new_trace)`.
+`torchlens.intervention.check_spec_compat(spec, new_trace)`.
 
 ## Append Constraints
 

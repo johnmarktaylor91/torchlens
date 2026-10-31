@@ -13,7 +13,7 @@ from ..._data_classes.internal_types import FuncExecutionContext
 from ..._data_classes.op import (
     Op,
 )
-from ..._errors import TorchLensPostfuncError
+from ..._errors import UserTransformError
 from ..._ir.events import (
     FunctionCallRef,
 )
@@ -221,7 +221,7 @@ def _emit_predicate_operation_events(
             evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
         except StopSignal:
             raise
-        except (TorchLensPostfuncError, TrainingModeConfigError):
+        except (UserTransformError, TrainingModeConfigError):
             # Postfunc + train-mode validation errors are storage failures and
             # must surface directly to the caller, not be aggregated through
             # the predicate-failure pipeline. The orchestrator's outer

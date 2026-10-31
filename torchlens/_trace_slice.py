@@ -36,8 +36,9 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
+from torchlens._selection import SelectionError
+
 from ._selection import (
-    SelectionError,
     Selector,
     _lift,
     _SelectionOperand,

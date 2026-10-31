@@ -1,6 +1,6 @@
 """The one-call device-profiling door (torchnative 4.3; FLIP-1 consumer).
 
-``native_profile(model, x)`` runs ONE execution at the save-nothing tier
+``kernel_profile(model, x)`` runs ONE execution at the save-nothing tier
 (the measurement tier: cheaper and more attributable than a saving capture)
 inside the ONE owned profiler session, then joins device events to the
 captured ops by runtime correlation IDs. It ships BEFORE the >=95% GPU
@@ -56,7 +56,7 @@ def register_join_result(trace: Any, result: KinetoJoinResult) -> None:
 
 
 @dataclass(frozen=True)
-class NativeProfileResult:
+class KernelProfileReport:
     """One door call: one execution, one trace, one joined result."""
 
     trace: Any
@@ -87,7 +87,7 @@ class NativeProfileResult:
         return tuple(sorted(self.join.op_device_ns.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
-def native_profile(
+def kernel_profile(
     model: Any,
     input_args: Any = None,
     input_kwargs: dict[str, Any] | None = None,
@@ -95,7 +95,7 @@ def native_profile(
     activities: Any | None = None,
     native_chrome_path: str | Path | None = None,
     **trace_kwargs: Any,
-) -> NativeProfileResult:
+) -> KernelProfileReport:
     """Run one save-nothing capture under the owned session and join it.
 
     Parameters
@@ -121,7 +121,7 @@ def native_profile(
 
     Returns
     -------
-    NativeProfileResult
+    KernelProfileReport
         The trace, the joined result, and the session facts.
     """
 
@@ -137,7 +137,7 @@ def native_profile(
         if torch.cuda.is_available():  # pragma: no cover - CUDA leg
             torch.cuda.synchronize()
     result = join_session(active, trace, native_chrome_path=native_chrome_path)
-    return NativeProfileResult(
+    return KernelProfileReport(
         trace=trace,
         join=result,
         session_facts=dict(active.result.facts if active.result is not None else {}),
@@ -231,9 +231,9 @@ def _write_native_chrome(
 
 
 __all__ = [
-    "NativeProfileResult",
+    "KernelProfileReport",
     "join_result_for",
     "join_session",
-    "native_profile",
+    "kernel_profile",
     "register_join_result",
 ]

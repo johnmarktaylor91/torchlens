@@ -9,15 +9,15 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens.runnable import ContractCheck, ReadinessReport
+
 from . import _state
 from ._runnable import (
     ActivationPayloadLayerDescriptor,
-    ContractCheck,
     DivergencePolicy,
     InputAttestationFingerprint,
     NumericAttestationStatus,
     PathFaithfulness,
-    ReadinessReport,
     ReadinessStatus,
     RunnableCallDescriptor,
     RunnableErrorCode,

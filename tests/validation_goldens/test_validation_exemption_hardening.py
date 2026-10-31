@@ -38,7 +38,7 @@ from torchlens.validation.invariants import (
     _check_site_key_invariants,
     check_metadata_invariants,
 )
-from torchlens.validation.status import ValidationReplayStatus
+from torchlens.validation.status import ValidationStatus
 
 
 def _fake_layer(**kwargs: Any) -> Any:
@@ -1696,7 +1696,7 @@ def test_swamped_fp32_add_uses_ulp_predicate() -> None:
     assert result is True
     status = trace.validation_replay_status
     assert status.exempted_reason_counts["ulp_swamped_perturbation"] >= 1
-    assert status.failed_node_count == 0
+    assert status.num_failed_ops == 0
 
 
 def test_similar_magnitude_influential_add_is_not_ulp_exempted() -> None:
@@ -1732,7 +1732,7 @@ def test_boundary_crossing_validates_piecewise_constant_ops() -> None:
         result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
         assert result is True
-        assert trace.validation_replay_status.failed_node_count == 0
+        assert trace.validation_replay_status.num_failed_ops == 0
         assert (
             "locally_constant_by_construction"
             not in trace.validation_replay_status.exempted_reason_counts
@@ -1752,7 +1752,7 @@ def test_instance_norm_running_stats_are_training_update_targets() -> None:
 
     assert result is True
     status = trace.validation_replay_status
-    assert status.failed_node_count == 0
+    assert status.num_failed_ops == 0
     assert status.exempted_reason_counts["pre_perturbation_exemption"] >= 1
 
 
@@ -1769,7 +1769,7 @@ def test_scalar_masked_fill_all_selected_input_parent_is_structural() -> None:
 
     assert result is True
     status = trace.validation_replay_status
-    assert status.failed_node_count == 0
+    assert status.num_failed_ops == 0
     assert status.exempted_reason_counts["pre_perturbation_exemption"] >= 1
 
 
@@ -1792,7 +1792,7 @@ def test_corrupted_piecewise_constant_wrong_edges_still_fail() -> None:
         result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
         assert result is False
-        assert trace.validation_replay_status.failed_node_count >= 1
+        assert trace.validation_replay_status.num_failed_ops >= 1
         assert any(
             decision["decision"] == "failed" and decision["reason"] == "perturbation_insensitive"
             for decision in trace.validation_replay_status.decisions
@@ -1818,7 +1818,7 @@ def test_all_inf_legitimate_ops_validate_or_exempt_with_proof() -> None:
         result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
         assert result is True
-        assert trace.validation_replay_status.failed_node_count == 0
+        assert trace.validation_replay_status.num_failed_ops == 0
 
 
 def test_max_finite_selection_data_parents_perturb_distinctly() -> None:
@@ -1835,7 +1835,7 @@ def test_max_finite_selection_data_parents_perturb_distinctly() -> None:
         result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
         assert result is True
-        assert trace.validation_replay_status.failed_node_count == 0
+        assert trace.validation_replay_status.num_failed_ops == 0
 
 
 def test_corrupted_swamped_add_replay_fails_without_reexecuting_diagnostic_probes() -> None:
@@ -1918,7 +1918,7 @@ def test_output_bookkeeping_projection_is_structural() -> None:
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
     assert result is True
-    assert trace.validation_replay_status.failed_node_count == 0
+    assert trace.validation_replay_status.num_failed_ops == 0
 
 
 def test_structural_arg_exemption_covers_keyword_parent_positions() -> None:
@@ -1981,7 +1981,7 @@ def test_empty_like_is_justified_exempted_not_unverified() -> None:
     assert result is True
     status = trace.validation_replay_status
     assert status.state == "passed"
-    assert status.unverified_node_count == 0
+    assert status.num_unverified_ops == 0
     assert status.exempted_reason_counts["uninitialized_by_design"] >= 1
     decisions = [
         decision
@@ -2024,7 +2024,7 @@ def test_missing_saved_args_yields_reason_coded_unverified() -> None:
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     assert result.unverified_reason_counts["missing_saved_args"] >= 1
 
@@ -2041,7 +2041,7 @@ def test_selective_save_interior_gap_is_unverified() -> None:
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     status = trace.validation_replay_status
     assert status.unverified_reason_counts["missing_saved_parent_payload"] >= 1
@@ -2113,7 +2113,7 @@ def test_missing_parent_payload_yields_reason_coded_unverified() -> None:
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     assert result.unverified_reason_counts["missing_saved_parent_payload"] >= 1
 
@@ -2206,7 +2206,7 @@ def test_perturbation_exception_yields_reason_coded_unverified() -> None:
     torch.manual_seed(108)
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     assert result.unverified_reason_counts["perturbation_execution_exception"] >= 1
 
@@ -2250,7 +2250,7 @@ def test_fully_saved_vanilla_model_has_zero_unverified_decisions() -> None:
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
     assert result is True
-    assert trace.validation_replay_status.unverified_node_count == 0
+    assert trace.validation_replay_status.num_unverified_ops == 0
 
 
 def test_packed_sequence_structural_trace_passes() -> None:
@@ -2268,7 +2268,7 @@ def test_packed_sequence_structural_trace_passes() -> None:
     assert result is True
     status = trace.validation_replay_status
     assert status.state == "passed"
-    assert status.unverified_node_count == 0
+    assert status.num_unverified_ops == 0
 
 
 def test_validation_status_cache_invalidated_after_same_shape_rerun() -> None:

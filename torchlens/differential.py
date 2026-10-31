@@ -1,6 +1,6 @@
 """The ONE guarded cross-capture delta projection (leverage B15, D-2/D-7).
 
-``diff_report(subject, reference)`` enumerates BOTH captures' structural
+``diff(subject, reference)`` enumerates BOTH captures' structural
 site keys and settles every position into exactly one row of a closed
 status vocabulary — the projection summary/cost/themes/netron/Model-Explorer
 consumers read instead of re-deriving their own joins:
@@ -35,7 +35,7 @@ import torch
 
 from ._errors import InvalidArgumentError
 
-__all__ = ["DiffRow", "DifferentialReport", "diff_report"]
+__all__ = ["DiffRow", "DiffReport", "diff"]
 
 #: Engine-inserted machinery layer types (leverage D-7 exclusion rule).
 _MACHINERY_LAYER_TYPES = frozenset({"interventionreplacement"})
@@ -74,7 +74,7 @@ class DiffRow:
 
 
 @dataclass(frozen=True)
-class DifferentialReport:
+class DiffReport:
     """The settled two-capture differential: rows plus honest totals."""
 
     rows: tuple[DiffRow, ...]
@@ -98,7 +98,7 @@ class DifferentialReport:
             for status in _ROW_STATUSES
             if self.counts.get(status, 0)
         )
-        return f"DifferentialReport({len(self.rows)} rows: {parts or 'no rows'})"
+        return f"DiffReport({len(self.rows)} rows: {parts or 'no rows'})"
 
 
 def _ops_by_key(trace: Any, keys: dict[str, str]) -> dict[str, list[str]]:
@@ -221,7 +221,7 @@ def _joined_rows(
     return rows
 
 
-def diff_report(subject: Any, reference: Any) -> DifferentialReport:
+def diff(subject: Any, reference: Any) -> DiffReport:
     """Settle two captures into the guarded differential projection.
 
     Parameters
@@ -233,7 +233,7 @@ def diff_report(subject: Any, reference: Any) -> DifferentialReport:
 
     Returns
     -------
-    DifferentialReport
+    DiffReport
         One row per structural position of the UNION of both captures, each
         in the closed added / removed / unresolved / excluded_machinery /
         unreachable / zero / changed vocabulary.
@@ -250,7 +250,7 @@ def diff_report(subject: Any, reference: Any) -> DifferentialReport:
 
     if subject is reference:
         raise InvalidArgumentError(
-            "diff_report(subject, reference) received the SAME capture on "
+            "diff(subject, reference) received the SAME capture on "
             "both sides: the differential of a capture with itself is "
             "identically zero, so every row would be vacuous. Pass the OTHER "
             "run as the reference (a fork after do() is a different trace).",
@@ -333,4 +333,4 @@ def diff_report(subject: Any, reference: Any) -> DifferentialReport:
     counts: dict[str, int] = {}
     for row_record in rows:
         counts[row_record.status] = counts.get(row_record.status, 0) + 1
-    return DifferentialReport(rows=tuple(rows), counts=counts)
+    return DiffReport(rows=tuple(rows), counts=counts)

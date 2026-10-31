@@ -72,7 +72,7 @@ def test_fast_run_host_scalar_escape_changed_input_never_verified(tmp_path: Path
 
     ordinary = tl.load(path).run(inputs=changed)
     assert ordinary.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert ordinary.report.poisoned
+    assert ordinary.report.is_poisoned
 
     loaded = tl.load(path)
     first = loaded.run(inputs=original, fast=True)
@@ -80,7 +80,7 @@ def test_fast_run_host_scalar_escape_changed_input_never_verified(tmp_path: Path
 
     fast = loaded.run(inputs=changed, fast=True)
     assert fast.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert fast.report.poisoned
+    assert fast.report.is_poisoned
     # The wrong replayed value must never be blessed: the report matches the
     # ordinary provider's verdict on the identical artifact and input.
     assert fast.report.path_faithfulness is ordinary.report.path_faithfulness
@@ -133,7 +133,7 @@ def test_fast_run_layout_twin_never_verified(tmp_path: Path) -> None:
 
     fast = loaded.run(inputs=twin, fast=True)
     assert fast.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert fast.report.poisoned
+    assert fast.report.is_poisoned
 
 
 def test_fast_sparse_run_consumes_alias_unresolved_flag() -> None:

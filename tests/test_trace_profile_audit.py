@@ -161,7 +161,7 @@ def test_trace_profile_honesty_labels_missing_timing_as_unknown() -> None:
     )
     missing_timing_op._internal_set("func_duration", None)
     profile = trace.profile(sort_by="activation_memory")
-    honesty = profile.honesty()
+    honesty = profile.evidence_labels()
     row = honesty.loc[honesty["name"] == missing_timing_op.label].iloc[0]
 
     assert row["time"] == "unknown"

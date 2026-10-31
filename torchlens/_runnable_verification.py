@@ -8,11 +8,12 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from torchlens._runnable import ContractCheck, RunnableDiagnostic
+
 from . import _state
 from ._io._torch_symbols import torch_attr
 from ._runnable import (
     CallableRegistryEntry,
-    ContractCheck,
     DivergencePolicy,
     InputAttestationFingerprint,
     LiteralAtom,
@@ -27,7 +28,6 @@ from ._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     RunnableCallDescriptor,
-    RunnableDiagnostic,
     RunnableErrorCode,
     SparseRunDescriptor,
     StateSource,
@@ -42,8 +42,8 @@ from ._utils.rng import (
     aten_qualname_is_seeded_rng,
 )
 from .errors import (
-    NumericAttestationError,
     PathDivergenceError,
+    ReplayValueMismatchError,
     RunPreconditionError,
 )
 
@@ -335,7 +335,7 @@ def _raise_numeric_attestation_failure(fork: Any, check: ContractCheck) -> None:
 
     _state.unregister_log(fork)
     diagnostic = check.diagnostic
-    raise NumericAttestationError(
+    raise ReplayValueMismatchError(
         diagnostic.message if diagnostic is not None else "Numeric attestation failed.",
         code=RunnableErrorCode.NUMERIC_ATTESTATION_FAILED.value,
         path_faithfulness=PathFaithfulness.DIVERGED,
@@ -367,7 +367,7 @@ def _contract_check(
             current_runtime=str(torch.__version__),
             detection_stage="run_honesty_contract",
             resolver_provenance=None,
-            analysis_load_available=True,
+            is_analysis_load_available=True,
             details=details,
         )
     return ContractCheck(name=name, passed=passed, diagnostic=diagnostic)

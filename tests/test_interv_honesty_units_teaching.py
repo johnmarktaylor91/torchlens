@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._selection import SelectionError
+from torchlens.errors import SelectionError
 
 
 class _ConvNet(nn.Module):

@@ -18,13 +18,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends import (
-    BackendAmbiguityError,
     BackendCapabilities,
-    BackendMismatchError,
     BackendSpec,
-    BackendUnsupportedError,
     CaptureBackend,
-    UnknownBackendError,
 )
 from torchlens.backends.default_specs import (
     _contains_other_backend_tensor,
@@ -41,6 +37,12 @@ from torchlens.backends.registry import _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES, Se
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.capture.trace import _capture_backend_from_registry
+from torchlens.errors import (
+    AmbiguousBackendError,
+    BackendMismatchError,
+    BackendUnsupportedError,
+    UnknownBackendError,
+)
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import MetadataInvariantError
 
@@ -196,7 +198,7 @@ def _register_fake_backend(name: str = "fake", *, priority: int = 50) -> None:
             validate_trace=_fake_validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=True,
+                has_validation_replay=True,
                 fastlog=False,
                 interventions=False,
                 rng_replay=False,
@@ -293,7 +295,7 @@ def test_capture_backend_factory_checked_at_registration() -> None:
                 validate_trace=_fake_validate_trace,
                 capabilities=BackendCapabilities(
                     backward_capture=False,
-                    validation_replay=False,
+                    has_validation_replay=False,
                     fastlog=False,
                     interventions=False,
                     rng_replay=False,
@@ -323,7 +325,7 @@ def test_capture_backend_factory_import_error_is_not_exempted() -> None:
                 validate_trace=_fake_validate_trace,
                 capabilities=BackendCapabilities(
                     backward_capture=False,
-                    validation_replay=False,
+                    has_validation_replay=False,
                     fastlog=False,
                     interventions=False,
                     rng_replay=False,
@@ -349,7 +351,7 @@ def test_replace_backend_spec_removes_stale_aliases() -> None:
         validate_trace=_fake_validate_trace,
         capabilities=BackendCapabilities(
             backward_capture=False,
-            validation_replay=False,
+            has_validation_replay=False,
             fastlog=False,
             interventions=False,
             rng_replay=False,
@@ -388,7 +390,9 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     tinygrad_spec = tl.backends.spec("tinygrad")
 
     assert jax_spec.capabilities.backward_capture == jax_capabilities.supports_backward_capture
-    assert jax_spec.capabilities.validation_replay == jax_capabilities.supports_validation_replay
+    assert (
+        jax_spec.capabilities.has_validation_replay == jax_capabilities.supports_validation_replay
+    )
     assert jax_spec.capabilities.fastlog == jax_capabilities.supports_fastlog
     assert jax_spec.capabilities.interventions == jax_capabilities.supports_intervention
     assert (
@@ -416,7 +420,9 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     assert tl.backends.spec("torch").capabilities.output_container_structure == "full_spec"
 
     assert mlx_spec.capabilities.backward_capture == mlx_capabilities.supports_backward_capture
-    assert mlx_spec.capabilities.validation_replay == mlx_capabilities.supports_validation_replay
+    assert (
+        mlx_spec.capabilities.has_validation_replay == mlx_capabilities.supports_validation_replay
+    )
     assert mlx_spec.capabilities.fastlog == mlx_capabilities.supports_fastlog
     assert mlx_spec.capabilities.interventions == mlx_capabilities.supports_intervention
     assert (
@@ -445,7 +451,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         == tinygrad_capabilities.supports_backward_capture
     )
     assert (
-        tinygrad_spec.capabilities.validation_replay
+        tinygrad_spec.capabilities.has_validation_replay
         == tinygrad_capabilities.supports_validation_replay
     )
     assert tinygrad_spec.capabilities.fastlog == tinygrad_capabilities.supports_fastlog
@@ -478,7 +484,8 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         paddle_spec.capabilities.backward_capture == paddle_capabilities.supports_backward_capture
     )
     assert (
-        paddle_spec.capabilities.validation_replay == paddle_capabilities.supports_validation_replay
+        paddle_spec.capabilities.has_validation_replay
+        == paddle_capabilities.supports_validation_replay
     )
     assert paddle_spec.capabilities.fastlog == paddle_capabilities.supports_fastlog
     assert paddle_spec.capabilities.interventions == paddle_capabilities.supports_intervention
@@ -1130,7 +1137,7 @@ def test_backend_none_ambiguity_is_deterministic() -> None:
     _register_fake_backend("fake_a", priority=99)
     _register_fake_backend("fake_b", priority=99)
     try:
-        with pytest.raises(BackendAmbiguityError, match="fake_a, fake_b"):
+        with pytest.raises(AmbiguousBackendError, match="fake_a, fake_b"):
             tl.trace(_FakeModel(), object())
     finally:
         tl.backends.unregister("fake_a")

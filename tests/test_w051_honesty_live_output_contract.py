@@ -90,7 +90,7 @@ def test_default_capture_container_output_settles_verified_live(name, factory, s
     assert all(trace.ops[label].container_spec is None for label in trace.output_layers)
     result = trace.run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.poisoned is False
+    assert result.report.is_poisoned is False
     with torch.no_grad():
         live = model(x)
     assert type(result.output) is type(live)
@@ -114,7 +114,7 @@ def test_container_contract_capture_settles_verified_live(name, factory, shape) 
     trace = tl.trace(model, x, capture=CaptureOptions(capture_container_structure=True))
     result = trace.run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.poisoned is False
+    assert result.report.is_poisoned is False
     with torch.no_grad():
         live = model(x)
     assert type(result.output) is type(live)
@@ -223,7 +223,7 @@ def test_live_graph_change_return_diverged_policy_is_honored() -> None:
     flipped = torch.full((3, 8), -5.0)
     result = trace.run(inputs=flipped, on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert result.report.poisoned is True
+    assert result.report.is_poisoned is True
     assert result.output is None
     assert result.report.first_mismatch is not None
     assert result.report.first_mismatch.code is RunnableErrorCode.CALL_STRUCTURE_MISMATCH

@@ -17,9 +17,10 @@ from torch import nn
 import torchlens as tl
 from torchlens._ir.container import TupleIndex
 from torchlens._ir.selector_eval import selector_from_spec
+from torchlens.intervention import check_spec_compat
 from torchlens.intervention.errors import (
     MultiMatchWarning,
-    OpaqueCallableInExecutableSaveError,
+    OpaqueCallableError,
     ReplayPreconditionError,
     UntrustedCallableError,
 )
@@ -39,7 +40,6 @@ from torchlens.intervention.types import (
     InterventionSpec,
 )
 from torchlens.io import load_intervention_spec
-from torchlens.validation import check_spec_compat
 
 _INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention.resolver")
 
@@ -148,7 +148,7 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     assert tl.load(path) == spec
     compat = check_spec_compat(spec, _log(_ReluModel(), x))
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
 
 
 def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
@@ -244,7 +244,7 @@ def test_where_hook_save_manifest_tolerates_nonportable_predicate(tmp_path: Path
 
     for level in ("executable_with_callables", "portable"):
         path = tmp_path / f"where_{level}.tlspec"
-        with pytest.raises(OpaqueCallableInExecutableSaveError, match="Callable selector"):
+        with pytest.raises(OpaqueCallableError, match="Callable selector"):
             log.save_intervention(path, level=level)
 
 
@@ -629,7 +629,7 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
         return out
 
     log.attach_hooks({tl.func("relu"): opaque_hook}, confirm_mutation=True)
-    with pytest.raises(OpaqueCallableInExecutableSaveError):
+    with pytest.raises(OpaqueCallableError):
         log.save_intervention(tmp_path / "opaque.tlspec", level="portable")
 
 

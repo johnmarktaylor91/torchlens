@@ -31,7 +31,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens.intervention.errors import ReplayPreconditionError
 from torchlens.intervention.save import load_intervention_spec
 from torchlens.intervention.types import InterventionSpec
@@ -331,7 +331,7 @@ def test_torch_bundle_rejects_non_torch_tensor_codec(tmp_path: Path) -> None:
         entry["codec"] = "numpy_safetensors_v1"
     _write_json(bundle_path / "manifest.json", manifest)
 
-    with pytest.raises(TorchLensIOError, match="non-torch payload codec"):
+    with pytest.raises(ArtifactError, match="non-torch payload codec"):
         tl.load(bundle_path)
 
 
@@ -344,5 +344,5 @@ def test_torch_bundle_rejects_non_torch_body_index_codec(tmp_path: Path) -> None
     manifest["body_index"][0]["logical_backend"] = "jax"
     _write_json(bundle_path / "manifest.json", manifest)
 
-    with pytest.raises(TorchLensIOError, match="non-torch payload codec"):
+    with pytest.raises(ArtifactError, match="non-torch payload codec"):
         tl.load(bundle_path)

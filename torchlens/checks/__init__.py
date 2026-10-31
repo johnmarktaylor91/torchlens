@@ -22,23 +22,14 @@ The honestly-redefined flagship checks (memo section 1, all measured):
   are the mechanism working) and RAISE at S-B before the weights are
   written -- the only pre-write tripwire under fp32 and bf16.
 
-One-shot parameter-space auditing is ``audit_params`` (also served as
-``tl.debug.param_health``). Access spelling is ``import torchlens.checks``
+One-shot parameter-space auditing is ``tl.debug.param_health``. Access spelling is ``import torchlens.checks``
 for now; root-facade routing is an F35 registration fragment. Every
 spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
 
 from __future__ import annotations
 
-from ._adapters import OptimizerFacts, optimizer_facts
-from ._audit import ParamHealthReport as ParamAudit, param_health as audit_params
-from ._constants import (
-    MAX_FRACTION_DEFAULT,
-    SUBNORMAL_FRACTION_THRESHOLD_DEFAULT,
-    WARN_WINDOW_DEFAULT,
-    WATCHDOG_FACTOR,
-)
-from ._errors import CheckConfigError, CheckLifecycleError, CheckViolationError
+from ._adapters import OptimizerFacts
 from ._ledgers import (
     ClipLedger,
     ClipLedgerSnapshot,
@@ -49,53 +40,26 @@ from ._ledgers import (
 )
 from ._range import LivenessProbe, RangeProbe
 from ._records import (
-    ACTIONS,
-    CHECK_REPORT_SCHEMA_VERSION,
-    EVIDENCE_KINDS,
-    SCALE_PROVENANCE,
-    SEVERITIES,
-    STAGES,
     CheckFinding,
     CheckReport,
 )
-from ._scan import ScanRow, named_entries_from_target, scan_named_tensors, tensor_digest
-from ._session import HAS_MULTI_GRAD_HOOK, MAX_STORED_FINDINGS, ChecksSession
+from ._scan import ScanRow
+from ._session import ChecksSession
 
 __tl_layer__ = "L5"
 
 __all__ = [
-    "ACTIONS",
-    "CHECK_REPORT_SCHEMA_VERSION",
-    "EVIDENCE_KINDS",
-    "HAS_MULTI_GRAD_HOOK",
-    "MAX_FRACTION_DEFAULT",
-    "MAX_STORED_FINDINGS",
-    "SCALE_PROVENANCE",
-    "SEVERITIES",
-    "STAGES",
-    "SUBNORMAL_FRACTION_THRESHOLD_DEFAULT",
-    "WARN_WINDOW_DEFAULT",
-    "WATCHDOG_FACTOR",
-    "CheckConfigError",
     "CheckFinding",
-    "CheckLifecycleError",
     "CheckReport",
-    "CheckViolationError",
     "ChecksSession",
     "ClipLedger",
     "ClipLedgerSnapshot",
     "LivenessProbe",
     "OptimizerFacts",
-    "ParamAudit",
     "RangeProbe",
     "ScaleLedger",
     "ScaleLedgerSnapshot",
     "ScanRow",
     "Watchdog",
     "WatchdogSnapshot",
-    "audit_params",
-    "named_entries_from_target",
-    "optimizer_facts",
-    "scan_named_tensors",
-    "tensor_digest",
 ]

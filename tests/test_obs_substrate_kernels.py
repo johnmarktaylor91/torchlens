@@ -17,7 +17,6 @@ from torchlens._observability import (
     Histogram,
     HistogramDescriptor,
     Spine,
-    StatKernelError,
     merge_histogram_results,
     merge_spine_results,
 )
@@ -29,6 +28,7 @@ from torchlens._observability._kernels import (
     spine_result_from_vector,
     spine_vector,
 )
+from torchlens.errors import StatKernelError
 
 
 def _spine_of(*tensors: torch.Tensor) -> Spine:

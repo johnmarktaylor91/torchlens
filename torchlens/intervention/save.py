@@ -27,9 +27,9 @@ from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleInd
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from .errors import (
     DirectActivationWriteWarning,
-    DirectWriteInExecutableSaveError,
+    DirectWriteSaveError,
     MultiMatchWarning,
-    OpaqueCallableInExecutableSaveError,
+    OpaqueCallableError,
     ReplayPreconditionError,
     SiteResolutionError,
     UnserializableDictKeyError,
@@ -612,7 +612,7 @@ def _enforce_direct_write_policy(
         )
         return
     if not allow_direct_writes:
-        raise DirectWriteInExecutableSaveError(
+        raise DirectWriteSaveError(
             "Direct out writes cannot be saved as executable interventions. "
             "Pass allow_direct_writes=True only if the recipe semantics are intentional."
         )
@@ -884,7 +884,7 @@ def _serialize_hook_spec(
         # instead of the selected facet slice. Refuse rather than persist a spec whose
         # replay semantics silently differ from what was attached.
         facet_name = hook_spec.metadata.get("facet_name", "<unknown>")
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Cannot save a facet-slice hook (facet {facet_name!r}) at "
             f"save_level={save_level.value!r}: the slice-scatter wrapper is bound to the "
             "captured trace and cannot round-trip through a spec file. Save at "
@@ -1099,11 +1099,11 @@ def _serialize_helper(
 
     portability = helper.portability
     if save_level == SaveLevel.PORTABLE and portability != "builtin":
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Portable intervention specs cannot save {portability} helper {helper.name!r}."
         )
     if save_level == SaveLevel.EXECUTABLE_WITH_CALLABLES and portability == "opaque_audit":
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Executable intervention specs cannot save opaque helper {helper.name!r}."
         )
     if portability == "import_ref":
@@ -1117,7 +1117,7 @@ def _serialize_helper(
             "name": helper.name,
             "repr": repr(helper),
             "batch_independent": bool(helper.batch_independent),
-            "compatible_with_append": bool(helper.compatible_with_append),
+            "compatible_with_append": bool(helper.is_compatible_with_append),
         }
 
     return {
@@ -1129,7 +1129,7 @@ def _serialize_helper(
         "kwargs": {key: _serialize_value(value, save_level, state) for key, value in helper.kwargs},
         "metadata": _jsonish_metadata(dict(helper.metadata)),
         "batch_independent": bool(helper.batch_independent),
-        "compatible_with_append": bool(helper.compatible_with_append),
+        "compatible_with_append": bool(helper.is_compatible_with_append),
     }
 
 
@@ -1158,7 +1158,7 @@ def _serialize_callable(value: Callable[..., Any], save_level: SaveLevel) -> dic
         # resolving it here would perform the import the laziness exists to
         # avoid.
         if save_level == SaveLevel.PORTABLE:
-            raise OpaqueCallableInExecutableSaveError(
+            raise OpaqueCallableError(
                 f"Portable intervention specs cannot save import-ref callable {value.import_path}."
             )
         return {
@@ -1169,12 +1169,12 @@ def _serialize_callable(value: Callable[..., Any], save_level: SaveLevel) -> dic
     import_path = _import_path_for_callable(value)
     if import_path is not None and _callable_round_trips(value, import_path):
         if save_level == SaveLevel.PORTABLE:
-            raise OpaqueCallableInExecutableSaveError(
+            raise OpaqueCallableError(
                 f"Portable intervention specs cannot save import-ref callable {import_path}."
             )
         return {"portability": "import_ref", "import_path": import_path, "repr": repr(value)}
     if save_level != SaveLevel.AUDIT:
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Callable {value!r} is opaque and can only be saved at audit level."
         )
     return {"portability": "opaque_audit", "repr": repr(value)}
@@ -1197,7 +1197,7 @@ def _serialize_opaque(value: Any, save_level: SaveLevel) -> dict[str, Any]:
     """
 
     if save_level != SaveLevel.AUDIT:
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Value {value!r} is not portable and can only be saved at audit level."
         )
     return {"__opaque_audit__": {"type": type(value).__name__, "repr": repr(value)}}
@@ -1628,13 +1628,13 @@ def _selector_value_to_json(value: Any, save_level: SaveLevel) -> Any:
         return value
     if callable(value):
         if save_level != SaveLevel.AUDIT:
-            raise OpaqueCallableInExecutableSaveError(
+            raise OpaqueCallableError(
                 f"Callable selector payload {value!r} is non-portable and can only be saved "
                 "at audit level."
             )
         return {"__opaque_audit__": {"type": type(value).__name__, "repr": repr(value)}}
     if save_level != SaveLevel.AUDIT:
-        raise OpaqueCallableInExecutableSaveError(
+        raise OpaqueCallableError(
             f"Selector payload {value!r} is non-portable and can only be saved at audit level."
         )
     return {"__opaque_audit__": {"type": type(value).__name__, "repr": repr(value)}}

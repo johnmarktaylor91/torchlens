@@ -13,7 +13,7 @@ from safetensors.torch import load_file
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io.runnable import (
     assert_sparse_core_has_no_tensor_payload,
     build_sparse_run_descriptor,
@@ -120,10 +120,10 @@ def test_runnable_save_rejects_tensor_in_slotted_keep_field(
     op = next(op for op in trace.layer_list if not op.is_input)
     object.__setattr__(op, field_name, {"hidden_tensor": torch.tensor([1.0])})
 
-    with pytest.raises((AssertionError, TorchLensIOError)) as caught:
+    with pytest.raises((AssertionError, ArtifactError)) as caught:
         trace.save(tmp_path / f"{field_name}.tlspec", level="runnable")
 
-    if isinstance(caught.value, TorchLensIOError):
+    if isinstance(caught.value, ArtifactError):
         assert isinstance(caught.value.__cause__, AssertionError)
 
 

@@ -1,6 +1,6 @@
 """The ONE constants module for checks-kit knobs (checks memo 4.4).
 
-``audit_params`` keeps knob parity with ``tl.debug.dtype_range``;
+``param_health`` keeps knob parity with ``tl.debug.dtype_range``;
 ``tests/test_checks_kit_scan.py`` pins the parity so the two doors can
 never silently drift apart without a deliberate, reviewed change here.
 """

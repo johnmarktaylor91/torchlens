@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
-from .._errors import TorchLensPostfuncError
+from .._errors import UserTransformError
 from .._ir.summary_role import ensure_summary_output_owns_storage, is_summary_transform
 from .._state import pause_logging
 from .._training_validation import TrainingModeConfigError
@@ -125,7 +125,7 @@ def _resolve_storage(
         Storage intent resolved from streaming options.
     activation_transform:
         Optional callable applied to RAM/disk payloads after dtype/device
-        transforms. Errors are wrapped in :class:`TorchLensPostfuncError`.
+        transforms. Errors are wrapped in :class:`UserTransformError`.
     save_raw_activations:
         When False and ``activation_transform`` is set, raw payloads are
         suppressed and only the transformed copy is retained.
@@ -143,7 +143,7 @@ def _resolve_storage(
     ------
     PredicateError
         If the requested storage policy is invalid for the tensor.
-    TorchLensPostfuncError
+    UserTransformError
         If the out transform raises while transforming a payload.
     TrainingModeConfigError
         If ``save_grad=True`` and the transformed RAM payload is not a
@@ -311,7 +311,7 @@ def _invoke_transform(
                 return cast("Callable[..., torch.Tensor]", transform)(tensor, ctx=ctx)
             return transform(tensor)
     except Exception as exc:
-        raise TorchLensPostfuncError(
+        raise UserTransformError(
             _transform_error_message(
                 ctx=ctx,
                 spec=spec,

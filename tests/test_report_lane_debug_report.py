@@ -83,7 +83,7 @@ def _helper_calls() -> dict[str, Callable[[dict[str, Any]], Any]]:
         "nan_report": lambda f: tl.debug.nonfinite_origin(f["model"], f["x"]),
         "bisect_nan_backward": lambda f: debug.bisect_nan_backward(f["grad_trace"]),
         "bisect_precision": lambda f: debug.bisect_precision(f["model"], f["x"]),
-        "audit_params": lambda f: tl.debug.param_health(f["model"]),
+        "param_health": lambda f: tl.debug.param_health(f["model"]),
         "first_bad_thing": lambda f: tl.report.find_nan(f["model"], f["x"]).first_bad_thing,
         "hot_path": lambda f: debug.hot_path(f["trace"]),
         "dead_neurons": lambda f: debug.dead_neurons(f["trace"]),

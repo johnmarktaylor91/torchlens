@@ -83,7 +83,7 @@ def _validate(fork: tl.Trace, ground_truth: torch.Tensor):
 
 def _last_failure(fork: tl.Trace):
     failure = getattr(fork, "_last_validation_failure", None)
-    return None if failure is None else (failure.check, failure.op_label)
+    return None if failure is None else (failure.check_name, failure.op_label)
 
 
 def test_act_fork_validates_against_hand_truth(two) -> None:

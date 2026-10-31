@@ -15,7 +15,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import load, trace as trace_fn
 from torchlens._data_classes.trace import Trace
-from torchlens._io import BlobRef, TorchLensIOError
+from torchlens._io import ArtifactError, BlobRef
 from torchlens.io import materialize_nested
 
 
@@ -293,7 +293,7 @@ def test_lazy_resave_detects_manifest_level_drift(tmp_path: Path) -> None:
     manifest["created_at"] = "2099-01-01T00:00:00Z"
     _write_manifest(bundle_path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="source bundle manifest has changed since load"):
+    with pytest.raises(ArtifactError, match="source bundle manifest has changed since load"):
         lazy_log.save(tmp_path / "resaved.tl")
 
 
@@ -304,7 +304,7 @@ def test_lazy_resave_detects_blob_level_drift(tmp_path: Path) -> None:
     lazy_log = load(bundle_path, lazy=True)
     _corrupt_one_blob(bundle_path)
 
-    with pytest.raises(TorchLensIOError, match="sha256 mismatch"):
+    with pytest.raises(ArtifactError, match="sha256 mismatch"):
         lazy_log.save(tmp_path / "resaved.tl")
 
 
@@ -364,7 +364,7 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
     lazy_log = load(bundle_path, lazy=True, materialize_nested=False)
 
     with pytest.raises(
-        TorchLensIOError,
+        ArtifactError,
         match="Call torchlens.io.materialize_nested\\(trace\\) before saving",
     ):
         lazy_log.save(tmp_path / "resaved.tl", include_saved_args=True)
@@ -411,7 +411,7 @@ def test_portable_loaded_logs_reject_validation_entry_points(
     bundle_path, _ = _save_bundle(tmp_path)
     restored = load(bundle_path, lazy=lazy)
 
-    with pytest.raises(TorchLensIOError, match="portable bundles drop them"):
+    with pytest.raises(ArtifactError, match="portable bundles drop them"):
         restored.validate_forward_pass([])
 
 

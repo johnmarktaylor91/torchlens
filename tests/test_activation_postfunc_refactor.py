@@ -181,7 +181,7 @@ def test_transform_error_has_context_and_cause() -> None:
 
         raise ValueError("sentinel")
 
-    with pytest.raises(tl.errors.TorchLensPostfuncError) as exc_info:
+    with pytest.raises(tl.errors.UserTransformError) as exc_info:
         tl.trace(_TinyModel(), torch.randn(2, 4), save=SaveOptions(activation_transform=_raise))
 
     message = str(exc_info.value)

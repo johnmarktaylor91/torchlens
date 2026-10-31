@@ -11,8 +11,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends import BackendCapabilities, BackendSpec, BackendUnsupportedError
-from torchlens.intervention.errors import BatchChunkInputAmbiguityError, ChunkedForwardConfigError
+from torchlens.backends import BackendCapabilities, BackendSpec
+from torchlens.errors import BackendUnsupportedError
+from torchlens.intervention.errors import AmbiguousBatchInputError, ChunkedForwardConfigError
 
 
 class DeterministicToy(nn.Module):
@@ -272,7 +273,7 @@ def test_auto_mode_rejects_multiple_batched_tensor_leaves() -> None:
     x = torch.ones(6, 3)
     y = torch.ones(6, 3)
 
-    with pytest.raises(BatchChunkInputAmbiguityError, match="0.*1"):
+    with pytest.raises(AmbiguousBatchInputError, match="0.*1"):
         tl.trace(model, (x, y), chunk_size=2)
 
 
@@ -388,7 +389,7 @@ def test_omitted_chunk_size_does_not_block_non_torch_backend() -> None:
             validate_trace=validate_trace,
             capabilities=BackendCapabilities(
                 backward_capture=False,
-                validation_replay=False,
+                has_validation_replay=False,
                 fastlog=False,
                 interventions=False,
                 rng_replay=False,

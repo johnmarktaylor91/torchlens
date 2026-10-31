@@ -227,11 +227,11 @@ def _memory_scopes(log: Any) -> dict[str, Any]:
 
     memory = _memory(log)
     return {
-        "at_capture_bytes": memory.at_capture_bytes,
-        "at_capture_saved_ops": memory.at_capture_saved_ops,
-        "retained_now_bytes": memory.retained_now_bytes,
-        "retained_now_present_ops": memory.retained_now_present_ops,
-        "retained_now_lazy_ops": memory.retained_now_lazy_ops,
+        "at_capture_bytes": memory.captured_bytes,
+        "at_capture_saved_ops": memory.captured_saved_ops,
+        "retained_now_bytes": memory.retained_bytes,
+        "retained_now_present_ops": memory.retained_present_ops,
+        "retained_now_lazy_ops": memory.retained_lazy_ops,
         "scope_note": memory.scope_note,
     }
 
@@ -263,7 +263,7 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
         "compute_ops": core.counts.compute_ops,
         "alias_rows": core.counts.alias_rows,
         "tensors_total": len(log) if hasattr(log, "__len__") else 0,
-        "tensors_saved": core.memory.at_capture_saved_ops,
+        "tensors_saved": core.memory.captured_saved_ops,
         "parameters": core.params.total or 0,
         "modules": module_row_count,
     }
@@ -283,11 +283,11 @@ def _health_summary(log: Any) -> dict[str, Any]:
     return {
         "verdict": facts.verdict,
         "basis": facts.basis,
-        "checked": facts.checked,
+        "checked": facts.num_checked_ops,
         "nonfinite_labels": list(facts.nonfinite_labels),
         "alias_nonfinite_labels": list(facts.alias_nonfinite_labels),
-        "unexamined": facts.unexamined,
-        "unchecked": facts.unchecked,
+        "unexamined": facts.num_unexamined_ops,
+        "unchecked": facts.num_unchecked_ops,
     }
 
 

@@ -7,7 +7,7 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
-from .._errors import CaptureContextError, InvalidArgumentError, PayloadUnavailableError
+from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
@@ -1453,7 +1453,7 @@ def draw(
     if vis_renderer == "dagua":
         opted_in_module = sys.modules.get("torchlens.experimental.dagua")
         if not getattr(opted_in_module, "__torchlens_dagua_opted_in__", False):
-            raise CaptureContextError(
+            raise CaptureNotActiveError(
                 "dagua renderer is experimental and has not been opted into",
                 code="dagua_renderer_not_opted_in",
                 remedy="opt in via `from torchlens.experimental import dagua` first",

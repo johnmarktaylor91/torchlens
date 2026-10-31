@@ -777,7 +777,7 @@ honest tensor-only `load_state_dict` binds identically in both lanes. The embedd
 ceiling is untouched: an extra-state model still cannot report `verified` (missing
 comparison basis, coherent in both lanes). If NEITHER capture-time record exists
 (`state_dict()` not a mapping at the capture boundary), the dead save refuses loudly and
-typed (`TorchLensIOError`, mirroring the `include_weights=True` lane) -- never a silent
+typed (`ArtifactError`, mirroring the `include_weights=True` lane) -- never a silent
 under-declaration.
 
 1. A computational group lacks a key, uses another ref schema, requests custom/import code, or is
@@ -1467,7 +1467,7 @@ Exception classes are `RunnableTLSPECError(TorchLensError)`,
 `RunPreconditionError(ConfigurationError, ValueError)`,
 `RuntimeSignatureDriftError(CompatibilityError, RuntimeError)`,
 `PathDivergenceError(ValidationError, RuntimeError, ValueError)`,
-`NumericAttestationError(ValidationError, RuntimeError)`,
+`ReplayValueMismatchError(ValidationError, RuntimeError)`,
 `PoisonedRunError(ValidationError, RuntimeError)`, and
 `SparseCorePayloadError(ValidationError, AssertionError)`. Each also subclasses
 `RunnableTLSPECError`. The machine code is in its diagnostic/report; exception text is not a

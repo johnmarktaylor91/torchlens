@@ -36,9 +36,9 @@ from .._utils._torch_compat import resolve_runnable_torch_alias
 from .._utils._torch_symbols import torch_attr
 from ._module_alias_guard import refuse_trace_alias_spellings
 from .errors import (
+    AmbiguousSiteError,
     MultiMatchWarning,
     ReplayPreconditionError,
-    SiteAmbiguityError,
     SiteResolutionError,
     UntrustedCallableError,
 )
@@ -934,7 +934,7 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
 
     Raises
     ------
-    SiteAmbiguityError
+    AmbiguousSiteError
         With ``fields["code"] == "multipass_bare_label_ambiguous"``.
     """
 
@@ -952,7 +952,7 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
         # only the exact bare layer label is the pass-ambiguous address.
         return
     pass_indices = sorted(int(getattr(site, "pass_index", 1) or 1) for site in matched)
-    raise SiteAmbiguityError(
+    raise AmbiguousSiteError(
         multipass_bare_label_message(layer_label, pass_indices),
         code="multipass_bare_label_ambiguous",
         layer_label=layer_label,
@@ -987,7 +987,7 @@ def resolve_sites(
 
     Raises
     ------
-    SiteAmbiguityError
+    AmbiguousSiteError
         If more sites resolve than ``max_fanout`` allows.
     SiteResolutionError
         If no site resolves or the query shape is unsupported.
@@ -996,7 +996,7 @@ def resolve_sites(
     if max_fanout is None:
         raise SiteResolutionError("max_fanout=None is not supported; pass an explicit integer.")
     if max_fanout < 1:
-        raise SiteAmbiguityError("max_fanout must be at least 1.")
+        raise AmbiguousSiteError("max_fanout must be at least 1.")
     if strict and isinstance(selector, str):
         raise SiteResolutionError(
             "Bare strings are non-portable in strict mode; use tl.label(...), "
@@ -1022,7 +1022,7 @@ def resolve_sites(
             )
         _refuse_bare_multipass_label(selector, matched)
     if len(matched) > max_fanout:
-        raise SiteAmbiguityError(
+        raise AmbiguousSiteError(
             f"site {selector!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
             "Pass a larger max_fanout explicitly or use a narrower selector."
         )
@@ -1238,7 +1238,7 @@ def find_sites(
     if max_fanout is None:
         raise SiteResolutionError("max_fanout=None is not supported; pass an explicit integer.")
     if max_fanout < 1:
-        raise SiteAmbiguityError("max_fanout must be at least 1.")
+        raise AmbiguousSiteError("max_fanout must be at least 1.")
     if strict and isinstance(query, str):
         raise SiteResolutionError(
             "Bare strings are non-portable in strict mode; use tl.label(...), "
@@ -1252,7 +1252,7 @@ def find_sites(
     sites = tuple(_iter_sites(log, direction))
     matched = _resolve_unchecked(sites, selector, strict=strict)
     if len(matched) > max_fanout:
-        raise SiteAmbiguityError(
+        raise AmbiguousSiteError(
             f"site {query!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
             "Pass a larger max_fanout explicitly or use a narrower selector."
         )

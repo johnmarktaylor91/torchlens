@@ -22,7 +22,7 @@ from _oracle_env import expect_bundle_minor_version_mismatch
 import torchlens as tl
 from torchlens._ecosystem import migrate
 from torchlens._ecosystem.migrate import _ABSENT_FAMILIES_BY_TARGET
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io.compat_ledger import MIGRATION_WITNESS_FILENAME, read_migration_witness
 
 GOLDENS_DIR = Path(__file__).parent / "release_goldens"
@@ -109,7 +109,7 @@ def test_v216_source_refuses_with_verified_reader(corpus_dir: Path, tmp_path: Pa
     """Pre-floor migration is out of v1; the remedy names the verified reader."""
 
     path = _working_copy(corpus_dir, tmp_path, "art_v2.16.0_portable")
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(path)
     assert excinfo.value.fields["code"] == "migration_source_unsupported"
     assert "torchlens==2.17.0" in excinfo.value.fields["remedy"]
@@ -118,7 +118,7 @@ def test_v216_source_refuses_with_verified_reader(corpus_dir: Path, tmp_path: Pa
 def test_non_directory_refuses(tmp_path: Path) -> None:
     """A non-directory source refuses typed."""
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(tmp_path / "missing")
     assert excinfo.value.fields["code"] == "migration_source_unsupported"
 
@@ -129,7 +129,7 @@ def test_unknown_format_refuses(tmp_path: Path) -> None:
     source = tmp_path / "junk.tlspec"
     source.mkdir()
     (source / "README.txt").write_text("not an artifact", encoding="utf-8")
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(source)
     assert excinfo.value.fields["code"] == "migration_source_unsupported"
 
@@ -140,7 +140,7 @@ def test_stranded_staging_refuses_before_mutation(corpus_dir: Path, tmp_path: Pa
     path = _working_copy(corpus_dir, tmp_path, "art_v2.31.0_portable")
     staging = path.with_name(path.name + ".tl-migrate-staging")
     staging.mkdir()
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(path)
     assert excinfo.value.fields["code"] == "migration_concurrent_writer"
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
@@ -159,7 +159,7 @@ def test_failure_injection_leaves_source_intact(
         raise OSError("injected copy failure")
 
     monkeypatch.setattr(shutil, "copytree", _boom)
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(path)
     assert excinfo.value.fields["code"] == "migration_staging_failed"
     assert (path / "manifest.json").read_bytes() == original
@@ -183,7 +183,7 @@ def test_publish_failure_restores_source(
         real_rename(src, dst)
 
     monkeypatch.setattr(os, "rename", _second_rename_fails)
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(path)
     assert excinfo.value.fields["code"] == "migration_staging_failed"
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
@@ -200,7 +200,7 @@ def test_tampered_witness_refuses_at_load(corpus_dir: Path, tmp_path: Path) -> N
     witness = json.loads(witness_path.read_text(encoding="utf-8"))
     witness["final_manifest_sha256"] = "0" * 64
     witness_path.write_text(json.dumps(witness), encoding="utf-8")
-    with expect_bundle_minor_version_mismatch(), pytest.raises(TorchLensIOError) as excinfo:
+    with expect_bundle_minor_version_mismatch(), pytest.raises(ArtifactError) as excinfo:
         tl.load(str(path))
     # The digest cross-check fails the witness door, so the pair refuses.
     assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"
@@ -212,7 +212,7 @@ def test_broken_witness_refuses_typed(corpus_dir: Path, tmp_path: Path) -> None:
 
     path = _working_copy(corpus_dir, tmp_path, "art_v2.31.0_portable")
     (path / MIGRATION_WITNESS_FILENAME).write_text('{"witness_schema": "bogus"}', encoding="utf-8")
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(path)
     assert excinfo.value.fields["code"] == "migration_witness_invalid"
 

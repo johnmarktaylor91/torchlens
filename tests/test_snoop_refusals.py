@@ -13,7 +13,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._snoop import EchoConfigError, normalize_echo
+from torchlens._snoop import normalize_echo
+from torchlens.errors import NarrationConfigError
 from torchlens.fastlog.options import RecordingOptions
 from torchlens.options import NarrationOptions
 
@@ -36,7 +37,7 @@ def _code(excinfo: pytest.ExceptionInfo) -> str:
 def test_echo_string_selection_refuses_with_post_hoc_remedy() -> None:
     """Label/substring echo= spellings refuse: final labels are not live."""
 
-    with pytest.raises(EchoConfigError) as excinfo:
+    with pytest.raises(NarrationConfigError) as excinfo:
         tl.trace(OneOp(), torch.randn(2, 4), narrate="relu_1_1")
     assert _code(excinfo) == "echo_argument_invalid"
     assert "narrate" in str(excinfo.value)
@@ -45,7 +46,7 @@ def test_echo_string_selection_refuses_with_post_hoc_remedy() -> None:
 def test_echo_unsupported_type_refuses() -> None:
     """Non-callable echo= objects refuse typed."""
 
-    with pytest.raises(EchoConfigError) as excinfo:
+    with pytest.raises(NarrationConfigError) as excinfo:
         normalize_echo(123)
     assert _code(excinfo) == "echo_argument_invalid"
 
@@ -53,7 +54,7 @@ def test_echo_unsupported_type_refuses() -> None:
 def test_echo_unknown_stats_rung_refuses() -> None:
     """The four measured cost classes are a closed vocabulary."""
 
-    with pytest.raises(EchoConfigError) as excinfo:
+    with pytest.raises(NarrationConfigError) as excinfo:
         normalize_echo(NarrationOptions(select=True, stats="approximate"))
     assert _code(excinfo) == "echo_argument_invalid"
 
@@ -72,7 +73,7 @@ def test_finalized_label_selector_refuses_before_execution() -> None:
             ran.append(True)
             return torch.relu(x)
 
-    with pytest.raises(EchoConfigError) as excinfo:
+    with pytest.raises(NarrationConfigError) as excinfo:
         tl.trace(Spy(), torch.randn(2, 4), narrate=tl.model_output(0))
     assert _code(excinfo) == "echo_selector_not_live"
     assert ran == []
@@ -81,7 +82,7 @@ def test_finalized_label_selector_refuses_before_execution() -> None:
 def test_echo_options_as_save_predicate_refuses_with_receipt() -> None:
     """The narrator-as-save-predicate mount refuses citing double evaluation."""
 
-    with pytest.raises(EchoConfigError) as excinfo:
+    with pytest.raises(NarrationConfigError) as excinfo:
         tl.trace(OneOp(), torch.randn(2, 4), save=NarrationOptions(select=True))
     assert _code(excinfo) == "echo_as_save_predicate"
     assert "twice" in str(excinfo.value)
@@ -90,7 +91,7 @@ def test_echo_options_as_save_predicate_refuses_with_receipt() -> None:
 def test_echo_options_via_hooks_refuses_with_receipt() -> None:
     """The hooks-mount refuses citing the measured +101% tax."""
 
-    with pytest.raises(EchoConfigError) as excinfo:
+    with pytest.raises(NarrationConfigError) as excinfo:
         tl.trace(
             OneOp(),
             torch.randn(2, 4),
@@ -102,7 +103,7 @@ def test_echo_options_via_hooks_refuses_with_receipt() -> None:
 def test_cache_true_with_echo_refuses_before_execution() -> None:
     """T-D: a cache hit runs no forward, so nothing live exists to narrate."""
 
-    with pytest.raises(EchoConfigError) as excinfo:
+    with pytest.raises(NarrationConfigError) as excinfo:
         tl.trace(
             OneOp(),
             torch.randn(2, 4),
@@ -115,7 +116,7 @@ def test_cache_true_with_echo_refuses_before_execution() -> None:
 def test_chunked_forward_with_echo_refuses() -> None:
     """Chunk fan-out runs several forwards into one Trace: refused typed."""
 
-    with pytest.raises(EchoConfigError) as excinfo:
+    with pytest.raises(NarrationConfigError) as excinfo:
         tl.trace(OneOp(), torch.randn(4, 4), narrate=True, chunk_size=2)
     assert _code(excinfo) == "echo_chunked_unsupported"
 
@@ -123,7 +124,7 @@ def test_chunked_forward_with_echo_refuses() -> None:
 def test_structure_only_with_stats_rung_refuses() -> None:
     """A stats rung reads values; structure_only captures none."""
 
-    with pytest.raises(EchoConfigError) as excinfo:
+    with pytest.raises(NarrationConfigError) as excinfo:
         tl.trace(
             OneOp(),
             torch.randn(2, 4),
@@ -149,7 +150,7 @@ def test_echo_on_non_torch_backend_refuses_typed() -> None:
 
     from torchlens._snoop._entry import refuse_echo_non_torch
 
-    with pytest.raises(EchoConfigError) as excinfo:
+    with pytest.raises(NarrationConfigError) as excinfo:
         refuse_echo_non_torch(True, SimpleNamespace(name="tf"))
     assert _code(excinfo) == "echo_backend_unsupported"
     refuse_echo_non_torch(None, SimpleNamespace(name="tf"))

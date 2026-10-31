@@ -59,6 +59,6 @@ To bootstrap a pin, pass `expected=None`. The helper prints and returns the curr
 pinned = tl.fingerprint.assert_unchanged(model, example, None)
 ```
 
-On a mismatch it raises `tl.fingerprint.StructuralHashMismatchError`, an `AssertionError` subclass,
+On a mismatch it raises `tl.errors.StructuralHashMismatchError`, an `AssertionError` subclass,
 whose message includes both the expected and actual hashes. Use the same `layers_to_save=None`
 metadata-only setting when producing a trace that you plan to compare directly with `tl.fingerprint.model`.

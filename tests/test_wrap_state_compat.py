@@ -617,7 +617,7 @@ class TestUnwrapSafety:
     def test_admission_epoch_check_refuses_unwrapped_process(self):
         # R54 second half: a capture admitted AFTER a concurrent unwrap
         # completes must refuse typed rather than run an unlogged forward.
-        from torchlens._errors import CaptureContextError
+        from torchlens._errors import CaptureNotActiveError
         from torchlens.backends.torch.backend import TorchBackend
 
         _ensure_wrapped()
@@ -625,7 +625,7 @@ class TestUnwrapSafety:
         saved = _state._is_decorated
         try:
             _state._is_decorated = False
-            with pytest.raises(CaptureContextError) as exc_info:
+            with pytest.raises(CaptureNotActiveError) as exc_info:
                 with TorchBackend().active_logging(session):
                     pass
             assert exc_info.value.fields["code"] == "wrappers_removed_before_capture"

@@ -209,7 +209,7 @@ def test_activation_patch_surfaces_settle_typed_or_effective(
       ``PatchApplicationError`` (the measured DIGEST mechanism).
     * ``resid_post`` homes on the recurrence-grouped residual adds; the
       hook path addresses them by bare layer label and refuses
-      ``SiteAmbiguityError`` (pass-qualified addressing, lane A04).
+      ``AmbiguousSiteError`` (pass-qualified addressing, lane A04).
 
     When the sibling lanes land their re-homing/addressing repairs, a table
     comes out instead -- then at least one cell must move (clean and
@@ -217,7 +217,7 @@ def test_activation_patch_surfaces_settle_typed_or_effective(
     all-identical values. A silent baseline-equal table fails in every world.
     """
 
-    from torchlens.intervention.errors import SiteAmbiguityError
+    from torchlens.intervention.errors import AmbiguousSiteError
 
     clean, corrupted = gpt2_inputs
     helper = getattr(tl.facets.patching, helper_name)
@@ -228,7 +228,7 @@ def test_activation_patch_surfaces_settle_typed_or_effective(
         except PatchApplicationError as exc:
             assert "replaced=False" in str(exc) or "never fired" in str(exc)
             return
-        except SiteAmbiguityError as exc:
+        except AmbiguousSiteError as exc:
             assert "pass-qualified" in str(exc)
             return
     baseline_log = tl.trace(gpt2, corrupted, capture=_CAPTURE)

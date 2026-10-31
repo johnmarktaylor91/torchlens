@@ -15,6 +15,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+import torchlens.errors
 import torchlens.transformer as tviz
 from torchlens.semantic.logit_lens import (
     PROVENANCE_NATIVE,
@@ -138,7 +139,7 @@ class TestPredictionPictures:
     def test_untracked_target_refuses(self) -> None:
         """A target the extractor did not retain refuses with the remedy."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.prediction_trajectory(_predictions(), target_token_id=999)
         assert excinfo.value.fields["code"] == "tv_record_invalid"
 
@@ -157,7 +158,7 @@ class TestPredictionPictures:
         """No tracked token, no answer panel."""
 
         trajectory = tviz.prediction_trajectory(_predictions())
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.render_answer_trajectory(trajectory, tmp_path / "answer.png")
         assert excinfo.value.fields["code"] == "tv_record_invalid"
 
@@ -176,7 +177,7 @@ class TestPredictionPictures:
             lens_source="model_head",
             validated=True,
         )
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.prediction_table(projected_only)
         assert excinfo.value.fields["code"] == "tv_record_invalid"
 

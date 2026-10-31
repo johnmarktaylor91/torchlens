@@ -212,11 +212,11 @@ class TestStreamingTripwireUnchanged:
 
     @pytest.mark.smoke
     def test_summary_non_tensor_output_refuses_under_streaming(self, tmp_path) -> None:
-        from torchlens._io import TorchLensIOError
+        from torchlens._io import ArtifactError
 
         model = _model()
         x = torch.randn(2, 4)
-        with pytest.raises(TorchLensIOError):
+        with pytest.raises(ArtifactError):
             tl.trace(
                 model,
                 x,

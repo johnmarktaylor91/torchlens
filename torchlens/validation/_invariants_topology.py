@@ -403,7 +403,7 @@ def _check_op_label_resolution(ml: Trace) -> None:
         record_validation_diagnostic(
             ml,
             ValidationDiagnostic(
-                check="op_label_resolution_unchecked",
+                check_name="op_label_resolution_unchecked",
                 message="Op label resolution not checked: this object has no ops accessor.",
                 extra={"invariant": name},
             ),

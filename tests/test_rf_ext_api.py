@@ -75,9 +75,8 @@ def test_configuration_errors_are_typed() -> None:
     working while typed handling becomes possible.
     """
 
+    from torchlens.errors import ReceptiveFieldConfigurationError, ReceptiveFieldError
     from torchlens.receptive_field import (
-        ReceptiveFieldConfigurationError,
-        ReceptiveFieldError,
         verify,
     )
     from torchlens.receptive_field._rules import register_rf_rule

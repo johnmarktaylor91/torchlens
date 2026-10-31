@@ -74,9 +74,9 @@ class TransformersNamespaceModel(nn.Module):
 def test_hf_row_ignores_plain_config_attribute() -> None:
     """A generic ``.config`` attribute must not label a module as HF Transformers."""
 
-    row = report(OrdinaryConfiguredModel(), torch.randn(1)).row("hf_transformers")
+    row = report(OrdinaryConfiguredModel(), torch.randn(1)).check("hf_transformers")
 
-    assert row.detected is False
+    assert row.is_detected is False
     assert row.status == "pass"
     assert row.severity == "ok"
 
@@ -84,9 +84,9 @@ def test_hf_row_ignores_plain_config_attribute() -> None:
 def test_hf_row_detects_real_transformers_namespace() -> None:
     """A class defined under the ``transformers`` namespace stays detected."""
 
-    row = report(TransformersNamespaceModel(), torch.randn(1)).row("hf_transformers")
+    row = report(TransformersNamespaceModel(), torch.randn(1)).check("hf_transformers")
 
-    assert row.detected is True
+    assert row.is_detected is True
     assert row.status == "pass"
     assert row.severity == "info"
 
@@ -105,9 +105,9 @@ def test_hf_row_detects_transformers_subclass_by_mro() -> None:
 
             return x
 
-    row = report(UserModel(), torch.randn(1)).row("hf_transformers")
+    row = report(UserModel(), torch.randn(1)).check("hf_transformers")
 
-    assert row.detected is True
+    assert row.is_detected is True
 
 
 # ---------------------------------------------------------------------------
@@ -159,9 +159,9 @@ def _named(module_path: str, class_name: str) -> nn.Module:
 def test_fsdp_row_ignores_user_class_merely_named_fsdp() -> None:
     """A user class named ``FsdpExportHelper`` must not trip the FSDP row."""
 
-    row = report(_named("my_project.helpers", "FsdpExportHelper"), torch.randn(1)).row("fsdp")
+    row = report(_named("my_project.helpers", "FsdpExportHelper"), torch.randn(1)).check("fsdp")
 
-    assert row.detected is False
+    assert row.is_detected is False
     assert row.status == "pass"
 
 
@@ -169,9 +169,9 @@ def test_fsdp_row_detects_real_fsdp_namespace() -> None:
     """A class defined under ``torch.distributed.fsdp`` stays detected."""
 
     model = _named("torch.distributed.fsdp.fully_sharded_data_parallel", "FullyShardedDataParallel")
-    row = report(model, torch.randn(1)).row("fsdp")
+    row = report(model, torch.randn(1)).check("fsdp")
 
-    assert row.detected is True
+    assert row.is_detected is True
     assert row.status == "scope"
 
 
@@ -179,44 +179,44 @@ def test_ddp_row_ignores_user_class_merely_named_distributed() -> None:
     """A user class named like DDP but in a user module must not be detected."""
 
     model = _named("my_project.net", "MyDistributedDataParallelHelper")
-    row = report(model, torch.randn(1)).row("distributed_data_parallel")
+    row = report(model, torch.randn(1)).check("distributed_data_parallel")
 
-    assert row.detected is False
+    assert row.is_detected is False
 
 
 def test_ddp_row_detects_real_torch_ddp_namespace() -> None:
     """A class under ``torch.nn.parallel.distributed`` stays detected."""
 
     model = _named("torch.nn.parallel.distributed", "DistributedDataParallel")
-    row = report(model, torch.randn(1)).row("distributed_data_parallel")
+    row = report(model, torch.randn(1)).check("distributed_data_parallel")
 
-    assert row.detected is True
+    assert row.is_detected is True
 
 
 def test_ddp_row_does_not_fire_on_data_parallel() -> None:
     """``nn.DataParallel`` (a different namespace) must not trip the DDP row."""
 
-    row = report(nn.DataParallel(_Passthrough()), torch.randn(1)).row("distributed_data_parallel")
+    row = report(nn.DataParallel(_Passthrough()), torch.randn(1)).check("distributed_data_parallel")
 
-    assert row.detected is False
+    assert row.is_detected is False
 
 
 def test_deepspeed_row_ignores_user_class_merely_named_deepspeed() -> None:
     """A user class named ``DeepspeedConfigHelper`` must not trip the DeepSpeed row."""
 
     model = _named("my_project.cfg", "DeepspeedConfigHelper")
-    row = report(model, torch.randn(1)).row("deepspeed")
+    row = report(model, torch.randn(1)).check("deepspeed")
 
-    assert row.detected is False
+    assert row.is_detected is False
 
 
 def test_deepspeed_row_detects_real_deepspeed_namespace() -> None:
     """A class under the ``deepspeed`` namespace stays detected."""
 
     model = _named("deepspeed.runtime.engine", "DeepSpeedEngine")
-    row = report(model, torch.randn(1)).row("deepspeed")
+    row = report(model, torch.randn(1)).check("deepspeed")
 
-    assert row.detected is True
+    assert row.is_detected is True
     assert row.status == "scope"
 
 
@@ -268,9 +268,9 @@ def test_lightning_row_ignores_plain_training_step_method() -> None:
     model = OrdinaryTrainingUtility()
     assert model.training is True  # nn.Module defaults to train mode
 
-    row = report(model, torch.randn(1)).row("lightning_training_step")
+    row = report(model, torch.randn(1)).check("lightning_training_step")
 
-    assert row.detected is False
+    assert row.is_detected is False
     assert row.status == "pass"
     assert row.severity == "ok"
 
@@ -293,9 +293,9 @@ def test_lightning_row_detects_real_lightning_module_in_train_mode() -> None:
 
     model = RealLit()
     model.train()
-    row = report(model, torch.randn(1)).row("lightning_training_step")
+    row = report(model, torch.randn(1)).check("lightning_training_step")
 
-    assert row.detected is True
+    assert row.is_detected is True
     assert row.status == "known_broken"
     assert row.severity == "error"
 
@@ -318,9 +318,9 @@ def test_lightning_row_clears_when_lightning_module_in_eval_mode() -> None:
 
     model = RealLit()
     model.eval()
-    row = report(model, torch.randn(1)).row("lightning_training_step")
+    row = report(model, torch.randn(1)).check("lightning_training_step")
 
-    assert row.detected is False
+    assert row.is_detected is False
     assert row.status == "pass"
 
 
@@ -404,9 +404,9 @@ class RealTorchFuncModel(nn.Module):
 def test_functorch_row_ignores_docstring_mention() -> None:
     """A docstring mentioning vmap must not flag the model as broken."""
 
-    row = report(DocstringMentionsVmapModel(), torch.randn(3)).row("vmap_functorch")
+    row = report(DocstringMentionsVmapModel(), torch.randn(3)).check("vmap_functorch")
 
-    assert row.detected is False
+    assert row.is_detected is False
     assert row.status == "pass"
     assert row.severity == "ok"
 
@@ -414,26 +414,26 @@ def test_functorch_row_ignores_docstring_mention() -> None:
 def test_functorch_row_ignores_comment_mention() -> None:
     """An inline comment mentioning functorch.vmap must not flag the model."""
 
-    row = report(CommentMentionsFunctorchModel(), torch.randn(3)).row("vmap_functorch")
+    row = report(CommentMentionsFunctorchModel(), torch.randn(3)).check("vmap_functorch")
 
-    assert row.detected is False
+    assert row.is_detected is False
 
 
 def test_functorch_row_detects_real_torch_vmap_call() -> None:
     """An actual ``torch.vmap`` call in forward stays detected."""
 
-    row = report(RealVmapModel(), torch.randn(3)).row("vmap_functorch")
+    row = report(RealVmapModel(), torch.randn(3)).check("vmap_functorch")
 
-    assert row.detected is True
+    assert row.is_detected is True
     assert row.status == "known_broken"
 
 
 def test_functorch_row_detects_torch_func_submodule_reference() -> None:
     """A ``torch.func`` submodule reference in forward stays detected."""
 
-    row = report(RealTorchFuncModel(), torch.randn(3)).row("vmap_functorch")
+    row = report(RealTorchFuncModel(), torch.randn(3)).check("vmap_functorch")
 
-    assert row.detected is True
+    assert row.is_detected is True
 
 
 # ---------------------------------------------------------------------------
@@ -485,7 +485,7 @@ def _offload_row_for(hook: _StubAlignDevicesHook) -> object:
 
     module = nn.Linear(2, 2)
     module._hf_hook = hook  # type: ignore[assignment]
-    return report(module, torch.randn(1, 2)).row("accelerate_cpu_disk_offload")
+    return report(module, torch.randn(1, 2)).check("accelerate_cpu_disk_offload")
 
 
 def test_offload_row_ignores_plain_dispatch_hook_with_execution_device() -> None:
@@ -495,7 +495,7 @@ def test_offload_row_ignores_plain_dispatch_hook_with_execution_device() -> None
         _StubAlignDevicesHook(offload=False, execution_device=torch.device("cpu"))
     )
 
-    assert row.detected is False
+    assert row.is_detected is False
     assert row.status == "pass"
 
 
@@ -505,9 +505,9 @@ def test_offload_row_detection_is_independent_of_device_id_truthiness() -> None:
     row_zero = _offload_row_for(_StubAlignDevicesHook(offload=False, execution_device=0))
     row_one = _offload_row_for(_StubAlignDevicesHook(offload=False, execution_device=1))
 
-    assert row_zero.detected is False
-    assert row_one.detected is False
-    assert row_zero.detected == row_one.detected
+    assert row_zero.is_detected is False
+    assert row_one.is_detected is False
+    assert row_zero.is_detected == row_one.is_detected
 
 
 def test_offload_row_detects_real_weight_offload() -> None:
@@ -520,7 +520,7 @@ def test_offload_row_detects_real_weight_offload() -> None:
 
     row = _offload_row_for(_StubAlignDevicesHook(offload=True, execution_device=0))
 
-    assert row.detected is True
+    assert row.is_detected is True
     assert row.status == "pass"
     assert row.severity == "info"
 
@@ -530,7 +530,7 @@ def test_offload_row_detects_buffer_offload() -> None:
 
     row = _offload_row_for(_StubAlignDevicesHook(offload=False, offload_buffers=True))
 
-    assert row.detected is True
+    assert row.is_detected is True
 
 
 # ---------------------------------------------------------------------------
@@ -652,9 +652,9 @@ class UninspectableParamModel(nn.Module):
 def test_tied_row_detects_ties_under_legacy_named_parameters_signature() -> None:
     """A legacy override that dedups must not make ties invisible (fail-open)."""
 
-    row = report(LegacySignatureTiedModel(), torch.randn(1, 2)).row("tied_parameters")
+    row = report(LegacySignatureTiedModel(), torch.randn(1, 2)).check("tied_parameters")
 
-    assert row.detected is True
+    assert row.is_detected is True
     assert row.status == "pass"
     assert row.severity == "info"
 
@@ -662,17 +662,17 @@ def test_tied_row_detects_ties_under_legacy_named_parameters_signature() -> None
 def test_tied_row_detects_ordinary_shared_parameters() -> None:
     """A plain shared parameter object stays detected via the primary path."""
 
-    row = report(OrdinaryTiedModel(), torch.tensor([1, 2, 3])).row("tied_parameters")
+    row = report(OrdinaryTiedModel(), torch.tensor([1, 2, 3])).check("tied_parameters")
 
-    assert row.detected is True
+    assert row.is_detected is True
 
 
 def test_tied_row_is_honest_when_enumeration_fails() -> None:
     """A failed enumeration must not be reported as a positive 'no ties' fact."""
 
-    row = report(UninspectableParamModel(), torch.randn(1)).row("tied_parameters")
+    row = report(UninspectableParamModel(), torch.randn(1)).check("tied_parameters")
 
-    assert row.detected is False
+    assert row.is_detected is False
     assert "could not be inspected" in row.details
     assert "No tied/shared parameter objects detected" not in row.details
 
@@ -699,7 +699,7 @@ def test_show_includes_suggestion_column_like_markdown() -> None:
     # show(). show() wraps long cells inside the designed width cap (bounded
     # designed reprs), so presence is asserted per wrapped fragment: every
     # fragment of the suggestion must appear on some table line.
-    dp_suggestion = compat_report.row("data_parallel").suggestion
+    dp_suggestion = compat_report.check("data_parallel").suggestion
     assert dp_suggestion
     for fragment in textwrap.wrap(dp_suggestion, width=_SHOW_CELL_WIDTH_CAP):
         assert fragment in text_table

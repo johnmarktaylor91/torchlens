@@ -319,7 +319,7 @@ class CapabilityRow:
 
     key: str
     spelling: str
-    available: bool
+    is_available: bool
     reason: str
     cost_class: str
 
@@ -334,7 +334,7 @@ class CapabilityCard:
     def __repr__(self) -> str:
         """Bounded identity card (F10/D31): rows point, never dump."""
 
-        available = sum(1 for row in self.rows if row.available)
+        available = sum(1 for row in self.rows if row.is_available)
         return (
             f"CapabilityCard({self.object_kind}: {available}/{len(self.rows)} "
             f"available; print() for the card, read .rows)"
@@ -344,8 +344,8 @@ class CapabilityCard:
         """Render the card: available members first, refusals with reasons."""
 
         lines = [f"capability card ({self.object_kind}):"]
-        for row in sorted(self.rows, key=lambda item: (not item.available, item.key)):
-            marker = "ok " if row.available else "NO "
+        for row in sorted(self.rows, key=lambda item: (not item.is_available, item.key)):
+            marker = "ok " if row.is_available else "NO "
             lines.append(f"  {marker} {row.spelling:<44} [{row.cost_class}] {row.reason}")
         return "\n".join(lines)
 
@@ -361,7 +361,7 @@ def _object_kind(trace_like: Any) -> str:
     return "trace"
 
 
-def capability_card(trace_like: Any) -> CapabilityCard:
+def capability_card(trace: Any) -> CapabilityCard:
     """Build the capability card for one trace-like object (D24).
 
     Metadata-only by construction: requirement tokens are evaluated
@@ -369,7 +369,7 @@ def capability_card(trace_like: Any) -> CapabilityCard:
     runs a forward.
     """
 
-    kind = _object_kind(trace_like)
+    kind = _object_kind(trace)
     rows: list[CapabilityRow] = []
     for entry in SURFACE_REGISTRY:
         available = True
@@ -387,7 +387,7 @@ def capability_card(trace_like: Any) -> CapabilityCard:
             CapabilityRow(
                 key=entry.key,
                 spelling=entry.spelling,
-                available=available,
+                is_available=available,
                 reason=reason,
                 cost_class=entry.cost_class,
             )

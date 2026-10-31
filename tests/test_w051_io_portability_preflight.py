@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io._portability_preflight import (
     preflight_metadata_portability,
     sanitize_annotation_tensors,
@@ -51,8 +51,8 @@ def _tiny_trace() -> tl.Trace:
     return tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(1, 4))
 
 
-def _refusal(trace: tl.Trace, path: Path) -> TorchLensIOError:
-    with pytest.raises(TorchLensIOError) as excinfo:
+def _refusal(trace: tl.Trace, path: Path) -> ArtifactError:
+    with pytest.raises(ArtifactError) as excinfo:
         trace.save(path)
     assert not path.exists(), "a refused save must leave nothing behind"
     return excinfo.value
@@ -162,7 +162,7 @@ def test_preflight_returns_bytes_the_loader_reads() -> None:
 @pytest.mark.smoke
 def test_preflight_names_metadata_paths_outside_annotations() -> None:
     state = {"tlspec_version": 9, "some_field": [1, {"deep": _UserObject()}]}
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         preflight_metadata_portability(
             state, unpickler_factory=_RenameAwareUnpickler, bundle_path="<memory>"
         )

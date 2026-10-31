@@ -23,9 +23,9 @@ from torchlens._errors import InvalidArgumentError
 from torchlens._utils._torch_compat import get_cpu_float8_deterministic_fill_support
 from torchlens.dataset_extraction import (
     BatchEnvelope,
-    DatasetExtractionResumeError,
     open_extraction,
 )
+from torchlens.errors import DatasetExtractionResumeError
 
 
 class _TokenModel(nn.Module):

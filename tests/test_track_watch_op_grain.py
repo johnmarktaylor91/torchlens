@@ -20,7 +20,7 @@ from torch import nn
 import torchlens as tl
 import torchlens.trackers as trk
 from torchlens._observability import split_heads
-from torchlens.trackers import WatchConfigError
+from torchlens.errors import WatchConfigError
 
 
 def _mlp() -> tuple[nn.Module, torch.optim.Optimizer]:

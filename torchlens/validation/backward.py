@@ -652,7 +652,7 @@ def validate_backward_pass(
         # distortion corrupted stock and captured gradients IDENTICALLY and
         # the comparison passed vacuously. Refuse (fail-closed) if the
         # wrappers cannot be removed because a capture is active.
-        from .._errors import CaptureContextError
+        from .._errors import CaptureNotActiveError
         from ._pristine import pristine_torch_oracle
 
         try:
@@ -671,7 +671,7 @@ def validate_backward_pass(
                 else:
                     stock_loss = loss_fn(model(*stock_inputs, **stock_kwargs))
                     stock_loss.backward()
-        except CaptureContextError:
+        except CaptureNotActiveError:
             warnings.warn(
                 "validate_backward_pass could not compute pristine-torch stock "
                 "gradients (a capture is active in this process, or the unwrap "

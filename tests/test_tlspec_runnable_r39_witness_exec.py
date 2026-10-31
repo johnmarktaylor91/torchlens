@@ -933,7 +933,7 @@ def test_live_opaque_output_never_verified(factory: Any) -> None:
         live = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
     result = live.run(inputs=x, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-    assert result.report.poisoned is True
+    assert result.report.is_poisoned is True
 
 
 def test_live_bare_tensor_output_stays_verified() -> None:
@@ -944,7 +944,7 @@ def test_live_bare_tensor_output_stays_verified() -> None:
     live = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
     result = live.run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.poisoned is False
+    assert result.report.is_poisoned is False
 
 
 def test_live_dict_output_stays_verified() -> None:
@@ -1056,7 +1056,7 @@ def test_executable_divergent_input_returns_diverged(tmp_path: Path) -> None:
     loaded = tl.load(path)
     result = loaded.run(inputs=torch.randn(5, 4), on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert result.report.poisoned is True
+    assert result.report.is_poisoned is True
 
 
 # ---- CLASS B structural immunizer: provider finalizer ownership -----------------------

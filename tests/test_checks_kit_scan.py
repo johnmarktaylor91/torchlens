@@ -1,4 +1,4 @@
-"""Checks kit item 1: scan kernel, audit_params, ParamAudit, JSON export.
+"""Checks kit item 1: scan kernel, param_health, ParamHealthReport, JSON export.
 
 Pins the checks memo 4.4 contract: mapping-only door, tied-alias dedup,
 skip-with-reason, unknown-name refusals, severity mapping, the versioned
@@ -16,7 +16,9 @@ import pytest
 import torch
 import torch.nn as nn
 
-import torchlens.checks as tc
+import torchlens.errors
+import torchlens.report
+from torchlens.checks import _constants, _records, _scan
 
 
 class _TiedNet(nn.Module):
@@ -43,11 +45,11 @@ def _model() -> nn.Module:
 def test_audit_params_clean_model_rows_and_export() -> None:
     """A fresh model audits with rows, coverage, and a versioned export."""
 
-    audit = tc.audit_params(_model())
+    audit = torchlens.report.param_health(_model())
 
-    assert audit.schema_version == tc.CHECK_REPORT_SCHEMA_VERSION == 1
+    assert audit.schema_version == _records.CHECK_REPORT_SCHEMA_VERSION == 1
     assert len(audit.rows) == 9  # 6 params + 3 batchnorm buffers
-    assert all(row.audited for row in audit.rows)
+    assert all(row.is_audited for row in audit.rows)
     assert audit.coverage["scope"] == "process_local"
     assert audit.coverage["global_reduce"] == "not_applied"
     payload = json.loads(audit.to_json())
@@ -65,9 +67,9 @@ def test_audit_params_nonfinite_named_critical() -> None:
         model[0].weight[0, 0] = float("nan")
         model[2].running_mean[0] = float("inf")
 
-    audit = tc.audit_params(model)
+    audit = torchlens.report.param_health(model)
 
-    critical = {f.names[0]: f for f in audit.findings if f.severity == "critical"}
+    critical = {f.param_names[0]: f for f in audit.findings if f.severity == "critical"}
     assert set(critical) == {"0.weight", "2.running_mean"}
     weight_finding = critical["0.weight"]
     assert weight_finding.code == "param_value_nonfinite"
@@ -86,9 +88,9 @@ def test_audit_params_severity_mapping() -> None:
         "bounded": torch.linspace(-2.0, 2.0, 8),
     }
 
-    audit = tc.audit_params(mapping, bounds={"bounded": (-1.0, 1.0)})
+    audit = torchlens.report.param_health(mapping, bounds={"bounded": (-1.0, 1.0)})
 
-    by_check = {(f.check, f.names[0]): f for f in audit.findings}
+    by_check = {(f.check_name, f.param_names[0]): f for f in audit.findings}
     assert by_check[("dtype_headroom", "near_max")].severity == "warning"
     assert by_check[("param_subnormal", "subnormal_heavy")].severity == "warning"
     assert by_check[("param_all_same", "constant")].severity == "warning"
@@ -101,7 +103,7 @@ def test_audit_params_severity_mapping() -> None:
 def test_audit_params_tied_dedup_keeps_aliases() -> None:
     """Tied tensors are ONE row with every alias preserved (memo 4.4)."""
 
-    audit = tc.audit_params(_TiedNet())
+    audit = torchlens.report.param_health(_TiedNet())
 
     assert len(audit.rows) == 1
     row = audit.rows[0]
@@ -114,7 +116,7 @@ def test_audit_params_mapping_door_and_skip_reasons() -> None:
     """state_dict mapping enters the same door; meta/sparse skip with reason."""
 
     model = _model()
-    state_audit = tc.audit_params(dict(model.state_dict()))
+    state_audit = torchlens.report.param_health(dict(model.state_dict()))
     assert len(state_audit.rows) == 9
 
     mapping = {
@@ -123,7 +125,7 @@ def test_audit_params_mapping_door_and_skip_reasons() -> None:
         "not_a_tensor": 3.14,
         "fine": torch.ones(4),
     }
-    audit = tc.audit_params(mapping)
+    audit = torchlens.report.param_health(mapping)
     reasons = dict(audit.skipped)
     assert "meta" in reasons["meta_param"]
     assert "layout" in reasons["sparse"]
@@ -136,25 +138,25 @@ def test_audit_params_refusals_are_typed() -> None:
     """Unknown names, malformed bounds, junk fractions refuse typed."""
 
     model = _model()
-    with pytest.raises(tc.CheckConfigError) as bounds_exc:
-        tc.audit_params(model, bounds={"nope": (0.0, 1.0)})
+    with pytest.raises(torchlens.errors.CheckConfigError) as bounds_exc:
+        torchlens.report.param_health(model, bounds={"nope": (0.0, 1.0)})
     assert bounds_exc.value.fields["code"] == "audit_bounds_unknown_name"
     assert bounds_exc.value.fields["remedy"]
 
-    with pytest.raises(tc.CheckConfigError) as within_exc:
-        tc.audit_params(model, within=["ghost.weight"])
+    with pytest.raises(torchlens.errors.CheckConfigError) as within_exc:
+        torchlens.report.param_health(model, within=["ghost.weight"])
     assert within_exc.value.fields["code"] == "audit_within_unknown_name"
 
-    with pytest.raises(tc.CheckConfigError) as pair_exc:
-        tc.audit_params(model, bounds={"0.weight": (1.0, -1.0)})
+    with pytest.raises(torchlens.errors.CheckConfigError) as pair_exc:
+        torchlens.report.param_health(model, bounds={"0.weight": (1.0, -1.0)})
     assert pair_exc.value.fields["code"] == "check_bounds_invalid"
 
-    with pytest.raises(tc.CheckConfigError) as fraction_exc:
-        tc.audit_params(model, max_fraction=1.5)
+    with pytest.raises(torchlens.errors.CheckConfigError) as fraction_exc:
+        torchlens.report.param_health(model, max_fraction=1.5)
     assert fraction_exc.value.fields["code"] == "check_fraction_invalid"
 
-    with pytest.raises(tc.CheckConfigError) as target_exc:
-        tc.audit_params([1, 2, 3])
+    with pytest.raises(torchlens.errors.CheckConfigError) as target_exc:
+        torchlens.report.param_health([1, 2, 3])
     assert target_exc.value.fields["code"] == "check_target_invalid"
 
 
@@ -162,7 +164,7 @@ def test_audit_params_within_filters_exact_names() -> None:
     """within= audits exactly the named tensors, day-1 exact spelling."""
 
     model = _model()
-    audit = tc.audit_params(model, within=["0.weight", "3.bias"])
+    audit = torchlens.report.param_health(model, within=["0.weight", "3.bias"])
     assert sorted(row.name for row in audit.rows) == ["0.weight", "3.bias"]
 
 
@@ -171,10 +173,10 @@ def test_debug_door_and_knob_parity() -> None:
 
     import torchlens as tl
 
-    assert tl.debug.param_health is tc.audit_params
-    assert tl.debug.ParamHealthReport is tc.ParamAudit
+    assert tl.debug.param_health is torchlens.report.param_health
+    assert tl.debug.ParamHealthReport is torchlens.report.ParamHealthReport
 
-    audit_defaults = signature(tc.audit_params).parameters
+    audit_defaults = signature(torchlens.report.param_health).parameters
     range_defaults = signature(tl.debug.dtype_range).parameters
     # Knob parity through the ONE constants module (memo 4.4).
     assert audit_defaults["max_fraction"].default == range_defaults["max_fraction"].default
@@ -182,10 +184,10 @@ def test_debug_door_and_knob_parity() -> None:
         audit_defaults["subnormal_fraction_threshold"].default
         == range_defaults["subnormal_fraction_threshold"].default
     )
-    assert audit_defaults["max_fraction"].default == tc.MAX_FRACTION_DEFAULT
+    assert audit_defaults["max_fraction"].default == _constants.MAX_FRACTION_DEFAULT
     assert (
         audit_defaults["subnormal_fraction_threshold"].default
-        == tc.SUBNORMAL_FRACTION_THRESHOLD_DEFAULT
+        == _constants.SUBNORMAL_FRACTION_THRESHOLD_DEFAULT
     )
 
 
@@ -232,9 +234,9 @@ def test_fp16_scan_never_widens_whole_tensors() -> None:
 
     recorder = _AllocationRecorder(tensor.numel())
     with recorder:
-        rows = tc.scan_named_tensors([("t", "parameter", tensor)])
+        rows = _scan.scan_named_tensors([("t", "parameter", tensor)])
 
-    assert rows[0].audited
+    assert rows[0].is_audited
     assert not recorder.saw_widened_float, "whole-tensor float widening is forbidden"
     assert recorder.max_intermediate_bytes <= input_bytes, (
         f"an intermediate allocated {recorder.max_intermediate_bytes} bytes > "
@@ -252,9 +254,9 @@ def test_scan_counts_are_exact_on_fp16() -> None:
     tensor[5] = 2.5
     tensor[6] = -1.25
 
-    (row,) = tc.scan_named_tensors([("t", "parameter", tensor)])
+    (row,) = _scan.scan_named_tensors([("t", "parameter", tensor)])
 
-    assert (row.n_nan, row.n_posinf, row.n_neginf) == (3, 1, 1)
+    assert (row.num_nan, row.num_posinf, row.num_neginf) == (3, 1, 1)
     assert row.finite_min == -1.25 and row.finite_max == 2.5 and row.abs_max == 2.5
     assert row.zero_fraction == pytest.approx(993 / 1000)
     assert row.dtype_max == pytest.approx(65504.0)
@@ -264,8 +266,8 @@ def test_tensor_digest_proves_change() -> None:
     """Digest differs on any change; equality never claims exactness."""
 
     tensor = torch.randn(16, 16)
-    baseline = tc.tensor_digest(tensor)
-    assert tc.tensor_digest(tensor) == baseline
+    baseline = _scan.tensor_digest(tensor)
+    assert _scan.tensor_digest(tensor) == baseline
     with torch.no_grad():
         tensor[3, 3] += 1e-3
-    assert tc.tensor_digest(tensor) != baseline
+    assert _scan.tensor_digest(tensor) != baseline

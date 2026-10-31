@@ -10,10 +10,12 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from .._literals import OutputDeviceLiteral
 from .._save_budget import SaveBudgetOption
 from .._utils.display import user_stacklevel
-from ..backends.registry import BackendName, BackendUnsupportedError, resolve_backend_spec
+from ..backends.registry import BackendName, resolve_backend_spec
 from ..errors import TorchLensWarning
 from ..options import CaptureOptions
 from .backward import validate_backward_pass
@@ -48,25 +50,25 @@ class InterventionValidationReport:
 
     Parameters
     ----------
-    invariance:
+    is_invariant:
         Whether a baseline forward validation succeeds.
-    specificity:
+    is_specific:
         Whether hook targets can be represented without ambiguity.
-    completeness:
+    is_complete:
         Whether the validation exercised all requested axes.
-    consistency:
+    is_consistent:
         Whether repeated validation decisions agree.
-    locality:
+    is_local:
         Whether intervention checks stay local to the requested model/input.
     details:
         Human-readable axis details.
     """
 
-    invariance: bool
-    specificity: bool
-    completeness: bool
-    consistency: bool
-    locality: bool
+    is_invariant: bool
+    is_specific: bool
+    is_complete: bool
+    is_consistent: bool
+    is_local: bool
     details: dict[str, Any]
 
     @property
@@ -81,11 +83,11 @@ class InterventionValidationReport:
 
         return all(
             (
-                self.invariance,
-                self.specificity,
-                self.completeness,
-                self.consistency,
-                self.locality,
+                self.is_invariant,
+                self.is_specific,
+                self.is_complete,
+                self.is_consistent,
+                self.is_local,
             )
         )
 
@@ -294,11 +296,11 @@ def _intervention_report(
         **(save_options or {}),
     )
     return InterventionValidationReport(
-        invariance=forward_ok,
-        specificity=False,
-        completeness=False,
-        consistency=False,
-        locality=False,
+        is_invariant=forward_ok,
+        is_specific=False,
+        is_complete=False,
+        is_consistent=False,
+        is_local=False,
         details={
             "invariance": "forward validation passed"
             if forward_ok
@@ -664,7 +666,7 @@ def _record_invariant_failure_if_missing(invariant_error: BaseException) -> None
     record_validation_failure(
         None,
         ValidationFailure(
-            check=CHECK_METADATA_INVARIANT,
+            check_name=CHECK_METADATA_INVARIANT,
             message=f"{type(invariant_error).__name__}: {invariant_error}",
         ),
     )

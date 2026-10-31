@@ -186,11 +186,11 @@ def test_legacy_param_restore_refuses_below_floor() -> None:
     states by the strict-binder suites.
     """
 
-    from torchlens._io import ArtifactVersionBelowFloorError
+    from torchlens._io import ArtifactTooOldError
 
     first = Param.__new__(Param)
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="tlspec_version=6"):
+    with pytest.raises(ArtifactTooOldError, match="tlspec_version=6"):
         first.__setstate__(_legacy_param_state("left.weight"))
 
 

@@ -36,7 +36,7 @@ from ._zero_fire import (
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
-    AppendStreamingNotSupportedError,
+    AppendStreamingUnsupportedError,
     BatchNormTrainModeWarning,
     ChunkedForwardConfigError,
     ControlFlowDivergenceError,
@@ -371,7 +371,7 @@ def _append_rerun(
 
     del strict
     if _is_streaming_append_active(log):
-        raise AppendStreamingNotSupportedError(_streaming_append_error_message(log))
+        raise AppendStreamingUnsupportedError(_streaming_append_error_message(log))
     _preflight(log, model, x)
     model = _unwrap_compiled_model(model)
     _preflight_append(log, model)

@@ -14,9 +14,9 @@ import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+from torchlens.errors import MetadataInvariantError  # noqa: E402
 from torchlens.intervention.errors import MultiMatchWarning  # noqa: E402
 from torchlens.validation import (  # noqa: E402
-    MetadataInvariantError,
     check_metadata_invariants,
 )
 

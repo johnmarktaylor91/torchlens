@@ -28,8 +28,6 @@ TARGET_ALL = [
     "summary",
     "options",
     "to_disk",
-    "AmbiguousOpLookupError",
-    "ReentrantTraceError",
     "Trace",
     "Layer",
     "Op",
@@ -193,6 +191,8 @@ def test_all_matches_frozen_target_ledger() -> None:
     surface `stats` and `aggregate` (conflict-ledger row 8) = 116. The
     interventions rename removes `do`, `push`, `push_from`, `run`, `swap_with`
     and `direction_from_pairs` and adds `Recipe` and `positions` = 112.
+    The decided-surface rename moves `AmbiguousOpLookupError` and
+    `ReentrantTraceError` to `tl.errors` = 114.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """
@@ -205,7 +205,7 @@ def test_phase_b_exports_are_top_level_importable() -> None:
     """Phase B public names should resolve from the top-level namespace."""
 
     assert torchlens.export is importlib.import_module("torchlens.export")
-    assert torchlens.AmbiguousOpLookupError.__name__ == "AmbiguousOpLookupError"
+    assert torchlens.errors.AmbiguousOpLookupError.__name__ == "AmbiguousOpLookupError"
     assert importlib.import_module("torchlens.facets") is importlib.import_module(
         "torchlens.semantic.facets"
     )

@@ -27,7 +27,6 @@ from .events import (
     BackwardPassStart,
     BlobRef,
     BufferWriteEvent,
-    CheckpointInvocationObserved,
     ConditionalEvent,
     EdgeUseKind as EdgeUseKind,
     FunctionCallRef,
@@ -48,10 +47,9 @@ from .events import (
     is_control_edge_use,
     is_value_edge_use,
 )
-from .live_index import LiveIndex, LiveIndexWindowError
+from .live_index import LiveIndex
 from .predicate import (
     _DEFERRED_VALUE,
-    MLXValueUnavailableError,
     coerce_deferred_value as coerce_deferred_value,
     is_deferred_value as is_deferred_value,
 )
@@ -85,12 +83,9 @@ __all__ = [
     "IdentityEntry",
     "is_control_edge_use",
     "is_value_edge_use",
-    "CheckpointInvocationObserved",
     "GradFnDiscovered",
     "GradFnFired",
     "LiveIndex",
-    "LiveIndexWindowError",
-    "MLXValueUnavailableError",
     "ModuleEnterEvent",
     "ModuleExitEvent",
     "ModuleFrame",

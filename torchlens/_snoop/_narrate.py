@@ -115,7 +115,7 @@ def narrate_trace(
         Keep only the last N rows (the tail idiom).
     select:
         Optional filter: a substring, or a callable over
-        :class:`~torchlens._snoop.NarrationEvent` rows.
+        :class:`~torchlens.types.NarrationEvent` rows.
 
     Returns
     -------

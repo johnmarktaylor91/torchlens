@@ -216,7 +216,7 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     honest reason and a stable error code (fields were empty before).
     """
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
     from torchlens.errors import RunnablePreflightError
 
     captured = tl.trace(
@@ -248,7 +248,7 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     without_weights = tmp_path / "no-weights.tlspec"
     recaptured.save(without_weights, level="runnable")
     loaded_bare = tl.load(without_weights)
-    with pytest.raises(TorchLensIOError) as refusal:
+    with pytest.raises(ArtifactError) as refusal:
         loaded_bare.save(tmp_path / "resave2.tlspec", level="runnable")
     assert refusal.value.fields["code"] == "run_capability_unavailable"
     assert refusal.value.fields["detection_stage"] == "runnable_resave_state_universe"

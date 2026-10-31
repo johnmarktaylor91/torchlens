@@ -28,7 +28,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.errors import TorchLensIOError
+from torchlens.errors import ArtifactError
 
 _PWN_MARKER_NAME = "r58_capture_cache_pwned"
 
@@ -262,7 +262,7 @@ def test_group_readable_secret_refuses_typed(cache_root: Path) -> None:
     secret = cache_root / ".capture_cache_secret"
     secret.chmod(0o644)
     try:
-        with pytest.raises(TorchLensIOError, match="readable or writable"):
+        with pytest.raises(ArtifactError, match="readable or writable"):
             tl.trace(
                 model,
                 torch.rand(2, 4),

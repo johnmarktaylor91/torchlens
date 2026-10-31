@@ -117,7 +117,7 @@ def prediction_trajectory(  # noqa: PLR0913 -- position/batch/tokenizer/target a
         target_probs=tuple(target_probs) if target_token_id is not None else None,
         target_ranks=tuple(target_ranks) if target_token_id is not None else None,
         lens_source=predictions.lens_source,
-        validated=predictions.validated,
+        is_validated=predictions.validated,
         tie_convention=predictions.tie_convention,
     )
 
@@ -145,7 +145,7 @@ def _target_values(
 def _lens_footer(trajectory: PredictionTrajectory) -> list[str]:
     """Return the trajectory's honesty footer lines."""
 
-    validated = "numerically validated" if trajectory.validated else "UNVALIDATED"
+    validated = "numerically validated" if trajectory.is_validated else "UNVALIDATED"
     lines = [
         f"lens: {trajectory.lens_source} ({validated}); probabilities use the "
         "full-vocabulary denominator",

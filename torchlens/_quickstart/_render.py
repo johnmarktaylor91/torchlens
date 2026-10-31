@@ -23,7 +23,7 @@ from typing import Any
 
 from torch import nn
 
-from .._errors import CaptureContextError, KeywordConflictError
+from .._errors import CaptureNotActiveError, KeywordConflictError
 from ._gate import require_gold
 from ._primitive import ExecutionReceipt, capture_concrete
 from ._provenance import InputProvenance
@@ -174,7 +174,7 @@ def _render_dot_source(dot: str, fileformat: str) -> bytes:
     try:
         import graphviz
     except ImportError as error:
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             "Rendering requires the graphviz Python package and the Graphviz system binaries.",
             code="render_engine_unavailable",
             remedy="pip install graphviz, and install Graphviz (apt install graphviz)",
@@ -182,7 +182,7 @@ def _render_dot_source(dot: str, fileformat: str) -> bytes:
     try:
         return bytes(graphviz.Source(dot).pipe(format=fileformat))
     except Exception as error:
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             f"Graphviz could not render the graph to {fileformat!r}: {error}",
             code="render_engine_unavailable",
             remedy=(

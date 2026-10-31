@@ -9,7 +9,7 @@ import shutil
 import warnings
 from pathlib import Path
 
-from .._io import TorchLensIOError
+from .._io import ArtifactError
 from .._io.streaming import PARTIAL_SENTINEL
 
 
@@ -30,13 +30,13 @@ def cleanup_partial(path: str | Path, *, force: bool = False) -> list[Path]:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If any cleanup candidate is a symlink.
     """
 
     bundle_path = Path(path)
     if bundle_path.is_symlink():
-        raise TorchLensIOError(f"Refusing to clean symlink path {bundle_path}.")
+        raise ArtifactError(f"Refusing to clean symlink path {bundle_path}.")
     removed: list[Path] = []
     candidates = []
     if bundle_path.exists():
@@ -46,7 +46,7 @@ def cleanup_partial(path: str | Path, *, force: bool = False) -> list[Path]:
     candidates.extend(bundle_path.parent.glob(f"{glob.escape(bundle_path.name)}.tmp.*"))
     for candidate in candidates:
         if candidate.is_symlink():
-            raise TorchLensIOError(f"Refusing to clean symlink temp directory {candidate}.")
+            raise ArtifactError(f"Refusing to clean symlink temp directory {candidate}.")
         if not candidate.is_dir():
             continue
         if force or (candidate / PARTIAL_SENTINEL).exists():

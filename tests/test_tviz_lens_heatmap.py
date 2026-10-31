@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 import torch
 
+import torchlens.errors
 import torchlens.transformer as tviz
 from torchlens.semantic.logit_lens import LogitLensEntry, LogitLensResult
 from torchlens.transformer._lens_heatmap import (
@@ -138,7 +139,7 @@ def test_target_mode_names_the_target_and_pdf_renders(tmp_path: Path) -> None:
 def test_out_of_contract_requests_refuse(tmp_path: Path, kwargs: dict) -> None:
     """Bad requests refuse typed before anything is drawn."""
 
-    with pytest.raises(tviz.TvizError) as caught:
+    with pytest.raises(torchlens.errors.RenderError) as caught:
         tviz.render_logit_lens_heatmap(_result(), tmp_path / "x.png", **kwargs)
     assert caught.value.fields["code"] == "tv_record_invalid"
     assert not (tmp_path / "x.png").exists()
@@ -158,7 +159,7 @@ def test_wide_lens_refuses_rather_than_cropping(tmp_path: Path) -> None:
     """Above the column cap the caller must name positions; nothing is cut."""
 
     wide = _result(n_layers=1, seq=MAX_HEATMAP_POSITIONS + 1)
-    with pytest.raises(tviz.TvizError, match="never crops silently"):
+    with pytest.raises(torchlens.errors.RenderError, match="never crops silently"):
         tviz.render_logit_lens_heatmap(wide, tmp_path / "x.png")
     artifact = tviz.render_logit_lens_heatmap(wide, tmp_path / "x.png", positions=range(10))
     assert artifact.paths[0].exists()
@@ -177,5 +178,5 @@ def test_positionless_lens_refuses(tmp_path: Path) -> None:
         validated=True,
         final_logits=None,
     )
-    with pytest.raises(tviz.TvizError, match="needs \\[batch, positions, vocab\\]"):
+    with pytest.raises(torchlens.errors.RenderError, match="needs \\[batch, positions, vocab\\]"):
         tviz.render_logit_lens_heatmap(result, tmp_path / "x.png")

@@ -62,7 +62,7 @@ def _copy_only_verdict(model: nn.Module, x: torch.Tensor) -> bool:
 
 
 def _fallbacks(diagnostics: list[Any]) -> list[Any]:
-    return [item for item in diagnostics if item.check == arg_references.FALLBACK_CHECK]
+    return [item for item in diagnostics if item.check_name == arg_references.FALLBACK_CHECK]
 
 
 class _Plain(nn.Module):

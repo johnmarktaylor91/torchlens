@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from torchlens._observability import EventStream, ObserverEvent, ObserverEventError
+from torchlens._observability import EventStream, ObserverEvent
 from torchlens._observability._chassis import SUBSCRIBER_FAILURE_LIMIT
+from torchlens.errors import ObserverEventError
 from torchlens.errors._base import TorchLensWarning
 
 

@@ -7,7 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import RecordContext, RecorderStateError
+from torchlens.errors import RecorderStateError
+from torchlens.fastlog import RecordContext
 
 
 class SimpleMlp(nn.Module):

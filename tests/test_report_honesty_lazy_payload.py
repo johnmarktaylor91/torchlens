@@ -74,7 +74,7 @@ def test_lazy_unsaved_rows_refuse_typed(lazy_artifact: tuple[Path, tl.Trace]) ->
 def test_corrupt_blob_raises_typed_not_none(lazy_artifact: tuple[Path, tl.Trace]) -> None:
     """A checksum-drifted blob refuses typed on the materializing read."""
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     path, _ = lazy_artifact
     loaded = tl.load(path, lazy=True)
@@ -82,7 +82,7 @@ def test_corrupt_blob_raises_typed_not_none(lazy_artifact: tuple[Path, tl.Trace]
     ref = loaded[label].ops[0].out_ref
     blob_path = ref.blob_path()
     blob_path.write_bytes(b"corrupted" + blob_path.read_bytes()[9:])
-    with pytest.raises(TorchLensIOError, match="sha256 mismatch"):
+    with pytest.raises(ArtifactError, match="sha256 mismatch"):
         _ = loaded[label].out
 
 

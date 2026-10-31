@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens._runnable import ContractCheck
+
 from ._runnable import (
-    ContractCheck,
     ControlWitness,
     ControlWitnessKind,
     RunnableCallDescriptor,

@@ -339,7 +339,7 @@ def test_folded_validate_tripwire_catches_injected_inconsistency() -> None:
         ReceptiveFieldDirection.RECEPTIVE,
         ReceptiveFieldDirection.PROJECTIVE,
     }
-    assert all(failure.n_violations > 0 for failure in failures)
+    assert all(failure.num_violations > 0 for failure in failures)
 
 
 class _AddZero(nn.Module):
@@ -439,7 +439,7 @@ def test_non_torch_backend_keeps_geometry_and_gates_both_gradients() -> None:
     assert projective.status is ReceptiveFieldStatus.EXACT
     assert receptive.layout.axis_kinds == ("pointwise",)
     assert projective.layout.axis_kinds == ("pointwise",)
-    with pytest.raises(tl.receptive_field.BackendUnsupportedError, match="tinygrad"):
+    with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
         target.receptive_field.gradient((0,))
-    with pytest.raises(tl.receptive_field.BackendUnsupportedError, match="tinygrad"):
+    with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
         source.projective_field.gradient((0,), target=target)

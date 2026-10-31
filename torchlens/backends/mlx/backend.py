@@ -13,6 +13,8 @@ from typing import Any, cast
 
 import numpy as np
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from ... import _state
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
@@ -41,14 +43,13 @@ from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import (
     BackendName,
-    BackendUnsupportedError,
     get_backend_spec,
     require_capability_implementation,
 )
 from ...capture.outcome import StopRequest, stamp_backend_finalized
 from ...fastlog._halt import StopSignal
 from ...fastlog.types import CaptureSpec
-from ...validation.status import ValidationReplaySource, ValidationReplayStatus  # noqa: TC001
+from ...validation.status import ValidationReplaySource, ValidationStatus  # noqa: TC001
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -1659,7 +1660,7 @@ class MLXBackend:
         validate_metadata = bool(kwargs.pop("validate_metadata", True))
         trace = self.capture_trace(*args, **kwargs)
         result = self.validate_trace(trace, validate_metadata=validate_metadata)
-        if isinstance(result, ValidationReplayStatus):
+        if isinstance(result, ValidationStatus):
             return result.passed
         return result
 
@@ -1668,7 +1669,7 @@ class MLXBackend:
         trace: Trace,
         *_args: Any,
         **kwargs: Any,
-    ) -> bool | ValidationReplayStatus:
+    ) -> bool | ValidationStatus:
         """Validate an MLX trace with per-op replay and perturbation.
 
         Parameters
@@ -1683,15 +1684,15 @@ class MLXBackend:
 
         Returns
         -------
-        bool or ValidationReplayStatus
+        bool or ValidationStatus
             True for a verified live pass, False for a verified live failure,
             or an explicit unavailable status for loaded payload-stripped
             traces.
         """
 
         status = trace.validation_replay_status
-        if not status.available or _mlx_loaded_replay_unavailable(trace):
-            status_result = ValidationReplayStatus.unavailable_loaded_runtime_stripped(
+        if not status.is_available or _mlx_loaded_replay_unavailable(trace):
+            status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=self.name,
                 payload_load_status=getattr(trace, "payload_load_status", None),
             )
@@ -1722,23 +1723,23 @@ class MLXBackend:
                     reason_counts = {
                         "mlx_perturbation_no_perturbable_input": len(perturbation_gaps)
                     }
-            status_result = ValidationReplayStatus.from_replay_counts(
+            status_result = ValidationStatus.from_replay_counts(
                 backend=self.name,
                 source=_mlx_validation_source(trace),
-                replayed_node_count=replayed_count,
-                unverified_node_count=unverified_count,
-                failed_node_count=failed_count,
+                num_replayed_ops=replayed_count,
+                num_unverified_ops=unverified_count,
+                num_failed_ops=failed_count,
                 payload_load_status=getattr(trace, "payload_load_status", None),
                 unverified_reason_counts=reason_counts,
             )
         except Exception:
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend=self.name,
                 source=_mlx_validation_source(trace),
                 payload_load_status=getattr(trace, "payload_load_status", None),
-                replayed_node_count=replayed_count,
-                failed_node_count=max(1, failed_count),
+                num_replayed_ops=replayed_count,
+                num_failed_ops=max(1, failed_count),
             )
         setattr(trace, "_validation_replay_status", status_result)
         return status_result if status_result.state == "unverified" else status_result.passed

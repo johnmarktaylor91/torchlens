@@ -11,8 +11,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
-from torchlens.fastlog import RecoveryError
+from torchlens._io import ArtifactError
+from torchlens.errors import RecoveryError
 
 
 class PersistenceModel(nn.Module):
@@ -225,7 +225,7 @@ def test_load_rejects_hash_mismatch_in_finalized_bundle(tmp_path: Path) -> None:
     )
     _first_blob(bundle_path).write_bytes(b"corrupt")
 
-    with pytest.raises(TorchLensIOError, match="failed integrity validation"):
+    with pytest.raises(ArtifactError, match="failed integrity validation"):
         tl.load(bundle_path)
 
     recovered = tl.fastlog.recover(bundle_path)
@@ -250,7 +250,7 @@ def test_load_rejects_incomplete_blob_metadata_in_finalized_bundle(tmp_path: Pat
     lines[0] = json.dumps(first)
     index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    with pytest.raises(TorchLensIOError, match="failed integrity validation"):
+    with pytest.raises(ArtifactError, match="failed integrity validation"):
         tl.load(bundle_path)
 
     recovered = tl.fastlog.recover(bundle_path)
@@ -319,7 +319,7 @@ def test_recover_oversized_index_refuses_typed(
     (bundle_path / "manifest.json").unlink()
     monkeypatch.setattr(recover_module, "_INDEX_MAX_BYTES", 8)
 
-    with pytest.raises(TorchLensIOError, match="ceiling") as excinfo:
+    with pytest.raises(ArtifactError, match="ceiling") as excinfo:
         tl.fastlog.recover(bundle_path)
     assert excinfo.value.fields["code"] == "fastlog_index_too_large"
 
@@ -462,7 +462,7 @@ def test_disk_finalize_refuses_concurrently_created_target(
 
     monkeypatch.setattr(storage_disk_module, "_build_fastlog_manifest", _race_then_build)
 
-    with pytest.raises(TorchLensIOError, match="already exists"):
+    with pytest.raises(ArtifactError, match="already exists"):
         tl.record(
             PersistenceModel(),
             torch.ones(1, 3),
@@ -481,7 +481,7 @@ def test_recover_refuses_below_floor_bundle_instead_of_resurrecting(tmp_path: Pa
     resurrecting exactly what ``load()`` refuses.
     """
 
-    from torchlens._io import ArtifactVersionBelowFloorError
+    from torchlens._io import ArtifactTooOldError
 
     bundle_path = tmp_path / "oldbundle.tlfast"
     _write_bundle(bundle_path)
@@ -489,7 +489,7 @@ def test_recover_refuses_below_floor_bundle_instead_of_resurrecting(tmp_path: Pa
     manifest["tlspec_version"] = 5
     (bundle_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(ArtifactVersionBelowFloorError):
+    with pytest.raises(ArtifactTooOldError):
         tl.fastlog.recover(bundle_path)
 
 

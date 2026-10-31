@@ -189,7 +189,7 @@ class MergeReport:
     stored_alignment: MergeAlignment
     alignment: MergeAlignment
     value_status: MergeValueStatus
-    n_joins: int
+    num_joins: int
     findings: tuple[MergedFinding, ...]
     degradations: tuple[str, ...] = ()
 
@@ -232,7 +232,7 @@ class MergeReport:
                 else ""
             ),
             f"- value status: {self.value_status.value}",
-            f"- joins: {self.n_joins}",
+            f"- joins: {self.num_joins}",
         ]
         for finding in self.findings:
             lines.append(f"- [{finding.kind}] {finding.detail}")
@@ -261,7 +261,7 @@ def _report_from(derivation: MergeDerivation, degradations: tuple[str, ...] = ()
         stored_alignment=derivation.stored_alignment,
         alignment=effective,
         value_status=effective_value_status,
-        n_joins=len(derivation.joins),
+        num_joins=len(derivation.joins),
         findings=findings,
         degradations=degradations,
     )

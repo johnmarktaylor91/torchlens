@@ -13,7 +13,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._quickstart import (
-    SynthesizedValueReadWarning,
     internal_read,
     is_gold,
     parse_input_size,
@@ -24,6 +23,7 @@ from torchlens._quickstart import (
     resolve_rung,
     trace_input_provenance,
 )
+from torchlens.errors import SynthesizedValueReadWarning
 from torchlens.types import InputSpec
 from torchlens.user_funcs import render as _render
 

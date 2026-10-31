@@ -56,12 +56,6 @@ def __getattr__(name: str) -> Any:
         value = getattr(_me, name)
         globals()[name] = value
         return value
-    if name == "ReportOptions":
-        # The offline-report worker stays lazy like the html() door itself.
-        from ._report import ReportOptions
-
-        globals()[name] = ReportOptions
-        return ReportOptions
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -265,7 +259,7 @@ def html(
     graph:
         ``"collapsed"`` (default) / ``"flat"`` / ``"none"``.
     options:
-        ``tl.export.ReportOptions`` emission plumbing: ``share_safe``
+        ``tl.options.HtmlReportOptions`` emission plumbing: ``share_safe``
         (strip every embedded value including the frontier),
         ``deterministic`` (suppress the manifest timestamp for byte-exact
         regeneration), ``vis_call_depth`` (graph-depth knob, forwarded
@@ -949,11 +943,11 @@ def _chrome_trace_diff_deltas(bundle: Any) -> tuple[dict[str, dict[str, float]],
     gate's stable code and message. The gate is never bypassed.
     """
 
-    from ..intervention.errors import BundleRelationshipError
+    from ..intervention.errors import BundleComparisonError
 
     try:
         return bundle.norm_delta(), {"status": "computed", "operation": "norm_delta"}
-    except BundleRelationshipError as exc:
+    except BundleComparisonError as exc:
         return {}, {
             "status": "refused",
             "operation": "norm_delta",
@@ -1270,7 +1264,6 @@ for _name, _fn, _tier, _caps in _BUILTIN_EXPORT_TARGETS:
 del _name, _fn, _tier, _caps
 
 __all__ = [
-    "ReportOptions",
     "aim",
     "chrome_trace",
     "chrome_trace_diff",

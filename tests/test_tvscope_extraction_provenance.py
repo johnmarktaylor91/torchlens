@@ -21,7 +21,7 @@ pytest.importorskip("torchvision")
 import torchlens as tl  # noqa: E402
 import torchlens.preprocessing as pp  # noqa: E402
 from torchlens._extraction_provenance import INPUT_PREPROCESSING_SCHEMA, input_preprocessing_of
-from torchlens.dataset_extraction import DatasetExtractionResumeError
+from torchlens.errors import DatasetExtractionResumeError
 
 
 class _SmallCNN(nn.Module):
@@ -240,9 +240,9 @@ def test_provenance_only_stamp_records_applied_not_audited(model, resolution, tm
 
 
 def test_audit_provenance_stamp_carries_its_verdict(model, resolution, tmp_path) -> None:
-    """A PreprocessingAudit provenance stamp rides with its own verdict."""
+    """A PreprocessingComparison provenance stamp rides with its own verdict."""
 
-    report = pp.audit(resolution, resolution)
+    report = pp.compare(resolution, resolution)
     out_dir = tmp_path / "auditstamp"
     tl.extract_dataset(
         model,

@@ -148,7 +148,7 @@ def test_capability_card_is_metadata_only(family_trace, monkeypatch) -> None:
     card = family_trace.capabilities()
     text = str(card)
     assert "capability card" in text
-    assert any(row.available for row in card.rows)
+    assert any(row.is_available for row in card.rows)
 
 
 def test_capability_card_on_partial_names_remedies(partial_trace) -> None:
@@ -156,7 +156,7 @@ def test_capability_card_on_partial_names_remedies(partial_trace) -> None:
 
     card = capability_card(partial_trace)
     assert card.object_kind == "partial_trace"
-    refused = {row.key: row for row in card.rows if not row.available}
+    refused = {row.key: row for row in card.rows if not row.is_available}
     assert "summary" in refused
     assert "explain" not in refused  # explain degrades, never refuses
     assert "audit" in str(refused["summary"].reason) or "explain" in str(refused["summary"].reason)
@@ -207,7 +207,7 @@ def test_agent_json_is_the_one_machine_projection(family_trace) -> None:
     agent_json = family_trace.to_agent_json()
     assert agent_json["counts"]["layers"] == core.counts.layers
     assert agent_json["counts"]["operations"] == core.counts.tracked_tensor_rows
-    assert agent_json["counts"]["tensors_saved"] == core.memory.at_capture_saved_ops
+    assert agent_json["counts"]["tensors_saved"] == core.memory.captured_saved_ops
     assert agent_json["capture"]["model_class"] == family_trace.model_class_name
 
 

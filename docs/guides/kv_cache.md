@@ -11,7 +11,7 @@ during generation", and they cost very different amounts:
 | Record every step of a generation as one inspectable product | `tl.trace(..., episode=tl.options.EpisodeOptions(...))` | diagnostic tier: superlinear in the number of steps, so tens of steps, not hundreds ([episode capture](../reference/episode_capture.md)) |
 
 `steer_generate` never traces: it runs the model's real `generate()` with the edit installed as a
-hook, so the edit fires once per forward call (`result.report.fire_count`), and the keys and values
+hook, so the edit fires once per forward call (`result.report.num_fires`), and the keys and values
 it writes into the cache already carry the edit. Use a trace or an episode capture only when you
 need the recorded graph, and then for a few steps.
 

@@ -6,6 +6,9 @@ comparisons, determinism, gradient and parameter health) live in ``tl.debug``.
 
 from __future__ import annotations
 
+import importlib
+from typing import TYPE_CHECKING, Any
+
 from ..debug._audit import HealthReport
 from ..debug._compile_counter import count_compiles
 from ..debug._cost import hot_path, hot_path_rows
@@ -87,6 +90,16 @@ __all__ = [
     "find_nan",
     "FlopsCrossCheck",
     "HealthReport",
+    "ValidationStatus",
+    "ValidationFailure",
+    "ValidationDiagnostic",
+    "InterventionValidationReport",
+    "kernel_profile",
+    "KernelProfileReport",
+    "MergeReport",
+    "CompatWindow",
+    "diff",
+    "DiffReport",
     "BackwardEstimate",
     "BackwardStatus",
     "CapabilityCard",
@@ -158,11 +171,55 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> object:
-    """Resolve ``isolated_capture`` lazily (its code lives with the rerun helpers)."""
+if TYPE_CHECKING:
+    from torchlens._ecosystem.compat import CompatWindow
+    from torchlens._merged._presenter import MergeReport
+    from torchlens._observability._native_profile import KernelProfileReport, kernel_profile
+    from torchlens.differential import DiffReport, diff
+    from torchlens.validation.consolidated import InterventionValidationReport
+    from torchlens.validation.diagnostics import ValidationDiagnostic, ValidationFailure
+    from torchlens.validation.status import ValidationStatus
 
-    if name == "isolated_capture":
-        from ..debug._rerun import isolated_capture
+_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    "ValidationStatus": ("torchlens.validation.status", "ValidationStatus"),
+    "ValidationFailure": ("torchlens.validation.diagnostics", "ValidationFailure"),
+    "ValidationDiagnostic": ("torchlens.validation.diagnostics", "ValidationDiagnostic"),
+    "InterventionValidationReport": (
+        "torchlens.validation.consolidated",
+        "InterventionValidationReport",
+    ),
+    "kernel_profile": ("torchlens._observability._native_profile", "kernel_profile"),
+    "KernelProfileReport": ("torchlens._observability._native_profile", "KernelProfileReport"),
+    "MergeReport": ("torchlens._merged._presenter", "MergeReport"),
+    "CompatWindow": ("torchlens._ecosystem.compat", "CompatWindow"),
+    "diff": ("torchlens.differential", "diff"),
+    "DiffReport": ("torchlens.differential", "DiffReport"),
+    "isolated_capture": ("torchlens.debug._rerun", "isolated_capture"),
+}
 
-        return isolated_capture
+
+def __getattr__(name: str) -> Any:
+    """Resolve exports whose defining modules would import-cycle if loaded eagerly.
+
+    Parameters
+    ----------
+    name:
+        Attribute requested from this namespace.
+
+    Returns
+    -------
+    Any
+        The exported object.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not an export of this namespace.
+    """
+
+    if name in _LAZY_EXPORTS:
+        module_name, attr_name = _LAZY_EXPORTS[name]
+        value = getattr(importlib.import_module(module_name), attr_name)
+        globals()[name] = value
+        return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

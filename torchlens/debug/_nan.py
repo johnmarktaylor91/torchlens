@@ -661,7 +661,7 @@ class NonfiniteReport(Report):
     custom-autograd exceptions).
     """
 
-    found: bool
+    has_nonfinite: bool
     phase: str
     kind: str
     origin_label: str | None
@@ -670,9 +670,9 @@ class NonfiniteReport(Report):
     tensor_role: str | None
     nonfinite_labels: tuple[str, ...]
     coverage_basis: str
-    checked: int
-    unchecked: int
-    unexamined: int
+    num_checked_ops: int
+    num_unchecked_ops: int
+    num_unexamined_ops: int
     capture_status: str
     cost_tier: str
     amp_disclosure: str | None
@@ -688,14 +688,14 @@ class NonfiniteReport(Report):
     def _report_status(self) -> str:
         """The verdict token on the card's lead line."""
 
-        return "found" if self.found else "not_found"
+        return "found" if self.has_nonfinite else "not_found"
 
     def _report_coverage(self) -> str | None:
         """What this report did and did not examine."""
 
         return (
-            f"{self.checked} checked, {self.unchecked} unchecked, "
-            f"{self.unexamined} unexamined (basis: {self.coverage_basis})"
+            f"{self.num_checked_ops} checked, {self.num_unchecked_ops} unchecked, "
+            f"{self.num_unexamined_ops} unexamined (basis: {self.coverage_basis})"
         )
 
     def _report_findings(self) -> list[str]:
@@ -713,7 +713,7 @@ class NonfiniteReport(Report):
         """Return the human-readable report text."""
 
         lines = [f"NaN forensics ({self.phase}; {self.cost_tier})"]
-        if self.found:
+        if self.has_nonfinite:
             lines.append(
                 f"  origin: {self.origin_label} ({self.kind}) at "
                 f"{self.source_line or '<source unavailable>'}"
@@ -726,8 +726,8 @@ class NonfiniteReport(Report):
         else:
             lines.append(f"  no non-finite value among CHECKED outputs ({self.scope_note})")
         lines.append(
-            f"  coverage: basis={self.coverage_basis}, checked={self.checked}, "
-            f"unchecked={self.unchecked}, unexamined={self.unexamined}"
+            f"  coverage: basis={self.coverage_basis}, checked={self.num_checked_ops}, "
+            f"unchecked={self.num_unchecked_ops}, unexamined={self.num_unexamined_ops}"
         )
         lines.append(f"  capture outcome: {self.capture_status}")
         if self.amp_disclosure:
@@ -806,7 +806,7 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
             )
 
     return NonfiniteReport(
-        found=bool(finding.found),
+        has_nonfinite=bool(finding.found),
         phase="forward",
         kind=str(finding.kind),
         origin_label=finding.label,
@@ -821,9 +821,9 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
             if coverage is not None
             else "live_tripwire_first_bad_output"
         ),
-        checked=int(getattr(coverage, "checked", 0) or 0),
-        unchecked=int(getattr(coverage, "unchecked", 0) or 0),
-        unexamined=int(getattr(coverage, "unexamined", 0) or 0),
+        num_checked_ops=int(getattr(coverage, "checked", 0) or 0),
+        num_unchecked_ops=int(getattr(coverage, "unchecked", 0) or 0),
+        num_unexamined_ops=int(getattr(coverage, "unexamined", 0) or 0),
         capture_status=capture_status,
         cost_tier=cost_tier,
         amp_disclosure=amp_disclosure,

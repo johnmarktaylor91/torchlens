@@ -19,10 +19,10 @@ import random
 import pytest
 import torch
 
+from torchlens.errors import TransformContractError
 from torchlens.transforms import (
     TensorSpec,
     TransformContext,
-    TransformContractError,
     chain,
     srp,
     srp_realized_facts,

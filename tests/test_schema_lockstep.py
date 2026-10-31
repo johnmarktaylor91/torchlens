@@ -535,7 +535,7 @@ def _render_method_x_model_compat() -> str:
 
     reports = _compat_reference_reports()
     label_sequences = {
-        name: tuple(row.label for row in report.rows) for name, report in reports.items()
+        name: tuple(row.label for row in report.checks) for name, report in reports.items()
     }
     (first_labels, *other_labels) = label_sequences.values()
     if any(labels != first_labels for labels in other_labels):
@@ -568,10 +568,10 @@ def _render_method_x_model_compat() -> str:
     ]
     any_non_pass = False
     for name, report in reports.items():
-        non_pass = [row.label for row in report.rows if row.status != "pass"]
+        non_pass = [row.label for row in report.checks if row.status != "pass"]
         any_non_pass = any_non_pass or bool(non_pass)
         cell = ", ".join(f"`{label}`" for label in non_pass) if non_pass else "none"
-        lines.append(f"| `{name}` | {len(report.rows)} | {cell} |")
+        lines.append(f"| `{name}` | {len(report.checks)} | {cell} |")
     lines.append("")
     if any_non_pass:
         lines.append(

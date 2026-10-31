@@ -11,7 +11,7 @@ import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError  # noqa: E402
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
 
 @pytest.mark.optional

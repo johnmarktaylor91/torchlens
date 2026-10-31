@@ -50,7 +50,7 @@ class MergedFinding:
     key: tuple[str, int, str, int] | None = None
     ranks: tuple[int, ...] = field(default_factory=tuple)
 
-    def to_payload(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return the canonical JSON-serializable projection."""
 
         return {
@@ -62,7 +62,7 @@ class MergedFinding:
         }
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> MergedFinding:
+    def from_dict(cls, payload: dict[str, Any]) -> MergedFinding:
         """Rebuild a finding from :meth:`to_payload` output."""
 
         raw_key = payload.get("key")

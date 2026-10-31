@@ -221,7 +221,7 @@ def test_assert_unchanged_reports_both_hashes_on_mismatch() -> None:
     expected = tl.fingerprint.model(_ResidualModel(), _input())
     actual = tl.fingerprint.model(_SequentialModel(), _input())
 
-    with pytest.raises(tl.fingerprint.StructuralHashMismatchError) as error:
+    with pytest.raises(tl.errors.StructuralHashMismatchError) as error:
         tl.fingerprint.assert_unchanged(_SequentialModel(), _input(), expected)
 
     assert expected in str(error.value)
@@ -237,9 +237,9 @@ def test_structural_hash_mismatch_error_joins_the_taxonomy() -> None:
 
     from torchlens import errors
 
-    assert errors.StructuralHashMismatchError is tl.fingerprint.StructuralHashMismatchError
-    assert issubclass(tl.fingerprint.StructuralHashMismatchError, errors.ValidationError)
-    assert issubclass(tl.fingerprint.StructuralHashMismatchError, AssertionError)
+    assert errors.StructuralHashMismatchError is tl.errors.StructuralHashMismatchError
+    assert issubclass(tl.errors.StructuralHashMismatchError, errors.ValidationError)
+    assert issubclass(tl.errors.StructuralHashMismatchError, AssertionError)
 
     expected = tl.fingerprint.model(_ResidualModel(), _input())
     with pytest.raises(AssertionError):

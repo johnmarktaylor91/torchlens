@@ -33,6 +33,8 @@ from typing import Any, Literal, cast
 import torch
 from torch import nn
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from . import _state
 from ._autoroute._builtin_output import (
     check_output_style,
@@ -77,10 +79,10 @@ from ._deprecations import MISSING, MissingType
 from ._errors import (
     ArgumentConflictError,
     ArgumentTypeError,
-    CaptureContextError,
+    CaptureNotActiveError,
     InvalidArgumentError,
     KeywordConflictError,
-    TorchLensPostfuncError,
+    UserTransformError,
 )
 from ._input_coerce import (
     _coerce_input_args,
@@ -88,7 +90,7 @@ from ._input_coerce import (
     _reject_non_mapping_input_kwargs,
     _reject_unrouted_forward_kwargs,
 )
-from ._io import TorchLensIOError
+from ._io import ArtifactError
 from ._io.streaming import BundleStreamWriter
 from ._ir import ParentEdge
 from ._ir.op_record import amend_graph_edge_insertion
@@ -136,7 +138,6 @@ from .backends._options import (
 from .backends.registry import (
     BackendName,
     BackendSpec,
-    BackendUnsupportedError,
     get_backend_spec,
     resolve_backend_spec,
 )
@@ -245,9 +246,9 @@ _CAPTURE_CACHE_HEADER_BYTES = len(_CAPTURE_CACHE_MAGIC) + _CAPTURE_CACHE_TAG_HEX
 def _capture_cache_io_error(message: str) -> Exception:
     """Build the typed artifact-boundary error for a refused capture cache."""
 
-    from ._io import TorchLensIOError
+    from ._io import ArtifactError
 
-    return TorchLensIOError(message)
+    return ArtifactError(message)
 
 
 def _harden_capture_cache_dir(directory: Path) -> None:
@@ -273,7 +274,7 @@ def _harden_capture_cache_dir(directory: Path) -> None:
 
     Raises
     ------
-    torchlens.errors.TorchLensIOError
+    torchlens.errors.ArtifactError
         When the directory is owned by another user, or is group/other-writable and
         cannot be tightened. Either condition means a second principal can substitute
         the pickle this process will load.
@@ -365,7 +366,7 @@ def _capture_cache_secret(cache_root: Path) -> bytes:
 
     Raises
     ------
-    torchlens.errors.TorchLensIOError
+    torchlens.errors.ArtifactError
         When an existing secret file is not a private regular file, so a tag
         computed with it would prove nothing.
     """
@@ -1247,7 +1248,7 @@ def _release_preparation_after_failed_capture(model: nn.Module) -> None:
 
     try:
         release_model(model)
-    except CaptureContextError as refusal:
+    except CaptureNotActiveError as refusal:
         if refusal.fields.get("code") == "release_during_active_capture":
             # A NESTED capture failed while an outer capture still owns the
             # model's instrumentation (e.g. tl.trace called from a forward
@@ -1450,7 +1451,7 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
 
     trace = _state._active_trace
     if trace is None:
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             "register_tensor_connection() was called without an active trace",
             code="capture_context_required",
             remedy=(
@@ -2149,9 +2150,9 @@ def _run_model_and_save_specified_outs(
                 out_writer.abort(str(exc))
             if isinstance(exc, Exception) and not isinstance(
                 exc,
-                (PredicateError, SaveBudgetExceededError, TorchLensIOError, TorchLensPostfuncError),
+                (PredicateError, SaveBudgetExceededError, ArtifactError, UserTransformError),
             ):
-                raise TorchLensIOError("Streaming out save failed during forward pass.") from exc
+                raise ArtifactError("Streaming out save failed during forward pass.") from exc
         raise
     finally:
         _state.reset_capture_runtime_context()
@@ -2703,7 +2704,7 @@ def trace(
     Postfunc behavior:
         ``save.activation_transform`` and ``grad_transform`` both take a tensor, should return a
         tensor for portable-save and streaming compatibility, run under ``pause_logging()``, and
-        raise ``TorchLensPostfuncError`` with layer/function/tensor context if they fail.
+        raise ``UserTransformError`` with layer/function/tensor context if they fail.
 
         Activation transforms run during forward capture. Their result is stored alongside the
         raw out by default, and ``capture.backward_ready=True`` requires the transformed out to
@@ -2813,7 +2814,7 @@ def trace(
                 if result is not None:
                     return cast("Trace", result)
         if closed_bool_env("TORCHLENS_AUTO"):
-            raise CaptureContextError(
+            raise CaptureNotActiveError(
                 "TORCHLENS_AUTO requested an unsupported implicit capture mode",
                 code="auto_environment_unsupported",
                 remedy="unset TORCHLENS_AUTO and call auto_capture() explicitly",
@@ -4324,7 +4325,6 @@ def validate_batch_of_models_and_inputs(*args: Any, **kwargs: Any) -> Any:
 
 
 _PUBLIC_IMPL_WRAPPER_NAMES = (
-    "summary",
     "show_model_graph",
     "draw_backward",
     "draw_combined",

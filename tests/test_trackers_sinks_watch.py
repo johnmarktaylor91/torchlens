@@ -9,9 +9,10 @@ from __future__ import annotations
 import pytest
 import torch
 
+import torchlens.errors
 import torchlens.trackers as trk
-from torchlens._observability import HistorySchemaError
 from torchlens._utils._torch_compat import HAS_AMP_GRADSCALER
+from torchlens.errors import HistorySchemaError
 from torchlens.trackers._errors import WatchConfigError, WatchRuntimeError
 
 _requires_gradscaler = pytest.mark.skipif(
@@ -54,7 +55,7 @@ class TestTierP:
         assert steps[-1] == 107  # last step force-sampled at close
         assert 105 in steps  # the cadence hit (105 % 5 == 0)
         report = session.close()
-        assert report.final_sample_forced
+        assert report.is_final_sample_forced
         assert report.first_step == 100
         assert report.last_step == 107
 
@@ -283,7 +284,7 @@ class TestLoudFailures:
 
         model, opt = _mlp()
         narrow = trk.MemorySink(capabilities=frozenset({"scalar", "text_manifest"}))
-        with pytest.raises(trk.SinkProtocolError) as info:
+        with pytest.raises(torchlens.errors.SinkProtocolError) as info:
             trk.watch(model, to=narrow, optimizer=opt, hist_every=10)
         assert info.value.fields["code"] == "tracker_sink_capability_missing"
         assert narrow.scalars == []
@@ -361,7 +362,7 @@ class TestLoudFailures:
         sink = trk.MemorySink()
         session = trk.watch(model, to=sink, optimizer=opt)
         report = session.close()
-        assert report.disabled
+        assert report.is_disabled
         assert [p.tag for p in sink.scalars] == ["torchlens/run/disabled"]
 
 

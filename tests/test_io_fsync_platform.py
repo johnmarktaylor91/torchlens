@@ -2,7 +2,7 @@
 
 Windows' ``FlushFileBuffers`` (behind ``os.fsync``) needs a handle with write
 access: a read-only descriptor fails with ``EBADF``, which made every
-``Trace.save`` on Windows raise ``TorchLensIOError`` (nightly platform canary,
+``Trace.save`` on Windows raise ``ArtifactError`` (nightly platform canary,
 windows-2025). POSIX ``fsync`` accepts a read-only descriptor.
 """
 

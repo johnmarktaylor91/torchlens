@@ -1,7 +1,8 @@
 """Public TorchLens type aliases and rarely used data classes."""
 
+import importlib
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 #: Role declaration (architecture memo build item 2, seeding the layer map
 #: the C01 lint consumes): this module is a FACADE-role cross-layer
@@ -47,6 +48,13 @@ _GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 __all__ = [
     "Accessor",
     "TraceLike",
+    "NarrationEvent",
+    "RunnableDiagnostic",
+    "RunnableCompatibility",
+    "RunReport",
+    "ReadinessReport",
+    "ContractCheck",
+    "MergedFinding",
     "AtenOp",
     "AttributeWrite",
     "BackwardPass",
@@ -91,31 +99,62 @@ __all__ = [
     "register_container",
 ]
 
-#: Public records whose implementation lives in a private package; loaded
-#: on first access so importing tl.types stays cheap.
-_LAZY_TYPES: dict[str, str] = {
-    "Container": "torchlens._data_classes.container",
-    "ContainerLeafOccurrence": "torchlens._ir.container_registry",
-    "ContainerSpec": "torchlens._ir.container",
-    "InputProvenance": "torchlens._quickstart._provenance",
-    "InputSpec": "torchlens._quickstart._grammar",
-    "MergeAlignment": "torchlens._merged._enums",
-    "MergeValueStatus": "torchlens._merged._enums",
-    "MergedTrace": "torchlens._merged._presenter",
-    "PartialTrace": "torchlens._partial",
-    "TraceSlice": "torchlens._trace_slice",
-    "register_container": "torchlens._ir.container",
+
+if TYPE_CHECKING:
+    from torchlens._merged._errors import MergedFinding
+    from torchlens._runnable import (
+        ContractCheck,
+        ReadinessReport,
+        RunnableCompatibility,
+        RunnableDiagnostic,
+        RunReport,
+    )
+    from torchlens._snoop._event import NarrationEvent
+
+_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    "NarrationEvent": ("torchlens._snoop._event", "NarrationEvent"),
+    "RunnableDiagnostic": ("torchlens._runnable", "RunnableDiagnostic"),
+    "RunnableCompatibility": ("torchlens._runnable", "RunnableCompatibility"),
+    "RunReport": ("torchlens._runnable", "RunReport"),
+    "ReadinessReport": ("torchlens._runnable", "ReadinessReport"),
+    "ContractCheck": ("torchlens._runnable", "ContractCheck"),
+    "MergedFinding": ("torchlens._merged._errors", "MergedFinding"),
+    "Container": ("torchlens._data_classes.container", "Container"),
+    "ContainerLeafOccurrence": ("torchlens._ir.container_registry", "ContainerLeafOccurrence"),
+    "ContainerSpec": ("torchlens._ir.container", "ContainerSpec"),
+    "InputProvenance": ("torchlens._quickstart._provenance", "InputProvenance"),
+    "InputSpec": ("torchlens._quickstart._grammar", "InputSpec"),
+    "MergeAlignment": ("torchlens._merged._enums", "MergeAlignment"),
+    "MergeValueStatus": ("torchlens._merged._enums", "MergeValueStatus"),
+    "MergedTrace": ("torchlens._merged._presenter", "MergedTrace"),
+    "PartialTrace": ("torchlens._partial", "PartialTrace"),
+    "TraceSlice": ("torchlens._trace_slice", "TraceSlice"),
+    "register_container": ("torchlens._ir.container", "register_container"),
 }
 
 
-def __getattr__(name: str) -> object:
-    """Resolve a lazily exported record type."""
+def __getattr__(name: str) -> Any:
+    """Resolve exports whose defining modules would import-cycle if loaded eagerly.
 
-    module = _LAZY_TYPES.get(name)
-    if module is None:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    import importlib
+    Parameters
+    ----------
+    name:
+        Attribute requested from this namespace.
 
-    value = getattr(importlib.import_module(module), name)
-    globals()[name] = value
-    return value
+    Returns
+    -------
+    Any
+        The exported object.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not an export of this namespace.
+    """
+
+    if name in _LAZY_EXPORTS:
+        module_name, attr_name = _LAZY_EXPORTS[name]
+        value = getattr(importlib.import_module(module_name), attr_name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

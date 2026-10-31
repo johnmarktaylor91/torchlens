@@ -593,7 +593,7 @@ def warn_parallel() -> None:
 
     Raises
     ------
-    CaptureContextError
+    CaptureNotActiveError
         If called from a child process that is not a distributed rank
         (code ``child_process_capture_unsupported``).
     """
@@ -647,9 +647,9 @@ def warn_parallel() -> None:
     except Exception:
         is_rank_process = False
     if not is_rank_process:
-        from .._errors import CaptureContextError
+        from .._errors import CaptureNotActiveError
 
-        raise CaptureContextError(
+        raise CaptureNotActiveError(
             "TorchLens capture was started in child process "
             f"{process.name!r}, which is not a distributed rank; capture state "
             "is per-interpreter and ordered, so a child-process capture "

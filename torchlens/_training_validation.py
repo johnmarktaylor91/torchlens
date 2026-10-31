@@ -83,7 +83,7 @@ def effective_inference_only(capture_options: CaptureOptions, *, backward_reques
 class TrainingModeConfigError(ConfigurationError, ValueError):
     """Raised when ``backward_ready=True`` conflicts with capture configuration.
 
-    This is the slow/replay sibling of ``tl.fastlog.RecordingConfigError``:
+    This is the slow/replay sibling of ``tl.errors.RecordingConfigError``:
     both are ``ValueError`` subclasses for user configuration mistakes, but
     this class specifically covers autograd-retaining training captures.
     """

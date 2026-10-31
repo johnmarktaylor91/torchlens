@@ -31,8 +31,6 @@ _LAZY_ATTRS = {
     # eager import block (options/captured_run+ir/observers/quantities/errors
     # and their transitive chains) is fully deferred behind these rows -- the
     # marginal-import guard in tests/test_import_hygiene.py holds the line.
-    "AmbiguousOpLookupError": ("torchlens._errors", "AmbiguousOpLookupError"),
-    "ReentrantTraceError": ("torchlens._state", "ReentrantTraceError"),
     # Agent surface (F29): the read-only inspection core. Deliberately NOT in
     # __all__ (frozen root budget); reachable as tl.agent per the docs.
     "agent": ("torchlens.agent", None),
@@ -224,7 +222,7 @@ _REDIRECTS: dict[str, str] = {
     "Buffer": "use torchlens.types.Buffer",
     "build_render_audit": "use torchlens.experimental.dagua.build_render_audit",
     "check_metadata_invariants": "use torchlens.validation.check_metadata_invariants",
-    "check_spec_compat": "use torchlens.validation.check_spec_compat",
+    "check_spec_compat": "use torchlens.intervention.check_spec_compat",
     "cleanup_tmp": "use torchlens.io.cleanup_tmp",
     "draw_backward": "use torchlens.visualization.draw_backward",
     "draw_combined": "use torchlens.visualization.draw_combined",
@@ -278,7 +276,7 @@ _REDIRECTS: dict[str, str] = {
     "suppress_mutate_warnings": "use torchlens.io.suppress_mutate_warnings",
     "TargetManifestDiff": "use torchlens.types.TargetManifestDiff",
     "TensorInputObservation": "use torchlens.types.TensorInputObservation",
-    "TorchLensPostfuncError": "use torchlens.errors.TorchLensPostfuncError",
+    "TorchLensPostfuncError": "use torchlens.errors.UserTransformError",
     "trace_to_dagua_graph": "use torchlens.experimental.dagua.trace_to_dagua_graph",
     "TraceState": "use torchlens.io.TraceState",
     "TrainingModeConfigError": "use torchlens.errors.TrainingModeConfigError",
@@ -701,8 +699,6 @@ __all__ = [
     "summary",
     "options",
     "to_disk",
-    "AmbiguousOpLookupError",
-    "ReentrantTraceError",
     "Trace",
     "Layer",
     "Op",

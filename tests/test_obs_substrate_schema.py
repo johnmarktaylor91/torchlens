@@ -9,7 +9,6 @@ from torchlens._observability import (
     PHASES,
     PRESENCE,
     STREAMS,
-    HistorySchemaError,
     ObservationRecord,
     RunRecord,
     SiteRecord,
@@ -18,6 +17,7 @@ from torchlens._observability import (
     merge_observations,
     validate_step_order,
 )
+from torchlens.errors import HistorySchemaError
 
 
 def _observed(step: int = 1, *, stream: str = "activation", **kwargs) -> ObservationRecord:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1716,7 +1717,7 @@ def to_disk(
         forces synchronous writes; ``True`` requires the async pipeline and
         refuses typed where it cannot be honored (``tl.record``). Writes
         land in submission order, a failed write raises
-        ``TorchLensIOError`` and marks the bundle PARTIAL, and finalization
+        ``ArtifactError`` and marks the bundle PARTIAL, and finalization
         waits for every pending write before the bundle publishes.
     max_pending_bytes:
         Pending snapshot byte budget for the async pipeline (``None`` uses
@@ -1969,6 +1970,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
 
 __all__ = [
     "RecordingOptions",
+    "HtmlReportOptions",
     "CaptureOptions",
     "NarrationOptions",
     "EpisodeOptions",
@@ -1982,11 +1984,37 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> object:
-    """Resolve ``RecordingOptions`` lazily (its module imports this one)."""
+if TYPE_CHECKING:
+    from torchlens.export._report import HtmlReportOptions
 
-    if name == "RecordingOptions":
-        from .fastlog.options import RecordingOptions
+_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    "HtmlReportOptions": ("torchlens.export._report", "HtmlReportOptions"),
+    "RecordingOptions": ("torchlens.fastlog.options", "RecordingOptions"),
+}
 
-        return RecordingOptions
+
+def __getattr__(name: str) -> Any:
+    """Resolve exports whose defining modules would import-cycle if loaded eagerly.
+
+    Parameters
+    ----------
+    name:
+        Attribute requested from this namespace.
+
+    Returns
+    -------
+    Any
+        The exported object.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not an export of this namespace.
+    """
+
+    if name in _LAZY_EXPORTS:
+        module_name, attr_name = _LAZY_EXPORTS[name]
+        value = getattr(importlib.import_module(module_name), attr_name)
+        globals()[name] = value
+        return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

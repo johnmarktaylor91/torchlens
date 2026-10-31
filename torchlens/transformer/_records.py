@@ -683,7 +683,7 @@ class PredictionTrajectory:
         Per-layer probability and ONE-BASED rank of the tracked token.
     lens_source:
         ``"model_head"`` or ``"user"``.
-    validated:
+    is_validated:
         Whether the reconstructed lens passed numeric validation; ``False``
         for user lenses, rendered as unvalidated.
     tie_convention:
@@ -699,7 +699,7 @@ class PredictionTrajectory:
     target_probs: tuple[float, ...] | None = None
     target_ranks: tuple[int, ...] | None = None
     lens_source: str = "model_head"
-    validated: bool = False
+    is_validated: bool = False
     tie_convention: str = ""
 
     def __post_init__(self) -> None:

@@ -8,11 +8,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._errors import ArgumentTypeError
-from .._io import JaxPayloadLoadHint, PayloadLoadHints, TorchLensIOError, _json, materialize_nested
+from .._io import ArtifactError, JaxPayloadLoadHint, PayloadLoadHints, _json, materialize_nested
 from .._io.bundle import cleanup_tmp, load as _load
 from .._io.sidecar import (
     AnalysisOnlySidecar,
-    SidecarError,
     SidecarFamily,
     attach_sidecar,
     list_sidecar_families,
@@ -86,7 +85,7 @@ def detect_tlspec_format(path: str | Path) -> str:
             # was lost) -- route it through v2.0_unified so the REAL numeric
             # `tlspec_version` floor check applies. The former fallthrough
             # here misrouted exactly this shape into the legacy
-            # ArtifactVersionBelowFloorError path with a "pre-tlspec
+            # ArtifactTooOldError path with a "pre-tlspec
             # ModelLog format" message that is false for a tlspec-schema
             # artifact (R73 fast-tier fuzz finding, 2026-10).
             return "v2.0_unified"
@@ -129,14 +128,14 @@ def _reject_symlinked_metadata_path(path: Path) -> None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If ``path`` is a symlink.
     """
 
     if path.is_symlink():
         # Same front-door cause as the bundle loader's symlink guards, so it
         # carries the same stable code a caller branches on (R65).
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Refusing symlinked .tlspec format-detection path: {path}. "
             f"Remedy: pass the resolved bundle directory instead, e.g. "
             f"tl.load(str(Path(path).resolve())).",
@@ -307,7 +306,6 @@ if not TYPE_CHECKING:
 
 __all__ = [
     "AnalysisOnlySidecar",
-    "SidecarError",
     "SidecarFamily",
     "TraceState",
     "JaxPayloadLoadHint",

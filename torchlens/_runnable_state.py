@@ -16,13 +16,14 @@ from typing import Any
 
 import torch
 
+from torchlens.runnable import RunnableDiagnostic
+
 from . import _state
 from ._runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
     RUNNABLE_INITIALIZER_POLICY_VERSION,
     ControlWitnessKind,
     InitializerPolicy,
-    RunnableDiagnostic,
     RunnableErrorCode,
     SparseRunDescriptor,
     StateSlotRole,
@@ -2771,7 +2772,7 @@ def _diagnostic(
         current_runtime=str(torch.__version__),
         detection_stage=detection_stage,
         resolver_provenance=None,
-        analysis_load_available=True,
+        is_analysis_load_available=True,
         details=details,
     )
 

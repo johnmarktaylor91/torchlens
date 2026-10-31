@@ -48,9 +48,10 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from torchlens._selection import SelectionError
+
 from .._selection import (
     Selection,
-    SelectionError,
     _apply_invalid,
     _require_edge_provenance,
     _trace_edge_records,

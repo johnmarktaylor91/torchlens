@@ -14,7 +14,7 @@ from typing import Any
 
 import torch
 
-from .._errors import TorchLensPostfuncError
+from .._errors import UserTransformError
 
 # _io / _state / _training_validation sit at or above this module's layer
 # (arch-spine layer lint): their names defer inside the one function each
@@ -67,7 +67,7 @@ def apply_transform(
         with pause_logging():
             return transform(tensor)
     except Exception as exc:
-        raise TorchLensPostfuncError(
+        raise UserTransformError(
             transform_error_message(
                 label=label,
                 raw_label=raw_label,
@@ -244,18 +244,18 @@ def validate_streaming_transform_output(
         Raises if streaming cannot serialize the transformed value.
     """
 
-    from .._io import TorchLensIOError
+    from .._io import ArtifactError
 
     if not streaming_active:
         return
     if not isinstance(transformed_tensor, torch.Tensor):
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Streaming save requires {transform_kind}_transform outputs to be "
             f"torch.Tensor instances, but layer {label} produced "
             f"{type(transformed_tensor).__name__}."
         )
     if transformed_tensor.layout != torch.strided:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Streaming save does not support sparse {transform_kind}_transform outputs "
             f"for layer {label}."
         )

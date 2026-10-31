@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _DeferredForeignCallable,
@@ -237,7 +237,7 @@ def test_malicious_metadata_is_denied_and_executes_nothing(tmp_path: Path, gadge
     marker = tmp_path / "PWNED"
     _overwrite_metadata(bundle, gadget_factory(marker))
 
-    with pytest.raises((TorchLensIOError, pickle.UnpicklingError)):
+    with pytest.raises((ArtifactError, pickle.UnpicklingError)):
         tl.load(bundle)
 
     assert not marker.exists(), "load-time gadget executed"

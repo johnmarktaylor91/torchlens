@@ -65,7 +65,7 @@ class NarrationEvent:
 
     ``label`` is TIER-HONEST: the spelling THE OBJECT RETURNED BY THIS CALL
     will accept for lookup (the raw in-flight label on both live tiers;
-    post-hoc rendering re-derives final labels natively). ``direction`` is
+    post-hoc rendering re-derives final labels natively). ``signal`` is
     reserved for backward narration and is always ``"forward"`` in V1.
     """
 
@@ -84,13 +84,13 @@ class NarrationEvent:
     device: str | None = None
     output_index: int | None = None
     source_location: str | None = None
-    intervened: bool = False
+    has_intervention: bool = False
     #: Ordinal distance disclosed on buffered ``followed_by`` releases.
     late: int | None = None
     stats: NarrationStats | None = None
     #: Free-form single-line body for ``attempted`` / ``note`` kinds.
     text: str | None = None
-    direction: str = "forward"
+    signal: str = "forward"
     tier: str | None = None
     extra_labels: tuple[tuple[str, str], ...] = field(default=())
 

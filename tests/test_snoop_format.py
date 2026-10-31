@@ -18,9 +18,10 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._snoop import NarrationEvent, NarrationStats, render_line, render_stats_segment
+from torchlens._snoop import NarrationStats, render_line, render_stats_segment
 from torchlens._source_links import terminal_file_line_link
 from torchlens.options import NarrationOptions
+from torchlens.types import NarrationEvent
 
 _ESCAPE_BYTES = re.compile("[\x1b\x9d\x07]")
 

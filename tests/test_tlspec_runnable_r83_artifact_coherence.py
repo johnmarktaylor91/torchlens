@@ -20,7 +20,7 @@ and listed in ``_io/rehydrate.py``, but was never registered in
 ``_PORTABLE_STATE_SPEC``. Any trace that went through ``__setstate__`` -- which
 ``cache=True`` makes routine -- tripped the field-catalog tripwire, so
 ``save(level="runnable")`` failed outright on the SECOND capture with
-``TorchLensIOError: Trace._pending_live_fire_records is missing from
+``ArtifactError: Trace._pending_live_fire_records is missing from
 _PORTABLE_STATE_SPEC``. A user-facing save failure on a normal flow, not merely a
 test red. The broader cross-effort field-catalog drift stays deferred.
 """
@@ -254,7 +254,7 @@ def test_untampered_artifact_still_runs_verified(tmp_path: Path) -> None:
     path = _save(tmp_path / "clean.tlspec")
     result = tl.load(path).run(inputs=torch.randn(2, 4))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 class _MixedDispatch(nn.Module):
@@ -291,7 +291,7 @@ def test_dunder_and_inplace_spellings_do_not_false_refuse(tmp_path: Path) -> Non
     trace.save(path, level="runnable", include_weights=True)
     result = tl.load(path).run(inputs=torch.randn(4))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 # --------------------------------------------------------------------------- #
@@ -302,7 +302,7 @@ def test_dunder_and_inplace_spellings_do_not_false_refuse(tmp_path: Path) -> Non
 def test_cache_true_repeat_capture_saves_runnable(tmp_path: Path) -> None:
     """Pre-fix the SECOND capture raised the field-catalog tripwire outright.
 
-    ``TorchLensIOError: Trace._pending_live_fire_records is missing from
+    ``ArtifactError: Trace._pending_live_fire_records is missing from
     _PORTABLE_STATE_SPEC`` -- a user-facing save failure on a normal flow.
     """
 
@@ -317,7 +317,7 @@ def test_cached_repeat_capture_still_replays_verified(tmp_path: Path) -> None:
     path = _save(tmp_path / "cached.tlspec", cache=True)
     result = tl.load(path).run(inputs=torch.randn(2, 4))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_pending_live_fire_records_is_registered() -> None:

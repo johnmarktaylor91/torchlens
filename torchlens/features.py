@@ -296,7 +296,6 @@ def site_matrix(source: Any, site: str) -> SiteMatrix:
 
 __all__ = [
     "SHAPING_OP",
-    "FeatureShapingError",
     "ShapingRecord",
     "SiteMatrix",
     "as_matrix",

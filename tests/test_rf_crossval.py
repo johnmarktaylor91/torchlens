@@ -89,7 +89,7 @@ def test_deliberately_undersized_rule_fires_negative_tripwire() -> None:
     result = _op(trace, "conv2d").receptive_field.check((0, 0, 2, 2), input_op=_input_op(trace))
 
     assert result.status is ReceptiveFieldValidationStatus.FAIL
-    assert result.n_violations == 8
+    assert result.num_violations == 8
     assert len(result.violations) == 8
     assert result.per_axis_excess == (0, 0, 1, 1)
     assert result.slack_per_axis is None
@@ -127,7 +127,7 @@ def test_validation_thresholds_cannot_suppress_real_support(validation_surface: 
 
     assert len(results) == 1
     assert results[0].status is ReceptiveFieldValidationStatus.FAIL
-    assert results[0].n_violations == 8
+    assert results[0].num_violations == 8
 
 
 @pytest.mark.parametrize("direction", ["receptive", "projective"])
@@ -267,7 +267,7 @@ def test_unknown_and_data_dependent_geometry_are_indeterminate(taint: str) -> No
     result = _op(trace, "softmax").receptive_field.check((0, 0, 1), input_op=_input_op(trace))
 
     assert result.status is ReceptiveFieldValidationStatus.INDETERMINATE
-    assert result.n_violations == 0
+    assert result.num_violations == 0
     assert not result.passed
 
 
@@ -292,7 +292,7 @@ def test_undeclared_training_batch_coupling_fails() -> None:
 
     assert result.status is ReceptiveFieldValidationStatus.FAIL
     assert result.cross_batch == "undeclared"
-    assert result.n_violations > 0
+    assert result.num_violations > 0
 
 
 class _SmallConvNet(nn.Module):

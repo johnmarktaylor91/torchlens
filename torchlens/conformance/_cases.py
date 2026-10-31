@@ -214,7 +214,7 @@ def run_c0_cases(adapter: Any) -> list[CaseResult]:
 def _run_capture(adapter: Any, model: RosterModel) -> tuple[Any, Any, Any]:
     """Build the roster model and capture once; return (net, trace, reference)."""
 
-    net, example = model.build()
+    net, example = model.builder()
     trace = adapter.trace(net, example)
     reference = adapter.reference_output(net, example)
     return net, trace, reference

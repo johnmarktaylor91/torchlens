@@ -55,7 +55,7 @@ class SixNDFacts:
     quantity unless the hypothetical backward door was invoked.
     """
 
-    n_params: int
+    num_params: int
     d_numel: int
     two_nd: int
     six_nd: int
@@ -70,7 +70,7 @@ class SixNDFacts:
             else f"{100.0 * self.forward_delta_fraction:+.3f}%"
         )
         return [
-            f"6ND comparator (HF-as-implemented): N={self.n_params} params, "
+            f"6ND comparator (HF-as-implemented): N={self.num_params} params, "
             f"D={self.d_numel} main-input elements (pads counted)",
             f"  2ND forward-body heuristic = {self.two_nd} "
             f"(analytic forward vs 2ND: {delta}, heuristic-vs-exact)",
@@ -260,7 +260,7 @@ def _build_report(
     if d_numel is not None and core.params.total is not None:
         two_nd = 2 * core.params.total * d_numel
         six_nd = SixNDFacts(
-            n_params=core.params.total,
+            num_params=core.params.total,
             d_numel=d_numel,
             two_nd=two_nd,
             six_nd=6 * core.params.total * d_numel,
@@ -317,7 +317,7 @@ def flops(
     input_kwargs: dict[str, Any] | None = None,
     *,
     main_input_numel: int | None = None,
-    breakdown_top_k: int = 5,
+    breakdown_k: int = 5,
 ) -> FlopsReport:
     """Build the one-call cost report from a trace OR a model (D10).
 
@@ -335,7 +335,7 @@ def flops(
         Explicit 6ND ``D`` for the trace door (the comparator's HF
         applicability cannot be established from a trace alone; the line
         is OMITTED without it, never guessed).
-    breakdown_top_k:
+    breakdown_k:
         Depth-1 module rows in the optional breakdown block (0 disables).
     """
 
@@ -354,7 +354,7 @@ def flops(
                 trace,
                 model=subject,
                 main_input_numel=main_input_numel,
-                breakdown_top_k=breakdown_top_k,
+                breakdown_top_k=breakdown_k,
             )
         finally:
             trace.cleanup()
@@ -371,7 +371,7 @@ def flops(
         subject,
         model=None,
         main_input_numel=main_input_numel,
-        breakdown_top_k=breakdown_top_k,
+        breakdown_top_k=breakdown_k,
     )
 
 

@@ -14,7 +14,7 @@ import torch
 
 from ... import _state
 from ..._data_classes.internal_types import FuncExecutionContext
-from ..._errors import TorchLensCaptureGapWarning
+from ..._errors import CaptureGapWarning
 from ..._io import BlobRef as PortableBlobRef
 from ..._ir.container import ContainerSpec, OutputPathComponent
 from ..._ir.container_registry import ContainerLeafOccurrence, ModelSite, Phase, Role
@@ -107,7 +107,7 @@ def _record_input_semantics_gaps(
         "TorchLens cannot verify the captured model-input semantics "
         f"({reason}); affected path(s): {', '.join(gaps)}. The completeness "
         "verdict is ceilinged at capture_verified=False.",
-        TorchLensCaptureGapWarning,
+        CaptureGapWarning,
         stacklevel=3,
     )
 
@@ -430,9 +430,9 @@ class TorchBackend:
                         # with zero logging and return a silently empty Trace.
                         # Refuse loudly instead.
                         if not _state._is_decorated:
-                            from ..._errors import CaptureContextError
+                            from ..._errors import CaptureNotActiveError
 
-                            raise CaptureContextError(
+                            raise CaptureNotActiveError(
                                 "torch wrappers were removed between model "
                                 "preparation and capture admission (a "
                                 "concurrent unwrap_torch() call)",

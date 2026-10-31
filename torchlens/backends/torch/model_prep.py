@@ -30,7 +30,7 @@ from ..._data_classes._module_role_hints import multi_output_role_from_path, rol
 from ..._data_classes.func_call_location import FuncCallLocation
 from ..._data_classes.module import HookInfo
 from ..._data_classes.param import Param, ParamAccessor
-from ..._errors import CaptureContextError
+from ..._errors import CaptureNotActiveError
 from ..._ir import ModuleEnterEvent, ModuleExitEvent, ModuleFrame, ModulePrepEvent
 from ..._ir.container_registry import ModuleSite, Phase, Role, walk_container
 from ..._ir.op_record import (
@@ -302,7 +302,7 @@ def _refuse_release_during_active_capture() -> None:
 
     Raises
     ------
-    CaptureContextError
+    CaptureNotActiveError
         If ``_active_trace`` is set or logging is enabled.
     """
 
@@ -310,7 +310,7 @@ def _refuse_release_during_active_capture() -> None:
         return
     trace = _state._active_trace
     model_label = getattr(trace, "model_label", None) or getattr(trace, "model_class_name", None)
-    raise CaptureContextError(
+    raise CaptureNotActiveError(
         "tl.release_model() was called while a TorchLens capture is still active"
         + (f" for model {model_label!r}" if model_label else ""),
         code="release_during_active_capture",
@@ -339,7 +339,7 @@ def release_model(model: nn.Module) -> None:
 
     Raises
     ------
-    CaptureContextError
+    CaptureNotActiveError
         If a capture is currently active (code
         ``release_during_active_capture``). Releasing mid-capture strips the
         ``tl_*`` / ``._tl`` metadata the capture's module attribution reads,

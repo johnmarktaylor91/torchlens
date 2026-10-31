@@ -13,6 +13,8 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from . import _validation_argument_references as _arg_references, user_funcs as _user_funcs
 from ._capture_state_helpers import (
     _model_for_ground_truth_validation,
@@ -53,7 +55,7 @@ from ._validation_state_snapshot import (
     snapshot_state_for_restore,
     state_matches_snapshot,
 )
-from .backends.registry import BackendName, BackendUnsupportedError, resolve_backend_spec
+from .backends.registry import BackendName, resolve_backend_spec
 from .errors import TraceNotReproducibleWarning
 from .options import (
     CaptureOptions,
@@ -1153,7 +1155,7 @@ def _warn_if_validation_trace_not_reproducible(
         record_validation_diagnostic(
             first_trace,
             ValidationDiagnostic(
-                check="trace_retrace_structure_mismatch",
+                check_name="trace_retrace_structure_mismatch",
                 message=message,
                 extra={
                     "first_graph_hash": first_hash,
@@ -1191,7 +1193,7 @@ def _warn_if_validation_trace_not_reproducible(
         record_validation_diagnostic(
             first_trace,
             ValidationDiagnostic(
-                check="trace_retrace_unavailable",
+                check_name="trace_retrace_unavailable",
                 message=message,
                 extra={"exception_type": type(exc).__name__},
             ),
@@ -1212,7 +1214,7 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
         Validation trace whose pristine re-trace diverged structurally.
     """
 
-    from .validation.status import ValidationReplayStatus
+    from .validation.status import ValidationStatus
 
     current_status = trace.validation_replay_status
     unverified_reason_counts = dict(current_status.unverified_reason_counts)
@@ -1222,7 +1224,7 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
     setattr(
         trace,
         "_validation_replay_status",
-        ValidationReplayStatus.unverified(
+        ValidationStatus.unverified(
             backend=current_status.backend,
             source=current_status.source,
             reason="trace_retrace_structure_mismatch",
@@ -1231,12 +1233,12 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
                 "re-trace diverged structurally, so the overall validation "
                 "result is unverified."
             ),
-            replayed_node_count=current_status.replayed_node_count,
-            unverified_node_count=max(1, current_status.unverified_node_count),
+            num_replayed_ops=current_status.num_replayed_ops,
+            num_unverified_ops=max(1, current_status.num_unverified_ops),
             payload_load_status=current_status.payload_load_status,
-            pure_unverified_node_count=current_status.pure_unverified_node_count,
-            effect_region_node_count=current_status.effect_region_node_count,
-            failed_node_count=current_status.failed_node_count,
+            num_pure_unverified_ops=current_status.num_pure_unverified_ops,
+            num_effect_region_ops=current_status.num_effect_region_ops,
+            num_failed_ops=current_status.num_failed_ops,
             unverified_reason_counts=unverified_reason_counts,
             exempted_reason_counts=current_status.exempted_reason_counts,
             decisions=current_status.decisions,
@@ -1291,7 +1293,8 @@ def _refuse_validation_precondition(
     )
 
     record_validation_failure(
-        None, ValidationFailure(check=CHECK_PRECONDITION, message=message, extra=dict(extra or {}))
+        None,
+        ValidationFailure(check_name=CHECK_PRECONDITION, message=message, extra=dict(extra or {})),
     )
     if trace_observer is not None:
         trace_observer(None)
@@ -1533,7 +1536,7 @@ def _validate_forward_pass_torch(
                 _trace_observer,
                 {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
-        from ._errors import CaptureContextError
+        from ._errors import CaptureNotActiveError
         from .backends.torch.ops import _walk_output_tensors_with_paths
         from .validation._pristine import pristine_torch_oracle
 
@@ -1549,7 +1552,7 @@ def _validate_forward_pass_torch(
         try:
             with pristine_torch_oracle():
                 ground_truth_output = ground_truth_model(*input_args_copy, **input_kwargs_copy)
-        except CaptureContextError:
+        except CaptureNotActiveError:
             return _refuse_validation_precondition(
                 "TorchLens validation could not compute a pristine-torch ground "
                 "truth (a capture is active in this process, or the unwrap "
@@ -1732,7 +1735,7 @@ def _validate_forward_pass_torch(
             record_validation_diagnostic(
                 trace,
                 ValidationDiagnostic(
-                    check="trace_retrace_pristine_copy_unavailable",
+                    check_name="trace_retrace_pristine_copy_unavailable",
                     message=(
                         "TorchLens validation skipped the pristine trace-vs-retrace check "
                         "because the model could not be deep-copied."
@@ -1777,14 +1780,14 @@ def _validate_forward_pass_torch(
                 (
                     diagnostic
                     for diagnostic in get_validation_diagnostics(trace)
-                    if diagnostic.check == "trace_retrace_structure_mismatch"
+                    if diagnostic.check_name == "trace_retrace_structure_mismatch"
                 ),
                 None,
             )
             record_validation_failure(
                 trace,
                 ValidationFailure(
-                    check=CHECK_RETRACE_MISMATCH,
+                    check_name=CHECK_RETRACE_MISMATCH,
                     message=(
                         retrace_diagnostic.message
                         if retrace_diagnostic is not None

@@ -717,7 +717,7 @@ class TestCorr25LivePoisonSpine:
         trace = tl.trace(model, x, capture=_CAPTURE)
         result = trace.run(inputs=x, on_divergence="return")
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-        assert result.report.poisoned is True
+        assert result.report.is_poisoned is True
         with pytest.raises(PoisonedRunError):
             result.trace.to_pandas()
 
@@ -728,7 +728,7 @@ class TestCorr25LivePoisonSpine:
         trace = tl.trace(model, x, capture=_CAPTURE)
         result = trace.run(inputs=x)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-        assert result.report.poisoned is False
+        assert result.report.is_poisoned is False
         assert len(result.trace.to_pandas()) > 0
 
 

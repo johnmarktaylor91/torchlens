@@ -17,7 +17,7 @@ from ._base import ConfigurationError, TorchLensError, ValidationError
 
 __all__ = [
     "BundleRelationError",
-    "CheckpointSeriesLiveParamsError",
+    "ParamEvidenceMissingError",
     "EpisodeCaptureError",
     "EpisodeDeclarationError",
     "EpisodeErrorCode",
@@ -219,7 +219,7 @@ class BundleExperimentError(ValidationError, RuntimeError):
     """
 
 
-class CheckpointSeriesLiveParamsError(ValidationError, RuntimeError):
+class ParamEvidenceMissingError(ValidationError, RuntimeError):
     """Cross-member parameter read refused: no immutable capture-time evidence.
 
     TorchLens records which parameter a run used, not its bytes, so a

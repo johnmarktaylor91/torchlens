@@ -167,7 +167,7 @@ def test_time_clean_step_discloses_method_and_reruns() -> None:
     model = nn.Linear(4, 4).eval()
     timing = measure_clean_step(model, torch.randn(2, 4), warmup=1, repeats=3)
     assert timing.seconds > 0
-    assert timing.n_forwards_run == 4
+    assert timing.num_forward_runs == 4
     assert timing.scope == ("forward",)
     assert "uninstrumented" in timing.method
 
@@ -181,8 +181,8 @@ def test_roofline_rows_are_hypotheses_and_aggregate_is_sum_over_sum(small_trace)
     sum(FLOPs)/sum(bytes), never a mean of per-op ratios."""
 
     balance = machine_balance(
-        compute_peak_flops_per_s=1e12,
-        memory_peak_bytes_per_s=1e11,
+        peak_flops_per_s=1e12,
+        peak_bytes_per_s=1e11,
         basis="advertised",
     )
     result = roofline(small_trace, ridge_intensity=balance.ridge_intensity)
@@ -221,13 +221,11 @@ def test_machine_balance_requires_named_basis() -> None:
     is never called MFU."""
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        machine_balance(
-            compute_peak_flops_per_s=1e12, memory_peak_bytes_per_s=1e11, basis="vendor_max"
-        )
+        machine_balance(peak_flops_per_s=1e12, peak_bytes_per_s=1e11, basis="vendor_max")
     assert excinfo.value.fields["code"] == "machine_balance_basis_invalid"
     balance = machine_balance(
-        compute_peak_flops_per_s=1e12,
-        memory_peak_bytes_per_s=1e11,
+        peak_flops_per_s=1e12,
+        peak_bytes_per_s=1e11,
         basis="measured_achievable",
         method="STREAM triad + DGEMM roof",
     )
@@ -315,7 +313,7 @@ def test_cost_report_measures_and_discloses() -> None:
     tiers = {tier.tier: tier for tier in result.tiers}
     assert tiers["raw_forward"].ratio_vs_raw == 1.0
     assert tiers["trace"].median_seconds > 0
-    assert result.n_forwards_run >= 6
+    assert result.num_forward_runs >= 6
 
 
 def test_cost_report_refuses_unknown_tier() -> None:

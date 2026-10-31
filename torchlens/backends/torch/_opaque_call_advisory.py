@@ -34,7 +34,7 @@ from typing import Any
 
 import torch
 
-from ..._errors import TorchLensCaptureGapWarning
+from ..._errors import CaptureGapWarning
 
 __all__ = ("DLPACK_CODE", "SCRIPTED_CODE", "advise_opaque_calls")
 
@@ -310,7 +310,7 @@ def _warn_scripted(found: list[tuple[_CallSite, _ScriptedCall]]) -> None:
     in_function = f" in `{site.function}`" if site.function else ""
     others = [f"`{c.name}` at {s.file}:{s.line}" for s, c in found[1:]]
     warnings.warn(
-        TorchLensCaptureGapWarning(
+        CaptureGapWarning(
             f"The forward calls the TorchScript function `{call.name}`{defined} at "
             f"{site.file}:{site.line}{in_function}: `{site.source}`. TorchLens records a "
             "scripted call as one `jitscript` boundary op, but not this one: it wrote into "
@@ -344,7 +344,7 @@ def _warn_dlpack(found: list[_CallSite]) -> None:
     in_function = f" in `{site.function}`" if site.function else ""
     others = [f"{s.file}:{s.line}" for s in found[1:]]
     warnings.warn(
-        TorchLensCaptureGapWarning(
+        CaptureGapWarning(
             f"The line at {site.file}:{site.line}{in_function} hands a tensor to another "
             f"library through DLPack: `{site.source}`. That library's kernels run outside "
             "the Python functions TorchLens wraps, so the "

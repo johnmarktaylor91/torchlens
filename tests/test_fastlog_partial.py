@@ -15,7 +15,8 @@ import torchlens.capture.projections as fastlog_state
 from torchlens import Recording
 from torchlens._io.streaming import PARTIAL_SENTINEL
 from torchlens.backends.torch.backend import TorchBackend
-from torchlens.fastlog import PredicateError, RecordContext, Recorder, RecorderStateError
+from torchlens.errors import PredicateError, RecorderStateError
+from torchlens.fastlog import RecordContext, Recorder
 
 
 class FailingAfterOps(nn.Module):

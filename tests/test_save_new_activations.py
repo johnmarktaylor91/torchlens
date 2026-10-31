@@ -911,7 +911,7 @@ def test_carry_state_then_routing_change_still_refuses():
     log = trace_fn(model, torch.randn(2, 4))
     try:
         first = log.run(inputs=torch.randn(2, 4), carry_state=True)
-        assert first.report.state_carried is True
+        assert first.report.has_carried_state is True
         with pytest.raises(ValueError, match="computational graph changed"):
             log.run(inputs=torch.randn(2, 4), carry_state=True)
     finally:

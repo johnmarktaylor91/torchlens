@@ -19,7 +19,7 @@ from torchlens._runnable import (
     PathFaithfulness,
     StateSource,
 )
-from torchlens.errors import NumericAttestationError
+from torchlens.errors import ReplayValueMismatchError
 from torchlens.options import CaptureOptions, SaveOptions
 
 
@@ -450,7 +450,7 @@ def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -
     declared ``byte_digest`` (covered by
     ``tests/test_io_runnable_payload_integrity.py::test_archived_activation_digest_is_verified_against_the_loaded_tensor``),
     so a manifest-level digest edit no longer survives to ``.run()``. This test keeps the
-    RUN-time half of the tripwire -- the ``NumericAttestationError`` fields, the source
+    RUN-time half of the tripwire -- the ``ReplayValueMismatchError`` fields, the source
     Trace rollback, and the not-poisoned guarantee -- by planting the same corrupt declared
     digest on the already-loaded descriptor, which is exactly the state the loader used to
     hand ``.run()``.
@@ -480,7 +480,7 @@ def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -
     )
     before = _physical_outs(loaded)
 
-    with pytest.raises(NumericAttestationError) as caught:
+    with pytest.raises(ReplayValueMismatchError) as caught:
         loaded.run(inputs=inputs)
 
     mismatch = caught.value.fields["first_mismatch"]

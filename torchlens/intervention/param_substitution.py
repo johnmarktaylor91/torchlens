@@ -63,9 +63,10 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from torchlens._selection import SelectionError
+
 from .._selection import (
     Selection,
-    SelectionError,
     Site,
     _apply_invalid,
 )

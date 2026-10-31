@@ -41,7 +41,7 @@ from ..._data_classes.op import (
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
-from ..._errors import TorchLensPostfuncError
+from ..._errors import UserTransformError
 from ..._io import BlobRef
 from ..._ir.container import (
     _SAFE_DEFAULT_FACTORIES,

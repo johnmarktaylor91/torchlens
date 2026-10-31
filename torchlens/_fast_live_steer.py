@@ -32,9 +32,11 @@ from typing import Any
 import torch
 from torch import nn
 
+from torchlens._runnable import ContractCheck, RunnableDiagnostic
+
 from . import _runnable_execution as _execution
 from ._errors import TorchLensWarning
-from ._runnable import ContractCheck, RunnableDiagnostic, RunnableErrorCode
+from ._runnable import RunnableErrorCode
 from ._runnable_execution import _INPUT_CHECK_UNAVAILABLE, _contract_check
 from .errors import RunCapabilityUnavailableError
 
@@ -225,7 +227,7 @@ def hooked_run_diagnostic(trace: Any) -> RunnableDiagnostic | None:
         current_runtime=None,
         detection_stage="hooked_run_unverified",
         resolver_provenance=None,
-        analysis_load_available=True,
+        is_analysis_load_available=True,
         details=(
             ("staged_hooks", str(hooks)),
             ("staged_value_replacements", str(values)),

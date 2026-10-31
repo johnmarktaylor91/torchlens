@@ -28,9 +28,9 @@ _DROPPED_CAPTURE_FIELDS = (
 def test_load_pre_floor_golden_refuses_typed() -> None:
     """The checked-in pre-floor golden bundle refuses with the floor named."""
 
-    from torchlens.errors import ArtifactVersionBelowFloorError
+    from torchlens.errors import ArtifactTooOldError
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
         tl.load(str(V3_GOLDEN))
 
 

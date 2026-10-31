@@ -7,7 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import CaptureSpec, RecordingConfigError
+from torchlens.errors import RecordingConfigError
+from torchlens.fastlog import CaptureSpec
 
 
 class DefaultsModel(nn.Module):

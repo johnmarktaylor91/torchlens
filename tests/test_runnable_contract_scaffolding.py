@@ -19,16 +19,15 @@ from torchlens._runnable import (
     CallExecutionContext,
     InitializerPolicy,
     InputAttestationFingerprint,
-    ReadinessReport,
     RunnableCallDescriptor,
     RunnableErrorCode,
     RunnableTraceProtocol,
-    RunReport,
     SparseRunDescriptor,
     StateSlotRole,
     WitnessCompleteness,
 )
 from torchlens.errors import ReattachError, RunnableTLSPECError, StateBindingError
+from torchlens.types import ReadinessReport, RunReport
 
 
 @pytest.mark.smoke
@@ -172,9 +171,9 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
         "path_faithfulness",
         "first_mismatch",
         "numeric_attestation",
-        "poisoned",
+        "is_poisoned",
         "nondeterministic_sources",
-        "state_carried",
+        "has_carried_state",
         "truncation",
         "truncated",
         "stopped_at",

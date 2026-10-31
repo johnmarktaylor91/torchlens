@@ -332,11 +332,11 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         With ``primitive_op_schema_invalid`` or ``primitive_op_fk_invalid``.
     """
 
-    from .._io import TorchLensIOError
+    from .._io import ArtifactError
     from .invariants import MetadataInvariantError
 
     profile = getattr(trace, "_primitive_op_profile", None)
@@ -360,7 +360,7 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
             if any(marker in detail for marker in fk_markers)
             else "primitive_op_schema_invalid"
         )
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Primitive-operation profile failed pre-release validation: {detail}",
             code=code,
             remedy="re-capture and re-save the trace; do not edit primitive profile metadata",

@@ -79,7 +79,7 @@ def push_to_hub(
     ArgumentTypeError
         ``hub_push_artifact_unsupported`` when the object is neither a
         ``Trace`` nor a ``Bundle`` (raw pickling is never a fallback).
-    TorchLensIOError
+    ArtifactError
         If the ``.tlspec`` bundle save fails. ``push_to_hub`` never silently
         substitutes a metadata-only stub for genuine artifact content.
     """
@@ -161,7 +161,7 @@ def from_hub(
     ------
     ImportError
         If ``huggingface_hub`` is unavailable and no ``api`` is given.
-    TorchLensIOError
+    ArtifactError
         ``hub_artifact_unsafe`` when the download is not a readable gzipped
         tar or a member fails the extraction checks; any ``.tlspec`` load
         refusal propagates unchanged.
@@ -208,17 +208,17 @@ def _extract_bundle(archive: Path, destination: Path) -> Path:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         ``hub_artifact_unsafe`` on an unreadable archive, a link or special
         member, an absolute or parent-escaping name, more than one top-level
         entry, or a member count or total size over the bounds.
     """
 
-    from .._io import TorchLensIOError
+    from .._io import ArtifactError
 
     root, problem = _checked_extract(archive, destination)
     if problem is not None:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"from_hub refused {archive.name}: {problem}. Only the gzipped `.tlspec` "
             "tar written by push_to_hub is loaded. Remedy: point path_in_repo at an "
             "artifact uploaded with torchlens.bridge.huggingface.push_to_hub, or "
@@ -306,12 +306,12 @@ def _artifact_bytes(log_or_bundle_or_spec: Any, *, save_level: str = "portable")
     ------
     ArgumentTypeError
         ``hub_push_artifact_unsupported`` for any other object.
-    TorchLensIOError
+    ArtifactError
         If the bundle save fails.
     """
 
     from .._errors import ArgumentTypeError
-    from .._io import TorchLensIOError
+    from .._io import ArtifactError
 
     saver = _resolve_bundle_saver(log_or_bundle_or_spec)
     if saver is None:
@@ -336,7 +336,7 @@ def _artifact_bytes(log_or_bundle_or_spec: Any, *, save_level: str = "portable")
                 tar.add(bundle_dir, arcname=_BUNDLE_ARCNAME)
             return buffer.getvalue()
     except Exception as bundle_error:
-        raise TorchLensIOError(
+        raise ArtifactError(
             "push_to_hub could not serialize this "
             f"{type(log_or_bundle_or_spec).__name__} artifact through the "
             f"privacy-scrubbed portable `.tlspec` bundle path ({bundle_error!r}). "

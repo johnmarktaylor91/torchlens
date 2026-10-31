@@ -62,7 +62,7 @@ class ParamHealthReport(Report):
     def _report_findings(self) -> list[str]:
         """One-line findings for the card, most severe first."""
 
-        return [f"[{item.severity}] {item.check}: {item.message}" for item in self.findings]
+        return [f"[{item.severity}] {item.check_name}: {item.message}" for item in self.findings]
 
     def _report_rows(self) -> list[dict[str, Any]] | None:
         """The natural table rows behind ``to_pandas()``."""
@@ -100,7 +100,7 @@ class ParamHealthReport(Report):
             )
         lines = [heading]
         lines.extend(
-            f"- [{finding.severity}] {finding.check}: {finding.message}"
+            f"- [{finding.severity}] {finding.check_name}: {finding.message}"
             for finding in self.findings
         )
         lines.extend(f"- skipped {name}: {reason}" for name, reason in self.skipped)
@@ -181,25 +181,25 @@ def _row_findings(
 
     findings: list[CheckFinding] = []
     names = (row.name, *row.aliases)
-    if row.n_nonfinite:
+    if row.num_nonfinite:
         findings.append(
             CheckFinding(
-                check="param_nonfinite",
+                check_name="param_nonfinite",
                 code="param_value_nonfinite",
                 severity="critical",
                 action="collect",
                 message=(
                     f"{row.name} ({row.kind}) holds nonfinite values: "
-                    f"{row.n_nan} NaN, {row.n_posinf} +inf, {row.n_neginf} -inf "
+                    f"{row.num_nan} NaN, {row.num_posinf} +inf, {row.num_neginf} -inf "
                     f"of {row.numel} elements. Every later step on corrupt "
                     "state is wasted compute."
                 ),
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={
-                    "n_nan": float(row.n_nan),
-                    "n_posinf": float(row.n_posinf),
-                    "n_neginf": float(row.n_neginf),
+                    "n_nan": float(row.num_nan),
+                    "n_posinf": float(row.num_posinf),
+                    "n_neginf": float(row.num_neginf),
                 },
                 remedy="Reload the last healthy checkpoint; arm the scheduled scan to catch the minting step.",
                 follow_up="torchlens.checks session: register_nonfinite_param_check(every=1)",
@@ -209,7 +209,7 @@ def _row_findings(
         low, high = bounds[row.name]
         findings.append(
             CheckFinding(
-                check="param_bounds",
+                check_name="param_bounds",
                 code="param_bounds_violated",
                 severity="warning",
                 action="collect",
@@ -217,7 +217,7 @@ def _row_findings(
                     f"{row.name} violates declared bounds ({low}, {high}): "
                     f"{row.bounds_below} below, {row.bounds_above} above."
                 ),
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={
                     "below": float(row.bounds_below or 0),
@@ -233,7 +233,7 @@ def _row_findings(
     ):
         findings.append(
             CheckFinding(
-                check="dtype_headroom",
+                check_name="dtype_headroom",
                 code="param_dtype_headroom",
                 severity="warning",
                 action="collect",
@@ -242,7 +242,7 @@ def _row_findings(
                     f"{(1 - max_fraction) * 100:.0f}% of the {row.dtype} ceiling "
                     f"{row.dtype_max:.6g}; the next growth step can overflow."
                 ),
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={"abs_max": row.abs_max, "dtype_max": row.dtype_max},
                 remedy="Rescale, clip, or move the tensor to a wider dtype.",
@@ -255,7 +255,7 @@ def _row_findings(
     ):
         findings.append(
             CheckFinding(
-                check="param_subnormal",
+                check_name="param_subnormal",
                 code="param_subnormal_heavy",
                 severity="warning",
                 action="collect",
@@ -265,7 +265,7 @@ def _row_findings(
                     f"{subnormal_fraction_threshold}); values this small "
                     "lose precision and can silently flush to zero."
                 ),
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={"subnormal_fraction": row.subnormal_fraction},
                 remedy="Rescale the tensor or audit the upstream initialization/decay.",
@@ -274,21 +274,21 @@ def _row_findings(
     if row.zero_fraction == 1.0 and row.numel > 0:
         findings.append(
             CheckFinding(
-                check="param_all_zero",
+                check_name="param_all_zero",
                 code="param_all_zero",
                 severity="info",
                 action="collect",
                 message=f"{row.name} is entirely zero ({row.numel} elements).",
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={"numel": float(row.numel)},
                 remedy="Expected for fresh biases/counters; suspicious for trained weights.",
             )
         )
-    elif row.all_same and row.numel > 1:
+    elif row.is_constant and row.numel > 1:
         findings.append(
             CheckFinding(
-                check="param_all_same",
+                check_name="param_all_same",
                 code="param_all_same",
                 severity="warning",
                 action="collect",
@@ -296,7 +296,7 @@ def _row_findings(
                     f"{row.name} holds one repeated value across {row.numel} "
                     "elements -- a suspicious constant for a trained tensor."
                 ),
-                names=names,
+                param_names=names,
                 evidence="scan_kernel",
                 values={"numel": float(row.numel)},
                 remedy="Check the initialization and whether the tensor ever receives updates.",
@@ -313,9 +313,9 @@ def _coverage(rows: tuple[ScanRow, ...], skipped: int) -> dict[str, Any]:
         scope = "rank_local_shard"
     return {
         "scope": scope,
-        "audited_tensors": sum(1 for row in rows if row.audited),
+        "audited_tensors": sum(1 for row in rows if row.is_audited),
         "skipped_tensors": skipped,
-        "audited_elements": sum(row.numel for row in rows if row.audited),
+        "audited_elements": sum(row.numel for row in rows if row.is_audited),
         "global_reduce": "not_applied",
     }
 
@@ -379,7 +379,7 @@ def param_health(  # noqa: PLR0913 -- the memo-4.4 signature IS the designed pub
     rows = tuple(scan_named_tensors(entries, bounds=bounds))
     findings: list[CheckFinding] = []
     for row in rows:
-        if not row.audited:
+        if not row.is_audited:
             continue
         findings.extend(
             _row_findings(
@@ -389,7 +389,9 @@ def param_health(  # noqa: PLR0913 -- the memo-4.4 signature IS the designed pub
                 subnormal_fraction_threshold=subnormal_fraction_threshold,
             )
         )
-    skipped = tuple((row.name, row.skip_reason or "unscannable") for row in rows if not row.audited)
+    skipped = tuple(
+        (row.name, row.skip_reason or "unscannable") for row in rows if not row.is_audited
+    )
     checks_run = (
         "param_nonfinite",
         "param_bounds" if bounds else "param_bounds (no bounds declared)",

@@ -9,12 +9,12 @@ import pytest
 paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError  # noqa: E402
 from torchlens.backends.paddle import GradOptions  # noqa: E402
 from torchlens.backends.paddle.backend import (  # noqa: E402
     PaddleIntermediateSignature,
     _paddle_trace_intermediate_signatures,
 )
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 

@@ -115,7 +115,7 @@ def test_printed_remedy_runs_and_edits_the_labelled_op(cnn, label: str) -> None:
     trace = tl.trace(model, x)
     assert trace[label.split(":")[0]].func_name == op_type
     same_type = [layer for layer in trace.layer_list if layer.func_name == op_type]
-    assert bound.last_report.fire_count == len(same_type) >= 1
+    assert bound.last_report.num_fires == len(same_type) >= 1
 
 
 def test_narrowed_remedy_spelling_runs(cnn) -> None:
@@ -124,7 +124,7 @@ def test_narrowed_remedy_spelling_runs(cnn) -> None:
     model, x = cnn
     bound = tl.when(tl.func("conv2d") & tl.in_module("2"), _double).bind(model)
     bound(x)
-    assert bound.last_report.fire_count == 1
+    assert bound.last_report.num_fires == 1
 
 
 @pytest.mark.parametrize(
@@ -142,7 +142,7 @@ def test_live_matchable_label_terms_still_bind_and_fire(cnn, selector) -> None:
     model, x = cnn
     bound = tl.when(selector(), _double).bind(model)
     bound(x)
-    assert bound.last_report.fire_count == 1
+    assert bound.last_report.num_fires == 1
 
 
 def test_every_binding_door_refuses_at_bind(cnn) -> None:

@@ -12,9 +12,11 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from .. import _state
 from .._utils._torch_compat import tensor_any_over_dims
-from ..backends.registry import BackendUnsupportedError, get_backend_spec
+from ..backends.registry import get_backend_spec
 from . import _engine, _rules
 from ._errors import (
     ReceptiveFieldConfigurationError,

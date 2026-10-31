@@ -52,8 +52,8 @@ def test_raw_numbers_pin() -> None:
         "params_total",
         "flops_forward_fma2",
         "macs_forward",
-        "at_capture_bytes",
-        "retained_now_bytes",
+        "captured_bytes",
+        "retained_bytes",
     ):
         value = getattr(totals, name)
         assert value is None or type(value) is int, name

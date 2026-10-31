@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import MIN_TLSPEC_VERSION, TorchLensIOError
+from torchlens._io import MIN_TLSPEC_VERSION, ArtifactError
 from torchlens._io.manifest import Manifest
 from torchlens._io.payload_codec import get_payload_codec
 from torchlens._runnable import NumericAttestationStatus
@@ -160,7 +160,7 @@ def test_archived_activation_digest_is_verified_against_the_loaded_tensor(
     members[0]["byte_digest"] = "0" * 64
     _write_manifest(path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="byte-digest mismatch"):
+    with pytest.raises(ArtifactError, match="byte-digest mismatch"):
         tl.load(path)
 
     # The honest artifact still loads and publishes a digest that MATCHES its value.
@@ -379,14 +379,14 @@ def test_older_version_refuses_at_rehydration_floor(tmp_path: Path) -> None:
     refuses. ``Manifest.from_dict`` refuses first with the floor named.
     """
 
-    from torchlens.errors import ArtifactVersionBelowFloorError
+    from torchlens.errors import ArtifactTooOldError
 
     path = tmp_path / "versioned.tlspec"
     tl.trace(ParamsOnlyModel().eval(), torch.ones(2, 3), capture=_CAP).save(path)
     manifest_dict = _manifest(path)
     manifest_dict["tlspec_version"] = MIN_TLSPEC_VERSION - 1
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
         Manifest.from_dict(manifest_dict)
 
 
@@ -398,5 +398,5 @@ def test_from_dict_really_requires_every_non_provenance_field(tmp_path: Path) ->
     manifest_dict = _manifest(path)
     manifest_dict.pop("tensors")
 
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         Manifest.from_dict(manifest_dict)

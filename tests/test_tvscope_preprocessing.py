@@ -19,6 +19,7 @@ import torch
 pytest.importorskip("torchvision")
 
 import torchlens._data_classes._preprocessing_provenance as provenance  # noqa: E402
+import torchlens.errors
 import torchlens.preprocessing as pp  # noqa: E402
 import torchlens.preprocessing._records as records  # noqa: E402
 from torchlens._data_classes.trace import ResolvedPreprocessing  # noqa: E402
@@ -213,7 +214,7 @@ class TestAntialiasCoercion:
                 return preset
 
         resolution = pp.resolve(_FakeWeights())
-        report = pp.audit(resolution, resolution)
+        report = pp.compare(resolution, resolution)
         assert report.verdict == "verified"
 
 
@@ -223,7 +224,7 @@ class TestAuditOracle:
     def test_audit_names_mismatched_fields(self, resnet50_v2_resolution) -> None:
         """Wrong constants are named per field, before any extraction."""
 
-        report = pp.audit(resnet50_v2_resolution, {"mean": [0.5] * 3, "std": [0.5] * 3})
+        report = pp.compare(resnet50_v2_resolution, {"mean": [0.5] * 3, "std": [0.5] * 3})
         assert report.verdict == "mismatch"
         assert set(report.mismatched_fields) == {"mean", "std"}
         mean_row = next(f for f in report.findings if f.field == "mean")
@@ -236,21 +237,21 @@ class TestAuditOracle:
     ) -> None:
         """Strict mode refuses BOTH failure kinds, distinctly typed."""
 
-        with pytest.raises(pp.PreprocessingAuditError) as mismatch_info:
-            pp.audit(
+        with pytest.raises(torchlens.errors.PreprocessingAuditError) as mismatch_info:
+            pp.compare(
                 resnet50_v2_resolution,
                 {"mean": [0.5] * 3, "std": [0.5] * 3},
                 strict=True,
             )
         assert mismatch_info.value.fields["code"] == "preprocessing_audit_mismatch"
-        with pytest.raises(pp.PreprocessingAuditError) as unknown_info:
-            pp.audit(detection_resolution, None, strict=True)
+        with pytest.raises(torchlens.errors.PreprocessingAuditError) as unknown_info:
+            pp.compare(detection_resolution, None, strict=True)
         assert unknown_info.value.fields["code"] == "preprocessing_audit_unknown"
 
     def test_permissive_stamps_mismatch_never_raises(self, resnet50_v2_resolution) -> None:
         """Default mode reports; it never raises and never says verified."""
 
-        report = pp.audit(resnet50_v2_resolution, {"mean": [0.5] * 3, "std": [0.5] * 3})
+        report = pp.compare(resnet50_v2_resolution, {"mean": [0.5] * 3, "std": [0.5] * 3})
         assert report.verdict == "mismatch"
 
     def test_fallback_record_never_yields_verified(self) -> None:
@@ -265,14 +266,14 @@ class TestAuditOracle:
         )
         assert fallback.status == provenance.STATUS_UNVERIFIED_FALLBACK
         resolution = pp.Resolution(preprocessing=fallback, declared=None, transform=None)
-        report = pp.audit(resolution, None)
+        report = pp.compare(resolution, None)
         assert report.verdict == "unknown"
         assert "authority_status_unverified_fallback" in report.unknown_reasons
 
     def test_opaque_applied_side_never_matches(self, resnet50_v2_resolution) -> None:
         """An opaque callable's fields are unknown -- never match (memo D4)."""
 
-        report = pp.audit(resnet50_v2_resolution, lambda x: x)
+        report = pp.compare(resnet50_v2_resolution, lambda x: x)
         assert report.verdict == "unknown"
         assert all(f.verdict == "unknown" for f in report.findings)
         assert "opaque_transform" in report.unknown_reasons
@@ -281,7 +282,7 @@ class TestAuditOracle:
     def test_self_audit_of_authoritative_resolution_verifies(self, resnet50_v2_resolution) -> None:
         """Applying the authority's own transform is verified-by-construction."""
 
-        report = pp.audit(resnet50_v2_resolution, resnet50_v2_resolution)
+        report = pp.compare(resnet50_v2_resolution, resnet50_v2_resolution)
         assert report.verdict == "verified"
 
     @pytest.mark.smoke
@@ -290,7 +291,7 @@ class TestAuditOracle:
 
         import json
 
-        report = pp.audit(resnet50_v2_resolution, {"mean": [0.5] * 3})
+        report = pp.compare(resnet50_v2_resolution, {"mean": [0.5] * 3})
         payload = json.loads(json.dumps(report.to_json()))
         assert payload["schema"] == "tl_preprocessing_audit_v1"
         assert payload["verdict"] == report.verdict
@@ -330,7 +331,9 @@ class TestDiagnosticsNeverMatch:
         """NaNs are an intrinsic contradiction."""
 
         result = pp.diagnose(torch.full((2, 3, 4, 4), float("nan")))
-        assert any(f.check == "nonfinite" and f.outcome == "contradiction" for f in result.findings)
+        assert any(
+            f.check_name == "nonfinite" and f.outcome == "contradiction" for f in result.findings
+        )
 
     def test_uint8_under_float_declaration_contradicts(self) -> None:
         """An integer batch cannot have passed a declared float normalization."""
@@ -340,7 +343,7 @@ class TestDiagnosticsNeverMatch:
             torch.randint(0, 255, (2, 3, 4, 4), dtype=torch.uint8), declared=declared
         )
         assert any(
-            f.check == "dtype_regime" and f.outcome == "contradiction" for f in result.findings
+            f.check_name == "dtype_regime" and f.outcome == "contradiction" for f in result.findings
         )
 
     def test_unknown_check_refuses_typed(self) -> None:
@@ -357,7 +360,7 @@ class TestDiagnosticsNeverMatch:
 
         batch = torch.rand(2, 3, 4, 4)
         default = pp.diagnose(batch)
-        assert all(f.check != "confinement" for f in default.findings)
+        assert all(f.check_name != "confinement" for f in default.findings)
         declared = pp.DeclaredPreprocessing(
             mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), value_range=(0.0, 1.0)
         )
@@ -435,7 +438,7 @@ class TestFalsePositiveSuite:
     def test_detection_checkpoint_correct_unit_range_batch(self, detection_resolution) -> None:
         """The declares-nothing family: [0,1] input, verdict unknown, no alarm."""
 
-        report = pp.audit(detection_resolution, None)
+        report = pp.compare(detection_resolution, None)
         assert report.verdict == "unknown"
         result = pp.diagnose(torch.rand(2, 3, 8, 8), declared=detection_resolution.declared)
         assert list(result.contradictions) == []
@@ -458,5 +461,5 @@ class TestFalsePositiveSuite:
         """Unknown is the honest verdict; never an error-grade claim."""
 
         unknown_authority = pp.resolve(model=torch.nn.Linear(2, 2))
-        report = pp.audit(unknown_authority, lambda x: x)
+        report = pp.compare(unknown_authority, lambda x: x)
         assert report.verdict == "unknown"

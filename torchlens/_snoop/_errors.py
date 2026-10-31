@@ -14,11 +14,11 @@ from ..errors._base import CaptureError, ConfigurationError
 __tl_layer__ = "L5"
 
 
-class EchoConfigError(ConfigurationError):
+class NarrationConfigError(ConfigurationError):
     """Raised for ``echo=`` configuration refusals at capture entry."""
 
 
-class EchoStatsError(CaptureError):
+class NarrationStatsError(CaptureError):
     """Raised when an armed echo stats rung refuses a value computation.
 
     The exact rung's numel-budget refusal is a SEMANTIC refusal (the user
@@ -28,4 +28,4 @@ class EchoStatsError(CaptureError):
     """
 
 
-__all__ = ["EchoConfigError", "EchoStatsError"]
+__all__ = ["NarrationConfigError", "NarrationStatsError"]

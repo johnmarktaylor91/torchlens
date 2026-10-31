@@ -23,13 +23,13 @@ metadata + safetensors blobs, directory bundles); log administration delegates t
   routes here).
 - `TraceState` — the runtime state enum (`torchlens._trace_state`).
 - `suppress_mutate_warnings()` — context manager silencing mutation warnings.
-- `PayloadLoadHints` / `JaxPayloadLoadHint`, `TorchLensIOError`, `materialize_nested`,
+- `PayloadLoadHints` / `JaxPayloadLoadHint`, `ArtifactError`, `materialize_nested`,
   `cleanup_tmp` — re-exports from `_io`.
 
 ## Gotchas
 
 - Rehydration floor: artifacts older than tlspec_version 6 refuse with
-  `ArtifactVersionBelowFloorError` (drop-not-resurrect); the floor covers Trace
+  `ArtifactTooOldError` (drop-not-resurrect); the floor covers Trace
   rehydration only — legacy 2.16 intervention specs still load.
 - The `io`/`_io` split is a recorded dual-home (see
   `.project-context/architecture.md`); do not fold one into the other casually.

@@ -216,7 +216,7 @@ def _device_time_lookup(trace: Trace) -> dict[str, int]:
     """Return the per-op joined device-time table, refusing typed when absent.
 
     The Kineto join is session-time (torchnative W2.2): it exists only on a
-    trace captured under ``torchlens._observability.native_profile`` (or an
+    trace captured under ``torchlens.report.kernel_profile`` (or an
     owned session joined via ``join_session``) whose join reached
     ``joined``. Asking for ``by="device_time"`` anywhere else raises the
     typed ladder refusal (``device_time_unavailable``) instead of returning
@@ -236,7 +236,7 @@ def _device_time_lookup(trace: Trace) -> dict[str, int]:
             "profiler session.",
             code="device_time_unavailable",
             remedy=(
-                "Capture through torchlens._observability.native_profile "
+                "Capture through torchlens.report.kernel_profile "
                 "(one execution, save-nothing tier) on a CUDA host, then "
                 "rank with by='device_time'."
             ),

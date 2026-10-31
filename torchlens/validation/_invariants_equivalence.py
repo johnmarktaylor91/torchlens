@@ -694,7 +694,7 @@ def _check_call_site_contract_post_hoc(
         record_validation_diagnostic(
             trace,
             ValidationDiagnostic(
-                check="call_site_contract_unchecked",
+                check_name="call_site_contract_unchecked",
                 message=(
                     "Call-site grouping contract (i) to (iii) not checked: this trace "
                     "carries no call-site side table (the key is never persisted; step 7 "

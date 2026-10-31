@@ -328,7 +328,7 @@ class CleanStepTime:
     warmup: int
     method: str
     scope: tuple[str, ...]
-    n_forwards_run: int
+    num_forward_runs: int
 
 
 def measure_clean_step(
@@ -369,7 +369,7 @@ def measure_clean_step(
         warmup=warmup,
         method="median of uninstrumented forward wall times (perf_counter)",
         scope=("forward",),
-        n_forwards_run=warmup + repeats,
+        num_forward_runs=warmup + repeats,
     )
 
 
@@ -392,7 +392,7 @@ class RooflineRow:
     ideal_traffic_bytes: int | None
     intensity: float | None
     bound_hypothesis: str | None
-    cache_resident_hint: bool
+    is_cache_resident_hint: bool
     reason: str
     evidence: str = "estimated+ideal_read_once_write_once"
 
@@ -512,7 +512,7 @@ def roofline(
                     ideal_traffic_bytes=None,
                     intensity=None,
                     bound_hypothesis=None,
-                    cache_resident_hint=False,
+                    is_cache_resident_hint=False,
                     reason="no_rule",
                 )
             )
@@ -528,7 +528,7 @@ def roofline(
                     ideal_traffic_bytes=None,
                     intensity=None,
                     bound_hypothesis=None,
-                    cache_resident_hint=False,
+                    is_cache_resident_hint=False,
                     reason="missing_shape_dtype",
                 )
             )
@@ -542,7 +542,7 @@ def roofline(
                     ideal_traffic_bytes=0,
                     intensity=None,
                     bound_hypothesis=None,
-                    cache_resident_hint=False,
+                    is_cache_resident_hint=False,
                     reason="zero_logical_traffic",
                 )
             )
@@ -572,7 +572,7 @@ def roofline(
                 ideal_traffic_bytes=traffic,
                 intensity=intensity,
                 bound_hypothesis=bound,
-                cache_resident_hint=hint,
+                is_cache_resident_hint=hint,
                 reason="covered",
             )
         )
@@ -592,8 +592,8 @@ def roofline(
 class MachineBalance:
     """A roofline ceiling pair and its ridge point (D18): basis disclosed."""
 
-    compute_peak_flops_per_s: float
-    memory_peak_bytes_per_s: float
+    peak_flops_per_s: float
+    peak_bytes_per_s: float
     ridge_intensity: float
     basis: str
     method: str
@@ -601,8 +601,8 @@ class MachineBalance:
 
 def machine_balance(
     *,
-    compute_peak_flops_per_s: float,
-    memory_peak_bytes_per_s: float,
+    peak_flops_per_s: float,
+    peak_bytes_per_s: float,
     basis: str,
     method: str = "user_supplied ceilings",
 ) -> MachineBalance:
@@ -620,16 +620,16 @@ def machine_balance(
             code="machine_balance_basis_invalid",
             remedy="Name the ceiling's basis explicitly; it is disclosed on every render.",
         )
-    if compute_peak_flops_per_s <= 0 or memory_peak_bytes_per_s <= 0:
+    if peak_flops_per_s <= 0 or peak_bytes_per_s <= 0:
         raise InvalidArgumentError(
             "machine_balance ceilings must be positive.",
             code="machine_balance_basis_invalid",
             remedy="Pass positive compute (FLOP/s) and memory (bytes/s) ceilings.",
         )
     return MachineBalance(
-        compute_peak_flops_per_s=float(compute_peak_flops_per_s),
-        memory_peak_bytes_per_s=float(memory_peak_bytes_per_s),
-        ridge_intensity=float(compute_peak_flops_per_s) / float(memory_peak_bytes_per_s),
+        peak_flops_per_s=float(peak_flops_per_s),
+        peak_bytes_per_s=float(peak_bytes_per_s),
+        ridge_intensity=float(peak_flops_per_s) / float(peak_bytes_per_s),
         basis=basis,
         method=method,
     )
@@ -777,7 +777,7 @@ class OverheadReport:
     """Measured capture costs on the USER'S model and host (D27)."""
 
     tiers: tuple[CostTierMeasurement, ...]
-    n_forwards_run: int
+    num_forward_runs: int
     environment: dict[str, str]
 
     def __repr__(self) -> str:
@@ -786,7 +786,7 @@ class OverheadReport:
         tiers = ", ".join(tier.tier for tier in self.tiers)
         return (
             f"OverheadReport({len(self.tiers)} tier(s): {tiers}; measured over "
-            f"{self.n_forwards_run} forwards; print() for the report, read .tiers)"
+            f"{self.num_forward_runs} forwards; print() for the report, read .tiers)"
         )
 
     def __str__(self) -> str:
@@ -804,7 +804,7 @@ class OverheadReport:
         lines.append(
             "  environment: " + ", ".join(f"{k}={v}" for k, v in sorted(self.environment.items()))
         )
-        lines.append(f"  disclosure: this measurement ran {self.n_forwards_run} forward passes")
+        lines.append(f"  disclosure: this measurement ran {self.num_forward_runs} forward passes")
         return "\n".join(lines)
 
 
@@ -902,6 +902,6 @@ def overhead(
     }
     return OverheadReport(
         tiers=tuple(measurements),
-        n_forwards_run=n_forwards,
+        num_forward_runs=n_forwards,
         environment=environment,
     )

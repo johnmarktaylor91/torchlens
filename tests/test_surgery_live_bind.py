@@ -154,7 +154,7 @@ def test_bind_boundary_rule_module_output(toy) -> None:
     bound = tl.when(tl.module("fc1"), tl.scale(0.0)).bind(model)
     out = bound(x)
     assert torch.allclose(out, model.fc2(torch.relu(torch.zeros(3, 4))))
-    assert bound.last_report.fire_count == 1
+    assert bound.last_report.num_fires == 1
     assert not any(m._forward_hooks or m._forward_pre_hooks for m in model.modules())
 
 
@@ -175,7 +175,7 @@ def test_bind_report_contents(toy) -> None:
     assert report.trace is None
     assert report.spec_digest == spec.digest
     assert report.model_class == "_Toy"
-    assert report.fire_count == 1
+    assert report.num_fires == 1
     assert report.rule_fire_counts == {spec.rules[0].rule_id: 1}
     assert report.zero_fire_rule_ids == ()
     assert report.cleanup == "removed"
@@ -200,7 +200,7 @@ def test_bind_pass_qualified_boundary_target() -> None:
     out = bound(x)
     assert torch.allclose(out, torch.zeros(2, 4))
     report = bound.last_report
-    assert report.fire_count == 1
+    assert report.num_fires == 1
     (fire,) = report.fires
     assert fire["pass_index"] == 2
     assert fire["target"] == "block:2"
@@ -379,7 +379,7 @@ def test_bind_exception_cleanup_is_atomic() -> None:
     assert report.status == "error"
     assert report.error == "RuntimeError: boom"
     assert report.cleanup == "removed"
-    assert report.fire_count == 1  # the relu fired before the raise
+    assert report.num_fires == 1  # the relu fired before the raise
     assert not any(m._forward_hooks or m._forward_pre_hooks for m in model.modules())
     # and no torch-function mode is left installed: plain ops run clean
     assert torch.relu(torch.tensor([-1.0, 1.0])).tolist() == [0.0, 1.0]
@@ -544,7 +544,7 @@ def test_steer_generate_toy_composition() -> None:
     assert isinstance(result.outputs, torch.Tensor)
     assert isinstance(result.report, BindReport)
     assert result.report.door == "generate"
-    assert result.report.fire_count == 3  # one relu per generation step
+    assert result.report.num_fires == 3  # one relu per generation step
     assert result.report.trace is None
     from torchlens import Trace
 
@@ -570,10 +570,10 @@ def _real_generate_gate(model_name: str, steer_site: str, ids: torch.Tensor) -> 
     out_cache_on = bound.generate(ids, max_new_tokens=6, do_sample=False, use_cache=True)
     report_on = bound.last_report
     assert report_on.status == "fired" and report_on.door == "generate"
-    assert report_on.fire_count >= 6  # at least one boundary fire per step
+    assert report_on.num_fires >= 6  # at least one boundary fire per step
     torch.manual_seed(0)
     out_cache_off = bound.generate(ids, max_new_tokens=6, do_sample=False, use_cache=False)
-    assert bound.last_report.fire_count >= 6
+    assert bound.last_report.num_fires >= 6
     assert torch.equal(out_cache_on, out_cache_off), "KV cache on/off must agree"
     assert not torch.equal(out_cache_on, base_out), "the steer must change generation"
 
@@ -584,7 +584,7 @@ def _real_generate_gate(model_name: str, steer_site: str, ids: torch.Tensor) -> 
 
     # the plain-call door works on the same binding
     out_call = bound(ids)
-    assert bound.last_report.door == "call" and bound.last_report.fire_count >= 1
+    assert bound.last_report.door == "call" and bound.last_report.num_fires >= 1
     assert out_call.logits.shape[1] == ids.shape[1]
 
     # zero fires during a real generate refuse under 'error' and retain the report

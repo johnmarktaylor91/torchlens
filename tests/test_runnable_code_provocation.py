@@ -328,7 +328,7 @@ def test_poisoned_run_refused_on_faithful_consumers(tmp_path: Path) -> None:
 
     loaded = tl.load(_save_branch_artifact(tmp_path, "poison.tlspec"))
     result = loaded.run(inputs=-_branch_input(), on_divergence="return")
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     with pytest.raises(PoisonedRunError) as export_caught:
         result.trace.save(tmp_path / "poisoned-export.tlspec")
     assert export_caught.value.fields["code"] == RunnableErrorCode.POISONED_RUN_REFUSED.value
@@ -375,7 +375,7 @@ def test_input_alias_topology_unresolved_code_surfaces_on_report(tmp_path: Path)
         def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
             return a[:8].sum() + b[:8].sum()
 
-    from torchlens.errors import TorchLensCaptureGapWarning
+    from torchlens.errors import CaptureGapWarning
 
     base = torch.randn(3 * 70000 + 4)
     a = base[0::3][:69000]
@@ -384,7 +384,7 @@ def test_input_alias_topology_unresolved_code_surfaces_on_report(tmp_path: Path)
     # The unprovable same-storage topology already discloses a capture gap at
     # capture time (input_copy_semantics_unverifiable) -- expected here, since the
     # unresolved relation is exactly what this provocation constructs.
-    with pytest.warns(TorchLensCaptureGapWarning):
+    with pytest.warns(CaptureGapWarning):
         trace = tl.trace(TwoInput().eval(), (a, b), capture=_capture_options())
     trace.save(path, level="runnable")
     result = tl.load(path).run(inputs=(a, b))

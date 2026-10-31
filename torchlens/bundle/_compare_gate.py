@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._capture_state_helpers import _hash_input_tensor_value
-from ..intervention.errors import BundleRelationshipError
+from ..intervention.errors import BundleComparisonError
 from ..intervention.types import Relationship
 
 if TYPE_CHECKING:
@@ -275,7 +275,7 @@ def require_comparable(
 
     Raises
     ------
-    BundleRelationshipError
+    BundleComparisonError
         With ``fields["code"]`` set to ``bundle_gate_ordering_topology``,
         ``bundle_gate_model_axis_unmet``,
         ``bundle_gate_input_values_differ``, or
@@ -298,7 +298,7 @@ def require_comparable(
                 relations, right_name, left_name
             )
             if path is not None:
-                raise BundleRelationshipError(
+                raise BundleComparisonError(
                     f"Bundle operation {operation!r} refuses: members "
                     f"{left_name!r} and {right_name!r} are joined by an "
                     f"ordering relation ({' -> '.join(path)}). Members "
@@ -316,7 +316,7 @@ def require_comparable(
                 )
         relationship = relationship_of(left, right)
         if _MODEL_AXIS_RANK[relationship] < requirement.model_floor_rank:
-            raise BundleRelationshipError(
+            raise BundleComparisonError(
                 f"Bundle operation {operation!r} requires model-axis "
                 f"evidence of at least {requirement.model_floor_label!r}; "
                 f"member pair {left_name}/{right_name} derives "
@@ -336,7 +336,7 @@ def require_comparable(
             right_digest = _input_value_digest(right)
             if left_digest is not None and right_digest is not None:
                 if left_digest != right_digest:
-                    raise BundleRelationshipError(
+                    raise BundleComparisonError(
                         f"Bundle operation {operation!r} requires "
                         "value-level input identity; member pair "
                         f"{left_name}/{right_name} captured DIFFERENT "
@@ -360,7 +360,7 @@ def require_comparable(
                     )
                     if digest is None
                 ]
-                raise BundleRelationshipError(
+                raise BundleComparisonError(
                     f"Bundle operation {operation!r} requires value-level "
                     f"input identity, and member(s) {unproven!r} retain "
                     "no input payloads to prove it (inputs not saved, or "

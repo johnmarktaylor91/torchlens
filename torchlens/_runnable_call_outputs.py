@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens._runnable import ContractCheck
+
 from ._ir.container import (
     CONTAINER_KIND_CAPABILITIES,
     ContainerReconstructionError,
@@ -18,7 +20,6 @@ from ._ir.container import (
     resolve_container_type,
 )
 from ._runnable import (
-    ContractCheck,
     RunnableCallDescriptor,
     RunnableErrorCode,
     SparseRunDescriptor,

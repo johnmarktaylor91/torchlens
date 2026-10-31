@@ -9,7 +9,7 @@ tier:
   group-lifecycle wraps, verifies the five-namespace collective recognizer,
   and stamps this rank's install-epoch record. Required spelling for MPMD
   programs and any program whose ranks enter capture at different times.
-* :class:`GroupLifecycleLedger` / :func:`audit_membership_lineages` -- the
+* :class:`GroupLifecycleLedger` / :func:`verify_membership_lineages` -- the
   per-rank lifecycle evidence and the pure PRE-JOIN membership-lineage audit
   the merge engine runs over it.
 * Typed refusal vocabulary: ``ambiguous_group_lifetime``,
@@ -29,14 +29,13 @@ required.
 from ._audit import (
     GROUP_LIFETIME_EVIDENCE_CONFLICT,
     MembershipLineageVerdict as MembershipLineageVerdict,
-    audit_membership_lineages,
+    verify_membership_lineages,
 )
 from ._ledger import (
     LineageEntry as LineageEntry,
     LineageVector as LineageVector,
 )
 from ._lifecycle import (
-    AmbiguousGroupLifetimeError,
     ArmingRecord,
     GroupIdentity,
     arm,
@@ -45,18 +44,15 @@ from ._lifecycle import (
 )
 from ._recognizer import (
     CollectiveRecognizer as CollectiveRecognizer,
-    UncapturedCollectiveOpError,
     is_vetted_build,
 )
 
 __all__ = [
     "GROUP_LIFETIME_EVIDENCE_CONFLICT",
-    "AmbiguousGroupLifetimeError",
     "ArmingRecord",
     "GroupIdentity",
-    "UncapturedCollectiveOpError",
     "arm",
-    "audit_membership_lineages",
+    "verify_membership_lineages",
     "disarm",
     "is_vetted_build",
     "is_armed",

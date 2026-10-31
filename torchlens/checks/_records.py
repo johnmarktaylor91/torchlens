@@ -85,17 +85,17 @@ class CheckFinding:
     """One immutable check finding (memo 4.5).
 
     ``values`` carries the measured numbers (already-reduced floats only);
-    ``names`` the offending parameter/site names with every alias of a tied
+    ``param_names`` the offending parameter/site names with every alias of a tied
     tensor preserved; ``follow_up`` the call that localizes the culprit
     (memo D3: the finding names a cone, the frontier names the culprit).
     """
 
-    check: str
+    check_name: str
     code: str
     severity: str
     action: str
     message: str
-    names: tuple[str, ...] = ()
+    param_names: tuple[str, ...] = ()
     global_step: int | None = None
     backward_id: int | None = None
     attempted_step_id: int | None = None
@@ -127,7 +127,7 @@ class CheckFinding:
         """Return the JSON-serializable payload for this finding."""
 
         payload = asdict(self)
-        payload["names"] = list(self.names)
+        payload["names"] = list(self.param_names)
         return payload
 
 
@@ -185,7 +185,7 @@ class CheckReport:
         )
         lines = [heading]
         lines.extend(
-            f"- [{finding.severity}] {finding.check}: {finding.message}"
+            f"- [{finding.severity}] {finding.check_name}: {finding.message}"
             for finding in self.findings[:20]
         )
         if len(self.findings) > 20:

@@ -9,16 +9,10 @@ import torch
 
 from .._utils.tensor_utils import layer_grad_tolerances_for_dtype
 from ._errors import (
-    AmbiguousCallError,
     AmbiguousInputError,
-    AmbiguousPassError,
-    AmbiguousTargetError,
     BackendUnsupportedError,
-    NoInfluencePathError,
     ReceptiveFieldConfigurationError,
     ReceptiveFieldError,
-    ReceptiveFieldUnavailableError,
-    ReceptiveFieldValidationError,
 )
 from ._rules import (
     ReceptiveFieldRule,
@@ -168,7 +162,7 @@ def _empirical_adjoint_checks(
 
     checks: list[EmpiricalAdjointCheck] = []
     for validation in containment:
-        for role, receptive in validation.gradient.items():
+        for role, receptive in validation.grad.items():
             far_label = next(
                 (op.label for op in trace.layer_list if str(op.io_role or op.label) == role),
                 "",
@@ -389,11 +383,7 @@ def self_check(
 
 
 __all__ = [
-    "AmbiguousCallError",
     "AmbiguousInputError",
-    "AmbiguousTargetError",
-    "AmbiguousPassError",
-    "BackendUnsupportedError",
     "EmpiricalAdjointCheck",
     "GradReceptiveField",
     "GridLayout",
@@ -402,17 +392,12 @@ __all__ = [
     "ReceptiveFieldAxis",
     "ReceptiveFieldBox",
     "ReceptiveFieldBoxAxis",
-    "ReceptiveFieldConfigurationError",
     "ReceptiveFieldDirection",
-    "ReceptiveFieldError",
-    "NoInfluencePathError",
     "ReceptiveFieldProfile",
     "ReceptiveFieldRule",
     "ReceptiveFieldRuleContext",
     "ReceptiveFieldStatus",
-    "ReceptiveFieldUnavailableError",
     "ReceptiveFieldValidation",
-    "ReceptiveFieldValidationError",
     "ReceptiveFieldValidationStatus",
     "ReceptiveFieldVerification",
     "ReceptiveFieldView",

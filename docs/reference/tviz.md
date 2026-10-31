@@ -267,6 +267,6 @@ head's expanded copy.
 
 ## Refusal codes
 
-All tviz refusals ride `torchlens.transformer.TvizError` with a stable
+All tviz refusals ride `torchlens.errors.RenderError` with a stable
 `fields["code"]`; the contract rows live in
 `docs/reference/error_refusal_contract.md`.

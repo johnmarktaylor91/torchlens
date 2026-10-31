@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from torchlens._runnable import ContractCheck, RunnableDiagnostic
+
 from . import _state
 from ._runnable import (
-    ContractCheck,
     PathFaithfulness,
-    RunnableDiagnostic,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
@@ -478,7 +478,7 @@ def _bind_runtime_inputs(
                     current_runtime=str(torch.__version__),
                     detection_stage="run_honesty_contract",
                     resolver_provenance=None,
-                    analysis_load_available=True,
+                    is_analysis_load_available=True,
                     details=(),
                 ),
             )

@@ -7,9 +7,10 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens._runnable import ContractCheck
+
 from . import _state
 from ._runnable import (
-    ContractCheck,
     InputAttestationFingerprint,
     RunnableErrorCode,
     SparseRunDescriptor,

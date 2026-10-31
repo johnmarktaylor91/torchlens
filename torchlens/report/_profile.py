@@ -103,10 +103,10 @@ class ProfileReport:
     # contract requires a rescued/ceilinged capture to stay visible in profile
     # output, so these are stamped from the source trace at build time.
     capture_status: str = "unknown"
-    capture_verified: bool | None = None
+    is_capture_verified: bool | None = None
     capture_verification_reason: str | None = None
-    rescue_rerun: bool = False
-    structure_only: bool = False
+    has_rescue_rerun: bool = False
+    is_structure_only: bool = False
     # F09 (costreport D4/D6): the whole-capture KNOWN forward partition
     # total -- the invariant percent denominator -- plus the unknown EVENT
     # count disclosed beside it (never a FLOP percentage).
@@ -162,10 +162,10 @@ class ProfileReport:
         frame.attrs["torchlens_capture_honesty"] = {
             "schema": "torchlens.capture_honesty.v1",
             "capture_status": self.capture_status,
-            "capture_verified": self.capture_verified,
+            "capture_verified": self.is_capture_verified,
             "capture_verification_reason": self.capture_verification_reason,
-            "rescue_rerun": self.rescue_rerun,
-            "structure_only": self.structure_only,
+            "rescue_rerun": self.has_rescue_rerun,
+            "structure_only": self.is_structure_only,
         }
         frame.attrs["column_additivity"] = dict(self.column_additivity)
         frame.attrs["partition_total"] = self.partition_total
@@ -243,20 +243,20 @@ class ProfileReport:
         notes = []
         # L7a G3 render honesty: hypothesis shapes must never present as
         # measurements (memo sec 3.4).
-        if self.structure_only:
+        if self.is_structure_only:
             notes.append("structure-only capture -- shapes/dtypes are HYPOTHESES, not measurements")
         if self.capture_status not in ("complete", "unknown"):
             notes.append(f"capture outcome: {self.capture_status}")
-        if self.capture_verified is False:
+        if self.is_capture_verified is False:
             reason = self.capture_verification_reason or "unrecorded reason"
             notes.append(f"capture UNVERIFIED ({reason})")
-        if self.rescue_rerun:
+        if self.has_rescue_rerun:
             notes.append("rescue re-run result (mode_rescue_rerun)")
         if not notes:
             return ""
         return "! " + "; ".join(notes) + " -- rows below may undercount what ran"
 
-    def honesty(self, *, as_summary: bool = False) -> pd.DataFrame | str:
+    def evidence_labels(self, *, as_summary: bool = False) -> pd.DataFrame | str:
         """Return per-cell evidence labels for resource quantities (D2/D9).
 
         A projection of cell facts, never a null check: FLOP labels come
@@ -1021,10 +1021,10 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
         _honesty_frame=honesty_frame,
         _tree_text=_build_call_tree(trace),
         capture_status=capture_status,
-        capture_verified=capture_verified,
+        is_capture_verified=capture_verified,
         capture_verification_reason=capture_verification_reason,
-        rescue_rerun=rescue_rerun,
-        structure_only=structure_only,
+        has_rescue_rerun=rescue_rerun,
+        is_structure_only=structure_only,
         partition_total=partition_total,
         unknown_events=aggregation.coverage.unknown,
         attention_full_square_ops=counted_attention_ops(aggregation),

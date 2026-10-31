@@ -31,7 +31,7 @@ def _save_load(trace: Any, tmp_path: Path, name: str) -> Any:
 def _row_facts(status: Any) -> list[tuple[Any, ...]]:
     return [
         (row.pass_index, row.grad_fn_label, row.call_index, row.op_label, row.flops)
-        for attribution in status.attributions
+        for attribution in status.flops_attributions
         for row in attribution.rows
     ]
 
@@ -48,10 +48,10 @@ def test_loaded_trace_reads_the_saved_count_and_attribution(case: str, tmp_path:
         assert status.executed_flops == live.executed_flops is not None
         assert status.executed_evidence == "formula_exact"
         assert status.executed_flops_per_pass == live.executed_flops_per_pass
-        assert status.uncounted_ops == live.uncounted_ops
+        assert status.uncounted_op_counts == live.uncounted_op_counts
         assert status.unattributed_flops == live.unattributed_flops
         assert _row_facts(status) == _row_facts(live)
-        (attribution,) = status.attributions
+        (attribution,) = status.flops_attributions
         assert attribution.source == "saved record" and attribution.other_trace_ops is None
         (record,) = loaded.autograd.backward_passes
         assert record.aten_ops is None
@@ -68,7 +68,7 @@ def test_loaded_checkpointed_trace_keeps_its_recompute_label(tmp_path: Path) -> 
         loaded = _save_load(trace, tmp_path, "checkpointed")
         status = backward_status(loaded)
         assert status.recompute_flops == SEGMENT_FORWARD
-        assert [a.recompute for a in status.attributions] == ["labeled"]
+        assert [a.recompute for a in status.flops_attributions] == ["labeled"]
     finally:
         trace.cleanup()
 
@@ -135,7 +135,7 @@ def test_malformed_records_are_named(change: dict[str, Any], reason: str) -> Non
 def test_malformed_record_refuses_at_load(tmp_path: Path) -> None:
     """The load boundary refuses a hand-edited record with its typed code."""
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
     from torchlens._io.forgery_validation import validate_persisted_forgery_surfaces
 
     trace = _traced_backward(*ZOO_BUILDERS["frozen_backbone"]())
@@ -144,7 +144,7 @@ def test_malformed_record_refuses_at_load(tmp_path: Path) -> None:
         (loaded_pass,) = loaded.autograd.backward_passes
         validate_persisted_forgery_surfaces(loaded)
         loaded_pass.executed_flops_record = {**_GOOD, "executed_flops": -1}
-        with pytest.raises(TorchLensIOError) as refusal:
+        with pytest.raises(ArtifactError) as refusal:
             validate_persisted_forgery_surfaces(loaded)
         assert refusal.value.fields["code"] == "artifact_executed_flops_record_invalid"
     finally:

@@ -100,7 +100,7 @@ def test_honesty_labels_mixed_evidence_differently(sdpa_trace) -> None:
     """
 
     prof = profile(sdpa_trace, level="op")
-    honesty = prof.honesty()
+    honesty = prof.evidence_labels()
     labels = set(honesty["flops"])
     assert "formula_exact" in labels, labels
     assert "estimated" in labels, labels
@@ -111,7 +111,7 @@ def test_honesty_vocabulary_and_qualifiers(nested_trace) -> None:
     inventory; boundary rows are not_applicable, never fabricated."""
 
     prof = profile(nested_trace, level="op")
-    honesty = prof.honesty()
+    honesty = prof.evidence_labels()
     assert set(honesty["time"]) <= {
         "measured+instrumentation_inclusive",
         "unknown",
@@ -130,7 +130,7 @@ def test_honesty_as_summary_and_inline_evidence(nested_trace) -> None:
     interleaves per-cell evidence columns (D9's inline form, on the export door)."""
 
     prof = profile(nested_trace, level="op")
-    line = prof.honesty(as_summary=True)
+    line = prof.evidence_labels(as_summary=True)
     assert isinstance(line, str)
     assert "formula_exact" in line
     inline = prof.to_pandas(evidence=True)
@@ -144,7 +144,7 @@ def test_honesty_aggregation_preserves_weakest_evidence(sdpa_trace) -> None:
     """D2: a rollup row holding an estimated member never upgrades to exact."""
 
     prof = profile(sdpa_trace, level="module")
-    honesty = prof.honesty()
+    honesty = prof.evidence_labels()
     # The root module contains the SDPA op: its rollup evidence is the
     # weakest member evidence, never formula_exact.
     assert "estimated" in set(honesty["flops"])
@@ -324,8 +324,8 @@ def test_backward_estimate_is_named_door_and_hypothetical(nograd_trace) -> None:
     estimate = backward_estimate(nograd_trace)
     assert estimate.label == "hypothetical"
     assert estimate.hypothetical_flops > 0
-    assert estimate.n_ops_multiplied > 0
-    assert estimate.grad_disabled_at_capture
+    assert estimate.num_multiplied_ops > 0
+    assert estimate.is_grad_disabled_at_capture
     assert "HYPOTHETICAL" in estimate.disclosure
     assert "requires_grad as captured" in estimate.disclosure
     # No default 1.0 multiplier: non-MAC ops are excluded and named.

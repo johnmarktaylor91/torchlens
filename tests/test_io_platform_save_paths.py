@@ -26,7 +26,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError, _durability
+from torchlens._io import ArtifactError, _durability
 
 fcntl = pytest.importorskip("fcntl")
 
@@ -73,7 +73,7 @@ def test_windows_emulation_reproduces_bad_fd_on_read_only_flush(
 
     trace = _trace()
     monkeypatch.setattr(_durability, "_fsync_open_flags", lambda _os_name: _POSIX_FLAGS)
-    with pytest.raises(TorchLensIOError, match="Bad file descriptor"):
+    with pytest.raises(ArtifactError, match="Bad file descriptor"):
         trace.save(tmp_path / "canary.tlspec")
 
 

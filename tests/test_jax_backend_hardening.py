@@ -17,8 +17,8 @@ from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._io.tlspec import _TlSpecWriter
-from torchlens.backends import BackendRuntimeCompatibilityError, BackendUnsupportedError
 from torchlens.backends.jax import capabilities
+from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -1212,7 +1212,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     loaded_status = loaded_portable.validate_forward_pass([])
     assert loaded_status is loaded_portable.validation_replay_status
     assert loaded_status.state == "unavailable"
-    assert loaded_status.available is False
+    assert loaded_status.is_available is False
     assert loaded_status.reason == "loaded_trace_runtime_capture_stripped"
     assert loaded_status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):
@@ -1231,7 +1231,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     spec = tl.backends.spec("jax")
 
     assert spec.capabilities.backward_capture is False
-    assert spec.capabilities.validation_replay is True
+    assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is False
     assert spec.capabilities.interventions is False
     assert spec.capabilities.payload_materialization is True
@@ -1300,7 +1300,7 @@ def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
 
     import jax.numpy as jnp
 
-    from torchlens.backends import BackendCapabilityConformanceError
+    from torchlens.errors import BackendCapabilityConformanceError
 
     def model(x: Any) -> Any:
         """Return a tanh-projected input.

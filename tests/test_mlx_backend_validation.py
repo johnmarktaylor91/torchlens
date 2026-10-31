@@ -12,7 +12,7 @@ import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends.mlx import MLXBackend  # noqa: E402
-from torchlens.validation.status import ValidationReplayStatus  # noqa: E402
+from torchlens.validation.status import ValidationStatus  # noqa: E402
 
 
 class _TwoLayerMLP(nn.Module):
@@ -36,14 +36,14 @@ def test_mlx_validation_healthy_two_layer_mlp_passes() -> None:
     assert MLXBackend().validate_trace(trace) is True
     status = trace.validation_replay_status
     assert status.state == "passed"
-    assert status.replayed_node_count >= 1
+    assert status.num_replayed_ops >= 1
 
 
 def test_mlx_validation_registered_spec_dispatches() -> None:
     """The registered spec routes to the real oracle, not the old refusal."""
 
     spec = tl.backends.spec("mlx")
-    assert spec.capabilities.validation_replay is True
+    assert spec.capabilities.has_validation_replay is True
     assert spec.validate_trace(_healthy_trace()) is True
 
 
@@ -171,7 +171,7 @@ def test_mlx_end_to_end_bare_streaming_flip_refuses_typed() -> None:
     the option. (Interventions are genuinely lifted on MLX now, so the probe
     uses streaming, which remains gated.)"""
 
-    from torchlens.backends import BackendCapabilityConformanceError
+    from torchlens.errors import BackendCapabilityConformanceError
 
     spec = tl.backends.spec("mlx")
     object.__setattr__(spec.capabilities, "has_streaming", True)
@@ -196,7 +196,7 @@ def test_mlx_validation_loaded_payload_stripped_trace_is_unavailable() -> None:
 
     result = MLXBackend().validate_trace(trace)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unavailable"
     assert result.passed is False
 
@@ -263,7 +263,7 @@ def test_mlx_constant_producer_reports_unverified_gap() -> None:
     trace = tl.trace(_ConstantProducerNet(), mx.ones((1, 4)), backend="mlx")
     result = MLXBackend().validate_trace(trace)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     assert trace._mlx_perturbation_gaps
     assert all(label.startswith("add") for label in trace._mlx_perturbation_gaps)

@@ -10,7 +10,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention.errors import (
     BaselineUndeterminedError,
-    BundleRelationshipError,
+    BundleComparisonError,
 )
 from torchlens.intervention.types import Relationship
 
@@ -144,7 +144,7 @@ def test_relationship_matrix_gates_node_operations() -> None:
     bundle = tl.Bundle({"good": good, "different": different})
 
     assert bundle.comparability("good", "different") is Relationship.UNKNOWN
-    with pytest.raises(BundleRelationshipError, match="node"):
+    with pytest.raises(BundleComparisonError, match="node"):
         bundle.node(tl.func("relu"))
 
     assert bundle.map(lambda member: member.trace_label) == {

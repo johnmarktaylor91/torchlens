@@ -166,7 +166,7 @@ recorded: 2026-08-17T10:55:17.426084+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the TorchLensIOError refusal and now pins a real v8 round-trip surface for the first time
+reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the ArtifactError refusal and now pins a real v8 round-trip surface for the first time
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 3d3fe9b0f01c15239e22447c14a4629d2b6e713c (clean)
@@ -174,7 +174,7 @@ recorded: 2026-08-17T18:35:19.763203+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the TorchLensIOError refusal and now pins a real v8 round-trip surface for the first time
+reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the ArtifactError refusal and now pins a real v8 round-trip surface for the first time
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 3d3fe9b0f01c15239e22447c14a4629d2b6e713c (clean)
@@ -182,7 +182,7 @@ recorded: 2026-08-17T18:35:19.785583+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the TorchLensIOError refusal and now pins a real v8 round-trip surface for the first time
+reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the ArtifactError refusal and now pins a real v8 round-trip surface for the first time
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 3d3fe9b0f01c15239e22447c14a4629d2b6e713c (clean)
@@ -190,7 +190,7 @@ recorded: 2026-08-17T18:35:19.804356+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the TorchLensIOError refusal and now pins a real v8 round-trip surface for the first time
+reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the ArtifactError refusal and now pins a real v8 round-trip surface for the first time
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 3d3fe9b0f01c15239e22447c14a4629d2b6e713c (clean)
@@ -198,7 +198,7 @@ recorded: 2026-08-17T18:35:25.319377+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the TorchLensIOError refusal and now pins a real v8 round-trip surface for the first time
+reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the ArtifactError refusal and now pins a real v8 round-trip surface for the first time
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 3d3fe9b0f01c15239e22447c14a4629d2b6e713c (clean)
@@ -206,7 +206,7 @@ recorded: 2026-08-17T18:35:25.338707+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the TorchLensIOError refusal and now pins a real v8 round-trip surface for the first time
+reason: facet-cache persistence fix: ModuleCall/Module _facets_cache declared FieldPolicy.DROP, so a public .facets read no longer poisons Trace.save; the tlspec stage stops pinning the ArtifactError refusal and now pins a real v8 round-trip surface for the first time
 env: py3.10-torch2.13.0
 torch: 2.13.0+cu130
 source: 3d3fe9b0f01c15239e22447c14a4629d2b6e713c (clean)

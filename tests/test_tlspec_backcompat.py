@@ -9,9 +9,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention import check_spec_compat
 from torchlens.intervention.types import Edit, InterventionSpec
 from torchlens.options import CaptureOptions
-from torchlens.validation import check_spec_compat
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "tlspec_v2_16"
 
@@ -247,7 +247,7 @@ def _assert_intervention_matches(
 
     compat = check_spec_compat(fixture_spec, live_log)
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
 
 
 @pytest.mark.parametrize(

@@ -13,6 +13,8 @@ from typing import Any, cast
 import torch
 from torch import nn
 
+from torchlens._runnable import ContractCheck, ReadinessReport
+
 from . import _state
 from ._call_fingerprint import fingerprinting, install_module_token_hooks
 from ._data_classes._trace_accessors import boundary_label_rows
@@ -42,11 +44,9 @@ from ._fast_live_until import (
 from ._fast_sparse_state import _state_mutating_call_ids
 from ._ir.container import ContainerSpec, rebuild_container_from_spec
 from ._runnable import (
-    ContractCheck,
     DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
-    ReadinessReport,
     ReadinessStatus,
     RunnableCallDescriptor,
     RunnableErrorCode,

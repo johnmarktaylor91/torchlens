@@ -119,7 +119,7 @@ def add(delta: torch.Tensor | float | int, *, allow_shape_change: bool = False) 
         kwargs=(("allow_shape_change", allow_shape_change),),
         factory=factory,
         batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -171,7 +171,7 @@ def replace_with(
         kwargs=(("allow_shape_change", allow_shape_change),),
         factory=factory,
         batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 

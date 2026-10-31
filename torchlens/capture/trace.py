@@ -34,6 +34,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 from torch import get_default_dtype, nn
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from .. import _state
 from .._capture_state_helpers import CompiledCapturePrep, prepare_compiled_capture
 from .._ir.container_registry import ModelSite, Phase, Role, walk_container
@@ -42,7 +44,6 @@ from .._runnable_seam import runnable_trace_state
 from ..backends.registry import (
     TORCH_BACKEND_NAME,
     BackendName,
-    BackendUnsupportedError,
     CaptureBackend,
     get_backend_spec,
     resolve_backend_spec,

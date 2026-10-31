@@ -503,7 +503,7 @@ class TFBackend:
 
         trace = args[0] if args else kwargs["trace"]
         status = trace.validation_replay_status
-        if not status.available:
+        if not status.is_available:
             setattr(trace, "_validation_replay_status", status)
             return status
         try:
@@ -516,14 +516,14 @@ class TFBackend:
                 validate_metadata=bool(kwargs.get("validate_metadata", True)),
             )
         except Exception:
-            from ...validation.status import ValidationReplayStatus
+            from ...validation.status import ValidationStatus
 
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend=self.name,
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
                 payload_load_status=getattr(trace, "payload_load_status", None),
-                failed_node_count=1,
+                num_failed_ops=1,
             )
             setattr(trace, "_validation_replay_status", status_result)
         return status_result if status_result.state == "unverified" else status_result.passed

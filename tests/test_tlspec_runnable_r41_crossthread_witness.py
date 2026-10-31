@@ -1219,7 +1219,7 @@ def test_live_inexecutable_divergent_input_typed_and_rolls_back() -> None:
     assert isinstance(exc.value.__cause__, RuntimeError)  # native torch error preserved
     rerun = trace.run(inputs=x)
     assert rerun.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert rerun.report.poisoned is False
+    assert rerun.report.is_poisoned is False
 
 
 def test_live_changed_batch_refresh_stays_verified() -> None:
@@ -1240,7 +1240,7 @@ def test_live_changed_batch_refresh_stays_verified() -> None:
         warnings.simplefilter("ignore")
         result = trace.run(inputs=torch.randn(5, 4))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.poisoned is False
+    assert result.report.is_poisoned is False
 
 
 def test_live_non_divergent_native_failure_reraises_raw() -> None:

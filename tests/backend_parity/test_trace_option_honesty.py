@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendSpec, BackendUnsupportedError
+from torchlens.backends import BackendSpec
 from torchlens.backends._options import (
     JAX_PREVIEW_TRACE_OPTION_POLICY,
     MLX_PREVIEW_TRACE_OPTION_POLICY,
@@ -18,6 +18,7 @@ from torchlens.backends._options import (
     reject_unsupported_trace_options,
 )
 from torchlens.backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
+from torchlens.errors import BackendUnsupportedError
 from torchlens.user_funcs import _filter_trace_kwargs_for_backend
 
 pytestmark = pytest.mark.backend_parity

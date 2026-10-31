@@ -11,7 +11,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.streaming import PARTIAL_SENTINEL
-from torchlens.fastlog import CaptureSpec, PredicateError, RecordContext, RecordingConfigError
+from torchlens.errors import PredicateError, RecordingConfigError
+from torchlens.fastlog import CaptureSpec, RecordContext
 from torchlens.options import StorageOptions
 
 

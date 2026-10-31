@@ -50,7 +50,7 @@ def test_dtype_range_audit_clean_fp32_has_full_coverage() -> None:
     audit = tl.debug.dtype_range(trace)
 
     assert audit.findings == ()
-    assert audit.n_ops_audited == audit.n_ops_total
+    assert audit.num_audited_ops == audit.num_ops
     assert audit.coverage == 1.0
 
 
@@ -67,11 +67,11 @@ def test_dtype_range_audit_partial_save_reports_incomplete_coverage() -> None:
 
     audit = tl.debug.dtype_range(trace)
 
-    assert audit.n_ops_audited < audit.n_ops_total
+    assert audit.num_audited_ops < audit.num_ops
     assert audit.coverage < 1.0
     assert unsaved_labels
     assert all(not unsaved_labels.intersection(finding.ops) for finding in audit.findings)
-    assert f"coverage={audit.n_ops_audited}/{audit.n_ops_total}" in repr(audit)
+    assert f"coverage={audit.num_audited_ops}/{audit.num_ops}" in repr(audit)
 
 
 def test_dtype_range_audit_reports_recorded_downcast_boundary() -> None:

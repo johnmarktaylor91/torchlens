@@ -75,12 +75,12 @@ def test_summary_carries_the_structure_only_banner() -> None:
 def test_profile_repr_carries_the_banner() -> None:
     log = _structure_trace()
     profile = log.profile()
-    assert profile.structure_only is True
+    assert profile.is_structure_only is True
     assert "structure-only capture" in repr(profile)
     # Measured-value columns render honestly: nothing presents a hypothesis
     # figure as "measured". Boundary pseudo-rows read not_applicable (A07:
     # they own no compute by the identity partition) -- also never "measured".
-    honesty = profile.honesty()
+    honesty = profile.evidence_labels()
     # F09 (costreport D9): structure-only shape-derived cells are labeled
     # HYPOTHESIS -- the exact banner-vs-labels mismatch fix. Still never
     # "measured", never "estimated"-presented-as-fact.

@@ -730,7 +730,7 @@ def test_ledgered_undeclared_trace_field_refusal_teaches(tmp_path: Path) -> None
     """
 
     from torchlens._data_classes._trace_components import TRACE_EXTERNAL_WRITE_EXEMPTIONS
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
     from torchlens._io.scrub import _is_runtime_only_trace_field
 
     field_name = next(
@@ -740,7 +740,7 @@ def test_ledgered_undeclared_trace_field_refusal_teaches(tmp_path: Path) -> None
     )
     log = trace_fn(_TinyIOModel(), torch.randn(2, 4))
     setattr(log, field_name, "still-live-at-save-time")
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         log.save(str(tmp_path / "refused.tlspec"))
     message = str(excinfo.value)
     assert field_name in message

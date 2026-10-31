@@ -21,7 +21,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._io.bundle import save as _save_bundle
-from torchlens._selection import SelectionError
+from torchlens.errors import SelectionError
 
 
 class _Branchy(nn.Module):

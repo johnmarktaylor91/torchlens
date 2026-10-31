@@ -545,14 +545,14 @@ def test_w34_census_unverified_outcome_is_recorded_not_discarded() -> None:
 
     # Bind the model: replay reads parameters through TorchLens' weak model
     # reference, so a temporary model can be collected mid-test and turn the
-    # replay into PostTraceParamUnavailable.
+    # replay into ParamReleasedError.
     model = _Tiny()
     trace, ground_truth = _capture(model, torch.randn(3, 4))
     status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
     assert status.state == "passed"
     diagnostics = get_validation_diagnostics(trace)
     assert any(
-        diagnostic.check == "completeness_census_unverified"
+        diagnostic.check_name == "completeness_census_unverified"
         and diagnostic.extra.get("reason") == "dispatch_op_count_not_collected"
         for diagnostic in diagnostics
     )
@@ -605,7 +605,7 @@ def test_w34_outside_tensor_consumer_with_traced_parent_fails_source_provenance(
 
     assert _quiet_validate(_GlobalTensor(), torch.randn(3, 4)) is False
     failure = tl.validation.last_validation_failure()
-    assert failure is not None and failure.check == "source_provenance"
+    assert failure is not None and failure.check_name == "source_provenance"
 
 
 def test_w34_unused_input_model_still_validates() -> None:

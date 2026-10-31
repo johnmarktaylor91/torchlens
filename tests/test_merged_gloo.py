@@ -21,16 +21,16 @@ import torch
 from torch import nn
 
 import torchlens as tl  # noqa: E402
-from torchlens._io import TorchLensIOError  # noqa: E402
-from torchlens._merged import (  # noqa: E402
+from torchlens._io import ArtifactError  # noqa: E402
+from torchlens.distributed import (  # noqa: E402
+    _lifecycle as lifecycle,
+    is_vetted_build,
+)
+from torchlens.errors import (  # noqa: E402
     MergeConflictError,
     MergedArtifactError,
     MergedSurfaceUnsupportedError,
     MergeInputError,
-)
-from torchlens.distributed import (  # noqa: E402
-    _lifecycle as lifecycle,
-    is_vetted_build,
 )
 
 # Every test in this module calls real `lifecycle.arm()` (via `_capture()`) to
@@ -108,7 +108,7 @@ class TestLiveMerge:
         log = _capture()
         report = tl.merge_report([log])
         assert report.alignment.value == "aligned"
-        assert report.n_joins == 1
+        assert report.num_joins == 1
         assert report.to_markdown().startswith("# Cross-rank merge report")
 
     def test_join_ops_resolve_to_boundary_nodes(self, gloo_world):
@@ -330,7 +330,7 @@ class TestTamperMatrix:
         # this test's NAME is only actually tested when the refusal type is pinned.
         # A foreign bundle_format never enters the merged branch, so the trace-bundle
         # loader refuses it as an unrecognized directory artifact.
-        with pytest.raises(TorchLensIOError):
+        with pytest.raises(ArtifactError):
             tl.load(art)
 
 

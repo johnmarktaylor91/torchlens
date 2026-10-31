@@ -28,15 +28,15 @@ from torchlens import Trace, trace as trace_fn
 from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.backends.torch import rescue
 from torchlens.errors import (
+    CaptureGapWarning,
     MetadataInvariantError,
-    TorchLensCaptureGapWarning,
     TraceNotReproducibleWarning,
 )
 from torchlens.fastlog import RecordContext
 from torchlens.intervention.types import DictKey
 from torchlens.options import SaveOptions
+from torchlens.report import ValidationDiagnostic
 from torchlens.validation import (
-    ValidationDiagnostic,
     check_metadata_invariants,
     get_validation_diagnostics,
     get_validation_failure,
@@ -80,7 +80,7 @@ from torchlens.validation.status import (
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
-    ValidationReplayStatus,
+    ValidationStatus,
 )
 
 _TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None
@@ -110,7 +110,7 @@ def _assert_validation_capture_is_clean(model: nn.Module, x: torch.Tensor) -> No
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={})
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
 
 
 def _assert_validation_fails_only_on_adoption(model: nn.Module, x: torch.Tensor) -> None:
@@ -127,9 +127,9 @@ def _assert_validation_fails_only_on_adoption(model: nn.Module, x: torch.Tensor)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={}) is False
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
     failure = last_validation_failure()
-    assert failure is not None and failure.check == "source_provenance"
+    assert failure is not None and failure.check_name == "source_provenance"
     assert failure.extra["reasons"] == ["module_boundary_adoption"]
 
 
@@ -196,20 +196,20 @@ def test_validation_import_path():
 def test_validation_replay_unverified_status_semantics() -> None:
     """Unverified replay status is available but never bool-coerced."""
 
-    status = ValidationReplayStatus.unverified(
+    status = ValidationStatus.unverified(
         backend="jax",
         source="live",
         reason="region_not_per_op_replayable",
         message="synthetic partial replay",
-        replayed_node_count=3,
-        unverified_node_count=2,
+        num_replayed_ops=3,
+        num_unverified_ops=2,
     )
 
     assert status.state == "unverified"
-    assert status.available is True
-    assert status.replayed_node_count == 3
-    assert status.unverified_node_count == 2
-    assert status.failed_node_count == 0
+    assert status.is_available is True
+    assert status.num_replayed_ops == 3
+    assert status.num_unverified_ops == 2
+    assert status.num_failed_ops == 0
     with pytest.raises(TypeError, match="not a boolean"):
         bool(status)
 
@@ -217,31 +217,31 @@ def test_validation_replay_unverified_status_semantics() -> None:
 def test_validation_replay_status_aggregate_fold() -> None:
     """Aggregate replay status keeps failures dominant over unverified regions."""
 
-    mixed_status = ValidationReplayStatus.from_replay_counts(
+    mixed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=4,
-        unverified_node_count=1,
+        num_replayed_ops=4,
+        num_unverified_ops=1,
     )
-    failed_status = ValidationReplayStatus.from_replay_counts(
+    failed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=0,
-        unverified_node_count=3,
-        failed_node_count=2,
+        num_replayed_ops=0,
+        num_unverified_ops=3,
+        num_failed_ops=2,
     )
-    passed_status = ValidationReplayStatus.from_replay_counts(
+    passed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=4,
-        unverified_node_count=0,
+        num_replayed_ops=4,
+        num_unverified_ops=0,
     )
 
     assert mixed_status.state == "unverified"
-    assert mixed_status.replayed_node_count == 4
-    assert mixed_status.unverified_node_count == 1
+    assert mixed_status.num_replayed_ops == 4
+    assert mixed_status.num_unverified_ops == 1
     assert failed_status.state == "failed"
-    assert failed_status.failed_node_count == 2
+    assert failed_status.num_failed_ops == 2
     assert bool(failed_status) is False
     assert passed_status.state == "passed"
     assert bool(passed_status) is True
@@ -280,7 +280,7 @@ def test_validation_decision_recorder_counts_distinct_nodes() -> None:
     # output decision is a different phase entirely (counting it let
     # "exemptions alone" traces pass the no_nodes_replay_validated guard --
     # b1-fable round-2 F1).
-    assert status.replayed_node_count == 1
+    assert status.num_replayed_ops == 1
     assert status.state == "passed"
 
 
@@ -299,7 +299,7 @@ def test_validation_decision_recorder_distinct_node_count_keeps_failure_tripwire
 
     status = recorder.as_status()
 
-    assert status.failed_node_count == 1
+    assert status.num_failed_ops == 1
     assert status.state == "failed"
     assert bool(status) is False
 
@@ -320,7 +320,7 @@ def test_validation_all_exempted_cannot_pass_without_replayed_nodes() -> None:
 
     assert status.state == "unverified"
     assert status.reason == "no_nodes_replay_validated"
-    assert status.replayed_node_count == 0
+    assert status.num_replayed_ops == 0
     with pytest.raises(TypeError, match="not a boolean"):
         bool(status)
 
@@ -340,7 +340,7 @@ def test_validation_positive_replay_coverage_can_still_pass() -> None:
     status = recorder.as_status()
 
     assert status.state == "passed"
-    assert status.replayed_node_count == 1
+    assert status.num_replayed_ops == 1
     assert bool(status) is True
 
 
@@ -840,7 +840,7 @@ def test_trace_clears_forward_global_container_tensor_labels_between_sessions() 
         with pytest.warns(UserWarning, match="no graph/source provenance"):
             assert validate_forward_pass(model, x, validate_metadata=True) is False
         failure = last_validation_failure()
-        assert failure is not None and failure.check == "source_provenance"
+        assert failure is not None and failure.check_name == "source_provenance"
         with pytest.warns(UserWarning, match="no graph/source provenance"):
             second_trace = tl.trace(
                 model,
@@ -1439,7 +1439,7 @@ def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
     assert warning.fields["first_graph_hash"] != warning.fields["retrace_graph_hash"]
     assert warning.fields["first_divergence"] is not None
     assert len(diagnostics) == 1
-    assert diagnostics[0][0].check == "trace_retrace_structure_mismatch"
+    assert diagnostics[0][0].check_name == "trace_retrace_structure_mismatch"
     assert diagnostics[0][0].extra["first_op_count"] == warning.fields["first_op_count"]
 
 
@@ -1487,7 +1487,7 @@ def test_validate_forward_pass_retrace_mismatch_records_a_structured_failure() -
     assert len(observed) == 1
     failure = get_validation_failure(observed[0])
     assert failure is not None
-    assert failure.check == "retrace_mismatch"
+    assert failure.check_name == "retrace_mismatch"
     assert "stateful/non-reproducible" in failure.summary()
 
 
@@ -1643,7 +1643,7 @@ def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
 
     assert execution_count == [2]
     assert len(diagnostics) == 1
-    assert diagnostics[0][0].check == "trace_retrace_pristine_copy_unavailable"
+    assert diagnostics[0][0].check_name == "trace_retrace_pristine_copy_unavailable"
 
 
 def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted() -> None:
@@ -1821,7 +1821,7 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
             is False
         )
         first = get_validation_failure(None)
-        assert first is not None and first.check == "retrace_mismatch"
+        assert first is not None and first.check_name == "retrace_mismatch"
 
         assert (
             user_public_impls._validate_forward_pass_torch(nn.Linear(3, 2), torch.randn(2, 3))
@@ -1839,7 +1839,7 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
         )
         refusal = get_validation_failure(None)
         assert refusal is not None
-        assert refusal.check == "precondition_refusal"
+        assert refusal.check_name == "precondition_refusal"
         assert "cannot prove model-state restoration" in refusal.summary()
 
 

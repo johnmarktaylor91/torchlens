@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._selection import SelectionError
+from torchlens.errors import SelectionError
 from torchlens.intervention.edge_substitution import (
     _reexecute_child_with_substitution,
     require_depth1_arg_path,

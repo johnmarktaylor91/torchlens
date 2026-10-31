@@ -366,14 +366,14 @@ def test_dry_run_does_not_invoke_transform() -> None:
 
 
 def test_transform_error_wrapped_with_event_context() -> None:
-    """Postfunc exceptions surface as TorchLensPostfuncError with event context."""
+    """Postfunc exceptions surface as UserTransformError with event context."""
 
     def boom(_: torch.Tensor) -> torch.Tensor:
         """Always raise to validate error wrapping."""
 
         raise RuntimeError("custom failure")
 
-    with pytest.raises(tl.errors.TorchLensPostfuncError) as exc_info:
+    with pytest.raises(tl.errors.UserTransformError) as exc_info:
         tl.record(
             _PostfuncModel(),
             torch.ones(1, 3),

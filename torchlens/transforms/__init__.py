@@ -27,7 +27,6 @@ from ._context import (
     axis_for_role,
     with_context,
 )
-from ._errors import TransformContractError
 from ._helpers import ProbeReport, SrpSizing, srp_dims_for, srp_fidelity_probe
 from ._kernels import cast, flatten, magnitude, reduce, take_index, unit_norm
 from ._pipeline import OpaqueStep, TransformPipeline, apply_dispatch
@@ -61,7 +60,6 @@ __all__ = [
     "SrpSizing",
     "TensorSpec",
     "TransformContext",
-    "TransformContractError",
     "TransformDefinition",
     "TransformPipeline",
     "TransformSpec",

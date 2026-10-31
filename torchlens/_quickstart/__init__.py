@@ -19,7 +19,6 @@ stable spellings are the verbs themselves.
 from __future__ import annotations
 
 from ._gate import (
-    SynthesizedValueReadWarning,
     internal_read,
     is_gold,
     require_gold,
@@ -56,7 +55,6 @@ __all__ = [
     "InputSpec",
     "RenderResult",
     "ResolvedInputs",
-    "SynthesizedValueReadWarning",
     "TensorFacts",
     "attach_provenance",
     "internal_read",

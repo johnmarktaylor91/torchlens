@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens.errors
 from torchlens import features
 
 
@@ -103,14 +104,14 @@ class TestShapingOp:
     def test_scalar_input_refuses_typed(self) -> None:
         """A 0-dim tensor has no stimulus axis."""
 
-        with pytest.raises(features.FeatureShapingError) as excinfo:
+        with pytest.raises(torchlens.errors.FeatureShapingError) as excinfo:
             features.as_matrix(torch.tensor(1.0))
         assert excinfo.value.fields["code"] == "feature_matrix_scalar_input"
 
     def test_row_id_disagreement_refuses_typed(self) -> None:
         """Row/id cardinality disagreement is the mislabeling tripwire."""
 
-        with pytest.raises(features.FeatureShapingError) as excinfo:
+        with pytest.raises(torchlens.errors.FeatureShapingError) as excinfo:
             features.as_matrix(torch.randn(3, 4), row_ids=["a", "b"])
         assert excinfo.value.fields["code"] == "feature_rows_ids_mismatch"
 
@@ -143,7 +144,7 @@ class TestSiteMatrixRoutes:
         trace = tl.trace(
             model, torch.rand(2, 3, 8, 8), capture=tl.options.CaptureOptions(layers_to_save="none")
         )
-        with pytest.raises(features.FeatureShapingError) as excinfo:
+        with pytest.raises(torchlens.errors.FeatureShapingError) as excinfo:
             features.site_matrix(trace, "conv")
         assert excinfo.value.fields["code"] == "feature_site_payload_unavailable"
 
@@ -162,7 +163,7 @@ class TestSiteMatrixRoutes:
             features.site_matrix(out_dir, "not_a_key")
         assert dir_info.value.fields["code"] == "extraction_reader_key_unknown"
         loaded = tl.load(out_dir)
-        with pytest.raises(features.FeatureShapingError) as obj_info:
+        with pytest.raises(torchlens.errors.FeatureShapingError) as obj_info:
             features.site_matrix(loaded, "not_a_key")
         assert obj_info.value.fields["code"] == "feature_site_payload_unavailable"
         assert obj_info.value.fields["available"] == ["conv"]

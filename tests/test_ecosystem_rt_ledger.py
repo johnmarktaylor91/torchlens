@@ -20,7 +20,7 @@ from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
 from torchlens._ecosystem import compat_window
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io.compat_ledger import (
     LEDGER_ROWS,
     SupportClass,
@@ -97,7 +97,7 @@ def test_historical_bridge_reader_rows_carry_evidence() -> None:
 def test_v216_refusal_names_verified_reader_not_false_range(corpus_dir: Path) -> None:
     """The genuine v2.16 bundle refuses with the 2.17.0 remedy (defect 5 fixed)."""
 
-    with pytest.raises(tl.errors.TorchLensIOError) as excinfo:
+    with pytest.raises(tl.errors.ArtifactError) as excinfo:
         tl.load(str(corpus_dir / "art_v2.16.0_portable"))
     remedy = excinfo.value.fields["remedy"]
     assert "torchlens==2.17.0" in remedy
@@ -141,7 +141,7 @@ def test_forged_pair_refuses_typed(corpus_dir: Path, tmp_path: Path) -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["torchlens_version"] = "2.30.0"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    with expect_bundle_minor_version_mismatch(), pytest.raises(TorchLensIOError) as excinfo:
+    with expect_bundle_minor_version_mismatch(), pytest.raises(ArtifactError) as excinfo:
         tl.load(str(forged))
     assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"
     assert "2.30.0" in str(excinfo.value)

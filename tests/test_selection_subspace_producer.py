@@ -21,8 +21,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._selection import SelectionError
 from torchlens._selection_subspace import BasisProvenance
+from torchlens.errors import SelectionError
 
 _RELU = "relu_1_2"
 _SIGMOID = "sigmoid_1_4"

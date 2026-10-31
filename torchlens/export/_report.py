@@ -48,7 +48,7 @@ from .._utils.display import atomic_write_text
 from ..errors._base import TorchLensWarning
 from ._common import _static_graph_data
 
-__all__ = ["ReportOptions", "write_report"]
+__all__ = ["HtmlReportOptions", "write_report"]
 
 #: Report artifact schema identity (manifest field).
 REPORT_SCHEMA = "torchlens.report_html.v1"
@@ -66,7 +66,7 @@ _HOME = os.path.expanduser("~")
 
 
 @dataclass(frozen=True)
-class ReportOptions:
+class HtmlReportOptions:
     """Emission plumbing for the offline HTML report (C06 house pattern).
 
     The content doors (``arrays=`` / ``graph=``) stay flat keywords on
@@ -81,7 +81,7 @@ class ReportOptions:
     #: Suppress the manifest timestamp (byte-exact regeneration).
     deterministic: bool = False
     #: Optional graph-depth knob, forwarded to ``draw`` and disclosed.
-    vis_call_depth: int | None = None
+    depth: int | None = None
     #: Thumbnail site budget, enforced before payloads are written.
     max_array_sites: int = MAX_ARRAY_SITES_DEFAULT
     #: Thumbnail byte budget, enforced before payloads are written.
@@ -558,7 +558,7 @@ def write_report(
     *,
     arrays: Any = "frontier",
     graph: str = "collapsed",
-    options: ReportOptions | None = None,
+    options: HtmlReportOptions | None = None,
 ) -> Path:
     """Write the single-file offline HTML report for one capture.
 
@@ -577,7 +577,7 @@ def write_report(
         ``"collapsed"`` (default: module-collapsed real graph, depth
         disclosed) / ``"flat"`` / ``"none"``.
     options:
-        Emission plumbing (``ReportOptions``): redaction, byte-stability,
+        Emission plumbing (``HtmlReportOptions``): redaction, byte-stability,
         renderer depth, thumbnail budgets.
 
     Returns
@@ -586,10 +586,10 @@ def write_report(
         The written report path.
     """
 
-    opts = options if options is not None else ReportOptions()
+    opts = options if options is not None else HtmlReportOptions()
     share_safe = opts.share_safe
     deterministic = opts.deterministic
-    vis_call_depth = opts.vis_call_depth
+    vis_call_depth = opts.depth
     max_array_sites = opts.max_array_sites
     max_array_bytes = opts.max_array_bytes
     destination = Path(path)

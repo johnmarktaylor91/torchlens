@@ -28,7 +28,7 @@ class TraceNarrateMixin:
             Keep only the last ``last`` rows (the crash-tail idiom).
         select:
             Optional filter: a substring, or a callable over
-            :class:`torchlens._snoop.NarrationEvent` rows.
+            :class:`torchlens.types.NarrationEvent` rows.
 
         Returns
         -------
@@ -36,6 +36,6 @@ class TraceNarrateMixin:
             Rendered narration block (no trailing newline).
         """
 
-        from .._snoop import narrate_trace
+        from torchlens._snoop._narrate import narrate_trace
 
         return narrate_trace(self, last=last, select=select)

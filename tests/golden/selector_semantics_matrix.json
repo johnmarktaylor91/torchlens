@@ -744,7 +744,7 @@
   "relu_1_2",
   "relu_2_4"
  ],
- "sites_default_fanout/conv/not_func_missing": "ERROR:SiteAmbiguityError",
+ "sites_default_fanout/conv/not_func_missing": "ERROR:AmbiguousSiteError",
  "spec/and_func_inmodule": {
   "capture_repr": "(tl.func('relu') & tl.in_module('features'))",
   "direction": null,

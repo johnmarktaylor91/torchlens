@@ -26,7 +26,7 @@ semantics (see "What the measurements broke" below).
 | `add_module_unchanging_check(module)` | `session.register_frozen_check([...parameter names])` | Declared-frozen parameters; the default evidence keeps exact snapshots and shows the delta. |
 | `add_tensor_unchanging_check(tensor)` | `session.register_frozen_check(["name"])` | |
 | `add_module_output_range_check(module, output_range=(low, high))` | `checks.RangeProbe({site: (low, high)})`, passed to a trace as `capture=tl.options.CaptureOptions(hooks=probe.hook_plan())` | Sites are TorchLens selectors such as `tl.func("softmax")`. |
-| `add_module_nan_check(module)` | `session.register_nonfinite_param_check()` and `session.register_nonfinite_gradient_check()`; for activations, `tl.trace(..., capture=tl.options.CaptureOptions(raise_on_nan=True))` | Parameters, gradients and activations are checked at the points where the evidence is exact. |
+| `add_module_nan_check(module)` | `session.register_nonfinite_param_check()` and `session.register_nonfinite_grad_check()`; for activations, `tl.trace(..., capture=tl.options.CaptureOptions(raise_on_nan=True))` | Parameters, gradients and activations are checked at the points where the evidence is exact. |
 | `add_module_inf_check(module)` | The same three checks | They cover NaN and Inf together. |
 | `add_tensor_nan_check(tensor)` | `session.register_nonfinite_param_check()` | Scans every parameter and, by default, every buffer. |
 | `add_tensor_inf_check(tensor)` | `session.register_nonfinite_param_check()` | |
@@ -55,7 +55,7 @@ optimizer = torch.optim.AdamW(model.parameters())
 
 session = checks.ChecksSession(model, optimizer, scaler=None)
 session.register_change_check()            # gradient-fact detector, M-of-N warn
-session.register_nonfinite_gradient_check()  # collect at S-A, raise at S-B pre-write
+session.register_nonfinite_grad_check()  # collect at S-A, raise at S-B pre-write
 session.register_update_ratio_check()      # raw + lr-normalized columns, collect
 
 with session:                               # attach() installs the hooks; detach() on exit
@@ -161,9 +161,10 @@ or inferred evidence never produces an exact pass.
 ## One-shot parameter auditing: `param_health`
 
 ```python
+import torchlens as tl
 import torchlens.checks as checks
 
-audit = checks.audit_params(model)          # also: tl.debug.param_health(model)
+audit = tl.report.param_health(model)          # also: tl.debug.param_health(model)
 print(audit)                                # notebook-style summary
 assert not audit.findings                    # healthy fresh model
 ```
@@ -188,7 +189,7 @@ optimizer_state = {
     if isinstance(value, torch.Tensor)
 }
 if optimizer_state:
-    print(checks.audit_params(optimizer_state))
+    print(tl.report.param_health(optimizer_state))
 ```
 
 ```python
@@ -196,7 +197,7 @@ if optimizer_state:
 optimizer.zero_grad()
 model(torch.randn(4, 8)).square().mean().backward()
 grads = {f"grad.{n}": p.grad for n, p in model.named_parameters() if p.grad is not None}
-grad_audit = checks.audit_params(grads)
+grad_audit = tl.report.param_health(grads)
 print(f"{len(grad_audit.rows)} gradient tensors scanned, {len(grad_audit.findings)} findings")
 optimizer.zero_grad()
 ```

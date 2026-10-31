@@ -103,7 +103,7 @@ def test_changed_bool_input_diverges_and_is_not_attested(tmp_path: Path) -> None
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert diverged.report.poisoned
+    assert diverged.report.is_poisoned
     # The honest report must never masquerade the silent-wrong result as correct.
     fresh = model(left, right, False)
     assert torch.equal(fresh, left - right)
@@ -120,7 +120,7 @@ def test_unchanged_bool_input_still_verifies_and_attests(tmp_path: Path) -> None
     result = tl.load(path).run(inputs=[left, right, True])
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert all(check.passed for check in result.report.contract_checks)
     torch.testing.assert_close(result.output, left + right)
 
@@ -428,4 +428,4 @@ def test_dataclass_opaque_field_never_verified(tmp_path: Path) -> None:
     result = tl.load(path).run(inputs=pair, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-    assert result.report.poisoned
+    assert result.report.is_poisoned

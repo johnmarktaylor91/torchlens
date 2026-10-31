@@ -16,10 +16,10 @@ from pathlib import Path
 import pytest
 import torch
 
+from torchlens.errors import TransformContractError
 from torchlens.stats import PCA, FittedArtifactError, FittedPCA, load_fitted, save_fitted
 from torchlens.transforms import (
     TensorSpec,
-    TransformContractError,
     chain,
     pca_apply,
     project,
@@ -104,7 +104,7 @@ def test_probe_reports_scoped_rows_and_is_deterministic() -> None:
     pilot = torch.randn(12, 300, generator=generator)
     first = srp_fidelity_probe(pilot, n_components=(16, 64), seed=7)
     second = srp_fidelity_probe(pilot, n_components=(16, 64), seed=7)
-    assert first.to_record() == second.to_record()
+    assert first.to_dict() == second.to_dict()
     assert first.corpus == "user_pilot_batch"
     assert first.distance_claim == "empirical_only"
     assert first.n_rows == 12 and first.input_extent == 300
@@ -114,7 +114,7 @@ def test_probe_reports_scoped_rows_and_is_deterministic() -> None:
         assert -1.0 <= row["corr_rdm_spearman"] <= 1.0
     text = str(first)
     assert "scoped to THIS batch" in text and "empirical_only" in text
-    assert first.canonical_json().startswith('{"algorithm_version"')
+    assert first.to_json().startswith('{"algorithm_version"')
 
 
 @pytest.mark.smoke

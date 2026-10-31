@@ -141,7 +141,7 @@ def raise_if_pending_state_slots(state: Mapping[str, object]) -> None:
 
     Raises
     ------
-    torchlens._errors.CaptureContextError
+    torchlens._errors.CaptureNotActiveError
         Typed ``state_baseline_unavailable`` naming the pending slots on
         ``exc.fields["pending_slots"]``.
     """
@@ -151,9 +151,9 @@ def raise_if_pending_state_slots(state: Mapping[str, object]) -> None:
     ]
     if not pending_slots:
         return
-    from .._errors import CaptureContextError
+    from .._errors import CaptureNotActiveError
 
-    raise CaptureContextError(
+    raise CaptureNotActiveError(
         "The capture-boundary state baseline cannot be taken: "
         f"{len(pending_slots)} state slot(s) are un-materialized lazy "
         f"parameters/buffers with no bytes yet (first: {pending_slots[0]!r}; "

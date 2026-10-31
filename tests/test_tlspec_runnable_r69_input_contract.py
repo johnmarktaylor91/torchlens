@@ -262,7 +262,7 @@ def test_r69_admitted_capture_semantic_runtime_replacement_diverges(tmp_path: Pa
         diverged = tl.load(path).run(inputs=[x, swap], on_divergence="return")
         assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
         assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-        assert diverged.report.poisoned
+        assert diverged.report.is_poisoned
     # stock numpy capture -> float-enum / custom-float runtime swaps.
     path = _save(_trace(_FloatBranch(), [x, np.float64(2.0)]), tmp_path / "np_float.tlspec")
     for swap in (_CustomFloat(2.0), _StatefulFloat(2.0)):
@@ -748,11 +748,11 @@ def test_r69_no_untyped_error_input_boundary_save_sweep(
 ) -> None:
     """Every runnable-save cell either SUCCEEDS or refuses through a typed
     ``RunnableErrorCode`` disposition -- a bare AssertionError or untyped
-    ``TorchLensIOError`` anywhere in the matrix is a failure (the belt that
+    ``ArtifactError`` anywhere in the matrix is a failure (the belt that
     catches the NEXT DROP-order-shaped bug regardless of which leaf trips it).
     """
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     leaf = _BELT_LEAVES[leaf_name]
     x = torch.randn(3)
@@ -780,7 +780,7 @@ def test_r69_no_untyped_error_input_boundary_save_sweep(
     except RunnablePreflightError as exc:
         # Typed refusal: carries structured RunnableErrorCode diagnostics.
         assert exc.fields.get("diagnostics"), (leaf_name, position)
-    except TorchLensIOError as exc:
+    except ArtifactError as exc:
         cause_chain = []
         cause = exc.__cause__
         while cause is not None:

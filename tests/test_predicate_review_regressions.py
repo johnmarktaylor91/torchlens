@@ -626,7 +626,7 @@ def test_followed_by_opaque_inner_refuses_typed_never_mangles() -> None:
     """FIX: an opaque-callable temporal inner must refuse typed, never rebuild
     as a ``contains`` selector over its repr string."""
 
-    from torchlens.intervention.errors import OpaqueCallableInExecutableSaveError
+    from torchlens.intervention.errors import OpaqueCallableError
     from torchlens.intervention.save import (
         SaveLevel,
         _target_spec_from_json,
@@ -634,7 +634,7 @@ def test_followed_by_opaque_inner_refuses_typed_never_mangles() -> None:
     )
 
     spec = tl.followed_by(lambda ctx: True).to_target_spec()
-    with pytest.raises(OpaqueCallableInExecutableSaveError):
+    with pytest.raises(OpaqueCallableError):
         _target_spec_to_json(spec, SaveLevel.PORTABLE)
     audit_spec = _target_spec_from_json(_target_spec_to_json(spec, SaveLevel.AUDIT))
     with pytest.raises(SiteResolutionError, match="opaque audit payload"):

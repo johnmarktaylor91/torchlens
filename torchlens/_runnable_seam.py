@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, Any, Protocol
 import torch
 
 if TYPE_CHECKING:
+    from torchlens._runnable import ReadinessReport, RunnableDiagnostic
+
     from ._runnable import (
         ArchivedActivation,
         DivergencePolicy,
         PathFaithfulness,
-        ReadinessReport,
-        RunnableDiagnostic,
         RunResult,
         SparseRunDescriptor,
     )

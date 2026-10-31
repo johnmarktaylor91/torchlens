@@ -21,7 +21,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import ArgumentTypeError
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens.bridge import huggingface
 
 
@@ -163,7 +163,7 @@ def _symlink(tar: tarfile.TarFile) -> None:
 def test_from_hub_refuses_an_unsafe_download(payload: bytes, problem: str, tmp_path: Path) -> None:
     hub = _LocalHub(tmp_path / "cache")
     hub.files[("me/bad", "torchlens_artifact.tar.gz")] = payload
-    with pytest.raises(TorchLensIOError, match=problem) as info:
+    with pytest.raises(ArtifactError, match=problem) as info:
         huggingface.from_hub("me/bad", api=hub)
     assert info.value.fields["code"] == "hub_artifact_unsafe"
     assert not (tmp_path / "escape.json").exists()
