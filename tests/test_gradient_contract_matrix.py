@@ -53,7 +53,6 @@ from torchlens.intervention import (
     subspace_ablate,
     subspace_interchange,
 )
-from torchlens.intervention._position_edits import at_positions
 from torchlens.intervention.stochastic import mean_fill, mean_from
 from torchlens.intervention.types import InterventionDecision
 
@@ -217,7 +216,7 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
     ),
     "compose": (lambda: compose(scale(2.0), scale(3.0)), lambda out: 6.0 * out, "refused"),
     "at_positions": (
-        lambda: at_positions(scale(3.0), [0], axis=1),
+        lambda: tl.positions(scale(3.0), [0], axis=1),
         lambda out: torch.where(_UNITS, 3.0 * out, out),
         "refused",
     ),

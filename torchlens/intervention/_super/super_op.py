@@ -60,7 +60,7 @@ class SuperOp(Super["Op"], _TensorBearing):
         super().__init__(
             label,
             cast(dict[str, "Op"], resolved_members),
-            query=selector,
+            selector=selector,
             bundle_member_names=bundle_member_names,
         )
 
@@ -113,7 +113,7 @@ class SuperAtenOp(Super["AtenOp"]):
         super().__init__(
             label,
             resolved_members,
-            query=decomposition_slot,
+            selector=decomposition_slot,
             bundle_member_names=resolved_names,
         )
         self.decomposition_slot = decomposition_slot

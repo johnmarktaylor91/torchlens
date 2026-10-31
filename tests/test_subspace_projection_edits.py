@@ -28,7 +28,6 @@ from torchlens.intervention import (
     subspace_ablate,
     subspace_interchange,
 )
-from torchlens.intervention._position_edits import at_positions
 from torchlens.intervention._subspace_projection import PROJECTION_NOTE
 from torchlens.intervention.stochastic import mean_from
 
@@ -219,7 +218,7 @@ _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any,
         lambda: (_subspace_sel(), tl.scale(6.0)),
     ),
     "at_positions": (
-        lambda: (_subspace_sel(), at_positions(tl.zero_ablate(), [0])),
+        lambda: (_subspace_sel(), tl.positions(tl.zero_ablate(), [0])),
         lambda: (
             tl.subspace(tl.units(_SITE, _site_units_mask([0])), _H[:1], origin="rows"),
             tl.zero_ablate(),

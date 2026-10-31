@@ -129,7 +129,7 @@ class Super(Generic[T]):
         label: str,
         members: dict[str, T],
         *,
-        query: Any = None,
+        selector: Any = None,
         bundle_member_names: list[str] | None = None,
     ) -> None:
         """Initialize an aligned Super view.
@@ -140,15 +140,15 @@ class Super(Generic[T]):
             Representative label.
         members:
             Resolved objects keyed by bundle member name.
-        query:
-            Original user query, when available.
+        selector:
+            Original user selector, when available.
         bundle_member_names:
             Full bundle member-name order. Missing names are treated as sparse
             alignment gaps and lower ``coverage``.
         """
 
         self._label = label
-        self._query = query
+        self._query = selector
         self._members = dict(members)
         self._bundle_member_names = (
             list(bundle_member_names) if bundle_member_names is not None else list(members)
@@ -180,7 +180,7 @@ class Super(Generic[T]):
             if members
             else repr(selector)
         )
-        return cls(str(first_label), members=members, query=selector)
+        return cls(str(first_label), members=members, selector=selector)
 
     @property
     def label(self) -> str:
