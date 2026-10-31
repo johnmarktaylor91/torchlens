@@ -70,11 +70,11 @@ SaveOptions.save_raw_activations
 SaveOptions.save_raw_gradients
 StorageOptions._specified_fields
 StorageOptions.async_writes
-StorageOptions.bundle_path
 StorageOptions.include_buffer_values
 StorageOptions.include_custom_attributes
 StorageOptions.max_pending_bytes
 StorageOptions.on_save
+StorageOptions.path
 StorageOptions.retain_in_memory
 VisualizationOptions._specified_fields
 VisualizationOptions.collapse

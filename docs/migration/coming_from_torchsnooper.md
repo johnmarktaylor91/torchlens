@@ -75,7 +75,7 @@ torch.manual_seed(0)
 tl.record(
     Tiny(),
     torch.tensor([[2.0, 3.0]]),
-    narrate=tl.options.NarrationOptions(select=True, sink=sink),
+    narrate=tl.options.NarrationOptions(sites=True, sink=sink),
 )
 # one line per captured event: input source, linear, relu
 RESULT = sum(1 for line in sink.getvalue().splitlines() if line.lstrip().startswith("#"))

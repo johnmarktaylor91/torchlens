@@ -112,8 +112,8 @@ class DiskStorageBackend:
             If static options request ``keep_grad=True`` in disk-only mode.
         """
 
-        if options.streaming is None or options.streaming.bundle_path is None:
-            raise RecordingConfigError("DiskStorageBackend requires streaming.bundle_path")
+        if options.streaming is None or options.streaming.path is None:
+            raise RecordingConfigError("DiskStorageBackend requires streaming.path")
         if options.streaming.async_writes is True:
             # The fastlog recorder consumes each blob's manifest entry
             # synchronously per record (index lines, record metadata), so an
@@ -131,7 +131,7 @@ class DiskStorageBackend:
         self.disk_only = not options.streaming.retain_in_memory
         self._validate_static_keep_grad()
         self.writer = BundleStreamWriter(
-            options.streaming.bundle_path,
+            options.streaming.path,
             include_custom_attributes=options.streaming.include_custom_attributes,
             include_buffer_values=options.streaming.include_buffer_values,
         )
@@ -289,7 +289,7 @@ class DiskStorageBackend:
         self.writer._closed = True
         self.writer._finalized = True
         self._finalized = True
-        object.__setattr__(self.recording, "bundle_path", self.writer.final_path)
+        object.__setattr__(self.recording, "path", self.writer.final_path)
 
     def abort(self, reason: str) -> None:
         """Abort the underlying streaming writer with a redacted persisted reason.

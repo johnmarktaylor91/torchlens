@@ -109,7 +109,7 @@ unaffected.
 | `max_module_depth` | `visualization.depth` | removed |
 | `layout_engine` | `visualization.layout` | removed |
 | `node_mode` | `visualization.node_style` | removed |
-| `save_outs_to` | `streaming.bundle_path` | removed |
+| `save_outs_to` | `streaming.path` | removed |
 | `keep_outs_in_memory` | `streaming.retain_in_memory` | removed |
 | `out_sink` | `streaming.on_save` | removed |
 | `log_forward_pass(layers=...)` | `trace(layers_to_save=...)` | removed |

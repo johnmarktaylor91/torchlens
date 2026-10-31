@@ -2718,10 +2718,10 @@ error-strings	torchlens/bridge/lit/_refusals.py	20
 error-strings	torchlens/bridge/lit/_refusals.py	2024
 error-strings	torchlens/bridge/lit/_refusals.py	83
 error-strings	torchlens/bridge/mcp.py	2.0
-error-strings	torchlens/capture/_episode_ledger.py	100
-error-strings	torchlens/capture/_episode_ledger.py	124
-error-strings	torchlens/capture/_episode_ledger.py	5.4
-error-strings	torchlens/capture/_episode_ledger.py	657
+error-strings	torchlens/_capture/_episode_ledger.py	100
+error-strings	torchlens/_capture/_episode_ledger.py	124
+error-strings	torchlens/_capture/_episode_ledger.py	5.4
+error-strings	torchlens/_capture/_episode_ledger.py	657
 error-strings	torchlens/checks/_audit.py	1.0.
 error-strings	torchlens/checks/_param_checks.py	16
 error-strings	torchlens/checks/_param_checks.py	4.5
@@ -2731,7 +2731,7 @@ error-strings	torchlens/_data_classes/_trace_stats.py	1.0
 error-strings	torchlens/debug/_precision.py	64
 error-strings	torchlens/distributed/_ledger.py	256
 error-strings	torchlens/distributed/_recognizer.py	10
-error-strings	torchlens/fastlog/options.py	1024
+error-strings	torchlens/recording/options.py	1024
 error-strings	torchlens/_ir/summary_role.py	64
 error-strings	torchlens/_merged/_artifact.py	10
 error-strings	torchlens/_merged/_artifact.py	256

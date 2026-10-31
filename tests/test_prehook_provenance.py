@@ -567,9 +567,7 @@ def test_record_to_trace_ram_and_disk_preserve_provenance(tmp_path: Path) -> Non
 
     for streaming in (
         None,
-        tl.options.StorageOptions(
-            bundle_path=tmp_path / "recording.tlfast", retain_in_memory=False
-        ),
+        tl.options.StorageOptions(path=tmp_path / "recording.tlfast", retain_in_memory=False),
     ):
         model = _Nested()
         model.child.register_forward_pre_hook(lambda _m, args: (args[0] + 1,))

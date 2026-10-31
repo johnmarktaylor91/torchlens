@@ -156,7 +156,7 @@ def test_disk_only_mode_persists_transformed_blob(tmp_path: Path) -> None:
         torch.ones(1, 3),
         default_op=True,
         activation_transform=lambda t: t.float() * 2,
-        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
     )
 
     records = _disk_out_records(recording)
@@ -194,7 +194,7 @@ def test_ram_disk_mirror_populates_both_transformed_payloads(tmp_path: Path) -> 
         torch.ones(1, 3),
         default_op=True,
         activation_transform=lambda t: t.float() * 3,
-        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=True),
+        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
     )
 
     records = _out_records(recording)
@@ -231,7 +231,7 @@ def test_ram_disk_mirror_invokes_transform_once_per_selected_event(tmp_path: Pat
         save=lambda ctx: ctx.kind == "op" and ctx.func_name == "relu",
         activation_transform=counting_transform,
         streaming=tl.options.StorageOptions(
-            bundle_path=tmp_path / "mirror_once.tlfast", retain_in_memory=True
+            path=tmp_path / "mirror_once.tlfast", retain_in_memory=True
         ),
     )
 
@@ -414,7 +414,7 @@ def test__activation_transform_repr_exposed_and_persisted(tmp_path: Path) -> Non
         torch.ones(1, 3),
         default_op=True,
         activation_transform=named_transform,
-        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
     )
     metadata = json.loads((bundle_path / "metadata.json").read_text(encoding="utf-8"))
     assert metadata.get("_activation_transform_repr") is not None
@@ -432,7 +432,7 @@ def test_transform_roundtrips_via_disk_recovery(tmp_path: Path) -> None:
         torch.ones(1, 3),
         default_op=True,
         activation_transform=lambda t: t.float() * 2,
-        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
     )
 
     loaded = tl.load(bundle_path)

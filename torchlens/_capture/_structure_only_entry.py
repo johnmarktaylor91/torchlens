@@ -179,7 +179,7 @@ def _refuse_structure_only_payload_selections(
             "save_grads",
         )
     streaming_options = facts.streaming_options
-    if streaming_options.bundle_path is not None or streaming_options.on_save is not None:
+    if streaming_options.path is not None or streaming_options.on_save is not None:
         _refuse_values(
             "structure_only=True cannot stream activation payloads to disk or "
             "callbacks; there are no value payloads to stream",

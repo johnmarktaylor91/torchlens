@@ -484,7 +484,7 @@ def _streaming_append_error_message(log: Trace) -> str:
 
     details = []
     if getattr(log, "_out_writer", None) is not None:
-        details.append("bundle_path streaming")
+        details.append("path streaming")
     if getattr(log, "_out_sink", None) is not None:
         details.append("on_save streaming")
     details_text = ", ".join(details) if details else "streaming"

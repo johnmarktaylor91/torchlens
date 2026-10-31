@@ -86,7 +86,7 @@ def _validate_disk_only_keep_grad_defaults(options: RecordingOptions) -> None:
 
     if (
         options.streaming is None
-        or options.streaming.bundle_path is None
+        or options.streaming.path is None
         or options.streaming.retain_in_memory
     ):
         return

@@ -127,7 +127,7 @@ def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
         torch.ones(1, 3),
         default_op=CaptureSpec(save_grad=True),
         streaming=StorageOptions(
-            bundle_path=tmp_path / "mirror.tlfast",
+            path=tmp_path / "mirror.tlfast",
             retain_in_memory=True,
         ),
     )
@@ -147,7 +147,7 @@ def test_disk_only_keep_grad_default_rejected_at_construction(tmp_path: Path) ->
             StorageModel(),
             default_op=CaptureSpec(save_grad=True),
             streaming=StorageOptions(
-                bundle_path=tmp_path / "disk.tlfast",
+                path=tmp_path / "disk.tlfast",
                 retain_in_memory=False,
             ),
         )
@@ -170,7 +170,7 @@ def test_disk_only_predicate_keep_grad_rejected_before_record_write(
             StorageModel(),
             torch.ones(1, 3),
             save=keep_op,
-            streaming=StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=StorageOptions(path=bundle_path, retain_in_memory=False),
         )
 
     partials = list(tmp_path.glob("disk.tlfast.tmp.*"))
@@ -199,7 +199,7 @@ def test_keep_grad_true_cpu_device_warns_once_and_is_allowed(tmp_path: Path) -> 
             torch.ones(1, 3),
             default_op=CaptureSpec(save_grad=True, device="cpu"),
             streaming=StorageOptions(
-                bundle_path=tmp_path / "mirror.tlfast",
+                path=tmp_path / "mirror.tlfast",
                 retain_in_memory=True,
             ),
         )

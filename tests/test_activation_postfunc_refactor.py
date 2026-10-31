@@ -221,7 +221,7 @@ def test_streaming_preserves_transformed_out(tmp_path: Path) -> None:
         torch.randn(2, 4),
         capture=CaptureOptions(layers_to_save="all"),
         save=SaveOptions(activation_transform=torch.mean),
-        streaming=StorageOptions(bundle_path=bundle_path),
+        streaming=StorageOptions(path=bundle_path),
     )
     layer = _first_transformed_layer(trace)
     restored = tl.load(bundle_path)

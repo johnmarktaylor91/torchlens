@@ -2956,14 +2956,16 @@ deprecation shim owed*
 : `tl.record(...)`, `Recorder(...)` and `tl.options.RecordingOptions` take `narrate=` (a
   `tl.options.NarrationOptions`, with `NarrationOptions.as_dict()`,
   `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`) and
-  `save_raw_grads=` (`RecordingOptions.save_raw_grads`). `NarrationOptions.sink` receives the
+  `save_raw_grads=` (`RecordingOptions.save_raw_grads`). `NarrationOptions.sites` (`sites=`)
+  scopes the narration (`True` for every event, `"modules"` for structure lines only, or a
+  live selector); `trace.narrate(select=...)` filters post hoc. `NarrationOptions.sink` receives the
   narrated lines, `NarrationOptions.max_lines` caps them, `NarrationOptions.on_error_only`
   narrates only when the forward raises, and `NarrationOptions.tail_on_error` is how many of the
   last selected events the sink receives on a forward exception.
 
 **StorageOptions**
 : `tl.options.StorageOptions` (also reachable as `torchlens._user_funcs.StorageOptions`) groups the
-  streaming-save knobs: `StorageOptions.bundle_path` (`bundle_path=`),
+  streaming-save knobs: `StorageOptions.path` (`path=`),
   `StorageOptions.retain_in_memory`, `StorageOptions.on_save` (keyword
   `on_save=`),
   `StorageOptions.include_custom_attributes`, `StorageOptions.include_buffer_values`,
@@ -4656,7 +4658,7 @@ alphabetical order.
 | `FuncCallLocation.source_loading_enabled` | Whether source text is loaded for this location, `True` by default |
 | `FuncCallLocation.to_html_link` | Return a VS Code source-location link for this call, for HTML renderers |
 
-#### `tl.user_funcs.ParentEdge`
+#### `torchlens._user_funcs.ParentEdge`
 
 | Spelling | Meaning |
 | --- | --- |
@@ -4697,7 +4699,7 @@ alphabetical order.
 | `TensorInputObservation.payload_status` | `"saved"`, or the reason no payload is available |
 | `TensorInputObservation.source_op` | Label of the final producer `Op` of this tensor, or `None` when unavailable |
 
-#### `tl.fastlog.RecordContext`
+#### `tl.recording.RecordContext`
 
 | Spelling | Meaning |
 | --- | --- |
@@ -4726,7 +4728,7 @@ alphabetical order.
 | `RecordContext.type_index` | One-based occurrence index of this event within its `layer_type`, or `None` |
 | `RecordContext.window_miss` | Whether a history-dependent selector looked past the retained lookback window |
 
-#### `tl.fastlog.ModuleStackFrame`
+#### `tl.recording.ModuleStackFrame`
 
 | Spelling | Meaning |
 | --- | --- |

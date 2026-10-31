@@ -43,12 +43,12 @@ def test_fastlog_bundle_tree_is_private_under_permissive_umask(tmp_path) -> None
             _TinyModel(),
             torch.randn(1, 4),
             save=tl.func("relu"),
-            streaming=tl.options.StorageOptions(bundle_path=bundle),
+            streaming=tl.options.StorageOptions(path=bundle),
         )
     finally:
         os.umask(old_umask)
 
-    final = Path(recording.bundle_path)
+    final = Path(recording.path)
     assert _mode(final) == 0o700
     assert _mode(final / "blobs") == 0o700
     for sidecar in (

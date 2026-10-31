@@ -175,7 +175,7 @@ _INTERVENTION_FIELDS: Final[tuple[str, ...]] = (
     "allow_changed_params",
 )
 _STREAMING_FIELDS: Final[tuple[str, ...]] = (
-    "bundle_path",
+    "path",
     "retain_in_memory",
     "on_save",
     "include_custom_attributes",
@@ -259,7 +259,7 @@ _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "allow_changed_params": "allow_changed_params",
 }
 _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
-    "bundle_path": "bundle_path",
+    "path": "path",
     "retain_in_memory": "retain_in_memory",
     "on_save": "on_save",
 }
@@ -1476,7 +1476,7 @@ class StorageOptions:
 
     Parameters
     ----------
-    bundle_path:
+    path:
         Portable bundle directory for streamed out saves.
     retain_in_memory:
         Whether streamed outs remain in memory.
@@ -1512,12 +1512,12 @@ class StorageOptions:
 
     Examples
     --------
-    >>> opts = StorageOptions(bundle_path="run.tlspec", retain_in_memory=False)
+    >>> opts = StorageOptions(path="run.tlspec", retain_in_memory=False)
     >>> opts.retain_in_memory
     False
     """
 
-    bundle_path: str | Path | None = None
+    path: str | Path | None = None
     retain_in_memory: bool = True
     on_save: Callable[[str, torch.Tensor], None] | None = None
     include_custom_attributes: bool = True
@@ -1528,7 +1528,7 @@ class StorageOptions:
 
     def __init__(
         self,
-        bundle_path: str | Path | None | MissingType = MISSING,
+        path: str | Path | None | MissingType = MISSING,
         retain_in_memory: bool | MissingType = MISSING,
         on_save: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
         *,
@@ -1541,9 +1541,7 @@ class StorageOptions:
 
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
-            "bundle_path": _resolve_option_value(
-                "bundle_path", bundle_path, None, specified_fields
-            ),
+            "path": _resolve_option_value("path", path, None, specified_fields),
             "retain_in_memory": _resolve_option_value(
                 "retain_in_memory", retain_in_memory, True, specified_fields
             ),
@@ -1636,7 +1634,7 @@ def to_disk(
     """
 
     return StorageOptions(
-        bundle_path=path,
+        path=path,
         retain_in_memory=retain_in_memory,
         include_custom_attributes=include_custom_attributes,
         include_buffer_values=include_buffer_values,

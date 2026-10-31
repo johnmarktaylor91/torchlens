@@ -55,7 +55,7 @@ def test_echo_unknown_stats_rung_refuses() -> None:
     """The four measured cost classes are a closed vocabulary."""
 
     with pytest.raises(NarrationConfigError) as excinfo:
-        normalize_echo(NarrationOptions(select=True, stats="approximate"))
+        normalize_echo(NarrationOptions(sites=True, stats="approximate"))
     assert _code(excinfo) == "echo_argument_invalid"
 
 
@@ -83,7 +83,7 @@ def test_echo_options_as_save_predicate_refuses_with_receipt() -> None:
     """The narrator-as-save-predicate mount refuses citing double evaluation."""
 
     with pytest.raises(NarrationConfigError) as excinfo:
-        tl.trace(OneOp(), torch.randn(2, 4), save=NarrationOptions(select=True))
+        tl.trace(OneOp(), torch.randn(2, 4), save=NarrationOptions(sites=True))
     assert _code(excinfo) == "echo_as_save_predicate"
     assert "twice" in str(excinfo.value)
 
@@ -95,7 +95,7 @@ def test_echo_options_via_hooks_refuses_with_receipt() -> None:
         tl.trace(
             OneOp(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(hooks=[NarrationOptions(select=True)]),
+            capture=tl.options.CaptureOptions(hooks=[NarrationOptions(sites=True)]),
         )
     assert _code(excinfo) == "echo_via_hooks_unsupported"
 
@@ -128,7 +128,7 @@ def test_structure_only_with_stats_rung_refuses() -> None:
         tl.trace(
             OneOp(),
             torch.randn(2, 4),
-            narrate=NarrationOptions(select=True, stats="sampled"),
+            narrate=NarrationOptions(sites=True, stats="sampled"),
             capture=tl.options.CaptureOptions(structure_only=True),
         )
     assert _code(excinfo) == "echo_stats_requires_values"
@@ -138,7 +138,7 @@ def test_record_with_only_echo_is_a_legal_capture() -> None:
     """The echo term in the non-empty-capture validation (snoop row 1)."""
 
     recording = tl.record(
-        OneOp(), torch.randn(2, 4), narrate=NarrationOptions(select=True, sink=lambda _: None)
+        OneOp(), torch.randn(2, 4), narrate=NarrationOptions(sites=True, sink=lambda _: None)
     )
     assert recording.records == []
 
@@ -173,5 +173,5 @@ def test_halt_only_fast_path_declines_when_echo_is_armed() -> None:
 
     halt_only = RecordingOptions(halt=lambda ctx: False)
     assert _is_halt_only_capture(halt_only)
-    with_echo = RecordingOptions(halt=lambda ctx: False, narrate=NarrationOptions(select=True))
+    with_echo = RecordingOptions(halt=lambda ctx: False, narrate=NarrationOptions(sites=True))
     assert not _is_halt_only_capture(with_echo)

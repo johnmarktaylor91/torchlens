@@ -181,7 +181,7 @@ def validate_training_compatibility(
     if not backward_ready:
         return
 
-    streaming_bundle_path = getattr(streaming, "bundle_path", None)
+    streaming_bundle_path = getattr(streaming, "path", None)
     if save_outs_to is not None or streaming_bundle_path is not None:
         raise TrainingModeConfigError(
             "backward_ready=True is not compatible with slow/replay out disk saves. "
