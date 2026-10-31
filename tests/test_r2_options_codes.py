@@ -41,6 +41,8 @@ def test_on_nonfinite_warn_emits_one_capture_nonfinite_detected_warning() -> Non
         trace = tl.trace(
             _NaN(), torch.zeros(2), capture=tl.options.CaptureOptions(on_nonfinite="warn")
         )
-    codes = [getattr(w.message, "code", None) for w in caught]
+    codes = [
+        w.message.fields.get("code") for w in caught if isinstance(w.message, TorchLensWarning)
+    ]
     assert codes.count("capture_nonfinite_detected") == 1
     assert trace.num_ops >= 1
