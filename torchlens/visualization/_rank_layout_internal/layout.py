@@ -396,6 +396,28 @@ def get_node_placement_engine(vis_node_placement: str, layout_cost: int) -> str:
     return "dot"
 
 
+#: One edit-mark row as ``render_lines_to_html`` writes it: bold text in the edit ink.
+#: Ordinary rows hold escaped text, so only edit rows open a ``FONT COLOR`` cell.
+_EDIT_ROW_RE = re.compile(r'<TR><TD ALIGN="CENTER"><FONT COLOR="[^"]*"><B>.*?</B></FONT></TD></TR>')
+
+
+def _without_edit_rows(label: str) -> str:
+    """Return ``label`` without its edit-mark gap and rows.
+
+    Edit marks annotate a node the layout has already placed: the rank layout
+    sizes the node from its unedited rows, so drawing marks never moves a node
+    or a module frame. The size estimate sums every row's characters into one
+    line, so an edit row would otherwise widen the node and every frame around it.
+    """
+
+    from .._edit_marks import EDIT_GAP_ROW
+
+    head, gap, tail = label.partition(EDIT_GAP_ROW)
+    if not gap:
+        return label
+    return head + _EDIT_ROW_RE.sub("", tail)
+
+
 def _estimate_node_size(label: str) -> tuple[float, float]:
     """Estimate graphviz node dimensions in points from an HTML label.
 
@@ -646,7 +668,7 @@ def render_rank_layout(
     for dot_name, nd in node_data.items():
         node_label = nd["node_label"]
         label = nd["attrs"].get("label", "")
-        node_label_sizes[node_label] = _estimate_node_size(str(label))
+        node_label_sizes[node_label] = _estimate_node_size(_without_edit_rows(str(label)))
 
     num_rank_nodes = len(node_data)
     positions, compound_bboxes, max_y = _compute_topological_layout(

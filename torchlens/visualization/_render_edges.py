@@ -18,6 +18,10 @@ from ._edge_multiplicity import (
 )
 from ._render_common import *
 from ._render_leaf import *
+from ._render_module_scope import (
+    _get_lowest_module_for_two_nodes,
+    _place_rolled_endpoints_in_pass_scope,
+)
 from ._render_utils import html_escape
 from ._typography import DEFAULT_TYPOGRAPHY
 from .collapse_plan import OpSegment
@@ -1379,6 +1383,21 @@ def _add_edges_for_node(
                 _register_arg_midpoint_edge(
                     deduped_edge_registry, tail_name, head_name, edge_dict, emitted_index
                 )
+        if (
+            vis_mode == "rolled"
+            and not edge_has_boundary
+            and parent_segment is None
+            and child_segment is None
+            and ellipsis_fold is None
+            and not parent_is_collapsed_module
+            and not child_is_collapsed_module
+        ):
+            _place_rolled_endpoints_in_pass_scope(
+                ((parent_node, tail_name), (child_node, head_name)),
+                edge_module_key,
+                vis_call_depth,
+                module_edge_dict,
+            )
         # r-b6 R19-4: input-connectivity marks EVERY module containing a
         # connected endpoint, for every edge. The historical loop broke after
         # the first entry (its guard compared a name to itself, so it was
@@ -1965,85 +1984,6 @@ def _get_lowest_module_for_two_render_nodes(
         both_nodes_collapsed_modules,
         vis_call_depth,
     )
-
-
-def _get_lowest_module_for_two_nodes(
-    node1: Union["Op", "Layer"],
-    node2: Union["Op", "Layer"],
-    both_nodes_collapsed_modules: bool,
-    vis_call_depth: int,
-) -> Union[str, int]:
-    """Find the deepest module subgraph that contains both nodes.
-
-    Used to place an edge into the correct Graphviz cluster (subgraph).
-    Edges between nodes in the same module cluster are drawn inside that
-    cluster; edges crossing module boundaries are drawn at the level of
-    the lowest common ancestor module.
-
-    Returns -1 when no module contains both nodes (the edge belongs to the
-    top-level graph, not any subgraph).
-
-    Special handling:
-    - ``is_atomic_module`` nodes are adjusted to their parent
-      scope (they represent the module's output, rendered one level up).
-    - Rolled mode: pass suffixes are stripped from module names so that all
-      ops share the same cluster.
-    - Both-collapsed case: when both nodes are collapsed module boxes, the
-      containing module must be at least one level above the collapse depth.
-
-    Args:
-        node1: The first node.
-        node2: The second node.
-        both_nodes_collapsed_modules: Whether both nodes are collapsed module boxes.
-        vis_call_depth: How many levels deep to visualize.
-
-    Returns:
-        Module name (str) for the containing cluster, or -1 for top-level.
-    """
-    node1_modules = node1.modules[:]
-    node2_modules = node2.modules[:]
-
-    if isinstance(node1, Layer) or isinstance(node2, Layer):
-        node1_modules = [module.split(":")[0] for module in node1_modules]
-        node2_modules = [module.split(":")[0] for module in node2_modules]
-
-    if node1.is_atomic_module:
-        node1_nested_modules = node1_modules[:-1]
-    else:
-        node1_nested_modules = node1_modules[:]
-
-    if (
-        (len(node1_modules) == 0)
-        or (len(node2_modules) == 0)
-        or (node1_modules[0] != node2_modules[0])
-    ):
-        return -1  # no submodule contains them both.
-
-    if node1 == node2:
-        if node1.is_atomic_module and (len(node1_modules) == 1):
-            return -1
-        elif node1.is_atomic_module and (len(node1_modules) > 1):
-            module = node1_modules[-2]
-        else:
-            module = node1_modules[-1]
-        return cast(str, module)
-
-    if both_nodes_collapsed_modules:
-        if (vis_call_depth == 1) or (len(node1_nested_modules) == 1):
-            return -1
-        if len(node1_modules) < vis_call_depth or len(node2_modules) < vis_call_depth:
-            return -1
-        if node1_modules[vis_call_depth - 1] == node2_modules[vis_call_depth - 1]:
-            module = node1_modules[vis_call_depth - 2]
-            return cast(str, module)
-
-    module = node1_modules[0]
-    for m in range(min(len(node1_modules), len(node2_modules))):
-        if node1_modules[m] != node2_modules[m]:
-            break
-        module = node1_modules[m]
-
-    return cast(str, module)
 
 
 __all__ = [

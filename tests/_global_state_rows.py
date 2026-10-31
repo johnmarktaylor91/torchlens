@@ -1472,6 +1472,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/visualization/_render_entrypoints.py", "__all__"),
         ("torchlens/visualization/_render_flow.py", "__all__"),
         ("torchlens/visualization/_render_leaf.py", "__all__"),
+        ("torchlens/visualization/_render_module_scope.py", "__all__"),
         ("torchlens/visualization/_render_nodes.py", "__all__"),
         ("torchlens/visualization/_render_ordering.py", "__all__"),
         ("torchlens/visualization/_render_regions.py", "__all__"),
