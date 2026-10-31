@@ -75,7 +75,7 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
         # Capture frames carry module addresses but no class names, so the
         # class is read from the live model of the active capture.
         from .._data_classes._runtime_handles import source_model_from_trace
-        from .._semantic.facets import info
+        from .._semantic.facets import describe
         from .._state import active_capture
 
         model = source_model_from_trace(active_capture()[0])
@@ -85,7 +85,7 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
                 class_name = "" if model is None else type(model.get_submodule(address)).__name__
             except (AttributeError, TypeError):
                 class_name = ""
-            declares[key] = bool(class_name) and bool(names & set(info(class_name)["facets"]))
+            declares[key] = bool(class_name) and bool(names & set(describe(class_name)["facets"]))
         return declares[key]
 
     def _recipe_interior(ctx: Any) -> bool:

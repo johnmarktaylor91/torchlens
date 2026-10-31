@@ -139,7 +139,7 @@ with tl.facets.adding(my_attention):
 ```
 
 `tl.facets.reset()` restores the process registry to built-ins. `tl.facets.functions()`
-and `tl.facets.info(class_name)` expose registry metadata.
+and `tl.facets.describe(class_name)` expose registry metadata.
 
 Conflict resolution is deterministic: `class_qualname` is more specific than
 `class_name`, which is more specific than a predicate; user recipes beat built-ins

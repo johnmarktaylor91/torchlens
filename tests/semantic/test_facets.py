@@ -615,8 +615,8 @@ def test_list_info_glob_and_recipe_record() -> None:
     assert len(recipes) == 1
     assert isinstance(recipes[0], FacetFunction)
     assert recipes[0].name == "discovery_recipe"
-    assert tl.facets.info("UnitFacetRecord") == {
-        "recipes": ["discovery_recipe"],
+    assert tl.facets.describe("UnitFacetRecord") == {
+        "functions": ["discovery_recipe"],
         "facets": ["q"],
     }
 

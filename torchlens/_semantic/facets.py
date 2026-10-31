@@ -1521,21 +1521,21 @@ def functions(
     ]
 
 
-def info(class_name: str) -> dict[str, builtins.list[str]]:
-    """Return registered recipe names and declared facets for a class name."""
+def describe(class_name: str) -> dict[str, builtins.list[str]]:
+    """Return registered facet function names and declared facets for a class name."""
 
-    recipes: builtins.list[str] = []
+    functions: builtins.list[str] = []
     facets: builtins.list[str] = []
     seen: set[str] = set()
     for recipe in _REGISTRY:
         if not _class_filter_matches(recipe.public.class_names, class_name):
             continue
-        recipes.append(recipe.public.name)
+        functions.append(recipe.public.name)
         for facet_name in recipe.declared_facets:
             if facet_name not in seen:
                 facets.append(facet_name)
                 seen.add(facet_name)
-    return {"recipes": recipes, "facets": facets}
+    return {"functions": functions, "facets": facets}
 
 
 def __getattr__(name: str) -> Any:
@@ -1988,7 +1988,7 @@ __all__ = [
     "MissingFacet",
     "MissingGrad",
     "enable_transformer_lens_aliases",
-    "info",
+    "describe",
     "functions",
     "register",
     "reset",
