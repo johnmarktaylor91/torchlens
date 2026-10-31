@@ -1,0 +1,86 @@
+"""The per-flag torch capability table and its declarative attribute probes."""
+
+from __future__ import annotations
+
+import pytest
+
+from torchlens.utils import _torch_compat as tc
+from torchlens.utils._torch_compat_table import (
+    CAPABILITY_ROWS,
+    MEASURED_TORCH_VERSIONS,
+    CapabilityRow,
+)
+
+
+@pytest.mark.smoke
+def test_table_rows_match_the_capability_flags_exactly() -> None:
+    """Every snapshot flag has exactly one row and every row names a snapshot flag."""
+
+    assert set(CAPABILITY_ROWS) == set(tc._CAPABILITY_ATTRS)
+    assert all(row.flag == flag for flag, row in CAPABILITY_ROWS.items())
+
+
+@pytest.mark.smoke
+def test_absent_on_lists_only_measured_versions_in_order() -> None:
+    """``absent_on`` is an ordered subset of the measured matrix."""
+
+    order = {version: index for index, version in enumerate(MEASURED_TORCH_VERSIONS)}
+    for row in CAPABILITY_ROWS.values():
+        assert set(row.absent_on) <= set(order), row.flag
+        assert list(row.absent_on) == sorted(row.absent_on, key=order.__getitem__), row.flag
+        if not row.measured:
+            assert row.absent_on == (), row.flag
+
+
+@pytest.mark.smoke
+def test_table_probed_flags_agree_with_the_live_probe() -> None:
+    """A flag probed from its row reads what its declared paths resolve to now."""
+
+    table_probed = [row.flag for row in CAPABILITY_ROWS.values() if row.attribute_paths]
+    assert table_probed, "no declaratively probed rows"
+    for flag in table_probed:
+        assert getattr(tc, flag) is tc._probe_table_row(flag), flag
+
+
+@pytest.mark.smoke
+def test_measured_class_covers_each_shape() -> None:
+    """The classification distinguishes constant, varying and unmeasured rows."""
+
+    every = MEASURED_TORCH_VERSIONS
+    assert CapabilityRow("HAS_X").measured_class == "constant-true"
+    assert CapabilityRow("HAS_X", absent_on=every).measured_class == "constant-false"
+    assert CapabilityRow("HAS_X", absent_on=every[:1]).measured_class == "varying"
+    assert CapabilityRow("HAS_X", measured=False).measured_class == "unmeasured"
+
+
+@pytest.mark.smoke
+def test_attribute_path_resolution_returns_none_for_absent_surfaces() -> None:
+    """Missing modules and missing attribute segments resolve to ``None``, never raise."""
+
+    assert tc._resolve_attribute_path("torch:_C._VariableFunctions") is not None
+    assert tc._resolve_attribute_path("torch:_C.no_such_surface") is None
+    assert tc._resolve_attribute_path("torch.utils._device:DeviceContext") is not None
+    assert tc._resolve_attribute_path("torch.utils._device:DeviceContext.no_such") is None
+    assert tc._resolve_attribute_path("torch._no_such_module:anything") is None
+
+
+@pytest.mark.smoke
+def test_probe_table_row_refuses_rows_without_paths() -> None:
+    """A bespoke-probe row cannot be evaluated declaratively by mistake."""
+
+    bespoke = next(row.flag for row in CAPABILITY_ROWS.values() if not row.attribute_paths)
+    with pytest.raises(ValueError, match="declares no attribute paths"):
+        tc._probe_table_row(bespoke)
+
+
+@pytest.mark.smoke
+def test_table_getter_flips_its_flag_when_the_surface_disappears(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A getter routed through the table still marks the capability missing."""
+
+    monkeypatch.setattr(tc, "HAS_DEVICE_CONSTRUCTORS", True)
+    monkeypatch.setattr(tc, "_resolve_attribute_path", lambda _spec: None)
+    monkeypatch.setenv("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS", "1")
+    assert tc.get_device_constructors() is None
+    assert tc.HAS_DEVICE_CONSTRUCTORS is False
