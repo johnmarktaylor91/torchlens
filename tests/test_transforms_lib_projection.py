@@ -62,7 +62,7 @@ def test_srp_dims_for_matches_the_dense_jl_formula() -> None:
     """k = ceil(4 ln n / (eps^2/2 - eps^3/3)); the sklearn-practice value."""
 
     sizing = srp_dims_for(128, eps=0.2)
-    assert sizing.n_components == 1120  # ceil(4*ln(128) / (0.02 - 0.008/3))
+    assert sizing.num_components == 1120  # ceil(4*ln(128) / (0.02 - 0.008/3))
     assert int(sizing) == 1120
     assert sizing.formula == "dense_jl_l2_heuristic"
     assert "corr" in sizing.note  # it SAYS it is a poor corr-RDM guide
@@ -239,7 +239,7 @@ def test_pca_apply_matches_the_fp64_reference() -> None:
     out = step.apply(x[:8], None)
     reference = (x[:8].double() - fitted.mean) @ fitted.components.T
     assert torch.allclose(out.double(), reference, atol=1e-5)
-    plan = step.plan(TensorSpec.of(x))
+    plan = step.plan(TensorSpec.from_tensor(x))
     assert plan.output.shape == (None, 5)
     params = step.params_dict()
     assert params["centered"] is True

@@ -293,11 +293,11 @@ class MergedTrace:
     def __init__(
         self,
         derivation: MergeDerivation,
-        handles: Mapping[int, _RankHandle],
+        rank_handles: Mapping[int, _RankHandle],
         degradations: tuple[str, ...] = (),
     ) -> None:
         self._derivation = derivation
-        self._handles = dict(handles)
+        self._handles = dict(rank_handles)
         self._load_degradations = tuple(degradations)
         self._source_path: str | None = None
         self._released = False
@@ -324,7 +324,7 @@ class MergedTrace:
                 statuses[rank] = outcome.status.value
         return statuses
 
-    def release(self) -> None:
+    def cleanup(self) -> None:
         """Drop every rank-trace handle so the member traces can be reclaimed.
 
         The counterpart of ``Trace.cleanup()`` for the presenter (R37 /

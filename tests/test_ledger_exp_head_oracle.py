@@ -64,7 +64,7 @@ def test_head_ablation_sugar_matches_hand_written_hook_oracle() -> None:
         metric=metric,
         retain="none",
         model=model,
-        x=ids,
+        inputs=ids,
     )
     sweep_values = {
         row.candidate_id: row.value
@@ -135,7 +135,7 @@ def test_unscoped_head_selector_is_refused_as_sweep_candidate() -> None:
         metric=metric,
         retain="none",
         model=model,
-        x=ids,
+        inputs=ids,
     )
     (row,) = [r for r in bundle.effects().rows if r.candidate_id == "unscoped"]
     assert row.status == "refused"

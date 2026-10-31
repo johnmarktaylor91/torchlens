@@ -192,7 +192,7 @@ def test_fork_do_rerun_engine_resaves_the_requested_sites(fresh: dict[str, Any])
             tl.module(_SITE),
             _steer(),
             model=model,
-            x=x,
+            inputs=x,
             intervention=tl.options.InterventionOptions(engine="rerun"),
         )
     _assert_matches_fresh(fork, fresh)

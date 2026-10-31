@@ -174,7 +174,7 @@ def test_projective_global_rule_uses_frozen_whole_input_status() -> None:
         )
     )
 
-    assert descriptor.layout.axis_kinds == ("pointwise", "pointwise", "full", "full")
+    assert descriptor.axis_roles.axis_kinds == ("pointwise", "pointwise", "full", "full")
     assert descriptor.status is ReceptiveFieldStatus.WHOLE_INPUT
 
 

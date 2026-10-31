@@ -166,7 +166,7 @@ def test_verdicts_match_the_base_on_capture_and_rerun(
         tl.module("fc1"),
         tl.scale(0.5),
         model=model,
-        x=x,
+        inputs=x,
         intervention=InterventionOptions(engine="rerun"),
     )
     assert fresh == [expected]

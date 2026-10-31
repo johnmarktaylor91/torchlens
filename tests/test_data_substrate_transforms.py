@@ -121,7 +121,7 @@ def test_kernel_plan_predicts_apply(spec: TransformSpec, shape: tuple[int, ...])
 
     torch.manual_seed(0)
     tensor = torch.randn(*shape)
-    planned = spec.plan(TensorSpec.of(tensor))
+    planned = spec.plan(TensorSpec.from_tensor(tensor))
     result = spec.apply(tensor)
     assert result.shape[0] == tensor.shape[0], "T-C2: stimulus axis inviolable"
     assert tuple(result.shape[1:]) == planned.output.shape[1:]

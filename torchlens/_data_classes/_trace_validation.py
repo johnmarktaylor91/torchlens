@@ -248,7 +248,7 @@ def _warn_pending_value_edits_on_new_input_run(
         "carries value-edits (do()/push/direct writes) applied to its SAVED "
         "values -- those edits do NOT apply to a new-input run and its result "
         "reflects the un-edited model. To intervene on new inputs, rerun with "
-        "hooks (do(..., engine='rerun', model=..., x=...)) or capture the new "
+        "hooks (do(..., engine='rerun', model=..., inputs=...)) or capture the new "
         "input with intervene=.",
         PendingValueEditsWarning,
         stacklevel=3,

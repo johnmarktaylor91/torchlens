@@ -12,12 +12,12 @@ import torch, torchvision.models as models, torchlens as tl
 model = models.resnet18(weights="IMAGENET1K_V1").eval()
 
 log = tl.trace(model, x)                             # rung 1: your real input (best)
-log = tl.trace(model, input_size=(1, 3, 224, 224))   # rung 2: your shape, random values; disclosed
+log = tl.trace(model, input_shape=(1, 3, 224, 224))   # rung 2: your shape, random values; disclosed
 log = tl.trace(model)                                # rung 3: inferred shape + random values; disclosed, or a teach
 log = tl.trace(lm, "The quick brown fox")            # HF models: a string IS a real input
 ```
 
-The rungs are exclusive by law: a real input XOR `input_size=` XOR nothing.
+The rungs are exclusive by law: a real input XOR `input_shape=` XOR nothing.
 Mixing them refuses with a typed error (`input_rung_conflict`) before any
 forward runs. A failed explicit size never falls through to inference, and a
 failed inference never falls through to a stock tensor -- TorchLens does not
@@ -29,13 +29,13 @@ data is meaningful. For Hugging Face models, a prompt string is a gold
 input: it is tokenized with the model's own tokenizer, and the tokenizer
 provenance is recorded on the trace.
 
-**Rung 2 (`input_size=`).** One flat positive-integer tuple is one input
+**Rung 2 (`input_shape=`).** One flat positive-integer tuple is one input
 shape (batch included exactly as written). A sequence of shape tuples is
 several positional tensors. A mapping binds forward keyword names to
 shapes -- this is how multi-input models are reachable:
 
 ```python
-log = tl.trace(clip, input_size={
+log = tl.trace(clip, input_shape={
     "input_ids": (1, 16),
     "pixel_values": (1, 3, 224, 224),
     "attention_mask": (1, 16),
@@ -54,7 +54,7 @@ the override. TorchLens never discovers dtypes by running failed forwards.
 in a probe diary) and the surface consumes the exact verified capture --
 the cost is "N probes + 1 verified capture", never a second capture after
 verification. When inference cannot help, the refusal teaches the exact
-next command, in order: pass the real call; pass `input_size=` (including
+next command, in order: pass the real call; pass `input_shape=` (including
 the mapping form); call `torchlens.debug.guess_input_shape` directly with
 hints. For Hugging Face models the refusal says the better answer first: a
 real prompt string.

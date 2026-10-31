@@ -5,7 +5,7 @@ D1): it depends only on torch and the L0 error basis, so the resolver ->
 inference -> capture import cycle is impossible by construction. Everything
 here is DOCUMENTED-UNSTABLE pending the naming sprint.
 
-The ladder's law (memo D2): a real input XOR ``input_size=`` XOR nothing.
+The ladder's law (memo D2): a real input XOR ``input_shape=`` XOR nothing.
 Mixing is a typed refusal before any forward; a failed explicit size never
 falls through to inference; a failed inference never falls through to a stock
 tensor.
@@ -104,7 +104,7 @@ def resolve_rung(
     Raises
     ------
     torchlens._errors.ArgumentConflictError
-        Code ``input_rung_conflict`` when a real input and ``input_size=``
+        Code ``input_rung_conflict`` when a real input and ``input_shape=``
         are both supplied. The rungs are exclusive by law; TorchLens never
         guesses which one the caller meant.
     """
@@ -112,13 +112,13 @@ def resolve_rung(
     real = _has_real_input(input_args, input_kwargs)
     if real and input_size is not None:
         raise ArgumentConflictError(
-            "Got BOTH a real input and input_size=. The input ladder's rungs are "
-            "exclusive: a real input (best), input_size= (your shape, synthesized "
+            "Got BOTH a real input and input_shape=. The input ladder's rungs are "
+            "exclusive: a real input (best), input_shape= (your shape, synthesized "
             "values, disclosed), or nothing (inferred shape, disclosed).",
             code="input_rung_conflict",
             remedy=(
-                "pass the real input alone (drop input_size=), or drop the real "
-                "input and keep input_size="
+                "pass the real input alone (drop input_shape=), or drop the real "
+                "input and keep input_shape="
             ),
         )
     if real:

@@ -74,7 +74,7 @@ def _rerun_fork(trace: Trace, model: nn.Module, x: torch.Tensor) -> Trace:
         tl.func("relu"),
         tl.scale(2.0),
         model=model,
-        x=x,
+        inputs=x,
         intervention=InterventionOptions(engine="rerun"),
     )
 

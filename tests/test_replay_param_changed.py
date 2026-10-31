@@ -181,7 +181,7 @@ def test_a_rerun_fork_refuses_a_later_edit_but_not_its_own_weights() -> None:
         tl.func("relu"),
         _double,
         model=model,
-        x=x,
+        inputs=x,
         intervention=InterventionOptions(engine="rerun"),
     )
     out = str(trace.output_layers[0])
@@ -229,7 +229,7 @@ def test_allow_changed_params_never_changes_the_capture(engine: str) -> None:
             tl.func("relu"),
             _double,
             model=model,
-            x=x,
+            inputs=x,
             intervention=InterventionOptions(engine=engine, allow_changed_params=allow),
         )
         for allow in (False, True)

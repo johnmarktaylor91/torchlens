@@ -425,7 +425,7 @@ def _validate_sweep_entry(
     if engine == "live_hook" and (model is None or x is None):
         raise BundleExperimentError(
             "site_sweep on the live_hook lane runs a REAL forward per "
-            "candidate and needs model= and x=; pass both, or use "
+            "candidate and needs model= and inputs=; pass both, or use "
             "engine='replay' to recompute from saved payloads.",
             code="site_sweep_inputs_missing",
             engine=engine,
@@ -701,7 +701,7 @@ def sweep_sites(
     retain: Any,
     engine: str = "live_hook",
     model: nn.Module | None = None,
-    x: Any = None,
+    inputs: Any = None,
     multi_site: bool | Collection[str] = False,
     replicates: bool = False,
     retain_ceiling_bytes: int | None = None,
@@ -756,7 +756,7 @@ def sweep_sites(
         artifact keyed by operation id and survives discard/save/load.
     """
 
-    _validate_sweep_entry(engine=engine, metric=metric, retain=retain, model=model, x=x)
+    _validate_sweep_entry(engine=engine, metric=metric, retain=retain, model=model, x=inputs)
 
     # Emission (item 9b): ONE material step per top-level operation — a
     # 144-candidate sweep is ONE step referencing the effect table, never
@@ -784,7 +784,7 @@ def sweep_sites(
         edit=edit,
         metric=metric,
         model=model,
-        x=x,
+        x=inputs,
         retain=retain,
         baseline_value=baseline_value,
         attempted=len(pairs),

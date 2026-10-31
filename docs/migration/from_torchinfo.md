@@ -11,7 +11,7 @@ now gets right.
 | torchinfo | TorchLens |
 |---|---|
 | `summary(model, input_data=x)` | `tl.summary(model, x)` |
-| `summary(model, input_size=(1, 3, 224, 224))` | `tl.summary(model, input_size=(1, 3, 224, 224))` |
+| `summary(model, input_size=(1, 3, 224, 224))` | `tl.summary(model, input_shape=(1, 3, 224, 224))` |
 | `depth=3` | `depth=3` |
 | `col_names=("output_size", "num_params", "mult_adds")` | `columns=[...]` / `view="compute"` |
 | `col_names=(..., "input_size", "kernel_size", "groups")` | `columns=["+input", "+kernel_size", "+groups"]` |
@@ -128,7 +128,7 @@ summary(model, (3, 224, 224))
 
 # after
 import torchlens as tl
-tl.summary(model, input_size=(1, 3, 224, 224))  # the batch dimension is explicit
+tl.summary(model, input_shape=(1, 3, 224, 224))  # the batch dimension is explicit
 ```
 
 torchsummary's `input_size` leaves out the batch dimension and its

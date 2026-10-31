@@ -49,7 +49,7 @@ class TestOneResolverOneRecord:
         """trace / summary / render serialize the same declared record."""
 
         model = _cnn().eval()
-        trace_log = tl.trace(model, input_size=SIZE)
+        trace_log = tl.trace(model, input_shape=SIZE)
         trace_record = trace_log.input_preprocessor
         render_result = render(model, input_size=SIZE, file=str(tmp_path / "unused.svg"))
         render_record = provenance_to_record(render_result.provenance)
@@ -199,7 +199,7 @@ class TestDecodeGate:
     def test_output_table_refuses_on_synthesized_trace(self) -> None:
         """decode_output (every decode door's chokepoint) requires gold."""
 
-        log = tl.trace(_cnn().eval(), input_size=SIZE)
+        log = tl.trace(_cnn().eval(), input_shape=SIZE)
         with pytest.raises(Exception) as excinfo:
             log.decode_output()
         assert excinfo.value.fields["code"] == "nongold_semantics_unavailable"

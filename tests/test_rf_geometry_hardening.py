@@ -1064,7 +1064,7 @@ def test_geometry_refuses_typed_for_underivable_rearrangements(
 
     trace = capture(model_type().eval(), torch.randn(1, 1, 8, 8))
     target = op_named(trace, fragment)
-    with pytest.raises(ReceptiveFieldError, match="use .gradient"):
+    with pytest.raises(ReceptiveFieldError, match="use .probe_grad"):
         target.receptive_field.at(unit)
 
 
@@ -1073,7 +1073,7 @@ def test_grid_sample_gradient_fallback_reports_support() -> None:
 
     trace = capture(_GridSampleConv().eval(), torch.randn(1, 1, 8, 8))
     target = op_named(trace, "conv2d")
-    results = target.receptive_field.gradient((0, 0, 2, 2))
+    results = target.receptive_field.probe_grad((0, 0, 2, 2))
     gradient = next(iter(results.values())) if isinstance(results, Mapping) else results
     assert gradient.support_mask is not None
     assert bool(gradient.support_mask.any())
@@ -1172,7 +1172,7 @@ def test_check_exposes_retain_graph() -> None:
     checked = target.receptive_field.check(unit, retain_graph=True)
     assert checked.status is ReceptiveFieldValidationStatus.PASS
     # The graph survived the check, so a later gradient works.
-    assert target.receptive_field.gradient(unit, retain_graph=True)
+    assert target.receptive_field.probe_grad(unit, retain_graph=True)
 
     # The default still frees the graph (unchanged behavior, now disclosed).
     fresh = capture(model, torch.randn(1, 1, 8, 8))
@@ -1180,4 +1180,4 @@ def test_check_exposes_retain_graph() -> None:
     fresh_unit = fresh_target.receptive_field.center_unit(batch_index=0)
     fresh_target.receptive_field.check(fresh_unit)
     with pytest.raises(RuntimeError, match="backward through the graph"):
-        fresh_target.receptive_field.gradient(fresh_unit, retain_graph=True)
+        fresh_target.receptive_field.probe_grad(fresh_unit, retain_graph=True)

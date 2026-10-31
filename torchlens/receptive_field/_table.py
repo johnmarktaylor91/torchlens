@@ -191,7 +191,7 @@ def _kind_summary(descriptor: ReceptiveField) -> str:
     abbreviations = {"windowed": "win", "pointwise": "pt", "full": "full", "unknown": "unk"}
     return " ".join(
         f"axis{axis}:{abbreviations[kind]}"
-        for axis, kind in enumerate(descriptor.layout.axis_kinds)
+        for axis, kind in enumerate(descriptor.axis_roles.axis_kinds)
     )
 
 
@@ -244,7 +244,7 @@ def _row(
         "notes": descriptor.notes,
         "batch_coupled": descriptor.batch_coupled,
         "exact": bool(axes is not None and all(axis.exact for axis in axes)),
-        "layout": descriptor.layout,
+        "layout": descriptor.axis_roles,
     }
 
 

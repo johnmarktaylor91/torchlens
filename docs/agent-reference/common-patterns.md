@@ -62,11 +62,11 @@ armed = tl.trace(model, x.requires_grad_(True),
                  save_mode="reference")
 armed_op = armed["relu_1_2"]
 armed_unit = armed_op.receptive_field.center_unit(batch_index=0)
-gradient = armed_op.receptive_field.gradient(armed_unit, retain_graph=True)
+gradient = armed_op.receptive_field.probe_grad(armed_unit, retain_graph=True)
 validated = tl.receptive_field.verify(armed, units="center")
-# show(gradient=True) recomputes the gradient WITHOUT retain_graph and frees the
+# show(grad=True) recomputes the gradient WITHOUT retain_graph and frees the
 # autograd graph -- call it last (or re-capture) if later backward passes are needed.
-overlay = armed_op.receptive_field.show(armed_unit, gradient=True)
+overlay = armed_op.receptive_field.show(armed_unit, grad=True)
 # tl.validate(model, x, scope="receptive_field") captures an armed trace itself.
 # tl.validate(gpu_model, x, scope="forward", output_device="cpu", save_budget=None) keeps
 # the validator capture's saved activations in host memory; output_device / save_budget

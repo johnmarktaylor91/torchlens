@@ -76,7 +76,7 @@ def test_flagship_gallery_end_to_end(tmp_path: Path) -> None:
             metric=metric,
             retain="all",
             model=model,
-            x=ids,
+            inputs=ids,
         )
         # Members baseline-first; one exact construction answer per variant.
         assert bundle.names[0] == "baseline"
@@ -172,7 +172,7 @@ def test_emission_overhead_is_bounded(tmp_path: Path) -> None:
             metric=metric,
             retain="none",
             model=model,
-            x=x,
+            inputs=x,
         )
 
     one_sweep()  # warm the wrappers

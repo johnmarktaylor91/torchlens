@@ -479,14 +479,16 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
     return [str(label)]
 
 
-def pluck(model: _nn.Module, x: _Any, layer: str, stop_after: _Any | None = None) -> _torch.Tensor:
+def pluck(
+    model: _nn.Module, inputs: _Any, layer: str, stop_after: _Any | None = None
+) -> _torch.Tensor:
     """Return the saved out for one layer.
 
     Parameters
     ----------
     model:
         PyTorch model to run.
-    x:
+    inputs:
         Positional input argument or argument container for ``model.forward``.
     layer:
         Layer label, module path, pass-qualified label, or unique substring.
@@ -517,7 +519,7 @@ def pluck(model: _nn.Module, x: _Any, layer: str, stop_after: _Any | None = None
         if stop_after is None
         else CaptureOptions(layers_to_save=[layer], stop_after=stop_after)
     )
-    trace = _resolve_top_level("trace")(model, x, capture=capture)
+    trace = _resolve_top_level("trace")(model, inputs, capture=capture)
     return _out_from_log(trace, layer)
 
 
@@ -648,7 +650,7 @@ def _extract_layers_with_trace(
 
 def extract(
     model: _nn.Module,
-    x: _Any,
+    inputs: _Any,
     layers: _Iterable[str] | _Mapping[str, str],
     *,
     detach_saved_activations: bool = True,
@@ -659,7 +661,7 @@ def extract(
     ----------
     model:
         PyTorch model to run.
-    x:
+    inputs:
         Positional input argument or argument container for ``model.forward``.
     layers:
         Either a list of layer lookups or a mapping of ``user_label -> layer_lookup``.
@@ -677,7 +679,7 @@ def extract(
     """
 
     _trace, outputs, _views = _extract_layers_with_trace(
-        model, x, layers, detach_saved_activations=detach_saved_activations
+        model, inputs, layers, detach_saved_activations=detach_saved_activations
     )
     return outputs
 

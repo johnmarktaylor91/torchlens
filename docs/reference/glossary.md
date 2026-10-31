@@ -2770,12 +2770,12 @@ deprecation shim owed*
   ungrouped op view. Only with `level="op"`. `ProfileReport.group_by` records
   the key (`None` for one row per op).
 
-**tl.summary("<hub model id>", input_size=...)** — *unstable — no deprecation shim owed*
+**tl.summary("<hub model id>", input_shape=...)** — *unstable — no deprecation shim owed*
 : A string model is a Hugging Face Hub id (or local config directory):
   `tl.summary` fetches the config only, builds the declared architecture on
   the meta device (no weights downloaded or allocated, `trust_remote_code`
   never set) and takes the weights-free summary path, so it needs
-  `input_size=` or meta inputs. Requires `transformers`.
+  `input_shape=` or meta inputs. Requires `transformers`.
 
 **Trace.forward_peak_memory / Trace.backward_peak_memory**
 : The largest memory growth above a bracket's starting baseline, including memory freed before the
@@ -3601,7 +3601,7 @@ Members of classes whose public home changed, one entry per class.
 : Graph-free diagnostic summary of a merge. `MergeReport.alignment`: the effective structural verdict; `MergeReport.conflicts`: the structural conflict findings, which never join and never become gaps; `MergeReport.divergences`: the value-divergence findings: ranks disagreeing on a witnessed value; `MergeReport.expected_ranks`: the declared world, when one was given; `MergeReport.gaps`: the presence-gap findings: boundaries a rank never recorded; `MergeReport.stored_alignment`: the structural verdict derived at merge time; `MergeReport.value_status`: the merge-level value verdict.
 
 **`tl.types.MergedTrace`**
-: N rank-local captures stitched at their collective boundaries. `MergedTrace.alignment`: the effective verdict: the stored one, lowered by load degradations; `MergedTrace.expected_ranks`: the declared world, when one was given (it can only widen expectations); `MergedTrace.gaps`: the typed presence-gap ledger; `MergedTrace.happens_before`: partial-order query over two join keys (`left`, `right`); `MergedTrace.join_ops`: resolve a join's boundary ops on every presenting rank; `MergedTrace.joins`: the cross-rank collective joins, in deterministic key order; `MergedTrace.member_outcomes`: read-only map of each rank to its settled capture-outcome status; `MergedTrace.rank_ids`: the global ranks present in the merge; `MergedTrace.release`: drop every rank-trace handle so the member traces can be reclaimed; `MergedTrace.stored_alignment`: the structural verdict derived at merge time; `MergedTrace.stored_value_status`: the value verdict derived at merge time; `MergedTrace.value_status`: the merge-level value verdict from the join ledger.
+: N rank-local captures stitched at their collective boundaries. `MergedTrace.alignment`: the effective verdict: the stored one, lowered by load degradations; `MergedTrace.expected_ranks`: the declared world, when one was given (it can only widen expectations); `MergedTrace.gaps`: the typed presence-gap ledger; `MergedTrace.happens_before`: partial-order query over two join keys (`left`, `right`); `MergedTrace.join_ops`: resolve a join's boundary ops on every presenting rank; `MergedTrace.joins`: the cross-rank collective joins, in deterministic key order; `MergedTrace.member_outcomes`: read-only map of each rank to its settled capture-outcome status; `MergedTrace.rank_ids`: the global ranks present in the merge; `MergedTrace.cleanup`: drop every rank-trace handle so the member traces can be reclaimed; `MergedTrace.stored_alignment`: the structural verdict derived at merge time; `MergedTrace.stored_value_status`: the value verdict derived at merge time; `MergedTrace.value_status`: the merge-level value verdict from the join ledger.
 
 **`tl.trackers.HistoryReader`**
 : Reads one history artifact without loading the run or importing a model. `HistoryReader.observations`: materialize observations, optionally filtered by `step`, `site_id` and `stream`; verifies checksums; `HistoryReader.step_blocks`: the committed step blocks, oldest first.

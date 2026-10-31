@@ -49,7 +49,7 @@ features with the shipped `very_sparse_fixed` construction (v1).
    fixture: 0.43-0.48 at k=256, 0.69-0.73 at k=1024, 0.87 at k=4096.
 3. **The reason is your RDM's dynamic range, not k alone.** The measured
    spread BETWEEN corpora at the same site and k is larger than the spread
-   across k — run `T.srp_fidelity_probe(pilot_batch, n_components=(...))`
+   across k — run `T.srp_fidelity_probe(pilot_batch, num_components=(...))`
    on one batch of your own stimuli before committing a harvest. The
    probe's report carries its scope fields, so pasted numbers stay honest.
 4. **Pool before you project; normalize AFTER you project.** Pool-first

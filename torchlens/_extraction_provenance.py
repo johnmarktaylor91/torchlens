@@ -153,7 +153,7 @@ def coerce_input_preprocessing(
     if input_transform is not None:
         applied_by = "extract_dataset"
         if isinstance(input_transform, Resolution):
-            if input_transform.transform is None:
+            if input_transform.input_transform is None:
                 raise InvalidArgumentError(
                     "input_transform received a declaration-only resolution "
                     f"(source {input_transform.preprocessing.source!r}) that carries "
@@ -167,7 +167,7 @@ def coerce_input_preprocessing(
                     ),
                     source=input_transform.preprocessing.source,
                 )
-            transform_callable = input_transform.transform
+            transform_callable = input_transform.input_transform
             report = _audit(input_transform, input_transform)
             authority_json = report.to_json()["authority"]
             audit_json = report.to_json()

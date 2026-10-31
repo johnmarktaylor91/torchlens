@@ -35,7 +35,7 @@ def _meta_model() -> nn.Module:
 
 @pytest.mark.smoke
 def test_facade_auto_selects_with_declared_input_size() -> None:
-    report = tl.summary(_meta_model(), input_size=(2, 8))
+    report = tl.summary(_meta_model(), input_shape=(2, 8))
     text = report.lower()
     assert "structure-only" in text or "hypothes" in text
     assert "8" in report  # geometry rendered
@@ -53,7 +53,7 @@ def test_facade_report_keeps_its_result_exports() -> None:
     render() and HTML all carry it, and the exports work.
     """
 
-    report = tl.summary(_meta_model(), input_size=(2, 8))
+    report = tl.summary(_meta_model(), input_shape=(2, 8))
     markdown = report.to_markdown()
     assert markdown.startswith("| ")
     assert "fc1" in markdown
@@ -78,5 +78,5 @@ def test_facade_never_triggers_on_real_models() -> None:
 
     model = Toy()
     model.eval()
-    report = tl.summary(model, input_size=(2, 8))
+    report = tl.summary(model, input_shape=(2, 8))
     assert "hypothes" not in report.lower()

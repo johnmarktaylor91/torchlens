@@ -480,11 +480,11 @@ class FacetSpec(_SelectionOperand):
 
         return self._append(TransformPrimitive("getitem", (key,), capability_class="selection"))
 
-    def heads(self, n_heads: int, d_head: int) -> FacetSpec:
+    def heads(self, num_heads: int, d_head: int) -> FacetSpec:
         """Append a projection-to-heads reshape primitive."""
 
         return self._append(
-            TransformPrimitive("heads", (n_heads, d_head), capability_class="bijective_view")
+            TransformPrimitive("heads", (num_heads, d_head), capability_class="bijective_view")
         )
 
     def split(self, sections: int, dim: int = -1) -> tuple[FacetSpec, ...]:

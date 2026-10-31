@@ -56,14 +56,14 @@ class TestResolver:
         assert declared.crop_size == 224
         assert declared.mean == pytest.approx((0.485, 0.456, 0.406))
         assert resnet50_v2_resolution.status == provenance.STATUS_AUTHORITATIVE
-        assert resnet50_v2_resolution.transform is not None
+        assert resnet50_v2_resolution.input_transform is not None
 
     def test_detection_authority_declares_nothing(self, detection_resolution) -> None:
         """A real shipped family declares NO fields; resolution stays honest."""
 
         assert detection_resolution.declared is None
         assert detection_resolution.preprocessing.config.get("declares") == "nothing"
-        assert detection_resolution.transform is not None
+        assert detection_resolution.input_transform is not None
 
     def test_explicit_mapping_resolves_with_aliases(self) -> None:
         """Explicit declarations accept canonical + alias keys, disclose the rest."""
@@ -131,7 +131,7 @@ class TestResolver:
         resolution = pp.resolve(lambda x: x)
         assert resolution.status == provenance.STATUS_UNKNOWN
         assert resolution.declared is None
-        assert resolution.transform is not None
+        assert resolution.input_transform is not None
 
     def test_no_metadata_model_resolves_unknown(self) -> None:
         """A plain nn.Module resolves unknown -- never a TorchLens recipe."""
@@ -139,7 +139,7 @@ class TestResolver:
         resolution = pp.resolve(model=torch.nn.Linear(4, 4))
         assert resolution.status == provenance.STATUS_UNKNOWN
         assert resolution.preprocessing.source == "unknown"
-        assert resolution.transform is None
+        assert resolution.input_transform is None
 
     def test_registry_extension_wins_over_builtins(self) -> None:
         """register_authority_adapter probes before the builtin mapping adapter."""
@@ -265,7 +265,7 @@ class TestAuditOracle:
             description="fallback",
         )
         assert fallback.status == provenance.STATUS_UNVERIFIED_FALLBACK
-        resolution = pp.Resolution(preprocessing=fallback, declared=None, transform=None)
+        resolution = pp.Resolution(preprocessing=fallback, declared=None, input_transform=None)
         report = pp.compare(resolution, None)
         assert report.verdict == "unknown"
         assert "authority_status_unverified_fallback" in report.unknown_reasons

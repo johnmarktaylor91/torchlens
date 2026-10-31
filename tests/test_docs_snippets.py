@@ -441,7 +441,7 @@ _RECIPE_PAGES_EXECUTED = (
 #: r7 R81 (opus b2 MED): pages with python fences OUTSIDE the executed set,
 #: each with a reason. The executed gate covered 9 of 33 fence-bearing pages
 #: with NO drift gate, so a new page (or a new fence on an old one) shipped
-#: unexecuted and rotted silently -- the show(gradient=True)/RF-ordering rot
+#: unexecuted and rotted silently -- the show(grad=True)/RF-ordering rot
 #: class. SHRINK-ONLY: move pages into DOC_FILES as they gain execution
 #: coverage; a NEW page must either join DOC_FILES or take a reasoned row
 #: here in the same change.

@@ -631,7 +631,7 @@ class TestMemberOutcomeGate:
         from torchlens.capture.outcome import CaptureStatus
 
         merged = merge_ranks(self._attested_pair(CaptureStatus.STOPPED, CaptureStatus.COMPLETE))
-        merged.release()
+        merged.cleanup()
         assert merged.member_outcomes == {0: "stopped", 1: "complete"}
         assert "stopped" in merged.summary()
 

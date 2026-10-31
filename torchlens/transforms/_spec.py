@@ -124,7 +124,7 @@ class TensorSpec:
     dtype: str
 
     @staticmethod
-    def of(tensor: torch.Tensor, *, generalize_batch: bool = True) -> TensorSpec:
+    def from_tensor(tensor: torch.Tensor, *, generalize_batch: bool = True) -> TensorSpec:
         """Describe a concrete tensor, optionally generalizing the batch extent.
 
         Parameters

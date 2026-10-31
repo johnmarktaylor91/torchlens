@@ -252,10 +252,10 @@ class ReceptiveFieldView:
         return self._descriptor().center0
 
     @property
-    def layout(self) -> GridLayout:
+    def axis_roles(self) -> GridLayout:
         """Return the derived layout for the only reachable input."""
 
-        return self._descriptor().layout
+        return self._descriptor().axis_roles
 
     def _center_unit(self, descriptor: ReceptiveField) -> tuple[int, ...]:
         """Return windowed-axis midpoint coordinates for the ``"center"`` selector.
@@ -267,7 +267,7 @@ class ReceptiveFieldView:
         """
 
         if descriptor.axes is None:
-            raise ReceptiveFieldError("Geometric axes are unavailable; use .gradient() instead.")
+            raise ReceptiveFieldError("Geometric axes are unavailable; use .probe_grad() instead.")
         output_axes = sorted(
             cast(int, axis.output_axis) for axis in descriptor.axes if axis.kind == "windowed"
         )
@@ -289,7 +289,7 @@ class ReceptiveFieldView:
         ----------
         unit:
             Windowed-axis coordinates, or ``"center"`` for their midpoint.
-            Coordinates must be non-negative and in range; unlike ``.gradient()``
+            Coordinates must be non-negative and in range; unlike ``.probe_grad()``
             and ``.check()``, negative indices are rejected rather than wrapped.
         input_op:
             Optional exact IO role or model-input operation.
@@ -393,7 +393,7 @@ class ReceptiveFieldView:
             clip=clip,
         )
 
-    def gradient(
+    def probe_grad(
         self,
         unit: tuple[int, ...],
         *,
@@ -598,7 +598,7 @@ class ReceptiveFieldView:
         direction: ReceptiveFieldDirection | str | None = None,
         target: object | None = None,
         image: object | None = None,
-        gradient: bool = False,
+        grad: bool = False,
         retain_graph: bool = False,
         plane: object | None = None,
         box_color: str = "#FF3B30",
@@ -621,11 +621,11 @@ class ReceptiveFieldView:
             projective overlay.
         image:
             Optional source image override.
-        gradient:
+        grad:
             Whether to include empirical gradient magnitude.
         retain_graph:
             Whether the empirical gradient probe retains autograd buffers, so
-            repeated ``show(gradient=True)`` or later ``gradient()`` calls over
+            repeated ``show(grad=True)`` or later ``gradient()`` calls over
             the same captured graph stay possible.
         plane:
             Required plane selector for three-dimensional inputs.
@@ -653,7 +653,7 @@ class ReceptiveFieldView:
                 direction=self._direction_for(direction),
                 target=target,
                 image=cast("Image.Image | None", image),
-                gradient=gradient,
+                grad=grad,
                 retain_graph=retain_graph,
                 plane=cast("tuple[int, int] | None", plane),
                 box_color=box_color,

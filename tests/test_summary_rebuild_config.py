@@ -137,7 +137,7 @@ def test_input_args_xor_input_size() -> None:
     """The one-call door refuses mixed input spellings (ladder rung law, F17)."""
 
     with pytest.raises(ArgumentConflictError) as excinfo:
-        tl.summary(_Toy(), torch.randn(2, 8), input_size=(2, 8))
+        tl.summary(_Toy(), torch.randn(2, 8), input_shape=(2, 8))
     assert excinfo.value.fields["code"] == "input_rung_conflict"
 
 
@@ -155,15 +155,15 @@ def test_zero_input_inference_failure_teaches_the_real_input_spelling() -> None:
     with pytest.raises(ShapeInferenceError) as excinfo:
         tl.summary(_Uninferrable())
     assert excinfo.value.fields["code"] == "input_inference_failed"
-    assert "input_size=" in str(excinfo.value.fields["remedy"])
+    assert "input_shape=" in str(excinfo.value.fields["remedy"])
 
 
 def test_input_size_synthesizes_and_discloses() -> None:
-    """input_size= builds a seeded synthetic input and says so."""
+    """input_shape= builds a seeded synthetic input and says so."""
 
-    report = tl.summary(_Toy(), input_size=(2, 8))
+    report = tl.summary(_Toy(), input_shape=(2, 8))
     assert "synthetic input" in str(report)
-    assert "input_size=(2, 8)" in str(report)
+    assert "input_shape=(2, 8)" in str(report)
     assert report.total_params == (8 * 16 + 16) + (16 * 8 + 8)
 
 

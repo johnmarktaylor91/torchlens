@@ -154,7 +154,7 @@ ResolvedPreprocessing` provenance record (source, identifier, verified,
     declared:
         Normalized comparable fields, or ``None`` when the authority declared
         nothing (the record then says so).
-    transform:
+    input_transform:
         The authority's own transform callable when it ships one (torchvision
         preset, timm transform, HF processor); ``None`` for declaration-only
         authorities (explicit dicts) and unknown resolutions.
@@ -162,7 +162,7 @@ ResolvedPreprocessing` provenance record (source, identifier, verified,
 
     preprocessing: ResolvedPreprocessing
     declared: DeclaredPreprocessing | None
-    transform: Callable[[Any], Any] | None
+    input_transform: Callable[[Any], Any] | None
 
     @property
     def status(self) -> str:
@@ -212,5 +212,5 @@ def unknown_resolution(reason: str, *, fetch: dict[str, Any] | None = None) -> R
             description=f"no preprocessing authority resolved: {reason}",
         ),
         declared=None,
-        transform=None,
+        input_transform=None,
     )

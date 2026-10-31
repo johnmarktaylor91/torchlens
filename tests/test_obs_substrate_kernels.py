@@ -155,7 +155,7 @@ class TestHistogramReference:
         assert result.specials["neginf"] == 1
         assert sum(result.pos_counts) == 1
         assert sum(result.neg_counts) == 1
-        assert result.count_total == 7
+        assert result.numel == 7
 
     def test_signed_sides_are_independent(self) -> None:
         h = Histogram()
@@ -169,7 +169,7 @@ class TestHistogramReference:
         data = torch.randn(50_000) * 40.0
         h = Histogram()
         h.update(data)
-        assert h.result().count_total == 50_000
+        assert h.result().numel == 50_000
 
     def test_bucket_edges_are_the_manifest_descriptor_values(self) -> None:
         d = HistogramDescriptor(bins_per_octave=1, lo_exp=-2, hi_exp=2)

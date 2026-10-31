@@ -1931,7 +1931,7 @@ def _run_model_and_save_specified_outs(
             save_grads=grads_to_save if save_grads else None,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=mark_layer_depths,
-            num_context_lines=num_context_lines,
+            source_context_lines=num_context_lines,
             optimizer=optimizer,
             save_source_context=save_source_context,
             save_rng=save_rng,
@@ -2547,7 +2547,7 @@ def trace(
     chunk_size: int | None | MissingType = MISSING,
     chunk_paths: Iterable[Any] | None | MissingType = MISSING,
     backend: BackendName | None = None,
-    input_size: Any | None = None,
+    input_shape: Any | None = None,
     on_zero_fire: str | MissingType = MISSING,
     **forward_kwargs: Any,
 ) -> Trace:
@@ -2594,11 +2594,11 @@ def trace(
     input_args:
         Positional args for ``model.forward()``; a single tensor or list.
         The input ladder (memo D2): a real input is the gold rung; omit
-        it and pass ``input_size=``, or omit both to infer -- synthesized
+        it and pass ``input_shape=``, or omit both to infer -- synthesized
         values, disclosed, or a teach; mixing refuses ``input_rung_conflict``.
     input_kwargs:
         Keyword args for ``model.forward()``.
-    input_size:
+    input_shape:
         Declared input shape(s) (torch backend only): one flat positive-int
         tuple, a sequence of shape tuples, or a mapping of forward keyword
         names to shapes (batch included exactly as written). Dtype/value
@@ -2725,7 +2725,7 @@ def trace(
         del forward_kwargs  # must never ride the ladder's locals() snapshot below
         _reject_non_mapping_input_kwargs(input_kwargs)
         model, intervene = _model_door.resolve_trace_operands(model, intervene)
-        if input_size is not None or input_args is None:
+        if input_shape is not None or input_args is None:
             model = _reject_non_module_ladder_root(model)
             # Quickstart input ladder (F17, memo D2/D4): declared/inferred rungs
             # resolve BEFORE any capture machinery, then re-enter trace() as gold.
@@ -2734,7 +2734,7 @@ def trace(
                 ladder_kwargs.pop(consumed)
             from ._quickstart._ladder import _trace_via_ladder
 
-            return _trace_via_ladder(model, input_args, input_kwargs, input_size, ladder_kwargs)
+            return _trace_via_ladder(model, input_args, input_kwargs, input_shape, ladder_kwargs)
         if not isinstance(model, nn.Module) and is_dynamo_compiled_callable(model):
             raise InvalidArgumentError(
                 "TorchLens cannot capture a torch.compile-produced plain callable because it is "

@@ -54,7 +54,7 @@ def _inference_remedies(model: nn.Module) -> str:
     remedies = (
         "(1) pass the real forward call -- tl.<verb>(model, x) or "
         "tl.<verb>(model, input_kwargs={...}); "
-        "(2) pass input_size= with your shape -- a flat tuple, a sequence of "
+        "(2) pass input_shape= with your shape -- a flat tuple, a sequence of "
         "tuples, or a mapping of forward keyword names to shapes, with "
         "torchlens.types.InputSpec for dtype/value-recipe hints; "
         "(3) run torchlens.debug.guess_input_shape(model, ...) directly with "
@@ -63,7 +63,7 @@ def _inference_remedies(model: nn.Module) -> str:
     if _is_hf_model(model):
         remedies = (
             "for this Hugging Face model a real prompt string is a BETTER "
-            "answer than input_size= -- tl.<verb>(model, 'The quick brown fox') "
+            "answer than input_shape= -- tl.<verb>(model, 'The quick brown fox') "
             "tokenizes with the model's own tokenizer; otherwise " + remedies
         )
     return remedies

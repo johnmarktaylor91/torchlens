@@ -108,7 +108,7 @@ def prediction_trajectory(  # noqa: PLR0913 -- position/batch/tokenizer/target a
             target_ranks.append(rank)
     target_token = None if target_token_id is None else _decode(tokenizer, target_token_id)
     return PredictionTrajectory(
-        layers=tuple(layers),
+        module_addresses=tuple(layers),
         provenance=tuple(provenance),
         position=position,
         top_tokens=tuple(top_tokens),
@@ -154,7 +154,7 @@ def _lens_footer(trajectory: PredictionTrajectory) -> list[str]:
         lines.append(f"ranks: one-based; {trajectory.tie_convention}")
     native_rows = sum(1 for p in trajectory.provenance if p == "native output")
     lines.append(
-        f"{len(trajectory.layers) - native_rows} projected rows "
+        f"{len(trajectory.module_addresses) - native_rows} projected rows "
         f"(projected through final norm/head), {native_rows} native-output rows"
     )
     return lines
@@ -188,7 +188,7 @@ def render_prediction_ribbon(
     """
 
     matplotlib = require_matplotlib()
-    n_layers = len(trajectory.layers)
+    n_layers = len(trajectory.module_addresses)
     k = len(trajectory.top_tokens[0]) if trajectory.top_tokens else 0
     fig = figure(width=1.1 * k + 3.4, height=0.28 * n_layers + 1.6)
     ax = fig.add_subplot(111)
@@ -212,7 +212,7 @@ def render_prediction_ribbon(
             )
     labels = [
         layer + ("  [native]" if prov == "native output" else "")
-        for layer, prov in zip(trajectory.layers, trajectory.provenance, strict=True)
+        for layer, prov in zip(trajectory.module_addresses, trajectory.provenance, strict=True)
     ]
     ax.set_yticks([row + 0.5 for row in range(n_layers)])
     ax.set_yticklabels(labels, fontsize=6)
@@ -268,7 +268,7 @@ def render_answer_trajectory(
             remedy="build the trajectory with target_token_id= (and extract with "
             "tokens= so the streaming lens retains it)",
         )
-    n_layers = len(trajectory.layers)
+    n_layers = len(trajectory.module_addresses)
     fig = figure(width=7.0, height=4.6)
     prob_ax, rank_ax = fig.subplots(2, 1, sharex=True)
     xs = list(range(n_layers))
@@ -280,7 +280,7 @@ def render_answer_trajectory(
     rank_ax.invert_yaxis()  # rank 1 (best) at the top
     rank_ax.set_ylabel("rank (one-based, log scale)", fontsize=8)
     rank_ax.set_xticks(xs)
-    rank_ax.set_xticklabels(trajectory.layers, rotation=90, fontsize=6)
+    rank_ax.set_xticklabels(trajectory.module_addresses, rotation=90, fontsize=6)
     disclosures = _lens_footer(trajectory)
     fig.suptitle(
         f"answer trajectory: {trajectory.target_token!r} @ position {trajectory.position}",

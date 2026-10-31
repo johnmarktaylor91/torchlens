@@ -110,7 +110,7 @@ def test_open_clip_model_resolves_its_own_preprocess_cfg() -> None:
     assert declared.std == pytest.approx(tuple(config["std"]))
     assert declared.crop_size == 224
     assert declared.interpolation == "bicubic"
-    assert callable(resolution.transform)
+    assert callable(resolution.input_transform)
 
 
 def test_check_card_agrees_with_a_matching_card() -> None:

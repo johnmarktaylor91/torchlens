@@ -21,7 +21,7 @@ this one) and silent for training, so a caller who needs the gradient says so wi
 - A selection door edits only the selected elements, so the rest of the site keeps the graph:
   under `do(tl.units(...))` a cutting verb still lets the gradient through the unselected
   elements, and under `do(tl.subspace(...))` through the orthogonal complement.
-- The capture doors, `fork.do` (replay), `do(model=, x=)` (rerun), `attach_hooks` + `run` and
+- The capture doors, `fork.do` (replay), `do(model=, inputs=)` (rerun), `attach_hooks` + `run` and
   `spec.bind(model)` keep whatever the verb keeps. `push(replay=ReplayOptions(differentiable=True))`
   re-leafs the replayed values by design, so no gradient reaches the parameters upstream of the
   edit under any verb; the gradient stops at the replay frontier. To train parameters upstream of
@@ -218,36 +218,36 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | fork.do (replay) | `compose` | reaches | reaches |
 | fork.do (replay) | `at_positions` | reaches | reaches |
 | fork.do (replay) | `hook callable` | reaches | reaches |
-| do(model=, x=) (rerun) | `zero_ablate` | cut | raises:edit_detached_from_graph |
-| do(model=, x=) (rerun) | `mean_ablate` | reaches | reaches |
-| do(model=, x=) (rerun) | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
-| do(model=, x=) (rerun) | `scale` | reaches | reaches |
-| do(model=, x=) (rerun) | `clamp` | reaches | reaches |
-| do(model=, x=) (rerun) | `add_noise` | reaches | reaches |
-| do(model=, x=) (rerun) | `steer` | reaches | reaches |
-| do(model=, x=) (rerun) | `add(scalar)` | reaches | reaches |
-| do(model=, x=) (rerun) | `add(tensor)` | reaches | reaches |
-| do(model=, x=) (rerun) | `replace_with` | cut | raises:edit_detached_from_graph |
-| do(model=, x=) (rerun) | `swap_with` | cut | raises:edit_detached_from_graph |
-| do(model=, x=) (rerun) | `project_onto` | reaches | reaches |
-| do(model=, x=) (rerun) | `project_out` | reaches | reaches |
-| do(model=, x=) (rerun) | `scramble_elements` | reaches | reaches |
-| do(model=, x=) (rerun) | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
-| do(model=, x=) (rerun) | `splice_module` | reaches | reaches |
-| do(model=, x=) (rerun) | `patch_from` | cut | raises:edit_detached_from_graph |
-| do(model=, x=) (rerun) | `permute_batch` | reaches | reaches |
-| do(model=, x=) (rerun) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
-| do(model=, x=) (rerun) | `mean_from` | cut | raises:edit_detached_from_graph |
-| do(model=, x=) (rerun) | `mean_fill` | reaches | reaches |
-| do(model=, x=) (rerun) | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
-| do(model=, x=) (rerun) | `set_direction_mean` | reaches | reaches |
-| do(model=, x=) (rerun) | `subspace_ablate` | reaches | reaches |
-| do(model=, x=) (rerun) | `subspace_ablate(resample)` | reaches | reaches |
-| do(model=, x=) (rerun) | `subspace_interchange` | reaches | reaches |
-| do(model=, x=) (rerun) | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
-| do(model=, x=) (rerun) | `compose` | reaches | reaches |
-| do(model=, x=) (rerun) | `at_positions` | reaches | reaches |
-| do(model=, x=) (rerun) | `hook callable` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `zero_ablate` | cut | raises:edit_detached_from_graph |
+| do(model=, inputs=) (rerun) | `mean_ablate` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
+| do(model=, inputs=) (rerun) | `scale` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `clamp` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `add_noise` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `steer` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `add(scalar)` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `add(tensor)` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `replace_with` | cut | raises:edit_detached_from_graph |
+| do(model=, inputs=) (rerun) | `swap_with` | cut | raises:edit_detached_from_graph |
+| do(model=, inputs=) (rerun) | `project_onto` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `project_out` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `scramble_elements` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
+| do(model=, inputs=) (rerun) | `splice_module` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `patch_from` | cut | raises:edit_detached_from_graph |
+| do(model=, inputs=) (rerun) | `permute_batch` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
+| do(model=, inputs=) (rerun) | `mean_from` | cut | raises:edit_detached_from_graph |
+| do(model=, inputs=) (rerun) | `mean_fill` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
+| do(model=, inputs=) (rerun) | `set_direction_mean` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `subspace_ablate` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `subspace_ablate(resample)` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `subspace_interchange` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| do(model=, inputs=) (rerun) | `compose` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `at_positions` | reaches | reaches |
+| do(model=, inputs=) (rerun) | `hook callable` | reaches | reaches |
 | attach_hooks + run | `zero_ablate` | cut | raises:edit_detached_from_graph |
 | attach_hooks + run | `mean_ablate` | reaches | reaches |
 | attach_hooks + run | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |

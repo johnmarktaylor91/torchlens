@@ -49,7 +49,7 @@ def _descriptor() -> ReceptiveField:
         io_role="input.x",
         input_op_label="input_1",
         input_shape=(2, 32),
-        layout=_layout(),
+        axis_roles=_layout(),
         axes=(
             ReceptiveFieldAxis(0, None, "pointwise", 2, None, None, None, True, True, False),
             ReceptiveFieldAxis(

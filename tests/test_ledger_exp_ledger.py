@@ -318,7 +318,7 @@ def test_emission_one_step_per_operation(tmp_path: Path) -> None:
             metric=metric,
             retain="all",
             model=model,
-            x=x,
+            inputs=x,
         )
         bundle.vary({"baseline": None, "c0": None})
         entry = led.entries()["e1"]

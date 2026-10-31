@@ -33,20 +33,20 @@ print(rf.size, rf.jump, rf.center0)
 box = rf.at((3, 3))
 
 # Gradient-bearing actions use a complete target-element index, including batch.
-# .gradient() and .check() FREE the armed autograd graph by default, so pass
+# .probe_grad() and .check() FREE the armed autograd graph by default, so pass
 # retain_graph=True to every gradient-bearing action except the last.
 unit = rf.center_unit(batch_index=0)
-empirical = rf.gradient(unit, retain_graph=True)
+empirical = rf.probe_grad(unit, retain_graph=True)
 checked = rf.check(unit, retain_graph=True)
-overlay = rf.show(unit, gradient=True)
+overlay = rf.show(unit, grad=True)
 overlay.save("resnet18_rf.png")
 ```
 
-`ReceptiveFieldView.at()` is the cheap geometric query. `.gradient()` probes exactly one output
+`ReceptiveFieldView.at()` is the cheap geometric query. `.probe_grad()` probes exactly one output
 element and returns its empirical support mask. `.check()` is the zero-tolerance containment
-tripwire, and `.show()` renders an input overlay; with `gradient=True`, it also overlays the
+tripwire, and `.show()` renders an input overlay; with `grad=True`, it also overlays the
 empirical heatmap. Gradient operations require a backward-ready trace and are deliberately
-explicit because they consume autograd work. Both `.gradient()` and `.check()` FREE the armed
+explicit because they consume autograd work. Both `.probe_grad()` and `.check()` FREE the armed
 autograd graph by default; pass `retain_graph=True` to either when a later gradient-bearing
 action must run on the same armed capture.
 
@@ -70,7 +70,7 @@ Never read a numeric box without its `status`.
 | `EXACT` | Exact integer hull of potential support for the captured execution. |
 | `WHOLE_INPUT` | The whole far endpoint is the exact structural envelope. In a projective query, the display means the whole output/target even though the stable enum name remains `WHOLE_INPUT`. |
 | `UPPER_BOUND` | Sound envelope, not an exact claim. |
-| `DATA_DEPENDENT` | Routing depends on data; use `.gradient()`. |
+| `DATA_DEPENDENT` | Routing depends on data; use `.probe_grad()`. |
 | `UNKNOWN` | The operation is recognized, but captured facts or axis roles are insufficient. |
 | `UNSUPPORTED` | A contributing operation has no registered geometric rule. |
 
@@ -195,10 +195,10 @@ trace.draw(
 )
 
 # Save the source image overlay and the empirical gradient heatmap together.
-op.receptive_field.show(unit, gradient=True).save("rf_overlay.png")
+op.receptive_field.show(unit, grad=True).save("rf_overlay.png")
 ```
 
-Use a complete index for `.gradient()`, `.check()`, and `.show()`; `.at()` alone takes the
+Use a complete index for `.probe_grad()`, `.check()`, and `.show()`; `.at()` alone takes the
 shorter coordinate tuple over windowed axes. This separation prevents a guessed batch coordinate
 from becoming an apparently precise answer.
 

@@ -136,7 +136,7 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
             effect_site=str(effect_site),
         )
     receipt = CausalReceipt(
-        layer=layer,
+        module_address=layer,
         heads=heads,
         effects=effects,
         metric=str(receipts.get("metric_provenance", metric)),
@@ -247,9 +247,9 @@ def _kv_group_lines(receipt: CausalReceipt) -> list[str]:
         return []
     lines = [
         KV_GROUP_RECEIPT_WORDING.format(
-            per_group=gqa.num_query_heads // gqa.n_kv_heads,
+            per_group=gqa.num_query_heads // gqa.num_key_value_heads,
             n_query=gqa.num_query_heads,
-            n_groups=gqa.n_kv_heads,
+            n_groups=gqa.num_key_value_heads,
         )
     ]
     sharing = receipt.sharing_lines()
@@ -474,7 +474,7 @@ def render_receipt_grid(
     ax.set_xticks([col + 0.5 for col in range(len(heads))])
     ax.set_xticklabels(_column_labels(rows[0]), fontsize=_TEXT_PT)
     ax.set_yticks([row_index + 0.5 for row_index in range(len(rows))])
-    ax.set_yticklabels([receipt.layer for receipt in rows], fontsize=_TEXT_PT)
+    ax.set_yticklabels([receipt.module_address for receipt in rows], fontsize=_TEXT_PT)
     ax.tick_params(length=0)
     ax.set_xlabel("query head" if rows[0].kv_groups is None else "kv group", fontsize=_TEXT_PT)
     bar = colorbar(fig, mesh, ax, label=f"change in\n{rows[0].metric}")

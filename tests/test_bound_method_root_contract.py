@@ -240,7 +240,7 @@ def test_validate_refuses_other_callables_typed() -> None:
 def test_input_rung_ladder_refuses_bound_method_roots_typed() -> None:
     model = _mlp()
     with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.trace(model.forward, input_size=(2, 4))
+        tl.trace(model.forward, input_shape=(2, 4))
     assert excinfo.value.fields["code"] == "input_rung_requires_module_root"
     assert "gold rung" in excinfo.value.fields["remedy"]
 

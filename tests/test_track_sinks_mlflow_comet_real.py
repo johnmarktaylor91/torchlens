@@ -87,7 +87,7 @@ def _assert_mlflow_matches(
         )
         stored = json.loads(Path(path).read_text())
         assert stored["counts"] == list(point.counts)
-        assert stored["edges"] == list(point.edges)
+        assert stored["edges"] == list(point.bin_edges)
         assert stored["summary"] == point.summary
 
 

@@ -157,7 +157,7 @@ class MLflowSink:
             "tag": point.tag,
             "step": point.step,
             "counts": list(point.counts),
-            "edges": list(point.edges),
+            "edges": list(point.bin_edges),
             "summary": dict(point.summary),
         }
         path = f"{_mlflow_key(point.tag)}/step_{point.step:010d}.json"

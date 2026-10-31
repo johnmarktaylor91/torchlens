@@ -379,7 +379,9 @@ def test_gradient_results_retain_signed_values() -> None:
     with torch.no_grad():
         model.weight.fill_(-1.0)  # every true partial is NEGATIVE.
     trace = _trace(model, torch.ones(1, 1, 5, 5, requires_grad=True))
-    result = _op(trace, "conv2d").receptive_field.gradient((0, 0, 2, 2), input_op=_input_op(trace))
+    result = _op(trace, "conv2d").receptive_field.probe_grad(
+        (0, 0, 2, 2), input_op=_input_op(trace)
+    )
 
     assert result.signed_grad is not None
     assert torch.equal(result.grad, result.signed_grad.abs())

@@ -679,7 +679,7 @@ def test_gradient_rf_lift():
     )
     armed_op = armed["relu_2_4"]
     unit = armed_op.receptive_field.center_unit(batch_index=0)
-    gradient_by_role = armed_op.receptive_field.gradient(unit, retain_graph=True)
+    gradient_by_role = armed_op.receptive_field.probe_grad(unit, retain_graph=True)
     gradient = gradient_by_role["input.x"]
     selection = gradient.__selection__()
     assert isinstance(selection, Selector)

@@ -945,7 +945,7 @@ def test_static_attr_memo_releases_a_self_referencing_class():
 
 
 def test_merged_trace_release_drops_member_traces():
-    """MergedTrace.release() unpins the rank traces it held strongly (b2:B20).
+    """MergedTrace.cleanup() unpins the rank traces it held strongly (b2:B20).
 
     Regression guard for the presenter's lifetime contract: without release(),
     a presenter over live traces transitively pinned every member (and its
@@ -959,14 +959,14 @@ def test_merged_trace_release_drops_member_traces():
     refs = [weakref.ref(trace_a), weakref.ref(trace_b)]
     merged = MergedTrace(
         derivation=None,  # placeholder: release() must not need the derivation
-        handles={0: _RankHandle(0, trace=trace_a), 1: _RankHandle(1, trace=trace_b)},
+        rank_handles={0: _RankHandle(0, trace=trace_a), 1: _RankHandle(1, trace=trace_b)},
     )
     del trace_a, trace_b
     gc.collect()
     assert all(ref() is not None for ref in refs), "presenter should pin members"
 
-    merged.release()
+    merged.cleanup()
     gc.collect()
     gc.collect()
     assert all(ref() is None for ref in refs), "release() left a member pinned"
-    merged.release()  # idempotent
+    merged.cleanup()  # idempotent

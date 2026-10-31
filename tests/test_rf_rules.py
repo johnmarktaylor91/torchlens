@@ -108,7 +108,7 @@ def test_training_batch_norm_projective_maps_channel_vector_parents() -> None:
         state = solution.states[(parent.label, trace.output_ops[0].io_role)]
         descriptor = solution.descriptors[(parent.label, trace.output_ops[0].io_role)]
         assert state.axes is not None
-        assert descriptor.layout.axis_kinds == ("full", "pointwise", "full", "full")
+        assert descriptor.axis_roles.axis_kinds == ("full", "pointwise", "full", "full")
 
 
 def test_training_instance_norm_projective_maps_running_stat_parents() -> None:
@@ -255,5 +255,5 @@ def test_pointwise_activations_pass_receptive_field_through_exactly() -> None:
     descriptor = deep_conv.receptive_field._descriptor()
 
     assert descriptor.status is ReceptiveFieldStatus.EXACT
-    assert descriptor.layout.axis_kinds == ("pointwise", "full", "windowed", "windowed")
+    assert descriptor.axis_roles.axis_kinds == ("pointwise", "full", "windowed", "windowed")
     assert descriptor.size == (5, 5)  # two 3x3 convs; the ReLU passes the field through unchanged

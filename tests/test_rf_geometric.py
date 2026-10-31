@@ -216,7 +216,7 @@ def test_global_branch_broadcast_becomes_whole_input_by_arithmetic() -> None:
     trace = tl.trace(_SqueezeExciteShape(), torch.randn(2, 3, 8, 8))
     descriptor = next(iter(_engine.lookup(trace, _last_op(trace, "__mul__")).values()))
 
-    assert descriptor.layout.axis_kinds == ("pointwise", "pointwise", "full", "full")
+    assert descriptor.axis_roles.axis_kinds == ("pointwise", "pointwise", "full", "full")
     assert descriptor.status is ReceptiveFieldStatus.WHOLE_INPUT
     assert descriptor.axes is not None
     assert descriptor.axes[2].exact and descriptor.axes[3].exact
@@ -242,10 +242,10 @@ def test_layout_is_derived_from_window_rule_semantics(
     target = next(op for op in trace.layer_list if op.func_name.startswith("conv"))
     descriptor = next(iter(_engine.lookup(trace, target).values()))
 
-    assert descriptor.layout.axis_kinds == expected_kinds
-    assert descriptor.layout.windowed_axes == expected_windowed
-    assert descriptor.layout.source == "derived"
-    assert all(label == target.label for label in descriptor.layout.provenance)
+    assert descriptor.axis_roles.axis_kinds == expected_kinds
+    assert descriptor.axis_roles.windowed_axes == expected_windowed
+    assert descriptor.axis_roles.source == "derived"
+    assert all(label == target.label for label in descriptor.axis_roles.provenance)
 
 
 def test_unconsumed_input_layout_remains_unknown() -> None:
@@ -255,7 +255,7 @@ def test_unconsumed_input_layout_remains_unknown() -> None:
     input_op = next(op for op in trace.layer_list if op.is_input)
     descriptor = next(iter(_engine.lookup(trace, input_op).values()))
 
-    assert descriptor.layout.axis_kinds == ("unknown",) * 4
+    assert descriptor.axis_roles.axis_kinds == ("unknown",) * 4
     assert descriptor.status is ReceptiveFieldStatus.UNKNOWN
 
 

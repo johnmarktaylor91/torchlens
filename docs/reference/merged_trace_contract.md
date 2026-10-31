@@ -276,7 +276,7 @@ is reachable. Dropping the presenter releases those handles; like ordinary
 `Trace` objects, member traces can contain cycles and may require Python's cyclic
 collector before memory is reclaimed.
 
-`MergedTrace.release()` is the explicit counterpart of `Trace.cleanup()` for the
+`MergedTrace.cleanup()` is the explicit counterpart of `Trace.cleanup()` for the
 presenter: it drops every rank-core handle so member traces (and their retained
 activations) can be reclaimed without waiting for the presenter itself to become
 unreachable. After `release()`:

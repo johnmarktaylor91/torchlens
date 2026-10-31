@@ -59,7 +59,7 @@ def test_head_ablation_flagship_on_pretrained_gpt2(r1_loader, tmp_path: Path) ->
             metric=metric,
             retain="all",
             model=model,
-            x=ids,
+            inputs=ids,
         )
         assert bundle.names[0] == "baseline" and len(bundle.names) == n_heads + 1
         view = bundle.effects()

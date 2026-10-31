@@ -151,7 +151,7 @@ def _rerun(baseline: Any, site: Any, model: nn.Module, inputs: tuple[Any, Any]) 
         site,
         tl.zero_ablate(),
         model=model,
-        x=inputs,
+        inputs=inputs,
         intervention=InterventionOptions(engine="rerun"),
     )
 
@@ -166,7 +166,7 @@ def test_zero_fire_rerun_on_same_inputs_refuses_typed(model_cls: type[nn.Module]
             _value_predicate(baseline, label),
             tl.zero_ablate(),
             model=model,
-            x=tuple(t.clone() for t in inputs),
+            inputs=tuple(t.clone() for t in inputs),
             intervention=InterventionOptions(engine="rerun"),
         )
     assert excinfo.value.fields["code"] == "rerun_selector_unmatchable_live"

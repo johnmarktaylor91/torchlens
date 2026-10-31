@@ -632,19 +632,19 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> SimilarityS
 class PCA:
     """Simple incremental PCA backed by running covariance."""
 
-    def __init__(self, n_components: int, name: str | None = None) -> None:
+    def __init__(self, num_components: int, name: str | None = None) -> None:
         """Initialize the estimator.
 
         Parameters
         ----------
-        n_components:
+        num_components:
             Number of principal components to return.
         name:
             Optional metric name.
         """
 
         self.name = name
-        self.n_components = int(n_components)
+        self.n_components = int(num_components)
         self._covariance = Covariance(name=name)
 
     def update(self, value: Any) -> None:

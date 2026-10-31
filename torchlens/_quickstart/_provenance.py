@@ -134,7 +134,7 @@ class InputProvenance:
             return "input: user-provided (real values)"
         shapes = ", ".join("x".join(str(d) for d in facts.shape) for facts in self.tensors)
         if self.origin == "declared":
-            return f"input: synthesized from input_size= ({shapes}); values are random, disclosed"
+            return f"input: synthesized from input_shape= ({shapes}); values are random, disclosed"
         return (
             f"input: shape inferred ({shapes}), values synthesized; "
             f"strategy={self.strategy or 'unknown'}; disclosed"

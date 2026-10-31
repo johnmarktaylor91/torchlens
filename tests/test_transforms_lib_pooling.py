@@ -251,7 +251,7 @@ def test_spatial_plan_predicts_apply() -> None:
     img = torch.randn(2, 3, 4, 5)
     ctx = TransformContext(roles=NCHW)
     for spec in (pool_spatial("mean"), pool_spatial("max"), channel_mean()):
-        plan = spec.plan(TensorSpec.of(img), ctx)
+        plan = spec.plan(TensorSpec.from_tensor(img), ctx)
         out = spec.apply(img, ctx)
         assert plan.output.shape == (None, *out.shape[1:])
         assert plan.output.dtype == str(out.dtype)
@@ -266,7 +266,7 @@ def test_token_plan_predicts_apply() -> None:
     ctx = TransformContext(roles=BTD, mask=mask)
     for op in ("mean", "max", "first", "last"):
         spec = pool_tokens(op)
-        plan = spec.plan(TensorSpec.of(x), ctx)
+        plan = spec.plan(TensorSpec.from_tensor(x), ctx)
         out = spec.apply(x, ctx)
         assert plan.output.shape == (None, *out.shape[1:])
         assert plan.output.dtype == str(out.dtype)
@@ -281,7 +281,7 @@ def test_mean_family_refuses_integer_domains() -> None:
     ints = torch.randint(0, 9, (2, 3, 4))
     ctx = TransformContext(roles=BTD, mask=torch.ones(2, 3, dtype=torch.bool))
     with pytest.raises(TransformContractError) as excinfo:
-        pool_tokens("mean").plan(TensorSpec.of(ints), ctx)
+        pool_tokens("mean").plan(TensorSpec.from_tensor(ints), ctx)
     assert excinfo.value.fields["code"] == "transform_plan_invalid"
     with pytest.raises(TransformContractError) as excinfo:
         pool_tokens("mean").apply(ints, ctx)

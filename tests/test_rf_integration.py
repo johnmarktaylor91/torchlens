@@ -333,6 +333,6 @@ def test_non_torch_geometry_works_but_gradient_probe_is_gated() -> None:
     descriptor = next(iter(target.receptive_field.per_input.values()))
 
     assert descriptor.status is tl.receptive_field.ReceptiveFieldStatus.EXACT
-    assert descriptor.layout.axis_kinds == ("pointwise",)
+    assert descriptor.axis_roles.axis_kinds == ("pointwise",)
     with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
-        target.receptive_field.gradient((0,))
+        target.receptive_field.probe_grad((0,))

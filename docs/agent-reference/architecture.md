@@ -25,7 +25,7 @@ Key entry points:
   machinery in `torchlens/_postprocess/_site_key.py` / `_site_join.py` /
   `_grouping_stamp.py`.
 - Quickstart input ladder (F17; spellings DOCUMENTED-UNSTABLE): trace/summary/
-  render share one resolver -- real input XOR `input_size=` (flat tuple /
+  render share one resolver -- real input XOR `input_shape=` (flat tuple /
   sequence / keyword-to-shape mapping; seed-0 local synthesis; fail-closed
   dtype facts, `torchlens.types.InputSpec` override) XOR zero-arg
   inference (the exact verified trace is consumed, never recaptured).
@@ -50,7 +50,7 @@ Key entry points:
   depth/fold/filter/elision). The legacy spellings are removed: each refuses
   typed naming its successor (`REMOVED_SUMMARY_OPTIONS`/`REMOVED_SUMMARY_LEVELS`
   in `report/_summary_config.py`); `fma1` refuses `flop_convention_unavailable`
-  when underivable. One-call input precedence: args XOR `input_size=` XOR
+  when underivable. One-call input precedence: args XOR `input_shape=` XOR
   zero-input (reuses `guess_input_shape`'s verified trace, synthesis
   disclosed). Result API: `render`/`print`/`details`/`to_pandas`/
   `to_markdown`/`to_html` + scalar raw ints; survives model/Trace teardown;
@@ -137,7 +137,7 @@ Key entry points:
   branches refuse device-neutrally at the user's source line;
   `trace.discharge_against(real_trace)` corroborates/refutes hypotheses
   behind a comparable-twins preflight; `Trace.structure_evidence` is the
-  persisted envelope; `tl.summary(meta_model, input_size=...)` and
+  persisted envelope; `tl.summary(meta_model, input_shape=...)` and
   `Trace.check_plan(plan)` are the facade + audit verbs. Doc:
   `docs/reference/weightsfree_capture.md`.
 - Selection algebra (L6; core spellings slate-ratified subject to D7, rest
@@ -401,10 +401,10 @@ armed_trace = tl.trace(model, x.requires_grad_(True),
                        save_mode="reference")
 armed_op = armed_trace["relu_1_2"]
 armed_unit = armed_op.receptive_field.center_unit(batch_index=0)
-rf_gradient = armed_op.receptive_field.gradient(armed_unit, retain_graph=True)
+rf_gradient = armed_op.receptive_field.probe_grad(armed_unit, retain_graph=True)
 rf_results = tl.receptive_field.verify(armed_trace, units="center")
-# show(gradient=True) recomputes the gradient WITHOUT retain_graph and frees the
+# show(grad=True) recomputes the gradient WITHOUT retain_graph and frees the
 # autograd graph -- call it last (or re-capture) if later backward passes are needed.
-rf_image = armed_op.receptive_field.show(armed_unit, gradient=True)
+rf_image = armed_op.receptive_field.show(armed_unit, grad=True)
 # tl.validate(model, x, scope="receptive_field") captures an armed trace itself.
 ```

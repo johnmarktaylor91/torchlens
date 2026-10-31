@@ -37,19 +37,19 @@ __all__ = ["ProbeReport", "SrpSizing", "srp_dims_for", "srp_fidelity_probe"]
 class SrpSizing:
     """An explicit sized width with its formula, version, and assumptions.
 
-    Converts to ``int`` (feeds ``srp(n_components=...)`` directly); the
+    Converts to ``int`` (feeds ``srp(num_components=...)`` directly); the
     record fields make an ``"auto"`` spelling lower to an explicit recorded
     k instead of an unexplained number.
 
     Attributes
     ----------
-    n_components:
+    num_components:
         The sized output width.
     formula:
         Formula id (``"dense_jl_l2_heuristic"``).
     version:
         Formula version.
-    n_samples:
+    num_samples:
         Row count the bound was sized for.
     eps:
         Requested maximum pairwise-L2 distortion.
@@ -58,22 +58,22 @@ class SrpSizing:
         correlation-distance RDMs.
     """
 
-    n_components: int
+    num_components: int
     formula: str
     version: int
-    n_samples: int
+    num_samples: int
     eps: float
     note: str
 
     def __int__(self) -> int:
         """Return the sized width."""
 
-        return self.n_components
+        return self.num_components
 
     def __index__(self) -> int:
         """Index conversion so the sizing feeds ``srp()`` directly."""
 
-        return self.n_components
+        return self.num_components
 
     def to_record(self) -> dict[str, Any]:
         """Return the JSON-portable sizing record.
@@ -85,10 +85,10 @@ class SrpSizing:
         """
 
         return {
-            "n_components": self.n_components,
+            "n_components": self.num_components,
             "formula": self.formula,
             "version": self.version,
-            "n_samples": self.n_samples,
+            "n_samples": self.num_samples,
             "eps": self.eps,
             "note": self.note,
         }
@@ -136,10 +136,10 @@ def srp_dims_for(num_samples: int, eps: float = 0.1) -> SrpSizing:
     denominator = eps**2 / 2.0 - eps**3 / 3.0
     k = math.ceil(4.0 * math.log(num_samples) / denominator)
     return SrpSizing(
-        n_components=k,
+        num_components=k,
         formula="dense_jl_l2_heuristic",
         version=1,
-        n_samples=num_samples,
+        num_samples=num_samples,
         eps=eps,
         note=(
             "dense-JL Euclidean heuristic (sklearn johnson_lindenstrauss_min_dim "
@@ -333,7 +333,7 @@ class ProbeReport:
 
 def srp_fidelity_probe(
     features: torch.Tensor,
-    n_components: Sequence[int],
+    num_components: Sequence[int],
     seed: int = 0,
     construction: str = "very_sparse_fixed",
 ) -> ProbeReport:
@@ -344,7 +344,7 @@ def srp_fidelity_probe(
     features:
         Pilot activations, ``(n, ...)`` with the stimulus axis leading
         (flattened per row); ``n >= 4`` so the RDMs have enough pairs.
-    n_components:
+    num_components:
         Candidate output widths to probe.
     seed:
         Base seed for the probe projections.
@@ -370,7 +370,7 @@ def srp_fidelity_probe(
             code="transform_params_invalid",
             remedy="cast the pilot batch to a float dtype",
         )
-    widths = list(n_components)
+    widths = list(num_components)
     if not widths:
         raise TransformContractError(
             "srp_fidelity_probe needs at least one candidate n_components.",

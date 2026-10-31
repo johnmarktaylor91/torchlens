@@ -220,7 +220,7 @@ def test_inplace_relu_projective_double_vjp_succeeds_on_basic_block() -> None:
     source = trace.input_ops[0]  # type: ignore[union-attr]
     target = trace.output_ops[0]  # type: ignore[union-attr]
 
-    result = source.projective_field.gradient(  # type: ignore[union-attr]
+    result = source.projective_field.probe_grad(  # type: ignore[union-attr]
         (0, 0, 4, 4), target=target
     )
 
@@ -409,7 +409,7 @@ def test_source_target_caches_reuse_and_drop_across_portable_round_trip(
     assert loaded_target.receptive_field.at((3, 3), source=loaded_source).exact
     assert loaded_source.projective_field.at((3, 3), target=loaded_target).exact
     with pytest.raises(ReceptiveFieldUnavailableError, match="backward_ready=True"):
-        loaded_source.projective_field.gradient((0, 0, 3, 3), target=loaded_target)
+        loaded_source.projective_field.probe_grad((0, 0, 3, 3), target=loaded_target)
 
 
 @pytest.mark.backend_tinygrad
@@ -437,9 +437,9 @@ def test_non_torch_backend_keeps_geometry_and_gates_both_gradients() -> None:
 
     assert receptive.status is ReceptiveFieldStatus.EXACT
     assert projective.status is ReceptiveFieldStatus.EXACT
-    assert receptive.layout.axis_kinds == ("pointwise",)
-    assert projective.layout.axis_kinds == ("pointwise",)
+    assert receptive.axis_roles.axis_kinds == ("pointwise",)
+    assert projective.axis_roles.axis_kinds == ("pointwise",)
     with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
-        target.receptive_field.gradient((0,))
+        target.receptive_field.probe_grad((0,))
     with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
-        source.projective_field.gradient((0,), target=target)
+        source.projective_field.probe_grad((0,), target=target)

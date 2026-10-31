@@ -129,13 +129,13 @@ def test_engine_scoping_refusals(capture):
             tl.param("fc1.weight"),
             tl.scale(0.0),
             model=model,
-            x=x,
+            inputs=x,
             intervention=tl.options.InterventionOptions(engine="rerun"),
         )
     assert excinfo.value.fields["code"] == "param_substitution_engine_unsupported"
     # auto with model+x resolves to rerun -> same refusal
     with pytest.raises(SelectionError) as excinfo:
-        trace.fork().do(tl.param("fc1.weight"), tl.scale(0.0), model=model, x=x)
+        trace.fork().do(tl.param("fc1.weight"), tl.scale(0.0), model=model, inputs=x)
     assert excinfo.value.fields["code"] == "param_substitution_engine_unsupported"
 
 

@@ -62,7 +62,7 @@ def _rerun_with(trace: Trace, model: nn.Module, x: torch.Tensor, edit: Any) -> T
         tl.func("relu"),
         edit,
         model=model,
-        x=x,
+        inputs=x,
         intervention=InterventionOptions(engine="rerun"),
     )
 

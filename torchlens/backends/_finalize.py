@@ -1230,7 +1230,7 @@ def new_preview_function_trace(
         save_grads=None,
         detach_saved_activations=False,
         mark_layer_depths=compute_input_output_distances,
-        num_context_lines=num_context_lines,
+        source_context_lines=num_context_lines,
         optimizer=None,
         save_source_context=False,
         save_rng=False,

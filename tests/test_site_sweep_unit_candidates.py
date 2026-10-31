@@ -63,7 +63,7 @@ def test_distinct_units_at_one_site_are_distinct_candidates(engine: str) -> None
         metric=_metric,
         retain="none",
         model=model,
-        x=x,
+        inputs=x,
         engine=engine,
     )
     rows = {row.candidate_id: row for row in bundle.effects().rows}
@@ -99,7 +99,7 @@ def test_identical_units_still_refuse_as_duplicates() -> None:
             metric=_metric,
             retain="none",
             model=model,
-            x=x,
+            inputs=x,
         )
     assert excinfo.value.fields["code"] == "site_sweep_duplicate_candidates"
 
@@ -119,6 +119,6 @@ def test_same_units_spelled_two_ways_are_one_candidate() -> None:
                 metric=_metric,
                 retain="none",
                 model=model,
-                x=x,
+                inputs=x,
             )
         assert excinfo.value.fields["code"] == "site_sweep_duplicate_candidates"
