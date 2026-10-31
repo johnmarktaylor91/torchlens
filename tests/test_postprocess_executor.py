@@ -314,6 +314,12 @@ def _wrap_then(real: Any, after: Any) -> Any:
     return patched
 
 
+def _empty_output_layers(trace: Any) -> None:
+    # Before step 1, ``output_layers`` already holds the output parents' raw
+    # labels, so a no-op step 1 would not leave it empty; empty it explicitly.
+    trace.output_layers = []
+
+
 def _clear_layer_label_map(trace: Any) -> None:
     trace._raw_to_final_layer_labels.clear()
 
@@ -343,7 +349,13 @@ def _postcondition_breakers() -> list[Any]:
         return None
 
     return [
-        pytest.param("1", "_add_output_layers", lambda: noop, "must register output", id="1"),
+        pytest.param(
+            "1",
+            "_add_output_layers",
+            lambda: _wrap_then(pp._add_output_layers, _empty_output_layers),
+            "must register output",
+            id="1",
+        ),
         pytest.param(
             "8",
             "_map_raw_labels_to_final_labels",
@@ -376,8 +388,9 @@ def _postcondition_breakers() -> list[Any]:
         ),
         pytest.param(
             "16",
-            "_build_module_logs",
-            lambda: _wrap_then(pp._build_module_logs, _null_module_logs),
+            # The step's last call, so nothing inside step 16 reads the nulled field.
+            "refresh_saved_module_call_count",
+            lambda: _wrap_then(pp.refresh_saved_module_call_count, _null_module_logs),
             "module logs",
             id="16",
         ),
