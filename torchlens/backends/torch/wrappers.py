@@ -1969,7 +1969,6 @@ def torch_func_decorator(
 
         # ---- In-place detection and safe copy ----
         same_object_returned = len(args) > 0 and id(out_orig) == id(args[0])
-        record_is_inplace = get_tensor_label(out_orig) is not None
         # True in-place ops (add_, mul_, etc.) modify the tensor and return self.
         # No-op functions (to(same_dtype), contiguous() on contiguous tensor)
         # also return self but don't modify anything.
@@ -1982,6 +1981,15 @@ def torch_func_decorator(
             same_object_returned and _call_requests_inplace(inplace_param_index, args, kwargs)
         )
         was_inplace = same_object_returned and mutation_signature
+        # The live intervention site's in-place verdict. A replacement at a
+        # MUTATING site (``x.add_(1)``, ``torch.add(a, b, out=c)``) only takes
+        # effect when copied into the mutated receiver, so the hook runner
+        # needs the verdict; a NON-mutating same-object return (``x.to(device)``
+        # already there, ``x.contiguous()`` on a contiguous tensor) hands its
+        # replacement to the caller like any functional op. Label presence is
+        # not mutation: keying on it refused every replacement at an identity
+        # return and recorded ``replaced=False`` on a rule that had fired.
+        record_is_inplace = was_inplace or isinstance(kwargs.get("out"), torch.Tensor)
         # An in-place write to a prepared Parameter is a mutated-receiver site
         # too: a live intervention replacing its output must be copied into the
         # Parameter (``_apply_inplace_replacement_to_mutated_storage``) so later
@@ -1991,8 +1999,6 @@ def torch_func_decorator(
             and not is_storage_rebinding_setter
             and _is_prepared_parameter_receiver(trace, args[0])
         )
-        if mutates_prepared_parameter:
-            record_is_inplace = True
         # The internal identity-forcing decorator (_state._decorated_identity)
         # exists precisely to MINT a distinct logged tensor at module boundaries
         # (nn.Identity / pass-through outputs). Unlike user-visible no-ops such as
