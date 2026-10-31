@@ -166,7 +166,7 @@ def test_memory_error_in_postprocess_settles_failed(monkeypatch) -> None:
         captured.append(trace)
         raise MemoryError("planted OOM")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
     with pytest.raises(MemoryError):
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
     outcome = captured[0].outcome

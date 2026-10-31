@@ -1,9 +1,10 @@
 """Behaviour tests for the postprocess step executor.
 
 Steps 1-20 run in registry order through ``run_pipeline``; each step body
-resolves its callable through the ``torchlens._postprocess`` namespace at call
-time. These tests pin the order, the one-evaluation-per-step gate invariant,
-the patch seams, and the observable effects of steps 17.5 and 19.
+calls its function through the function's home module (``graph_traversal``,
+``labeling``, ``finalization``, ...). These tests pin the order, the
+one-evaluation-per-step gate invariant, the home-module seams, and the
+observable effects of steps 17.5 and 19.
 """
 
 from __future__ import annotations
@@ -67,23 +68,23 @@ def test_registry_runs_steps_in_the_pinned_order() -> None:
 
 
 def test_executor_seam_patched_step_executes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A monkeypatched step function still executes.
+    """A step function replaced on its home module executes.
 
-    The executor resolves step callables through the module namespace at CALL
-    time; a registry of imported references would silently break every
-    monkeypatch seam.
+    The executor calls each step through its home module (here
+    ``graph_traversal``) at call time; a registry of imported references
+    would silently break every home-module seam.
     """
 
     import torchlens._postprocess as pp
 
     calls: list[str] = []
-    real_step2 = pp._find_output_ancestors
+    real_step2 = pp.graph_traversal._find_output_ancestors
 
     def patched_step2(trace: object) -> None:
         calls.append("ran")
         real_step2(trace)
 
-    monkeypatch.setattr(pp, "_find_output_ancestors", patched_step2)
+    monkeypatch.setattr(pp.graph_traversal, "_find_output_ancestors", patched_step2)
     trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
     try:
         assert calls == ["ran"], "the patched step body must have executed"
@@ -138,7 +139,7 @@ def test_executor_failing_step_propagates(monkeypatch: pytest.MonkeyPatch) -> No
     def exploding_step9(trace: object) -> None:
         raise _StepBoom("step 9 exploded")
 
-    monkeypatch.setattr(pp, "_log_final_info_for_layers", exploding_step9)
+    monkeypatch.setattr(pp.labeling, "_log_final_info_for_layers", exploding_step9)
     with pytest.raises(_StepBoom):
         tl.trace(_TinyModel().eval(), torch.randn(2, 3))
 
@@ -356,28 +357,28 @@ def _postcondition_breakers() -> list[Any]:
         pytest.param(
             "1",
             "_add_output_layers",
-            lambda: _wrap_then(pp._add_output_layers, _empty_output_layers),
+            lambda: _wrap_then(pp.graph_traversal._add_output_layers, _empty_output_layers),
             "registered 0, expected 1",
             id="1-missing",
         ),
         pytest.param(
             "1",
             "_add_output_layers",
-            lambda: _wrap_then(pp._add_output_layers, _duplicate_output_layer),
+            lambda: _wrap_then(pp.graph_traversal._add_output_layers, _duplicate_output_layer),
             "registered 2, expected 1",
             id="1-extra",
         ),
         pytest.param(
             "8",
             "_map_raw_labels_to_final_labels",
-            lambda: _wrap_then(pp._map_raw_labels_to_final_labels, _clear_layer_label_map),
+            lambda: _wrap_then(pp.labeling._map_raw_labels_to_final_labels, _clear_layer_label_map),
             "raw-to-final layer labels",
             id="8-layer",
         ),
         pytest.param(
             "8",
             "_map_raw_labels_to_final_labels",
-            lambda: _wrap_then(pp._map_raw_labels_to_final_labels, _clear_op_label_map),
+            lambda: _wrap_then(pp.labeling._map_raw_labels_to_final_labels, _clear_op_label_map),
             "raw-to-final op labels",
             id="8-op",
         ),
@@ -385,7 +386,7 @@ def _postcondition_breakers() -> list[Any]:
             "11",
             "_build_lookup_keys_and_finalize_retained_layers",
             lambda: _wrap_then(
-                pp._build_lookup_keys_and_finalize_retained_layers, _drop_first_lookup_keys
+                pp.labeling._build_lookup_keys_and_finalize_retained_layers, _drop_first_lookup_keys
             ),
             "without lookup keys",
             id="11",
@@ -393,7 +394,7 @@ def _postcondition_breakers() -> list[Any]:
         pytest.param(
             "15.5",
             "_build_layer_logs",
-            lambda: _wrap_then(pp._build_layer_logs, _clear_layer_logs),
+            lambda: _wrap_then(pp.finalization._build_layer_logs, _clear_layer_logs),
             "aggregate layer logs",
             id="15.5",
         ),
@@ -401,7 +402,7 @@ def _postcondition_breakers() -> list[Any]:
             "16",
             # The step's last call, so nothing inside step 16 reads the nulled field.
             "refresh_saved_module_call_count",
-            lambda: _wrap_then(pp.refresh_saved_module_call_count, _null_module_logs),
+            lambda: _wrap_then(pp.saved_summary.refresh_saved_module_call_count, _null_module_logs),
             "module logs",
             id="16",
         ),
@@ -435,9 +436,19 @@ def test_unmet_step_postcondition_raises_typed_error(
     import re
 
     import torchlens._postprocess as pp
+    from torchlens._utils import hashing
     from torchlens.errors import MetadataInvariantError
 
-    monkeypatch.setattr(pp, attribute, make_breaker())
+    homes = {
+        "_add_output_layers": pp.graph_traversal,
+        "_map_raw_labels_to_final_labels": pp.labeling,
+        "_build_lookup_keys_and_finalize_retained_layers": pp.labeling,
+        "_build_layer_logs": pp.finalization,
+        "refresh_saved_module_call_count": pp.saved_summary,
+        "compute_graph_shape_hash": hashing,
+        "_set_tracing_finished": pp.finalization,
+    }
+    monkeypatch.setattr(homes[attribute], attribute, make_breaker())
     with pytest.raises(MetadataInvariantError) as excinfo:
         tl.trace(_TinyModel().eval(), torch.randn(2, 3))
     assert excinfo.value.check_name == "postprocess_step_postcondition"

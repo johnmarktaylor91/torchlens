@@ -110,7 +110,7 @@ def test_planted_step1_failure_survives_with_partial_log(monkeypatch) -> None:
     def _boom(*args: object, **kwargs: object) -> None:
         raise ValueError("planted step1")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted step1") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
     assert hasattr(exc_info.value, "partial_log")
@@ -161,7 +161,7 @@ def test_halted_postprocess_failure_propagates_with_halt_context(monkeypatch) ->
     def _boom(*args: object, **kwargs: object) -> None:
         raise ValueError("planted halted-pp")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted halted-pp") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     assert isinstance(exc_info.value.__context__, StopSignal)

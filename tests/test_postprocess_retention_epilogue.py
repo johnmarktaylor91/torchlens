@@ -87,8 +87,7 @@ def test_failed_postprocess_still_releases_the_hot_tier(monkeypatch) -> None:
     def _boom(*args: object, **kwargs: object) -> None:
         raise RuntimeError("injected postprocess failure")
 
-    monkeypatch.setattr(pp, "_build_module_logs", _boom)
-    monkeypatch.setattr(pp.finalization, "_build_module_logs", _boom, raising=False)
+    monkeypatch.setattr(pp.finalization, "_build_module_logs", _boom)
 
     with pytest.raises(RuntimeError, match="injected postprocess failure"):
         tl.trace(
@@ -105,8 +104,7 @@ def test_repeated_postprocess_failures_do_not_accumulate_hot_tiers(monkeypatch) 
     def _boom(*args: object, **kwargs: object) -> None:
         raise RuntimeError("injected postprocess failure")
 
-    monkeypatch.setattr(pp, "_build_module_logs", _boom)
-    monkeypatch.setattr(pp.finalization, "_build_module_logs", _boom, raising=False)
+    monkeypatch.setattr(pp.finalization, "_build_module_logs", _boom)
 
     for _ in range(3):
         with pytest.raises(RuntimeError, match="injected postprocess failure"):
