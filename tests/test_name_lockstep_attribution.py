@@ -340,3 +340,42 @@ def test_a_renamed_keyword_reports_the_old_spelling_with_its_equals_sign(tmp_pat
     assert check._old_path({"kind": "member", "path": "Trace.ops"}, "ops", "layer_list") == (
         "Trace.layer_list"
     )
+
+
+# --- a moved member whose owner set shrank ---------------------------------------------
+
+
+def test_a_moved_member_pairs_on_its_spelling_and_keeps_retired_owners_as_residue(
+    tmp_path: Path,
+) -> None:
+    """``Accessor.head`` owned by ``Accessor`` alone: live; ``LayerAccessor.head``: stale."""
+
+    old = _row(
+        "member:tl.data_classes._accessor_base:Accessor.head",
+        "member",
+        "head",
+        "Accessor.head",
+        "f-h",
+        owner_names=["LayerAccessor", "ModuleAccessor"],
+    )
+    new = _row(
+        "member:tl._data_classes._accessor_base:Accessor.head",
+        "member",
+        "head",
+        "Accessor.head",
+        "f-h",
+        owner_names=["Accessor"],
+    )
+    surface_diff = diff_inventories(_inventory(TRACE, old), _inventory(TRACE, new))
+    assert [(m.basis, m.retired_owners) for m in surface_diff.moved] == [
+        ("moved", ("LayerAccessor", "ModuleAccessor"))
+    ]
+    corpus = _corpus(
+        tmp_path,
+        glossary="`Accessor.head` returns the first items.\n",
+        example="trace.layers.head(3)\nLayerAccessor.head\naccessor.head\n",
+    )
+    findings = check.check_lockstep(surface_diff, corpus, _inventory(TRACE, new))
+    assert [(f.change, f.location) for f in findings if f.problem == "stale"] == [
+        ("moved", "examples/demo.py:2")
+    ]

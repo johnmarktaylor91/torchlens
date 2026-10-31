@@ -22,6 +22,10 @@ class Rename:
         ``declared`` (from a rename map), ``fingerprint`` (same owner, kind, signature
         and docstring line, unique on both sides) or ``moved`` (the same kind and public
         spelling under another defining module, unique on both sides).
+    retired_owners
+        For a moved member, the public owner names the base side spelled it through
+        that the head side no longer does (``LayerAccessor`` once ``Accessor.head`` is
+        owned by ``Accessor`` alone); their qualified spellings are still residue.
     """
 
     old_id: str
@@ -29,6 +33,7 @@ class Rename:
     old_name: str
     new_name: str
     basis: str
+    retired_owners: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -151,7 +156,7 @@ def _declared_renames(
     return found
 
 
-def _spelling_key(row: dict[str, Any]) -> tuple[str, str, tuple[str, ...]]:
+def _spelling_key(row: dict[str, Any]) -> tuple[str, str]:
     """Return what the public spelling of a row depends on.
 
     Parameters
@@ -161,11 +166,39 @@ def _spelling_key(row: dict[str, Any]) -> tuple[str, str, tuple[str, ...]]:
 
     Returns
     -------
-    tuple[str, str, tuple[str, ...]]
-        Kind, path and the owner names the spelling is written through.
+    tuple[str, str]
+        Kind and path.
     """
 
-    return (row["kind"], str(row["path"]), tuple(sorted(row.get("owner_names", ()))))
+    return (row["kind"], str(row["path"]))
+
+
+def _moved(base_row: dict[str, Any], head_row: dict[str, Any], basis: str) -> Rename:
+    """Return the moved pair of two rows with one public spelling.
+
+    Parameters
+    ----------
+    base_row, head_row
+        The rows on each side.
+    basis
+        ``moved`` or ``fingerprint``.
+
+    Returns
+    -------
+    Rename
+        The pair, carrying the owner names the head side no longer spells it through.
+    """
+
+    retired = set(base_row.get("owner_names", ())) - set(head_row.get("owner_names", ()))
+    retired.discard(str(head_row["path"]).split(".")[0])
+    return Rename(
+        base_row["id"],
+        head_row["id"],
+        base_row["name"],
+        head_row["name"],
+        basis,
+        tuple(sorted(retired)),
+    )
 
 
 def _moved_pairs(base: Rows, head: Rows, removed: set[str], new: set[str]) -> list[Rename]:
@@ -201,9 +234,7 @@ def _moved_pairs(base: Rows, head: Rows, removed: set[str], new: set[str]) -> li
     for key in sorted(set(old_groups) & set(new_groups)):
         if len(old_groups[key]) == 1 and len(new_groups[key]) == 1:
             old_id, new_id = old_groups[key][0], new_groups[key][0]
-            found.append(
-                Rename(old_id, new_id, base[old_id]["name"], head[new_id]["name"], "moved")
-            )
+            found.append(_moved(base[old_id], head[new_id], "moved"))
             removed.discard(old_id)
             new.discard(new_id)
     return found
@@ -269,7 +300,10 @@ def diff_inventories(base: Rows, head: Rows, declared: dict[str, str] | None = N
     moved = _moved_pairs(base, head, removed, new)
     for pair in _fingerprint_renames(base, head, removed, new):
         # A fingerprint pair that keeps its leaf is a move, not a respelling.
-        (moved if pair.old_name == pair.new_name else renamed).append(pair)
+        if pair.old_name == pair.new_name:
+            moved.append(_moved(base[pair.old_id], head[pair.new_id], "fingerprint"))
+        else:
+            renamed.append(pair)
     return SurfaceDiff(
         new=tuple(head[row_id] for row_id in sorted(new)),
         removed=tuple(base[row_id] for row_id in sorted(removed)),

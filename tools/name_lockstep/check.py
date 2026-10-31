@@ -14,7 +14,9 @@ head row still uses that leaf, so a member that another class keeps is not flagg
 only when ``attribution`` cannot show the text belongs to something else: a live head
 name at that position, an imported third-party object, a URL, or an assignment target.
 A name whose defining module moved but whose public spelling is unchanged (``moved``)
-is neither new nor removed; it keeps the glossary-entry obligation only.
+is neither new nor removed; it keeps the glossary-entry obligation, and the qualified
+spellings through owner names the head side retired (``LayerAccessor.head`` once only
+``Accessor.head`` remains) are still residue.
 """
 
 from __future__ import annotations
@@ -358,6 +360,13 @@ def check_lockstep(
         findings += _missing(corpus, row, "new")
     for move in surface_diff.moved:
         findings += _missing(corpus, head_rows[move.new_id], "moved")
+        for owner in move.retired_owners:
+            row = {
+                **head_rows[move.new_id],
+                "owner_names": [owner],
+                "path": f"{owner}.{move.new_name}",
+            }
+            findings += _residue(corpus, row, move.new_id, "moved", leaves, claims)
     for rename in surface_diff.renamed:
         new_row = head_rows[rename.new_id]
         findings += _missing(corpus, new_row, "renamed")
