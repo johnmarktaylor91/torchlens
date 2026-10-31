@@ -108,7 +108,7 @@ _LAZY_ATTRS = {
     "export": ("torchlens.export", None),
     "facets": ("torchlens.semantic", "facets"),
     "fastlog": ("torchlens.fastlog", None),
-    "facet": ("torchlens.intervention", "facet"),
+    "facet": ("torchlens.intervention.selectors", "facet"),
     "followed_by": ("torchlens.intervention", "followed_by"),
     "func": ("torchlens.intervention", "func"),
     "func_transform": ("torchlens.intervention", "func_transform"),

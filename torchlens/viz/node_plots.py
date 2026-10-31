@@ -55,7 +55,7 @@ _RANK_TOLERANCE = 1e-12
 _DRAW_SCALE = 2
 
 
-def render_heatmap(
+def heatmap(
     data: Any,
     *,
     width: int = 240,
@@ -127,7 +127,7 @@ def render_heatmap(
         raise ValueError("max_axis_items must be at least 1.")
     array = np.asarray(_as_numpy(data), dtype=np.float64)
     if array.ndim != 2:
-        raise ValueError("render_heatmap expects a 2D array.")
+        raise ValueError("heatmap expects a 2D array.")
 
     normalized = _normalize_finite(array, vmin, vmax)
     colors = _apply_colormap(normalized, cmap)

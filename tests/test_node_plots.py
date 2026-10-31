@@ -11,7 +11,7 @@ import pytest
 import torch
 from PIL import Image, ImageDraw
 
-from torchlens.viz import image_scatter, lineplot, render_heatmap
+from torchlens.viz import heatmap, image_scatter, lineplot
 from torchlens.viz._tensor_display import show_tensor
 from torchlens.viz.node_plots import (
     _coords_to_pixel_centers,
@@ -72,8 +72,8 @@ def test_render_heatmap_deterministic_size_and_mode() -> None:
 
     data = np.arange(25, dtype=np.float64).reshape(5, 5)
 
-    first = render_heatmap(data, width=123, height=91)
-    second = render_heatmap(data, width=123, height=91)
+    first = heatmap(data, width=123, height=91)
+    second = heatmap(data, width=123, height=91)
 
     assert first.mode == "RGB"
     assert first.size == (123, 91)
@@ -83,7 +83,7 @@ def test_render_heatmap_deterministic_size_and_mode() -> None:
 def test_render_heatmap_constant_array_no_nan() -> None:
     """A constant finite heatmap should render low-color pixels, not nan-color pixels."""
 
-    image = render_heatmap(np.full((4, 4), 7.0), nan_color=(235, 235, 235))
+    image = heatmap(np.full((4, 4), 7.0), nan_color=(235, 235, 235))
 
     assert image.getpixel((10, 10)) != (235, 235, 235)
 
@@ -92,7 +92,7 @@ def test_render_heatmap_unknown_cmap_raises() -> None:
     """Unknown colormap names should raise a clear ValueError."""
 
     with pytest.raises(ValueError, match="Unknown colormap"):
-        render_heatmap(np.zeros((2, 2)), cmap="plasma")
+        heatmap(np.zeros((2, 2)), cmap="plasma")
 
 
 def test_render_heatmap_axis_thumbnails_bounded() -> None:
@@ -101,7 +101,7 @@ def test_render_heatmap_axis_thumbnails_bounded() -> None:
     images = _solid_images(12)
     labels = [f"item-{index}" for index in range(12)]
 
-    image = render_heatmap(
+    image = heatmap(
         np.arange(144, dtype=np.float64).reshape(12, 12),
         width=180,
         height=140,

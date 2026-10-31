@@ -13,7 +13,7 @@ Pins:
 - ``rank_transform_rdm``: the Nili et al. 2014 display convention --
   average ranks for ties, percentile scaling to exactly 100, symmetric
   zero-diagonal output, display-only validation refusals.
-- The ``rdm_node_spec(display=)`` render kwarg validates its vocabulary.
+- The ``tl.viz.nodes.rdm(display=)`` render kwarg validates its vocabulary.
 - The tl.stats.cka method contract (item 14): linear, BIASED estimator,
   CPU float64, matched observations, NaN on zero variance -- pinned with
   literal reference values so any estimator change fails loudly.
@@ -127,12 +127,12 @@ def test_rank_transform_refusals() -> None:
 def test_rdm_node_spec_display_vocabulary() -> None:
     """The render kwarg accepts raw/rank/percentile and refuses others."""
 
-    from torchlens.repgeom import rdm_node_spec
+    from torchlens.viz.nodes import rdm as rdm_node
 
     for display in ("raw", "rank", "percentile"):
-        assert callable(rdm_node_spec(display=display))
+        assert callable(rdm_node(display=display))
     with pytest.raises(ValueError, match="display"):
-        rdm_node_spec(display="log")
+        rdm_node(display="log")
 
 
 @pytest.mark.smoke

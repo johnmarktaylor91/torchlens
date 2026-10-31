@@ -13,7 +13,6 @@ _USER_FUNC_EXPORTS = {
     "draw_combined",
     "show_bundle_graph",
     "show_model_graph",
-    "summary",
 }
 
 #: Surgery-visuals doors (lane F43; DOCUMENTED-UNSTABLE spellings): lazy so
@@ -72,6 +71,5 @@ __all__ = [
     "render_surgery",
     "show_bundle_graph",
     "show_model_graph",
-    "summary",
     "surgery_diff",
 ]

@@ -46,7 +46,7 @@ Exposed as `tl.viz` through the lazy attribute map in `torchlens/__init__.py`
   `_aggregate_channels()`, `_top_channel_indices()`.
 
 ## node_plots.py
-- PIL-only render primitives: `render_heatmap()`, `lineplot()`,
+- PIL-only render primitives: `heatmap()`, `lineplot()`,
   `image_scatter()`.
 - Consumed outside the package by `repgeom/__init__.py` and
   `receptive_field/_viz.py`; treat their signatures as shared surface.

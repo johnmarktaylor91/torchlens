@@ -522,7 +522,7 @@ tl.facets.enable_transformer_lens_aliases()
 When enabled, aliases such as `hook_pattern`, `hook_z`, `hook_result`,
 `hook_resid_pre`, `hook_resid_mid`, and `hook_resid_post` resolve to native
 TorchLens facets when those native facets exist.
-`torchlens.semantic.transformer_lens_aliases_enabled()` reports the current
+`torchlens.facets.transformer_lens_aliases_enabled()` reports the current
 process-wide state.
 
 ## Migration Cheat Sheet

@@ -9,7 +9,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
-from ..viz.node_plots import render_heatmap
+from ..viz import node_plots
 from ._errors import (
     AmbiguousInputError,
     ReceptiveFieldConfigurationError,
@@ -71,7 +71,7 @@ def show(
     alpha:
         Gradient heatmap opacity in ``[0, 1]``.
     cmap:
-        Colormap passed to :func:`torchlens.viz.render_heatmap`.
+        Colormap passed to :func:`torchlens.viz.heatmap`.
 
     Returns
     -------
@@ -381,7 +381,7 @@ def _tensor_image(
         data = data.mean(dim=axis)
     if data.ndim == 1:
         data = data.unsqueeze(0)
-    return render_heatmap(
+    return node_plots.heatmap(
         data.numpy(),
         width=max(1, int(descriptor.input_shape[axes[-1]])),
         height=32 if len(axes) == 1 else max(1, int(descriptor.input_shape[axes[0]])),
@@ -412,7 +412,7 @@ def _gradient_image(
         data = data.mean(dim=axis)
     if data.ndim == 1:
         data = data.unsqueeze(0)
-    return render_heatmap(data.numpy(), width=size[0], height=size[1], cmap=cmap)
+    return node_plots.heatmap(data.numpy(), width=size[0], height=size[1], cmap=cmap)
 
 
 def _draw_box(

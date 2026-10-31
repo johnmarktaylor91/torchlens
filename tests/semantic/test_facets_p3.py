@@ -12,8 +12,9 @@ from torch.nn import functional as F
 
 import torchlens as tl
 from torchlens.errors import MissingFacetError
+from torchlens.facets import MissingFacet
 from torchlens.intervention.errors import SiteResolutionError
-from torchlens.semantic import MissingFacet, facets as facets_mod
+from torchlens.semantic import facets as facets_mod
 from torchlens.semantic.recipes import activate_entrypoint_recipes
 
 

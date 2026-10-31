@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import FacetSpec
+from torchlens.facets import FacetSpec
 from torchlens.semantic.logit_lens import logit_lens, logit_lens_predictions
 
 VOCAB, D_MODEL, SEQ = 13, 6, 5

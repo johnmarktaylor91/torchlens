@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import FacetSpec
+from torchlens.facets import FacetSpec
 
 
 class HeadResult(nn.Module):

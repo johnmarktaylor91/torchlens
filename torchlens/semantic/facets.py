@@ -1190,7 +1190,7 @@ class FacetView(Mapping[FacetKey, Any]):
             f"{available if available else 'none'}"
         )
         hint = (
-            f"register a recipe with @torchlens.semantic.register(class_name={class_name!r}) "
+            f"register a recipe with @torchlens.facets.register(class_name={class_name!r}) "
             f"on a function returning {{{str(name)!r}: ...}}"
         )
         return AbsenceReason(status="structurally_absent", remedy=hint, detail=detail)

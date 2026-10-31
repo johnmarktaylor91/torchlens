@@ -300,7 +300,7 @@ a model fed embeddings, no batches).
 
 ```python
 from torch import nn
-from torchlens.semantic import FacetSpec
+from torchlens.facets import FacetSpec
 from torchlens.semantic.recipes._helpers import parameter_spec
 
 class DocBlock(nn.Module):

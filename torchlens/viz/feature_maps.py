@@ -28,7 +28,7 @@ _REDUCE_MAX = 1
 _TEXT_COLOR = (25, 28, 34)
 _LABEL_FILL = (255, 255, 255)
 _LABEL_OUTLINE = (95, 103, 117)
-#: Non-finite pixel color; matches node_plots.render_heatmap's nan_color default.
+#: Non-finite pixel color; matches node_plots.heatmap's nan_color default.
 _NONFINITE_COLOR = (235, 235, 235)
 
 
@@ -846,7 +846,7 @@ def _map_to_heatmap_image(map_tensor: torch.Tensor, *, cmap: str, cell_size: int
         RGB heatmap image.
     """
 
-    # Same non-finite contract as node_plots.render_heatmap: the scale is
+    # Same non-finite contract as node_plots.heatmap: the scale is
     # computed over FINITE values only (one Inf must not floor everything
     # else) and non-finite pixels get the dedicated nan color instead of
     # being laundered into real values.

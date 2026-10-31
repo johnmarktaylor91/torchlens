@@ -23,7 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.semantic.facets import FacetRegistrySnapshot
 
-_RECIPE_PREFIX = "torchlens.semantic.functions."
+_RECIPE_PREFIX = "torchlens.facets.functions."
 
 
 def _global_modules(payload: bytes) -> set[str]:

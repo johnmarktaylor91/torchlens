@@ -145,7 +145,6 @@ from .save import (
 from .selectors import (
     at_step,
     contains,
-    facet,
     followed_by,
     func,
     func_transform,
@@ -314,7 +313,6 @@ __all__ = [
     "Direction",
     "direction_from_pairs",
     "do",
-    "facet",
     "func",
     "func_transform",
     "followed_by",

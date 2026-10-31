@@ -147,7 +147,7 @@ def test_m6_channel_grid_uses_first_batch_element():
     base = torch.tensor([[[[0.0, 1.0], [2.0, 3.0]]], [[[4.0, 5.0], [6.0, 7.0]]]])
     changed_tail = base.clone()
     changed_tail[1] = torch.tensor([[[400.0, -500.0], [600.0, -700.0]]])  # batch 1 differs
-    cg = tl.viz.channel_grid(n=1, max_size=40)
+    cg = tl.viz.nodes.channel_grid(n=1, max_size=40)
     # Documented: batch element 0 is the only one rendered, so changing batch 1
     # must not change the output.
     assert cg(base).tobytes() == cg(changed_tail).tobytes()

@@ -12,12 +12,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import MissingFacetError
+from torchlens.facets import FacetFunction, FacetSpec, FacetView, MissingGrad
 from torchlens.intervention.errors import SiteResolutionError
 from torchlens.semantic import (
-    FacetFunction,
-    FacetSpec,
-    FacetView,
-    MissingGrad,
     facets as facets_mod,
 )
 from torchlens.semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY

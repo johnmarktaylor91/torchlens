@@ -1135,7 +1135,7 @@
   `Annotation` grammar lets only a valid receipt mint `intervention_effect`, and
   effects never recolor attention cells). Bridges: `circuitsvis_attention`
   (payload-bounded, dormancy disclosed) and the `bertviz_tuple` parity oracle.
-  FIX-H shipped in `tl.viz.render_heatmap`: nearest-neighbor discrete cells, separate
+  FIX-H shipped in `tl.viz.heatmap`: nearest-neighbor discrete cells, separate
   `row_labels=`/`col_labels=`, omission marker computed AFTER final overlap selection.
   Records are session-only, never persisted. Doc: `docs/reference/tviz.md`.
 - MECHINTERP KIT (F05; every spelling DOCUMENTED-UNSTABLE pending the naming

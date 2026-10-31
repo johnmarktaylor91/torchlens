@@ -254,6 +254,6 @@ def test_facet_doors_refuse_typed_on_an_unregistered_attention_class() -> None:
             view["q"]
         assert type(exc_info.value) is not KeyError
         assert "_UnregisteredAttention" in str(exc_info.value)
-        assert "torchlens.semantic.register" in str(exc_info.value)
+        assert "torchlens.facets.register" in str(exc_info.value)
         assert view.get("q") is None
         assert not hasattr(view, "q")

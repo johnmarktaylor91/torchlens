@@ -123,7 +123,7 @@ Key entry points:
   kind, and effects never recolor attention cells. `score_decomposition`
   enforces the hard sum-to-score invariant (`tv_decomposition_unclosed`).
   Bridges: payload-bounded `circuitsvis_attention` + the `bertviz_tuple`
-  parity oracle. FIX-H shipped in `tl.viz.render_heatmap` (nearest-neighbor
+  parity oracle. FIX-H shipped in `tl.viz.heatmap` (nearest-neighbor
   cells, separate `row_labels=`/`col_labels=`, post-selection omission
   marker). Doc: `docs/reference/tviz.md`.
 - Structure-only capture (DOCUMENTED-UNSTABLE; D8 GRANTED — weights-free
