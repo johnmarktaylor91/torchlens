@@ -3,8 +3,9 @@
 Causal scrubbing, resampling ablation and mean ablation replace an activation with values drawn
 from, or averaged over, other inputs. TorchLens builds them from one population noun and one
 sampling plan, records every draw, and makes each draw reproducible from its seed. Every name on
-this page lives in `torchlens.intervention` (not at the `tl.` root) and is DOCUMENTED-UNSTABLE:
-the spellings may change without a deprecation shim.
+this page lives in `torchlens.intervention` (not at the `tl.` root), except `mean_from`, `mean_fill`
+and `sampling_records`, which import from `torchlens.intervention.stochastic`. All are
+DOCUMENTED-UNSTABLE: the spellings may change without a deprecation shim.
 
 ## The pieces
 
@@ -47,7 +48,8 @@ result:
 import torch
 from torch import nn
 import torchlens as tl
-from torchlens.intervention import population, resample_rows_from, sampling_records
+from torchlens.intervention import population, resample_rows_from
+from torchlens.intervention.stochastic import sampling_records
 
 
 class Toy(nn.Module):
@@ -90,7 +92,8 @@ with a warning, and refused under `strict=True`.
 import torch
 from torch import nn
 import torchlens as tl
-from torchlens.intervention import mean_from, population, set_direction_mean
+from torchlens.intervention import population, set_direction_mean
+from torchlens.intervention.stochastic import mean_from
 
 
 class Toy(nn.Module):
