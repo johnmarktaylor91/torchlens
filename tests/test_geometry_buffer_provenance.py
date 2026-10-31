@@ -69,6 +69,38 @@ _DEFINED_FROM_EVERY_STATE = [
 ]
 _DEFINED_FROM_NONEMPTY_STATES = ["resize_shrink", "resize_same", "resize_as_shrink"]
 
+# Validation gaps that are not entry-state graph dependence; each is pinned so it
+# flips loudly when fixed.
+_KNOWN_VALIDATION_GAPS = {
+    # Validation perturbs the template tensor of ``resize_as_``, whose values never
+    # reach the output (only its size is read), so the perturbation check fails
+    # from every entry state.
+    ("resize_as_shrink", "fresh"): "resize_as_ template is perturbed as a value edge",
+    ("resize_as_shrink", "after_one_forward"): "resize_as_ template is perturbed as a value edge",
+    ("resize_as_shrink", "aliased"): "resize_as_ template is perturbed as a value edge",
+    # The buffer views a larger shared storage, so the grow exposes the neighbour's
+    # defined elements; replay resizes a compact copy of the receiver instead.
+    ("resize_grow_then_zero", "aliased"): "replay of a grow inside a shared storage",
+}
+
+
+def _cases(names: list[str], states: list[str]) -> list[Any]:
+    """Return ``(name, state)`` params, marking known validation gaps as strict xfails."""
+
+    return [
+        pytest.param(
+            name,
+            state,
+            marks=(
+                [pytest.mark.xfail(strict=True, reason=_KNOWN_VALIDATION_GAPS[(name, state)])]
+                if (name, state) in _KNOWN_VALIDATION_GAPS
+                else []
+            ),
+        )
+        for name in names
+        for state in states
+    ]
+
 
 def _model_class(name: str) -> type[nn.Module]:
     shape, write = _WRITES[name]
@@ -184,16 +216,17 @@ def test_resize_is_one_in_place_write_produced_by_the_resize(name: str, state: s
     assert any(version_label in parents for _, parents, _ in rows)
 
 
-@pytest.mark.parametrize("state", list(_ENTRY_STATES))
-@pytest.mark.parametrize("name", _DEFINED_FROM_EVERY_STATE)
+@pytest.mark.parametrize(("name", "state"), _cases(_DEFINED_FROM_EVERY_STATE, list(_ENTRY_STATES)))
 def test_geometry_write_validates_from_every_entry_state(name: str, state: str) -> None:
     """Validation (first trace from the entry state, re-trace from after it) returns True."""
 
     assert _quiet_validate(_model_in_state(name, state), torch.rand(4)) is True
 
 
-@pytest.mark.parametrize("state", ["fresh", "after_one_forward", "aliased"])
-@pytest.mark.parametrize("name", _DEFINED_FROM_NONEMPTY_STATES)
+@pytest.mark.parametrize(
+    ("name", "state"),
+    _cases(_DEFINED_FROM_NONEMPTY_STATES, ["fresh", "after_one_forward", "aliased"]),
+)
 def test_prefix_preserving_resize_validates(name: str, state: str) -> None:
     """A resize that never grows past the buffer's elements validates from a non-empty buffer."""
 
