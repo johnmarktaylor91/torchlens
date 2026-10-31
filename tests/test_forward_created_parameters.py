@@ -241,7 +241,6 @@ def test_lazy_module_built_in_forward_validates() -> None:
     _assert_validates(LazyBuiltInForward().eval(), _x())
 
 
-@pytest.mark.smoke
 def test_lazy_module_recreated_in_forward_replaces_the_prep_slot_and_validates() -> None:
     x = _x()
     model = LazyFirstCall().eval()
@@ -264,7 +263,6 @@ def test_lazy_module_recreated_in_forward_replaces_the_prep_slot_and_validates()
     _assert_validates(model, x)
 
 
-@pytest.mark.smoke
 def test_lazy_module_registered_at_prep_records_no_creation_advisory() -> None:
     x = _x()
     model = LazyAtPrep().eval()
@@ -308,7 +306,6 @@ def test_parameter_built_from_a_captured_value_gains_no_provenance() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_hand_written_init_on_a_prepared_parameter_is_model_dataflow() -> None:
     """``nn.init.uniform_(self.weight)`` on an ordinary parameter is a recorded, consumed op."""
 
@@ -334,7 +331,6 @@ def test_hand_written_init_on_a_prepared_parameter_is_model_dataflow() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_hand_written_constant_init_on_a_prepared_parameter_validates() -> None:
     x = _x()
     model = InitInForward(lambda w: w.fill_(0.5))

@@ -107,7 +107,6 @@ def test_materialization_of_a_module_built_in_forward_is_audited(_armed_witness:
     _assert_materialization_is_audited(trace)
 
 
-@pytest.mark.smoke
 def test_materialization_of_a_lazy_module_registered_at_prep_is_audited(
     _armed_witness: None,
 ) -> None:
