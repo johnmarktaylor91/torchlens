@@ -241,6 +241,13 @@ Key entry points:
   `BackwardPassEnd.close_path` sidecar-only disclosure. Grouped floor:
   `trace.grad_fn_site_summary` per-site backward rollups (read-only L1
   consumption).
+- Predicate runtime extension point (DOCUMENTED-UNSTABLE, S4 seam):
+  `torchlens.ir.predicate_registry` — `PredicateProtocol` (one positional
+  concrete `RecordContext`), `coerce_predicate(value, slot="save"|"halt"|"until")`
+  (raw callables incl. `BaseSelector` returned BY IDENTITY; registered names
+  via a slot-aware enforcing wrapper), `register_predicate(name)` (no
+  user-object mutation, no loader-consulted attribute). Registry INERT until
+  consumers adopt names. Contract: `docs/reference/predicate_runtime.md`.
 - Sparse capture: `tl.record(model, x, save=...)` is torch-only in backend v1; it returns
   `Recording`, and `Recording.to_trace()` materializes full graph structure with explicit
   errors for unsaved payload reads. Forward exceptions default to

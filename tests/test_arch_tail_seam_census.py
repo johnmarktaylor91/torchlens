@@ -34,6 +34,11 @@ SEAM_DISPOSITIONS: dict[str, tuple[str, str]] = {
         "register_term_resolver still appends to a bare module list; the typed "
         "inspectable capability-declared registry promotion is unbuilt",
     ),
+    "predicate_registry": (
+        "PARTIAL",
+        "register_predicate/coerce_predicate live under a lock; the "
+        "inspection/snapshot/persistence obligations of 6.2 are open",
+    ),
     "facet_recipes": (
         "MET",
         "metadata-only inventory + explicit activation (semantic/recipes; the "
