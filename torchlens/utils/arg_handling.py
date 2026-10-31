@@ -314,8 +314,8 @@ def copy_arg_tree(arg: Any, _in_progress: dict[int, Any] | None = None, _depth: 
     Instead we clone tensors (which copies storage without following Python
     object references) and recurse only into standard containers.
 
-    Clones tensors, recurses into standard containers (list, tuple, dict),
-    and leaves everything else as-is.  This prevents infinite loops that
+    Clones tensors and storages, recurses into standard containers (list,
+    tuple, dict), and leaves everything else as-is.  This prevents infinite loops that
     copy.deepcopy can trigger on complex tensor wrappers (e.g. ESCNN
     GeometricTensor) while still protecting user inputs from in-place
     mutations like device moves.
@@ -372,6 +372,11 @@ def copy_arg_tree(arg: Any, _in_progress: dict[int, Any] | None = None, _depth: 
         # structure that reuses the same tensor keeps its historical per-slot
         # clone semantics.
         return _clone_input_tensor_payload(arg)
+    if isinstance(arg, (torch.UntypedStorage, torch.TypedStorage)):
+        # A storage argument (``Tensor.set_(storage, offset, size, stride)``) is
+        # data like a tensor: the copy holds the bytes it had at the call, so a
+        # later write to the source storage cannot change what replay reads.
+        return arg.clone()
     arg_id = id(arg)
     existing = _in_progress.get(arg_id)
     if existing is not None:
