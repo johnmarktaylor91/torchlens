@@ -306,7 +306,11 @@ def _admit_saved_args_budget(
     if budget is None:
         return None
     from ..._save_budget import _retained_storage_identities
-    from ._ops_retention import _saved_arg_retention_devices, _uncharged_parameter_aliases
+    from ._ops_retention import (
+        _iter_tree_storages,
+        _saved_arg_retention_devices,
+        _uncharged_parameter_aliases,
+    )
 
     # Offloaded copies (validation with an ``output_device``) are charged to
     # the device they will live on, not the device the op consumed them on;
@@ -358,7 +362,7 @@ def _commit_saved_args_budget(
     budget = getattr(trace, "_save_budget_accountant", None)
     if budget is None or reservations is None:
         return
-    from ._ops_retention import _uncharged_parameter_aliases
+    from ._ops_retention import _iter_tree_storages, _uncharged_parameter_aliases
 
     saved = (fields_dict.get("saved_args"), fields_dict.get("saved_kwargs"))
     aliases = _uncharged_parameter_aliases(*saved)
