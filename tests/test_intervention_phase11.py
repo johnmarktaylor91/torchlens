@@ -32,10 +32,10 @@ def test_trace_show_accepts_intervention_options() -> None:
 
     log = _interventions()
     try:
-        assert "digraph" in log.show(intervention_mode="node_mark")
-        assert "digraph" in log.show(intervention_mode="node_mark", show_cone=True)
-        assert "digraph" in log.show(intervention_mode="node_mark", show_cone=False)
-        assert "digraph" in log.show(intervention_mode="as_node")
+        assert "digraph" in str(log.show(intervention_mode="node_mark"))
+        assert "digraph" in str(log.show(intervention_mode="node_mark", show_cone=True))
+        assert "digraph" in str(log.show(intervention_mode="node_mark", show_cone=False))
+        assert "digraph" in str(log.show(intervention_mode="as_node"))
     finally:
         log.cleanup()
 
