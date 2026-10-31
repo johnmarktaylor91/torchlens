@@ -284,8 +284,8 @@ def test_input_at_selects_top_level_and_nested_input_leaf() -> None:
         capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
 
-    top = trace.resolve_sites(tl.model_input("attention_mask")).first()
-    nested = trace.resolve_sites(tl.model_input("past_key_values", 0, 1)).first()
+    top = trace[trace[tl.model_input("attention_mask")].labels[0]]
+    nested = trace[trace[tl.model_input("past_key_values", 0, 1)].labels[0]]
 
     assert torch.equal(top.out, payload["attention_mask"])
     assert torch.equal(nested.out, payload["past_key_values"][0][1])

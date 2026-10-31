@@ -18,7 +18,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._utils._torch_compat import get_gradient_edge_support
 from torchlens.attribution import onebackward as ob
-from torchlens.errors import SelectionError
+from torchlens.errors import SelectionError, TraceCleanedUpError
 
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
@@ -52,7 +52,7 @@ class TestSiteGrainRanking:
     def test_top_k_selects_highest_scored_sites(self) -> None:
         trace = _trace()
         table = _site_table(trace)
-        resolved = tl.top_k(k=2, by=table).resolve(trace)
+        resolved = trace[tl.top_k(k=2, by=table)]
         selected = {entry.key for entry in resolved if entry.num_selected}
         # Contract tie-break: stable sort by score, ties resolve by CANONICAL
         # SITE ORDER (alias twins share a score; the earlier site wins).
@@ -70,9 +70,9 @@ class TestSiteGrainRanking:
     def test_top_fraction_and_largest_false(self) -> None:
         trace = _trace()
         table = _site_table(trace)
-        half = tl.top_fraction(fraction=0.5, by=table).resolve(trace)
+        half = trace[tl.top_fraction(fraction=0.5, by=table)]
         assert len([entry for entry in half if entry.num_selected]) == 2
-        bottom = tl.top_k(k=1, by=table, largest=False).resolve(trace)
+        bottom = trace[tl.top_k(k=1, by=table, largest=False)]
         lowest = min((row.score, row.address) for row in table.rows())
         (winner,) = [entry for entry in bottom if entry.num_selected]
         assert winner.key == lowest[1]
@@ -83,7 +83,7 @@ class TestSiteGrainRanking:
         trace = _trace()
         table = _site_table(trace)
         cut = sorted(row.score for row in table.rows())[1]
-        resolved = tl.threshold(above=cut, by=table).resolve(trace)
+        resolved = trace[tl.threshold(above=cut, by=table)]
         assert {entry.key for entry in resolved} == {
             row.address for row in table.rows() if row.score > cut
         }
@@ -93,14 +93,14 @@ class TestSiteGrainRanking:
         trace = _trace()
         table = _site_table(trace)
         with pytest.raises(SelectionError) as excinfo:
-            tl.top_k(k=99, by=table).resolve(trace)
+            trace[tl.top_k(k=99, by=table)]
         assert excinfo.value.fields["reason"] == "population_too_small"
 
     @_requires_gradient_edge
     def test_provenance_carries_metric_and_counts(self) -> None:
         trace = _trace()
         table = _site_table(trace)
-        resolved = tl.top_k(k=1, by=table).resolve(trace)
+        resolved = trace[tl.top_k(k=1, by=table)]
         source = next(iter(resolved)).provenance.source
         for fragment in ("read_table_v1", "method='grad'", "reduction='sum_of_abs'", "frozen="):
             assert fragment in source, source
@@ -114,7 +114,7 @@ class TestElementGrainRanking:
     def test_top_k_elements(self) -> None:
         trace = _trace()
         table = ob.read(trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce=None)
-        resolved = tl.top_k(k=3, by=table).resolve(trace)
+        resolved = trace[tl.top_k(k=3, by=table)]
         assert sum(entry.num_selected for entry in resolved) == 3
 
     @pytest.mark.smoke
@@ -122,7 +122,7 @@ class TestElementGrainRanking:
     def test_element_threshold(self) -> None:
         trace = _trace()
         table = ob.read(trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce=None)
-        resolved = tl.threshold(above=0.0, by=table).resolve(trace)
+        resolved = trace[tl.threshold(above=0.0, by=table)]
         expected = sum(int((row.value > 0).sum()) for row in table.rows())
         assert sum(entry.num_selected for entry in resolved) == expected
 
@@ -135,7 +135,7 @@ class TestByDoorContract:
         trace_a, trace_b = _trace(), _trace()
         table = _site_table(trace_a)
         with pytest.raises(SelectionError) as excinfo:
-            tl.top_k(k=1, by=table).resolve(trace_b)
+            trace_b[tl.top_k(k=1, by=table)]
         assert excinfo.value.fields["code"] == "by_score_invalid"
         assert excinfo.value.fields["reason"] == "by_table_foreign"
 
@@ -145,9 +145,9 @@ class TestByDoorContract:
         table = _site_table(trace)
         selection = tl.top_k(k=1, by=table)
         trace.cleanup()
-        with pytest.raises(SelectionError) as excinfo:
-            selection.resolve(trace)
-        assert excinfo.value.fields["reason"] in ("by_table_foreign", "by_table_stale")
+        # The resolution door is trace[selector]; a husked trace refuses at the door.
+        with pytest.raises(TraceCleanedUpError):
+            trace[selection]
 
     @pytest.mark.smoke
     @_requires_gradient_edge
@@ -163,12 +163,12 @@ class TestByDoorContract:
             reduce="sum_of_abs",
         )
         with pytest.raises(SelectionError) as excinfo:
-            tl.top_k(k=1, by=table).resolve(trace)
+            trace[tl.top_k(k=1, by=table)]
         assert excinfo.value.fields["reason"] == "by_table_multi_target"
-        narrowed = tl.top_k(k=1, by=table.target("t0")).resolve(trace)
+        narrowed = trace[tl.top_k(k=1, by=table.target("t0"))]
         assert any(entry.num_selected for entry in narrowed)
         folded_table = table.aggregate_targets(lambda scores: max(scores), name="max")
-        folded = tl.top_k(k=1, by=folded_table).resolve(trace)
+        folded = trace[tl.top_k(k=1, by=folded_table)]
         assert any(entry.num_selected for entry in folded)
 
     @pytest.mark.smoke
@@ -185,7 +185,7 @@ class TestByDoorContract:
         # linear_2_3 is not upstream of the target: its row is 'unreachable',
         # so an explicit by-population naming it refuses.
         with pytest.raises(SelectionError) as excinfo:
-            tl.top_k(k=1, by=table, within="linear_2_3").resolve(trace)
+            trace[tl.top_k(k=1, by=table, within="linear_2_3")]
         assert excinfo.value.fields["code"] == "population_not_covered"
 
     @pytest.mark.smoke
@@ -193,7 +193,7 @@ class TestByDoorContract:
         """The existing by='value'/'abs' door is untouched."""
 
         trace = _trace()
-        resolved = tl.top_k(k=2, by="abs").resolve(trace)
+        resolved = trace[tl.top_k(k=2, by="abs")]
         assert sum(entry.num_selected for entry in resolved) == 2
         with pytest.raises(ValueError):
             tl.top_k(k=1, by="magnitude")
@@ -208,10 +208,10 @@ class TestCompositionRows:
         trace = _trace()
         table = _site_table(trace)
         combined = tl.top_k(k=2, by=table) | tl.units("linear_1_1", [(0, 0)])
-        resolved = combined.resolve(trace)
+        resolved = trace[combined]
         assert len(list(resolved)) >= 2
         narrowed = tl.top_k(k=2, by=table) - tl.units("gelu_1_2", [(0, 0)])
-        assert narrowed.resolve(trace) is not None
+        assert trace[narrowed] is not None
 
     @pytest.mark.smoke
     @_requires_gradient_edge
@@ -222,7 +222,7 @@ class TestCompositionRows:
         table = _site_table(trace)
         # The table binds to the BASE trace, so the circuit resolves there;
         # align_to is the one explicit door onto the fork (L6 stage 4a).
-        circuit = tl.top_k(k=1, by=table).resolve(trace)
+        circuit = trace[tl.top_k(k=1, by=table)]
         fork = trace.fork()
         fork.do(circuit.align_to(fork), tl.zero_ablate())
         rescored = ob.read(

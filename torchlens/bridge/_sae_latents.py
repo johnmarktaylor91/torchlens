@@ -271,7 +271,7 @@ class _SAEFamily:
         """Return the op labels of this family's site on the record's trace (cached)."""
 
         trace = getattr(record, "trace", None) or getattr(record, "source_trace", None)
-        if trace is None or not hasattr(trace, "resolve_sites"):
+        if trace is None or not hasattr(trace, "_resolve_sites"):
             return None
         cached = self._homes.get(id(trace))
         if cached is not None and cached[0]() is trace:
@@ -296,7 +296,7 @@ class _SAEFamily:
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", MultiMatchWarning)
-                    matched = trace.resolve_sites(self.site, max_fanout=len(trace.layer_list) or 1)
+                    matched = trace._resolve_sites(self.site, max_fanout=len(trace.layer_list) or 1)
             except (SiteResolutionError, InvalidArgumentError, KeyError, ValueError) as exc:
                 return InvalidArgumentError(
                     f"the SAE registered as {self.name!r} sits at {self.site!r}, which matches "

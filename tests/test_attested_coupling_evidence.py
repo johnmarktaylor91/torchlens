@@ -315,7 +315,7 @@ def test_do_quarantines_inherited_episode_evidence():
     )
     fork = log.fork()
     assert fork.annotations["episode"].get("rows") is not None  # inherited
-    fork.do(tl.units("relu_1_2:2", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("relu_1_2:2", [(0, 0)])], tl.zero_ablate())
     quarantined = fork.annotations["episode"]
     assert quarantined.get("quarantined") is True
     assert quarantined.get("code") == "episode_evidence_dropped_perturbed_replay"

@@ -44,7 +44,7 @@ def resolve_one_site(log: Any, site: Any) -> Any:
     """Resolve a TorchLens site-like value to one layer-pass record.
 
     The accepted vocabulary is deliberately WIDE (neuro memo item 9): any
-    ``resolve_sites`` selector or raw op label, or -- when that resolution
+    ``_resolve_sites`` selector or raw op label, or -- when that resolution
     misses -- any ``log[...]`` lookup, which covers module dotted paths
     (``"encoder.layer.3"``), the spelling Brain-Score users already write.
 
@@ -67,7 +67,7 @@ def resolve_one_site(log: Any, site: Any) -> Any:
     if hasattr(site, "out") and hasattr(site, "layer_label"):
         return site
     try:
-        resolved = log.resolve_sites(site, max_fanout=1)
+        resolved = log._resolve_sites(site, max_fanout=1)
         return resolved.first()
     except SiteResolutionError:
         if isinstance(site, str):

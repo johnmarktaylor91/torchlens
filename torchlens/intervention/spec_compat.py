@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, NamedTuple
 
 from .errors import GraphShapeMismatchError, SiteResolutionError
-from .resolver import SiteTable, _site_record, resolve_sites
+from .resolver import _resolve_sites, _site_record, _SiteTable
 from .types import InterventionSpec
 
 __all__ = ["SpecCompat", "TargetManifestDiff", "check_spec_compat"]
@@ -74,11 +74,11 @@ def _site_key_for_label(log: Any, label: str) -> str | None:
     return key if isinstance(key, str) else None
 
 
-def _site_keys_for_table(log: Any, table: SiteTable) -> list[str | None]:
+def _site_keys_for_table(log: Any, table: _SiteTable) -> list[str | None]:
     """Return each resolved site's structural key, in table order.
 
     Keys are looked up by each site record's own pass-qualified label, never by
-    ``SiteTable.labels()``: those are layer labels, which a multi-pass layer
+    ``_SiteTable.labels()``: those are layer labels, which a multi-pass layer
     repeats once per pass and which name no single op.
     """
 
@@ -148,7 +148,7 @@ def _resolve_entry(new_log: Any, entry: dict[str, Any], graph_hash: Any) -> _Ent
     hash_matches = entry.get("graph_shape_hash") == graph_hash
     selector = _target_spec_from_json(entry["selector"])
     try:
-        table = resolve_sites(
+        table = _resolve_sites(
             new_log,
             selector,
             strict=True,

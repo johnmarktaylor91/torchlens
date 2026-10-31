@@ -279,16 +279,14 @@ def test_pass_qualification_pin_on_albert_two_pass_adds():
     fork_bare = trace.fork()
     with pytest.raises(Exception, match="ambiguous|multipass_bare_label"):
         fork_bare.do(
-            tl.units(site, torch.ones_like(trace[f"{site}:1"].out, dtype=torch.bool)).resolve(
-                fork_bare
-            ),
+            fork_bare[tl.units(site, torch.ones_like(trace[f"{site}:1"].out, dtype=torch.bool))],
             tl.zero_ablate(),
         )
     # Pass-qualified zero-ablation of one slice of pass 1.
     fork = trace.fork()
     mask = torch.zeros_like(trace[f"{site}:1"].out, dtype=torch.bool)
     mask[0, 0, :] = True
-    fork.do(tl.units(f"{site}:1", mask).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units(f"{site}:1", mask)], tl.zero_ablate())
     assert torch.all(fork[f"{site}:1"].out[0, 0, :] == 0), "edited slice not ablated"
     assert torch.equal(fork[f"{site}:1"].out[0, 1:, :], trace[f"{site}:1"].out[0, 1:, :]), (
         "untouched elements of the addressed pass moved"
@@ -301,7 +299,7 @@ def test_pass_qualification_pin_on_albert_two_pass_adds():
     )
     # Identity donor: patch pass 2 from the unedited source trace -> no-op.
     fork_donor = trace.fork()
-    fork_donor.do(tl.units(f"{site}:2", mask).resolve(fork_donor), tl.patch_from(trace))
+    fork_donor.do(fork_donor[tl.units(f"{site}:2", mask)], tl.patch_from(trace))
     assert torch.equal(fork_donor.output_ops[0].out, trace.output_ops[0].out), (
         "identity-donor patch changed the output"
     )
@@ -338,7 +336,7 @@ def test_container_output_do_lands_through_model_output_container(r0_capture):
     fork = trace.fork()
     mask = torch.zeros_like(trace[f"{sites[0]}:1"].out, dtype=torch.bool)
     mask[0, 0, :] = True
-    fork.do(tl.units(f"{sites[0]}:1", mask).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units(f"{sites[0]}:1", mask)], tl.zero_ablate())
     assert torch.all(fork[f"{sites[0]}:1"].out[0, 0, :] == 0), "edited slice not ablated"
     output_nodes = [
         op for op in fork.layer_list if getattr(op, "is_output", False) and op.out is not None

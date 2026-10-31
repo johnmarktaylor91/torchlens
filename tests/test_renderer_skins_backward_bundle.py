@@ -54,7 +54,7 @@ def _bundle() -> tl.Bundle:
     model, inputs = _Block(), torch.randn(1, 3)
     clean = tl.trace(model, inputs, capture=tl.options.CaptureOptions(intervention_ready=True))
     edited = clean.fork("intervened")
-    edited.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(edited), tl.zero_ablate())
+    edited.do(edited[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     return tl.Bundle({"clean": clean, "intervened": edited}, baseline="clean")
 
 

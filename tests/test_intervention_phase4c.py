@@ -317,9 +317,7 @@ def test_module_selector_matches_exact_multi_op_boundary() -> None:
     )
 
     intervened = {op.layer_label for op in log.ops if op.interventions}
-    resolved_boundary = {
-        op.layer_label for op in log.resolve_sites(tl.module("block"), max_fanout=len(log.ops))
-    }
+    resolved_boundary = {log[label].layer_label for label in log[tl.module("block")].labels}
 
     assert len(intervened) == 1
     assert intervened == resolved_boundary
@@ -351,18 +349,13 @@ def test_module_selector_save_is_exact_for_trace_and_record() -> None:
     recording_trace = recording.to_trace()
 
     saved = {op.layer_label for op in log.ops if op.has_saved_activation}
-    resolved_boundary = {
-        op.layer_label for op in log.resolve_sites(tl.module("block"), max_fanout=len(log.ops))
-    }
+    resolved_boundary = {log[label].layer_label for label in log[tl.module("block")].labels}
     assert saved == resolved_boundary
     assert len(recording.records) == 1
     assert recording.records[0].ctx.output_of_module_calls == ("block:1",)
     recording_saved = {op.layer_label for op in recording_trace.ops if op.has_saved_activation}
     recording_boundary = {
-        op.layer_label
-        for op in recording_trace.resolve_sites(
-            tl.module("block"), max_fanout=len(recording_trace.ops)
-        )
+        recording_trace[label].layer_label for label in recording_trace[tl.module("block")].labels
     }
     assert recording_saved == recording_boundary
 

@@ -14,7 +14,6 @@ from .._user_funcs import (
     validate_batch_of_models_and_inputs,
     validate_forward_pass,
 )
-from ..intervention.resolver import resolve_sites
 from .diagnostics import (
     get_validation_diagnostics,
     get_validation_failure,
@@ -1339,6 +1338,5 @@ __all__ = [
     "validate_batch_of_models_and_inputs",
     "validate_forward_pass",
     "check_metadata_invariants",
-    "resolve_sites",
     "validate_tlspec",
 ]

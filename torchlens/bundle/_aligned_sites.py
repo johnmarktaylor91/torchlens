@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from ..intervention.resolver import resolve_sites
+from ..intervention.resolver import _resolve_sites
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -75,7 +75,7 @@ def resolve_aligned_site(
     resolved: dict[str, Any] = {}
     for name, log in members.items():
         try:
-            table = resolve_sites(log, counterparts.get(name, label), max_fanout=1)
+            table = _resolve_sites(log, counterparts.get(name, label), max_fanout=1)
             resolved[name] = table.first()
         except Exception:  # noqa: BLE001 - missing sites are not common sites
             return None

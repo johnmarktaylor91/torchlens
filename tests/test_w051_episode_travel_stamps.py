@@ -116,7 +116,7 @@ def test_at_step_never_answers_from_stale_stamps() -> None:
     trace = _episode(model)
     product = trace.run(inputs=torch.tensor([[9]])).trace
     with pytest.raises(TorchLensError) as info:
-        product.resolve_sites(at_step(1))
+        product[at_step(1)]
     assert info.value.fields["code"] == "episode_step_selector_without_episode"
 
 

@@ -135,7 +135,7 @@ def _resolve_population(within: Any, trace: Any) -> Selection:
                 code="selection_trace_mismatch",
             )
         return within
-    return within.resolve(trace)
+    return within._resolve(trace)
 
 
 def _default_population(trace: Any) -> Selection:

@@ -98,12 +98,12 @@ def test_site_classifies_structural() -> None:
 
 def test_post_hoc_resolution_by_components_and_key() -> None:
     log = _ready(_TinyModel())
-    by_type = log.resolve_sites(site(func="relu"))
-    assert by_type.labels() == ("relu_1_2",)
+    by_type = log[site(func="relu")]
+    assert by_type.labels == ("relu_1_2:1",)
     key = log["relu_1_2"].site_key
-    assert log.resolve_sites(site(key)).labels() == ("relu_1_2",)
-    by_module = log.resolve_sites(site(module_path="fc1"))
-    assert "linear_1_1" in by_module.labels()
+    assert log[site(key)].labels == ("relu_1_2:1",)
+    by_module = log[site(module_path="fc1")]
+    assert "linear_1_1:1" in by_module.labels
 
 
 def test_reused_module_calls_share_one_site_key_family() -> None:
@@ -119,16 +119,16 @@ def test_reused_module_calls_share_one_site_key_family() -> None:
     log = _ready(_ReusedModule())
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # fan-out disclosure, expected here
-        table = log.resolve_sites(site(func="relu"))
+        table = log[site(func="relu")]
         # grouping rule row 28 (fork 1, module identity): the two calls of one
         # relu instance are one Layer with 2 passes, so address them by op label.
-        assert len({op.layer_label for op in table}) == 1
-        labels = [op.label for op in table]
+        assert len({log[label].layer_label for label in table.labels}) == 1
+        labels = list(table.labels)
         assert len(labels) == 2
         keys = {log.ops[label].site_key for label in labels}
         assert len(keys) == 1, "reused-module calls share ONE structural position key"
         (shared_key,) = keys
-        assert {op.label for op in log.resolve_sites(site(shared_key))} == set(labels)
+        assert set(log[site(shared_key)].labels) == set(labels)
 
 
 # ---------------------------------------------------------------------------

@@ -333,7 +333,7 @@ def test_batch_failure_mid_attach_detaches_earlier_pairs() -> None:
         fork.do(
             [
                 (log["relu_1_2"].__selection__(), tl.scale(2.0)),
-                (ragged.resolve(fork), permute_batch(seed=1, axis=0)),
+                (fork[ragged], permute_batch(seed=1, axis=0)),
             ]
         )
     assert excinfo.value.fields["code"] == "mask_not_row_equivariant"

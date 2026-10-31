@@ -277,7 +277,7 @@ def _resolve_region(operand: Any, trace: Any) -> Selection:
                 code="selection_trace_mismatch",
             )
         return operand
-    return operand.resolve(trace)
+    return operand._resolve(trace)
 
 
 def _region_labels(graph: _TraceGraph, resolved: Selection, producer: str) -> frozenset[str]:

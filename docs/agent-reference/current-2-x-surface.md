@@ -760,11 +760,11 @@
   `sdpa` mask builder reads mask values and refuses typed
   `value_dependent_branch_unsupported` naming that remedy (never an automatic
   backend switch). Doc of record: `docs/reference/weightsfree_capture.md`.
-- SELECTION ALGEBRA (L6 stage 1; Selection/ResolvedSelection/resolve/
+- SELECTION ALGEBRA (L6 stage 1; Selector/Selection/`trace[selector]`/
   `__selection__`/operators slate-ratified subject to D7, producer
   constructors + members DOCUMENTED-UNSTABLE): `tl.Selector` is the
-  composable trace-independent query AST; `selection.resolve(trace)` returns
-  the frozen trace-bound `tl.Selection` (ordered `Site(site_key,
+  composable trace-independent query AST; `trace[selector]` (the one
+  resolution door) returns the frozen trace-bound `tl.Selection` (ordered `Site(site_key,
   mask, provenance)` tuple; SESSION-ONLY, never persisted). TWO-LEVEL
   denotation: (touched-site family, selected-element set) — zero-mask entries
   stay first-class, `.empty`/`__bool__` are element-level, and `bool()` on
@@ -1002,7 +1002,7 @@
   rather than guess. BOUNDARY: a bare layer label naming a
   multi-pass layer refuses typed — `multipass_bare_label_ambiguous`
   (`AmbiguousSiteError`) on string/`tl.label` addressing
-  (do/attach_hooks/push_from/resolve_sites), `selection_unresolvable` /
+  (do/attach_hooks/push_from/`trace[selector]`), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
   every pass-qualified spelling; bare labels on single-pass layers stay
   accepted, predicate selectors keep fan-out, and the explicit Layer
@@ -1306,8 +1306,7 @@
   `site + decode(z') - decode(z)` (the reconstruction error stays), and
   `trace[site].facets["name[k]"]` reads the encoder activation; a string site must be one
   op of a single-pass layer (`sae_latent_site_ambiguous`), a selector site fans out. A bare
-  latent or `tl.head` selector also reads on a finished trace at `trace[selector]` and
-  `trace.resolve_sites(selector)` (each entry a `Facet`, `.value` the read;
+  latent or `tl.head` selector also reads on a finished trace at `trace[selector]` (the `Facet`, `.value` the read;
   `facet_selector_no_match` when nothing serves it) and keeps the ops that read needs
   through `tl.trace(save=selector)`; `intervene=`, `bind`, capture `hooks=` and
   `tl.extract` still refuse a facet selector.

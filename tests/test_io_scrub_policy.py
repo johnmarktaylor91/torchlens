@@ -452,9 +452,8 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "between": lambda t: t.between(t.input_ops[0].label, t.output_ops[0].label),
         "subgraph": lambda t: t.subgraph(tl.func("relu")),
         "find_sites": lambda t: t.find_sites("relu"),
-        "resolve_sites": lambda t: t.resolve_sites("relu"),
         # F33 (weightsfree D14): the audit-only plan checker is a pure read
-        # over resolve_sites + recorded geometry; executable=False always.
+        # over selector resolution + recorded geometry; executable=False always.
         "check_plan": lambda t: t.check_plan(["relu"]),
         "stack": lambda t: t.stack(tl.func("relu")),
         "show": lambda t: t.show(kind="graph", path=str(out / "shown")),

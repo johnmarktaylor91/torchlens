@@ -15,7 +15,6 @@ import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
 from torchlens.errors import MetadataInvariantError  # noqa: E402
-from torchlens.intervention.errors import MultiMatchWarning  # noqa: E402
 from torchlens.validation import (  # noqa: E402
     check_metadata_invariants,
 )
@@ -176,8 +175,8 @@ def test_mlx_nested_modules_preserve_object_module_attribution() -> None:
     assert {module.address for module in trace.modules} == {"self", "encoder", "head"}
     assert set(trace.modules["self"].call_children) == {"encoder", "head"}
     assert {"encoder:1", "head:1"} <= set(trace.module_calls.keys())
-    encoder_labels = trace.resolve_sites(tl.in_module("encoder"), max_fanout=16).labels()
-    head_labels = trace.resolve_sites(tl.in_module("head"), max_fanout=16).labels()
+    encoder_labels = trace[tl.in_module("encoder")].labels
+    head_labels = trace[tl.in_module("head")].labels
     assert encoder_labels
     assert head_labels
     assert all("encoder:1" in trace.layers[label].modules for label in encoder_labels)
@@ -198,8 +197,8 @@ def test_mlx_shared_submodule_aliases_use_primary_address() -> None:
     assert shared.all_addresses == ["left", "right"]
     assert shared.num_calls == 2
     assert shared.call_labels == ["left:1", "left:2"]
-    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        left_labels = trace.resolve_sites(tl.in_module("left"), max_fanout=32).labels()
+    left_labels = trace[tl.in_module("left")].labels
+    assert len(left_labels) == 2
     assert any("left:1" in trace.layers[label].modules for label in left_labels)
     assert any("left:2" in trace.layers[label].modules for label in left_labels)
     assert {tuple(param.all_module_addresses) for param in shared.params} == {("left", "right")}
@@ -213,14 +212,14 @@ def test_mlx_list_container_and_parameterless_modules_are_discovered() -> None:
     trace = tl.trace(MLXListContainer(), _input(), backend="mlx")
 
     assert {"layers.0", "layers.1", "layers.2"} <= {module.address for module in trace.modules}
-    assert trace.resolve_sites(tl.in_module("layers.1"), max_fanout=16).labels()
+    assert trace[tl.in_module("layers.1")].labels
     assert trace.modules["layers.0"].params
     assert trace.modules["layers.2"].params
     assert check_metadata_invariants(trace) is True
 
     parameterless = tl.trace(MLXParameterless(), _input(), backend="mlx")
     assert [module.address for module in parameterless.modules] == ["self"]
-    assert parameterless.resolve_sites(tl.in_module("self"), max_fanout=16).labels()
+    assert parameterless[tl.in_module("self")].labels
     assert check_metadata_invariants(parameterless) is True
 
 

@@ -160,7 +160,7 @@ accumulate/fail-fast machinery (`max_predicate_failures` /
 
 ## What S4 explicitly does NOT promise
 
-* NO `Selection` / `ResolvedSelection` types, NO `__selection__` protocol, NO
+* NO `Selector` / `Selection` types, NO `__selection__` protocol, NO
   new operator dunders (separate merges).
 * NO selector-kind extension: the `SelectorKind` closed Literal does not
   widen here, and there is NO kind-string / `TargetSpec` round-trip for

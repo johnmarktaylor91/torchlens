@@ -324,6 +324,6 @@ def intervene_selector_fired_nowhere(trace: Trace, selector: Any, direction: str
         with warnings.catch_warnings():
             # Only the zero-match fact is asked; fan-out is the user's design.
             warnings.simplefilter("ignore", MultiMatchWarning)
-            return not trace.resolve_sites(selector, max_fanout=fanout)
+            return not trace._resolve_sites(selector, max_fanout=fanout)
     except SiteResolutionError:
         return True

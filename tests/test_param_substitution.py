@@ -473,7 +473,7 @@ def test_foreign_resolved_selection_refuses(capture):
     model, x, trace = capture
     other_model, other_x, other = _capture()
     try:
-        resolved = tl.param("fc1.weight").resolve(other)
+        resolved = other[tl.param("fc1.weight")]
         with pytest.raises(SelectionError) as excinfo:
             trace.fork().do(resolved, tl.scale(0.0))
         assert excinfo.value.fields["code"] == "selection_trace_mismatch"

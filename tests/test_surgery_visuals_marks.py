@@ -105,7 +105,7 @@ def _edited_fork(log):
     """A fork with one recorded replay edit at the relu."""
 
     fork = log.fork()
-    fork.do(tl.units("relu_1_2", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("relu_1_2", [(0, 0)])], tl.zero_ablate())
     return fork
 
 
@@ -149,7 +149,7 @@ def test_cohort_mark_is_heuristic_and_dashed() -> None:
     x = torch.randn(3, 4)
     log = tl.trace(model, x, capture=_CAPTURE)
     fork = log.fork()
-    fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     facts = surgery_facts(fork)
     by_label = {mark.call_label: mark for mark in facts.marks}
     assert by_label["linear_1_1:1"].basis == "fact"
@@ -187,7 +187,7 @@ def test_rendered_passes_carry_only_their_own_marks(tmp_path) -> None:
     x = torch.randn(3, 4)
     log = tl.trace(model, x, capture=_CAPTURE)
     fork = log.fork()
-    fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     source = render_surgery(
         fork,
         vis_mode="unrolled",
@@ -226,7 +226,7 @@ def test_staged_set_only_attributes_no_marks(chain_capture) -> None:
     _model, _x, log = chain_capture
     fork = log.fork()
     fork.do(
-        tl.units("relu_1_2", [(0, 0)]).resolve(fork),
+        fork[tl.units("relu_1_2", [(0, 0)])],
         tl.zero_ablate(),
         intervention=tl.options.InterventionOptions(engine="set_only"),
     )
@@ -407,7 +407,7 @@ def test_diff_positional_cohort_join_is_heuristic() -> None:
     subject = tl.trace(model, x, capture=_CAPTURE)
     reference = tl.trace(model, x, capture=_CAPTURE)
     fork = subject.fork()
-    fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     diff = intervention_diff(fork, reference)
     joins = {row.subject_label: row for row in diff.rows if row.kind == "matched"}
     assert joins["linear_1_1:1"].join == "site_key_positional"
@@ -465,7 +465,7 @@ def test_diff_draw_line_styles_and_census_sidecar(tmp_path) -> None:
     subject = tl.trace(model, x, capture=_CAPTURE)
     reference = tl.trace(model, x, capture=_CAPTURE)
     fork = subject.fork()
-    fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     diff = intervention_diff(fork, reference)
     rendered = diff.draw(str(tmp_path / "diff_fig"), vis_fileformat="svg", vis_save_only=True)
     figure_text = (tmp_path / "diff_fig.svg").read_text()

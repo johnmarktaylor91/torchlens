@@ -65,7 +65,7 @@ def test_interior_masked_edit_scatter_contract(log):
     """Element-masked interior edit: masked elements edited, rest bit-intact."""
 
     selection = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)])
-    mask = selection.resolve(log)[0].mask
+    mask = log[selection][0].mask
     fork = log.fork()
     fork.do(selection, tl.zero_ablate())
     edited = fork["relu_1_2"].out
@@ -84,7 +84,7 @@ def test_leaf_site_masked_edit_via_rf_intersection(log):
     u1 = log["relu_2_4"]
     u2 = log["conv2d_2_3"]
     inter = u1.receptive_field.at((3, 3)) & u2.receptive_field.at((5, 5))
-    mask = inter.resolve(log)[0].mask
+    mask = log[inter][0].mask
     fork = log.fork()
     fork.do(inter, tl.zero_ablate())
     patched = fork["input_1"].out
@@ -112,7 +112,7 @@ def test_raw_value_routes_through_replace_with(log):
     """A non-callable replacement value obeys the same scatter contract."""
 
     selection = tl.units("relu_1_2", [(0, 0, 1, 1)])
-    mask = selection.resolve(log)[0].mask
+    mask = log[selection][0].mask
     replacement = torch.full_like(log["relu_1_2"].out, 7.0)
     fork = log.fork()
     fork.do(selection, replacement)
@@ -189,7 +189,7 @@ def test_audit_record_contents(log):
     """The audit record carries repr + digest + per-site relation/counts."""
 
     selection = tl.units("relu_1_2", [(0, 0, 1, 1)])
-    resolved = selection.resolve(log)
+    resolved = log[selection]
     fork = log.fork()
     fork.do(selection, tl.zero_ablate())
     record = fork.intervention_audit[-1]
@@ -242,11 +242,11 @@ def test_patch_from_identity_and_discriminating_twin(log):
     """patch_from: identity patch is exact; a perturbed source is consumed."""
 
     selection = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)])
-    mask = selection.resolve(log)[0].mask
+    mask = log[selection][0].mask
 
     # (a) IDENTITY: patching the trace's own values is exact end to end.
     fork = log.fork()
-    fork.do(selection.resolve(fork), tl.patch_from(log))
+    fork.do(fork[selection], tl.patch_from(log))
     assert torch.equal(fork["output_1"].out, log["output_1"].out)
 
     # (b) DISCRIMINATING TWIN: a documented-epsilon perturbation propagates.
@@ -255,7 +255,7 @@ def test_patch_from_identity_and_discriminating_twin(log):
     perturbed[0, 0, 1, 1] += 10.0
     _replay_module._commit_replay_updates(source, {"relu_1_2": perturbed}, {})
     fork2 = log.fork()
-    fork2.do(selection.resolve(fork2), tl.patch_from(source))
+    fork2.do(fork2[selection], tl.patch_from(source))
     assert torch.isclose(fork2["relu_1_2"].out[0, 0, 1, 1], perturbed[0, 0, 1, 1])
     assert torch.equal(fork2["relu_1_2"].out[~mask], log["relu_1_2"].out[~mask])
     assert not torch.equal(fork2["output_1"].out, log["output_1"].out)

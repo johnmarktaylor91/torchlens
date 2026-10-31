@@ -281,7 +281,7 @@ def test_composed_target_refuses_and_within_runs() -> None:
 def test_resolved_target_refuses_and_units_mask_edits_the_support_set() -> None:
     log = _trace()
     fork = log.fork()
-    resolved = _subspace_sel().resolve(fork)
+    resolved = fork[_subspace_sel()]
     with pytest.raises(InvalidArgumentError) as caught:
         fork.do(resolved, tl.zero_ablate())
     assert caught.value.fields["code"] == "subspace_projection_composed"

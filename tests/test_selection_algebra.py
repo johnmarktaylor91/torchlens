@@ -90,8 +90,8 @@ def test_metaplan_flagship_expression(log):
     union = u1.receptive_field.at((3, 3)) | u2.receptive_field.at((5, 5))
     inter = u1.receptive_field.at((3, 3)) & u2.receptive_field.at((5, 5))
     assert isinstance(union, Selector) and isinstance(inter, Selector)
-    resolved_union = union.resolve(log)
-    resolved_inter = inter.resolve(log)
+    resolved_union = log[union]
+    resolved_inter = log[inter]
     assert resolved_inter.is_empty is False
     assert _elements(resolved_inter) <= _elements(resolved_union)
     # Overlapping late-layer RF boxes at the input site: one shared ACT site.
@@ -139,8 +139,8 @@ def test_selector_sub_desugars_to_and_not(log):
     # Semantics: difference of match-sets IS a(x) and not b(x); coincides with
     # the desugared spelling on the resolved whole-site view.
     desugared = tl.func("relu") & (~tl.in_module("c1"))
-    lifted_difference = difference.__selection__().resolve(log)
-    lifted_desugared = desugared.__selection__().resolve(log)
+    lifted_difference = log[difference.__selection__()]
+    lifted_desugared = log[desugared.__selection__()]
     assert lifted_difference == lifted_desugared
 
     with pytest.raises(Exception, match="cannot subtract"):
@@ -162,8 +162,8 @@ def test_op_and_layer_lift(log):
 
     layer = log["relu_1_2"]
     op = layer.ops[0]
-    resolved_layer = layer.__selection__().resolve(log)
-    resolved_op = op.__selection__().resolve(log)
+    resolved_layer = log[layer.__selection__()]
+    resolved_op = log[op.__selection__()]
     assert resolved_layer == resolved_op  # single-pass model: same denotation
     assert resolved_op[0].key == ("relu_1_2", 1)
     assert resolved_op[0].provenance.relation == "exact"
@@ -176,14 +176,14 @@ def test_op_and_layer_lift(log):
 
 
 def test_bool_refusal_pair(log):
-    """Selection.__bool__ refuses typed; ResolvedSelection is element-level."""
+    """Selector.__bool__ refuses typed; Selection is element-level."""
 
     query = tl.units("relu_1_2", [(0, 0, 0, 0)])
     with pytest.raises(SelectionError) as excinfo:
         bool(query)
     assert excinfo.value.fields["code"] == "selection_bool_ambiguous"
 
-    resolved = query.resolve(log)
+    resolved = log[query]
     assert bool(resolved) is True
     assert resolved.is_empty is False
     element_empty = resolved - resolved
@@ -204,9 +204,9 @@ def _family(resolved: Selection) -> frozenset:
 def test_law_table(log):
     """Laws that HOLD, at both levels."""
 
-    a = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)]).resolve(log)
-    b = tl.units("relu_1_2", [(0, 1, 2, 2), (0, 0, 3, 3)]).resolve(log)
-    c = log["conv2d_1_1"].__selection__().resolve(log)
+    a = log[tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)])]
+    b = log[tl.units("relu_1_2", [(0, 1, 2, 2), (0, 0, 3, 3)])]
+    c = log[log["conv2d_1_1"].__selection__()]
 
     # commutativity + associativity of | and &
     assert (a | b) == (b | a)
@@ -224,7 +224,7 @@ def test_law_table(log):
     minus_self = a - a
     assert minus_self.is_empty and _family(minus_self) == _family(a)
     # involution THROUGH the element-empty intermediate
-    full_site = log["relu_1_2"].__selection__().resolve(log)
+    full_site = log[log["relu_1_2"].__selection__()]
     complemented = ~full_site
     assert complemented.is_empty and _family(complemented) == _family(full_site)
     assert (~complemented) == full_site
@@ -238,8 +238,8 @@ def test_law_table(log):
 def test_pinned_non_laws(log):
     """Deliberate NON-laws, pinned."""
 
-    a = tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(log)
-    c = log["conv2d_1_1"].__selection__().resolve(log)
+    a = log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
+    c = log[log["conv2d_1_1"].__selection__()]
 
     # A - B != A & ~B whenever A touches sites B does not (family rules differ)
     left = a - c
@@ -254,8 +254,8 @@ def test_pinned_non_laws(log):
     assert de_morgan_left != de_morgan_right
 
     # ~lift(s) != lift(~s) for selector-terms
-    mask_complement = (~tl.func("relu").__selection__()).resolve(log)
-    predicate_negation = (~tl.func("relu")).__selection__().resolve(log)
+    mask_complement = log[~tl.func("relu").__selection__()]
+    predicate_negation = log[(~tl.func("relu")).__selection__()]
     assert mask_complement != predicate_negation
     # predicate negation matches all NON-relu sites; mask complement stays on
     # the relu sites with empty masks.
@@ -265,8 +265,8 @@ def test_pinned_non_laws(log):
 def test_complement_empty_cells(log):
     """The two empty cells, keyed by level."""
 
-    a = tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(log)
-    c = log["conv2d_1_1"].__selection__().resolve(log)
+    a = log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
+    c = log[log["conv2d_1_1"].__selection__()]
     no_sites = a & c  # disjoint families -> no touched sites
     assert len(no_sites) == 0
     assert (~no_sites) == no_sites  # complement of no-touched-sites
@@ -284,7 +284,7 @@ def test_complement_empty_cells(log):
 
 
 def _act_nonempty(log):
-    return tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(log)
+    return log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
 
 
 def _act_element_empty(log):
@@ -293,11 +293,11 @@ def _act_element_empty(log):
 
 
 def _act_no_sites(log):
-    return _act_nonempty(log) & log["conv2d_1_1"].__selection__().resolve(log)
+    return _act_nonempty(log) & log[log["conv2d_1_1"].__selection__()]
 
 
 def _param_nonempty(log):
-    return tl.param("c1.weight").resolve(log)
+    return log[tl.param("c1.weight")]
 
 
 def _param_element_empty(log):
@@ -307,7 +307,7 @@ def _param_element_empty(log):
 
 def _param_no_sites(log):
     # PARAM x PARAM & over disjoint families -> no touched sites
-    return tl.param("c1.weight").resolve(log) & tl.param("c2.weight").resolve(log)
+    return log[tl.param("c1.weight")] & log[tl.param("c2.weight")]
 
 
 _EMPTINESS_BUILDERS = {
@@ -352,8 +352,8 @@ def test_totality_mixed_kind_cells_refuse(log, operator, resolved_state):
     act = tl.units("relu_1_2", [(0, 0, 1, 1)])
     param = tl.param("c1.weight")
     if resolved_state == "resolved":
-        act = act.resolve(log)
-        param = param.resolve(log)
+        act = log[act]
+        param = log[param]
     with pytest.raises(SelectionError) as excinfo:
         {
             "or": lambda: act | param,
@@ -377,7 +377,7 @@ def test_totality_invert_cells(log):
         assert _family(inverted) == _family(resolved)
     query = tl.units("relu_1_2", [(0, 0, 1, 1)])
     assert isinstance(~query, Selector)
-    assert (~~query).resolve(log) == query.resolve(log)
+    assert log[~~query] == log[query]
 
 
 def test_kind_matrix_edge_cells_pinned_for_stage3():
@@ -400,7 +400,7 @@ def test_query_composition_flattens_or(log):
         | tl.units("relu_1_2", [(0, 0, 3, 3)])
     )
     assert isinstance(query, Selector)
-    assert query.resolve(log)[0].num_selected == 3
+    assert log[query][0].num_selected == 3
 
 
 def test_query_resolved_mixing(log, other_log):
@@ -408,14 +408,14 @@ def test_query_resolved_mixing(log, other_log):
     resolved OP resolved across traces refuses typed."""
 
     query = tl.units("relu_1_2", [(0, 0, 1, 1)])
-    resolved = tl.units("relu_1_2", [(0, 0, 2, 2)]).resolve(log)
+    resolved = log[tl.units("relu_1_2", [(0, 0, 2, 2)])]
     mixed = resolved | query
     assert isinstance(mixed, Selection)
     assert mixed[0].num_selected == 2
     mixed_reflected = query | resolved
     assert mixed_reflected == mixed
 
-    foreign = tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(other_log)
+    foreign = other_log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
     with pytest.raises(SelectionError) as excinfo:
         resolved | foreign
     assert excinfo.value.fields["code"] == "selection_trace_mismatch"
@@ -489,9 +489,9 @@ def test_difference_table_all_cells_both_orders(a, b):
 def test_relation_composition_flows_through_operators(log):
     """Composed entries carry the table-derived relation."""
 
-    exact = tl.units("input_1", [(0, 0, 4, 4)]).resolve(log)  # relation exact
+    exact = log[tl.units("input_1", [(0, 0, 4, 4)])]  # relation exact
     box = log["relu_2_4"].receptive_field.at((3, 3))
-    hull = box.__selection__().resolve(log)
+    hull = log[box.__selection__()]
     hull_relation = hull[0].provenance.relation  # exact or upper_bound
     joined = exact | hull
     assert joined[0].provenance.relation == _join_relation("exact", hull_relation)
@@ -510,16 +510,16 @@ def test_mask_representation_parity(log):
     """whole-site sentinel == dense equivalent; slice-box == dense equivalent."""
 
     op = log["relu_1_2"].ops[0]
-    whole = op.__selection__().resolve(log)
+    whole = log[op.__selection__()]
     dense_mask = torch.ones(op.shape, dtype=torch.bool)
-    dense = tl.units("relu_1_2", dense_mask).resolve(log)
+    dense = log[tl.units("relu_1_2", dense_mask)]
     assert whole == dense
 
     box = log["relu_2_4"].receptive_field.at((3, 3))
-    from_slices = box.__selection__().resolve(log)
+    from_slices = log[box.__selection__()]
     dense_box = torch.zeros(box.input_shape, dtype=torch.bool)
     dense_box[box.slices()] = True
-    from_dense = tl.units("input_1", dense_box).resolve(log)
+    from_dense = log[tl.units("input_1", dense_box)]
     assert from_slices[0].key == from_dense[0].key
     assert torch.equal(from_slices[0].mask, from_dense[0].mask)
 
@@ -527,7 +527,7 @@ def test_mask_representation_parity(log):
 def test_mask_immutability_pin(log):
     """Mutating a returned mask alters NOTHING: digest, equality, later reads."""
 
-    resolved = tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(log)
+    resolved = log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
     entry = resolved[0]
     digest_before = resolved.digest
     handed_out = entry.mask
@@ -535,15 +535,15 @@ def test_mask_immutability_pin(log):
     handed_out.fill_(True)
     assert entry.num_selected == 1
     assert resolved.digest == digest_before
-    assert resolved == tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(log)
+    assert resolved == log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
 
 
 def test_repeated_resolve_identity_stability(log):
     """Repeated resolves are equal with equal digests (deterministic)."""
 
     query = tl.units("relu_1_2", [(0, 0, 1, 1)]) | tl.func("conv2d")
-    first = query.resolve(log)
-    second = query.resolve(log)
+    first = log[query]
+    second = log[query]
     assert first == second
     assert first.digest == second.digest
 
@@ -556,7 +556,7 @@ def test_multi_site_value_type(log):
     ``relu_1_2``).
     """
 
-    resolved = (tl.func("relu") | tl.func("conv2d")).__selection__().resolve(log)
+    resolved = log[(tl.func("relu") | tl.func("conv2d")).__selection__()]
     keys = [entry.key for entry in resolved]
     execution_order = {
         (op.layer_label, op.pass_index): index for index, op in enumerate(log.layer_list)
@@ -571,7 +571,7 @@ def test_multi_site_value_type(log):
 def test_empty_selection_legal_end_to_end(log):
     """Zero matches is disclosure, never an error."""
 
-    resolved = tl.label("no_such_layer_anywhere").__selection__().resolve(log)
+    resolved = log[tl.label("no_such_layer_anywhere").__selection__()]
     assert len(resolved) == 0
     assert resolved.is_empty is True
     assert bool(resolved) is False
@@ -582,30 +582,30 @@ def test_resolver_refusal_matrix(log):
 
     # site_not_in_trace
     with pytest.raises(SelectionError) as excinfo:
-        tl.units("nowhere_9_9", [(0,)]).resolve(log)
+        log[tl.units("nowhere_9_9", [(0,)])]
     assert excinfo.value.fields["code"] == "selection_unresolvable"
     assert excinfo.value.fields["reason"] == "site_not_in_trace"
 
     with pytest.raises(SelectionError) as excinfo:
-        tl.param("no.such.param").resolve(log)
+        log[tl.param("no.such.param")]
     assert excinfo.value.fields["reason"] == "site_not_in_trace"
 
     # mask_shape_mismatch (bad shape mask; out-of-range unit index)
     with pytest.raises(SelectionError) as excinfo:
-        tl.units("relu_1_2", torch.ones(2, 2, dtype=torch.bool)).resolve(log)
+        log[tl.units("relu_1_2", torch.ones(2, 2, dtype=torch.bool))]
     assert excinfo.value.fields["reason"] == "mask_shape_mismatch"
     with pytest.raises(SelectionError) as excinfo:
-        tl.units("relu_1_2", [(9, 9, 9, 9)]).resolve(log)
+        log[tl.units("relu_1_2", [(9, 9, 9, 9)])]
     assert excinfo.value.fields["reason"] == "mask_shape_mismatch"
     with pytest.raises(SelectionError) as excinfo:
-        tl.param("c1.weight", mask=torch.ones(1, dtype=torch.bool)).resolve(log)
+        log[tl.param("c1.weight", mask=torch.ones(1, dtype=torch.bool))]
     assert excinfo.value.fields["reason"] == "mask_shape_mismatch"
 
     # population_too_small (incl. the empty complement case)
     like = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 0, 2, 2)])
     whole = log["relu_1_2"].__selection__()
     with pytest.raises(SelectionError) as excinfo:
-        tl.random_like(like=like, within=~whole, seed=3).resolve(log)
+        log[tl.random_like(like=like, within=~whole, seed=3)]
     assert excinfo.value.fields["reason"] == "population_too_small"
     assert excinfo.value.fields["requested"] == 2
     assert excinfo.value.fields["available"] == 0
@@ -633,10 +633,10 @@ def test_resolver_refusals_no_index_space_and_non_tensor(log, monkeypatch):
         selection_module, "_forward_ops", lambda trace: (_NoShapeOp(), _NonTensorOp())
     )
     with pytest.raises(SelectionError) as excinfo:
-        tl.units("stub_1_1", [(0,)]).resolve(log)
+        log[tl.units("stub_1_1", [(0,)])]
     assert excinfo.value.fields["reason"] == "no_index_space"
     with pytest.raises(SelectionError) as excinfo:
-        tl.units("tuple_1_1", [(0,)]).resolve(log)
+        log[tl.units("tuple_1_1", [(0,)])]
     assert excinfo.value.fields["reason"] == "non_tensor_site"
 
 
@@ -647,7 +647,7 @@ def test_facet_lift_and_refusal_rows(log):
 
     op = log["relu_1_2"].ops[0]
     spec = FacetSpec.from_home(op)
-    resolved = spec.__selection__().resolve(log)
+    resolved = log[spec.__selection__()]
     assert resolved[0].key == ("relu_1_2", 1)
     assert resolved[0].provenance.relation == "exact"
     assert resolved[0].num_selected == resolved[0].mask.numel()
@@ -660,7 +660,7 @@ def test_facet_lift_and_refusal_rows(log):
     sparse_op = sparse_log["relu_1_2"].ops[0]
     sparse_spec = FacetSpec.from_home(sparse_op)
     with pytest.raises(SelectionError) as excinfo:
-        sparse_spec.__selection__().resolve(sparse_log)
+        sparse_log[sparse_spec.__selection__()]
     assert excinfo.value.fields["code"] == "selection_unresolvable"
     assert excinfo.value.fields["reason"] in ("value_not_saved", "facet_write_mask_unavailable")
 
@@ -683,21 +683,21 @@ def test_gradient_rf_lift():
     gradient = gradient_by_role["input.x"]
     selection = gradient.__selection__()
     assert isinstance(selection, Selector)
-    resolved = selection.resolve(armed)
+    resolved = armed[selection]
     assert resolved[0].provenance.relation == "exact"
     assert resolved[0].num_selected == int(gradient.support_mask.sum().item())
     # Mixin dispatch with a geometric box at the same site
     box = armed_op.receptive_field.at("center")
     combined = gradient | box
     assert isinstance(combined, Selector)
-    assert combined.resolve(armed)[0].num_selected >= resolved[0].num_selected
+    assert armed[combined][0].num_selected >= resolved[0].num_selected
 
 
 def test_box_lift_relation_and_shape_guard(log):
     """Hull lift relation: exact only when box.exact and no sparse axis."""
 
     box = log["relu_2_4"].receptive_field.at((3, 3))
-    resolved = box.__selection__().resolve(log)
+    resolved = log[box.__selection__()]
     expected = "exact" if (box.exact and not box.sparse_possible) else "upper_bound"
     assert resolved[0].provenance.relation == expected
     assert resolved[0].key == ("input_1", 1)
@@ -731,12 +731,12 @@ def test_random_selection_totality(log):
     like = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 0, 2, 2), (0, 1, 3, 3)])
     within = log["relu_1_2"].__selection__() - like
     control = tl.random_like(like=like, within=within, seed=11)
-    first = control.resolve(log)
-    second = control.resolve(log)
+    first = log[control]
+    second = log[control]
     assert first == second  # seeded determinism
     assert _elements(first) == 3  # |result| == |like|
     # sampled inside within: no overlap with `like`
-    overlap = first & like.resolve(log)
+    overlap = first & log[like]
     assert overlap.is_empty
     assert first.kind == "ACT"  # result kind = within's kind
 
@@ -759,8 +759,8 @@ def test_selection_repr_stability(log):
     assert repr(inverted) == "Selection[ACT](~units('relu_1_2', n=1))"
     box = log["relu_2_4"].receptive_field.at((3, 3))
     assert repr(box.__selection__()) == "Selection[ACT](rf_box('relu_2_4:1' -> 'input.x'))"
-    resolved = unit.resolve(log)
-    assert repr(resolved) == "ResolvedSelection[ACT](1 sites, 1 elements)"
+    resolved = log[unit]
+    assert repr(resolved) == "Selection[ACT](1 sites, 1 elements)"
 
 
 def test_selection_is_frozen(log):
@@ -769,7 +769,7 @@ def test_selection_is_frozen(log):
     query = tl.units("relu_1_2", [(0, 0, 1, 1)])
     with pytest.raises(AttributeError):
         query._kind = "PARAM"
-    resolved = query.resolve(log)
+    resolved = log[query]
     with pytest.raises(AttributeError):
         resolved._entries = ()
 
@@ -798,7 +798,7 @@ def test_internal_closed_set_guards_raise(log):
         _SelectionOperand,
     )
 
-    resolved = tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(log)
+    resolved = log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
     with pytest.raises(ValueError, match="unknown operator"):
         _compose_resolved("xor", resolved, resolved)
 

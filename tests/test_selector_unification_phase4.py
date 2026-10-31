@@ -24,14 +24,14 @@ def test_selector_composition_in_layers_to_save() -> None:
     assert any(layer.func_name == "relu" for layer in saved)
 
 
-def test_selector_composition_and_negation_in_resolve_sites() -> None:
+def test_selector_composition_and_negation_in_the_trace_door() -> None:
     """Composed selectors work after capture resolution."""
 
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU())
     log = tl.trace(model, torch.ones(1, 2))
-    relu_sites = log.resolve_sites(tl.func("relu") & ~tl.label_contains("linear"), max_fanout=100)
+    relu_sites = log[tl.func("relu") & ~tl.label_contains("linear")]
     assert relu_sites
-    assert all(site.func_name == "relu" for site in relu_sites)
+    assert all(log[label].func_name == "relu" for label in relu_sites.labels)
 
 
 def test_func_rejects_non_string_pattern() -> None:

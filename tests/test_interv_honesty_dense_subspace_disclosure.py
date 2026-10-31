@@ -71,7 +71,7 @@ def test_dense_direction_do_edits_the_component_and_stamps_both_markers() -> Non
 @pytest.mark.smoke
 def test_dense_resolution_source_carries_the_marker() -> None:
     log = _trace()
-    resolved = tl.subspace("relu_1_2", torch.ones(_D), origin="dense probe").resolve(log)
+    resolved = log[tl.subspace("relu_1_2", torch.ones(_D), origin="dense probe")]
     assert all(DENSE_SUPPORT_NOTE in entry.provenance.source for entry in resolved)
     assert all(bool(entry.mask.all()) for entry in resolved)
 
@@ -83,7 +83,7 @@ def test_sparse_direction_do_stamps_the_projection_and_edits_only_its_support() 
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
         fork.do(selection, tl.zero_ablate())
-    mask = selection.resolve(log)[0].mask
+    mask = log[selection][0].mask
     assert bool((fork["relu_1_2"].out[mask] == 0).all())
     assert torch.equal(fork["relu_1_2"].out[~mask], log["relu_1_2"].out[~mask])
     (site,) = fork.intervention_audit[-1]["sites"]

@@ -357,8 +357,9 @@ def test_h9_intervention_colors_only_intervened_pass():
         ),
         layer_list=ops,
     )
-    original = resolver.resolve_sites
-    resolver.resolve_sites = lambda trace, target, max_fanout: [ops[1]]  # resolve pass 2 only
+    # node_spec reads the private resolver at call time; patch it by name.
+    original = resolver._resolve_sites
+    resolver._resolve_sites = lambda trace, target, max_fanout: [ops[1]]  # resolve pass 2 only
     try:
         callback = make_intervention_node_spec_fn(
             fake, show_cone=False, graph_overrides=None, user_node_spec_fn=None
@@ -375,4 +376,4 @@ def test_h9_intervention_colors_only_intervened_pass():
         site_labels, _ = intervention_site_and_cone_labels(fake, show_cone=False)
         assert site_labels == {"relu_1_1"}
     finally:
-        resolver.resolve_sites = original
+        resolver._resolve_sites = original

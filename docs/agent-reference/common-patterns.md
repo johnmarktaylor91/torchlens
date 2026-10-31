@@ -108,11 +108,11 @@ full_structure = recording.to_trace()
 log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 u1, u2 = log["relu_1_2"], log["conv2d_2_3"]
 inter = u1.receptive_field.at((3, 3)) & u2.receptive_field.at((5, 5))  # a Selection
-resolved = inter.resolve(log)              # frozen, trace-bound, session-only
+resolved = log[inter]                      # frozen, trace-bound, session-only
 fork = log.fork()
 fork.do(inter, tl.zero_ablate())           # edit-then-scatter: only masked elements
 fork2 = log.fork()
-fork2.do(tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(fork2), tl.patch_from(log))
+fork2.do(fork2[tl.units("relu_1_2", [(0, 0, 1, 1)])], tl.patch_from(log))
 fork3 = log.fork()
 fork3.do(tl.param("head.weight"), tl.scale(0.5))  # "as if" the weight changed, replay-only:
 # every consumption is substituted; the live nn.Parameter is NEVER written.

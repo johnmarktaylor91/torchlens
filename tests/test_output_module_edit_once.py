@@ -401,8 +401,8 @@ def test_single_leaf_output_module_selects_one_site_without_multimatch() -> None
     trace = _ready_trace(model, x)
     with warnings.catch_warnings():
         warnings.simplefilter("error", MultiMatchWarning)
-        table = trace.resolve_sites(tl.module("fc2"))
-    assert len(list(table)) == 1
+        trace.fork().do(tl.module("fc2"), tl.scale(0.5))
+    assert len(trace[tl.module("fc2")]) == 1
 
 
 def test_multimatch_warning_names_alias_compounding_not_fan_out() -> None:
@@ -414,7 +414,7 @@ def test_multimatch_warning_names_alias_compounding_not_fan_out() -> None:
     producer = alias.parents[0]
     selector = tl.label(producer) | tl.label(alias.layer_label)
     with pytest.warns(MultiMatchWarning) as record:
-        trace.resolve_sites(selector)
+        trace.fork().do(selector, tl.scale(0.5))
     message = " ".join(str(item.message) for item in record)
     assert "compound" in message
     assert "fan out" not in message
@@ -427,7 +427,7 @@ def test_multimatch_warning_keeps_fan_out_for_independent_sites() -> None:
     model, x, _x2 = _setup(_TupleHeadNet)
     trace = _ready_trace(model, x)
     with pytest.warns(MultiMatchWarning, match="will fan out"):
-        trace.resolve_sites(tl.module("head"))
+        trace.fork().do(tl.module("head"), tl.scale(0.5))
 
 
 class _ChunkNet(nn.Module):

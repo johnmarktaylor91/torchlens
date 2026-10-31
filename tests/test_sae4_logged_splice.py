@@ -46,7 +46,7 @@ def test_logged_latents_are_trace_nodes_equal_to_the_result_latents(setup) -> No
     site, consumer = labels.index("linear_1_1:1"), labels.index(result.latents_site)
     assert site < consumer < labels.index(next(lab for lab in labels if lab.startswith("linear_2")))
     # Selectors see the node: the latents op is a relu of the logged trace.
-    relus = [op.label for op in result.spliced.resolve_sites(tl.func("relu"))]
+    relus = list(result.spliced[tl.func("relu")].labels)
     assert result.latents_site in relus
     assert result.latents_site.partition(":")[0] in str(result.spliced.summary())
 

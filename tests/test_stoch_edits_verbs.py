@@ -221,7 +221,7 @@ def test_mask_equivariance_law() -> None:
     baseline = log["relu_1_2"].out
     span = tl.units("relu_1_2", [(row, col) for row in range(5) for col in (1, 2)])
     fork = log.fork()
-    fork.do(span.resolve(fork), permute_batch(seed=4, axis=0))
+    fork.do(fork[span], permute_batch(seed=4, axis=0))
     record = sampling_records(fork)[-1]
     permutation = torch.tensor(record["permutation"])
     expected = baseline.clone()
@@ -237,7 +237,7 @@ def test_mask_equivariance_law() -> None:
     for seed in (1, 99):
         fork_bad = log.fork()
         with pytest.raises(Exception) as excinfo:
-            fork_bad.do(ragged.resolve(fork_bad), permute_batch(seed=seed, axis=0))
+            fork_bad.do(fork_bad[ragged], permute_batch(seed=seed, axis=0))
         assert excinfo.value.fields["code"] == "mask_not_row_equivariant"
 
 

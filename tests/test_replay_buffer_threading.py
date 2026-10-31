@@ -92,7 +92,7 @@ def test_inplace_buffer_edit_threads_through_every_pass() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error", BufferThreadGapWarning)
         fork.do(
-            tl.units("buffer_1:1", [(i,) for i in range(4)]).resolve(fork),
+            fork[tl.units("buffer_1:1", [(i,) for i in range(4)])],
             tl.replace_with(edit),
         )
 
@@ -127,7 +127,7 @@ def test_replay_leaves_source_trace_capture_untouched() -> None:
 
     fork = log.fork()
     fork.do(
-        tl.units("buffer_1:1", [(i,) for i in range(4)]).resolve(fork),
+        fork[tl.units("buffer_1:1", [(i,) for i in range(4)])],
         tl.replace_with(torch.full((4,), 7.0)),
     )
 
@@ -168,7 +168,7 @@ def test_inplace_activation_op_does_not_corrupt_origin_readback() -> None:
     fork = log.fork()
     edit = torch.full((2, 4), 5.0)
     fork.do(
-        tl.units("relu_1_2:1", [(i, j) for i in range(2) for j in range(4)]).resolve(fork),
+        fork[tl.units("relu_1_2:1", [(i, j) for i in range(2) for j in range(4)])],
         tl.replace_with(edit),
     )
 
@@ -194,7 +194,7 @@ def test_unprovable_buffer_thread_warns_and_keeps_captured_value() -> None:
 
     with pytest.warns(BufferThreadGapWarning, match="buffer_1:2"):
         fork.do(
-            tl.units("buffer_1:1", [(i,) for i in range(4)]).resolve(fork),
+            fork[tl.units("buffer_1:1", [(i,) for i in range(4)])],
             tl.replace_with(torch.full((4,), 7.0)),
         )
 

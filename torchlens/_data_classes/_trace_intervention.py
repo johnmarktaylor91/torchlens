@@ -662,7 +662,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             This model log after the selected propagation engine runs.
         """
 
-        if type(hooks_or_site).__name__ == "SiteTable":
+        if type(hooks_or_site).__name__ == "_SiteTable":
             # find_sites() output is a first-class address (leverage B3/NEW-4):
             # the zero-match refusal recommends find_sites, so its result must
             # be accepted here, lowered to the exact resolved site labels.
@@ -1519,7 +1519,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 )
             resolved_edges = lifted
         else:
-            resolved_edges = lifted.resolve(self)
+            resolved_edges = lifted._resolve(self)
         from ..intervention.edge_substitution import apply_edge_substitution_do
 
         payload = apply_edge_substitution_do(
@@ -1571,7 +1571,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 )
             resolved_params = lifted
         else:
-            resolved_params = lifted.resolve(self)
+            resolved_params = lifted._resolve(self)
         from ..intervention.param_substitution import apply_param_substitution_do
 
         payload = apply_param_substitution_do(
@@ -1871,7 +1871,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         except SiteResolutionError:
             pass
         max_fanout = max(1, len(self.layer_list))
-        self.resolve_sites(site, strict=strict, max_fanout=max_fanout)
+        self._resolve_sites(site, strict=strict, max_fanout=max_fanout)
 
     def _target_spec_from_site(self: "Trace", site: Any, *, strict: bool) -> TargetSpec:
         """Convert a selector-like site to a mutable target spec.

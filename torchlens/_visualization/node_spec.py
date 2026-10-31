@@ -216,11 +216,11 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
     if not targets:
         return []
 
-    from ..intervention.resolver import resolve_sites
+    from ..intervention.resolver import _resolve_sites
 
     by_label: dict[str, Op] = {}
     for target in targets:
-        table = resolve_sites(trace, target, max_fanout=max(1, len(trace.layer_list)))
+        table = _resolve_sites(trace, target, max_fanout=max(1, len(trace.layer_list)))
         for site in table:
             forward_site = _forward_site(site)
             # Key by the pass-qualified label (op.label, e.g. relu_1_1:2) so

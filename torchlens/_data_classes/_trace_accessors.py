@@ -8,6 +8,7 @@ from typing import Any
 from .._constants import _is_suffixed_raw_label
 from .._errors import AmbiguousOpLookupError
 from ._accessor_base import Accessor, attach_source_honesty
+from ._layer_accessors import _LAYER_COUNTABLE_FIELDS
 from .op import Op
 
 
@@ -35,6 +36,8 @@ def _group_by_attr(items: Sequence[Any], attr: str) -> dict[Any, list[Any]]:
 
 class OrphanAccessor(Accessor[Op]):
     """Dict-like accessor for retained orphan ``Op`` records."""
+
+    _COUNTABLE_FIELDS = _LAYER_COUNTABLE_FIELDS
 
     def __init__(self, _orphan_labels: Mapping[str, Op] | None = None) -> None:
         """Initialize from raw orphan labels.
@@ -257,6 +260,8 @@ class TraceOpAccessor(Accessor[Op]):
     over a chosen row list (``input_ops``, ``output_ops``, ``saved_ops``, ...)
     keeps the default ``counted_view=False`` and lists exactly its rows.
     """
+
+    _COUNTABLE_FIELDS = _LAYER_COUNTABLE_FIELDS
 
     def __init__(
         self,

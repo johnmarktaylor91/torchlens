@@ -6,7 +6,7 @@ import builtins
 import re as _re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, TypeAlias, overload
+from typing import Any, Literal, TypeAlias
 
 from .._errors import ArgumentTypeError
 from .types import TargetSpec
@@ -1672,73 +1672,23 @@ def at_step(*steps: int) -> EpisodeStepSelector:
     return EpisodeStepSelector(*steps)
 
 
-@overload
-def in_module(address_or_layer: str) -> InModuleSelector:
+def in_module(address: str) -> InModuleSelector:
     """Create a module-containment selector.
 
     Parameters
     ----------
-    address_or_layer:
-        Module address.
+    address:
+        Module address whose contained sites the selector matches.
 
     Returns
     -------
     InModuleSelector
-        Selector matching sites contained in the module.
-    """
-    ...
-
-
-@overload
-def in_module(address_or_layer: Any, address: str) -> bool:
-    """Test whether a layer pass belongs to a module.
-
-    Parameters
-    ----------
-    address_or_layer:
-        Layer pass record.
-    address:
-        Module address.
-
-    Returns
-    -------
-    bool
-        Whether the layer pass belongs to the module.
-    """
-    ...
-
-
-def in_module(address_or_layer: Any, address: str | None = None) -> InModuleSelector | bool:
-    """Create a module-containment selector or test one layer pass.
-
-    Parameters
-    ----------
-    address_or_layer:
-        Module address when called with one argument, or a layer pass record
-        when called with two arguments.
-    address:
-        Module address to test when ``layer_log`` is a record.
-
-    Returns
-    -------
-    InModuleSelector | bool
-        Selector for one-argument calls; containment result for two-argument
-        calls retained for architecture-plan compatibility.
+        Selector matching sites contained in the module. Whether one record
+        belongs to a module is read on the record (``layer.module == address``
+        or ``address in layer.modules``).
     """
 
-    if address is None:
-        return InModuleSelector(str(address_or_layer))
-
-    from .._ir.selector_eval import module_address_matches
-
-    if getattr(address_or_layer, "is_output", False):
-        # The synthetic output alias carries its producer's module stamp for
-        # display only; it lies in no module (same rule as the selector form).
-        return False
-    modules = getattr(address_or_layer, "modules", ())
-    module_ops = getattr(address_or_layer, "output_of_module_calls", ())
-    candidates = tuple(modules) + tuple(module_ops)
-    return any(module_address_matches(candidate, address) for candidate in candidates)
+    return InModuleSelector(str(address))
 
 
 def _classify_selector_direction(

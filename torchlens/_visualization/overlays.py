@@ -43,12 +43,12 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
     from .._selection import Selection, Selector
 
     if isinstance(overlay, Selector):
-        overlay = overlay.resolve(trace)
+        overlay = overlay._resolve(trace)
     elif not isinstance(overlay, Selection):
         selection_hook = getattr(overlay, "__selection__", None)
         if selection_hook is None:
             return overlay
-        overlay = selection_hook().resolve(trace)
+        overlay = selection_hook()._resolve(trace)
     if overlay._trace is not trace:
         from torchlens._selection import SelectionError
 

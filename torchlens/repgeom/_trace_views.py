@@ -285,7 +285,7 @@ def _selected_mds_sites(
     expected_counts = _expected_stimulus_counts(trace)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=MultiMatchWarning)
-        sites = list(trace.resolve_sites(save, max_fanout=1_000_000))
+        sites = list(trace._resolve_sites(save, max_fanout=1_000_000))
     selected_by_layer: dict[str, list[Any]] = OrderedDict()
     for site in sites:
         selected_by_layer.setdefault(str(getattr(site, "layer_label")), []).append(site)

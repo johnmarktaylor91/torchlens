@@ -193,11 +193,11 @@ def test_align_to_survives_label_renumbering_via_corroborated_join() -> None:
     authorizes the rebind."""
 
     base, inserted = _capture_pair()
-    selection = tl.units("linear_1_1", [(0, 0)]).resolve(base)
+    selection = base[tl.units("linear_1_1", [(0, 0)])]
     # fc1's op renumbers relative labels? Same label here; the INSERTED trace
     # keeps linear_1_1, so exercise the drifted case with fc2 instead: its
     # label moved from linear_2_3 to linear_2_4 across the insertion.
-    fc2_selection = tl.units("linear_2_3", [(0, 0)]).resolve(base)
+    fc2_selection = base[tl.units("linear_2_3", [(0, 0)])]
     aligned = fc2_selection.align_to(inserted)
     (entry,) = tuple(aligned)
     assert entry.key[0] == "linear_2_4"

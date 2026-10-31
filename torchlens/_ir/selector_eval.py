@@ -6,7 +6,7 @@ parameterized by a ``lifecycle``:
 - ``"capture"``: in-flight ``RecordContext`` objects (and duck-typed layer-like
   objects) evaluated by ``trace(save=...)`` / ``record(save=...)`` predicates.
 - ``"site"``: finalized ``Op`` / ``Layer`` / ``GradFn`` sites resolved by
-  ``find_sites`` / ``resolve_sites``.
+  ``find_sites`` / ``_resolve_sites``.
 - ``"live"``: capture-time hook-site proxies matched while applying live hooks.
 
 One matching RULE per selector kind; only the *subject universe* (which label
@@ -584,14 +584,14 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
         return SelectorCapabilityError(
             "tl.facet(...) / tl.head(...) selectors resolve through intervention mutators "
             "(Trace.set, attach_hooks, do) and, on a finished trace, as a bare selector "
-            "through trace[selector] and trace.resolve_sites(selector); not through "
+            "through trace[selector]; not through "
             f"{where}{' (find_sites, composite selectors)' if lifecycle == 'site' else ''}."
         )
     if kind == "site":
         return SelectorCapabilityError(
             "tl.site(...) needs a structural site key, which does not exist on "
             f"{where}: final structural numbering is absent mid-attach. Resolve "
-            "the site on the finished trace (log.resolve_sites / do), or pass "
+            "the site on the finished trace (trace[selector] / do), or pass "
             "the site selector through trace(save=/intervene=), which arms the "
             "live minter."
         )
@@ -1219,7 +1219,7 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
                     "intervene= contains a site selector. This capture surface "
                     "did not arm it (tl.record and preview backends do not "
                     "support live site keys yet). Address the finished trace "
-                    "post hoc (log.resolve_sites / do), or use tl.trace with "
+                    "post hoc (trace[selector] / do), or use tl.trace with "
                     "the site selector in save=/intervene=."
                 )
             return _site_key_matches(selector, minter.key_for_context(subject))
@@ -1757,7 +1757,7 @@ def _site_key_matches(selector: Any, rendered_key: Any) -> bool:
 
 
 def _selector_from_site_table(site_table: Any) -> BaseSelector:
-    """Lower a ``find_sites()`` SiteTable into a label-union selector."""
+    """Lower a ``find_sites()`` _SiteTable into a label-union selector."""
 
     from ..intervention.selectors import label
 
@@ -1768,7 +1768,7 @@ def _selector_from_site_table(site_table: Any) -> BaseSelector:
             site_labels.append(site_label)
     if not site_labels:
         raise SiteResolutionError(
-            "This SiteTable resolved 0 sites, so there is nothing to "
+            "This _SiteTable resolved 0 sites, so there is nothing to "
             "address; re-run find_sites(...) with a matching query.",
             code="site_table_empty",
         )
@@ -1824,7 +1824,7 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
         if lifecycle == "live":
             return label(selector_like)
         return label_contains(selector_like)
-    if type(selector_like).__name__ == "SiteTable":
+    if type(selector_like).__name__ == "_SiteTable":
         # find_sites() output is accepted directly (leverage B3/NEW-4): the
         # zero-match refusal RECOMMENDS log.find_sites(...), so its result
         # must be a valid address, not a dead end.
@@ -1836,7 +1836,7 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
     # An ``Op``/``Layer`` RECORD is the most precise site spelling a user can
     # hold (AUD-CODE 4.10, W051-REPLAY out-of-fence item 1). Lower it to its
     # PASS-QUALIFIED ``Op.label`` selector(s) here, so the ``set()`` door,
-    # ``resolve_sites(record)`` and the mutator site validation all address
+    # ``_resolve_sites(record)`` and the mutator site validation all address
     # exactly the pass(es) the record names -- never the bare ``layer_label``
     # (the LAST pass of a multi-pass layer) the live arm below would pick.
     # Lazy import: ``intervention.hooks`` imports this module.

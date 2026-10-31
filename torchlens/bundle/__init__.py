@@ -32,7 +32,7 @@ from ..intervention.errors import (
     BaselineUndeterminedError,
     BundleMemberError,
 )
-from ..intervention.resolver import resolve_sites
+from ..intervention.resolver import _resolve_sites
 from ..intervention.types import Relationship
 from ._aligned_sites import aligned_site_labels, resolve_aligned_site
 from ._alternatives import (
@@ -891,7 +891,7 @@ class Bundle:
         failures: dict[str, str] = {}
         for name, log in logs.items():
             try:
-                table = resolve_sites(log, site, max_fanout=1)
+                table = _resolve_sites(log, site, max_fanout=1)
                 layer_members[name] = cast("Op", table.first())
             except Exception as exc:  # noqa: BLE001 - rewrapped with member context
                 failures[name] = str(exc)
@@ -1844,7 +1844,7 @@ class Bundle:
             label = str(left_site.layer_label)
             right_label = aligned.get(label, {}).get(right_name, label)
             try:
-                right_site = resolve_sites(right_log, right_label, max_fanout=1).first()
+                right_site = _resolve_sites(right_log, right_label, max_fanout=1).first()
             except Exception:  # noqa: BLE001 - missing sites are not common sites
                 continue
             left_out = getattr(left_site, "out", None)

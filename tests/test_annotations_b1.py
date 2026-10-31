@@ -102,7 +102,7 @@ def test_annotation_tensor_blob_round_trips_tlspec(tmp_path: Path) -> None:
     tensor = torch.arange(6, dtype=torch.float32).reshape(3, 2)
 
     trace.annotate(tl.func("relu"), data=tensor)
-    key = f"layer:{trace.resolve_sites(tl.func('relu'), max_fanout=10).first().layer_label}"
+    key = f"layer:{trace[trace[tl.func('relu')].labels[0]].layer_label}"
     assert torch.equal(trace._annotation_blobs[key], tensor)
 
     bundle_path = tmp_path / "annotated.tlspec"
@@ -121,14 +121,14 @@ def test_json_breadcrumb_round_trips_and_ndarray_rejects(tmp_path: Path) -> None
     breadcrumb = {"kind": "note", "scores": [1, 2, 3]}
 
     trace.annotate(tl.func("relu"), data=breadcrumb)
-    relu = trace.resolve_sites(tl.func("relu"), max_fanout=10).first()
+    relu = trace[trace[tl.func("relu")].labels[0]]
     assert relu.annotations["user"]["data"] == breadcrumb
     assert trace.layer_logs[relu.layer_label].annotations["user"]["data"] == breadcrumb
 
     bundle_path = tmp_path / "breadcrumb.tlspec"
     trace.save(bundle_path)
     loaded = tl.load(bundle_path)
-    loaded_relu = loaded.resolve_sites(tl.func("relu"), max_fanout=10).first()
+    loaded_relu = loaded[loaded[tl.func("relu")].labels[0]]
 
     assert loaded_relu.annotations["user"]["data"] == breadcrumb
     assert loaded.layer_logs[loaded_relu.layer_label].annotations["user"]["data"] == breadcrumb
@@ -137,7 +137,7 @@ def test_json_breadcrumb_round_trips_and_ndarray_rejects(tmp_path: Path) -> None
 
 
 def test_annotate_uses_large_default_fanout() -> None:
-    """The public annotate default should not inherit resolver max_fanout=8."""
+    """The public annotate default should not cap matches at a handful of sites."""
 
     trace = tl.trace(
         _ManyReluModel(),
@@ -160,7 +160,7 @@ def test_annotate_rerun_preserves_user_annotations_and_refreshes_internals() -> 
     """Same-shape rerun keeps user annotations and blob data only."""
 
     trace, model, x = _trace_tiny()
-    relu = trace.resolve_sites(tl.func("relu"), max_fanout=10).first()
+    relu = trace[trace[tl.func("relu")].labels[0]]
     key = f"layer:{relu.layer_label}"
     trace.annotations["user"] = {"trace_note": "keep"}
     trace.input_annotations["user"] = {"input_note": "keep"}
@@ -170,7 +170,7 @@ def test_annotate_rerun_preserves_user_annotations_and_refreshes_internals() -> 
     trace.layer_logs[relu.layer_label].annotations["dedup_reference_label"] = "stale"
 
     result = trace.run(model, x + 0.125)
-    rerun_relu = result.resolve_sites(tl.func("relu"), max_fanout=10).first()
+    rerun_relu = result[result[tl.func("relu")].labels[0]]
 
     assert result is trace
     assert result.annotations["user"] == {"trace_note": "keep"}
@@ -204,8 +204,8 @@ def test_annotate_copy_returns_owned_copy() -> None:
 
     assert copied is not trace
     assert trace._annotation_blobs is None
-    copied_relu = copied.resolve_sites(tl.func("relu"), max_fanout=10).first()
-    source_relu = trace.resolve_sites(tl.func("relu"), max_fanout=10).first()
+    copied_relu = copied[copied[tl.func("relu")].labels[0]]
+    source_relu = trace[trace[tl.func("relu")].labels[0]]
     assert copied_relu.annotations["user"]["data"] == {"owned": True}
     assert "user" not in source_relu.annotations
 

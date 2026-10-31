@@ -172,7 +172,7 @@ def _op_labels(log: Any) -> tuple[str, ...]:
 def _selection_sites(log: Any, selection: Any) -> list[tuple[str, str]]:
     """Resolve an ``arrays=<Selection>`` value to op labels (row X15)."""
 
-    resolved = selection.resolve(log)
+    resolved = selection._resolve(log)
     # Site rows live on ``_entries`` today (the public spelling is an
     # L6 naming-session item); prefer a public ``entries`` once it exists.
     entries = getattr(resolved, "entries", None) or getattr(resolved, "_entries", ()) or ()
@@ -227,7 +227,7 @@ def _array_plan(log: Any, arrays: Any, share_safe: bool) -> _ArrayPlan:
         ordered = frontier_labels + [lbl for lbl in flagged if lbl not in frontier_labels]
         sites = [(lbl, "flagged") for lbl in ordered] + _intervention_sites(log)
         return _ArrayPlan("flagged", tuple(sites), flagged_total, len(sites), False)
-    if hasattr(arrays, "resolve"):
+    if hasattr(arrays, "_resolve"):
         sites = _selection_sites(log, arrays)
         return _ArrayPlan("selection", tuple(sites), flagged_total, len(sites), False)
     raise InvalidArgumentError(

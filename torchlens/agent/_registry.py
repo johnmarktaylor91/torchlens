@@ -552,7 +552,7 @@ def _handle_compare(args: dict[str, Any]) -> dict[str, Any]:
     )
     data["handoff"] = (
         "ref = tl.load(reference); sub = tl.load(subject); "
-        "sel = tl.changed(ref).resolve(sub)  # every element that moved"
+        "sel = sub[tl.changed(ref)]  # every element that moved"
     )
     # Per-side honesty blocks so the CLI's --fail-on gates READ this record
     # (AUD-CODE 3.11a): a diff over an unverified or NaN-poisoned side must

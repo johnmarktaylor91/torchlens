@@ -66,7 +66,7 @@ def test_decoder_ceilings_trip_before_resolution() -> None:
 
 
 def test_listing_resolves_the_full_population(artifact: Path) -> None:
-    """No max_fanout on listing: 3 relus resolve where intervention would cap."""
+    """Listing is uncapped: all 3 relus resolve."""
 
     envelope = call_tool(
         "torchlens_query_sites", {"path": str(artifact), "query": {"op": "func", "value": "relu"}}

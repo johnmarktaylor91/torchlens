@@ -111,7 +111,7 @@ def test_zero_ablate_pass1_per_pass_ground_truth(recurrent):
     model, x, trace = recurrent
     expected = _hand_forward_with_zeroed_pass(model, x, zeroed_pass=1)
     fork = trace.fork()
-    fork.do(tl.units("relu_1_2:1", _ALL_UNITS).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("relu_1_2:1", _ALL_UNITS)], tl.zero_ablate())
 
     for pass_index in (1, 2, 3):
         got = fork.layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
@@ -131,7 +131,7 @@ def test_zero_ablate_middle_pass_leaves_pass1_untouched(recurrent):
     model, x, trace = recurrent
     expected = _hand_forward_with_zeroed_pass(model, x, zeroed_pass=2)
     fork = trace.fork()
-    fork.do(tl.units("relu_1_2:2", _ALL_UNITS).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("relu_1_2:2", _ALL_UNITS)], tl.zero_ablate())
 
     pass1 = fork.layer_dict_all_keys["relu_1_2:1"].out
     assert torch.equal(pass1, trace.layer_dict_all_keys["relu_1_2:1"].out)
@@ -219,7 +219,7 @@ def test_no_spurious_divergence_warning_on_multipass_replay(recurrent):
     fork = trace.fork()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        fork.do(tl.units("relu_1_2:1", _ALL_UNITS).resolve(fork), tl.zero_ablate())
+        fork.do(fork[tl.units("relu_1_2:1", _ALL_UNITS)], tl.zero_ablate())
     divergence = [
         entry for entry in caught if issubclass(entry.category, ControlFlowDivergenceWarning)
     ]
@@ -233,7 +233,7 @@ def test_strict_multipass_replay_works(recurrent):
     expected = _hand_forward_with_zeroed_pass(model, x, zeroed_pass=1)
     fork = trace.fork()
     fork.do(
-        tl.units("relu_1_2:1", _ALL_UNITS).resolve(fork),
+        fork[tl.units("relu_1_2:1", _ALL_UNITS)],
         tl.zero_ablate(),
         intervention=tl.options.InterventionOptions(strict=True),
     )
@@ -272,7 +272,7 @@ def test_bare_multipass_label_refuses_in_units(recurrent):
 
     _model, _x, trace = recurrent
     with pytest.raises(SelectionError) as excinfo:
-        tl.units("relu_1_2", [(0, 0)]).resolve(trace)
+        trace[tl.units("relu_1_2", [(0, 0)])]
     assert excinfo.value.fields["code"] == "selection_unresolvable"
     assert excinfo.value.fields["reason"] == "multipass_bare_label"
     message = str(excinfo.value)
@@ -281,12 +281,12 @@ def test_bare_multipass_label_refuses_in_units(recurrent):
         assert spelling in message
 
 
-def test_bare_multipass_label_refuses_in_do_and_resolve_sites(recurrent):
+def test_bare_multipass_label_refuses_in_do_and_the_trace_door(recurrent):
     """String addressing of a bare multi-pass label refuses typed, teaching."""
 
     _model, _x, trace = recurrent
     with pytest.raises(AmbiguousSiteError) as excinfo:
-        trace.resolve_sites("relu_1_2", max_fanout=100)
+        trace[tl.label("relu_1_2")]
     assert excinfo.value.fields["code"] == "multipass_bare_label_ambiguous"
     assert excinfo.value.fields["pass_indices"] == (1, 2, 3)
     message = str(excinfo.value)
@@ -300,29 +300,26 @@ def test_bare_multipass_label_refuses_in_do_and_resolve_sites(recurrent):
     assert do_excinfo.value.fields["code"] == "multipass_bare_label_ambiguous"
 
     with pytest.raises(AmbiguousSiteError) as label_excinfo:
-        trace.resolve_sites(tl.label("relu_1_2"), max_fanout=100)
+        trace[tl.label("relu_1_2")]
     assert label_excinfo.value.fields["code"] == "multipass_bare_label_ambiguous"
 
 
 def test_substring_patterns_keep_fanout_semantics(recurrent):
     """A genuine substring pattern (not the bare label) still fans out."""
 
-    from torchlens.intervention.errors import MultiMatchWarning
-
     _model, _x, trace = recurrent
-    with pytest.warns(MultiMatchWarning):
-        sites = trace.resolve_sites("elu_1_2", max_fanout=100)
-    assert len(list(sites)) == _N_PASSES
+    sites = trace[tl.label_contains("elu_1_2")]
+    assert len(sites) == _N_PASSES
 
 
 def test_single_pass_bare_label_still_accepted(single_pass):
     """Bare labels keep working everywhere the layer is single-pass."""
 
     model, x, trace = single_pass
-    resolved = tl.units("relu_1_2", [(0, 0)]).resolve(trace)
+    resolved = trace[tl.units("relu_1_2", [(0, 0)])]
     assert len(tuple(resolved)) == 1
-    sites = trace.resolve_sites("relu_1_2")
-    assert len(list(sites)) == 1
+    site = trace[tl.label("relu_1_2")]
+    assert site.layer_label == "relu_1_2"
 
     with torch.no_grad():
         expected = torch.zeros_like(torch.relu(model.cell(x)))
@@ -336,7 +333,7 @@ def test_single_pass_replay_disclosures_keep_bare_labels(single_pass):
 
     model, x, trace = single_pass
     fork = trace.fork()
-    fork.do(tl.units("relu_1_2", _ALL_UNITS).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("relu_1_2", _ALL_UNITS)], tl.zero_ablate())
 
     assert bool((fork.layer_dict_all_keys["relu_1_2:1"].out == 0).all())
     # FIX-A (A05): the boundary output node mirrors its parent's resolved

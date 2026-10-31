@@ -223,10 +223,15 @@ def test_layer_accessor_queries_and_completion(
     assert log.layers.total() == len(log.layer_logs)
     assert base_label in log.layers._ipython_key_completions_()
     assert base_label in dir(log.layers)
-    assert isinstance(log.layers.by_operator(), dict)
-    assert base_label in log.layers.by_operator(operator)
-    assert isinstance(log.layers.by_module(), dict)
-    assert isinstance(log.layers.by_module_and_operator(), dict)
+    assert isinstance(log.layers.count_by("kind"), dict)
+    same_operator = [
+        layer.layer_label
+        for layer in log.layers
+        if (layer.func_name or layer.layer_type) == operator
+    ]
+    assert base_label in same_operator
+    assert isinstance(log.layers.count_by("module"), dict)
+    assert isinstance(log.layers.count_by("module", "kind"), dict)
 
 
 def test_trace_site_reports(architecture: tuple[nn.Module, torch.Tensor]) -> None:

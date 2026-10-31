@@ -163,5 +163,5 @@ def test_replay_engine_on_real_bound_capture() -> None:
     fork = bert_log.fork()
     target_op = next(op for op in bert_log.layer_list if op.label.startswith("linear"))
     zero_index = tuple(0 for _ in target_op.out.shape)
-    fork.do(tl.units(target_op.label, [zero_index]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units(target_op.label, [zero_index])], tl.zero_ablate())
     assert len(fork.intervention_audit) == 1

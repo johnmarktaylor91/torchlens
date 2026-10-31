@@ -744,7 +744,7 @@ class CaptureSession:
                 selected_grads = "all"
             else:
                 # Selector-shaped save_grads resolves like the activation
-                # branch: the public resolve_sites gate refuses mid-capture,
+                # branch: the public _resolve_sites gate refuses mid-capture,
                 # so the unchecked resolver walks the finalized layer list
                 # directly.
                 from ..intervention.resolver import _resolve_unchecked

@@ -66,7 +66,7 @@ def test_selection_intervened_artifact_loads_its_own_save(log, tmp_path):
     """ACT rows with per-site source disclosures round-trip through load."""
 
     fork = log.fork()
-    fork.do(tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("relu_1_2", [(0, 0, 1, 1)])], tl.zero_ablate())
     act_rows = [row for row in fork.intervention_audit if row.get("kind") == "ACT"]
     assert any("source" in site for row in act_rows for site in row.get("sites", ())), (
         "fixture must exercise the shipped per-site source disclosure"

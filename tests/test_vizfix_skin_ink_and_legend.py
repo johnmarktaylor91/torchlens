@@ -243,7 +243,7 @@ def test_legend_intervention_row_only_on_an_intervened_render(tmp_path: Path) ->
     )
     assert not any(row.startswith("intervention") for row in _legend_rows(str(plain)))
     fork = trace.fork("edited")
-    fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     edited = fork.draw(
         vis_save_only=True,
         file_format="svg",
@@ -345,7 +345,7 @@ def test_as_node_intervention_keeps_the_site_inside_its_module_boxes(tmp_path: P
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     fork = trace.fork("edited")
-    fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     dot = str(
         fork.draw(
             vis_save_only=True,

@@ -108,7 +108,7 @@ def _ablation_deltas(trace: tl.Trace, selection: tl.Selector) -> tuple[float, fl
     """Zero-ablate one selection on a fork; return (d_u1, d_u2, d_out)."""
 
     fork = trace.fork()
-    fork.do(selection.resolve(fork), tl.zero_ablate())
+    fork.do(fork[selection], tl.zero_ablate())
     late_delta = fork["conv2d_2_3"].out - trace["conv2d_2_3"].out
     out_delta = fork["relu_2_4"].out - trace["relu_2_4"].out
     return (
@@ -124,8 +124,8 @@ def test_flagship_compositions_are_selections(gallery):
     trace, inter, union, ctrl = gallery
     for composed in (inter, union, ctrl):
         assert isinstance(composed, tl.Selector)
-    resolved_inter = inter.resolve(trace)
-    resolved_union = union.resolve(trace)
+    resolved_inter = trace[inter]
+    resolved_union = trace[union]
     # Both land on the trace's input site with exact-relation provenance
     # (exact RF geometry ops only).
     for resolved in (resolved_inter, resolved_union):
@@ -175,8 +175,8 @@ def test_a3_union_magnitudes_reported_and_cardinality_theorem(gallery):
     """
 
     trace, inter, union, _ = gallery
-    resolved_inter = inter.resolve(trace)
-    resolved_union = union.resolve(trace)
+    resolved_inter = trace[inter]
+    resolved_union = trace[union]
     inter_deltas = _ablation_deltas(trace, inter)
     union_deltas = _ablation_deltas(trace, union)
     report = {
@@ -194,15 +194,15 @@ def test_a4_control_is_size_matched_by_construction(gallery):
     """A4 [CONSTRUCTION]: |ctrl| == |inter|, sampled inside ~union."""
 
     trace, inter, union, ctrl = gallery
-    resolved_inter = inter.resolve(trace)
-    resolved_ctrl = ctrl.resolve(trace)
+    resolved_inter = trace[inter]
+    resolved_ctrl = trace[ctrl]
     assert sum(e.num_selected for e in resolved_ctrl) == sum(e.num_selected for e in resolved_inter)
     # The control is disjoint from the union (sampled from its complement).
-    union_mask = union.resolve(trace)[0].mask
+    union_mask = trace[union][0].mask
     ctrl_mask = resolved_ctrl[0].mask
     assert not bool((union_mask & ctrl_mask).any())
     # Seeded determinism: same seed, same sample.
-    again = tl.random_like(like=inter, within=~union, seed=CTRL_SEED).resolve(trace)
+    again = trace[tl.random_like(like=inter, within=~union, seed=CTRL_SEED)]
     assert again == resolved_ctrl
 
 
@@ -235,7 +235,7 @@ def test_cross_run_patch_gallery_row():
     try:
         late = trace_a["conv2d_2_3"]
         inter = late.receptive_field.at(P) & late.receptive_field.at(Q)
-        resolved_a = inter.resolve(trace_a)
+        resolved_a = trace_a[inter]
         fork = trace_b.fork()
         aligned = resolved_a.align_to(fork)
         fork.do(aligned, tl.patch_from(trace_a))

@@ -162,7 +162,7 @@ def test_disclosure_fires_with_both_counts(episode_log: tl.Trace) -> None:
 
     label = _extra_label(episode_log)
     with pytest.warns(TorchLensWarning) as records:
-        resolved = tl.pass_variance(above=-1.0, within=label).resolve(episode_log)
+        resolved = episode_log[tl.pass_variance(above=-1.0, within=label)]
     coded = [
         r.message
         for r in records
@@ -186,7 +186,7 @@ def test_disclosure_covers_stable_across_passes(episode_log: tl.Trace) -> None:
 
     label = _extra_label(episode_log)
     with pytest.warns(TorchLensWarning) as records:
-        tl.stable_across_passes(within=label, atol=1e9).resolve(episode_log)
+        episode_log[tl.stable_across_passes(within=label, atol=1e9)]
     coded = [
         r.message
         for r in records
@@ -202,6 +202,6 @@ def test_no_disclosure_on_plain_captures(plain_log: tl.Trace) -> None:
     label = _extra_label(plain_log)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.pass_variance(above=-1.0, within=label).resolve(plain_log)
+        plain_log[tl.pass_variance(above=-1.0, within=label)]
     torchlens_warnings = [w for w in caught if isinstance(w.message, TorchLensWarning)]
     assert torchlens_warnings == []

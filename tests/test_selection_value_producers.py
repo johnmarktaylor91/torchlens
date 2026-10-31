@@ -97,7 +97,7 @@ def _relations(resolved):
 def test_top_k_mask_matches_manual_ranking(log):
     """top_k selects exactly the k largest elements of the site's saved value."""
 
-    resolved = tl.top_k(_RELU, 7).resolve(log)
+    resolved = log[tl.top_k(_RELU, 7)]
     value = log[_RELU].out.reshape(-1).to(torch.float64)
     expected = torch.zeros_like(value, dtype=torch.bool)
     expected[torch.argsort(value, descending=True, stable=True)[:7]] = True
@@ -110,9 +110,9 @@ def test_top_k_bottom_and_abs_variants(log):
     """largest=False ranks ascending; by='abs' ranks magnitudes."""
 
     value = log[_SIGMOID].out.reshape(-1)
-    bottom = tl.top_k(_SIGMOID, 3, largest=False).resolve(log)
+    bottom = log[tl.top_k(_SIGMOID, 3, largest=False)]
     assert bottom[0].mask.reshape(-1)[torch.argsort(value.to(torch.float64), stable=True)[:3]].all()
-    magnitude = tl.top_k(_SIGMOID, 3, by="abs").resolve(log)
+    magnitude = log[tl.top_k(_SIGMOID, 3, by="abs")]
     expected = torch.zeros_like(value, dtype=torch.bool)
     expected[torch.argsort(value.abs().to(torch.float64), descending=True, stable=True)[:3]] = True
     assert torch.equal(magnitude[0].mask.reshape(-1), expected)
@@ -127,7 +127,7 @@ def test_top_k_tie_break_is_first_flat_indices():
 
     trace = tl.trace(_AllZero(), torch.randn(1, 2, 2))
     try:
-        resolved = tl.top_k("relu_1_2", 2).resolve(trace)
+        resolved = trace[tl.top_k("relu_1_2", 2)]
         flat = resolved[0].mask.reshape(-1)
         assert flat[:2].all() and not flat[2:].any()
     finally:
@@ -139,7 +139,7 @@ def test_top_k_population_too_small_refuses_typed(log):
 
     numel = log[_RELU].out.numel()
     with pytest.raises(SelectionError) as excinfo:
-        tl.top_k(_RELU, numel + 1).resolve(log)
+        log[tl.top_k(_RELU, numel + 1)]
     assert excinfo.value.fields["code"] == "selection_unresolvable"
     assert excinfo.value.fields["reason"] == "population_too_small"
     assert excinfo.value.fields["available"] == numel
@@ -149,20 +149,20 @@ def test_top_fraction_ceil_rule_pinned(log):
     """top_fraction selects ceil(fraction * population), never zero when nonempty."""
 
     numel = log[_RELU].out.numel()
-    resolved = tl.top_fraction(_RELU, 0.01).resolve(log)
+    resolved = log[tl.top_fraction(_RELU, 0.01)]
     assert resolved[0].num_selected == math.ceil(0.01 * numel)
-    assert tl.top_fraction(_RELU, 0.0).resolve(log).is_empty
+    assert log[tl.top_fraction(_RELU, 0.0)].is_empty
 
 
 def test_threshold_band_and_abs(log):
     """Strict above/below bounds and their conjunction, plus magnitude form."""
 
     value = log[_RELU].out
-    above = tl.threshold(_RELU, above=0.5).resolve(log)
+    above = log[tl.threshold(_RELU, above=0.5)]
     assert torch.equal(above[0].mask, value > 0.5)
-    band = tl.threshold(_RELU, above=0.1, below=0.5).resolve(log)
+    band = log[tl.threshold(_RELU, above=0.1, below=0.5)]
     assert torch.equal(band[0].mask, (value > 0.1) & (value < 0.5))
-    magnitude = tl.threshold(_RELU, above=0.5, by="abs").resolve(log)
+    magnitude = log[tl.threshold(_RELU, above=0.5, by="abs")]
     assert torch.equal(magnitude[0].mask, value.abs() > 0.5)
     assert _relations(above) == ["exact"]
 
@@ -171,10 +171,10 @@ def test_sign_classes_partition_the_site(log):
     """positive/negative/zero partition; zero is the sparsity mask."""
 
     value = log[_RELU].out
-    zero = tl.sign(_RELU, "zero").resolve(log)
-    positive = tl.sign(_RELU, "positive").resolve(log)
-    negative = tl.sign(_RELU, "negative").resolve(log)
-    nonzero = tl.sign(_RELU, "nonzero").resolve(log)
+    zero = log[tl.sign(_RELU, "zero")]
+    positive = log[tl.sign(_RELU, "positive")]
+    negative = log[tl.sign(_RELU, "negative")]
+    nonzero = log[tl.sign(_RELU, "nonzero")]
     assert torch.equal(zero[0].mask, value == 0)
     assert torch.equal(positive[0].mask, value > 0)
     assert negative[0].num_selected == 0  # ReLU output has no negatives
@@ -197,15 +197,15 @@ def test_nan_never_satisfies_any_criterion():
         site = "sqrt_1_1"
         nan_mask = torch.isnan(trace[site].out)
         assert nan_mask.any()
-        wide = tl.threshold(site, above=-1e30).resolve(trace)
+        wide = trace[tl.threshold(site, above=-1e30)]
         assert not (wide[0].mask & nan_mask).any()
         for which in ("positive", "negative", "zero", "nonzero"):
-            resolved = tl.sign(site, which).resolve(trace)
+            resolved = trace[tl.sign(site, which)]
             assert not (resolved[0].mask & nan_mask).any()
-        ranked = tl.top_k(site, 2, largest=False).resolve(trace)
+        ranked = trace[tl.top_k(site, 2, largest=False)]
         assert not (ranked[0].mask & nan_mask).any()
         with pytest.raises(SelectionError) as excinfo:
-            tl.top_k(site, 3).resolve(trace)  # only 2 rankable elements
+            trace[tl.top_k(site, 3)]  # only 2 rankable elements
         assert excinfo.value.fields["reason"] == "population_too_small"
     finally:
         trace.cleanup()
@@ -214,7 +214,7 @@ def test_nan_never_satisfies_any_criterion():
 def test_global_default_population_spans_saved_sites(log):
     """within=None ranks across every retained tensor site of the capture."""
 
-    resolved = tl.top_k(None, 10).resolve(log)
+    resolved = log[tl.top_k(None, 10)]
     assert len(resolved) > 1  # touched family: all saved sites
     assert sum(entry.num_selected for entry in resolved) == 10
 
@@ -223,7 +223,7 @@ def test_value_producer_restricted_by_selection_population(log):
     """A Selection population restricts the candidate set, not just the mask."""
 
     zeros = tl.sign(_RELU, "zero")
-    ranked = tl.top_k(zeros, 4, largest=False).resolve(log)
+    ranked = log[tl.top_k(zeros, 4, largest=False)]
     value = log[_RELU].out
     relu_entry = [entry for entry in ranked if entry.key == (_RELU, 1)][0]
     assert relu_entry.num_selected == 4
@@ -245,7 +245,7 @@ def test_dead_requires_multi_sample_and_names_the_single_trace_spelling(log):
 def test_dead_mask_is_conjunction_across_samples(log, log_b):
     """dead selects exactly the elements silent in EVERY sample."""
 
-    resolved = tl.dead([log, log_b], within=_RELU).resolve(log)
+    resolved = log[tl.dead([log, log_b], within=_RELU)]
     expected = (log[_RELU].out == 0) & (log_b[_RELU].out == 0)
     assert torch.equal(resolved[0].mask, expected)
     assert resolved[0].mask[0, 3].all()  # the engineered dead channel
@@ -257,7 +257,7 @@ def test_dead_composes_with_module_selector(log, log_b):
     """The brief's acceptance row: tl.dead(...) & tl.in_module('encoder')."""
 
     composed = tl.dead([log, log_b]) & tl.in_module("encoder")
-    resolved = composed.resolve(log)
+    resolved = log[composed]
     site_keys = {entry.key for entry in resolved}
     assert (_RELU, 1) in site_keys
     assert (_SIGMOID, 1) not in site_keys  # head is outside the encoder
@@ -269,9 +269,7 @@ def test_dead_composes_with_module_selector(log, log_b):
 def test_saturated_detects_pinned_sigmoid_channel(log, log_b):
     """Units within tol of a declared bound in every sample are saturated."""
 
-    resolved = tl.saturated([log, log_b], low=0.0, high=1.0, atol=1e-4, within=_SIGMOID).resolve(
-        log
-    )
+    resolved = log[tl.saturated([log, log_b], low=0.0, high=1.0, atol=1e-4, within=_SIGMOID)]
     assert resolved[0].mask[0, 0].all()  # bias=100 channel pinned at 1
     expected = ((log[_SIGMOID].out - 1.0).abs() <= 1e-4) & (
         (log_b[_SIGMOID].out - 1.0).abs() <= 1e-4
@@ -291,7 +289,7 @@ def test_saturated_requires_a_declared_bound(log, log_b):
 def test_low_variance_selects_constant_channel(log, log_b):
     """The zero-weight constant channel has zero variance across samples."""
 
-    resolved = tl.low_variance([log, log_b], threshold=1e-12, within=_RELU).resolve(log)
+    resolved = log[tl.low_variance([log, log_b], threshold=1e-12, within=_RELU)]
     assert resolved[0].mask[0, 2].all()  # constant 0.7 channel
     stacked = torch.stack([log[_RELU].out.to(torch.float64), log_b[_RELU].out.to(torch.float64)])
     assert torch.equal(resolved[0].mask, torch.var(stacked, dim=0) < 1e-12)
@@ -303,8 +301,8 @@ def test_low_variance_selects_constant_channel(log, log_b):
 def test_samples_accept_a_bundle(log, log_b):
     """A Bundle is a legal evidence set (it iterates its member traces)."""
 
-    bundled = tl.dead(Bundle([log, log_b]), within=_RELU).resolve(log)
-    listed = tl.dead([log, log_b], within=_RELU).resolve(log)
+    bundled = log[tl.dead(Bundle([log, log_b]), within=_RELU)]
+    listed = log[tl.dead([log, log_b], within=_RELU)]
     assert bundled == listed
 
 
@@ -321,7 +319,7 @@ def test_sample_missing_site_refuses_typed(log, log_b):
     other = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
     try:
         with pytest.raises(SelectionError) as excinfo:
-            tl.dead([log, other], within=_RELU).resolve(log)
+            log[tl.dead([log, other], within=_RELU)]
         assert excinfo.value.fields["reason"] == "site_not_in_trace"
         assert excinfo.value.fields["sample"] == "samples[1]"
     finally:
@@ -334,7 +332,7 @@ def test_sample_shape_drift_refuses_typed(model, log):
     other = tl.trace(model, torch.randn(1, 1, 12, 12))
     try:
         with pytest.raises(SelectionError) as excinfo:
-            tl.dead([log, other], within=_RELU).resolve(log)
+            log[tl.dead([log, other], within=_RELU)]
         assert excinfo.value.fields["reason"] == "mask_shape_mismatch"
         assert excinfo.value.fields["sample"] == "samples[1]"
     finally:
@@ -368,7 +366,7 @@ def test_provenance_relations_pinned_per_producer(log, log_b):
         "low_variance": "exact",
     }
     for name, selection in pinned.items():
-        assert _relations(selection.resolve(log)) == [expected[name]], name
+        assert _relations(log[selection]) == [expected[name]], name
 
 
 def test_wrong_provenance_claim_fails_closed():
@@ -382,9 +380,9 @@ def test_relation_composition_through_flip_and_difference(log, log_b):
     """~dead flips upper->lower; exact - upper_bound lands lower_bound."""
 
     dead_sel = tl.dead([log, log_b], within=_RELU)
-    inverted = (~dead_sel).resolve(log)
+    inverted = log[~dead_sel]
     assert _relations(inverted) == [_FLIP["upper_bound"]] == ["lower_bound"]
-    difference = (tl.sign(_RELU, "zero") - dead_sel).resolve(log)
+    difference = log[tl.sign(_RELU, "zero") - dead_sel]
     assert _relations(difference) == ["lower_bound"]
     # element check: zeros-in-this-capture minus dead-across-both
     expected = (log[_RELU].out == 0) & ~((log[_RELU].out == 0) & (log_b[_RELU].out == 0))
@@ -394,7 +392,7 @@ def test_relation_composition_through_flip_and_difference(log, log_b):
 def test_complement_of_top_k_counts(log):
     """~top_k keeps the touched family and complements within the site."""
 
-    resolved = (~tl.top_k(_RELU, 5)).resolve(log)
+    resolved = log[~tl.top_k(_RELU, 5)]
     assert resolved[0].num_selected == log[_RELU].out.numel() - 5
 
 
@@ -415,7 +413,7 @@ def test_unknown_site_refuses_typed(log):
     """A population site absent from the trace refuses site_not_in_trace."""
 
     with pytest.raises(SelectionError) as excinfo:
-        tl.sign("nonexistent_9_9", "zero").resolve(log)
+        log[tl.sign("nonexistent_9_9", "zero")]
     assert excinfo.value.fields["reason"] == "site_not_in_trace"
 
 
@@ -425,10 +423,10 @@ def test_unsaved_payload_refuses_value_not_saved(model):
     trace = tl.trace(model, torch.randn(1, 1, 10, 10), save=tl.func("conv2d"))
     try:
         with pytest.raises(SelectionError) as excinfo:
-            tl.sign(_RELU, "zero").resolve(trace)
+            trace[tl.sign(_RELU, "zero")]
         assert excinfo.value.fields["reason"] == "value_not_saved"
         # the DEFAULT population is the retained sites, so it still resolves
-        resolved = tl.threshold(above=0.0).resolve(trace)
+        resolved = trace[tl.threshold(above=0.0)]
         labels = {entry.key[0] for entry in resolved}
         assert labels and all(label.startswith("conv2d") for label in labels)
     finally:
@@ -438,9 +436,9 @@ def test_unsaved_payload_refuses_value_not_saved(model):
 def test_foreign_resolved_population_refuses_trace_mismatch(log, log_b):
     """A within resolved on another trace refuses selection_trace_mismatch."""
 
-    foreign = tl.sign(_RELU, "zero").resolve(log_b)
+    foreign = log_b[tl.sign(_RELU, "zero")]
     with pytest.raises(SelectionError) as excinfo:
-        tl.top_k(foreign, 2).resolve(log)
+        log[tl.top_k(foreign, 2)]
     assert excinfo.value.fields["code"] == "selection_trace_mismatch"
 
 
@@ -455,14 +453,14 @@ def test_complex_ordered_comparison_refuses_value_criterion_invalid():
     try:
         site = "fft_1_1"
         with pytest.raises(SelectionError) as excinfo:
-            tl.top_k(site, 2).resolve(trace)
+            trace[tl.top_k(site, 2)]
         assert excinfo.value.fields["reason"] == "value_criterion_invalid"
-        resolved = tl.top_k(site, 2, by="abs").resolve(trace)
+        resolved = trace[tl.top_k(site, 2, by="abs")]
         assert resolved[0].num_selected == 2
-        zero = tl.sign(site, "zero").resolve(trace)  # magnitude classes allowed
+        zero = trace[tl.sign(site, "zero")]  # magnitude classes allowed
         assert zero[0].num_selected == 0
         with pytest.raises(SelectionError):
-            tl.sign(site, "positive").resolve(trace)
+            trace[tl.sign(site, "positive")]
     finally:
         trace.cleanup()
 
@@ -511,7 +509,7 @@ def test_do_zero_ablates_top_k_units(model):
     )
     try:
         selection = tl.top_k(_RELU, 6)
-        mask = selection.resolve(trace)[0].mask
+        mask = trace[selection][0].mask
         baseline = trace[_RELU].out.clone()
         fork = trace.fork()
         fork.do(selection, tl.zero_ablate())

@@ -105,7 +105,7 @@ def test_distilgpt2_replay_fork_census_and_splice_box(tmp_path) -> None:
     log = tl.trace(model, ids, capture=_CAPTURE)
     fork = log.fork()
     tanh_label = next(label for label in fork.op_labels if label.startswith("tanh"))
-    fork.do(tl.units(tanh_label, [(0, 0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(fork[tl.units(tanh_label, [(0, 0, 0)])], tl.zero_ablate())
     census_text = surgery_census(fork).to_text()
     assert "lane replay: 1 transaction(s)" in census_text
     assert _REPLAY_WORDING in census_text

@@ -142,7 +142,7 @@ Key entry points:
   `docs/reference/weightsfree_capture.md`.
 - Selection algebra (L6; core spellings slate-ratified subject to D7, rest
   DOCUMENTED-UNSTABLE): `tl.Selector` (composable query AST) /
-  `selection.resolve(trace)` -> `tl.Selection` (frozen, trace-bound,
+  `trace[selector]` -> `tl.Selection` (frozen, trace-bound,
   session-only). Operators `| & - ~` + reflected, no `__xor__`; two-level
   denotation (family + elements, zero-mask entries retained); region
   producers (BaseSelector, RF box/gradient, FacetSpec, Op, Layer) implement

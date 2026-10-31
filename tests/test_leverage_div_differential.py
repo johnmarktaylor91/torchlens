@@ -44,7 +44,7 @@ def test_changed_refuses_on_insertion_with_join_verdict():
     baseline = tl.trace(baseline_model, x, **_SAVE_ALL)
     variant = tl.trace(variant_model, x, **_SAVE_ALL)
     with pytest.raises(SelectionError) as excinfo:
-        tl.changed(baseline).resolve(variant)
+        variant[tl.changed(baseline)]
     assert excinfo.value.fields["code"] == "selection_unresolvable"
     assert excinfo.value.fields["reason"] == "site_join_refused"
     assert excinfo.value.fields["join_verdict"] == "refused_cardinality"
@@ -67,7 +67,7 @@ def test_changed_completes_across_label_renumbering_live_edit():
     handle.remove()
     assert list(edited.op_labels) != list(baseline.op_labels)  # labels DID churn
     shared = tl.in_module("conv1") | tl.in_module("conv2")
-    resolved = tl.changed(baseline, within=shared).resolve(edited)
+    resolved = edited[tl.changed(baseline, within=shared)]
     by_label = {entry.key[0]: int(entry._mask._dense_ro().sum()) for entry in resolved}
     assert by_label["conv2d_1_1"] == 0  # upstream of the edit: unmoved
     assert by_label["conv2d_2_3"] == 0  # the hook replaces AFTER conv2's own output
@@ -82,7 +82,7 @@ def test_changed_one_sided_subject_site_refuses_declared():
     edited = tl.trace(model, x, **_SAVE_ALL)
     handle.remove()
     with pytest.raises(SelectionError) as excinfo:
-        tl.changed(baseline).resolve(edited)  # default population includes the mul
+        edited[tl.changed(baseline)]  # default population includes the mul
     assert excinfo.value.fields["reason"] == "site_join_refused"
     assert excinfo.value.fields["join_verdict"] == "one_sided_subject"
 
@@ -102,7 +102,7 @@ def test_changed_machinery_op_excluded_with_disclosure():
         if edited.ops[label].layer_type == "interventionreplacement"
     ]
     assert len(machinery) == 1
-    resolved = tl.changed(baseline).resolve(edited)
+    resolved = edited[tl.changed(baseline)]
     machinery_entries = [
         entry for entry in resolved if "[machinery_excluded]" in entry.provenance.source
     ]
@@ -118,7 +118,7 @@ def test_top_changed_completes_across_live_edit():
     handle = model.conv2.register_forward_hook(lambda module, args, out: replacement)
     edited = tl.trace(model, x, **_SAVE_ALL)
     handle.remove()
-    resolved = tl.top_changed(baseline, k=3).resolve(edited)
+    resolved = edited[tl.top_changed(baseline, k=3)]
     assert sum(int(entry._mask._dense_ro().sum()) for entry in resolved) == 3
 
 

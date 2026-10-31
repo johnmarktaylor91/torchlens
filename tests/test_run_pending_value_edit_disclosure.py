@@ -56,7 +56,7 @@ def test_new_input_run_on_value_edited_fork_discloses() -> None:
     _model, _x, log = _traced()
     fork = log.fork()
     fork.do(
-        tl.units("relu_1_2:1", [(0, 0)]).resolve(fork),
+        fork[tl.units("relu_1_2:1", [(0, 0)])],
         tl.replace_with(torch.full((2, 4), 3.0)),
     )
 
