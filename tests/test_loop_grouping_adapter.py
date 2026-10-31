@@ -756,7 +756,6 @@ def _reference_reaches(workspace: Any, src_label: str, dst_label: str) -> bool:
     return False
 
 
-@pytest.mark.smoke
 def test_adaptive_reachability_matches_reference_on_random_dags() -> None:
     """Sparse, dense, and repeated queries all match ground-truth reachability.
 
@@ -886,6 +885,7 @@ def test_assignments_pool_one_recurrent_labels_tuple_per_group() -> None:
         assert all(instance is instances[0] for instance in instances)
 
 
+@pytest.mark.smoke
 def test_merge_iso_groups_visits_linear_pairs_on_an_unrelated_chain() -> None:
     """The pair sweep must not walk C(N,2) over an ungroupable iso group (R29/F29-A).
 
