@@ -2,7 +2,7 @@
 
 | Path | Purpose |
 |------|---------|
-| `__init__.py` | Top-level API, 112-name `__all__`, lazy facade, `pluck`/`extract` helpers |
+| `__init__.py` | Top-level API, 87-name `__all__`, lazy facade, `pluck`/`extract` helpers |
 | `_state.py` | Global logging toggle, active log, decoration maps, prepared-model registry; no torchlens imports except the sanctioned `errors._base` leaf (a RUNTIME base-class import, cycle-safe; only its TYPE_CHECKING block is typing-only) |
 | `_trace_state.py` | Small runtime state enum exposed through `torchlens.io` |
 | `_errors.py`, `errors/` | Public and legacy exception classes |

@@ -8,9 +8,6 @@ import warnings
 import torchlens
 
 TARGET_ALL = [
-    # L3 ATen profile facade (documented-unstable; exported at __all__ head).
-    # Ratchet row repaired by L6 post-merge: the L1/L3 merge train landed the
-    # export without this row, leaving main red on the frozen-surface test.
     "trace",
     "release_model",
     "clear_cache",
@@ -189,8 +186,9 @@ def test_all_matches_frozen_target_ledger() -> None:
     interventions rename removes `do`, `push`, `push_from`, `run`, `swap_with`
     and `direction_from_pairs` and adds `Recipe` and `positions` = 112.
     The decided-surface rename moves `AmbiguousOpLookupError` and
-    `ReentrantTraceError` to `tl.errors` = 114.
-    The visuals-and-kits rename moves `aggregate` to `tl.stats.aggregate` = 113.
+    `ReentrantTraceError` to `tl.errors`, and the visuals-and-kits rename moves
+    `aggregate` to `tl.stats.aggregate`. With every area's renames, moves and
+    removals merged, the total is 87.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """
