@@ -154,6 +154,8 @@ def _prepare_storage(cell: Cell) -> None:
 
 def _after_storage(cell: Cell) -> None:
     trace = cell.require_trace()
+    if cell.changes("outcome"):
+        raise NotApplicable("a halted capture holds only the ops that ran; no plain count to match")
     cell.expect(len(trace.ops) == len(cell.facts.labels), "streamed capture changed the op count")
 
 
@@ -297,7 +299,13 @@ def _after_index(cell: Cell) -> None:
     for op in trace.ops:
         got = trace[op.label]
         cell.expect(got is not None, f"trace[{op.label!r}] is None")
-    for address in cell.facts.module_addresses:
+    addresses = cell.facts.module_addresses
+    if cell.changes("outcome"):
+        # A halted capture holds only the module calls that ran before the halt.
+        from tests.behaviour.harness import _module_calls
+
+        addresses = tuple(sorted(_module_calls(trace)))
+    for address in addresses:
         cell.expect(trace.modules[address] is not None, f"modules[{address!r}] is None")
 
 
