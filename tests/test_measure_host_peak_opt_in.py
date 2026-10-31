@@ -26,7 +26,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import TorchLensIOError
 from torchlens.capture.peak_memory import CPU_PEAK_NOT_REQUESTED_REASON
-from torchlens.observe import pass_peak_facts
+from torchlens.observe._peaks import pass_peak_facts
 from torchlens.options import CaptureOptions
 
 MARGIN = 2**20

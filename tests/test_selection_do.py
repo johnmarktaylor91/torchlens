@@ -194,7 +194,7 @@ def test_audit_record_contents(log):
     fork.do(selection, tl.zero_ablate())
     record = fork.intervention_audit[-1]
     assert record["kind"] == "ACT"
-    assert record["resolve_digest"] == resolved.resolve_digest
+    assert record["resolve_digest"] == resolved.digest
     assert record["edit"] == "zero_ablate"
     assert record["sites"][0]["relation"] == "exact"
     assert record["sites"][0]["selected"] == 1

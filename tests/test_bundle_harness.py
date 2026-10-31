@@ -334,7 +334,7 @@ def test_empty_bundle_reads_refuse_typed_or_return_empty() -> None:
     from torchlens.intervention.errors import BaselineUndeterminedError
 
     empty = tl.Bundle()
-    assert empty.shared_op_labels == [] and empty.divergent_op_labels == []
+    assert empty.ops.shared == [] and empty.ops.divergent == []
     with pytest.raises(BaselineUndeterminedError):
         empty.delta_map("relative_l2")
 

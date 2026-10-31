@@ -2352,8 +2352,8 @@ def _op_alias_index(trace: Any, ops: Sequence[Any]) -> dict[str, Any]:
         for value in (
             getattr(op, "label", None),
             getattr(op, "layer_label", None),
-            getattr(op, "short_label", None),
-            getattr(op, "short_layer_label", None),
+            getattr(op, "label_short", None),
+            getattr(op, "layer_label_short", None),
         ):
             if isinstance(value, str):
                 aliases[value] = op

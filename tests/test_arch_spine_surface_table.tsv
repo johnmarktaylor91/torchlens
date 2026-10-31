@@ -25,7 +25,7 @@ torchlens.ReentrantTraceError	torchlens._state	L2	core	1	0
 torchlens.Selection	torchlens._selection	L4	core	1	0
 torchlens.Selector	torchlens._selection	L4	core	1	0
 torchlens.Trace	torchlens.data_classes.trace	L1	core	1	0
-torchlens.accessors	torchlens.accessors	L1	core	0	0
+torchlens.appliances	torchlens.appliances	L1	core	0	0
 torchlens.add	torchlens.intervention	L4	core	1	0
 torchlens.agent	torchlens.agent	FACADE	facade	0	0
 torchlens.aggregate	torchlens.stats	L5	core	1	0

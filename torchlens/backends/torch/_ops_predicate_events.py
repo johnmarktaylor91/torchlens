@@ -148,7 +148,7 @@ def _emit_predicate_operation_events(
                 sample_id=state.sample_id,
                 address=module_frame.address if module_frame else None,
                 module_type=module_frame.module_type if module_frame else None,
-                module_pass_number=module_frame.pass_number if module_frame else None,
+                module_pass_index=module_frame.pass_index if module_frame else None,
                 is_transform=bool(getattr(func, "__tl_is_transform_boundary__", False))
                 or func_name in TRANSFORM_FUNC_NAMES,
                 transform_kind=getattr(func, "__tl_transform_kind__", None)

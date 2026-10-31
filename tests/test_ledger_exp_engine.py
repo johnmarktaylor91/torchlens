@@ -17,7 +17,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors.episode import BundleExperimentError
-from torchlens.experiment import sweep_sites, top_k
+from torchlens.experiment import sweep_sites
+from torchlens.experiment._engine import top_k
 
 
 class _Tiny(nn.Module):

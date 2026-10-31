@@ -285,10 +285,10 @@ def _compute_collapse_graph_revision(trace: Trace) -> tuple[object, ...]:
     op_revision = tuple(
         (
             op.label,
-            op.short_label,
+            op.label_short,
             op._label_raw,
             op.layer_label,
-            op.short_layer_label,
+            op.layer_label_short,
             tuple(op.parents),
             tuple(op.children),
             tuple(str(module) for module in (op.modules or ())),
@@ -344,11 +344,11 @@ def _op_adjacency_index(
     for op in trace.layer_list:
         forms = (
             op.label,
-            op.short_label,
+            op.label_short,
             op._label_raw,
             op.raw_label,
             op.layer_label,
-            op.short_layer_label,
+            op.layer_label_short,
         )
         for form in forms:
             if not form:

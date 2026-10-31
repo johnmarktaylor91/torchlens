@@ -332,7 +332,7 @@ class _TreeBuilder:
             label = str(getattr(op, "label", None) or getattr(op, "layer_label", ""))
             stack = tuple(getattr(op, "module_call_stack", ()) or ())
             op_owner[label] = str(stack[-1]) if stack else None
-            pass_by_label[label] = int(getattr(op, "pass_number", 1) or 1)
+            pass_by_label[label] = int(getattr(op, "pass_index", 1) or 1)
             for spelling in _label_spellings(op):
                 self.owner_by_any_label.setdefault(spelling, op_owner[label])
         self.self_flops: dict[str | None, int] = {}

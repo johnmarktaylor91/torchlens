@@ -11,7 +11,7 @@ def test_session_invoke_and_bundle() -> None:
     """Experimental sessions should capture multiple invocations."""
 
     model = torch.nn.Linear(2, 2)
-    session = tl.experimental.session(model)
+    session = tl.experimental.Session(model=model)
 
     first = session.invoke(torch.ones(1, 2))
     second = session.invoke(torch.zeros(1, 2))

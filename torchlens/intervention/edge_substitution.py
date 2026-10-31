@@ -242,7 +242,7 @@ def apply_edge_substitution_do(
         for entry in resolved:
             if entry.num_selected == 0:
                 continue
-            address = entry.site_key
+            address = entry.key
             record = family.get(tuple(address))
             if record is None:
                 raise SelectionError(
@@ -288,7 +288,7 @@ def apply_edge_substitution_do(
                 substituted,
                 meta={
                     "parent_label": record.parent_label,
-                    "resolve_digest": resolved.resolve_digest,
+                    "resolve_digest": resolved.digest,
                     "helper_name": helper_name,
                 },
             )
@@ -306,7 +306,7 @@ def apply_edge_substitution_do(
                     dataclasses.replace(
                         helper_spec,
                         selection_recipe={
-                            "resolve_digest": resolved.resolve_digest,
+                            "resolve_digest": resolved.digest,
                             "edge_address": repr(tuple(address)),
                         },
                     )

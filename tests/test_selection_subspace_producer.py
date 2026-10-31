@@ -114,7 +114,7 @@ def test_tol_is_a_strict_support_threshold(log):
     """Weights with |w| <= tol contribute no support; |w| > tol do."""
 
     direction = torch.tensor([0.25, 0.5, -0.25, -0.5, 0.25, 0.5])
-    resolved = tl.subspace(_RELU, direction, origin="tol test", tol=0.25).resolve(log)
+    resolved = tl.subspace(_RELU, direction, origin="tol test", atol=0.25).resolve(log)
     expected = torch.zeros(2, _D, dtype=torch.bool)
     expected[:, [1, 3, 5]] = True
     assert torch.equal(resolved[0].mask, expected)
@@ -169,7 +169,7 @@ def test_provenance_source_carries_origin_method_geometry_and_digest(log):
 
     basis = _sparse_direction()
     resolved = tl.subspace(
-        _RELU, basis, origin="linear probe, run 42", method="probe", tol=0.1
+        _RELU, basis, origin="linear probe, run 42", method="probe", atol=0.1
     ).resolve(log)
     source = resolved[0].provenance.source
     assert "origin='linear probe, run 42'" in source
@@ -326,7 +326,7 @@ def test_sub_tol_row_refuses_at_construction():
 
     basis = torch.stack([torch.full((_D,), 0.01), torch.ones(_D)])
     with pytest.raises(ValueError, match="vacuous"):
-        tl.subspace(_RELU, basis, origin="sub-tol row", tol=0.05)
+        tl.subspace(_RELU, basis, origin="sub-tol row", atol=0.05)
 
 
 def test_bad_parameters_refuse():
@@ -335,7 +335,7 @@ def test_bad_parameters_refuse():
     with pytest.raises(ValueError, match="dim"):
         tl.subspace(_RELU, torch.ones(_D), origin="x", dim=True)
     with pytest.raises(ValueError, match="non-negative"):
-        tl.subspace(_RELU, torch.ones(_D), origin="x", tol=-1.0)
+        tl.subspace(_RELU, torch.ones(_D), origin="x", atol=-1.0)
     with pytest.raises(ValueError, match="method"):
         tl.subspace(_RELU, torch.ones(_D), origin="x", method="")
 

@@ -876,7 +876,7 @@ def _payload_projection(product: Any) -> list[dict[str, Any]]:
         payloads.append(
             {
                 "label_raw": getattr(op, "_label_raw", None),
-                "pass_index": getattr(op, "pass_number", None),
+                "pass_index": getattr(op, "pass_index", None),
                 "tensor": _tensor_fingerprint(out),
             }
         )

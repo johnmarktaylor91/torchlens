@@ -45,7 +45,7 @@ def push_frame(trace: Any, stack: list[ModuleStackFrame], module: nn.Module) -> 
         address=cast(str, module_meta.address),
         module_type=cast(str, module_meta.module_type),
         module_id=module_id,
-        pass_number=trace._module_capture_ws.mod_call_index[module_id],
+        pass_index=trace._module_capture_ws.mod_call_index[module_id],
     )
     stack.append(frame)
     return frame

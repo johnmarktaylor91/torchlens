@@ -57,11 +57,10 @@ from .live_index import LiveIndex, LiveIndexWindowError
 from .predicate import (
     _DEFERRED_VALUE,
     MLXValueUnavailableError,
-    RecordContext,
     coerce_deferred_value as coerce_deferred_value,
     is_deferred_value as is_deferred_value,
 )
-from .refs import DeferredRef, DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
+from .refs import DeferredRef, DeviceRef, DtypeRef, ParamRef, TensorRef
 from .semantics import BackendSemantics, CapturePolicy
 from .workspaces import (
     LEGACY_TRACE_BUILD_STATE_KEYS,
@@ -118,8 +117,6 @@ __all__ = [
     "ParentEdge",
     "PreHookProvenanceEvent",
     "Phase",
-    "RecordContext",
-    "ReservedLabel",
     "Role",
     "walk_container",
     "TensorRef",

@@ -164,7 +164,7 @@ def _op_for_entry(trace: Any, entry: Site, *, sample_name: str | None = None) ->
     ops = [
         op
         for op in _find_act_ops(trace, layer_label)
-        if (getattr(op, "pass_number", 1) or 1) == pass_index
+        if (getattr(op, "pass_index", 1) or 1) == pass_index
     ]
     if not ops:
         where = "this trace" if sample_name is None else sample_name

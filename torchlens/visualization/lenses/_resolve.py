@@ -398,7 +398,7 @@ def _stack_license_holds(trace: Trace) -> bool:
     for op in trace.layer_list:
         if getattr(op, "num_passes", 1) <= 1:
             continue
-        pass_index = getattr(op, "pass_number", None)
+        pass_index = getattr(op, "pass_index", None)
         if pass_index is None:
             return False
         if pass_index < last:

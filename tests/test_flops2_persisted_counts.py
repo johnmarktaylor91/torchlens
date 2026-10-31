@@ -79,7 +79,7 @@ def test_artifacts_saved_without_the_field_load_none_and_read_unknown(
 ) -> None:
     """A v9 or pre-field v10 pass state default-fills None; the status reads unknown."""
 
-    record = BackwardPass(pass_number=1, trigger="log_backward", implicit=False)
+    record = BackwardPass(pass_index=1, trigger="log_backward", implicit=False)
     state = dict(record.__getstate__())
     state.pop("executed_flops_record", None)
     state["tlspec_version"] = version

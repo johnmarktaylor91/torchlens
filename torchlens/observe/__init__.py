@@ -28,7 +28,7 @@ from ._device_memory import (
     device_memory_samples,
 )
 from ._liveness import DEATH_RULES, estimated_liveness
-from ._peaks import PassPeakFacts, format_pass_peak, pass_peak_facts
+from ._peaks import format_pass_peak
 from ._svg import render_timeline_svg, write_timeline_svg
 from ._timeline import SCHEMA_ID, memory_timeline_v2, module_rollup
 
@@ -38,14 +38,12 @@ __all__ = [
     "DeviceMemoryProvider",
     "DeviceMemoryReading",
     "DeviceMemorySample",
-    "PassPeakFacts",
     "SCHEMA_ID",
     "device_memory_samples",
     "estimated_liveness",
     "format_pass_peak",
     "memory_timeline_v2",
     "module_rollup",
-    "pass_peak_facts",
     "render_timeline_svg",
     "write_timeline_svg",
 ]

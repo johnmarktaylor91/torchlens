@@ -177,11 +177,11 @@ def _op_probe_keys(accessor: TraceOpAccessor) -> list[str]:
     for op in accessor:
         keys += [
             op.label,
-            op.short_label,
+            op.label_short,
             op._label_raw,
             op.raw_label,
             op.layer_label,
-            op.short_layer_label,
+            op.layer_label_short,
         ]
         keys += list(op.children) + list(op.parents)
     keys += ["nope", "", ":", "1", "self", "linear", "relu_1_1:99"]
@@ -363,7 +363,7 @@ def test_alias_index_build_failure_falls_back_to_scan(monkeypatch: pytest.Monkey
         ops = list(trace.ops)
         assert len(ops) > 2
         first, last = ops[0], ops[-1]
-        probe_key = first.short_label
+        probe_key = first.label_short
         assert isinstance(probe_key, str)
 
         original = Op.raw_label

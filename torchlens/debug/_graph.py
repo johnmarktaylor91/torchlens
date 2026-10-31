@@ -187,7 +187,7 @@ def _activation_row(label: str, status: str, reason: str) -> dict[str, Any]:
     }
 
 
-def compare_rows(
+def _compare_rows(
     trace_a: Trace,
     trace_b: Trace,
     *,
@@ -346,10 +346,10 @@ def compare(
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         One row per pass-qualified op with summary counts in ``df.attrs``.
-        The optional view over :func:`compare_rows` (the pandas-free core).
+        The optional view over :func:`_compare_rows` (the pandas-free core).
     """
 
-    rows, attrs = compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
+    rows, attrs = _compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
     pd = _require_pandas()
     frame = pd.DataFrame(
         rows,
@@ -386,7 +386,7 @@ def first_divergence(
     (``allclose=False``), mismatched shape, or exists in only one trace.
     Rows whose payloads could not be compared (unsaved, non-tensor,
     device-mismatch) are NOT divergences; they are disclosed under
-    ``attrs["activation_unavailable"]`` by :func:`compare_rows`, and a
+    ``attrs["activation_unavailable"]`` by :func:`_compare_rows`, and a
     divergence inside such a region cannot be excluded.
 
     Parameters
@@ -407,7 +407,7 @@ def first_divergence(
         compared row diverged.
     """
 
-    rows, _attrs = compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
+    rows, _attrs = _compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
     for row in rows:
         if row["status"] in ("only-a", "only-b"):
             return row

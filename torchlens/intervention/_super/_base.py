@@ -386,7 +386,7 @@ class _TensorBearing:
 
         return self._stacked("grad")
 
-    def diff_pair(
+    def compare(
         self,
         other: str | None = None,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
@@ -489,7 +489,7 @@ class _TensorBearing:
         """Return a tensor field keyed by member name.
 
         This is the ONE funnel every cross-member tensor read passes through
-        (``diff_pair``, ``aggregate``, ``out``/``grad`` via ``_stacked``, and
+        (``compare``, ``aggregate``, ``out``/``grad`` via ``_stacked``, and
         the SuperParam ``weight_norm_diff``), so the checkpoint live-ref
         guard lives here: for parameter-claim views with two or more members
         it refuses BEFORE any member tensor is resolved.

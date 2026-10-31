@@ -99,7 +99,7 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
         layer_label = getattr(op, "layer_label", None)
         if layer_label is not None and layer_label not in entry["layer_labels"]:
             entry["layer_labels"].append(layer_label)
-        entry["passes"].append(getattr(op, "pass_number", 1))
+        entry["passes"].append(getattr(op, "pass_index", 1))
         shape = getattr(op, "shape", None)
         if shape not in entry["shapes"]:
             entry["shapes"].append(shape)

@@ -227,7 +227,7 @@ def occlusion(
     resolved = _resolve_selection(trace, selection)
     if resolved._kind != "ACT":
         raise AttributionError("occlusion currently supports ACT selections only")
-    if resolved.empty:
+    if resolved.is_empty:
         # occluding nothing scores exactly zero, which reads as a
         # confident "no effect"; the resolved selection already knows it.
         raise AttributionError(
@@ -258,7 +258,7 @@ def occlusion(
             "blur_kernel_size": blur_kernel_size if baseline == "blur" else None,
             "original_score": original_score,
             "occluded_score": occluded_score,
-            "selection_digest": resolved.resolve_digest,
+            "selection_digest": resolved.digest,
         },
     )
 

@@ -202,7 +202,7 @@ def _resolve_explicit(
                 kind=selection.kind,
             )
         for entry in selection:
-            site_key = entry.site_key
+            site_key = entry.key
             if len(site_key) != 2:
                 raise ReadError(
                     f"frozen= selection entry {site_key!r} is not an ACT "

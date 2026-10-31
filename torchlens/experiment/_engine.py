@@ -159,7 +159,7 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
         # ResolvedSelection is a Sequence of Site rows. Entry site keys
         # are (layer_label, pass_index) tuples; the structural L1 key rides
         # structural_site_key and the label backstop derives it.
-        labels = tuple(str(entry.site_key[0]) for entry in resolved)
+        labels = tuple(str(entry.key[0]) for entry in resolved)
         parts = tuple(_unit_digest_part(entry) for entry in resolved)
         units_selected = any(isinstance(part, tuple) for part in parts)
         return _Candidate(
@@ -218,7 +218,7 @@ def _candidate_spec(baseline: Trace, candidate: _Candidate, edit: Any) -> Any:
 
     rules: list[Any] = []
     for entry in candidate.unit_entries:
-        label = str(entry.site_key[0])
+        label = str(entry.key[0])
         term = _site_key_term(baseline, candidate.candidate_id, (label,))
         op_label = str(baseline.ops[label].label)
         masked = _derive_masked_edit(edit, entry, candidate.unit_digest, op_label)
@@ -235,7 +235,7 @@ def _unit_digest_part(entry: Any) -> Any:
     site are distinct candidates and identical units are still duplicates.
     """
 
-    label = str(entry.site_key[0])
+    label = str(entry.key[0])
     mask = entry.mask
     if bool(mask.all()):
         return label

@@ -153,7 +153,7 @@ def _target_op_for_entry(entry: Any, target: Any, source_trace: Any = None) -> A
     candidates = [
         op
         for op in _find_act_ops(target, layer_label)
-        if (getattr(op, "pass_number", 1) or 1) == pass_index
+        if (getattr(op, "pass_index", 1) or 1) == pass_index
     ]
     if candidates and getattr(candidates[0], "site_key", None) == structural_key:
         return candidates[0]
@@ -258,7 +258,7 @@ def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
             relation=entry.provenance.relation,
             source=f"{entry.provenance.source} [cross-run aligned from {source_label!r}]",
         )
-        target_address = (op.layer_label, getattr(op, "pass_number", 1) or 1)
+        target_address = (op.layer_label, getattr(op, "pass_index", 1) or 1)
         if target_address != entry.key:
             # Site-key-first rebind under label drift (C03/B4): the aligned
             # entry addresses the TARGET op's same-policy address; the

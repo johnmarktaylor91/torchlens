@@ -42,7 +42,7 @@ def test_arm_opens_entry_and_contextvar_scopes(tmp_path: Path) -> None:
         entries = led.entries()
         assert list(entries) == ["e1"]
         entry = entries["e1"]
-        assert not entry.draft
+        assert not entry.is_draft
         assert entry.hypothesis_declared_at_seq is not None
         assert entry.metric_declared_at_seq is not None
         assert entry.metric == "logit diff"
@@ -55,7 +55,7 @@ def test_arm_opens_entry_and_contextvar_scopes(tmp_path: Path) -> None:
 def test_draft_without_hypothesis_and_verdict_basis_honesty(tmp_path: Path) -> None:
     led = ledger(tmp_path / "run.tlledger")
     try:
-        assert led.entries()["e1"].draft
+        assert led.entries()["e1"].is_draft
         assert " DRAFT" in led.entries()["e1"].overview_line()
         # A verdict with no basis is legal and VISIBLY weaker.
         led.verdict("inconclusive", text="eyeballed")
@@ -165,7 +165,7 @@ def test_quarantine_on_sink_death_returns_material_result(tmp_path: Path) -> Non
         assert excinfo.value.fields["code"] == "ledger_entry_quarantined"
         # Explicit save() RAISES on a dead sink (no material result at risk).
         with pytest.raises(BundleExperimentError):
-            led.save()
+            led.flush()
     finally:
         with contextlib.suppress(BundleExperimentError):
             led.close()

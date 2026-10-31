@@ -244,7 +244,7 @@ def _resolve_within_impl(
             kind=resolved.kind,
         )
     for entry in resolved:
-        site_key = entry.site_key
+        site_key = entry.key
         label = f"{site_key[0]}:{site_key[1]}" if len(site_key) == 2 else str(site_key[0])
         mask = entry.mask
         population[label] = None if bool(mask.all()) else mask

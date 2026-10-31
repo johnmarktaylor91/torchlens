@@ -191,8 +191,7 @@ class Session:
 
         import torchlens
 
-        bundle_fn = torchlens.bundle
-        return bundle_fn(
+        return torchlens.Bundle(
             {str(metadata["name"]): log for metadata, log in zip(self.invocations, self.traces)}
         )
 
@@ -323,6 +322,5 @@ __all__ = [
     "dagua",
     "freeze_module",
     "node_styles",
-    "session",
     "stop_after",
 ]

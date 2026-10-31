@@ -364,7 +364,7 @@ for facade_name, module_path in facades.items():
 # tip without any gate noticing -- the hand-list-outgrown-by-the-live-walk
 # failure class the oracles harness exists to catch.
 assert collisions == {
-    "accessors": [],
+    "appliances": [],
     # F29: the agent inspection surface -- children are cli plus
     # underscore-private modules; __all__ never collides with a child.
     "agent": [],

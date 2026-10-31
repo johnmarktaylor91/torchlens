@@ -529,12 +529,12 @@ def test_mask_immutability_pin(log):
 
     resolved = tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(log)
     entry = resolved[0]
-    digest_before = resolved.resolve_digest
+    digest_before = resolved.digest
     handed_out = entry.mask
     assert handed_out is not entry.mask  # fresh materialization per access
     handed_out.fill_(True)
     assert entry.num_selected == 1
-    assert resolved.resolve_digest == digest_before
+    assert resolved.digest == digest_before
     assert resolved == tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(log)
 
 
@@ -545,7 +545,7 @@ def test_repeated_resolve_identity_stability(log):
     first = query.resolve(log)
     second = query.resolve(log)
     assert first == second
-    assert first.resolve_digest == second.resolve_digest
+    assert first.digest == second.digest
 
 
 def test_multi_site_value_type(log):

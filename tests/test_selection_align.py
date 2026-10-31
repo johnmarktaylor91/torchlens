@@ -106,7 +106,7 @@ def test_align_to_rebinds_with_masks_and_provenance(pair):
         assert aligned_entry.provenance.relation == source_entry.provenance.relation
         assert "cross-run aligned from" in aligned_entry.provenance.source
     # Content digest is mask/site-based, so a label-identical alignment agrees.
-    assert aligned.resolve_digest == resolved.resolve_digest
+    assert aligned.digest == resolved.digest
 
 
 def test_do_still_refuses_foreign_resolved_selection(pair):
@@ -146,7 +146,7 @@ def test_cross_run_patch_lands_source_values(pair):
     downstream_delta = (fork["relu_2_4"].out - trace_b["relu_2_4"].out).abs().max()
     assert float(downstream_delta) > 0.0
     audit = fork.intervention_audit[-1]
-    assert audit["resolve_digest"] == aligned.resolve_digest
+    assert audit["resolve_digest"] == aligned.digest
     assert audit["patch_source"]["source_object_id"] == str(id(trace_a))
 
 
@@ -156,10 +156,10 @@ def test_alignment_mask_stays_immutable(pair):
     trace_a, trace_b = pair
     resolved = tl.units("relu_1_2", IDX).resolve(trace_a)
     aligned = resolved.align_to(trace_b)
-    digest = aligned.resolve_digest
+    digest = aligned.digest
     mask = aligned[0].mask
     mask.zero_()
-    assert aligned.resolve_digest == digest
+    assert aligned.digest == digest
     assert aligned[0].num_selected == len(IDX)
 
 

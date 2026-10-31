@@ -1112,10 +1112,10 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `structure_only_type_invalid` | Capture option `structure_only` is not a bool | Pass `structure_only=True` or `structure_only=False` |
 | `structure_only_validation_unsupported` | Validation entry has nothing to compare against on a structure-only trace; discharge is the verification story | Use `Trace.discharge_against(real_trace)` instead |
 | `structure_only_values_unsupported` | A value-payload request (save selection, gradients, streaming sinks, raw input/output, output decode) cannot be honored under `structure_only=True` | Drop the payload-requesting option or run a real capture |
-| `sweep_intervention_conflict` | `sweep()` received a second intervention | Express the target through `at` |
+| `sweep_intervention_conflict` | `sweep()` received a second intervention | Express the target through `site` |
 | `sweep_names_length_mismatch` | Sweep names and values have different lengths | Pass one name per value |
-| `sweep_site_missing` | Sweep site target is missing | Pass `at` |
-| `sweep_spec_at_conflict` | `sweep(at=...)` combined with `InterventionSpec` values; each spec already names its own WHERE and action (PROVISIONAL spelling, documented-unstable; C03 spec door) | Drop `at=` when sweeping over specs |
+| `sweep_site_missing` | Sweep site target is missing | Pass `site` |
+| `sweep_spec_at_conflict` | `sweep(site=...)` combined with `InterventionSpec` values; each spec already names its own WHERE and action (PROVISIONAL spelling, documented-unstable; C03 spec door) | Drop `at=` when sweeping over specs |
 | `sweep_spec_values_mixed` | Sweep values mixed `InterventionSpec` and plain replacement values (PROVISIONAL spelling, documented-unstable) | Pass all-spec values without `at=`, or all-plain values with `at=` |
 | `sweep_site_type_invalid` | Sweep site target has an unsupported type | Pass a label, selector, or predicate |
 | `sweep_values_empty` | Sweep values iterable is empty | Pass at least one value |

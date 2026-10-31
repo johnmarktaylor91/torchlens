@@ -89,7 +89,7 @@ from .._trace_core.relation_views import (
 )
 from .._trace_state import TraceState
 from ..backends.torch._tl import mark_detached_saved_activation
-from ..constants import ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER, RAW_LABEL_SUFFIX
+from ..constants import _RAW_LABEL_SUFFIX, ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER
 from ..intervention.errors import DirectActivationWriteWarning
 from ..intervention.types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
@@ -1608,12 +1608,12 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         "_construction_done": FieldPolicy.DROP,
         "_is_in_conditional_body": FieldPolicy.KEEP,
         "label": FieldPolicy.KEEP,
-        "short_label": FieldPolicy.KEEP,
+        "label_short": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
-        "short_layer_label": FieldPolicy.KEEP,
+        "layer_label_short": FieldPolicy.KEEP,
         "type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
-        "pass_number": FieldPolicy.KEEP,
+        "pass_index": FieldPolicy.KEEP,
         "num_passes": FieldPolicy.KEEP,
         "lookup_keys": FieldPolicy.KEEP,
         "out": FieldPolicy.BLOB,
@@ -2730,7 +2730,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         if not _finished:
             return {self._label_raw}
         spellings = {self.layer_label}
-        pass_index = self.pass_number
+        pass_index = self.pass_index
         if isinstance(pass_index, int):
             spellings.add(f"{self.layer_label}:{pass_index}")
         return spellings
@@ -3590,8 +3590,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         """
 
         label = self._label_raw
-        if isinstance(label, str) and label.endswith(RAW_LABEL_SUFFIX):
-            return label[: -len(RAW_LABEL_SUFFIX)]
+        if isinstance(label, str) and label.endswith(_RAW_LABEL_SUFFIX):
+            return label[: -len(_RAW_LABEL_SUFFIX)]
         return str(label)
 
     @raw_label.setter
@@ -4388,7 +4388,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def _str_during_pass(self) -> str:
         """Return a human-readable summary of this tensor entry while the forward pass is still in progress."""
         s = f"Tensor {self._label_raw} (layer {self._layer_label_raw}) (PASS NOT FINISHED):"
-        s += f"\n\tPass: {self.pass_number}"
+        s += f"\n\tPass: {self.pass_index}"
         s += f"\n\tTensor info: shape {self.shape}, dtype {self.dtype}"
         s += f"\n\tComputed from params: {self.uses_params}"
         s += f"\n\tComputed in modules: {self.modules}"

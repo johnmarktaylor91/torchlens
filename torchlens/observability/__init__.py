@@ -81,7 +81,7 @@ from ._native_profile import (
     register_join_result,
 )
 from ._op_tier import FacetSplitter, OpTierCollector, split_heads
-from ._overhead import ArmSpec, OverheadMeasurement, RefusalPredicate, measure_overhead
+from ._overhead import ArmSpec, OverheadMeasurement, measure_overhead
 from ._payloads import histogram_payload, observation_row
 from ._perf_harness import (
     MIN_PUBLISHABLE_REPEATS,
@@ -177,7 +177,6 @@ __all__ = [
     "ProfilerSession",
     "ProfilerSessionError",
     "RamRing",
-    "RefusalPredicate",
     "RegionRecord",
     "RunRecord",
     "SeriesPoint",

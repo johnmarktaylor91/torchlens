@@ -64,7 +64,7 @@ class BisectNanResult(FoundReport):
 
 
 @dataclass(frozen=True)
-class FindNanResult(FoundReport):
+class FindNanReport(FoundReport):
     """Structured first-non-finite diagnostic returned by ``find_nan``.
 
     Parameters
@@ -155,9 +155,9 @@ class FindNanResult(FoundReport):
         """
 
         if not self.found:
-            return f"FindNanResult(found=False, scope={self.scope!r})"
+            return f"FindNanReport(found=False, scope={self.scope!r})"
         return (
-            "FindNanResult("
+            "FindNanReport("
             f"found=True, kind={self.kind!r}, label={self.label!r}, "
             f"source_line={self.source_line!r}, scope={self.scope!r})"
         )
@@ -318,7 +318,7 @@ def _result_from_op(
     source_line: str | None = None,
     scope: str = "first non-finite tensor",
     uncertainty_zone: tuple[str, ...] = (),
-) -> FindNanResult:
+) -> FindNanReport:
     """Build a public diagnostic result from an offending op.
 
     Parameters
@@ -336,7 +336,7 @@ def _result_from_op(
 
     Returns
     -------
-    FindNanResult
+    FindNanReport
         Structured public diagnostic.
     """
 
@@ -346,7 +346,7 @@ def _result_from_op(
     message = f"{prefix} is {kind} at {label}."
     if uncertainty_zone:
         message += " Unsaved upstream uncertainty zone: " + ", ".join(uncertainty_zone) + "."
-    return FindNanResult(
+    return FindNanReport(
         found=True,
         op=op,
         label=label,
@@ -363,7 +363,7 @@ def _result_from_op(
     )
 
 
-def _no_finding_result(*, scope: str, uncertainty_zone: tuple[str, ...] = ()) -> FindNanResult:
+def _no_finding_result(*, scope: str, uncertainty_zone: tuple[str, ...] = ()) -> FindNanReport:
     """Build a no-finding diagnostic result.
 
     Parameters
@@ -375,14 +375,14 @@ def _no_finding_result(*, scope: str, uncertainty_zone: tuple[str, ...] = ()) ->
 
     Returns
     -------
-    FindNanResult
+    FindNanReport
         No-finding diagnostic.
     """
 
     message = f"No NaN/Inf found in {scope}."
     if uncertainty_zone:
         message += " Unsaved upstream uncertainty zone: " + ", ".join(uncertainty_zone) + "."
-    return FindNanResult(
+    return FindNanReport(
         False,
         None,
         None,
@@ -399,7 +399,7 @@ def _no_finding_result(*, scope: str, uncertainty_zone: tuple[str, ...] = ()) ->
     )
 
 
-def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanResult:
+def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
     """Run a memory-light live capture and return its first NaN or Inf finding.
 
     The capture stops at the first non-finite op output, rather than retaining
@@ -417,7 +417,7 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanResult:
 
     Returns
     -------
-    FindNanResult
+    FindNanReport
         First live non-finite output, or a clean result.
     """
 
@@ -482,7 +482,7 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanResult:
             isinstance(dimension, int) for dimension in shape
         ):
             raise ValueError("CaptureError non-finite payload has an invalid shape field.")
-        return FindNanResult(
+        return FindNanReport(
             True,
             raw_op,
             label,
@@ -520,7 +520,7 @@ def _exception_source_line(exc: CaptureError) -> str | None:
     return f"{exc.file_path}:{exc.line_no}"
 
 
-def find_nan_in_trace(trace: Trace) -> FindNanResult:
+def find_nan_in_trace(trace: Trace) -> FindNanReport:
     """Find the first NaN or Inf among saved trace outputs.
 
     Parameters
@@ -530,7 +530,7 @@ def find_nan_in_trace(trace: Trace) -> FindNanResult:
 
     Returns
     -------
-    FindNanResult
+    FindNanReport
         First saved non-finite output. Selectively saved traces explicitly
         report unsaved ancestor ops as an uncertainty zone.
     """

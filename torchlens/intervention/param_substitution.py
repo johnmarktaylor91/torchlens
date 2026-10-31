@@ -117,7 +117,7 @@ def _underivable(message: str, **fields: Any) -> SelectionError:
 def _param_for_entry(trace: Trace, entry: Site) -> Param:
     """Return the Param record addressed by one resolved PARAM entry."""
 
-    address = entry.site_key[0]
+    address = entry.key[0]
     for param in getattr(trace, "params", ()):
         if getattr(param, "address", None) == address or param.name == address:
             return param
@@ -326,7 +326,7 @@ def apply_param_substitution_do(
         for entry in resolved:
             if entry.num_selected == 0:
                 continue
-            _stage_param_entry(trace, entry, edit, resolved.resolve_digest, staging)
+            _stage_param_entry(trace, entry, edit, resolved.digest, staging)
         _propagate_staged(trace, staging, strict=strict)
     except Exception:
         _rollback_param_substitutions(staging.committed)
@@ -348,7 +348,7 @@ def _stage_param_entry(
 ) -> None:
     """Derive one entry's occurrences, compute its value, stage the stores."""
 
-    param_address = entry.site_key[0]
+    param_address = entry.key[0]
     occurrences_by_op = _derive_entry_occurrences(trace, entry)
     matched_values = [
         value for _, _, occurrences in occurrences_by_op for _, _, value in occurrences
@@ -447,7 +447,7 @@ def _derive_entry_occurrences(
 
     replay_module = importlib.import_module("torchlens.intervention.replay")
     param = _param_for_entry(trace, entry)
-    param_address = entry.site_key[0]
+    param_address = entry.key[0]
     live_param, barcode = _live_param_identity(param)
     if live_param is None and barcode is None:
         raise _underivable(
@@ -523,7 +523,7 @@ def _check_multipass_coverage(
         num_passes = int(getattr(child_op, "num_passes", 1) or 1)
         if num_passes > 1:
             covered.setdefault(child_op.layer_label, set()).add(
-                int(getattr(child_op, "pass_number", 0) or 0)
+                int(getattr(child_op, "pass_index", 0) or 0)
             )
             total_passes[child_op.layer_label] = num_passes
     for bare_label, seen in covered.items():

@@ -240,7 +240,7 @@ def _check_layer_pass_to_layer_log_xrefs(ml: Trace) -> None:
             if lpl.pass_index != call_index:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{ll_label}' pass key={call_index} but Op.pass_number={lpl.pass_index}",
+                    f"Layer '{ll_label}' pass key={call_index} but Op.pass_index={lpl.pass_index}",
                 )
             if lpl.layer_label != ll.layer_label:
                 raise MetadataInvariantError(
@@ -280,7 +280,7 @@ def _check_pass_count_consistency(ml: Trace) -> None:
                 f"num_passes={getattr(layer_log, 'num_passes', None)!r}",
             )
         for pass_index, op in ops.items():
-            if getattr(op, "pass_number", None) != pass_index:
+            if getattr(op, "pass_index", None) != pass_index:
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{layer_label}' stores op with pass_index="

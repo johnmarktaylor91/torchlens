@@ -186,3 +186,23 @@ class SuperAccessor(Generic[T, S]):
         preview = keys[:5]
         suffix = "..." if len(keys) > 5 else ""
         return f"{type(self).__name__} with {len(keys)} labels: {preview}{suffix}"
+
+
+class SharedNamesMixin:
+    """Add ``shared`` and ``divergent`` name lists to a per-kind Bundle accessor."""
+
+    #: Bundle kind whose names this accessor lists (``ops``, ``layers``, ...).
+    _names_kind: str
+    _bundle: Any
+
+    @property
+    def shared(self) -> list[str]:
+        """Return the names present in every Bundle member, ordered by the first member."""
+
+        return list(self._bundle._kind_names(self._names_kind, shared=True))
+
+    @property
+    def divergent(self) -> list[str]:
+        """Return the names present in some but not all Bundle members."""
+
+        return list(self._bundle._kind_names(self._names_kind, shared=False))

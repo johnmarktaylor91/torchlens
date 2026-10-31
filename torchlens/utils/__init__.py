@@ -41,7 +41,6 @@ if TYPE_CHECKING:
     from .collections import (
         assign_to_sequence_or_dict,
         ensure_iterable,
-        index_nested,
         is_iterable,
         remove_entry_from_list,
     )
@@ -1156,7 +1155,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "human_readable_size": ("torchlens.utils.display", "human_readable_size"),
     "identity": ("torchlens.utils.display", "identity"),
     "in_notebook": ("torchlens.utils.display", "in_notebook"),
-    "index_nested": ("torchlens.utils.collections", "index_nested"),
     "int_list_to_compact_str": ("torchlens.utils.display", "int_list_to_compact_str"),
     "is_iterable": ("torchlens.utils.collections", "is_iterable"),
     "iter_accessible_attributes": (
@@ -1262,11 +1260,9 @@ __all__ = [
     "human_readable_size",
     "identity",
     "in_notebook",
-    "index_nested",
     "int_list_to_compact_str",
     "is_iterable",
     "iter_accessible_attributes",
-    "find_executable_save_set",
     "flop_count",
     "format_flops",
     "format_size",

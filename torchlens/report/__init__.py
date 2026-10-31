@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from ..debug._graph import compare
+from ..debug._nan import FindNanReport, find_nan
+from ..debug._params import compare_params
+from ..intervention._topology.topology import compare_topology
 from ._compute_truth import ComputeAggregation, ComputeRow, RatioFact, compute_aggregation
 from ._cost_backward import (
     BACKWARD_STATES,
@@ -102,6 +106,11 @@ from ._summary_report import (
 )
 
 __all__ = [
+    "FindNanReport",
+    "compare",
+    "compare_params",
+    "compare_topology",
+    "find_nan",
     "BACKWARD_STATES",
     "CACHE_RESIDENT_BYTES_DEFAULT",
     "COST_CLASSES",

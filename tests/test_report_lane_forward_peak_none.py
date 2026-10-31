@@ -26,7 +26,8 @@ from torchlens.capture.peak_memory import (
     CPU_ZERO_PEAK_WITH_PYTHON_REASON,
     forward_peak_value,
 )
-from torchlens.observe import format_pass_peak, pass_peak_facts
+from torchlens.observe import format_pass_peak
+from torchlens.observe._peaks import pass_peak_facts
 from torchlens.options import CaptureOptions
 
 _FLAG = "measure_python_peak_memory=True"

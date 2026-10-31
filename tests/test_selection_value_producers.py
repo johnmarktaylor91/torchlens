@@ -150,7 +150,7 @@ def test_top_fraction_ceil_rule_pinned(log):
     numel = log[_RELU].out.numel()
     resolved = tl.top_fraction(_RELU, 0.01).resolve(log)
     assert resolved[0].num_selected == math.ceil(0.01 * numel)
-    assert tl.top_fraction(_RELU, 0.0).resolve(log).empty
+    assert tl.top_fraction(_RELU, 0.0).resolve(log).is_empty
 
 
 def test_threshold_band_and_abs(log):
@@ -268,7 +268,9 @@ def test_dead_composes_with_module_selector(log, log_b):
 def test_saturated_detects_pinned_sigmoid_channel(log, log_b):
     """Units within tol of a declared bound in every sample are saturated."""
 
-    resolved = tl.saturated([log, log_b], low=0.0, high=1.0, tol=1e-4, within=_SIGMOID).resolve(log)
+    resolved = tl.saturated([log, log_b], low=0.0, high=1.0, atol=1e-4, within=_SIGMOID).resolve(
+        log
+    )
     assert resolved[0].mask[0, 0].all()  # bias=100 channel pinned at 1
     expected = ((log[_SIGMOID].out - 1.0).abs() <= 1e-4) & (
         (log_b[_SIGMOID].out - 1.0).abs() <= 1e-4
@@ -488,7 +490,7 @@ def test_repr_stability_pins(log, log_b):
         "Selection[ACT](top_k(k=5, by='value', largest=True, "
         f"within=Selection[ACT](site({_RELU!r}))))"
     )
-    assert repr(tl.dead([log, log_b], tol=0.0)) == (
+    assert repr(tl.dead([log, log_b], atol=0.0)) == (
         "Selection[ACT](dead(n_samples=2, tol=0.0, within=saved_sites))"
     )
 

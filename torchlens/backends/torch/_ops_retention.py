@@ -550,7 +550,7 @@ def _module_stack_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[Modul
                 address=str(module_address),
                 module_type="",
                 module_id=0,
-                pass_number=int(module_pass),
+                pass_index=int(module_pass),
             )
         )
     return tuple(frames)
@@ -867,7 +867,7 @@ def _build_trace_predicate_context(
         sample_id=None,
         address=module_address,
         module_type=None,
-        module_pass_number=module_pass_index,
+        module_pass_index=module_pass_index,
         is_transform=bool(fields_dict.get("is_transform", False)),
         transform_kind=fields_dict.get("transform_kind"),
     )

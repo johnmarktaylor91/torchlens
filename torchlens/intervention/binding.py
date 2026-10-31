@@ -656,9 +656,7 @@ def _consider_op(
             sample_id=None,
             address=getattr(module_frame, "address", None) if module_frame else None,
             module_type=getattr(module_frame, "module_type", None) if module_frame else None,
-            module_pass_number=(
-                getattr(module_frame, "pass_number", None) if module_frame else None
-            ),
+            module_pass_index=(getattr(module_frame, "pass_index", None) if module_frame else None),
         )
         try:
             rule = binding.spec.match(ctx)
@@ -839,7 +837,7 @@ class _ArmedRuntime:
                         address=address,
                         module_type=module_type,
                         module_id=module_id,
-                        pass_number=session.module_pass_counts[address],
+                        pass_index=session.module_pass_counts[address],
                     )
                 )
 

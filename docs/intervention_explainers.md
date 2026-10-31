@@ -142,7 +142,7 @@ rows, the edit acts on the coordinates `c = Q x` (one per row) and the site gets
 An orthonormal basis is used exactly as given, so the coordinates are yours. Any other full-rank
 basis is orthonormalised by Gram-Schmidt in row order with each row's sign kept, so one direction
 `v` edits the component along `v / |v|`; the audit record says when that happened. A
-rank-deficient basis refuses `subspace_basis_invalid`. Weights at or below `tol=` are dropped
+rank-deficient basis refuses `subspace_basis_invalid`. Weights at or below `atol=` are dropped
 first.
 
 `resolve()` still answers a set question: the basis's support set, the elements a nonzero weight

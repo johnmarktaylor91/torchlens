@@ -132,7 +132,7 @@ TARGET_ALL = [
 ]
 
 CANONICAL_SUBMODULES = [
-    "torchlens.accessors",
+    "torchlens.appliances",
     "torchlens.bridge",
     "torchlens.callbacks",
     "torchlens.compat",

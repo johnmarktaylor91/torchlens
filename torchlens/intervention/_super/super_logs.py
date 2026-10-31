@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ._accessor_base import SuperAccessor
+from ._accessor_base import SharedNamesMixin, SuperAccessor
 from ._base import _TENSOR_FIELD_LITERAL, Super, _TensorBearing
 
 if TYPE_CHECKING:
@@ -177,8 +177,10 @@ class SuperGradFnCall(Super["GradFnCall"]):
     """Aligned view of a grad_fn_handle call label across bundle members."""
 
 
-class SuperModuleAccessor(SuperAccessor["Module", SuperModule]):
+class SuperModuleAccessor(SharedNamesMixin, SuperAccessor["Module", SuperModule]):
     """Dict-like Bundle accessor returning SuperModule objects."""
+
+    _names_kind = "modules"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize a module accessor for ``bundle``.
@@ -230,8 +232,10 @@ class SuperModuleAccessor(SuperAccessor["Module", SuperModule]):
         return [str(label) for label in trace.modules.keys()]
 
 
-class SuperBufferAccessor(SuperAccessor["Buffer", SuperBuffer]):
+class SuperBufferAccessor(SharedNamesMixin, SuperAccessor["Buffer", SuperBuffer]):
     """Dict-like Bundle accessor returning SuperBuffer objects."""
+
+    _names_kind = "buffers"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize a buffer accessor for ``bundle``.
@@ -282,8 +286,10 @@ class SuperBufferAccessor(SuperAccessor["Buffer", SuperBuffer]):
         return [str(label) for label in trace.buffers.keys()]
 
 
-class SuperParamAccessor(SuperAccessor["Param", SuperParam]):
+class SuperParamAccessor(SharedNamesMixin, SuperAccessor["Param", SuperParam]):
     """Dict-like Bundle accessor returning SuperParam objects."""
+
+    _names_kind = "params"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize a parameter accessor for ``bundle``.
@@ -334,8 +340,10 @@ class SuperParamAccessor(SuperAccessor["Param", SuperParam]):
         return [str(label) for label in trace.params.keys()]
 
 
-class SuperGradFnAccessor(SuperAccessor["GradFn", SuperGradFn]):
+class SuperGradFnAccessor(SharedNamesMixin, SuperAccessor["GradFn", SuperGradFn]):
     """Dict-like Bundle accessor returning SuperGradFn objects."""
+
+    _names_kind = "grad_fns"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize a grad_fn_handle accessor for ``bundle``.

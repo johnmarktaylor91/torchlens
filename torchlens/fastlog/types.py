@@ -304,7 +304,7 @@ class GradRecordContext:
     module_stack: tuple[Any, ...] = ()
     has_forward_op: bool = False
     has_op: bool = False
-    pass_number: int | None = None
+    pass_index: int | None = None
     order: int | None = None
     event_index: int | None = None
     shape: tuple[int, ...] | None = None
@@ -855,8 +855,8 @@ class Recording(CapturedRun):
 
         index = len(self.grad_records)
         self.grad_records.append(record)
-        if record.ctx.pass_number is not None:
-            self.grad_by_pass.setdefault(record.ctx.pass_number, []).append(index)
+        if record.ctx.pass_index is not None:
+            self.grad_by_pass.setdefault(record.ctx.pass_index, []).append(index)
         if record.ctx.layer_label is not None:
             self.grad_by_label.setdefault(record.ctx.layer_label, []).append(index)
         self.grad_by_label.setdefault(record.ctx.label, []).append(index)

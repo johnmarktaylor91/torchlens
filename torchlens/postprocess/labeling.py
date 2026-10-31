@@ -96,8 +96,8 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
             tensor_log_entry.label = f"{layer_type}_{type_index}:{pass_index}"
             tensor_log_entry.layer_label = f"{layer_type}_{type_index}"
 
-        tensor_log_entry.short_label = f"{layer_type}_{type_index}:{pass_index}"
-        tensor_log_entry.short_layer_label = f"{layer_type}_{type_index}"
+        tensor_log_entry.label_short = f"{layer_type}_{type_index}:{pass_index}"
+        tensor_log_entry.layer_label_short = f"{layer_type}_{type_index}"
         final_lookup_label = (
             tensor_log_entry.layer_label
             if tensor_log_entry.num_passes == 1
@@ -872,18 +872,18 @@ def _add_lookup_keys_for_layer_entry(
         layer_entry._label_raw,
         layer_entry.raw_label,
         layer_entry.layer_label,
-        layer_entry.short_layer_label,
+        layer_entry.layer_label_short,
         layer_entry.label,
-        layer_entry.short_label,
+        layer_entry.label_short,
         tensor_index,
         tensor_index - num_tensors_to_keep,
     ]
     layer_entry.ordinal_index = tensor_index
     primary_label_keys = {
         layer_entry.layer_label,
-        layer_entry.short_layer_label,
+        layer_entry.layer_label_short,
         layer_entry.label,
-        layer_entry.short_label,
+        layer_entry.label_short,
     }
     exact_op_keys = {
         layer_entry._label_raw,

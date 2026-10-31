@@ -442,7 +442,7 @@ def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
     """
 
     return [
-        (frame.address, frame.pass_number)
+        (frame.address, frame.pass_index)
         for frame in _mstack.snapshot(self._module_capture_ws.exhaustive_module_stack)
     ]
 

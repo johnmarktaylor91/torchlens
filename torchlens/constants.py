@@ -34,7 +34,7 @@ from .utils._torch_compat import get_torch_vf_namespace, get_variable_function_n
 # Each list defines the ordered user-facing/export fields for its data class.
 # Runtime-only state belongs in per-class FIELD_POLICY / PORTABLE_STATE_SPEC.
 
-RAW_LABEL_SUFFIX = "_raw"
+_RAW_LABEL_SUFFIX = "_raw"
 
 
 def _is_suffixed_raw_label(label: object) -> TypeGuard[str]:
@@ -46,10 +46,10 @@ def _is_suffixed_raw_label(label: object) -> TypeGuard[str]:
     suffix constant themselves.
     """
 
-    return isinstance(label, str) and label.endswith(RAW_LABEL_SUFFIX)
+    return isinstance(label, str) and label.endswith(_RAW_LABEL_SUFFIX)
 
 
-RAW_LABEL_FIELD = "raw_label"
+_RAW_LABEL_FIELD = "raw_label"
 ARG_EXPRESSIONS_FIELD = "arg_expressions"
 
 # The documented non-reproducible artifact surface (grind-r5 b7 R21, 3rd
@@ -349,7 +349,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     # General info
     "_label_raw",
     "_layer_label_raw",
-    RAW_LABEL_FIELD,
+    _RAW_LABEL_FIELD,
     "step_index",
     "raw_index",
     "ordinal_index",
@@ -358,12 +358,12 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "_construction_done",
     # Other labeling info
     "label",
-    "short_label",
+    "label_short",
     "layer_label",
-    "short_layer_label",
+    "layer_label_short",
     "type",
     "type_index",
-    "pass_number",
+    "pass_index",
     "num_passes",
     "lookup_keys",
     # Saved tensor info
@@ -995,7 +995,7 @@ GRAD_FN_LOG_FIELD_ORDER = [
 ]
 
 BACKWARD_PASS_FIELD_ORDER = [
-    "pass_number",
+    "pass_index",
     "trigger",
     "implicit",
     "outer_context",

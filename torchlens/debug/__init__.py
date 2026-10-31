@@ -29,8 +29,6 @@ from ._grad_fn_walk import (
 from ._gradients import gradient_flow_audit, gradient_flow_audit_rows
 from ._graph import (
     LineageResult,
-    compare,
-    compare_rows,
     dead_neurons,
     dead_neurons_rows,
     first_divergence,
@@ -44,9 +42,8 @@ from ._graph_breaks import (
     graph_breaks,
 )
 from ._infer_input_shape import InferInputShapeResult, infer_input_shape
-from ._nan import BisectNanResult, FindNanResult, NanReport, bisect_nan, find_nan, nan_report
+from ._nan import BisectNanResult, NanReport, bisect_nan, nan_report
 from ._nan_backward import BackwardNanResult, BackwardTransition, bisect_nan_backward
-from ._params import compare_params
 from ._params_audit import ParamAudit, audit_params
 from ._precision import BisectPrecisionResult, PrecisionRow as PrecisionRow, bisect_precision
 from ._recompute import recompute_candidates
@@ -62,7 +59,6 @@ __all__ = [
     "FirstBadThing",
     "CompileCountsUnavailableError",
     "DTypeRangeAudit",
-    "FindNanResult",
     "FlopsCrossCheck",
     "GradFnNode",
     "GradFnSketch",
@@ -81,10 +77,6 @@ __all__ = [
     "bisect_nan_backward",
     "bisect_precision",
     "check_determinism",
-    "find_nan",
-    "compare",
-    "compare_params",
-    "compare_rows",
     "clone_input_tree",
     "count_compiles",
     "dead_neurons",

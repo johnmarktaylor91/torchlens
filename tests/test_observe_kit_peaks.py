@@ -8,7 +8,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.observe import format_pass_peak, pass_peak_facts
+from torchlens.observe import format_pass_peak
+from torchlens.observe._peaks import pass_peak_facts
 
 TORCHLENS_DIR = Path(tl.__file__).resolve().parent
 

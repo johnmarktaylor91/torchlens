@@ -20,11 +20,11 @@ SelectorKind: TypeAlias = Literal[
     "func",
     "func_transform",
     "module",
-    "model_output",
+    "output",
     "output_at",
-    "model_input",
+    "input_at",
     "site",
-    "label_contains",
+    "contains",
     "predicate",
     "in_module",
     "facet",
@@ -37,7 +37,7 @@ SelectorKind: TypeAlias = Literal[
     "backward_pass",
     "intervening",
     "without_op",
-    "label_matches",
+    "regex",
     "followed_by",
     "preceded_by",
     "site",
@@ -278,7 +278,7 @@ class FuncSelector(BaseSelector):
     """
 
     name: str
-    model_output: int | str | None = None
+    output: int | str | None = None
 
     def __init__(self, name: str, *, output: int | str | None = None) -> None:
         """Create a function-name selector.
@@ -290,10 +290,10 @@ class FuncSelector(BaseSelector):
         """
 
         object.__setattr__(self, "selector_kind", "func")
-        selector_value: Any = name if output is None else {"name": name, "model_output": output}
+        selector_value: Any = name if output is None else {"name": name, "output": output}
         object.__setattr__(self, "selector_value", selector_value)
         object.__setattr__(self, "name", name)
-        object.__setattr__(self, "model_output", output)
+        object.__setattr__(self, "output", output)
 
 
 @dataclass(frozen=True, repr=False)
@@ -369,7 +369,7 @@ class OutputSelector(BaseSelector):
             Output index or semantic output role.
         """
 
-        object.__setattr__(self, "selector_kind", "model_output")
+        object.__setattr__(self, "selector_kind", "output")
         object.__setattr__(self, "selector_value", target)
         object.__setattr__(self, "target", target)
 
@@ -425,7 +425,7 @@ class InputPathSelector(BaseSelector):
         normalized = (
             tuple(path[0]) if len(path) == 1 and isinstance(path[0], (tuple, list)) else path
         )
-        object.__setattr__(self, "selector_kind", "model_input")
+        object.__setattr__(self, "selector_kind", "input_at")
         object.__setattr__(self, "selector_value", normalized)
         object.__setattr__(self, "path", normalized)
 
@@ -451,7 +451,7 @@ class ContainsSelector(BaseSelector):
             Substring to match in TorchLens labels.
         """
 
-        object.__setattr__(self, "selector_kind", "label_contains")
+        object.__setattr__(self, "selector_kind", "contains")
         object.__setattr__(self, "selector_value", substring)
         object.__setattr__(self, "substring", substring)
 
@@ -478,7 +478,7 @@ class RegexSelector(BaseSelector):
         """
 
         _re.compile(pattern)  # validate at construction time
-        object.__setattr__(self, "selector_kind", "label_matches")
+        object.__setattr__(self, "selector_kind", "regex")
         object.__setattr__(self, "selector_value", pattern)
         object.__setattr__(self, "pattern", pattern)
 
@@ -1762,11 +1762,11 @@ def _classify_selector_direction(
         if kind in {
             "label",
             "module",
-            "model_output",
+            "output",
             "output_at",
-            "model_input",
-            "label_contains",
-            "label_matches",
+            "input_at",
+            "contains",
+            "regex",
             "predicate",
             "in_module",
             "facet",

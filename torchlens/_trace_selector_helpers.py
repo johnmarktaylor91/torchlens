@@ -357,11 +357,11 @@ def _label_save_candidates(ctx: RecordContext) -> set[str]:
         candidates.add(_normalize_func_name(ctx.func_name))
     if ctx.address:
         candidates.add(ctx.address)
-        if ctx.module_pass_number is not None:
-            candidates.add(f"{ctx.address}:{ctx.module_pass_number}")
+        if ctx.module_pass_index is not None:
+            candidates.add(f"{ctx.address}:{ctx.module_pass_index}")
         candidates.add(ctx.address.rsplit(".", 1)[-1])
-        if ctx.module_pass_number is not None:
-            candidates.add(f"{ctx.address.rsplit('.', 1)[-1]}:{ctx.module_pass_number}")
+        if ctx.module_pass_index is not None:
+            candidates.add(f"{ctx.address.rsplit('.', 1)[-1]}:{ctx.module_pass_index}")
     return candidates
 
 

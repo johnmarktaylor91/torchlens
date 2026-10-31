@@ -776,14 +776,14 @@
   (global deterministic ranking over the population; too-few rankable
   elements refuse `population_too_small`), `tl.threshold(within, above=,
   below=, by=)`, `tl.sign(within, 'positive'|'negative'|'zero'|'nonzero',
-  tol=)` (`'zero'` = the sparsity mask / single-capture "didn't fire") read
+  atol=)` (`'zero'` = the sparsity mask / single-capture "didn't fire") read
   the RESOLUTION trace's retained activations at resolve time — exact-as-set
   claims about THIS capture (`relation="exact"`); `within=None` means every
   retained tensor site, PARAM/EDGE populations refuse
   `selection_kind_incompatible`, unsaved payloads refuse `value_not_saved`,
   NaN never satisfies a criterion, complex ordered comparisons refuse
-  `value_criterion_invalid`. `tl.dead(samples, tol=)` / `tl.saturated(
-  samples, low=, high=, tol=)` / `tl.low_variance(samples, threshold=)` are
+  `value_criterion_invalid`. `tl.dead(samples, atol=)` / `tl.saturated(
+  samples, low=, high=, atol=)` / `tl.low_variance(samples, threshold=)` are
   explicitly MULTI-SAMPLE (`samples=` iterable of >= 2 Traces; Bundle
   iterates; the single-capture form is deliberately the different spelling
   `sign(site,'zero')`): the resolution trace supplies geometry/population
@@ -804,7 +804,7 @@
   architectures is caught), and self-comparison refuses (vacuous). PARAM
   populations refuse — Param records hold live refs, never capture-time
   payloads, so checkpoint weight diffs are not claimable from Traces.
-  `tl.stable_across_passes(within=None, tol=, passes=)` /
+  `tl.stable_across_passes(within=None, atol=, passes=)` /
   `tl.pass_variance(within=None, above=, below=, passes=)` select by
   behaviour ACROSS a recurrent layer's passes (range-within-tol / variance
   bounds, float64, pass-qualified throughout): windows are explicit >= 2
@@ -815,7 +815,7 @@
   EVERY window pass-site (`do()` edits every window pass);
   `relation="exact"`.
   SUBSPACE PRODUCER (subspace wave; DOCUMENTED-UNSTABLE):
-  `tl.subspace(within, basis, *, origin=, method=None, dim=-1, tol=0.0)`
+  `tl.subspace(within, basis, *, origin=, method=None, dim=-1, atol=0.0)`
   selects the elements a DIRECTION in activation space lives on (probe
   directions, steering vectors, PCA components, SAE decoder rows; basis
   `[d]` or `[k, d]`, canonicalized float64). PROJECTION UNDER do():
@@ -828,7 +828,7 @@
   signs kept; set-combined or resolved subspaces refuse
   `subspace_projection_composed`; a partial-axis `within=` refuses
   `subspace_projection_partial_axis`). SUPPORT UNDER resolve(): the basis
-  SUPPORT SET (`|w| > tol` on the bound axis, union over rows, expanded
+  SUPPORT SET (`|w| > atol` on the bound axis, union over rows, expanded
   across other axes; a dense direction supports the WHOLE axis). GRADIENT
   CONTRACT: `tl.intervention.keep_grad(edit)` (and
   `InterventionDecision(keep_grad=True)`) raise `edit_detached_from_graph`

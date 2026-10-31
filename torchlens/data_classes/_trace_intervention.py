@@ -1527,7 +1527,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             {
                 "kind": "EDGE",
                 "selection_repr": repr(selection),
-                "resolve_digest": resolved_edges.resolve_digest,
+                "resolve_digest": resolved_edges.digest,
                 "edit": getattr(edit, "helper_name", getattr(edit, "__name__", "value")),
                 **payload,
             }
@@ -1577,7 +1577,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             {
                 "kind": "PARAM",
                 "selection_repr": repr(selection),
-                "resolve_digest": resolved_params.resolve_digest,
+                "resolve_digest": resolved_params.digest,
                 "edit": getattr(edit, "helper_name", getattr(edit, "__name__", "value")),
                 **payload,
             }

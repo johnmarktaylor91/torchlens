@@ -217,7 +217,7 @@ def test_sweep_spec_values_conflicts_refuse_typed() -> None:
         sweep(model, torch.randn(2, 4), values=[spec, 0.5])
     assert excinfo.value.fields["code"] == "sweep_spec_values_mixed"
     with pytest.raises(InvalidArgumentError) as excinfo:
-        sweep(model, torch.randn(2, 4), at="relu", values=[spec])
+        sweep(model, torch.randn(2, 4), site="relu", values=[spec])
     assert excinfo.value.fields["code"] == "sweep_spec_at_conflict"
 
 
@@ -227,7 +227,7 @@ def test_sweep_values_ride_typed_helper_specs() -> None:
     from torchlens.intervention.sweep import sweep
 
     model = _TinyModel()
-    bundle = sweep(model, torch.randn(2, 4), at="relu", values=[0.0, 1.5])
+    bundle = sweep(model, torch.randn(2, 4), site="relu", values=[0.0, 1.5])
     member_values = [float(trace["relu_1_2"].out.flatten()[0]) for trace in bundle.members.values()]
     assert member_values == [0.0, 1.5]
 

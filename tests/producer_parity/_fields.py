@@ -274,7 +274,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "RecordContext.kind": "F",
     "RecordContext.label": "F",
     "RecordContext.raw_label": "F",
-    "RecordContext.pass_number": "F",
+    "RecordContext.pass_index": "F",
     "RecordContext.event_index": "F",
     "RecordContext.step_index": "F",
     "RecordContext.layer_type": "F",
@@ -283,7 +283,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "RecordContext.func_name": "F",
     "RecordContext.address": "F",
     "RecordContext.module_type": "F",
-    "RecordContext.module_pass_number": "F",
+    "RecordContext.module_pass_index": "F",
     "RecordContext.module_stack": "F",
     "RecordContext.recent_events": R_JOURNAL,
     "RecordContext.recent_ops": R_JOURNAL,
@@ -344,7 +344,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "ModuleStackFrame.address": "F",
     "ModuleStackFrame.module_type": "F",
     "ModuleStackFrame.module_id": "F",  # id-derived token
-    "ModuleStackFrame.pass_number": "F",
+    "ModuleStackFrame.pass_index": "F",
     # ---- DeviceRef / DtypeRef ----------------------------------------------
     "DeviceRef.backend": "F",
     "DeviceRef.name": "F",

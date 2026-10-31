@@ -51,7 +51,7 @@ def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
     """
 
     return [
-        (frame.address, frame.pass_number)
+        (frame.address, frame.pass_index)
         for frame in _mstack.snapshot(self._module_capture_ws.exhaustive_module_stack)
     ]
 
@@ -147,7 +147,7 @@ def log_source_tensor_predicate(
             "tensor": t,
             "address": module_frame.address if module_frame else None,
             "module_type": module_frame.module_type if module_frame else None,
-            "module_pass_index": module_frame.pass_number if module_frame else None,
+            "module_pass_index": module_frame.pass_index if module_frame else None,
         },
         module_stack=state.module_stack,
         history=tuple(state.history),

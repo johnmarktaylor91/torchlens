@@ -330,7 +330,7 @@ def test_infer_input_shape_failed_result_strategy_is_not_probe_success() -> None
 def test_find_nan_live_label_has_no_raw_namespace_leak() -> None:
     """Live find_nan does not leak the internal ``_raw`` label suffix (M6).
 
-    MUTATION PROOF: dropping the ``removesuffix(RAW_LABEL_SUFFIX)`` strip makes
+    MUTATION PROOF: dropping the ``removesuffix(_RAW_LABEL_SUFFIX)`` strip makes
     the label end with ``_raw`` and this assertion fails.
     """
 
@@ -360,7 +360,7 @@ def test_find_nan_live_label_has_no_raw_namespace_leak() -> None:
             h = torch.log(h - h)
             return self.b(h)
 
-    result = tl.debug.find_nan(_NanMid(), torch.ones(1, 2))
+    result = tl.report.find_nan(_NanMid(), torch.ones(1, 2))
 
     assert result.found
     assert result.label is not None

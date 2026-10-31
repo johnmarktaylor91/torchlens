@@ -429,7 +429,7 @@ def _gradient_events(trace: Any, start_ordinal: int) -> tuple[list[dict[str, Any
     events: list[dict[str, Any]] = []
     gradient_ordinal = start_ordinal
     for backward_pass in backward_passes:
-        pass_index = int(getattr(backward_pass, "pass_number", 0) or 0)
+        pass_index = int(getattr(backward_pass, "pass_index", 0) or 0)
         for op in getattr(trace, "saved_grad_ops", ()) or ():
             try:
                 grad = op.grad_for(bwd=pass_index)

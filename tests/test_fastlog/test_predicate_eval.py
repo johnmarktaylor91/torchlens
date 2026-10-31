@@ -154,7 +154,7 @@ def test_record_context_constructor_is_schema_source_of_truth() -> None:
             address="encoder",
             module_type="Linear",
             module_id=123,
-            pass_number=1,
+            pass_index=1,
         ),
     )
     op_data = {

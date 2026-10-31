@@ -188,7 +188,7 @@ def _derive_masked_edit(edit: Any, entry: Site, digest: str, site_label: str) ->
 
     recipe = {
         "resolve_digest": digest,
-        "site_key": repr(entry.site_key),
+        "site_key": repr(entry.key),
         "relation": entry.provenance.relation,
         "selected": entry.num_selected,
         "source": entry.provenance.source,
@@ -196,7 +196,7 @@ def _derive_masked_edit(edit: Any, entry: Site, digest: str, site_label: str) ->
     if isinstance(edit, Edit):
         disclosure = (
             ("selection_digest", digest),
-            ("selection_site", repr(entry.site_key)),
+            ("selection_site", repr(entry.key)),
             ("selection_relation", entry.provenance.relation),
         )
         if entry._mask.form == "whole":

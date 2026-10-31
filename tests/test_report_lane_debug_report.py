@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.debug._graph import _compare_rows
 from torchlens.options import CaptureOptions
 from torchlens.report._report_protocol import REPORT_MAX_FINDINGS, BoundedReport
 
@@ -173,7 +174,7 @@ def test_dead_neurons_frame_is_unchanged(trace: Any) -> None:
 
 
 def test_compare_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = tl.debug.compare_rows(trace, trace)
+    rows, attrs = _compare_rows(trace, trace)
     columns = [
         "op",
         "status",
@@ -184,7 +185,7 @@ def test_compare_frame_is_unchanged(trace: Any) -> None:
         "allclose",
         "reason",
     ]
-    _assert_same(tl.debug.compare(trace, trace), _frame(rows, columns, attrs))
+    _assert_same(tl.report.compare(trace, trace), _frame(rows, columns, attrs))
 
 
 def test_gradient_flow_audit_frame_is_unchanged(grad_trace: Any) -> None:
@@ -249,4 +250,4 @@ def test_compare_params_frame_is_unchanged() -> None:
         "reason",
     ]
     expected = _frame(rows, columns, {"matched": 1, "value_diverged": 1})
-    _assert_same(tl.debug.compare_params(left, right), expected)
+    _assert_same(tl.report.compare_params(left, right), expected)

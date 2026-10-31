@@ -980,7 +980,7 @@ class Trace(
 
         Returns
         -------
-        FindNanResult
+        FindNanReport
             Structured non-finite diagnostic. Source locations are surfaced
             from the operation's existing recorded code context when available.
         """

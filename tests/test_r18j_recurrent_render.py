@@ -311,7 +311,7 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
     # No crash on a recurrent model.
     preview_fastlog(
         log,
-        predicate=lambda ctx: getattr(ctx, "pass_number", None) == 1,
+        predicate=lambda ctx: getattr(ctx, "pass_index", None) == 1,
         vis_save_only=True,
         vis_outpath=str(tmp_path / "preview"),
     )

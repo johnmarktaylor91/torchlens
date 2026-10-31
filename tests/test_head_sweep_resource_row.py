@@ -22,8 +22,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors.episode import BundleExperimentError
-from torchlens.experiment import sweep_sites, top_k
-from torchlens.experiment._engine import _member_bytes
+from torchlens.experiment import sweep_sites
+from torchlens.experiment._engine import _member_bytes, top_k
 from torchlens.options import CaptureOptions, InterventionOptions
 
 pytestmark = pytest.mark.slow

@@ -1760,7 +1760,7 @@ shim owed*
   then flat index; too-few rankable elements refuse `population_too_small`),
   `top_fraction(within, fraction)` (`k = ceil(fraction * population)`),
   `threshold(within, above=, below=, by=)` (strict open bounds; both = band),
-  `sign(within, 'positive'|'negative'|'zero'|'nonzero', tol=)` (`'zero'` is
+  `sign(within, 'positive'|'negative'|'zero'|'nonzero', atol=)` (`'zero'` is
   the sparsity mask and the single-capture "didn't fire on this input"
   spelling). `within` is `None` (default population: every retained tensor
   site — value claims exist only about retained values), a site label
@@ -1778,9 +1778,9 @@ shim owed*
   at least TWO — the single-capture form is deliberately a different
   spelling (`sign(site, 'zero')`), so one name never means two things. The
   resolution trace supplies geometry and population only; include it in
-  `samples` to count it as evidence. `dead(samples, tol=)` selects elements
-  with `|v| <= tol` in EVERY sample; `saturated(samples, low=, high=, tol=)`
-  selects elements pinned within `tol` of the same declared bound in every
+  `samples` to count it as evidence. `dead(samples, atol=)` selects elements
+  with `|v| <= atol` in EVERY sample; `saturated(samples, low=, high=, atol=)`
+  selects elements pinned within `atol` of the same declared bound in every
   sample (a bound is required — saturation is relative to the
   nonlinearity's range); both make dispositional claims from finite
   evidence and declare `provenance.relation="upper_bound"` (observed-silent
@@ -1871,9 +1871,9 @@ deprecation shim owed*
 *unstable — no deprecation shim owed*
 : Select by behaviour ACROSS a recurrent layer's passes, pass-qualified
   throughout (one capture is the evidence; population entries group per
-  layer). `stable_across_passes(within=None, tol=, passes=)` selects
+  layer). `stable_across_passes(within=None, atol=, passes=)` selects
   elements whose range (max - min, float64) across the pass window is
-  `<= tol`; `pass_variance(within=None, above=, below=, passes=)` applies
+  `<= atol`; `pass_variance(within=None, above=, below=, passes=)` applies
   strict bounds on the unbiased (n-1) cross-pass variance (at least one
   bound; "variance explodes late" = `above=` on a late window).
   `passes=None` uses every population pass; an explicit window is an
@@ -1895,7 +1895,7 @@ deprecation shim owed*
 : Select the elements a DIRECTION (or small subspace) in activation space
   lives on — probe directions, steering vectors, PCA components, SAE
   decoder rows. `subspace(within, basis, *, origin=, method=None, dim=-1,
-  tol=0.0)` takes one direction `[d]` or a stack `[k, d]` (canonicalized to
+  atol=0.0)` takes one direction `[d]` or a stack `[k, d]` (canonicalized to
   float64). Under `do()` the edit acts on the COMPONENT along the span of the
   basis rows: with `Q` the rows, on the coordinates `c = Q x`, written back as
   `x + Q^T (edit(c) - c)`; the orthogonal complement is unchanged. Coordinate
@@ -1908,7 +1908,7 @@ deprecation shim owed*
   `do()` (`subspace_projection_composed`); `within=` restricts positions
   (a partial-axis mask refuses `subspace_projection_partial_axis`).
   `resolve()` reports the basis's SUPPORT SET: every element whose coordinate
-  on the bound axis carries weight `|w| > tol` in at least one basis vector,
+  on the bound axis carries weight `|w| > atol` in at least one basis vector,
   expanded across the site's other axes (a dense direction supports the WHOLE
   axis) (docs/intervention_explainers.md, "Subspace edits: the component along
   a basis"). BASIS PROVENANCE IS MANDATORY: `origin=` is
@@ -1922,7 +1922,7 @@ deprecation shim owed*
   whose extent there differs from `d` refuses `selection_unresolvable` /
   `basis_dim_mismatch` — never a silent broadcast, truncation, or padding.
   `within=` is REQUIRED (a direction is minted for one representation
-  space). Non-finite bases and rows entirely at-or-below `tol` refuse at
+  space). Non-finite bases and rows entirely at-or-below `atol` refuse at
   construction (vacuous direction). Resolution is geometry-only (no payload
   reads — unsaved sites resolve); relation is `exact`; PARAM/EDGE
   populations refuse `selection_kind_incompatible` (a parameter-space
@@ -2713,7 +2713,7 @@ deprecation shim owed*
   inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:
   lead line, at most five findings, the exact remainder, the exits). The
   typed results (`TraceAudit`, `DeterminismReport`, `NanReport`,
-  `FindNanResult`, `ParamAudit`, ...) subclass it; those with a house-voice
+  `FindNanReport`, `ParamAudit`, ...) subclass it; those with a house-voice
   `__repr__` keep printing it and serve the card as `report.card()`. The
   table helpers `compare`, `compare_params`, `dead_neurons`,
   `gradient_flow_audit`, `hot_path` and `recompute_candidates` return a

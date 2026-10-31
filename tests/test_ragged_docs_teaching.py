@@ -186,7 +186,7 @@ def test_disclosure_covers_stable_across_passes(episode_log: tl.Trace) -> None:
 
     label = _extra_label(episode_log)
     with pytest.warns(TorchLensWarning) as records:
-        tl.stable_across_passes(within=label, tol=1e9).resolve(episode_log)
+        tl.stable_across_passes(within=label, atol=1e9).resolve(episode_log)
     coded = [
         r.message
         for r in records

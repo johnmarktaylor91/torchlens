@@ -22,7 +22,8 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.errors import TorchLensError
-from torchlens.observability import ArmSpec, RefusalPredicate, measure_overhead
+from torchlens.observability import ArmSpec, measure_overhead
+from torchlens.observability._overhead import RefusalPredicate
 
 
 def test_admissible_measurement_produces_full_artifact() -> None:

@@ -12,7 +12,7 @@ spelling): `report_type`, `subject` and `status` name what was examined and the 
 `to_dict()` returns a plain JSON-friendly payload, `to_pandas()` returns the table, and
 `print(report)` shows a bounded card (a lead line, at most five findings, the exact
 remainder, and the exits). The typed results (`TraceAudit`, `DeterminismReport`,
-`NanReport`, `FindNanResult`, `ParamAudit`, ...) are `DebugReport` subclasses; results
+`NanReport`, `FindNanReport`, `ParamAudit`, ...) are `DebugReport` subclasses; results
 that already print a house-voice summary keep it, and `report.card()` gives the card.
 The table helpers (`compare`, `compare_params`, `dead_neurons`, `gradient_flow_audit`,
 `hot_path`, `recompute_candidates`) return a tabular `DebugReport`: the report has a
@@ -223,7 +223,7 @@ True __sub__
 
 ## `compare`
 
-`tl.debug.compare(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` compares saved dense
+`tl.report.compare(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` compares saved dense
 floating activations with matching operation labels and returns a tabular `DebugReport`
 whose `.to_pandas()` DataFrame carries aggregate counts in `attrs`.
 
@@ -235,7 +235,7 @@ import torchlens as tl
 model = nn.ReLU()
 left = tl.trace(model, torch.tensor([[-1.0, 2.0]]))
 right = tl.trace(model, torch.tensor([[-1.0, 3.0]]))
-comparison = tl.debug.compare(left, right).to_pandas()
+comparison = tl.report.compare(left, right).to_pandas()
 print(comparison.shape, comparison.attrs["value_diverged"])
 ```
 
@@ -247,7 +247,7 @@ Output:
 
 ## `compare_params`
 
-`tl.debug.compare_params(model_a, model_b, *, rtol=1e-5, atol=1e-8, include_buffers=False)`
+`tl.report.compare_params(model_a, model_b, *, rtol=1e-5, atol=1e-8, include_buffers=False)`
 (DOCUMENTED-UNSTABLE spelling) is the weight-space counterpart of `compare`: it aligns two
 models' parameters on their qualified names and returns a tabular `DebugReport` whose
 `.to_pandas()` DataFrame has one row per name and aggregate counts in `attrs`. Tensors on different devices are compared on CPU;
@@ -265,7 +265,7 @@ right = nn.Linear(4, 2)
 right.load_state_dict(left.state_dict())
 with torch.no_grad():
     right.bias.add_(1.0)
-report = tl.debug.compare_params(left, right).to_pandas()
+report = tl.report.compare_params(left, right).to_pandas()
 print(report.attrs["matched"], report.attrs["value_diverged"])
 print(report.loc[report["allclose"] == False, "name"].tolist())  # noqa: E712
 ```
@@ -567,7 +567,7 @@ Output:
 
 ## `find_nan`
 
-`tl.debug.find_nan(model, x, **trace_kwargs)` runs a memory-light live capture and stops at
+`tl.report.find_nan(model, x, **trace_kwargs)` runs a memory-light live capture and stops at
 the first non-finite operation output. `trace.find_nan()` instead scans the payloads saved in an
 existing trace; on a selective-save trace, its result explicitly identifies the uncertainty zone
 created by unsaved operations.
@@ -586,7 +586,7 @@ class NonFinite(nn.Module):
 
 model = NonFinite()
 x = torch.ones(1, 2)
-live = tl.debug.find_nan(model, x)
+live = tl.report.find_nan(model, x)
 saved = tl.trace(model, x).find_nan()
 print(live.found, live.kind)
 print(saved.found, saved.kind)
