@@ -2122,7 +2122,6 @@ package-docstrings	torchlens/_input_walk.py	70
 package-docstrings	torchlens/_input_walk.py	71
 package-docstrings	torchlens/_io/__init__.py	3.2
 package-docstrings	torchlens/_io/_artifact_anchors.py	3.0
-package-docstrings	torchlens/_io/_artifact_anchors.py	44
 package-docstrings	torchlens/_io/_artifact_strings.py	0.13
 package-docstrings	torchlens/_io/_artifact_strings.py	54
 package-docstrings	torchlens/_io/_artifact_strings.py	55
@@ -5523,7 +5522,6 @@ test-docstrings	tests/test_extract_v2_text.py	25.6
 test-docstrings	tests/test_extract_v2_text.py	41.6
 test-docstrings	tests/test_extract_v2_workflows.py	10
 test-docstrings	tests/test_extract_v2_workflows.py	14
-test-docstrings	tests/test_extract_v2_workflows.py	16
 test-docstrings	tests/test_factcore_import_lint.py	42
 test-docstrings	tests/test_factcore_import_lint.py	7.4
 test-docstrings	tests/test_factcore_report_layer.py	3.8,
@@ -6660,7 +6658,6 @@ test-docstrings	tests/test_tl_meta.py	85
 test-docstrings	tests/test_tlspec_alloc_preflight_fake.py	51
 test-docstrings	tests/test_tlspec_alloc_preflight_fake.py	55
 test-docstrings	tests/test_tlspec_alloc_preflight_fake.py	61
-test-docstrings	tests/test_tlspec_backcompat.py	2.16.0
 test-docstrings	tests/test_tlspec_codec_device_allowlist.py	55
 test-docstrings	tests/test_tlspec_codec_device_allowlist.py	56
 test-docstrings	tests/test_tlspec_codec_device_allowlist.py	57
@@ -7205,7 +7202,6 @@ test-docstrings	tests/test_w051_semantic_norm_half.py	16
 test-docstrings	tests/test_w051_semantic_norm_half.py	32
 test-docstrings	tests/test_w1f3_observer_failopen.py	27
 test-docstrings	tests/test_w1f3_observer_failopen.py	986
-test-docstrings	tests/test_w1f6_facet_scatter_spec_compat.py	2.16
 test-docstrings	tests/test_w3_structural_hardening.py	16
 test-docstrings	tests/test_w3_structural_hardening.py	16.
 test-docstrings	tests/test_weightsfree_admission.py	19
@@ -7495,7 +7491,6 @@ test-names	tests/test_summary_rebuild_pins.py	50_
 test-names	tests/test_surgery_live_bind.py	68
 test-names	tests/test_surgery_live_regions.py	50_
 test-names	tests/test_surgery_visuals_realism.py	50_
-test-names	tests/test_tlspec_backcompat.py	2_16_
 test-names	tests/test_tlspec_runnable_alloc_bomb.py	64_
 test-names	tests/test_tlspec_runnable_escape_matrix.py	14_
 test-names	tests/test_tlspec_runnable_escape_witness.py	10_
@@ -7573,7 +7568,6 @@ test-names	tests/test_vizr_flat800.py	800_
 test-names	tests/test_w051_agent_cli.py	256_
 test-names	tests/test_w051_semantic_norm_half.py	16_
 test-names	tests/test_w051_semantic_norm_half.py	32_
-test-names	tests/test_w1f6_facet_scatter_spec_compat.py	2_16_
 test-names	tests/test_weightsfree_default_path.py	19
 test-names	tests/validation_goldens/test_validation_exemption_hardening.py	32_
 test-names	tests/workflow_gallery/test_proofnet_rg_breadth.py	14_
