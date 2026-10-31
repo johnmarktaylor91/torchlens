@@ -2979,3 +2979,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: b9c2dedbdc19ae0e4ae78b5f9a5667cb70660619 (dirty)
 recorded: 2026-10-31T11:38:57.428769+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: render-frames fix: the rolled-frame pass-scope helpers read Op/Layer modules, and they and _get_lowest_module_for_two_nodes moved from visualization/_render_edges.py to the new sibling visualization/_render_module_scope.py to keep _render_edges.py under its size ceiling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c28998a909cb3f9f6c8a7706be7b16b35e3f46f5 (dirty)
+recorded: 2026-10-31T14:58:50.222369+00:00
