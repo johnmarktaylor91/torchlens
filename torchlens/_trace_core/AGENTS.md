@@ -15,7 +15,7 @@ classes (`Trace`, `Op`, ...) present rows from here as facades. The architecture
 - `OpRowStore` holds op rows, described by `OpStoreLayout`. Rows are row-major while
   building; `freeze()` class-swaps in `_SealedRowMajorOpRowStore` (the sealed row-major
   variant used under the columnar-transpose threshold).
-- `DetachedOpStore` backs single-row detached records (`Op.copy()`, pickle restore, preview
+- `DetachedOpStore` backs single-row detached records (`Op._copy_with_shallow_fields()`, pickle restore, preview
   backends); `OpStoreView` is the per-fork copy-on-write view used by `Trace.fork()`.
 - Audit instrumentation for the postprocess step contracts: `begin_cell_write_audit()` /
   `end_cell_write_audit()` (class-swap to `_AuditedOpRowStore` / `_CombinedAuditOpRowStore`,

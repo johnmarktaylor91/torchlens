@@ -64,7 +64,7 @@ dict/list/set cells on rows that existed at step begin). Whole-row lifecycle
 is separate: creation is a produces contract; REMOVAL (husking releases and
 re-reads every cell) checks the `row_effects` `deletes` sanction, and
 released-row reads/deletes are row-lifecycle events, not column accesses.
-`Op.copy()`'s whole-schema getattr loop is tagged by `row_clone_scope` as
+`Op._copy_with_shallow_fields()`'s whole-schema getattr loop is tagged by `row_clone_scope` as
 the row-clone access kind — legal only on `creates` steps, no per-column
 edges (the row barrier carries ordering). Recording mode additionally tags
 writes content-effective vs no-op (a permanent no-op writer cannot

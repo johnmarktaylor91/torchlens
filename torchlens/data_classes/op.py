@@ -3640,35 +3640,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     # ************* Logging Functions ************
     # ********************************************
 
-    def copy(self, *, _store: Any = None) -> "Op":
-        """Return a selective-depth copy of this entry.
-
-        ``_store`` is the private internal-synthesis hook: postprocess output
-        node synthesis passes the owning trace's row store so the clone is
-        appended as a shared columnar row. Public callers omit it and receive
-        a detached single-row copy.
-
-        Most fields are ``copy.deepcopy``'d so the clone is fully independent.
-        However, certain fields are shallow-copied (shared by reference) because:
-
-        * ``func``, ``grad_fn_class_name``, ``grad_fn_handle`` - function or
-          autograd handle objects, immutable/shared.
-        * ``source_trace`` - must point to the same Trace instance.
-        * ``func_rng_states`` - large state dicts, not mutated after capture.
-        * ``saved_args``, ``saved_kwargs``, ``args_template``,
-          ``kwargs_template`` - may contain large tensors or structured
-          templates; deep-copying them is expensive and unnecessary.
-        * ``parent_params`` - references to nn.Parameters, must stay shared.
-        * ``out``, ``transformed_out``, ``transformed_grad``,
-          ``out_versions_by_child`` - large tensors;
-          shared references are safe since they're replaced (not mutated).
-        * ``container_spec`` - frozen dataclass shared by sibling output leaves.
-
-        Returns:
-            A new Op (or subclass) with the same field values.
-        """
-        return self._copy_with_shallow_fields(frozenset(), _store=_store)
-
     def _copy_for_output(self, *, _store: Any = None) -> "Op":
         """Clone this op for immediate conversion into a synthetic output node.
 

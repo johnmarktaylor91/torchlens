@@ -2464,7 +2464,7 @@ class Module:
         for label in self.layer_labels:
             entry = self._source_trace[label]
             row = _layer_log_to_row(entry)
-            row["num_ops"] = len(entry.ops)
+            row["num_ops"] = len(entry.ops) if hasattr(entry, "ops") else 1
             rows.append(row)
         return pd.DataFrame(rows, columns=columns)
 

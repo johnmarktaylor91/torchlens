@@ -10,7 +10,7 @@
   `Op` is a two-word `(_core, _row)` facade over the per-trace `OpRowStore`
   (`op_store.py`) held at `trace._trace_core` (declared `FieldPolicy.DROP`); rows are
   row-major lists while building and seal after the final step, key 20 (columnar transpose with
-  numeric packing at >=512 rows). `Op.copy()`, pickle restore, fork shells, and
+  numeric packing at >=512 rows). `Op._copy_with_shallow_fields()`, pickle restore, fork shells, and
   preview backends use detached single-row stores. M6 relations are LIVE
   (`relation_views.py`): on FINISHED traces the relation accessors return IMMUTABLE
   views — `tuple` for label sequences (`parents`, `children`, `modules`,
