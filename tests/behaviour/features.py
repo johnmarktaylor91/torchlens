@@ -96,10 +96,10 @@ def _prepare_save(cell: Cell) -> None:
 def _after_save(cell: Cell) -> None:
     """The selected ops are saved; anything else saved is an output or a buffer node."""
 
-    want = {op.label for op in cell.facts.plain.ops if op.func_name == cell.facts.common_func}
     for name, trace in (("live", cell.trace), ("loaded", cell.loaded)):
         if trace is None:
             continue
+        want = {op.label for op in trace.ops if op.func_name == cell.facts.common_func}
         got = {op.label for op in trace.saved_ops}
         allowed = {op.label for op in trace.output_ops}
         allowed |= {op.label for op in trace.ops if op.is_buffer_source}
@@ -122,7 +122,7 @@ def _after_intervene(cell: Cell) -> None:
 
     trace = cell.require_trace()
     target = cell.facts.common_float_func
-    want = {op.label for op in cell.facts.plain.ops if op.func_name == target}
+    want = {op.label for op in trace.ops if op.func_name == target}
     got = {op.label for op in trace.ops if op.intervention_replaced}
     cell.expect(
         got == want,
