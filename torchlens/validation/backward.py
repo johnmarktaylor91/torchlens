@@ -938,7 +938,7 @@ def validate_backward_pass(
             _record_backward_failure(
                 trace,
                 reason="parameter_census_mismatch",
-                op_label=(missing or unexpected or [None])[0],
+                op_label=missing[0] if missing else (unexpected[0] if unexpected else None),
                 message=f"captured parameter gradients differ from stock: missing {missing!r}, "
                 f"unexpected {unexpected!r}",
             )
