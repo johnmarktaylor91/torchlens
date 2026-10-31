@@ -10364,7 +10364,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout1"
@@ -10501,6 +10500,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -10520,7 +10520,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout2"
@@ -10657,6 +10656,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -10676,7 +10676,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout"
@@ -10813,6 +10812,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -10832,7 +10832,6 @@
     "call_index": 1,
     "call_label": "encoder.linear1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear1"
@@ -10969,6 +10968,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -10988,7 +10988,6 @@
     "call_index": 1,
     "call_label": "encoder.linear2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear2"
@@ -11125,6 +11124,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -11144,7 +11144,6 @@
     "call_index": 1,
     "call_label": "encoder.norm1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm1"
@@ -11277,6 +11276,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -11296,7 +11296,6 @@
     "call_index": 1,
     "call_label": "encoder.norm2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm2"
@@ -11429,6 +11428,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -11448,7 +11448,6 @@
     "call_index": 1,
     "call_label": "encoder.self_attn:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.self_attn"
@@ -11613,6 +11612,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -11650,7 +11650,6 @@
     "call_index": 1,
     "call_label": "encoder:1",
     "call_parent": "self:1",
-    "call_parent_label": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder"
@@ -11811,6 +11810,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "self:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -11834,7 +11834,6 @@
     "call_index": 1,
     "call_label": "self:1",
     "call_parent": null,
-    "call_parent_label": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -11984,6 +11983,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": null,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -31588,6 +31588,7 @@
    },
    "append_history": [],
    "archived_activations": {},
+   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
    "backend": "torch",
    "backend_runtime_config": null,
    "backend_runtime_device_summary": null,
@@ -31596,13 +31597,11 @@
    "backward_events": [],
    "backward_memory_backend": "<measured>",
    "backward_pass_logs": {},
-   "backward_passes": "<torchlens._data_classes.backward_pass.BackwardPassAccessor>",
    "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
    "backward_ready": false,
    "backward_root_grad_fn_object_ids": "<measured>",
    "batch_render": "auto",
-   "branching_factor": "1.0857142857142856",
    "buffer_layers": [],
    "buffer_num_calls": {},
    "buffer_read_ops": [],
@@ -31680,7 +31679,6 @@
    "class_docstring": "Minimal Transformer encoder layer with deterministic dropout settings.",
    "class_source_file": "<repo>/tests/capture_oracle/_models.py",
    "class_source_line": 267,
-   "class_source_location": "<repo>/tests/capture_oracle/_models.py:267",
    "cleanup_duration": "<measured>",
    "code_context": [],
    "completeness_decompositions": [],
@@ -31698,18 +31696,17 @@
     "\"unknown\"": 0,
     "\"zero_by_rule\"": 22
    },
-   "compute_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {},
    "conditional_branch_edges": [],
    "conditional_edge_call_indices": {},
    "conditional_records": [],
    "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
    "decoded_output": null,
    "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
    "detach_saved_activations": false,
    "distributed_scope": null,
-   "edges": "<raises SelectionError>",
    "emit_nvtx": false,
    "episode": null,
    "episode_coupling": null,
@@ -31722,112 +31719,21 @@
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
-   "flops_by_op_type": {
-    "\"add\"": {
-     "\"backward\"": 48,
-     "\"count\"": 2,
-     "\"forward\"": 48
-    },
-    "\"contiguous\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"dropout\"": {
-     "\"backward\"": 192,
-     "\"count\"": 3,
-     "\"forward\"": 192
-    },
-    "\"getitem\"": {
-     "\"backward\"": 0,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"input\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"layernorm\"": {
-     "\"backward\"": 600,
-     "\"count\"": 2,
-     "\"forward\"": 240
-    },
-    "\"linear\"": {
-     "\"backward\"": 3408,
-     "\"count\"": 4,
-     "\"forward\"": 1704
-    },
-    "\"output\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"permute\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"relu\"": {
-     "\"backward\"": 48,
-     "\"count\"": 1,
-     "\"forward\"": 48
-    },
-    "\"reshape\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"scaleddotproductattention\"": {
-     "\"backward\"": 1260,
-     "\"count\"": 1,
-     "\"forward\"": 504
-    },
-    "\"squeeze\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"transpose\"": {
-     "\"backward\"": 0,
-     "\"count\"": 6,
-     "\"forward\"": 0
-    },
-    "\"unflatten\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"unsqueeze\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"view\"": {
-     "\"backward\"": 0,
-     "\"count\"": 7,
-     "\"forward\"": 0
-    }
-   },
    "forward_docstring": "Encode a short sequence.\n\n        Parameters\n        ----------\n        x:\n            Sequence batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Encoded sequence.\n        ",
    "forward_duration": "<measured>",
    "forward_memory_backend": "<measured>",
    "forward_peak_memory": "<measured>",
-   "forward_peak_memory_pair": "<measured>",
    "forward_peak_memory_reason": "<measured>",
    "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
    "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
    "forward_source_line": 285,
-   "forward_source_location": "<repo>/tests/capture_oracle/_models.py:285",
    "func_calls_duration": "<measured>",
-   "grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "grad_fn_fire_timings": "<measured>",
    "grad_fn_logs": {},
    "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
    "grad_transform": null,
    "grad_transform_repr": null,
+   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
    "graph_shape_hash": "b8f1b57db90204955c1bc81bc11fa4e1ee82999691c8e93fd671381dc69e2709",
    "grouping": "structural",
    "grouping_policy": {
@@ -31844,8 +31750,6 @@
    "halt_reason": null,
    "halted": false,
    "has_backward_pass": false,
-   "has_conditional_branching": false,
-   "has_conditionals": false,
    "has_frozen_params": false,
    "has_gradients": false,
    "has_trainable_params": true,
@@ -31855,7 +31759,6 @@
    "init_signature": "(self) -> 'None'",
    "init_source_file": "<repo>/tests/capture_oracle/_models.py",
    "init_source_line": 270,
-   "init_source_location": "<repo>/tests/capture_oracle/_models.py:270",
    "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
@@ -31866,22 +31769,14 @@
    "input_preprocessor": null,
    "input_signature_hash": "75390a001dbe1003207d8f0ed591182ffbdcaf2f887715a9b047ca163752ab2d",
    "input_structure": "<raises AttributeError>",
-   "intermediate_derived_grads": "<torchlens._data_classes.derived_grad.IntermediateDerivedGradAccessor>",
-   "internal_sink_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_sink_ops": [],
-   "internal_source_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
    "intervention_ready": false,
    "is_appended": false,
-   "is_branching": true,
-   "is_dynamic_graph": false,
-   "is_recurrent": false,
+   "is_pristine": true,
    "keep_orphans": false,
-   "last_backward_duration": "<measured>",
-   "last_backward_pass": null,
-   "last_backward_root_grad_fn_object_id": "<measured>",
    "last_run": null,
    "layer_dict_all_keys": {
     "\"add_1\"": {
@@ -33817,102 +33712,11 @@
     ]
    },
    "logged_values": {},
-   "macs_by_op_type": {
-    "\"add\"": {
-     "\"backward\"": null,
-     "\"count\"": 2,
-     "\"forward\"": 0
-    },
-    "\"contiguous\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"dropout\"": {
-     "\"backward\"": null,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"getitem\"": {
-     "\"backward\"": null,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"input\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"layernorm\"": {
-     "\"backward\"": null,
-     "\"count\"": 2,
-     "\"forward\"": 0
-    },
-    "\"linear\"": {
-     "\"backward\"": null,
-     "\"count\"": 4,
-     "\"forward\"": 768
-    },
-    "\"output\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"permute\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"relu\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"reshape\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"scaleddotproductattention\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 144
-    },
-    "\"squeeze\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"transpose\"": {
-     "\"backward\"": null,
-     "\"count\"": 6,
-     "\"forward\"": 0
-    },
-    "\"unflatten\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"unsqueeze\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"view\"": {
-     "\"backward\"": null,
-     "\"count\"": 7,
-     "\"forward\"": 0
-    }
-   },
    "macs_unknown_split_ops": [],
    "manual_tensor_connections": [],
    "mark_layer_depths": true,
-   "max_in_degree": 3,
-   "max_layer_op_count": 1,
-   "max_out_degree": 3,
    "model_class_name": "TinyTransformer",
    "model_class_qualname": "capture_oracle._models.TinyTransformer",
-   "model_cls": "<callable TinyTransformer>",
    "model_label": "TinyTransformer",
    "model_object_id": "<measured>",
    "model_ops": [
@@ -34115,59 +33919,24 @@
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
-   "num_backward_edges": null,
    "num_backward_passes": 0,
-   "num_buffer_edges": 0,
    "num_buffer_layers": 0,
-   "num_buffer_read_ops": 0,
-   "num_buffer_sink_ops": 0,
-   "num_buffer_source_ops": 0,
-   "num_buffer_write_ops": 0,
-   "num_compute_edges": 37,
-   "num_compute_layers": 35,
-   "num_compute_ops": 35,
-   "num_conditionals": 0,
    "num_context_lines": 7,
    "num_edges": 40,
-   "num_grad_fn_calls": 0,
-   "num_grad_fns": 0,
-   "num_grad_fns_with_op": 0,
-   "num_grad_fns_without_op": 0,
    "num_input_layers": 1,
-   "num_input_ops": 1,
-   "num_internal_sink_layers": 0,
-   "num_internal_sink_ops": 0,
-   "num_internal_source_layers": 0,
-   "num_internal_source_ops": 0,
-   "num_layer_edges": 40,
-   "num_layers": 37,
    "num_layers_with_params": 6,
-   "num_module_calls": 10,
    "num_modules": 10,
    "num_ops": 35,
-   "num_ops_with_params": 6,
    "num_output_layers": 1,
-   "num_output_ops": 1,
    "num_param_tensors": 12,
-   "num_param_tensors_frozen": 0,
-   "num_param_tensors_trainable": 12,
    "num_params": 172,
-   "num_params_by_path": 172,
-   "num_params_executed": 172,
    "num_params_frozen": 0,
    "num_params_trainable": 172,
-   "num_params_unexecuted": 0,
    "num_saved_grad_fn_calls": 0,
    "num_saved_grad_fns": 0,
-   "num_saved_grad_layers": 0,
-   "num_saved_grad_module_calls": 0,
-   "num_saved_grad_modules": 0,
-   "num_saved_grad_ops": 0,
    "num_saved_layers": 37,
    "num_saved_module_calls": 10,
-   "num_saved_modules": 10,
    "num_saved_ops": 37,
-   "num_tensors": 37,
    "num_uncalled_modules": 1,
    "observer_spans": [],
    "op_equivalence_classes": {
@@ -34372,7 +34141,6 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "orphans": "<torchlens._data_classes._trace_accessors.OrphanAccessor>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -34382,7 +34150,6 @@
    "output_num_classes": null,
    "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "output_postprocessor": null,
-   "overhead_duration": "<measured>",
    "param_hash_full": "6914bfbbc695a04f44b7455eca670c746fc813dd8ce41469d5374a25d5553ac8",
    "param_hash_quick": "6914bfbbc695a04f44b7455eca670c746fc813dd8ce41469d5374a25d5553ac8",
    "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
@@ -34394,7 +34161,6 @@
     "label": null
    },
    "pinned_autograd_memory": "<measured>",
-   "pristine": true,
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
@@ -34403,7 +34169,6 @@
    "readiness": null,
    "recording_kept": true,
    "recurrence_detection": true,
-   "recurrent_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "relationship_evidence": {
     "\"graph\"": "unknown",
     "\"input\"": "unknown",
@@ -34434,9 +34199,6 @@
    "save_rng_states": "<measured>",
    "save_visualizations": false,
    "saved_activation_memory": "<measured>",
-   "saved_grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "saved_grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
-   "saved_grad_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
@@ -34447,24 +34209,17 @@
    "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [],
+   "source": "<torchlens._data_classes._trace_groups.TraceSource>",
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "structure_evidence": null,
    "structure_only": false,
-   "tied_param_groups": [],
    "tlspec_version": 10,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
-   "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 8292,
-   "total_flops_backward": 5556,
-   "total_flops_forward": 2736,
    "total_gradient_memory": "<measured>",
-   "total_macs": null,
-   "total_macs_backward": null,
-   "total_macs_forward": 912,
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "trace_label": "tinytransformer_N_fork_N",
@@ -34473,7 +34228,6 @@
    "uncalled_modules": [
     "encoder.self_attn.out_proj"
    ],
-   "unexecuted_param_names": [],
    "unknown_flop_ops": [],
    "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
    "verbose": false
@@ -44844,7 +44598,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout1"
@@ -44981,6 +44734,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -45000,7 +44754,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout2"
@@ -45137,6 +44890,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -45156,7 +44910,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout"
@@ -45293,6 +45046,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -45312,7 +45066,6 @@
     "call_index": 1,
     "call_label": "encoder.linear1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear1"
@@ -45449,6 +45202,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -45468,7 +45222,6 @@
     "call_index": 1,
     "call_label": "encoder.linear2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear2"
@@ -45605,6 +45358,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -45624,7 +45378,6 @@
     "call_index": 1,
     "call_label": "encoder.norm1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm1"
@@ -45757,6 +45510,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -45776,7 +45530,6 @@
     "call_index": 1,
     "call_label": "encoder.norm2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm2"
@@ -45909,6 +45662,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -45928,7 +45682,6 @@
     "call_index": 1,
     "call_label": "encoder.self_attn:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.self_attn"
@@ -46093,6 +45846,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -46130,7 +45884,6 @@
     "call_index": 1,
     "call_label": "encoder:1",
     "call_parent": "self:1",
-    "call_parent_label": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder"
@@ -46291,6 +46044,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "self:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -46314,7 +46068,6 @@
     "call_index": 1,
     "call_label": "self:1",
     "call_parent": null,
-    "call_parent_label": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -46464,6 +46217,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": null,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -66056,6 +65810,7 @@
    "annotations": {},
    "append_history": [],
    "archived_activations": {},
+   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
    "backend": "torch",
    "backend_runtime_config": null,
    "backend_runtime_device_summary": null,
@@ -66064,13 +65819,11 @@
    "backward_events": [],
    "backward_memory_backend": "<measured>",
    "backward_pass_logs": {},
-   "backward_passes": "<torchlens._data_classes.backward_pass.BackwardPassAccessor>",
    "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
    "backward_ready": false,
    "backward_root_grad_fn_object_ids": "<measured>",
    "batch_render": "auto",
-   "branching_factor": "1.0857142857142856",
    "buffer_layers": [],
    "buffer_num_calls": {},
    "buffer_read_ops": [],
@@ -66148,7 +65901,6 @@
    "class_docstring": "Minimal Transformer encoder layer with deterministic dropout settings.",
    "class_source_file": "<repo>/tests/capture_oracle/_models.py",
    "class_source_line": 267,
-   "class_source_location": "<repo>/tests/capture_oracle/_models.py:267",
    "cleanup_duration": "<measured>",
    "code_context": [],
    "completeness_decompositions": [],
@@ -66166,18 +65918,17 @@
     "\"unknown\"": 0,
     "\"zero_by_rule\"": 22
    },
-   "compute_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {},
    "conditional_branch_edges": [],
    "conditional_edge_call_indices": {},
    "conditional_records": [],
    "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
    "decoded_output": null,
    "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
    "detach_saved_activations": false,
    "distributed_scope": null,
-   "edges": "<raises SelectionError>",
    "emit_nvtx": false,
    "episode": null,
    "episode_coupling": null,
@@ -66190,112 +65941,21 @@
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
-   "flops_by_op_type": {
-    "\"add\"": {
-     "\"backward\"": 48,
-     "\"count\"": 2,
-     "\"forward\"": 48
-    },
-    "\"contiguous\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"dropout\"": {
-     "\"backward\"": 192,
-     "\"count\"": 3,
-     "\"forward\"": 192
-    },
-    "\"getitem\"": {
-     "\"backward\"": 0,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"input\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"layernorm\"": {
-     "\"backward\"": 600,
-     "\"count\"": 2,
-     "\"forward\"": 240
-    },
-    "\"linear\"": {
-     "\"backward\"": 3408,
-     "\"count\"": 4,
-     "\"forward\"": 1704
-    },
-    "\"output\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"permute\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"relu\"": {
-     "\"backward\"": 48,
-     "\"count\"": 1,
-     "\"forward\"": 48
-    },
-    "\"reshape\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"scaleddotproductattention\"": {
-     "\"backward\"": 1260,
-     "\"count\"": 1,
-     "\"forward\"": 504
-    },
-    "\"squeeze\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"transpose\"": {
-     "\"backward\"": 0,
-     "\"count\"": 6,
-     "\"forward\"": 0
-    },
-    "\"unflatten\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"unsqueeze\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"view\"": {
-     "\"backward\"": 0,
-     "\"count\"": 7,
-     "\"forward\"": 0
-    }
-   },
    "forward_docstring": "Encode a short sequence.\n\n        Parameters\n        ----------\n        x:\n            Sequence batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Encoded sequence.\n        ",
    "forward_duration": "<measured>",
    "forward_memory_backend": "<measured>",
    "forward_peak_memory": "<measured>",
-   "forward_peak_memory_pair": "<measured>",
    "forward_peak_memory_reason": "<measured>",
    "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
    "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
    "forward_source_line": 285,
-   "forward_source_location": "<repo>/tests/capture_oracle/_models.py:285",
    "func_calls_duration": "<measured>",
-   "grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "grad_fn_fire_timings": "<measured>",
    "grad_fn_logs": {},
    "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
    "grad_transform": null,
    "grad_transform_repr": null,
+   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
    "graph_shape_hash": "b8f1b57db90204955c1bc81bc11fa4e1ee82999691c8e93fd671381dc69e2709",
    "grouping": "structural",
    "grouping_policy": {
@@ -66312,8 +65972,6 @@
    "halt_reason": null,
    "halted": false,
    "has_backward_pass": false,
-   "has_conditional_branching": false,
-   "has_conditionals": false,
    "has_frozen_params": false,
    "has_gradients": false,
    "has_trainable_params": true,
@@ -66323,7 +65981,6 @@
    "init_signature": "(self) -> 'None'",
    "init_source_file": "<repo>/tests/capture_oracle/_models.py",
    "init_source_line": 270,
-   "init_source_location": "<repo>/tests/capture_oracle/_models.py:270",
    "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
@@ -66334,22 +65991,14 @@
    "input_preprocessor": null,
    "input_signature_hash": "75390a001dbe1003207d8f0ed591182ffbdcaf2f887715a9b047ca163752ab2d",
    "input_structure": "<raises AttributeError>",
-   "intermediate_derived_grads": "<torchlens._data_classes.derived_grad.IntermediateDerivedGradAccessor>",
-   "internal_sink_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_sink_ops": [],
-   "internal_source_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
    "intervention_ready": false,
    "is_appended": false,
-   "is_branching": true,
-   "is_dynamic_graph": false,
-   "is_recurrent": false,
+   "is_pristine": true,
    "keep_orphans": false,
-   "last_backward_duration": "<measured>",
-   "last_backward_pass": null,
-   "last_backward_root_grad_fn_object_id": "<measured>",
    "last_run": null,
    "layer_dict_all_keys": {
     "\"add_1\"": {
@@ -68285,102 +67934,11 @@
     ]
    },
    "logged_values": {},
-   "macs_by_op_type": {
-    "\"add\"": {
-     "\"backward\"": null,
-     "\"count\"": 2,
-     "\"forward\"": 0
-    },
-    "\"contiguous\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"dropout\"": {
-     "\"backward\"": null,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"getitem\"": {
-     "\"backward\"": null,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"input\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"layernorm\"": {
-     "\"backward\"": null,
-     "\"count\"": 2,
-     "\"forward\"": 0
-    },
-    "\"linear\"": {
-     "\"backward\"": null,
-     "\"count\"": 4,
-     "\"forward\"": 768
-    },
-    "\"output\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"permute\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"relu\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"reshape\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"scaleddotproductattention\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 144
-    },
-    "\"squeeze\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"transpose\"": {
-     "\"backward\"": null,
-     "\"count\"": 6,
-     "\"forward\"": 0
-    },
-    "\"unflatten\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"unsqueeze\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"view\"": {
-     "\"backward\"": null,
-     "\"count\"": 7,
-     "\"forward\"": 0
-    }
-   },
    "macs_unknown_split_ops": [],
    "manual_tensor_connections": [],
    "mark_layer_depths": true,
-   "max_in_degree": 3,
-   "max_layer_op_count": 1,
-   "max_out_degree": 3,
    "model_class_name": "TinyTransformer",
    "model_class_qualname": "capture_oracle._models.TinyTransformer",
-   "model_cls": "<callable TinyTransformer>",
    "model_label": "TinyTransformer",
    "model_object_id": "<measured>",
    "model_ops": [
@@ -68583,59 +68141,24 @@
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
-   "num_backward_edges": null,
    "num_backward_passes": 0,
-   "num_buffer_edges": 0,
    "num_buffer_layers": 0,
-   "num_buffer_read_ops": 0,
-   "num_buffer_sink_ops": 0,
-   "num_buffer_source_ops": 0,
-   "num_buffer_write_ops": 0,
-   "num_compute_edges": 37,
-   "num_compute_layers": 35,
-   "num_compute_ops": 35,
-   "num_conditionals": 0,
    "num_context_lines": 7,
    "num_edges": 40,
-   "num_grad_fn_calls": 0,
-   "num_grad_fns": 0,
-   "num_grad_fns_with_op": 0,
-   "num_grad_fns_without_op": 0,
    "num_input_layers": 1,
-   "num_input_ops": 1,
-   "num_internal_sink_layers": 0,
-   "num_internal_sink_ops": 0,
-   "num_internal_source_layers": 0,
-   "num_internal_source_ops": 0,
-   "num_layer_edges": 40,
-   "num_layers": 37,
    "num_layers_with_params": 6,
-   "num_module_calls": 10,
    "num_modules": 10,
    "num_ops": 35,
-   "num_ops_with_params": 6,
    "num_output_layers": 1,
-   "num_output_ops": 1,
    "num_param_tensors": 12,
-   "num_param_tensors_frozen": 0,
-   "num_param_tensors_trainable": 12,
    "num_params": 172,
-   "num_params_by_path": 172,
-   "num_params_executed": 172,
    "num_params_frozen": 0,
    "num_params_trainable": 172,
-   "num_params_unexecuted": 0,
    "num_saved_grad_fn_calls": 0,
    "num_saved_grad_fns": 0,
-   "num_saved_grad_layers": 0,
-   "num_saved_grad_module_calls": 0,
-   "num_saved_grad_modules": 0,
-   "num_saved_grad_ops": 0,
    "num_saved_layers": 37,
    "num_saved_module_calls": 10,
-   "num_saved_modules": 10,
    "num_saved_ops": 37,
-   "num_tensors": 37,
    "num_uncalled_modules": 1,
    "observer_spans": [],
    "op_equivalence_classes": {
@@ -68877,7 +68400,6 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "orphans": "<torchlens._data_classes._trace_accessors.OrphanAccessor>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -68887,7 +68409,6 @@
    "output_num_classes": null,
    "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "output_postprocessor": null,
-   "overhead_duration": "<measured>",
    "param_hash_full": "6914bfbbc695a04f44b7455eca670c746fc813dd8ce41469d5374a25d5553ac8",
    "param_hash_quick": "6914bfbbc695a04f44b7455eca670c746fc813dd8ce41469d5374a25d5553ac8",
    "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
@@ -68896,7 +68417,6 @@
    "parent_run": null,
    "parent_trace": null,
    "pinned_autograd_memory": "<measured>",
-   "pristine": true,
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
@@ -68905,7 +68425,6 @@
    "readiness": null,
    "recording_kept": true,
    "recurrence_detection": true,
-   "recurrent_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "relationship_evidence": {
     "\"graph\"": "unknown",
     "\"input\"": "unknown",
@@ -68933,9 +68452,6 @@
    "save_rng_states": "<measured>",
    "save_visualizations": false,
    "saved_activation_memory": "<measured>",
-   "saved_grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "saved_grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
-   "saved_grad_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
@@ -68976,24 +68492,17 @@
     "<torchlens._ir.events.ModuleExitEvent>",
     "<torchlens._ir.events.ModuleExitEvent>"
    ],
+   "source": "<torchlens._data_classes._trace_groups.TraceSource>",
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "structure_evidence": null,
    "structure_only": false,
-   "tied_param_groups": [],
    "tlspec_version": 10,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
-   "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 8292,
-   "total_flops_backward": 5556,
-   "total_flops_forward": 2736,
    "total_gradient_memory": "<measured>",
-   "total_macs": null,
-   "total_macs_backward": null,
-   "total_macs_forward": 912,
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "trace_label": "tinytransformer_N",
@@ -69002,7 +68511,6 @@
    "uncalled_modules": [
     "encoder.self_attn.out_proj"
    ],
-   "unexecuted_param_names": [],
    "unknown_flop_ops": [],
    "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
    "verbose": false
@@ -79376,7 +78884,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout1"
@@ -79513,6 +79020,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -79532,7 +79040,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout2"
@@ -79669,6 +79176,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -79688,7 +79196,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout"
@@ -79825,6 +79332,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -79844,7 +79352,6 @@
     "call_index": 1,
     "call_label": "encoder.linear1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear1"
@@ -79981,6 +79488,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -80000,7 +79508,6 @@
     "call_index": 1,
     "call_label": "encoder.linear2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear2"
@@ -80137,6 +79644,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -80156,7 +79664,6 @@
     "call_index": 1,
     "call_label": "encoder.norm1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm1"
@@ -80289,6 +79796,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -80308,7 +79816,6 @@
     "call_index": 1,
     "call_label": "encoder.norm2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm2"
@@ -80441,6 +79948,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -80460,7 +79968,6 @@
     "call_index": 1,
     "call_label": "encoder.self_attn:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.self_attn"
@@ -80625,6 +80132,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -80662,7 +80170,6 @@
     "call_index": 1,
     "call_label": "encoder:1",
     "call_parent": "self:1",
-    "call_parent_label": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder"
@@ -80823,6 +80330,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "self:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -80846,7 +80354,6 @@
     "call_index": 1,
     "call_label": "self:1",
     "call_parent": null,
-    "call_parent_label": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -80996,6 +80503,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": null,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -100600,6 +100108,7 @@
    },
    "append_history": [],
    "archived_activations": {},
+   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
    "backend": "torch",
    "backend_runtime_config": null,
    "backend_runtime_device_summary": null,
@@ -100608,13 +100117,11 @@
    "backward_events": [],
    "backward_memory_backend": "<measured>",
    "backward_pass_logs": {},
-   "backward_passes": "<torchlens._data_classes.backward_pass.BackwardPassAccessor>",
    "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
    "backward_ready": false,
    "backward_root_grad_fn_object_ids": "<measured>",
    "batch_render": "auto",
-   "branching_factor": "1.0857142857142856",
    "buffer_layers": [],
    "buffer_num_calls": {},
    "buffer_read_ops": [],
@@ -100692,7 +100199,6 @@
    "class_docstring": "Minimal Transformer encoder layer with deterministic dropout settings.",
    "class_source_file": "<repo>/tests/capture_oracle/_models.py",
    "class_source_line": 267,
-   "class_source_location": "<repo>/tests/capture_oracle/_models.py:267",
    "cleanup_duration": "<measured>",
    "code_context": [],
    "completeness_decompositions": [],
@@ -100710,18 +100216,17 @@
     "\"unknown\"": 0,
     "\"zero_by_rule\"": 22
    },
-   "compute_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {},
    "conditional_branch_edges": [],
    "conditional_edge_call_indices": {},
    "conditional_records": [],
    "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
    "decoded_output": null,
    "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
    "detach_saved_activations": false,
    "distributed_scope": null,
-   "edges": "<raises SelectionError>",
    "emit_nvtx": false,
    "episode": null,
    "episode_coupling": null,
@@ -100734,112 +100239,21 @@
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
-   "flops_by_op_type": {
-    "\"add\"": {
-     "\"backward\"": 48,
-     "\"count\"": 2,
-     "\"forward\"": 48
-    },
-    "\"contiguous\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"dropout\"": {
-     "\"backward\"": 192,
-     "\"count\"": 3,
-     "\"forward\"": 192
-    },
-    "\"getitem\"": {
-     "\"backward\"": 0,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"input\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"layernorm\"": {
-     "\"backward\"": 600,
-     "\"count\"": 2,
-     "\"forward\"": 240
-    },
-    "\"linear\"": {
-     "\"backward\"": 3408,
-     "\"count\"": 4,
-     "\"forward\"": 1704
-    },
-    "\"output\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"permute\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"relu\"": {
-     "\"backward\"": 48,
-     "\"count\"": 1,
-     "\"forward\"": 48
-    },
-    "\"reshape\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"scaleddotproductattention\"": {
-     "\"backward\"": 1260,
-     "\"count\"": 1,
-     "\"forward\"": 504
-    },
-    "\"squeeze\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"transpose\"": {
-     "\"backward\"": 0,
-     "\"count\"": 6,
-     "\"forward\"": 0
-    },
-    "\"unflatten\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"unsqueeze\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"view\"": {
-     "\"backward\"": 0,
-     "\"count\"": 7,
-     "\"forward\"": 0
-    }
-   },
    "forward_docstring": "Encode a short sequence.\n\n        Parameters\n        ----------\n        x:\n            Sequence batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Encoded sequence.\n        ",
    "forward_duration": "<measured>",
    "forward_memory_backend": "<measured>",
    "forward_peak_memory": "<measured>",
-   "forward_peak_memory_pair": "<measured>",
    "forward_peak_memory_reason": "<measured>",
    "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
    "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
    "forward_source_line": 285,
-   "forward_source_location": "<repo>/tests/capture_oracle/_models.py:285",
    "func_calls_duration": "<measured>",
-   "grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "grad_fn_fire_timings": "<measured>",
    "grad_fn_logs": {},
    "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
    "grad_transform": null,
    "grad_transform_repr": null,
+   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
    "graph_shape_hash": "b8f1b57db90204955c1bc81bc11fa4e1ee82999691c8e93fd671381dc69e2709",
    "grouping": "structural",
    "grouping_policy": {
@@ -100856,8 +100270,6 @@
    "halt_reason": null,
    "halted": false,
    "has_backward_pass": false,
-   "has_conditional_branching": false,
-   "has_conditionals": false,
    "has_frozen_params": false,
    "has_gradients": false,
    "has_trainable_params": true,
@@ -100867,7 +100279,6 @@
    "init_signature": "(self) -> 'None'",
    "init_source_file": "<repo>/tests/capture_oracle/_models.py",
    "init_source_line": 270,
-   "init_source_location": "<repo>/tests/capture_oracle/_models.py:270",
    "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
@@ -100878,22 +100289,14 @@
    "input_preprocessor": null,
    "input_signature_hash": "75390a001dbe1003207d8f0ed591182ffbdcaf2f887715a9b047ca163752ab2d",
    "input_structure": "<raises AttributeError>",
-   "intermediate_derived_grads": "<torchlens._data_classes.derived_grad.IntermediateDerivedGradAccessor>",
-   "internal_sink_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_sink_ops": [],
-   "internal_source_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
    "intervention_ready": false,
    "is_appended": false,
-   "is_branching": true,
-   "is_dynamic_graph": false,
-   "is_recurrent": false,
+   "is_pristine": true,
    "keep_orphans": false,
-   "last_backward_duration": "<measured>",
-   "last_backward_pass": null,
-   "last_backward_root_grad_fn_object_id": "<measured>",
    "last_run": null,
    "layer_dict_all_keys": {
     "\"add_1\"": {
@@ -102829,102 +102232,11 @@
     ]
    },
    "logged_values": {},
-   "macs_by_op_type": {
-    "\"add\"": {
-     "\"backward\"": null,
-     "\"count\"": 2,
-     "\"forward\"": 0
-    },
-    "\"contiguous\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"dropout\"": {
-     "\"backward\"": null,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"getitem\"": {
-     "\"backward\"": null,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"input\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"layernorm\"": {
-     "\"backward\"": null,
-     "\"count\"": 2,
-     "\"forward\"": 0
-    },
-    "\"linear\"": {
-     "\"backward\"": null,
-     "\"count\"": 4,
-     "\"forward\"": 768
-    },
-    "\"output\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"permute\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"relu\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"reshape\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"scaleddotproductattention\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 144
-    },
-    "\"squeeze\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"transpose\"": {
-     "\"backward\"": null,
-     "\"count\"": 6,
-     "\"forward\"": 0
-    },
-    "\"unflatten\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"unsqueeze\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"view\"": {
-     "\"backward\"": null,
-     "\"count\"": 7,
-     "\"forward\"": 0
-    }
-   },
    "macs_unknown_split_ops": [],
    "manual_tensor_connections": [],
    "mark_layer_depths": true,
-   "max_in_degree": 3,
-   "max_layer_op_count": 1,
-   "max_out_degree": 3,
    "model_class_name": "TinyTransformer",
    "model_class_qualname": "capture_oracle._models.TinyTransformer",
-   "model_cls": "<callable TinyTransformer>",
    "model_label": "TinyTransformer",
    "model_object_id": "<measured>",
    "model_ops": [
@@ -103127,59 +102439,24 @@
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
-   "num_backward_edges": null,
    "num_backward_passes": 0,
-   "num_buffer_edges": 0,
    "num_buffer_layers": 0,
-   "num_buffer_read_ops": 0,
-   "num_buffer_sink_ops": 0,
-   "num_buffer_source_ops": 0,
-   "num_buffer_write_ops": 0,
-   "num_compute_edges": 37,
-   "num_compute_layers": 35,
-   "num_compute_ops": 35,
-   "num_conditionals": 0,
    "num_context_lines": 7,
    "num_edges": 40,
-   "num_grad_fn_calls": 0,
-   "num_grad_fns": 0,
-   "num_grad_fns_with_op": 0,
-   "num_grad_fns_without_op": 0,
    "num_input_layers": 1,
-   "num_input_ops": 1,
-   "num_internal_sink_layers": 0,
-   "num_internal_sink_ops": 0,
-   "num_internal_source_layers": 0,
-   "num_internal_source_ops": 0,
-   "num_layer_edges": 40,
-   "num_layers": 37,
    "num_layers_with_params": 6,
-   "num_module_calls": 10,
    "num_modules": 10,
    "num_ops": 35,
-   "num_ops_with_params": 6,
    "num_output_layers": 1,
-   "num_output_ops": 1,
    "num_param_tensors": 12,
-   "num_param_tensors_frozen": 0,
-   "num_param_tensors_trainable": 12,
    "num_params": 172,
-   "num_params_by_path": 172,
-   "num_params_executed": 172,
    "num_params_frozen": 0,
    "num_params_trainable": 172,
-   "num_params_unexecuted": 0,
    "num_saved_grad_fn_calls": 0,
    "num_saved_grad_fns": 0,
-   "num_saved_grad_layers": 0,
-   "num_saved_grad_module_calls": 0,
-   "num_saved_grad_modules": 0,
-   "num_saved_grad_ops": 0,
    "num_saved_layers": 37,
    "num_saved_module_calls": 10,
-   "num_saved_modules": 10,
    "num_saved_ops": 37,
-   "num_tensors": 37,
    "num_uncalled_modules": 1,
    "observer_spans": [],
    "op_equivalence_classes": {
@@ -103384,7 +102661,6 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "orphans": "<torchlens._data_classes._trace_accessors.OrphanAccessor>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -103394,7 +102670,6 @@
    "output_num_classes": null,
    "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "output_postprocessor": null,
-   "overhead_duration": "<measured>",
    "param_hash_full": "6914bfbbc695a04f44b7455eca670c746fc813dd8ce41469d5374a25d5553ac8",
    "param_hash_quick": "6914bfbbc695a04f44b7455eca670c746fc813dd8ce41469d5374a25d5553ac8",
    "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
@@ -103406,7 +102681,6 @@
     "label": null
    },
    "pinned_autograd_memory": "<measured>",
-   "pristine": true,
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
@@ -103415,7 +102689,6 @@
    "readiness": null,
    "recording_kept": true,
    "recurrence_detection": true,
-   "recurrent_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "relationship_evidence": {
     "\"graph\"": "unknown",
     "\"input\"": "unknown",
@@ -103446,9 +102719,6 @@
    "save_rng_states": "<measured>",
    "save_visualizations": false,
    "saved_activation_memory": "<measured>",
-   "saved_grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "saved_grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
-   "saved_grad_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
@@ -103459,6 +102729,7 @@
    "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [],
+   "source": "<torchlens._data_classes._trace_groups.TraceSource>",
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [
@@ -103472,19 +102743,11 @@
    ],
    "structure_evidence": null,
    "structure_only": false,
-   "tied_param_groups": [],
    "tlspec_version": 10,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
-   "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 8292,
-   "total_flops_backward": 5556,
-   "total_flops_forward": 2736,
    "total_gradient_memory": "<measured>",
-   "total_macs": null,
-   "total_macs_backward": null,
-   "total_macs_forward": 912,
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "trace_label": "tinytransformer_N_fork_N",
@@ -103493,7 +102756,6 @@
    "uncalled_modules": [
     "encoder.self_attn.out_proj"
    ],
-   "unexecuted_param_names": [],
    "unknown_flop_ops": [],
    "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
    "verbose": false
@@ -113852,7 +113114,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout1"
@@ -113989,6 +113250,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -114008,7 +113270,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout2"
@@ -114145,6 +113406,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -114164,7 +113426,6 @@
     "call_index": 1,
     "call_label": "encoder.dropout:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout"
@@ -114301,6 +113562,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -114320,7 +113582,6 @@
     "call_index": 1,
     "call_label": "encoder.linear1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear1"
@@ -114457,6 +113718,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -114476,7 +113738,6 @@
     "call_index": 1,
     "call_label": "encoder.linear2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear2"
@@ -114613,6 +113874,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -114632,7 +113894,6 @@
     "call_index": 1,
     "call_label": "encoder.norm1:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm1"
@@ -114765,6 +114026,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -114784,7 +114046,6 @@
     "call_index": 1,
     "call_label": "encoder.norm2:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm2"
@@ -114917,6 +114178,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -114936,7 +114198,6 @@
     "call_index": 1,
     "call_label": "encoder.self_attn:1",
     "call_parent": "encoder:1",
-    "call_parent_label": "encoder:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.self_attn"
@@ -115101,6 +114362,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "encoder:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -115138,7 +114400,6 @@
     "call_index": 1,
     "call_label": "encoder:1",
     "call_parent": "self:1",
-    "call_parent_label": "self:1",
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder"
@@ -115299,6 +114560,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": "self:1",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -115322,7 +114584,6 @@
     "call_index": 1,
     "call_label": "self:1",
     "call_parent": null,
-    "call_parent_label": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -115472,6 +114733,7 @@
      }
     ],
     "param_memory": "<measured>",
+    "parent_label": null,
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "trace": {
@@ -133882,6 +133144,7 @@
    },
    "append_history": [],
    "archived_activations": {},
+   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
    "backend": "torch",
    "backend_runtime_config": null,
    "backend_runtime_device_summary": null,
@@ -133890,13 +133153,11 @@
    "backward_events": [],
    "backward_memory_backend": "<measured>",
    "backward_pass_logs": {},
-   "backward_passes": "<torchlens._data_classes.backward_pass.BackwardPassAccessor>",
    "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
    "backward_ready": false,
    "backward_root_grad_fn_object_ids": "<measured>",
    "batch_render": "auto",
-   "branching_factor": "1.0857142857142856",
    "buffer_layers": [],
    "buffer_num_calls": {},
    "buffer_read_ops": [],
@@ -133968,7 +133229,6 @@
    "class_docstring": "Minimal Transformer encoder layer with deterministic dropout settings.",
    "class_source_file": "_models.py",
    "class_source_line": 267,
-   "class_source_location": "_models.py:267",
    "cleanup_duration": "<measured>",
    "code_context": [],
    "completeness_decompositions": [],
@@ -133986,18 +133246,17 @@
     "\"unknown\"": 0,
     "\"zero_by_rule\"": 22
    },
-   "compute_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {},
    "conditional_branch_edges": [],
    "conditional_edge_call_indices": {},
    "conditional_records": [],
    "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
    "decoded_output": null,
    "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
    "detach_saved_activations": false,
    "distributed_scope": null,
-   "edges": "<raises SelectionError>",
    "emit_nvtx": false,
    "episode": null,
    "episode_coupling": null,
@@ -134010,112 +133269,21 @@
    "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": null,
    "factcore": "<torchlens.report._factcore.FactCore>",
-   "flops_by_op_type": {
-    "\"add\"": {
-     "\"backward\"": 48,
-     "\"count\"": 2,
-     "\"forward\"": 48
-    },
-    "\"contiguous\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"dropout\"": {
-     "\"backward\"": 192,
-     "\"count\"": 3,
-     "\"forward\"": 192
-    },
-    "\"getitem\"": {
-     "\"backward\"": 0,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"input\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"layernorm\"": {
-     "\"backward\"": 600,
-     "\"count\"": 2,
-     "\"forward\"": 240
-    },
-    "\"linear\"": {
-     "\"backward\"": 3408,
-     "\"count\"": 4,
-     "\"forward\"": 1704
-    },
-    "\"output\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"permute\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"relu\"": {
-     "\"backward\"": 48,
-     "\"count\"": 1,
-     "\"forward\"": 48
-    },
-    "\"reshape\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"scaleddotproductattention\"": {
-     "\"backward\"": 1260,
-     "\"count\"": 1,
-     "\"forward\"": 504
-    },
-    "\"squeeze\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"transpose\"": {
-     "\"backward\"": 0,
-     "\"count\"": 6,
-     "\"forward\"": 0
-    },
-    "\"unflatten\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"unsqueeze\"": {
-     "\"backward\"": 0,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"view\"": {
-     "\"backward\"": 0,
-     "\"count\"": 7,
-     "\"forward\"": 0
-    }
-   },
    "forward_docstring": "Encode a short sequence.\n\n        Parameters\n        ----------\n        x:\n            Sequence batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Encoded sequence.\n        ",
    "forward_duration": "<measured>",
    "forward_memory_backend": "<measured>",
    "forward_peak_memory": "<measured>",
-   "forward_peak_memory_pair": "<measured>",
    "forward_peak_memory_reason": "<measured>",
    "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
    "forward_source_file": "_models.py",
    "forward_source_line": 285,
-   "forward_source_location": "_models.py:285",
    "func_calls_duration": "<measured>",
-   "grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "grad_fn_fire_timings": "<measured>",
    "grad_fn_logs": {},
    "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
    "grad_transform": null,
    "grad_transform_repr": null,
+   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
    "graph_shape_hash": "b8f1b57db90204955c1bc81bc11fa4e1ee82999691c8e93fd671381dc69e2709",
    "grouping": "structural",
    "grouping_policy": {
@@ -134132,8 +133300,6 @@
    "halt_reason": null,
    "halted": false,
    "has_backward_pass": false,
-   "has_conditional_branching": false,
-   "has_conditionals": false,
    "has_frozen_params": false,
    "has_gradients": false,
    "has_trainable_params": true,
@@ -134143,7 +133309,6 @@
    "init_signature": "(self) -> 'None'",
    "init_source_file": "_models.py",
    "init_source_line": 270,
-   "init_source_location": "_models.py:270",
    "injected_ops": [],
    "input_annotations": {},
    "input_layers": [
@@ -134154,22 +133319,14 @@
    "input_preprocessor": null,
    "input_signature_hash": "75390a001dbe1003207d8f0ed591182ffbdcaf2f887715a9b047ca163752ab2d",
    "input_structure": null,
-   "intermediate_derived_grads": "<torchlens._data_classes.derived_grad.IntermediateDerivedGradAccessor>",
-   "internal_sink_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_sink_ops": [],
-   "internal_source_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
    "intervention_ready": false,
    "is_appended": false,
-   "is_branching": true,
-   "is_dynamic_graph": false,
-   "is_recurrent": false,
+   "is_pristine": true,
    "keep_orphans": false,
-   "last_backward_duration": "<measured>",
-   "last_backward_pass": null,
-   "last_backward_root_grad_fn_object_id": "<measured>",
    "last_run": null,
    "layer_dict_all_keys": {
     "\"add_1\"": {
@@ -136105,102 +135262,11 @@
     ]
    },
    "logged_values": {},
-   "macs_by_op_type": {
-    "\"add\"": {
-     "\"backward\"": null,
-     "\"count\"": 2,
-     "\"forward\"": 0
-    },
-    "\"contiguous\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"dropout\"": {
-     "\"backward\"": null,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"getitem\"": {
-     "\"backward\"": null,
-     "\"count\"": 3,
-     "\"forward\"": 0
-    },
-    "\"input\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"layernorm\"": {
-     "\"backward\"": null,
-     "\"count\"": 2,
-     "\"forward\"": 0
-    },
-    "\"linear\"": {
-     "\"backward\"": null,
-     "\"count\"": 4,
-     "\"forward\"": 768
-    },
-    "\"output\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"permute\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"relu\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"reshape\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"scaleddotproductattention\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 144
-    },
-    "\"squeeze\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"transpose\"": {
-     "\"backward\"": null,
-     "\"count\"": 6,
-     "\"forward\"": 0
-    },
-    "\"unflatten\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"unsqueeze\"": {
-     "\"backward\"": null,
-     "\"count\"": 1,
-     "\"forward\"": 0
-    },
-    "\"view\"": {
-     "\"backward\"": null,
-     "\"count\"": 7,
-     "\"forward\"": 0
-    }
-   },
    "macs_unknown_split_ops": [],
    "manual_tensor_connections": [],
    "mark_layer_depths": true,
-   "max_in_degree": 3,
-   "max_layer_op_count": 1,
-   "max_out_degree": 3,
    "model_class_name": "TinyTransformer",
    "model_class_qualname": "capture_oracle._models.TinyTransformer",
-   "model_cls": null,
    "model_label": "TinyTransformer",
    "model_object_id": "<measured>",
    "model_ops": [
@@ -136403,59 +135469,24 @@
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
-   "num_backward_edges": null,
    "num_backward_passes": 0,
-   "num_buffer_edges": 0,
    "num_buffer_layers": 0,
-   "num_buffer_read_ops": 0,
-   "num_buffer_sink_ops": 0,
-   "num_buffer_source_ops": 0,
-   "num_buffer_write_ops": 0,
-   "num_compute_edges": 37,
-   "num_compute_layers": 35,
-   "num_compute_ops": 35,
-   "num_conditionals": 0,
    "num_context_lines": 7,
    "num_edges": 40,
-   "num_grad_fn_calls": 0,
-   "num_grad_fns": 0,
-   "num_grad_fns_with_op": 0,
-   "num_grad_fns_without_op": 0,
    "num_input_layers": 1,
-   "num_input_ops": 1,
-   "num_internal_sink_layers": 0,
-   "num_internal_sink_ops": 0,
-   "num_internal_source_layers": 0,
-   "num_internal_source_ops": 0,
-   "num_layer_edges": 40,
-   "num_layers": 37,
    "num_layers_with_params": 6,
-   "num_module_calls": 10,
    "num_modules": 10,
    "num_ops": 35,
-   "num_ops_with_params": 6,
    "num_output_layers": 1,
-   "num_output_ops": 1,
    "num_param_tensors": 12,
-   "num_param_tensors_frozen": 0,
-   "num_param_tensors_trainable": 12,
    "num_params": 172,
-   "num_params_by_path": 172,
-   "num_params_executed": 172,
    "num_params_frozen": 0,
    "num_params_trainable": 172,
-   "num_params_unexecuted": 0,
    "num_saved_grad_fn_calls": 0,
    "num_saved_grad_fns": 0,
-   "num_saved_grad_layers": 0,
-   "num_saved_grad_module_calls": 0,
-   "num_saved_grad_modules": 0,
-   "num_saved_grad_ops": 0,
    "num_saved_layers": 37,
    "num_saved_module_calls": 10,
-   "num_saved_modules": 10,
    "num_saved_ops": 37,
-   "num_tensors": 37,
    "num_uncalled_modules": null,
    "observer_spans": [],
    "op_equivalence_classes": {
@@ -136660,7 +135691,6 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "orphans": "<torchlens._data_classes._trace_accessors.OrphanAccessor>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -136670,7 +135700,6 @@
    "output_num_classes": null,
    "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "output_postprocessor": null,
-   "overhead_duration": "<measured>",
    "param_hash_full": "6914bfbbc695a04f44b7455eca670c746fc813dd8ce41469d5374a25d5553ac8",
    "param_hash_quick": "6914bfbbc695a04f44b7455eca670c746fc813dd8ce41469d5374a25d5553ac8",
    "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
@@ -136679,7 +135708,6 @@
    "parent_run": null,
    "parent_trace": null,
    "pinned_autograd_memory": "<measured>",
-   "pristine": true,
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
@@ -136688,7 +135716,6 @@
    "readiness": "<torchlens._runnable.ReadinessReport>",
    "recording_kept": true,
    "recurrence_detection": true,
-   "recurrent_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "relationship_evidence": {
     "\"graph\"": "unknown",
     "\"input\"": "unknown",
@@ -136716,9 +135743,6 @@
    "save_rng_states": "<measured>",
    "save_visualizations": false,
    "saved_activation_memory": "<measured>",
-   "saved_grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "saved_grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
-   "saved_grad_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
@@ -136729,31 +135753,23 @@
    "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [],
+   "source": "<torchlens._data_classes._trace_groups.TraceSource>",
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "structure_evidence": null,
    "structure_only": false,
-   "tied_param_groups": [],
    "tlspec_version": 10,
    "total_activation_memory": "<measured>",
    "total_autograd_memory": "<measured>",
-   "total_backward_duration": "<measured>",
    "total_backward_memory": "<measured>",
-   "total_flops": 8292,
-   "total_flops_backward": 5556,
-   "total_flops_forward": 2736,
    "total_gradient_memory": "<measured>",
-   "total_macs": null,
-   "total_macs_backward": null,
-   "total_macs_forward": 912,
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "trace_label": "tinytransformer_N",
    "transform_repr": null,
    "transforms": [],
    "uncalled_modules": [],
-   "unexecuted_param_names": [],
    "unknown_flop_ops": [],
    "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
    "verbose": false

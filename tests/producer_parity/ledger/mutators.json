@@ -1,5 +1,7 @@
 {
  "append_amendment_callers": {
+  "torchlens/_ir/capture_events.py": 1,
+  "torchlens/_postprocess/graph_traversal.py": 1,
   "torchlens/backends/_finalize.py": 1,
   "torchlens/backends/jax/backend.py": 1,
   "torchlens/backends/tf/interventions.py": 1,
@@ -7,8 +9,6 @@
   "torchlens/backends/torch/_ops_retention.py": 1,
   "torchlens/backends/torch/backend.py": 1,
   "torchlens/backends/torch/model_prep.py": 3,
-  "torchlens/_ir/capture_events.py": 1,
-  "torchlens/_postprocess/graph_traversal.py": 1,
   "torchlens/user_funcs.py": 1
  },
  "op_events_inplace_writes": {
