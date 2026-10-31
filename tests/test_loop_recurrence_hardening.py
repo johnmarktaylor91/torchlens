@@ -204,6 +204,7 @@ def _permuted(graph: RecurrenceGroupingGraph, rng: "random.Random | None"):
     return dataclasses.replace(graph, nodes=new_nodes)
 
 
+@pytest.mark.smoke
 def test_children_order_permutation_invariance() -> None:
     """LOAD-BEARING: the layer partition is invariant to edge-tuple ordering.
 

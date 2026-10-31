@@ -885,7 +885,6 @@ def test_assignments_pool_one_recurrent_labels_tuple_per_group() -> None:
         assert all(instance is instances[0] for instance in instances)
 
 
-@pytest.mark.smoke
 def test_merge_iso_groups_visits_linear_pairs_on_an_unrelated_chain() -> None:
     """The pair sweep must not walk C(N,2) over an ungroupable iso group (R29/F29-A).
 
