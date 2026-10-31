@@ -231,14 +231,16 @@ def test_below_floor_refusal_carries_structured_fields(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_legacy_intervention_specs_refuse_on_stored_keywords_not_the_floor() -> None:
-    """The floor covers Trace rehydration only; a 2.16 intervention spec gets past it
-    and refuses typed on its pre-rename stored edit keywords instead."""
+def test_legacy_intervention_specs_refuse_as_2x_at_the_format_stamp() -> None:
+    """A 2.16 intervention spec (``format_version`` 1) refuses with the one 2.x error.
 
-    from torchlens._errors import InvalidArgumentError
+    The Trace floor never sees it: the spec loader reads the format stamp first and
+    refuses before any stored edit keyword is decoded.
+    """
 
-    fixture_path = Path(__file__).parent / "fixtures" / "tlspec_v2_16"
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.load(fixture_path / "F1_intervention_default.tlspec", trust_custom_callables=True)
-    assert not isinstance(excinfo.value, ArtifactTooOldError)
-    assert excinfo.value.fields["code"] == "intervention_helper_arguments_invalid"
+    from _refuses_as_2x import assert_refuses_as_2x
+
+    fixture_path = Path(__file__).parent / "goldens" / "legacy" / "intervention_v2_16.tlspec"
+    error = assert_refuses_as_2x(fixture_path)
+    assert error.fields["observed"] == "intervention format_version=1"
+    assert error.fields["path"] == str(fixture_path)

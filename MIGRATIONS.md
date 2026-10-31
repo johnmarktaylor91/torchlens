@@ -4,31 +4,22 @@
 
 TorchLens 2.16.0 wrote two public `.tlspec` directory formats:
 
-- Intervention specs with `spec.json` containing `format_version`.
+- Intervention specs with `spec.json` containing `format_version` (`"1"`, written by
+  torchlens 2.16 to 2.28; torchlens 2.29 and later write `"2"`).
 - Portable `ModelLog` bundles with `manifest.json` containing `io_format_version`.
 
-TorchLens does not auto-migrate them in place; readers dispatch by detected
-format.
+TorchLens 3 reads neither, and does not migrate them: like every file saved by
+torchlens 2.x, both refuse at `tl.load` and at `tl.validation.validate_tlspec` with
+`tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message
+names the 2.x origin and the remedy. Save the artifact again with torchlens 2.36.x
+(`pip install 'torchlens>=2.36,<3'`), which reads format_version-1 intervention specs, or
+capture the model again with this release. The 2.16 `ModelLog` bundle is the exception
+torchlens 2.36.x cannot read either: only torchlens 2.17.0 does (`pip install
+torchlens==2.17.0` in a separate environment).
 
-**Erratum (2026-10-14).** This section used to say that these 2.16.0 formats
-"are permanently readable". That sentence is retracted. Current releases still
-load 2.16.0 intervention specs, but they refuse 2.16.0 portable `ModelLog`
-bundles (`io_format_version` 2) with `tl.errors.ArtifactVersionBelowFloorError`
-(code `artifact_version_below_floor`): saved traces older than `tlspec_version`
-6 are below the rehydration floor. To read such a bundle, load it with
-TorchLens 2.17.0 (`pip install torchlens==2.17.0` in a separate environment), the
-verified reader for that format; `torchlens.ecosystem.compat_window()` lists the
-verified reader for each retired format.
-
-New writers introduced during the Phase 11 schema graduation emit the unified
-manifest format. The polymorphic loader detects the on-disk format and dispatches
-to the appropriate reader. During the Phase 11.0 transition, intervention specs
-also include `kind: "intervention"` in `manifest.json` while preserving the
-2.16.0 fields.
-
-An optional future utility, `torchlens.io.migrate_tlspec(path, dest)`, may write
-an upgraded copy in the unified format. It will not be required for loading
-existing 2.16.0 files.
+Readers dispatch by detected format (`tl.io.detect_tlspec_format`); the detection labels
+keep their 2.16 spellings for current intervention specs, which carry `kind:
+"intervention"` in `manifest.json` beside the 2.16 fields.
 
 ## Visualization Collapse Engine
 
@@ -398,9 +389,12 @@ acceptance authority.
 
 `tl.extract_dataset` writes manifest v2 (model identity, transform
 disclosure, input-preprocessing block, per-site identity with L1 site keys).
-v1 artifacts remain readable through `load_extraction`/`open_extraction`;
-resume continuation across the version boundary refuses typed
-(`extraction_resume_*`) rather than grafting mixed-manifest shards.
+v1 artifacts (schema `tl_extract_manifest_v1`, written by torchlens 2.34 and
+earlier) are files saved by torchlens 2.x: `load_extraction`, `open_extraction`,
+`relabel_extraction`, `tl.load` and `extract_dataset(..., resume=True)` refuse them
+with `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), and
+nothing migrates them in place. Re-extract into a fresh directory, or read them
+with torchlens 2.36.x.
 
 ## Gaussian RDM values changed: `repgeom.rdm(metric="gaussian")` now matches thingsvision (2026-10-14, numeric fix)
 

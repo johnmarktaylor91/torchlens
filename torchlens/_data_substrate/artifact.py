@@ -50,7 +50,7 @@ __all__ = [
     "ArtifactWriter",
     "compare_model_identity",
     "compare_signatures",
-    "migrate_v1_artifact",
+    "refuse_v1_manifest",
     "read_trusted_rows",
     "repair_ledger_tail",
     "shard_filename",
@@ -125,7 +125,8 @@ SIGNATURE_SEMANTIC_FIELDS: tuple[str, ...] = (
     "selector_plan",
 )
 
-#: Sentinel marking a field a completed-v1 migration could not prove.
+#: Sentinel a 2.x migration wrote for a v1 field it could not prove (kept so a v2 manifest
+#: carrying it still compares; this release writes no new ones).
 UNRECORDED_V1 = "unrecorded_v1"
 
 
@@ -248,7 +249,7 @@ def compare_signatures(existing: Mapping[str, Any], current: Mapping[str, Any]) 
         Names of every mismatched or missing semantic field, in KNOWN-FIELDS
         order (empty = compatible). ``model_identity`` is compared by its own
         level rules via :func:`compare_model_identity` and reported under its
-        field name; fields a completed-v1 migration marked
+        field name; fields a 2.x v1 migration marked
         :data:`UNRECORDED_V1` are skipped (disclosed, not comparable).
     """
 
@@ -621,163 +622,29 @@ class ArtifactWriter:
         self.write_manifest()
 
 
-def migrate_v1_artifact(
-    container: Path,
-    manifest_v1: Mapping[str, Any],
-    *,
-    acknowledge_in_progress: bool = False,
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Migrate a COMPLETED v1 artifact to v2 without a forward (extract D1).
-
-    Builds ``ledger.jsonl`` from the v1 in-manifest batch ledger, writes the
-    stimulus-id sidecar when v1 recorded ids, and rewrites the manifest as
-    v2 with every unprovable semantic field marked :data:`UNRECORDED_V1`
-    (disclosed, skipped by the signature compare on completed artifacts).
+def refuse_v1_manifest(manifest: Mapping[str, Any], *, container: Path) -> None:
+    """Refuse a v1 extraction artifact: torchlens 2.34 and earlier wrote that layout.
 
     Parameters
     ----------
+    manifest:
+        The parsed ``manifest.json`` mapping.
     container:
-        Artifact directory.
-    manifest_v1:
-        The parsed v1 manifest.
-    acknowledge_in_progress:
-        The explicit acknowledgment for IN-PROGRESS v1 artifacts (extract
-        D16): the migrated artifact records the prefix as
-        asserted-not-measured and carries ``unknown_v1_prefix_semantics:
-        true`` PERMANENTLY, propagated by every exporter into the export
-        contract — an assertion that expires when the data is converted is
-        not an assertion.
-
-    Returns
-    -------
-    tuple[dict[str, Any], list[dict[str, Any]]]
-        The v2 manifest document and the migrated ledger rows.
+        Artifact directory, for the refusal's structured fields.
 
     Raises
     ------
-    ExtractionArtifactError
-        ``extraction_resume_v1_in_progress`` for in-progress v1 artifacts
-        without the acknowledgment: v1 recorded neither model mode nor grad
-        state nor model identity, so an unfinished prefix cannot be proven
-        compatible with any resuming run (the random-init T-MODELSWAP
-        hazard lives exactly here).
+    ArtifactTooOldError
+        When ``manifest`` carries the v1 schema. This release reads no file saved by
+        torchlens 2.x and migrates nothing in place; the one 2.x error names the remedy.
     """
 
-    if manifest_v1.get("status") != "complete" and not acknowledge_in_progress:
-        raise ExtractionArtifactError(
-            "This artifact was written in progress by the v1 layout, which "
-            "recorded neither model identity, model mode, grad state, nor "
-            "padding policy; the completed prefix cannot be proven compatible "
-            "with any resuming run (a random-init resume would silently mix "
-            "checkpoint activations with random ones).",
-            code="extraction_resume_v1_in_progress",
-            remedy=(
-                "read the trusted prefix with load_extraction() and re-extract "
-                "into a fresh directory to finish the dataset"
-            ),
-            unprovable_fields=[
-                "model_identity",
-                "model_mode",
-                "padding_side",
-                "position_ids_source",
-            ],
-            status=manifest_v1.get("status"),
-        )
-    in_progress_acknowledged = manifest_v1.get("status") != "complete"
-    v1_signature = dict(manifest_v1.get("signature") or {})
-    provenance = dict(manifest_v1.get("stimulus_provenance") or {})
-    ids = provenance.get("stimulus_ids")
-    v1_transform = v1_signature.get("transform")
-    transform_pipeline: Any = None if v1_transform is None else UNRECORDED_V1
-    signature_v2: dict[str, Any] = {
-        "schema_version": MANIFEST_SCHEMA_V2,
-        "native_format": "pt_shards_v1",
-        "layer_plan": v1_signature.get("layer_plan"),
-        "layers_kind": v1_signature.get("layers_kind"),
-        "batch_size": v1_signature.get("batch_size"),
-        "transform_pipeline": transform_pipeline,
-        "stimuli": v1_signature.get("stimuli"),
-        "stimulus_ids_digest": stimulus_ids_digest(list(ids) if isinstance(ids, list) else None),
-        "model_identity": {"level": UNRECORDED_V1},
-        "padding_side": UNRECORDED_V1,
-        "position_ids_source": UNRECORDED_V1,
-        "model_mode": UNRECORDED_V1,
-        "pool": None,
-        "dtype_policy": None,
-        "ragged": "refuse",
-        "integrity": UNRECORDED_V1,
-        # F18 runtime fields: v1 recorded none of them (disclosed, skipped
-        # by the compare); a resume through opaque callables still refuses
-        # through the D8 rules, which treat an unrecorded block as empty.
-        "collate": UNRECORDED_V1,
-        "callable_identity": UNRECORDED_V1,
-        "selector_plan": UNRECORDED_V1,
-    }
-    rows: list[dict[str, Any]] = []
-    row_start = 0
-    for batch in manifest_v1.get("batches") or []:
-        filename = str(batch.get("file"))
-        shard_path = container / filename
-        n_rows = int(batch.get("n_stimuli", 0))
-        rows.append(
-            {
-                "index": int(batch.get("index", len(rows))),
-                "file": filename,
-                "row_start": row_start,
-                "n_rows": n_rows,
-                "byte_size": shard_path.stat().st_size if shard_path.is_file() else None,
-                "crc32": None,
-                "integrity": "migrated_v1",
-            }
-        )
-        row_start += n_rows
-    manifest_v2: dict[str, Any] = {
-        "schema": MANIFEST_SCHEMA_V2,
-        "torchlens_version": manifest_v1.get("torchlens_version"),
-        "status": "in_progress" if in_progress_acknowledged else "complete",
-        "signature": signature_v2,
-        "stimulus_provenance": {
-            "order": provenance.get("order"),
-            "n_stimuli": provenance.get("n_stimuli"),
-            "ids_recorded": isinstance(ids, list),
-            "ids_digest": signature_v2["stimulus_ids_digest"],
-        },
-        "storage": dict(manifest_v1.get("storage") or {}) | {"ledger": LEDGER_FILENAME},
-        "layers": manifest_v1.get("layers"),
-        "run": {},
-        "totals": (
-            None
-            if manifest_v1.get("status") != "complete"
-            else {"n_shards": len(rows), "n_stimuli": row_start}
-        ),
-        "ledger_digest": None,
-        "migration": {
-            "migrated_from": MANIFEST_SCHEMA_V1,
-            "unprovable_fields": [
-                "model_identity",
-                "model_mode",
-                "padding_side",
-                "position_ids_source",
-            ]
-            + (["transform_pipeline"] if transform_pipeline == UNRECORDED_V1 else []),
-            "legacy_signature": v1_signature,
-        },
-    }
-    if in_progress_acknowledged:
-        # The acknowledgment is PERMANENT: the prefix's semantics were
-        # asserted, never measured, and every exporter propagates the flag.
-        manifest_v2["unknown_v1_prefix_semantics"] = True
-        manifest_v2["migration"]["in_progress_acknowledged"] = "asserted_not_measured"
-    writer = ArtifactWriter(container, manifest_v2)
-    ledger_path = container / LEDGER_FILENAME
-    if not ledger_path.exists():
-        with open(ledger_path, "a", encoding="utf-8") as handle:
-            for row in rows:
-                handle.write(_canonical_dumps(row) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-    if isinstance(ids, list):
-        writer.write_stimulus_ids_sidecar([str(item) for item in ids])
-    manifest_v2["ledger_digest"] = "sha256:" + hashlib.sha256(ledger_path.read_bytes()).hexdigest()
-    writer.write_manifest()
-    return manifest_v2, rows
+    if manifest.get("schema") != MANIFEST_SCHEMA_V1:
+        return
+    from .._io._pre3_module_paths import pre_3_artifact_error
+
+    raise pre_3_artifact_error(
+        f"extraction manifest schema={MANIFEST_SCHEMA_V1}",
+        path=str(container),
+        code="artifact_version_below_floor",
+    )

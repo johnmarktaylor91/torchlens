@@ -67,7 +67,12 @@ _PRE_3_PRIVATE_MODULES = frozenset(
 )
 
 #: Individual globals whose module still exists but whose class name only 2.x wrote.
-_PRE_3_GLOBALS = frozenset({("torchlens.intervention.types", "HelperSpec")})
+_PRE_3_GLOBALS = frozenset(
+    {
+        ("torchlens.intervention.types", "HelperSpec"),
+        ("torchlens._data_classes.op", "TensorLog"),
+    }
+)
 
 _REMEDY = (
     "save it again with torchlens 2.36.x, which can read it (pip install "

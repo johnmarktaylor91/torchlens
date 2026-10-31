@@ -12,8 +12,8 @@ greps are the method this lint freezes).
 Scope boundary (mirrors the removal ruling):
 
 - Torch-version compatibility (``HAS_*`` flags) and artifact-format
-  compatibility (tlspec floors, legacy-save loading, pickle rename maps such
-  as the ``TensorLog`` module attribute) are NOT shims and are not matched.
+  compatibility (tlspec floors, the one refusal of files saved by 2.x) are
+  NOT shims and are not matched.
 - Method-level ``vis_*`` implementation params on ``draw``/``draw_backward``/
   ``draw_combined`` (``vis_mode``, ``vis_outpath``, ``vis_node_mode``,
   ``vis_buffers``, ...) are the KEPT non-warning spellings owned by the

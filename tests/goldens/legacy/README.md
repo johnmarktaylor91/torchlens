@@ -12,7 +12,9 @@ single typed refusal. They are never regenerated: they ARE the old formats.
 | `tlspec_v7.tlspec` | unified directory, capture-outcome era | 7 |
 | `tlspec_v9.tlspec` | unified directory, torchlens 2.34.1 | 9 |
 | `modellog_v2_16_genuine.tlspec` | the genuine 2.16 portable ModelLog format (`io_format_version` 2); manifest only, which is all the refusal reads | none |
+| `intervention_v2_16.tlspec` | intervention spec of torchlens 2.16 (`format_version` 1 in `spec.json`; torchlens 2.29 began writing 2) | none |
+| `extraction_v1/` | dataset-extraction artifact of torchlens 2.34 (`schema` `tl_extract_manifest_v1`); manifest only, which is all the refusal reads | none |
 
 The 2.16 ModelLog bundle with modern spellings stays at
-`tests/fixtures/tlspec_v2_16/F2_modellog_tiny_cnn.tlspec` beside the 2.16 intervention-spec
-fixtures, which a live reader still uses.
+`tests/fixtures/tlspec_v2_16/F2_modellog_tiny_cnn.tlspec`, which `tests/test_tlspec_unified.py`
+also uses.

@@ -139,13 +139,31 @@ def test_lazyimportref_type_denied_at_unpickler() -> None:
         unpickler.find_class("torchlens.intervention.save", "LazyImportRef")
 
 
+@pytest.mark.parametrize(
+    ("module", "name"),
+    [
+        ("torchlens._data_classes.op", "TensorLog"),
+        ("torchlens.intervention.types", "HelperSpec"),
+    ],
+)
+def test_class_names_only_2x_wrote_refuse_as_2x(module: str, name: str) -> None:
+    """A global whose module lives on but whose name only 2.x pickled refuses as a 2.x file."""
+
+    from torchlens.errors import ArtifactTooOldError
+
+    unpickler = SafeBundleUnpickler(io.BytesIO(b""))
+    with pytest.raises(ArtifactTooOldError) as excinfo:
+        unpickler.find_class(module, name)
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+    assert excinfo.value.fields["observed"] == f"module_path={module}"
+
+
 def test_legit_data_types_and_snapshot_still_admit() -> None:
     """Vetted-inert data types + FacetRegistrySnapshot + rename targets still resolve."""
 
     unpickler = SafeBundleUnpickler(io.BytesIO(b""))
     admitted = [
         ("torchlens._data_classes.op", "Op"),
-        ("torchlens._data_classes.op", "TensorLog"),  # locked rename alias of Op
         ("torchlens._data_classes.trace", "Trace"),
         ("torchlens._data_classes.grad_fn_call", "GradFnCall"),  # rename target
         ("torchlens.intervention._super.super_op", "SuperOp"),  # rename target

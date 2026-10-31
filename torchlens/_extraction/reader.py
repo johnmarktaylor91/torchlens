@@ -1340,7 +1340,6 @@ def open_extraction(
         )
     from torchlens._extraction.resume import DatasetExtractionResumeError
 
-    from .._data_substrate.artifact import MANIFEST_SCHEMA_V2
     from ..dataset_extraction import (
         MANIFEST_FILENAME,
         _load_manifest,
@@ -1348,10 +1347,6 @@ def open_extraction(
 
     container = Path(path)
     manifest = _load_manifest(container / MANIFEST_FILENAME)
-    if manifest.get("schema") != MANIFEST_SCHEMA_V2:
-        from .._data_substrate import migrate_v1_artifact
-
-        manifest, _rows = migrate_v1_artifact(container, manifest)
     if manifest.get("status") != "complete" and not in_progress:
         raise DatasetExtractionResumeError(
             f"Extraction artifact at {str(container)!r} has status "

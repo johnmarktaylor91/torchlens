@@ -121,7 +121,7 @@ from __future__ import annotations
 import io
 import pickle
 import warnings
-from collections.abc import Collection, Mapping
+from collections.abc import Collection
 from dataclasses import dataclass
 from types import ModuleType
 from typing import Any, BinaryIO
@@ -876,12 +876,8 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens._data_classes.grad_fn", "GradFnCallAccessor"),
         ("torchlens._data_classes.grad_fn_call", "GradFnCall"),  # locked rename target
         ("torchlens._data_classes.layer", "Layer"),
-        # Accessor classes moved to _layer_accessors.py (R43 ratchet split,
-        # F16 2026-08-29). New artifacts pickle the new qualnames; the
-        # layer-module rows stay so legacy artifacts keep loading through
-        # the re-exports.
-        ("torchlens._data_classes._layer_accessors", "LayerAccessor"),
-        ("torchlens._data_classes._layer_accessors", "OpAccessor"),
+        # The accessor classes live in _layer_accessors.py but pin ``__module__`` to the
+        # layer module, so every artifact pickles them under these rows.
         ("torchlens._data_classes.layer", "LayerAccessor"),
         ("torchlens._data_classes.layer", "OpAccessor"),
         ("torchlens._data_classes.module", "HookInfo"),
@@ -892,7 +888,6 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens._data_classes.op", "GradientRecord"),
         ("torchlens._data_classes.op", "GradientRecordAccessor"),
         ("torchlens._data_classes.op", "Op"),
-        ("torchlens._data_classes.op", "TensorLog"),  # locked rename-map alias of Op
         ("torchlens._data_classes.param", "Param"),
         ("torchlens._data_classes.param", "ParamAccessor"),
         # Prehook-provenance snapshots (frozen dataclasses, inert data).
@@ -1339,7 +1334,7 @@ def _exception_arose_outside_vm(exc: BaseException) -> bool:
     decode / dict lookup) that adds NO Python frame; its traceback never leaves
     the two VM files. An APPLICATION/reconstruction failure -- a REDUCE
     callable's body, a ``__setstate__``, a ``find_class`` module import
-    (importlib frames), the ``_RenameAwareUnpickler`` rename hook (a bundle.py
+    (importlib frames), the ``_RenameAwareUnpickler`` subclass (a bundle.py
     frame) -- necessarily executes at least one Python frame outside them.
     Classifying by WHERE the exception arose is version-robust where enumerating
     exception TYPES is fragile: both file names are derived from live code
@@ -1394,7 +1389,7 @@ class _DenyMissingDispatch(dict):
 class SafeBundleUnpickler(pickle._Unpickler):
     """Default-deny unpickler for untrusted TorchLens bundle ``metadata.pkl``.
 
-    Applies an optional rename map (for classes moved by locked renames) and then
+    Refuses every global that only torchlens 2.x wrote with the one 2.x error, then
     gates every resolved global through the module allowlist. Anything outside the
     allowlist raises :class:`pickle.UnpicklingError` without importing or calling
     attacker-chosen code.
@@ -1414,7 +1409,6 @@ class SafeBundleUnpickler(pickle._Unpickler):
         self,
         file: BinaryIO,
         *,
-        rename_map: Mapping[tuple[str, str], tuple[str, str]] | None = None,
         trust_custom_callables: bool = False,
         allowed_custom_callable_modules: Collection[str] | None = None,
     ) -> None:
@@ -1424,9 +1418,6 @@ class SafeBundleUnpickler(pickle._Unpickler):
         ----------
         file:
             Binary file object positioned at the start of a pickle stream.
-        rename_map:
-            Optional ``(module, name) -> (module, name)`` remapping applied before
-            allowlist resolution, preserving load of legitimately-renamed classes.
         trust_custom_callables:
             Whether to admit a foreign (non-torch/torchlens/numpy) callable by
             importing and resolving it. Mirrors the intervention-resolver contract:
@@ -1439,7 +1430,6 @@ class SafeBundleUnpickler(pickle._Unpickler):
         """
 
         super().__init__(file)
-        self._rename_map: Mapping[tuple[str, str], tuple[str, str]] = rename_map or {}
         self._trust_custom_callables = trust_custom_callables
         self._allowed_custom_callable_modules = (
             frozenset(allowed_custom_callable_modules)
@@ -1535,11 +1525,10 @@ class SafeBundleUnpickler(pickle._Unpickler):
         Raises
         ------
         pickle.UnpicklingError
-            If the (possibly renamed) global is not admitted by the allowlist.
+            If the global is not admitted by the allowlist.
         """
 
         refuse_pre_3_module_path(module, name)
-        module, name = self._rename_map.get((module, name), (module, name))
 
         # Safe wrappers for the two legitimately-needed but individually-dangerous
         # callables.

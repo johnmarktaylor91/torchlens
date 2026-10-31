@@ -2,12 +2,11 @@
 
 ``manifest.json`` and ``metadata.pkl`` are written together by one writer, so
 the facts both carry must agree at load or the artifact has been edited,
-truncated, or spliced from two sources. The loader compares:
-
-* the ``tlspec_version`` stamp -- the manifest's against the pickled root
-  state's; they must be equal;
-* ``n_layers`` -- the manifest's declared retained-op count against the
-  persisted ``layer_list`` length (a dropped or grafted op row).
+truncated, or spliced from two sources. The loader compares ``n_layers``, the
+manifest's declared retained-op count, against the persisted ``layer_list``
+length (a dropped or grafted op row). The ``tlspec_version`` stamps need no
+comparison here: the manifest policy and the state decoder each refuse any
+stamp other than the current one before this check runs.
 
 Refusal code: ``bundle_manifest_metadata_mismatch`` (field names the fact).
 """
@@ -35,30 +34,28 @@ def _is_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def persisted_anchor_facts(scrubbed_state: Mapping[str, Any]) -> tuple[Any, int | None]:
-    """Snapshot ``(root_stamp, persisted_row_count)`` from the unpickled root state.
+def persisted_anchor_facts(scrubbed_state: Mapping[str, Any]) -> int | None:
+    """Snapshot the persisted row count from the unpickled root state.
 
-    Taken BEFORE rehydration: the Trace state restore mutates the persisted
-    ``layer_list`` in place (F44 injected-op rows are split back out), so the
-    row count must be read from the bytes as written.
+    Taken before rehydration, which mutates the persisted ``layer_list`` in place.
     """
 
     rows = scrubbed_state.get("layer_list")
-    return scrubbed_state.get("tlspec_version"), (len(rows) if isinstance(rows, list) else None)
+    return len(rows) if isinstance(rows, list) else None
 
 
 def check_manifest_metadata_anchors(
     manifest: Any,
-    anchor_facts: tuple[Any, int | None],
+    persisted_rows: int | None,
     bundle_path: Path,
 ) -> None:
-    """Refuse a bundle whose manifest facts contradict its pickled metadata.
+    """Refuse a bundle whose manifest row count contradicts its pickled metadata.
 
     Parameters
     ----------
     manifest:
-        Parsed ``Manifest`` (``tlspec_version`` / ``n_layers`` attributes).
-    anchor_facts:
+        Parsed ``Manifest`` (``n_layers`` attribute).
+    persisted_rows:
         The :func:`persisted_anchor_facts` snapshot taken before rehydration.
     bundle_path:
         Artifact directory, named in the refusal.
@@ -66,25 +63,8 @@ def check_manifest_metadata_anchors(
     Raises
     ------
     ArtifactError
-        ``bundle_manifest_metadata_mismatch`` on a stamp or row-count conflict.
+        ``bundle_manifest_metadata_mismatch`` on a row-count conflict.
     """
-
-    root_stamp, persisted_rows = anchor_facts
-    manifest_stamp = getattr(manifest, "tlspec_version", None)
-    if (
-        isinstance(manifest_stamp, int)
-        and not isinstance(manifest_stamp, bool)
-        and isinstance(root_stamp, int)
-        and not isinstance(root_stamp, bool)
-        and root_stamp != manifest_stamp
-    ):
-        _refuse(
-            f"manifest.json declares tlspec_version={manifest_stamp} but the pickled "
-            f"Trace state carries tlspec_version={root_stamp}",
-            bundle_path=bundle_path,
-            field="tlspec_version",
-            reason="stamp_mismatch",
-        )
 
     declared_rows = getattr(manifest, "n_layers", None)
     if _is_int(declared_rows) and persisted_rows is not None and declared_rows != persisted_rows:

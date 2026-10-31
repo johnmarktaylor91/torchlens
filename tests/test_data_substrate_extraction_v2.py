@@ -20,8 +20,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_substrate import ExtractionArtifactError
-from torchlens._data_substrate.artifact import MANIFEST_SCHEMA_V2
 from torchlens._errors import InvalidArgumentError
 from torchlens.dataset_extraction import load_extraction
 from torchlens.errors import DatasetExtractionResumeError, TransformContractError
@@ -293,87 +291,6 @@ def test_model_identity_kwarg_refuses_outside_the_vocabulary(tmp_path: Path) -> 
 
 
 # --- completed-v1 migration through the public entry ---------------------------
-
-
-def _write_v1_artifact(tmp_path: Path, model: nn.Module, status: str) -> None:
-    """Write a v1 artifact whose shards hold this model's true activations.
-
-    Parameters
-    ----------
-    tmp_path:
-        Artifact directory.
-    model:
-        Model producing the shard payloads.
-    status:
-        v1 manifest status.
-    """
-
-    from torchlens.dataset_extraction import _shard_filename, _stimuli_signature
-
-    reference = tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, progress=False)
-    batches = []
-    for index, start in enumerate(range(0, 10, 4)):
-        payload = {key: value[start : start + 4] for key, value in reference.items()}
-        torch.save(payload, tmp_path / _shard_filename(index))
-        batches.append(
-            {"index": index, "file": _shard_filename(index), "n_stimuli": min(4, 10 - start)}
-        )
-    manifest = {
-        "schema": "tl_extract_manifest_v1",
-        "torchlens_version": "2.99",
-        "status": status,
-        "signature": {
-            "layer_plan": dict(_LAYERS),
-            "layers_kind": "mapping",
-            "batch_size": 4,
-            "transform": None,
-            "stimuli": _stimuli_signature(_stimuli()),
-        },
-        "stimulus_provenance": {"order": "iteration order", "n_stimuli": 10},
-        "storage": {},
-        "layers": {"relu": {}, "logits": {}},
-        "batches": batches if status == "complete" else batches[:1],
-    }
-    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-
-
-def test_completed_v1_resume_migrates_without_a_forward(tmp_path: Path) -> None:
-    """resume=True on a completed v1 artifact migrates and returns the paths."""
-
-    model = _Model(seed=0).eval()
-    _write_v1_artifact(tmp_path, model, "complete")
-    calls_before = model.n_forward_calls
-    paths = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False, resume=True
-    )
-    assert model.n_forward_calls == calls_before, "migration never runs a forward"
-    assert len(paths) == 3
-    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["schema"] == MANIFEST_SCHEMA_V2
-    assert manifest["migration"]["migrated_from"] == "tl_extract_manifest_v1"
-    loaded = load_extraction(tmp_path)
-    clean = tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, progress=False)
-    for key, tensor in clean.items():
-        assert torch.equal(loaded.activations[key], tensor)
-
-
-def test_in_progress_v1_resume_refuses_naming_unprovable_fields(tmp_path: Path) -> None:
-    """In-progress v1 recorded no identity/mode facts: v2 resume refuses typed."""
-
-    model = _Model(seed=0).eval()
-    _write_v1_artifact(tmp_path, model, "in_progress")
-    with pytest.raises(ExtractionArtifactError) as excinfo:
-        tl.extract_dataset(
-            model,
-            _stimuli(),
-            _LAYERS,
-            batch_size=4,
-            path=tmp_path,
-            progress=False,
-            resume=True,
-        )
-    assert excinfo.value.fields["code"] == "extraction_resume_v1_in_progress"
-    assert "model_identity" in excinfo.value.fields["unprovable_fields"]
 
 
 # --- the strict opaque-resume rule ---------------------------------------------
