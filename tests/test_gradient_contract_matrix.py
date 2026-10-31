@@ -37,7 +37,6 @@ from torchlens import (
     scale,
     splice_module,
     steer,
-    swap_with,
     zero_ablate,
 )
 from torchlens.intervention import (
@@ -53,6 +52,7 @@ from torchlens.intervention import (
     subspace_ablate,
     subspace_interchange,
 )
+from torchlens.intervention.helpers import swap_with
 from torchlens.intervention.stochastic import mean_fill, mean_from
 from torchlens.intervention.types import InterventionDecision
 

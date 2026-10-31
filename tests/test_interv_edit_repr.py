@@ -14,11 +14,11 @@ from torchlens.intervention.types import Edit
     [
         (tl.zero_grad(), "tl.zero_grad()"),
         (tl.scale_grad(2.0), "tl.scale_grad(2.0)"),
-        (tl.clamp_grad(low=-1.0), "tl.clamp_grad(min=-1.0)"),
+        (tl.clamp_grad(low=-1.0), "tl.clamp_grad(low=-1.0)"),
         (tl.zero_ablate(), "tl.zero_ablate()"),
         (tl.scale(0.5), "tl.scale(0.5)"),
         (tl.add_noise(0.1, seed=3), "tl.add_noise(0.1, seed=3)"),
-        (tl.clamp(min=0.0, max=1.0), "tl.clamp(min=0.0, max=1.0)"),
+        (tl.clamp(low=0.0, high=1.0), "tl.clamp(low=0.0, high=1.0)"),
     ],
 )
 def test_builtin_edit_repr_is_the_public_constructor_call(edit: Edit, expected: str) -> None:
