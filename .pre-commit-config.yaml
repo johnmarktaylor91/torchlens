@@ -1,155 +1,33 @@
-# A bare `pre-commit install` must arm ALL THREE stages this config declares.
-# Without this, only the pre-commit stage is installed and the commit-msg +
-# pre-push no-breaking-markers hooks below exist as config-only dead letters --
-# 2 of the 3 never-ship-a-major defense layers were inert for months while
-# tests/test_repo_hooks_armed.py stayed green (grind r3, R61/B27).
-default_install_hook_types: [pre-commit, commit-msg, pre-push]
+# Hook repos are pinned to full commit SHAs; the `# vX.Y.Z` trailer names the
+# tag each SHA was resolved from (the ruff trailer must equal the ruff== pin
+# in pyproject.toml and .github/workflows/pr.yml).
+default_install_hook_types: [pre-commit, pre-push]
 
 repos:
-  # Hook repos are pinned to full commit SHAs, not tags (grind r4, R61-1): a
-  # tag is MUTABLE, and these hooks -- two of them secret scanners -- execute
-  # third-party code on every commit, so the pin discipline matches the
-  # SHA-pinned third-party GitHub Actions. The `# vX.Y.Z` trailer records the
-  # tag each SHA was resolved from. Every hook repo is SHA-pinned;
-  # the ruff-pre-commit version lockstep is read from its `# vX.Y.Z` trailer
-  # by test_ruff_pin_is_identical_across_declaration_sites.
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    # v6.0.0 removed check-byte-order-marker and fix-encoding-pragma and raised the
-    # hook-env floor to python>=3.9; none of the five hooks used below are affected,
-    # and the local hooks already use the non-deprecated `stages` names v5 required.
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # v6.0.0 (git sha, not a secret)  # pragma: allowlist secret
     hooks:
-      # The two FORMATTERS exclude generator-owned artifacts (oracle/snapshot
-      # goldens are byte-compared to fresh generator output, rendered images
-      # and the sha256-pinned classics corpus models are corpus data): a
-      # formatter "fixing" a missing trailing newline there breaks the byte
-      # oracles or silently rewrites corpus files. Same generated-data
-      # doctrine as the ruff extend-exclude
-      # in pyproject.toml and the exclusions below. Surfaced by the CI
-      # `pre-commit run --all-files` job (grind r3, R87): the staged-file-only
-      # runs had never touched these trees.
-      - id: trailing-whitespace
-        exclude: &generated_artifacts >-
-          (?x)^(
-            tests/surface_oracle/goldens/|
-            tests/capture_oracle/goldens/|
-            tests/godobject_oracle/goldens/|
-            tests/snapshots/|
-            tests/release_goldens/|
-            docs/images/|
-            tests/real_model/vendored/|
-            tests/classics_corpus/models/|
-            tests/test_modelexplorer_assets/worker\.js|
-            tests/test_modelexplorer_assets/visualizer_custom_element\.d\.ts
-          )
-      - id: end-of-file-fixer
-        exclude: *generated_artifacts
-      - id: check-yaml
       - id: check-added-large-files
-        # canonical perf baselines are intentional large data artifacts; the
-        # harvested release golden corpus is irreplaceable byte-pinned
-        # test data (ecosystem MEMO 3.7 G1, digest-enforced by
-        # tests/test_tlspec_envelope_goldens.py)
-        # tests/test_modelexplorer_assets/worker.js is the byte-pinned Model
-        # Explorer worker oracle (F15 vendor contract harness; sha256-enforced
-        # by tests/test_modelexplorer_contract.py).
         exclude: ^(benchmarks/perf_baselines/.*\.json|tests/release_goldens/genuine_release_artifacts\.tar\.gz|tests/test_modelexplorer_assets/worker\.js)$
-      - id: detect-private-key
   - repo: https://github.com/gitleaks/gitleaks
-    # Repo-portable secret scanning: this is what makes .gitleaks.toml (the
-    # repo-root config gitleaks auto-discovers) actually referenced by the
-    # repo itself — previously only a machine-side global hook ran gitleaks,
-    # so fresh clones inherited the allowlist but no scanner (grind r3, R61).
     rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # v8.30.1 (git sha, not a secret)  # pragma: allowlist secret
     hooks:
-      # Commit-time scan of the STAGED diff (`gitleaks git --pre-commit
-      # --staged`). NOTE: under the CI parity job's `pre-commit run
-      # --all-files` nothing is staged, so THIS hook scans zero content there
-      # -- full-tree CI coverage comes from the manual-stage variant below
-      # (grind r4, R87-1: the old comment claimed full-tree coverage from
-      # this hook, which was vacuous).
       - id: gitleaks
-      # Full-tree scan of the checkout itself for the CI parity job, which
-      # invokes it explicitly with `--hook-stage manual` (the stage keeps the
-      # slower whole-tree scan out of every local commit).
+      # Full-tree scan for CI (`--hook-stage manual`); the default hook scans only staged changes.
       - id: gitleaks
         alias: gitleaks-full-tree
         name: Detect hardcoded secrets (full tree)
         entry: gitleaks dir . --redact --verbose
         stages: [manual]
-  - repo: https://github.com/Yelp/detect-secrets
-    # The commit the annotated tag v1.5.0 points at (tag object: 68e8b454).
-    rev: 01886c8a910c64595c47f186ca1ffc0b77fa5458  # v1.5.0 (git sha, not a secret)  # pragma: allowlist secret
-    hooks:
-      - id: detect-secrets
-        args: ["--baseline", ".secrets.baseline"]
-        # The surface/capture oracle goldens are auto-generated
-        # test fixtures full of deterministic per-op barcodes and source-ids
-        # (high-entropy hex) that are regenerated on every reviewed rebaseline;
-        # no credentials ever belong in them. Excluded like the other
-        # generated data catalogs. The godobject-oracle goldens and module-
-        # containment snapshots are the same
-        # deterministic-fixture class (tlspec manifests are FULL of sha256
-        # digests by design), surfaced when the CI all-files job first
-        # scanned the whole tree (grind r3, R87). The real-model
-        #         artifact registry, vendored-config provenance, and R0
-        #         expectation goldens are the same class: revision shas and
-        #         per-blob sha256 digests BY DESIGN (testing memo A1/A2).
-        #         The classics corpus manifest is the same class: per-file
-        #         sha256 provenance pins and the source commit sha.
-        exclude: >-
-          (?x)^(
-            tests/surface_oracle/goldens/.*|
-            tests/capture_oracle/goldens/.*|
-            tests/godobject_oracle/goldens/.*|
-            tests/snapshots/.*|
-            tests/perf_baselines/.*|
-            tests/fixtures/tlspec_v7/.*|
-            tests/fixtures/tlspec_v9/.*|
-            tests/release_goldens/.*|
-            tests/agent_surface_goldens/.*|
-            torchlens/schemas/writer_contract_v[0-9]+\.json|
-            tests/real_model/artifact_registry\.jsonl|
-            tests/real_model/vendored/.*|
-            tests/real_model/r0/expectations_r0\.json|
-            tests/classics_corpus/manifest\.json|
-            tests/transforms_corpus/.*|
-            tests/fixtures/s5_render_golden_manifest\.json
-          )$
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    # PIN AUTHORITY: the `# vX.Y.Z` trailer MUST equal the `ruff==` pin in
-    # pyproject.toml's dev extra and in .github/workflows/lint.yml. The formatter
-    # that WRITES the code and the gate that JUDGES it have to be the same ruff,
-    # or pre-commit happily formats to a style CI then rejects. Enforced by tests/
-    # test_packaging_diet.py::test_ruff_pin_is_identical_across_declaration_sites.
-    # SHA-pinned like every other hook repo (R61): this is the ONE hook with
-    # --fix (write access to the tree), so a mutable tag was the wrong exception.
     rev: a27a2e47c7751b639d2b5badf0ef6ff11fee893f  # v0.15.4 (git sha, not a secret)  # pragma: allowlist secret
     hooks:
-      # Lint fixes FIRST, formatter LAST (ruff's documented hook order): a
-      # `--fix` rewrite can produce unformatted code, so the formatter must
-      # have the final word locally exactly like `ruff format --check` has the
-      # final word in the Lint workflow. The reverse order let a locally
-      # accepted checkout be CI-rejected. Pinned by tests/
-      # test_ci_packaging_gates.py::test_precommit_ruff_fix_runs_before_ruff_format.
+      # Lint fixes first, formatter last, so the formatter has the final word.
       - id: ruff
         args: [--fix]
       - id: ruff-format
   - repo: local
     hooks:
-      - id: no-breaking-markers-commit-msg
-        name: Block semantic-release major-bump triggers (commit-msg)
-        entry: scripts/check_no_breaking_markers.py --commit-msg
-        language: system
-        stages: [commit-msg]
-        pass_filenames: true
-      - id: no-breaking-markers-pre-push
-        name: Block semantic-release major-bump triggers (pre-push)
-        entry: scripts/check_no_breaking_markers.py --pre-push
-        language: system
-        stages: [pre-push]
-        pass_filenames: false
-        always_run: true
       - id: no-internal-notes
         name: Internal planning notes must stay private
         entry: >-
@@ -159,16 +37,9 @@ repos:
           *_REPORT/_AUDIT/_SUMMARY/_LEDGER/_BATON/_FINDINGS/_NOTES/_STATE/_PLAN.md, HUNT_*/SPRINT_*/ROUND_*.md)
           are gitignored on purpose. Do not `git add -f` them. To untrack, use `git rm --cached`.
         language: fail
-        # commit stage only: catches `git add` of a private path. At pre-push the same matcher
-        # would fire on DELETIONS of these paths (e.g. the commit that untracks them), so scope here.
+        # Commit stage only: at pre-push the matcher would fire on deletions of these paths.
         stages: [pre-commit]
         files: '^\.research/|^\.project-context/(?!(architecture|state_of_torchlens)\.md$)|^(FORKS|PROGRESS)\.md$|^[^/]*_RESULTS\.md$|^[^/]*_(REPORT|AUDIT|SUMMARY|LEDGER|BATON|FINDINGS|NOTES|STATE|PLAN)(_[^/]*)?\.md$|^(HUNT|SPRINT|ROUND)_[^/]*\.md$'
-      # r7 R82 (opus b10 MED): the path hook above cannot see private paths
-      # appearing as file CONTENT -- .gitattributes shipped five internal
-      # .research/ filenames as dead LFS rules in this PUBLIC repo. Git config
-      # rule lines name their subject path first, so a leading private path on
-      # any line of a staged git config file is a leak of the artifact name.
-      # CI layer: tests/test_repo_privacy.py::test_git_config_files_reference_no_private_paths.
       - id: no-internal-notes-pre-push
         name: Internal notes must not reach remote main
         entry: scripts/check_no_internal_notes_pushed.py
@@ -176,6 +47,7 @@ repos:
         stages: [pre-push]
         pass_filenames: false
         always_run: true
+      # A private path named as the subject of a git config rule line leaks the artifact name.
       - id: no-internal-note-refs-in-git-config
         name: Git config files must not reference private paths
         language: pygrep

@@ -165,7 +165,6 @@
   "forward_kwargs"
  ],
  "plain_options": [
-  "OptionReceiptEntry",
   "suppress_mutate_warnings"
  ],
  "cells": [
