@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -363,7 +364,7 @@ def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPol
 
     policy = _CAPTURE_PRODUCER_POLICIES.get(mode)
     if policy is None:
-        emit = globals()[_EMIT_BY_MODE[mode]]
+        emit = _EMIT_BY_MODE[mode]
         policy = CaptureProducerPolicy(mode, emit)
         _CAPTURE_PRODUCER_POLICIES[mode] = policy
     return policy
@@ -725,11 +726,12 @@ def _exhaustive_capture_policy(trace: Trace, fields_dict: dict[str, Any]) -> Cap
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ._ops_exhaustive import _emit_exhaustive_operation_events  # noqa: E402
+from ._ops_predicate_events import _emit_predicate_operation_events  # noqa: E402
 from .ops import (  # noqa: E402
     _ANCESTOR_FIELD_NAMES,
     _ANCESTOR_SLOT_DESCRIPTORS,
     _CAPTURE_PRODUCER_POLICIES,
-    _EMIT_BY_MODE,
     _FUNCTION_REF_PER_OUTPUT_FIELDS,
     _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
     _LABEL_VERSION_SNAPSHOT,
@@ -737,3 +739,9 @@ from .ops import (  # noqa: E402
     CaptureProducerPolicy,
     _AncestorBitset,
 )
+
+# Producer routing by capture mode; the emitters live in their home modules above.
+_EMIT_BY_MODE: dict[CaptureProducerMode, Callable[..., Any]] = {
+    "exhaustive": _emit_exhaustive_operation_events,
+    "predicate": _emit_predicate_operation_events,
+}

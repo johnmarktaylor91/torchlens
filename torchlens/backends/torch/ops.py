@@ -506,12 +506,6 @@ class CaptureProducerPolicy:
 
 _CAPTURE_PRODUCER_POLICIES: dict[CaptureProducerMode, CaptureProducerPolicy] = {}
 
-_EMIT_BY_MODE: dict[CaptureProducerMode, str] = {
-    "exhaustive": "_emit_exhaustive_operation_events",
-    "predicate": "_emit_predicate_operation_events",
-}
-
-
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
 _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
 _LIVE_FIRE_RESULTS_ATTR = "_tl_live_fire_results"
