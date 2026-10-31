@@ -12,7 +12,6 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
@@ -407,6 +406,10 @@ def _is_buffer_state_view_dispatch(
     source = args[0]
     if not isinstance(source, torch.Tensor):
         return False
+    # Imported here: ``completeness_witness`` rebinds this function into its own
+    # globals, so a module-level name would not resolve at dispatch time.
+    from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
+
     if _is_uninitialized_lazy_tensor(source):
         return True
     return session_validated_buffer_address(trace, source) is not None
