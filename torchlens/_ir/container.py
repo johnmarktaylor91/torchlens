@@ -270,7 +270,7 @@ def _validate_container_spec(spec: ContainerSpec) -> None:
             )
         key_component = DictKey if kind == "dict" else HFKey
         for component in components:
-            if not isinstance(component, key_component) or component.key not in spec.keys:
+            if not isinstance(component, key_component) or component._key not in spec.keys:
                 raise ContainerReconstructionError(
                     f"ContainerSpec kind {kind!r} child component {component!r} is not among "
                     "the declared keys."
@@ -283,7 +283,7 @@ def _validate_container_spec(spec: ContainerSpec) -> None:
             )
         field_component = NamedField if kind == "namedtuple" else DataclassField
         for component in components:
-            if not isinstance(component, field_component) or component.name not in spec.fields:
+            if not isinstance(component, field_component) or component._name not in spec.fields:
                 raise ContainerReconstructionError(
                     f"ContainerSpec kind {kind!r} child component {component!r} is not among "
                     "the declared fields."
