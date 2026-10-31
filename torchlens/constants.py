@@ -61,7 +61,7 @@ ARG_EXPRESSIONS_FIELD = "arg_expressions"
 # artifact A/B gates) must mask exactly this set and nothing else; widening
 # it is a reviewed contract diff, because every additional row weakens the
 # reproducibility tripwire.
-ARTIFACT_VOLATILE_METADATA_FIELDS: tuple[str, ...] = (
+_ARTIFACT_VOLATILE_METADATA_FIELDS: tuple[str, ...] = (
     "random_seed",
     "capture_start_time",
     "capture_end_time",
@@ -74,7 +74,7 @@ ARTIFACT_VOLATILE_METADATA_FIELDS: tuple[str, ...] = (
     # varies exactly with forward_peak_memory (set iff a CPU delta read 0).
     "forward_peak_memory_reason",
 )
-ARTIFACT_VOLATILE_MANIFEST_FIELDS: tuple[str, ...] = (
+_ARTIFACT_VOLATILE_MANIFEST_FIELDS: tuple[str, ...] = (
     "created_at",
     "rng_state_digests",
 )
