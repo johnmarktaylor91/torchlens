@@ -3512,6 +3512,7 @@ The sections above describe each surface in depth.
 | `KernelProfileReport.session_facts` | Facts about the profiler session |
 | `Layer.is_edited` | Whether a user edit replaced the output of any pass of this layer |
 | `Layer.short_label` | Short pass-qualified label of a single-pass layer |
+| `Layer.short_layer_label` | Short layer label (no pass suffix) |
 | `LedgerEntry.is_draft` | Whether the entry is still a draft (no hypothesis declared yet) |
 | `LineageReport.message` | Human-readable status |
 | `LineageReport.start_label` | Resolved starting op label, or the requested label when lookup failed |

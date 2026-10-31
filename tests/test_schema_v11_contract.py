@@ -19,9 +19,16 @@ V11_CONTRACT = SCHEMAS / "writer_contract_v11.json"
 #: for every field added over v10. The v11 renames enter under their new
 #: spellings (the old spellings leave with no alias).
 V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
-    "grad_fn_call": {"fire_record": "keep"},
-    "layer": {"is_edited": "keep"},
-    "op": {"is_edited": "keep"},
+    "backward_pass": {"pass_number": "keep"},
+    "grad_fn_call": {"fire_record": "keep", "grad_fn_label": "keep"},
+    "layer": {"is_edited": "keep", "short_layer_label": "keep"},
+    "module_call": {"label": "keep"},
+    "op": {
+        "is_edited": "keep",
+        "pass_number": "keep",
+        "short_label": "keep",
+        "short_layer_label": "keep",
+    },
     "trace": {
         "_replay_frontier": "drop",
         "facet_functions": "drop",

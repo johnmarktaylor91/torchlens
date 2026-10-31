@@ -328,6 +328,11 @@ class OpRecord:
         return self.core.pass_index
 
     @property
+    def pass_number(self) -> int:
+        """Mirror of ``Op.pass_number`` (the IR core field is ``pass_index``)."""
+        return self.core.pass_index
+
+    @property
     def parents(self) -> tuple[ParentEdge, ...]:
         return self.core.parents
 

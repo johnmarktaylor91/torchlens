@@ -1435,7 +1435,7 @@ def _resolve_whole_site_term(node: _WholeSiteTerm, trace: Any) -> Selection:
 
     matches = _find_act_ops(trace, node.site_label)
     if node.pass_index is not None:
-        matches = tuple(op for op in matches if getattr(op, "pass_number", 1) == node.pass_number)
+        matches = tuple(op for op in matches if getattr(op, "pass_number", 1) == node.pass_index)
     if not matches:
         raise _unresolvable(
             "site_not_in_trace",

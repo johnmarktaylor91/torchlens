@@ -273,7 +273,7 @@ def pin_explicit(trace: Any, sites: tuple[str, ...]) -> list[SiteSpec]:
                 field_name="tl_" + address.replace(".", "_") + suffix,
                 module_address=address,
                 site_key=str(chosen.site_key),
-                pass_index=int(chosen.pass_index),
+                pass_index=int(chosen.pass_number),
             )
         )
     return specs
