@@ -17,7 +17,7 @@ from torchvision.models import ResNet50_Weights, resnet50
 model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2).eval()
 
 pre = torchlens.preprocessing.resolve(ResNet50_Weights.IMAGENET1K_V2)
-print(pre.record.description)   # torchvision preset: resize=232 crop=224
+print(pre.preprocessing.description)   # torchvision preset: resize=232 crop=224
 ```
 
 Note the V2 recipe resizes to 232, not the folk-memory 256 -- exactly the
@@ -34,7 +34,7 @@ model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").eval()
 
 processor = AutoImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
 pre = torchlens.preprocessing.resolve(processor)
-print(pre.record.description)
+print(pre.preprocessing.description)
 ```
 
 **timm** (the model carries its own data config; no network needed):
@@ -45,7 +45,7 @@ import timm
 model = timm.create_model("resnet18.a1_in1k", pretrained=True).eval()
 
 pre = torchlens.preprocessing.resolve(model=model)
-print(pre.record.description)
+print(pre.preprocessing.description)
 ```
 
 **open_clip** (the returned preprocess pipeline is the authority):
@@ -56,7 +56,7 @@ import open_clip
 model, _, preprocess = open_clip.create_model_and_transforms("ViT-B-32", pretrained="openai")
 
 pre = torchlens.preprocessing.resolve(preprocess)
-print(pre.record.description)
+print(pre.preprocessing.description)
 ```
 
 **torch.hub** (models declare no standard preprocessing metadata; declare
@@ -67,7 +67,7 @@ import torchlens.preprocessing
 model = torch.hub.load("pytorch/vision", "resnet18", weights=None).eval()
 
 pre = torchlens.preprocessing.resolve({"mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]})
-print(pre.record.description)
+print(pre.preprocessing.description)
 ```
 
 ## When the authority declares nothing

@@ -339,6 +339,8 @@ def doc_head(module):
 lm = DocLM().eval()
 ids = torch.randint(0, 20, (4, 6))
 data = [(ids, ids.roll(-1, dims=1))]          # (input_ids, next-token targets)
+import torchlens.mechinterp  # a submodule: import it before use
+
 traj = tl.mechinterp.measure_trajectory(lm, data, mask_input=False)
 print(traj)
 print(traj.position_means["entropy"].shape)    # [layers, positions]

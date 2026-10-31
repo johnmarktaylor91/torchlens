@@ -101,7 +101,7 @@ import torchlens.preprocessing as pp
 weights = ResNet50_Weights.IMAGENET1K_V2
 model = resnet50(weights=weights).eval()
 pre = pp.resolve(weights)               # the loader's own declared recipe
-print(pre.record.description)           # resize=232 crop=224 (V2 -- not 256/224!)
+print(pre.preprocessing.description)           # resize=232 crop=224 (V2 -- not 256/224!)
 
 features = tl.extract_dataset(
     model,
