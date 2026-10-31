@@ -136,7 +136,7 @@ def test_render_pass_reuses_layer_label_reverse_indexes(
         trace,
         entries,
         skipped_labels=skipped_labels,
-        rolled=False,
+        vis_mode="unrolled",
         depth=1000,
         show_buffer_layers="meaningful",
         collapse_fn=None,

@@ -1467,8 +1467,8 @@ def test_aesthetic_shared_module_visualizations():
 
     _vis(model, x, "shared_unrolled")
     _vis(model, x, "shared_code_panel", code_panel=True)
-    _vis(model, x, "shared_rolled", rolled=True)
-    _vis(model, x, "shared_rolled_depth1", rolled=True, depth=1)
+    _vis(model, x, "shared_rolled", vis_mode="rolled")
+    _vis(model, x, "shared_rolled_depth1", vis_mode="rolled", depth=1)
 
 
 def test_aesthetic_buffer_branch_visualizations():
@@ -1488,7 +1488,7 @@ def test_aesthetic_kitchen_sink_visualizations():
     x = torch.rand(1, 8)
 
     _vis(model, x, "kitchen_sink_unrolled", buffer_layers=True)
-    _vis(model, x, "kitchen_sink_rolled", rolled=True, buffer_layers=True)
+    _vis(model, x, "kitchen_sink_rolled", vis_mode="rolled", buffer_layers=True)
     _vis(model, x, "kitchen_sink_depth1", depth=1, buffer_layers=True)
     _vis(model, x, "kitchen_sink_depth2", depth=2, buffer_layers=True)
 
@@ -1509,17 +1509,17 @@ def test_aesthetic_loop_visualizations():
     # RecurrentParamsSimple: basic loop with shared params
     model = example_models.RecurrentParamsSimple()
     _vis(model, x_5d, "loop_simple_unrolled")
-    _vis(model, x_5d, "loop_simple_rolled", rolled=True)
+    _vis(model, x_5d, "loop_simple_rolled", vis_mode="rolled")
 
     # LoopingParamsDoubleNested: double-nested loops
     model = example_models.LoopingParamsDoubleNested()
     _vis(model, x_5d, "loop_double_nested_unrolled")
-    _vis(model, x_5d, "loop_double_nested_rolled", rolled=True)
+    _vis(model, x_5d, "loop_double_nested_rolled", vis_mode="rolled")
 
     # NestedModules: deep module nesting with recurrence
     model = example_models.NestedModules()
     _vis(model, x_5d, "nested_modules_unrolled")
-    _vis(model, x_5d, "nested_modules_rolled", rolled=True)
+    _vis(model, x_5d, "nested_modules_rolled", vis_mode="rolled")
     _vis(model, x_5d, "nested_modules_depth1", depth=1)
     _vis(model, x_5d, "nested_modules_depth2", depth=2)
 

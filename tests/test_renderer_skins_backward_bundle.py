@@ -95,7 +95,8 @@ def test_functional_draw_backward_reads_the_grouped_theme(tmp_path: Path) -> Non
     options = VisualizationOptions(
         container_path=str(tmp_path / "bwd_fn"), file_format="svg", theme="dark"
     )
-    dot = _backward_trace().draw(graph="backward", **visualization_to_render_kwargs(options)).dot
+    draw_kwargs = {**visualization_to_render_kwargs(options), "graph": "backward"}
+    dot = _backward_trace().draw(**draw_kwargs).dot
     assert f'bgcolor="{THEME_PRESETS["dark"].graph["bgcolor"]}"' in dot
 
 
