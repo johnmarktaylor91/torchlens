@@ -10,11 +10,13 @@ and you own every surface.
 import torch, torchvision.models as models, torchlens as tl
 
 model = models.resnet18(weights="IMAGENET1K_V1").eval()
+x = torch.rand(1, 3, 224, 224)  # stands in for your real, preprocessed batch
 
 log = tl.trace(model, x)                             # rung 1: your real input (best)
 log = tl.trace(model, input_size=(1, 3, 224, 224))   # rung 2: your shape, random values; disclosed
 log = tl.trace(model)                                # rung 3: inferred shape + random values; disclosed, or a teach
 log = tl.trace(lm, "The quick brown fox")            # HF models: a string IS a real input
+# (`lm` here is any Hugging Face language model you have loaded.)
 ```
 
 The rungs are exclusive by law: a real input XOR `input_size=` XOR nothing.
