@@ -8,12 +8,14 @@ purity, the ``_version``-keyed cache, and the ascii==degrade byte contract.
 """
 
 import math
+from dataclasses import replace
 
 import pytest
 import torch
 
 from torchlens._utils._torch_compat import get_cpu_half_kernels_support
 from torchlens.stats import (
+    FamilyEvidence,
     TensorStats,
     tensor_stats,
 )
@@ -360,3 +362,53 @@ def test_compat_wrapper_preserves_field_layout() -> None:
     assert "⚠" not in tensor_stats_summary(
         torch.tensor([1.0, float("nan")])
     )  # hazard marker is ASCII '!'
+
+
+@pytest.mark.parametrize("missing", ["num_nan", "num_posinf", "num_neginf"])
+def test_unknown_nonfinite_count_prevents_a_total(missing: str) -> None:
+    """One missing count makes both totals unknown, never an exact clearance."""
+
+    record = replace(tensor_stats(torch.ones(4)), **{missing: None})
+    assert record.num_nonfinite is None
+    assert record.num_finite is None
+    assert not record.has_no_finite_values
+    assert record.constant_value is None
+
+
+def test_policy_summary_defers_to_populated_family_evidence() -> None:
+    """A sampled family wins, while only reused facts summarize as reuse."""
+
+    exact = tensor_stats(torch.arange(32.0))
+    assert exact.policy == "exact"
+    sampled = replace(exact, histogram_evidence=FamilyEvidence("sampled", 32, 8))
+    assert sampled.policy == "sampled"
+    unavailable = FamilyEvidence("unavailable", 32, reason="not computed")
+    for evidence in (
+        FamilyEvidence("verdict", 32, reason="track_nonfinite"),
+        FamilyEvidence("exact", 32, reason="track_nonfinite"),
+    ):
+        reused = replace(
+            exact,
+            nonfinite_evidence=evidence,
+            extrema_evidence=unavailable,
+            mean_evidence=unavailable,
+            std_evidence=unavailable,
+            histogram_evidence=unavailable,
+        )
+        assert reused.policy == "reuse"
+        assert replace(reused, mean_evidence=exact.mean_evidence).policy == "exact"
+
+
+def test_verdict_repr_reports_presence_without_counts() -> None:
+    """A presence-only record stays renderable without inventing a census."""
+
+    record = replace(
+        tensor_stats(torch.ones(4)),
+        num_nan=None,
+        num_posinf=None,
+        num_neginf=None,
+        nonfinite_evidence=FamilyEvidence("verdict", 4, reason="track_nonfinite"),
+    )
+    line = render_core_line(record)
+    assert "nonfinite present" in line
+    assert "nan=" not in line and "+inf=" not in line and "-inf=" not in line

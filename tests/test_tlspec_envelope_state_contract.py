@@ -11,7 +11,7 @@ The MEMO 3.3 test obligations, on real bytes where the spec demands it:
   wrote (the D-ECO-10 on-disk cell plus the anti-laundering guarantee: the
   stable code survives ``tl.load``). Files a 2.x release saved refuse in
   ``tests/test_load_refuses_saved_by_2x.py``.
-- INERT inventory: ``torchlens.io.inspect_state_contract`` reports unknown
+- INERT inventory: the private ``inspect_state_contract`` scan reports unknown
   names with owning record types without loading anything and without
   refusing.
 - D-ECO-10's second assertion: the unknown-field event is registered as an

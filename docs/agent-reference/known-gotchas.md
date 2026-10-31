@@ -21,7 +21,7 @@
   `backward_peak_memory` is the largest pass peak on CPU, not a sum.
 - Distributed/sharded state is detected in `torchlens/_distributed.py` and refused at capture entry
   with `DistributedCaptureUnsupportedError`; the same detection feeds the `dtensor` / `device_mesh` /
-  `tensor_parallel` / `pipeline_parallel` rows of `tl.compat.report`, so the two cannot drift.
+  `tensor_parallel` / `pipeline_parallel` rows of `tl.report.doctor`, so the two cannot drift.
   `dtensor`, active TP hooks/styles, and `pipeline_parallel` refuse; dense parameters do not make a
   `PrepareModuleInput` redistribution safe. Only a bare inert mesh is informational. Detection is
   capability-probed (`HAS_DTENSOR`, `HAS_DEVICE_MESH`, `HAS_PIPELINING`), never version-parsed, and
@@ -126,7 +126,7 @@
   `ValueError` for TorchLens multi-pass access errors.
 - `copy()` on `Op` deep-copies graph metadata and shares tensor payloads/callables; see data_classes/AGENTS.md.
 - An in-place write to a prepared Parameter inside `forward` is a logged op (receiver positional
-  or `input=`); a frozen Parameter written with a grad-requiring operand runs tracked with its own
+  or passed as the torch `input` keyword); a frozen Parameter written with a grad-requiring operand runs tracked with its own
   `requires_grad=False` and ends a non-leaf, as in eager, so `restore_param_requires_grad` and the
   prep-time forcing skip non-leaf Parameters. Validate a fresh copy, not an already-run model: a
   deepcopy of the run model makes that Parameter a trainable leaf (torch's `Parameter.__deepcopy__`),

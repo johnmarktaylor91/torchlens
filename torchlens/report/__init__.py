@@ -85,6 +85,8 @@ __all__ = [
     "diff",
     "DiffReport",
     "doctor",
+    "DoctorReport",
+    "DoctorCheck",
     "BackwardEstimate",
     "BackwardStatus",
     "CapabilityCard",
@@ -136,14 +138,16 @@ __all__ = [
 if TYPE_CHECKING:
     from torchlens._merged._presenter import MergeReport
     from torchlens._observability._native_profile import KernelProfileReport, kernel_profile
-    from torchlens._utils import doctor
     from torchlens.differential import DiffReport, diff
+    from torchlens.report._doctor import DoctorCheck, DoctorReport, doctor
     from torchlens.validation.consolidated import InterventionValidationReport
     from torchlens.validation.diagnostics import ValidationDiagnostic, ValidationFailure
     from torchlens.validation.status import ValidationStatus
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
-    "doctor": ("torchlens._utils", "doctor"),
+    "doctor": ("torchlens.report._doctor", "doctor"),
+    "DoctorReport": ("torchlens.report._doctor", "DoctorReport"),
+    "DoctorCheck": ("torchlens.report._doctor", "DoctorCheck"),
     "ValidationStatus": ("torchlens.validation.status", "ValidationStatus"),
     "ValidationFailure": ("torchlens.validation.diagnostics", "ValidationFailure"),
     "ValidationDiagnostic": ("torchlens.validation.diagnostics", "ValidationDiagnostic"),

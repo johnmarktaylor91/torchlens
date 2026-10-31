@@ -456,35 +456,6 @@ class TraceStatsMixin(_TraceMixinBase):
 
         return nonfinite_verdict(self)
 
-    def stats_table(
-        self: "Trace",
-        *,
-        max_scan_elements: int | None = None,
-        mark_same_as_parent: bool = True,
-    ) -> Any:
-        """Per-op payload observations of ONE captured batch (C02; sumfam D18).
-
-        DOCUMENTED-UNSTABLE spelling. A FactCore projection through the
-        sound stats kernel: typed row states for unsaved / disk-backed /
-        unsupported / unscanned payloads (never a hollow zero row),
-        per-family exact/sampled evidence, and an explicit scan-cost
-        policy. Observations only -- audit owns judgments.
-
-        F10 polish (lovely item 9): rows read in graph order; ``= parent``
-        marks derive ONLY from the corroborated distribution verdict (D28)
-        and never fold by default; ``max_scan_elements`` is the D29
-        total-budget request, echoed in the table header with typed
-        ``unscanned`` rows; ``sort_rows`` discloses sampled-column sorts.
-        """
-
-        from ..report._stats_table import build_stats_table
-
-        return build_stats_table(
-            self,
-            max_scan_elements=max_scan_elements,
-            mark_same_as_parent=mark_same_as_parent,
-        )
-
     @property
     def unknown_flop_ops(self: "Trace") -> tuple[Any, ...]:
         """Named ledger of ops with unknown FLOPs, grouped by op name.

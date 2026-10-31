@@ -102,3 +102,24 @@ def test_echo_mounts_and_stays_pure() -> None:
     assert "EchoObserver(" in line and "lines echoed" in line
     assert "\n" not in line
     echoed.cleanup()
+
+
+def test_treescope_verdict_evidence_is_not_an_exact_census() -> None:
+    """The shared-record projection must preserve presence-only evidence."""
+
+    from dataclasses import replace
+
+    from torchlens.stats import FamilyEvidence
+
+    stats = replace(
+        tensor_stats(torch.arange(4.0)),
+        num_nan=None,
+        num_posinf=None,
+        num_neginf=None,
+        nonfinite_evidence=FamilyEvidence("verdict", 4, reason="track_nonfinite"),
+    )
+    fields = treescope_card_fields(stats)
+    assert fields["evidence"]["nonfinite"] == "verdict"
+    assert fields["nan_count"] is None and fields["posinf_count"] is None
+    assert fields["neginf_count"] is None
+    assert "nonfinite present" in fields["line_ascii"]

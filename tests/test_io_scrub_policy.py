@@ -346,7 +346,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "annotate": "user annotation writer (mutates trace annotations by contract)",
     "using": "appliance door: returns what a registered factory builds; it writes nothing "
     "on the trace (each appliance's own reads are its owner's to sweep)",
-    "with_annotations": "user annotation writer (mutating fluent spelling)",
     "add_node_overlay": "mutates the overlay table consumed by draw",
     "attach_hooks": "mutates the live model's hook registry",
     "clear_hooks": "mutates the live model's hook registry",
@@ -442,10 +441,6 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         # catch, and a presenter that builds a sub-DAG view is a prime candidate.
         "bill_of_materials": lambda t: t.bill_of_materials(),
         "sites": lambda t: t.sites(),
-        # C02: a pure read over retained payloads (typed row states, no
-        # persistence side effects) -- swept for the same reason as
-        # sites_table/bill_of_materials.
-        "stats_table": lambda t: t.stats_table(),
         # F09 (sumfam D24): the capability card is a metadata-only read of
         # the SurfaceRegistry filtered by this object -- swept like the
         # other pure report reads.

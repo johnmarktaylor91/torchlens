@@ -346,7 +346,7 @@ def _c10d_group_seq(group: Any) -> tuple[int | None, str | None]:
     shape): a private-API rename used to silently and permanently disable
     this redundant correlation cross-check -- the only in-band detector in
     the base-misalignment neighborhood -- with zero visibility in
-    ``doctor()`` / ``compat.report()``.
+    ``tl.report.doctor()``.
 
     Returns
     -------
@@ -356,7 +356,7 @@ def _c10d_group_seq(group: Any) -> tuple[int | None, str | None]:
         indistinguishable downstream from honest capability absence, so the
         only in-band base-misalignment cross-check vanished with zero
         visibility. It now demotes the capability through the standard
-        degradation channel (visible in ``doctor()`` / ``compat.report()``)
+        degradation channel (visible in ``tl.report.doctor()``)
         and returns the ``"c10d_group_seq_read_failed"`` disclosure token for
         the boundary record where the witness vanished.
     """

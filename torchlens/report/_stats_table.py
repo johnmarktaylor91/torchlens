@@ -1,4 +1,4 @@
-"""stats_table: per-site payload observations as a FactCore projection.
+"""The per-site payload observation table behind ``summary(view="stats")``.
 
 sumfam item 18 / D18 (C02 substrate) + the F10 polish (lovely item 9):
 observations of ONE CAPTURED BATCH -- per-site count, moments, extrema,
@@ -40,10 +40,10 @@ if TYPE_CHECKING:
 STATS_ROW_STATES: tuple[str, ...] = ("ok", "unsaved", "disk_backed", "unsupported", "unscanned")
 
 #: The explicit scan-cost policy line (D4: no surface implicitly triggers a
-#: payload scan without saying so; the caller invoked stats_table, which IS
+#: payload scan without saying so; the caller asked for the stats view, which IS
 #: the explicit request).
 SCAN_COST_POLICY = (
-    "stats_table scans every RETAINED payload once through the sound kernel "
+    "summary(view='stats') scans every RETAINED payload once through the sound kernel "
     "(exact families per the per-family policy; sampled families marked ~); "
     "disk-backed payloads are NOT materialized"
 )
@@ -135,7 +135,7 @@ class StatsTable:
 
         if by not in _SORTABLE_FIELDS:
             raise ValueError(
-                f"stats_table cannot sort on {by!r}; sortable fields are "
+                f"the stats table cannot sort on {by!r}; sortable fields are "
                 f"{sorted(_SORTABLE_FIELDS)} (closed vocabulary)."
             )
 
@@ -207,7 +207,11 @@ class StatsTable:
                     "max": None if stats is None else stats.finite_max,
                     "zero_count": None if stats is None else stats.num_zero,
                     "nan_count": None if stats is None else stats.num_nan,
-                    "inf_count": (None if stats is None else stats.num_posinf + stats.num_neginf),
+                    "inf_count": (
+                        None
+                        if stats is None or stats.num_posinf is None or stats.num_neginf is None
+                        else stats.num_posinf + stats.num_neginf
+                    ),
                     "sampled": None if stats is None else stats.std_evidence.is_sampled,
                     "same_as_parent": row.parent_mark,
                     "relation_basis": row.relation_basis,
@@ -250,7 +254,7 @@ def _row_state(op: Any) -> tuple[str, str | None]:
     if state == "present":
         return "ok", None
     if state == "lazy":
-        return "disk_backed", "payload is a lazy blob ref; not materialized by stats_table"
+        return "disk_backed", "payload is a lazy blob ref; not materialized by the stats view"
     if getattr(op, "has_saved_activation", False):
         return "unsaved", "saved at capture; no bytes in THIS object"
     return "unsaved", "not retained by the capture-time save= decision"
@@ -275,7 +279,7 @@ def build_stats_table(
     trace: Trace,
     *,
     max_scan_elements: int | None = None,
-    mark_same_as_parent: bool = True,
+    grain: str = "op",
 ) -> StatsTable:
     """Build the per-op observation table over one finished trace.
 
@@ -289,9 +293,10 @@ def build_stats_table(
         budget; later retained rows become typed ``unscanned`` rows and
         the header echoes the budget with the exact skip count. ``None``
         (default) scans everything the scan-cost policy licenses.
-    mark_same_as_parent:
-        Whether to derive the D28 distribution marks (cheap metadata
-        reads; no payload access). Marks never fold by default.
+    grain:
+        ``"op"`` (one row per executed op) or ``"module"`` (one row per
+        module-output payload). The ``= parent`` marks are always derived
+        (cheap metadata reads; no payload access) and never fold by default.
 
     Returns
     -------
@@ -308,6 +313,8 @@ def build_stats_table(
     scanned_elements = 0
     skipped_by_budget = 0
     for op in getattr(trace, "layer_list", ()) or ():
+        if grain == "module" and not getattr(op, "is_module_output", False):
+            continue
         label = str(getattr(op, "label", getattr(op, "layer_label", "?")))
         state, reason = _row_state(op)
         stats = None
@@ -331,9 +338,7 @@ def build_stats_table(
                             state, reason, stats = "unsupported", unavailable, None
             else:
                 state, reason = "unsupported", f"non-torch payload ({type(payload).__name__})"
-        parent_mark, relation_basis = (None, None)
-        if mark_same_as_parent:
-            parent_mark, relation_basis = _parent_mark(trace, op)
+        parent_mark, relation_basis = _parent_mark(trace, op)
         rows.append(
             StatsTableRow(
                 row_id=f"op:{label}",

@@ -124,6 +124,8 @@ class SummaryReport(str):
     _totals: SummaryTotals
     _capture: CaptureFacts
     _rebuilt: Any
+    _stats: Any
+    _stats_columns: tuple[str, ...]
 
     def __new__(
         cls,
@@ -133,8 +135,14 @@ class SummaryReport(str):
         totals: SummaryTotals,
         capture: CaptureFacts,
         rebuilt: Any = None,
+        stats: Any = None,
+        stats_columns: tuple[str, ...] = (),
     ) -> SummaryReport:
-        """Build the report around the rendered text."""
+        """Build the report around the rendered text.
+
+        ``stats`` is the typed observation table behind ``view="stats"``:
+        then ``rows`` serves its rows and ``to_pandas()`` its frame.
+        """
 
         # The payload is the canonical ASCII contract on every build path
         # (summary D1): a non-ASCII name degrades one character per character.
@@ -143,6 +151,8 @@ class SummaryReport(str):
         report._totals = totals
         report._capture = capture
         report._rebuilt = rebuilt
+        report._stats = stats
+        report._stats_columns = stats_columns
         return report
 
     def __repr__(self) -> str:
@@ -173,6 +183,8 @@ class SummaryReport(str):
 
         if style == "ascii":
             return str(self)
+        if self._stats is not None and style in ("unicode", "html"):
+            return str(self) if style == "unicode" else self._stats_html()
         payload = self._rebuilt_or_refuse("render")
         if style == "unicode":
             return str(payload.unicode_text)
@@ -220,6 +232,8 @@ class SummaryReport(str):
     def to_pandas(self, scope: str = "display") -> Any:
         """Typed DataFrame projection ('display' rows or 'all' op grain)."""
 
+        if self._stats is not None:
+            return self._stats.to_pandas()
         from ._summary_result import result_to_pandas
 
         return result_to_pandas(self, scope)
@@ -227,6 +241,10 @@ class SummaryReport(str):
     def to_markdown(self) -> str:
         """GitHub-flavored markdown table of the rendered rows."""
 
+        if self._stats is not None:
+            from ._stats_view import stats_rows_markdown
+
+            return stats_rows_markdown(self._stats, self._stats_columns)
         from ._summary_result import result_to_markdown
 
         return result_to_markdown(self)
@@ -234,6 +252,8 @@ class SummaryReport(str):
     def to_html(self) -> str:
         """The dependency-free escaped HTML fragment."""
 
+        if self._stats is not None:
+            return self._stats_html()
         payload = self._rebuilt_or_refuse("to_html")
         from ._summary_result import render_result_html
 
@@ -296,10 +316,19 @@ class SummaryReport(str):
         return self._capture.outcome_status
 
     @property
-    def rows(self) -> tuple[SummaryRow, ...]:
-        """Typed rows (op grain in the substrate; F08 adds rollups)."""
+    def rows(self) -> tuple[Any, ...]:
+        """Typed rows: the stats rows of a ``view="stats"`` report, else the summary rows."""
 
+        if self._stats is not None:
+            return tuple(self._stats.rows)
         return self._rows
+
+    def _stats_html(self) -> str:
+        """The stats table as an escaped preformatted block."""
+
+        import html
+
+        return "<pre>" + html.escape(str(self)) + "</pre>"
 
     @property
     def totals(self) -> SummaryTotals:
@@ -329,12 +358,26 @@ class SummaryReport(str):
                 key: (dict(value) if isinstance(value, dict) else value)
                 for key, value in self._totals.__dict__.items()
             },
-            "rows": [dict(row.__dict__) for row in self._rows],
+            "rows": self._dict_rows(),
         }
+
+    def _dict_rows(self) -> list[dict[str, Any]]:
+        """JSON-safe rows: stats rows carry their rendered cells, summary rows their fields."""
+
+        if self._stats is None:
+            return [dict(row.__dict__) for row in self._rows]
+        from ._stats_view import STATS_COLUMNS, _cell
+
+        return [
+            {"row_id": row.row_id, **{column: _cell(row, column) for column in STATS_COLUMNS}}
+            for row in self._stats.rows
+        ]
 
     def _repr_html_(self) -> str:
         """Dependency-free escaped HTML table (the F08 renderer when rebuilt)."""
 
+        if self._stats is not None:
+            return self._stats_html()
         if self._rebuilt is not None:
             from ._summary_result import render_result_html
 

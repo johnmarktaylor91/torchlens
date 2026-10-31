@@ -19,7 +19,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._deploy_env import restore_state_dict_resilient
-from torchlens.compat import report
+from torchlens.report import doctor as report
 
 bnb = pytest.importorskip("bitsandbytes")
 

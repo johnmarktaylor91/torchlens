@@ -7,7 +7,7 @@ geometries explicitly so no reader ever guesses which one it is looking at
 (design-merge-ranks-c v5, 1.7 amendment 2). This module is the one extraction
 point:
 
-* the ``dtensor`` / ``tensor_parallel`` findings and ``tl.compat.report``
+* the ``dtensor`` / ``tensor_parallel`` findings and ``tl.report.doctor``
   rows attach per-site dual geometry, so a refused TP/FSDP2 model is refused
   with its parameters precisely IDENTIFIED (logical shape, placements, shard
   offset) instead of silently mis-counted;

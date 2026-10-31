@@ -10,7 +10,7 @@ scheduled with later work.
 A model that holds `DTensor` or `ShardedTensor` state, or has active
 tensor-parallel hooks or styles, is refused at capture entry with
 `tl.errors.DistributedCaptureUnsupportedError` (finding kinds `dtensor` and
-`tensor_parallel`; `tl.compat.report()` shows the same rows). The reason is
+`tensor_parallel`; `tl.report.doctor()` shows the same rows). The reason is
 fidelity, not effort: DTensor's real work happens under `__torch_dispatch__`,
 below the `__torch_function__` layer TorchLens wraps, so an unguarded capture
 records rank-local view and reshape shims instead of the real ops and reports

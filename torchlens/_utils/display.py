@@ -391,6 +391,8 @@ def tensor_stats_summary(tensor: Any) -> str:
         if stats.num_true is not None:
             # bool family: the truth rate IS the semantics (lovely D12).
             return f"{prefix} true={stats.num_true}/{stats.numel}"
+        if stats.num_nan is None or stats.num_posinf is None or stats.num_neginf is None:
+            return prefix
         numel = stats.numel
         nan_percent = 100.0 * stats.num_nan / numel
         inf_percent = 100.0 * (stats.num_posinf + stats.num_neginf) / numel

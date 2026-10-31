@@ -220,7 +220,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   captured as a buffer too, addressed `<module>.<attr>`, `<module>.<attr>.<index>`, or
   `<module>.<attr>.<key>`.
   parent, not as a parameter edge, so it is absent from that read's `params`.
-  The receiver may be given by keyword (`torch.clamp_(input=p, ...)`). A frozen Parameter written
+  The receiver may be given by keyword, as the `input` keyword of `torch.clamp_`. A frozen Parameter written
   in place with a grad-requiring operand ends the pass a non-leaf, exactly as in eager. An `out=`
   write into a Parameter (`torch.add(a, b, out=p)`) is not captured yet; validation reports it as
   a completeness failure.
@@ -3060,6 +3060,7 @@ describe each surface in depth.
 | `tl.recording.dry_run` | Run predicates over one forward pass without retaining tensor payloads |
 | `tl.recording.recover` | Recover a finalized or partial recording bundle |
 | `tl.stats.RunningStats` | Always-on scalar spine accumulator (StreamingStat; D8) |
+| `tl.stats.TensorStats` | Frozen tensor statistics shared by tensor displays and narration; per-family evidence owns every claim |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
 | `tl._quickstart.Drawing` | Detached one-call render result. Always returned, never None |
 | `tl.stats.NarrationObserver` | Live stats-line echo mounted on the shipped observer surface |
@@ -3128,6 +3129,7 @@ describe each surface in depth.
 | `FacetSpec.function_id` | Recipe identifier that produced this facet |
 | `FacetSpec.function_version` | Recipe version that produced this facet |
 | `FacetView.function_source` | Return recipe name provenance for this view |
+| `FamilyEvidence.policy` | `exact`, `sampled`, `unavailable`, or nonfinite presence-only `verdict`; unavailable evidence carries a reason |
 | `FamilyEvidence.is_sampled` | Whether this family rode the seeded gathered sample |
 | `GraphNode.token_id` | Token id: the input token at ``position`` (token nodes) or the target vocabulary id (logit nodes) |
 | `HeadScores.eligible_rows` | field of `HeadScores` |
@@ -3185,18 +3187,26 @@ describe each surface in depth.
 | `SavePlan.estimated_bytes` | Return the summed payload estimate for the named sites |
 | `SavePlan.module_subtrees` | field of `SavePlan` |
 | `SeriesPoint.is_coarsened` | field of `SeriesPoint` |
+| `TensorStats.mean_evidence` | `FamilyEvidence` with policy, population, sample size, and reason for the mean |
+| `TensorStats.nonfinite_evidence` | Exact census evidence, unavailable with a reason, or presence-only `verdict` with counts unknown |
+| `TensorStats.finite_min` | Minimum finite value, or `None`; read `extrema_evidence` for its policy |
+| `TensorStats.finite_max` | Maximum finite value, or `None`; read `extrema_evidence` for its policy |
+| `TensorStats.mean` | Mean, or `None`; read `mean_evidence` for its policy |
+| `TensorStats.numel` | Number of elements in the tensor |
+| `TensorStats.nbytes` | Tensor payload bytes, or `None` when unknown |
 | `TensorStats.has_no_finite_values` | Whether no element is finite (the fully poisoned case) |
 | `TensorStats.is_all_false` | bool family: every element false (exact) |
 | `TensorStats.is_all_true` | bool family: every element true (exact) |
 | `TensorStats.is_all_zero` | Whether every element is exactly zero (exact claim) |
 | `TensorStats.is_magnitude_based` | field of `TensorStats` |
-| `TensorStats.num_finite` | Elements with finite values |
-| `TensorStats.num_nan` | field of `TensorStats` |
-| `TensorStats.num_neginf` | field of `TensorStats` |
-| `TensorStats.num_nonfinite` | Total nonfinite elements |
-| `TensorStats.num_posinf` | field of `TensorStats` |
+| `TensorStats.num_finite` | Elements with finite values, or `None` when any nonfinite count is unknown |
+| `TensorStats.num_nan` | Exact count, or `None` when unknown |
+| `TensorStats.num_neginf` | Exact count, or `None` when unknown |
+| `TensorStats.num_nonfinite` | Total nonfinite elements, or `None` when any count is unknown |
+| `TensorStats.num_posinf` | Exact count, or `None` when unknown |
 | `TensorStats.num_true` | field of `TensorStats` |
 | `TensorStats.num_zero` | field of `TensorStats` |
+| `TensorStats.policy` | Read-only family summary: `sampled` if any family is sampled, `reuse` if only reused facts are present, otherwise `exact` |
 | `TensorStats.std` | field of `TensorStats` |
 | `TensorStats.std_evidence` | field of `TensorStats` |
 | `TensorStats.std_se` | field of `TensorStats` |
@@ -3336,7 +3346,9 @@ The sections above describe each surface in depth.
 | `tl.report.ValidationStatus` | Machine-readable replay-validation availability or result |
 | `tl.report.compare_topology` | Compare two Traces structurally |
 | `tl.report.diff` | The same function as `tl.differential.diff` |
-| `tl.report.doctor` | Run a TorchLens startup health check (no arguments) |
+| `tl.report.DoctorReport` | Environment and optional model compatibility report; records are constructed by TorchLens |
+| `tl.report.DoctorCheck` | One diagnostic row; constructor keywords are outside the public contract |
+| `tl.report.doctor` | Inspect the environment always, and a model/input tree when supplied; never executes the supplied model |
 | `tl.report.kernel_profile` | Run one save-nothing capture under the owned session and join it |
 | `tl.trackers.HistoryReader` | Read one artifact without loading the run or importing a model |
 | `tl.trackers.correct_running_stats` | Apply the closed-form unscale correction to one spine record |
@@ -3437,9 +3449,20 @@ The sections above describe each surface in depth.
 | `ClipLedgerSnapshot.has_constancy_hint` | Whether the clip ledger saw a constant clipping pattern worth hinting |
 | `CloseReport.is_disabled` | Whether the watcher was disabled |
 | `CloseReport.is_final_sample_forced` | Whether close forced a final sample |
-| `CompatReport.check` | Return one report row by stable key |
-| `CompatReport.checks` | Truth-table rows for the inspected model/input pair |
-| `CompatRow.is_detected` | Whether the row's condition was detected in the supplied model/input |
+| `DoctorReport.check` | Return one diagnostic row by stable key; raises KeyError for an unknown key |
+| `DoctorReport.checks` | Ordered tuple of environment and optional model checks |
+| `DoctorReport.torch_version` | Installed PyTorch version, always set |
+| `DoctorReport.model_type` | Qualified model type, or None for an environment-only report |
+| `DoctorReport.capability_snapshot` | Full named runtime capability mapping |
+| `DoctorReport.to_markdown` | Return the diagnostic table as Markdown |
+| `DoctorReport.show` | Print and return the fixed-width table; str(report) returns the same text |
+| `DoctorCheck.key` | Stable row key; environment keys retain probe names except torch_capabilities |
+| `DoctorCheck.label` | Readable diagnostic title |
+| `DoctorCheck.status` | pass, known_broken, scope, or not_tested |
+| `DoctorCheck.severity` | ok, info, warning, or error |
+| `DoctorCheck.is_detected` | Detected condition; environment rows use status other than pass |
+| `DoctorCheck.details` | Diagnostic explanation |
+| `DoctorCheck.suggestion` | Remedy text or an empty string |
 | `ConformanceReport.is_claim_eligible` | `True` only when the pretrained-family floor is met; toys earn nothing regardless of pass rate |
 | `CostTreeRow.num_unknown_ops` | Directly-owned ops with no cost rule |
 | `DeterminismReport.first_problem` | Project the first divergence into the shared vocabulary |
@@ -3524,6 +3547,7 @@ The sections above describe each surface in depth.
 | `MergedTrace.at` | Return the SPMD fan: the ops matching `label` on every rank |
 | `MergedTrace.degradations` | Environment degradations recorded at load (empty on a live merge) |
 | `ModuleCall.parent_label` | Label of the parent ModuleCall in the dynamic call tree |
+| `NarrationEvent.stats` | `tl.stats.TensorStats` for this tensor, or `None` when no statistics were requested or available |
 | `NarrationEvent.has_intervention` | Whether an intervention acted at this event |
 | `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
 | `PreprocessingComparison.applied_source` | How the applied side was obtained: `"resolution"` / `"declaration"` / `"parsed_transform"` / `"undeclared"` / `"opaque_transform"` |
@@ -3663,7 +3687,7 @@ Members of classes whose public home changed, one entry per class.
 : Frozen reproducibility record for one subspace basis. `BasisProvenance.space_dim`: dimension of the space the basis lives in.
 
 **`tl.types.NarrationEvent`**
-: One immutable narration record. `NarrationEvent.extra_labels`: extra (key, value) labels; `NarrationEvent.late`: ordinal distance disclosed on a buffered release; `NarrationEvent.module_depth`: nesting depth of the module; `NarrationEvent.module_type`: class name of the module, or `None`; `NarrationEvent.ordinal`: position of the event in the narration; `NarrationEvent.output_index`: index of the output, or `None`; `NarrationEvent.source_location`: the source location, or `None`; `NarrationEvent.step_index`: the step index, or `None`.
+: One immutable narration record. `NarrationEvent.stats` holds `tl.stats.TensorStats` or `None`; sampled narration omits the finiteness family, while a reused positive verdict renders "nonfinite present" without a count. `NarrationEvent.extra_labels`: extra (key, value) labels; `NarrationEvent.late`: ordinal distance disclosed on a buffered release; `NarrationEvent.module_depth`: nesting depth of the module; `NarrationEvent.module_type`: class name of the module, or `None`; `NarrationEvent.ordinal`: position of the event in the narration; `NarrationEvent.output_index`: index of the output, or `None`; `NarrationEvent.source_location`: the source location, or `None`; `NarrationEvent.step_index`: the step index, or `None`.
 
 **`tl.types.TraceSlice`**
 : Frozen presenter over one trace's executed sub-DAG. `TraceSlice.as_region`: derive an admissible region that is operated on as one unit; `TraceSlice.source_trace`: the trace this slice views (never copied).
@@ -3719,6 +3743,8 @@ Members of classes whose public home changed, one entry per class.
 | `has_validation_replay=` | field and constructor keyword of `BackendCapabilities` |
 | `history_id=` | keyword of `Bundle.effects`: which recorded history to read |
 | `input_op=` | keyword of the receptive-field queries (`Trace.receptive_fields`, `Trace.projective_fields`): the input op to measure against |
+| `max_scan_elements=` | keyword of `Trace.summary(view="stats")`: the payload-scan element budget; later retained rows become typed `unscanned` rows; refused typed with any other view |
+| `stats_columns=` | constructor keyword of `SummaryReport`: the stats-view column names the report renders, set by `Trace.summary(view="stats")` from `columns=` |
 | `input_route=` | keyword of `tl.splice_module`: the route name for the spliced input |
 | `is_analysis_load_available=` | field and constructor keyword of `RunnableDiagnostic` |
 | `is_audited=` | field and constructor keyword of `ScanRow` |
@@ -3729,7 +3755,6 @@ Members of classes whose public home changed, one entry per class.
 | `is_complete=` | field and constructor keyword of `InterventionValidationReport` |
 | `is_consistent=` | field and constructor keyword of `InterventionValidationReport` |
 | `is_constant=` | field and constructor keyword of `ScanRow` |
-| `is_detected=` | field and constructor keyword of `CompatRow` |
 | `is_disabled=` | field and constructor keyword of `CloseReport` |
 | `is_enabled=` | field and constructor keyword of `ScaleLedgerSnapshot` |
 | `is_final_sample_forced=` | field and constructor keyword of `CloseReport` |

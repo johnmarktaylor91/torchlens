@@ -185,7 +185,7 @@ class BeltReport:
     not be measured, so it is neither belt-patched nor proven mode-visible.
     A stale pre-wrap reference to it would lose ops with zero signal while
     the capture still reports ``capture_verified=True``. Consumers
-    (``torchlens.report.doctor()`` and ``torchlens.compat.report()``) surface
+    (``torchlens.report.doctor()``) surface
     these rows; the details make the failure actionable per build.
     """
 
@@ -331,7 +331,7 @@ def belt_report() -> BeltReport | None:
     the dead generation are reversed and the belt re-derives.
 
     From a NON-OWNER thread while a capture is live (``doctor()`` /
-    ``compat.report()`` polled during a long forward), the cached report is
+    ``report.doctor()`` polled during a long forward), the cached report is
     served READ-ONLY (r8 R54 belt pair): deriving would evaluate probe
     originals under the global-RNG snapshot/restore bracket, and the restore
     would REWIND any draws the capture made in between -- silently repeating

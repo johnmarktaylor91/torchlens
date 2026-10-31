@@ -191,6 +191,10 @@ def build_rebuilt_summary(
 
     from ._summary_report import SummaryReport, build_summary_data
 
+    if config.view == "stats":
+        from ._stats_view import build_stats_summary
+
+        return build_stats_summary(trace, config)
     if config.flop_convention == "fma1":
         from ._factcore import factcore
 

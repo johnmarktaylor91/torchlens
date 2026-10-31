@@ -37,7 +37,7 @@ def _facet_value(module: Any, name: str, address: str) -> torch.Tensor:
             code="tv_facet_missing",
             message=f"Module {address!r} exposes no {name!r} facet.",
             remedy="capture an attention module with q/k/scores facets (eager "
-            "attention; see tl.compat.report)",
+            "attention; see tl.report.doctor)",
             address=address,
         )
     value = view[name].value

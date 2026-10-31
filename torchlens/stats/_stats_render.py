@@ -143,13 +143,17 @@ def _zero_field(stats: TensorStats) -> str | None:
 def _health_fields(stats: TensorStats) -> list[str]:
     """NaN / +Inf / -Inf, separate, printed whenever nonzero (D11)."""
 
+    if stats.nonfinite_evidence.policy == "verdict":
+        return ["nonfinite present"]
+    if stats.nonfinite_evidence.policy != "exact":
+        return []
     fields = []
     for name, count in (
         ("nan", stats.num_nan),
         ("+inf", stats.num_posinf),
         ("-inf", stats.num_neginf),
     ):
-        if count == 0:
+        if count is None or count == 0:
             continue
         fraction = count / stats.numel
         if fraction >= 0.001:

@@ -181,7 +181,7 @@ def test_m14_all_capabilities_present_reports_pass(monkeypatch: pytest.MonkeyPat
 def test_m14_status_is_a_valid_doctorcheck_value() -> None:
     """WARN is part of the DoctorCheck status vocabulary (guards a typo regression)."""
 
-    valid = tl_utils.DoctorCheck.__annotations__["status"]
+    valid = tl_utils._EnvironmentCheck.__annotations__["status"]
     # Literal["PASS", "FAIL", "SKIP", "WARN"] -> the string must mention WARN.
     assert "WARN" in str(valid) and "PASS" in str(valid)
 

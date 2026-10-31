@@ -1,4 +1,4 @@
-"""F10 lovely item 8/9: edge semantics (D28) + stats_table polish laws.
+"""F10 lovely item 8/9: edge semantics (D28) + stats view polish laws.
 
 The two axes are independent: ``expand``/``split`` are VIEWS that change
 the multiset; ``clone``/``contiguous`` copy/re-layout the SAME one. Every
@@ -17,6 +17,7 @@ from torchlens.intervention.edge_semantics import (
     classify_view_or_copy,
     distribution_relation,
 )
+from torchlens.report._stats_table import build_stats_table
 
 
 class _EdgeZoo(nn.Module):
@@ -106,7 +107,7 @@ def test_classifier_is_slot0_only() -> None:
 def test_stats_table_marks_budget_sort_fold(zoo_trace) -> None:
     """Item 9: marks from D28 only; budget typed; sorts disclosed."""
 
-    table = zoo_trace.stats_table()
+    table = build_stats_table(zoo_trace)
     assert "graph (execution) order" in repr(table)
     marked_rows = [row for row in table.rows if row.parent_mark]
     marked = {row.label.split("_")[0] for row in marked_rows}
@@ -114,10 +115,10 @@ def test_stats_table_marks_budget_sort_fold(zoo_trace) -> None:
     assert "expand" not in marked and "add" not in marked
     assert all("func_semantics:" in row.relation_basis for row in marked_rows)
 
-    budgeted = zoo_trace.stats_table(max_scan_elements=20)
+    budgeted = zoo_trace.summary(view="stats", max_scan_elements=20)
     states = {row.state for row in budgeted.rows}
     assert "unscanned" in states
-    assert "budget: max_scan_elements=20" in repr(budgeted)
+    assert "budget: max_scan_elements=20" in str(budgeted)
     unscanned = next(row for row in budgeted.rows if row.state == "unscanned")
     assert unscanned.stats is None and "budget" in unscanned.reason
 
@@ -134,9 +135,10 @@ def test_stats_table_marks_budget_sort_fold(zoo_trace) -> None:
 def test_marks_never_fold_by_default(zoo_trace) -> None:
     """D28: the default table keeps every marked row visible."""
 
-    table = zoo_trace.stats_table()
+    table = build_stats_table(zoo_trace)
     assert any(row.parent_mark for row in table.rows)
     assert table.fold_note is None
+    assert "rows folded" not in str(zoo_trace.summary(view="stats"))
 
 
 @pytest.mark.smoke
@@ -144,7 +146,7 @@ def test_to_pandas_carries_relation_columns(zoo_trace) -> None:
     """The tabular exit preserves the mark and its proof provenance."""
 
     pytest.importorskip("pandas")
-    frame = zoo_trace.stats_table().to_pandas()
+    frame = zoo_trace.summary(view="stats").to_pandas()
     assert "same_as_parent" in frame.columns
     assert "relation_basis" in frame.columns
     assert frame.attrs["ordering"].startswith("rows in graph")

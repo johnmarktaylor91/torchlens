@@ -2,7 +2,7 @@
 
 Before this guard, a tensor-parallel model traced "successfully" while reporting
 ``0 total modules`` and ``0 params total; 0 B`` -- the ``linear`` op replaced by
-bare ``viewas`` nodes -- and ``tl.compat.report`` reported all-pass for the same
+bare ``viewas`` nodes -- and ``tl.report.doctor`` reported all-pass for the same
 model. These tests pin the honest replacement: four report rows and a typed
 refusal at capture entry.
 
@@ -208,7 +208,7 @@ def test_dense_model_rows_all_pass_and_capture_succeeds() -> None:
 
     model = TinyModel()
     x = torch.randn(2, 4)
-    report = tl.compat.report(model, x)
+    report = tl.report.doctor(model, x)
     for key in DISTRIBUTED_ROW_KEYS:
         row = report.check(key)
         assert row.status == "pass", f"{key} status"
@@ -224,7 +224,7 @@ def test_dense_model_rows_all_pass_and_capture_succeeds() -> None:
 def test_all_four_rows_are_always_present() -> None:
     """The rows exist whether or not anything was detected."""
 
-    report = tl.compat.report(TinyModel(), torch.randn(2, 4))
+    report = tl.report.doctor(TinyModel(), torch.randn(2, 4))
     keys = {row.key for row in report.checks}
     for key in DISTRIBUTED_ROW_KEYS:
         assert key in keys
@@ -624,7 +624,7 @@ def test_report_row_marks_refusal_and_matches_detection() -> None:
     model = TinyModel()
     model.fc.weight = nn.Parameter(_fake_dtensor((4, 4)), requires_grad=False)
 
-    row = tl.compat.report(model, torch.randn(2, 4)).check("dtensor")
+    row = tl.report.doctor(model, torch.randn(2, 4)).check("dtensor")
     assert row.is_detected is True
     assert row.status == "scope"
     assert row.severity == "error"
@@ -644,18 +644,18 @@ def test_non_refusing_row_is_warning_not_error(monkeypatch: pytest.MonkeyPatch) 
     )
     model = TinyModel()
     model.stages = [_FakePipelineStage()]  # type: ignore[assignment]
-    refusing_row = tl.compat.report(model, torch.randn(2, 4)).check("pipeline_parallel")
+    refusing_row = tl.report.doctor(model, torch.randn(2, 4)).check("pipeline_parallel")
     assert refusing_row.severity == "error"
 
-    clean_row = tl.compat.report(TinyModel(), torch.randn(2, 4)).check("device_mesh")
+    clean_row = tl.report.doctor(TinyModel(), torch.randn(2, 4)).check("device_mesh")
     assert clean_row.severity == "ok"
     assert "DistributedCaptureUnsupportedError" not in clean_row.details
 
-    dtensor_clear = tl.compat.report(TinyModel(), torch.randn(2, 4)).check("dtensor")
+    dtensor_clear = tl.report.doctor(TinyModel(), torch.randn(2, 4)).check("dtensor")
     assert "bounded entry scan" in dtensor_clear.details
     assert "slots-only" in dtensor_clear.details
 
-    tp_clear = tl.compat.report(TinyModel(), torch.randn(2, 4)).check("tensor_parallel")
+    tp_clear = tl.report.doctor(TinyModel(), torch.randn(2, 4)).check("tensor_parallel")
     assert "user-wrapped or opaque hook" in tp_clear.details
 
 
@@ -664,7 +664,7 @@ def test_report_renders_with_distributed_rows() -> None:
 
     model = TinyModel()
     model.fc.weight = nn.Parameter(_fake_dtensor((4, 4)), requires_grad=False)
-    report = tl.compat.report(model, torch.randn(2, 4))
+    report = tl.report.doctor(model, torch.randn(2, 4))
     assert "DTensor / sharded tensors" in report.show()
     assert "Tensor parallel (TP)" in report.to_markdown()
 
@@ -900,7 +900,7 @@ def test_real_tensor_parallel_capture_refuses_instead_of_lying(
         "tensor_parallel",
     ]
 
-    row = tl.compat.report(model, x).check("dtensor")
+    row = tl.report.doctor(model, x).check("dtensor")
     assert row.is_detected is True
     assert row.severity == "error"
     assert "Detected structurally" not in row.details, "real DTensor is an exact match"

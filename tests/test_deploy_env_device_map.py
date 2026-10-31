@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.compat import report
+from torchlens.report import doctor as report
 
 
 def test_device_map_row_absent_reads_pass_ok() -> None:

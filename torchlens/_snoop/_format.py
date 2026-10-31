@@ -14,9 +14,12 @@ delimiter's EXISTENCE is pinned, its glyph is the naming sprint's.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from ._event import NarrationEvent, NarrationStats
+from ._event import NarrationEvent
+
+if TYPE_CHECKING:
+    from ..stats._tensor_stats import TensorStats
 
 __tl_layer__ = "L5"
 
@@ -122,13 +125,13 @@ def _format_value(value: float) -> str:
     return f"{value:.4g}"
 
 
-def render_stats_segment(stats: NarrationStats) -> str:
+def render_stats_segment(stats: TensorStats) -> str:
     """Render the stats segment on the shared grammar (snoop D4).
 
-    The sampled policy ``~``-marks every moment and carries the mandatory,
-    non-suppressible ``sampled=k/N`` evidence token; it NEVER renders a
-    finiteness field (the hard gate: the grammar renders with the finiteness
-    family absent). Exact prints the census only when nonzero, plus the
+    Sampled moments carry ``~`` marks and the mandatory, non-suppressible
+    ``sampled=k/N`` evidence token. Sampled narration has no finiteness
+    evidence; only an exact nonfinite family can print a census or clearance.
+    Exact prints the census only when nonzero, plus the
     ``finite`` clearance token when exactly zero. Reuse prints only what
     another armed feature already paid for.
 
@@ -143,39 +146,54 @@ def render_stats_segment(stats: NarrationStats) -> str:
         Space-joined stats tokens; empty when nothing is claimable.
     """
 
-    mark = "~=" if stats.policy == "sampled" else "="
     moments = (
-        ("mean", stats.mean),
-        ("sd", stats.sd),
-        ("min", stats.minimum),
-        ("max", stats.maximum),
+        ("mean", stats.mean, stats.mean_evidence),
+        ("sd", stats.std, stats.std_evidence),
+        ("min", stats.finite_min, stats.extrema_evidence),
+        ("max", stats.finite_max, stats.extrema_evidence),
     )
-    tokens = [f"{name}{mark}{_format_value(value)}" for name, value in moments if value is not None]
+    tokens = []
+    for name, value, evidence in moments:
+        if value is not None and evidence.policy in {"exact", "sampled"}:
+            mark = "~=" if evidence.is_sampled else "="
+            tokens.append(f"{name}{mark}{_format_value(value)}")
     if stats.policy == "sampled":
-        tokens.append(f"sampled={stats.sample_size}/{stats.population}")
-        return " ".join(tokens)
+        evidence = next(
+            evidence
+            for evidence in (
+                stats.mean_evidence,
+                stats.std_evidence,
+                stats.extrema_evidence,
+                stats.histogram_evidence,
+                stats.nonfinite_evidence,
+            )
+            if evidence.is_sampled
+        )
+        tokens.append(f"sampled={evidence.sample_size}/{evidence.population}")
     tokens.extend(_finiteness_tokens(stats))
     return " ".join(tokens)
 
 
-def _finiteness_tokens(stats: NarrationStats) -> list[str]:
+def _finiteness_tokens(stats: TensorStats) -> list[str]:
     """Return the finiteness tokens for an exact/reuse census (never sampled).
 
     A complete census prints the nonzero counts, or the ``finite`` clearance
-    token when exactly zero everywhere; an incomplete census falls back to
-    the boolean claim when one exists, else claims nothing.
+    token when exactly zero everywhere. A verdict proves presence without
+    counts; every other incomplete census claims nothing.
     """
 
+    if stats.nonfinite_evidence.policy == "verdict":
+        return ["nonfinite present"]
+    if stats.nonfinite_evidence.policy != "exact":
+        return []
     census = (
-        ("nan=", stats.nan_count),
-        ("+inf=", stats.posinf_count),
-        ("-inf=", stats.neginf_count),
+        ("nan=", stats.num_nan),
+        ("+inf=", stats.num_posinf),
+        ("-inf=", stats.num_neginf),
     )
     if all(count is not None for _, count in census):
         tokens = [f"{label}{count}" for label, count in census if count]
         return tokens or ["finite"]
-    if stats.has_nonfinite is not None:
-        return ["nonfinite" if stats.has_nonfinite else "finite"]
     return []
 
 

@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 from torchlens._utils import _torch_compat
-from torchlens.compat import report
+from torchlens.report import doctor as report
 
 
 class _QuantMethod(str, enum.Enum):

@@ -365,23 +365,6 @@ def verify(
     )
 
 
-def self_check(
-    trace: Trace,
-    *,
-    empirical_adjoint_atol: float | None = None,
-    empirical_adjoint_rtol: float | None = None,
-    **kwargs: object,
-) -> ReceptiveFieldVerification:
-    """Alias :func:`verify` for interactive RF self-consistency diagnostics."""
-
-    return verify(
-        trace,
-        empirical_adjoint_atol=empirical_adjoint_atol,
-        empirical_adjoint_rtol=empirical_adjoint_rtol,
-        **kwargs,
-    )
-
-
 __all__ = [
     "AmbiguousInputError",
     "EmpiricalAdjointCheck",
@@ -405,7 +388,6 @@ __all__ = [
     "register_rf_rule",
     "cross_validate",
     "node_spec",
-    "self_check",
     "verify",
     "rules",
 ]

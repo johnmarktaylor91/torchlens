@@ -609,7 +609,7 @@ class TestC10dGroupSeqCompatRouting:
     None``, so a private-API rename silently and permanently disabled the
     redundant correlation cross-check -- the only in-band detector in the
     base-misalignment neighborhood -- with zero visibility in ``doctor()`` /
-    ``compat.report()``.
+    ``report.doctor()``.
     """
 
     def test_missing_capability_short_circuits_to_none(self, monkeypatch):
@@ -648,7 +648,7 @@ class TestC10dGroupSeqCompatRouting:
         Fail-before: with ``HAS_C10D_GROUP_SEQ`` probed True, every getter
         exception was swallowed to a bare ``None`` while the flag stayed True
         -- the only in-band base-misalignment cross-check silently vanished,
-        invisible to ``doctor()`` / ``compat.report()`` and indistinguishable
+        invisible to ``tl.report.doctor()`` and indistinguishable
         on the boundary record from honest capability absence.
         """
 
@@ -671,7 +671,7 @@ class TestC10dGroupSeqCompatRouting:
         assert value is None
         assert disclosure == "c10d_group_seq_read_failed"
         # The degradation is now VISIBLE: the capability flag flipped through
-        # the standard channel, so doctor()/compat.report() report it.
+        # the standard channel, so doctor()/report.doctor() report it.
         assert tc.HAS_C10D_GROUP_SEQ is False
         assert tc.probe_c10d_capabilities()["HAS_C10D_GROUP_SEQ"] is False
         assert any(

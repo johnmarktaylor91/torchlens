@@ -177,7 +177,7 @@ def test_guide_next_steps_are_reader_executable() -> None:
     """No guide entry requires live objects the dump's reader does not hold."""
 
     steps = _clean_trace().to_agent_json(max_ops=1)["guide"]["next_steps"]
-    assert "tl.compat.report(model, x).to_markdown()" not in steps.values()
+    assert "tl.report.doctor(model, x).to_markdown()" not in steps.values()
     for spelling in steps.values():
         assert "model" not in spelling.replace("trace", "") or spelling.startswith("trace")
     # The omitted members are now taught.
@@ -275,12 +275,12 @@ def test_trace_slice_summary_carries_parent_honesty_banner() -> None:
 
 @pytest.mark.smoke
 def test_compat_report_repr_is_designed_and_bounded() -> None:
-    """repr/str are the findings-first summary, never a dataclass wall."""
+    """repr is bounded; str and show share the complete fixed-width table."""
 
-    report = tl.compat.report(nn.Linear(3, 4), torch.randn(2, 3))
+    report = tl.report.doctor(nn.Linear(3, 4), torch.randn(2, 3))
     rendered = repr(report)
-    assert rendered == str(report)
-    assert rendered.startswith("TorchLens compatibility report for")
+    assert str(report) == report.show()
+    assert rendered.startswith("TorchLens doctor report:")
     assert "finding(s)" in rendered
     assert ESC not in rendered
     for line in rendered.splitlines():
@@ -294,7 +294,7 @@ def test_compat_report_repr_is_designed_and_bounded() -> None:
 def test_capability_dump_moved_to_detail_accessor() -> None:
     """The row cell carries the grouped summary; the accessor the full dump."""
 
-    report = tl.compat.report(nn.Linear(3, 4), torch.randn(2, 3))
+    report = tl.report.doctor(nn.Linear(3, 4), torch.randn(2, 3))
     row = report.check("torch_capabilities")
     assert "capabilities present" in row.details
     snapshot = report.capability_snapshot()
@@ -306,24 +306,14 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
     # torch>=2.1 matrix, where an old-floor build genuinely has far more
     # absent (healthy-old-install) flags than current dev torch. Rebuild the
     # cell's exact expected length from the same building blocks
-    # _torch_capabilities_row() uses (format_capability_summary plus the
+    # the environment capability probe uses (format_capability_summary plus the
     # missing=/optional_absent= groupings), so the check tracks any honest
     # absence count instead of a magic number -- it still catches a
     # regression to the legacy verbose per-flag dump, which does not share
     # this structure.
-    from torchlens._utils import format_capability_summary
-    from torchlens._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
+    from torchlens._utils import _probe_torch_capabilities
 
-    absent = [name for name, available in snapshot.items() if not available]
-    missing = [name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS]
-    optional_absent = [name for name in absent if name in OPTIONAL_CAPABILITY_FLAGS]
-    expected = "Runtime capabilities: " + format_capability_summary(snapshot)
-    if missing:
-        expected += "; missing=" + ", ".join(missing)
-    if optional_absent:
-        expected += "; optional_absent=" + ", ".join(optional_absent)
-    expected += "; full dump: report.capability_snapshot()"
-    assert len(row.details) == len(expected)
+    assert row.details == _probe_torch_capabilities().detail
     # Absent flags stay NAMED in the cell (absences-first doctrine).
     for name, available in snapshot.items():
         if not available:

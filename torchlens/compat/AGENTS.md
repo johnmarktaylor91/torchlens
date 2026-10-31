@@ -1,6 +1,6 @@
 # compat/ - Implementation Guide
 
-`tl.compat.report(model, x)` is the FIRST diagnostic the root docs tell a debugging
+`tl.report.doctor(model, x)` is the FIRST diagnostic the root docs tell a debugging
 agent to run — keep this package cheap to import and side-effect free.
 
 ## Files
@@ -9,10 +9,10 @@ agent to run — keep this package cheap to import and side-effect free.
   facades `from_huggingface`, `from_timm`, `from_torchextractor`, `from_fx`,
   `from_ilg`, and `from_sentence_transformers` (all in `__all__`), plus the
   lazy `_COMPAT_MODULES` routing.
-- `_report.py` — `CompatRow` / `CompatReport` dataclasses and `report(model, input)`:
-  the runtime support report (wrapper coverage, capability flags, distributed findings
-  such as the `dtensor` / `device_mesh` / `tensor_parallel` / `pipeline_parallel` rows).
-  `CompatReport.to_markdown()` is the documented rendering.
+- `_report.py` holds private model/input probes used by `tl.report.doctor(model, inputs)`.
+  Public `DoctorCheck` and `DoctorReport` records live in `torchlens/report/_doctor.py`.
+  The probes inspect wrapper coverage, capabilities and distributed findings without
+  executing the model.
 - `torchextractor.py` — `Extractor`, the torchextractor-style adapter (callable and
   `forward` both return a `dict[str, torch.Tensor]` of layer outputs).
 - `lovely.py` / `torchshow.py` — thin adapters that coerce TorchLens records to tensors

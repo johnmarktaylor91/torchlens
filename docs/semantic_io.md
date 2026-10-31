@@ -147,7 +147,7 @@ change the default graph when no annotation-aware render hook is supplied.
 ```python
 trace.annotate(tl.func("relu"), data={"note": "late block"}, max_fanout=4)
 trace.annotate(tl.label("conv2d_1_1"), data=torch.zeros(8, 2))
-annotated = trace.with_annotations(tl.func("linear"), image="thumbnail.png")
+annotated = trace.annotate(tl.func("linear"), image="thumbnail.png", copy=True)
 ```
 
 JSON-serializable `data=` is stored under the user annotation namespace.
@@ -353,7 +353,6 @@ core flow runs without downloading external model weights.
 - `Trace.draw(show_input_transform_summary=True)`
 - `Trace.to_pandas(include_decoded_output_summary=True)`
 - `Trace.annotate(selector, data=..., image=..., max_fanout=..., copy=...)`
-- `Trace.with_annotations(selector, data=..., image=..., max_fanout=...)`
 - `Trace.model_profile`
 - `tl.repgeom.classical_mds(...)`
 - `tl.repgeom.procrustes_align(...)`

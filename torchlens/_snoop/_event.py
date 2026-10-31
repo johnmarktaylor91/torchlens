@@ -9,6 +9,10 @@ repetitions. All spellings are DOCUMENTED-UNSTABLE pending the naming sprint.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..stats._tensor_stats import TensorStats
 
 __tl_layer__ = "L5"
 
@@ -23,40 +27,6 @@ NARRATION_KINDS = (
     "attempted",
     "note",
 )
-
-
-@dataclass(frozen=True, slots=True)
-class NarrationStats:
-    """Structured stats segment for one narrated tensor (snoop D4).
-
-    Exactly one of the three evidence shapes is populated:
-
-    - ``policy="sampled"``: moments from a bounded seeded sample, ``~``-marked,
-      with ``sample_size``/``population`` evidence. NEVER carries finiteness
-      fields -- a planted NaN in 12.6M elements is invisible to an 8k
-      subsample (measured false negative), so a sampled line omits the
-      finiteness family entirely rather than printing a clearance.
-    - ``policy="exact"``: exact moments and the exact nonfinite census.
-    - ``policy="reuse"``: only facts another armed feature already paid for
-      (``track_nonfinite`` / ``raise_on_nan`` / saved payloads); every field
-      another feature did not pay for stays ``None`` and is omitted.
-    """
-
-    policy: str
-    population: int
-    sample_size: int | None = None
-    mean: float | None = None
-    sd: float | None = None
-    minimum: float | None = None
-    maximum: float | None = None
-    #: Exact nonfinite census fields; ``None`` = no claim (ABSENT on lines).
-    nan_count: int | None = None
-    posinf_count: int | None = None
-    neginf_count: int | None = None
-    #: track_nonfinite reuse verdict: True = has nonfinite, False = finite,
-    #: ``None`` = no synchronous evidence (deferred device flag -- omitted,
-    #: never printed as though known live).
-    has_nonfinite: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,7 +57,7 @@ class NarrationEvent:
     has_intervention: bool = False
     #: Ordinal distance disclosed on buffered ``followed_by`` releases.
     late: int | None = None
-    stats: NarrationStats | None = None
+    stats: TensorStats | None = None
     #: Free-form single-line body for ``attempted`` / ``note`` kinds.
     text: str | None = None
     signal: str = "forward"
@@ -95,4 +65,4 @@ class NarrationEvent:
     extra_labels: tuple[tuple[str, str], ...] = field(default=())
 
 
-__all__ = ["NARRATION_KINDS", "NarrationEvent", "NarrationStats"]
+__all__ = ["NARRATION_KINDS", "NarrationEvent"]

@@ -303,7 +303,7 @@ def attention_view(  # noqa: PLR0913 -- the record-shaped extraction surface (ax
             code="tv_facet_missing",
             message=f"Module {layer!r} exposes no attention pattern facet.",
             remedy="pick a pattern-bearing module "
-            f"({available[:8]}), or check tl.compat.report(model, x) for the "
+            f"({available[:8]}), or check tl.report.doctor(model, x) for the "
             "attention-detection rows",
             available=available,
         )
@@ -368,7 +368,7 @@ def attention_views(  # noqa: PLR0913 -- same record-shaped surface, list form
             message="No module in this trace exposes an attention pattern facet.",
             remedy="capture a transformer forward (eager attention captures directly; "
             "fused kernels need reconstruction_ready=True), or check "
-            "tl.compat.report(model, x)",
+            "tl.report.doctor(model, x)",
         )
     return [
         attention_view(

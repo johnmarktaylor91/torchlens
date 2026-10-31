@@ -514,7 +514,7 @@
   the allocator hook costs 1.7x-2.5x total capture time on real CNNs/ViTs. The flag is a
   session-time knob (`FieldPolicy.DROP`, not in `MODEL_LOG_FIELD_ORDER`) and does not survive
   save/load. Never assert `forward_peak_memory > 0` on the default path.
-- Sharded distributed state is REFUSED, not silently mis-captured. `tl.compat.report` carries
+- Sharded distributed state is REFUSED, not silently mis-captured. `tl.report.doctor` carries
   `dtensor`, `device_mesh`, `tensor_parallel`, and `pipeline_parallel` rows, and capture entry
   raises `tl.errors.DistributedCaptureUnsupportedError` (structured findings on
   `exc.fields["findings"]`; branch on `finding.kind`, never message text). DTensor/ShardedTensor
@@ -1260,8 +1260,15 @@
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
   `EchoSession` and the sinks (the event record is `tl.types.NarrationEvent`);
-  `Trace.narrate` replays a finished
-  capture as narration.
+  `Trace.narrate` replays a finished capture as narration.
+  `NarrationEvent.stats` is a `tl.stats.TensorStats` (or `None`). Read
+  `stats.mean_evidence.population` / `stats.mean_evidence.sample_size` for
+  sampled evidence; values are `mean`, `std`, `finite_min`, `finite_max`,
+  `numel`, and `nbytes`. The counts are `num_nan`, `num_posinf`, `num_neginf`.
+  Sampled narration has `nonfinite_evidence.policy="unavailable"` with a reason.
+  Reuse with a positive `track_nonfinite` verdict has policy `"verdict"` for that
+  family and renders "nonfinite present" with no count; a negative verdict has
+  policy `"exact"`, reason `"track_nonfinite"`, and zero counts.
 - `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
   the submodule is imported as `tl.debug` and is deliberately not in `__all__`.
 - `tl.receptive_field` is a lazy power-user submodule. `Op`, `Layer`, `ModuleCall`, and
@@ -1811,7 +1818,7 @@ object's docstring):
 - `tl.report.ValidationFailure`: A structured description of the first surfaced validation mismatch.
 - `tl.report.ValidationStatus`: Machine-readable replay-validation availability or result.
 - `tl.report.compare_topology`: Compare two Traces structurally.
-- `tl.report.doctor`: Run a TorchLens startup health check.
+- `tl.report.doctor(model=None, inputs=None)`: Environment health and optional model/input compatibility checks without executing the supplied model.
 - `tl.trackers.HistoryReader`: Read one artifact without loading the run or importing a model.
 - `tl.trackers.correct_running_stats`: Apply the closed-form unscale correction to one spine record.
 - `tl.trackers.corrected_grad_block`: Return `block` with every SCALED gradient observation corrected.
@@ -1841,3 +1848,11 @@ object's docstring):
 - `tl.types.RunnableDiagnostic`: Structured diagnostic shared by preflight, readiness, and run reports.
 - `torchlens._user_funcs.CaptureNotActiveError`: Raised when a capture-only operation is called outside an active capture.
 - `torchlens._user_funcs.UserTransformError`: Raised when activation_transform or grad_transform raises.
+
+- `tl.stats.TensorStats` is the frozen tensor statistics record. Its read-only
+  `TensorStats.policy` summarizes populated families (`exact`, `sampled`, `reuse`);
+  `FamilyEvidence.policy` remains authoritative per family. The nonfinite family
+  admits `verdict` for presence without counts. `TensorStats.num_nan`,
+  `TensorStats.num_posinf`, and `TensorStats.num_neginf` are optional exact counts;
+  `TensorStats.num_nonfinite` and `TensorStats.num_finite` are `None` if any count
+  is unknown. Reused `track_nonfinite` false verdicts carry an exact zero census.

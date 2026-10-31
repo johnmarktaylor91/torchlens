@@ -131,8 +131,8 @@ view type is `ReceptiveFieldView`.
 
 For extension, use `register_rf_rule()` and `rules()`; `ReceptiveFieldRule` and
 `ReceptiveFieldRuleContext` are the corresponding rule types, and `rules()` is a read-only
-snapshot. `node_spec()` creates a `Trace.draw(node_spec_fn=...)` callback. `verify()` and
-`self_check()` run the model-facing diagnostics: each returns a `ReceptiveFieldVerification` that
+snapshot. `node_spec()` creates a `Trace.draw(node_spec_fn=...)` callback. `verify()` runs
+the model-facing diagnostics: it returns a `ReceptiveFieldVerification` that
 pairs geometric containment checks with sampled `EmpiricalAdjointCheck` comparisons (the
 receptive/projective empirical derivatives at a shared unit). Its `.verdict` property is the
 tri-state summary: `FAIL` reports a real violation, `INDETERMINATE` means the empirical half never

@@ -620,13 +620,13 @@ Before filing a bug for a model-specific failure, run the runtime compatibility
 report:
 
 ```python
-compat = tl.compat.report(model, x)
-print(compat.to_markdown())
+report = tl.report.doctor(model=model, inputs=x)
+print(report.to_markdown())
 ```
 
-`tl.compat.report` inspects the model wrapper, modules, parameter sharing,
-input tensors, CUDA visibility, and common framework markers, then reports
-each row as `pass`, `known_broken`, `scope`, or `not_tested`.
+`tl.report.doctor` checks the environment and inspects the model wrapper,
+modules, parameter sharing, input tensors, CUDA visibility, and common framework
+markers, then reports each row as `pass`, `known_broken`, `scope`, or `not_tested`.
 
 `torch.compile` coexists with capture. On torch >= 2.6, every capture holds the
 public `torch.compiler.set_stance("force_eager")` scoped to the forward, so

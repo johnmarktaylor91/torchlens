@@ -195,12 +195,12 @@ def test_non_torch_backend_rejects_torch_tensor_annotation() -> None:
         trace.annotate(tl.func("relu"), data=torch.ones(1))
 
 
-def test_with_annotations_returns_owned_copy() -> None:
-    """with_annotations should leave the source trace untouched."""
+def test_annotate_copy_returns_owned_copy() -> None:
+    """annotate(..., copy=True) should leave the source trace untouched."""
 
     trace, _model, _x = _trace_tiny()
 
-    copied = trace.with_annotations(tl.func("relu"), data={"owned": True})
+    copied = trace.annotate(tl.func("relu"), data={"owned": True}, copy=True)
 
     assert copied is not trace
     assert trace._annotation_blobs is None

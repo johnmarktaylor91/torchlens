@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.compat import report
+from torchlens.report import doctor as report
 
 transformers = pytest.importorskip("transformers")
 peft = pytest.importorskip("peft")

@@ -14,8 +14,8 @@ import pytest
 import torch
 from torch import nn
 
-from torchlens.compat import report
-from torchlens.compat._report import _SHOW_CELL_WIDTH_CAP
+from torchlens.report import doctor as report
+from torchlens.report._doctor import _SHOW_CELL_WIDTH_CAP
 
 # ---------------------------------------------------------------------------
 # A3-08 — HF Transformers detection must key on real transformers namespace,
@@ -479,7 +479,7 @@ def _offload_row_for(hook: _StubAlignDevicesHook) -> object:
 
     Returns
     -------
-    CompatRow
+    DoctorCheck
         The ``accelerate_cpu_disk_offload`` row.
     """
 
