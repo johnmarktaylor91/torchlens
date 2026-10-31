@@ -141,9 +141,9 @@ def _apply_filter(
 ) -> tuple[tuple[ViewRow, ...], str | None]:
     """Presentation-only filtering with the mandatory coverage disclosure."""
 
-    if config.filter is None:
+    if config.where is None:
         return view.rows, None
-    predicate = config.filter
+    predicate = config.where
     if isinstance(predicate, str):
         pattern = re.compile(predicate)
 
@@ -161,10 +161,10 @@ def _apply_filter(
 
     else:
         raise InvalidArgumentError(
-            f"filter= accepts a regex string or a callable over rows; got "
+            f"where= accepts a regex string or a callable over rows; got "
             f"{type(predicate).__name__}.",
             code="summary_option_invalid",
-            remedy="pass a regex string, e.g. filter='conv', or a callable row -> bool",
+            remedy="pass a regex string, e.g. where='conv', or a callable row -> bool",
         )
     visible = tuple(row for row in view.rows if match(row))
     params_total = facts.params_total or 0

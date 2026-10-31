@@ -4,7 +4,6 @@ This module contains every user-facing function:
   - ``trace``  - the main entry point (runs model, returns Trace)
   - ``validate_forward_pass`` - replay-based correctness check
   - ``show_model_graph`` - visualization convenience wrapper
-  - ``draw_backward`` - backward grad_fn_handle visualization wrapper
   - ``log_model_metadata`` - metadata-only convenience wrapper
   - ``validate_batch_of_models_and_inputs`` - bulk validation harness
 
@@ -866,13 +865,6 @@ def _trace_mlx_model(
         raise BackendUnsupportedError(
             "MLX backend does not support pre-attached hooks. "
             "Omit hooks or use the PyTorch backend."
-        )
-    if visualization is not None and visualization.view not in ["none", "rolled", "unrolled"]:
-        raise InvalidArgumentError(
-            f"MLX visualization mode={visualization.view!r} is not supported",
-            code="visualization_mode_invalid",
-            remedy="set visualization.view to 'none', 'rolled', or 'unrolled'",
-            argument="visualization.view",
         )
     if capture_options.save_grads:
         raise BackendUnsupportedError("backward capture is not supported on the mlx backend")
@@ -2495,19 +2487,19 @@ def _reject_unsupported_torch_trace_option_values(capture_options: CaptureOption
             )
 
 
-def render(*args: Any, **kwargs: Any) -> Any:
+def draw(*args: Any, **kwargs: Any) -> Any:
     """One-call model picture over the quickstart input ladder (F17 B15).
 
     ONE metadata-only eval/no-grad capture (training flags, RNG, and norm
     buffers restored), rendered with the facade default ``collapse="auto"``
-    (``Trace.draw`` keeps ``"none"``). Detached
-    :class:`torchlens._quickstart.Drawing`; never auto-opens a viewer.
-    See :func:`torchlens._quickstart.render` for the parameters.
+    (``Trace.draw`` keeps ``"none"``). Returns a detached
+    :class:`torchlens.viz.Drawing`; never auto-opens a viewer.
+    See :func:`torchlens._quickstart.draw` for the parameters.
     """
 
-    from ._quickstart._render import render as _render_impl
+    from ._quickstart._render import draw as _draw_impl
 
-    return _render_impl(*args, **kwargs)
+    return _draw_impl(*args, **kwargs)
 
 
 def trace(
@@ -4285,18 +4277,6 @@ def show_model_graph(*args: Any, **kwargs: Any) -> None:
     return cast(None, _public_impls_module().show_model_graph(*args, **kwargs))
 
 
-def draw_backward(*args: Any, **kwargs: Any) -> str:
-    """Forward to the backward graph rendering implementation."""
-
-    return cast(str, _public_impls_module().draw_backward(*args, **kwargs))
-
-
-def draw_combined(*args: Any, **kwargs: Any) -> str:
-    """Forward to the combined graph rendering implementation."""
-
-    return cast(str, _public_impls_module().draw_combined(*args, **kwargs))
-
-
 def show_bundle_graph(*args: Any, **kwargs: Any) -> str | None:
     """Forward to the bundle graph rendering implementation."""
 
@@ -4329,8 +4309,6 @@ def validate_batch_of_models_and_inputs(*args: Any, **kwargs: Any) -> Any:
 
 _PUBLIC_IMPL_WRAPPER_NAMES = (
     "show_model_graph",
-    "draw_backward",
-    "draw_combined",
     "show_bundle_graph",
     "validate_forward_pass",
     "validate_backward_pass",

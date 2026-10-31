@@ -273,14 +273,7 @@ def _resolve_draw_request(
 
     show_buffer_layers = _normalize_buffer_visibility(request.show_buffer_layers)
     theme = resolve_theme(request.theme, for_paper=request.for_paper)
-    node_overlay = request.node_overlay
-    if (
-        node_overlay is None
-        or isinstance(node_overlay, str)
-        and node_overlay == getattr(trace, "_node_overlay_name", None)
-    ):
-        node_overlay = getattr(trace, "_node_overlay_scores", None)
-    node_overlay = resolve_overlay_request(trace, node_overlay)
+    node_overlay = resolve_overlay_request(trace, request.node_overlay)
     overrides = VisualizationOverrides(
         graph=graphviz_graph_overrides(cast(Optional[Dict[str, Any]], request.graph_overrides)),
         edge=cast(Optional[Dict[str, Any]], request.edge_overrides) or {},
@@ -1329,6 +1322,7 @@ def draw(
     stack_by: "str | bool | Callable[[Any], Any] | None" = None,
     show_redundant_args: bool = False,
     show_saved_for_backward: bool = False,
+    announce_path: bool | None = None,
 ) -> Any:
     """Render the computational graph through the resolved forward IR pipeline.
 
@@ -1444,7 +1438,9 @@ def draw(
         raise_encoding_dagua_refusal(request.encoding.active_channels())
     # a bare draw (no vis_outpath) writes a collision-safe file and
     # always prints where; an explicit path is written exactly, as before.
-    announce_path = vis_outpath is None
+    # ``Trace.draw`` resolves the collision-safe path itself and says so.
+    if announce_path is None:
+        announce_path = vis_outpath is None
     resolved_outpath = (
         collision_safe_outpath(DEFAULT_DRAW_STEM, vis_fileformat)
         if vis_outpath is None

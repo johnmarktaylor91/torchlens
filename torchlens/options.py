@@ -27,7 +27,6 @@ from ._literals import (
     OutputDeviceLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
-    VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
@@ -123,10 +122,11 @@ _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "save_raw_gradients",
 )
 _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
-    "view",
+    "graph",
+    "rolled",
     "depth",
     "container_path",
-    "save_only",
+    "open_viewer",
     "file_format",
     "show_buffers",
     "direction",
@@ -151,13 +151,12 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "show_legend",
     "color_by",
     "size_by",
-    "scale",
+    "size_scale",
     "stack_by",
+    "animate",
     "show_redundant_args",
     "font_size",
     "dpi",
-    "for_paper",
-    "return_graph",
     "order_siblings",
 )
 _REPLAY_FIELDS: Final[tuple[str, ...]] = (
@@ -235,7 +234,7 @@ _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "save_raw_grads": "save_raw_gradients",
 }
 _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
-    "view": "view",
+    "rolled": "rolled",
     "depth": "depth",
     "layout": "layout",
     "node_style": "node_style",
@@ -982,7 +981,11 @@ class SaveOptions:
 
 #: Alias properties removed by the 2026-10-01 shim removal (no alias kept).
 _REMOVED_VISUALIZATION_OPTION_MEMBERS: dict[str, str] = {
-    "mode": "use VisualizationOptions.view -- the mode alias was removed",
+    "mode": "use VisualizationOptions.rolled (a bool) -- the mode alias was removed",
+    "view": "use VisualizationOptions.rolled (True for the rolled graph); a picture is drawn whenever visualization options are passed",
+    "save_only": "use VisualizationOptions.open_viewer (True opens the viewer; the default never does)",
+    "for_paper": 'use VisualizationOptions.theme="paper"',
+    "return_graph": "read Drawing.dot on the returned Drawing",
     "max_module_depth": "use VisualizationOptions.depth -- the max_module_depth alias was removed",
     "layout_engine": "use VisualizationOptions.layout -- the layout_engine alias was removed",
     "node_mode": "use VisualizationOptions.node_style -- the node_mode alias was removed",
@@ -995,14 +998,18 @@ class VisualizationOptions:
 
     Parameters
     ----------
-    view:
-        Graph view: ``"none"``, ``"rolled"``, or ``"unrolled"``.
+    graph:
+        Which graph: ``"forward"``, ``"backward"`` or ``"combined"``.
+    rolled:
+        ``True`` draws each repeated module once (the rolled graph); ``False``
+        (default) draws every pass.
     depth:
         Maximum module nesting depth shown in the graph.
     container_path:
         Output path stem for rendered graph files.
-    save_only:
-        Whether rendering saves without opening a viewer.
+    open_viewer:
+        ``True`` opens the written picture in the system viewer (default
+        ``False``: never).
     file_format:
         Graph output file format.
     show_buffers:
@@ -1071,25 +1078,25 @@ class VisualizationOptions:
         Optional Graphviz font size.
     dpi:
         Optional Graphviz output DPI.
-    for_paper:
-        Convenience toggle forcing the paper theme preset.
-    return_graph:
-        Whether rendering returns the renderer object instead of DOT source.
+    animate:
+        A site label, pass-qualified label or record: the picture is the HTML
+        animation of the repeated ops at that site (default ``None``).
     order_siblings:
         Whether Graphviz ``dot`` renders should verify and apply execution-order
         placement for true parallel siblings.
 
     Examples
     --------
-    >>> opts = VisualizationOptions(view="rolled", depth=2)
+    >>> opts = VisualizationOptions(rolled=True, depth=2)
     >>> opts.layout
     'auto'
     """
 
-    view: VisModeLiteral = "none"
+    graph: Literal["forward", "backward", "combined"] = "forward"
+    rolled: bool = False
     depth: int = 1000
     container_path: str = "graph.gv"
-    save_only: bool = False
+    open_viewer: bool = False
     file_format: str = "pdf"
     show_buffers: BufferVisibilityLiteral = "meaningful"
     direction: VisDirectionLiteral = "bottomup"
@@ -1116,20 +1123,20 @@ class VisualizationOptions:
     size_by: str | Callable[[Any], Any] | None = None
     size_scale: str | None = None
     stack_by: str | bool | Callable[[Any], Any] | None = None
+    animate: Any = None
     show_redundant_args: bool = False
     font_size: int | None = None
     dpi: int | None = None
-    for_paper: bool = False
-    return_graph: bool = False
     order_siblings: bool = True
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
         self,
-        view: VisModeLiteral | MissingType = MISSING,
+        graph: Literal["forward", "backward", "combined"] | MissingType = MISSING,
+        rolled: bool | MissingType = MISSING,
         depth: int | MissingType = MISSING,
         container_path: str | MissingType = MISSING,
-        save_only: bool | MissingType = MISSING,
+        open_viewer: bool | MissingType = MISSING,
         file_format: str | MissingType = MISSING,
         show_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
         direction: VisDirectionLiteral | MissingType = MISSING,
@@ -1156,25 +1163,27 @@ class VisualizationOptions:
         show_legend: bool | None | MissingType = MISSING,
         color_by: str | Callable[[Any], Any] | None | MissingType = MISSING,
         size_by: str | Callable[[Any], Any] | None | MissingType = MISSING,
-        scale: str | None | MissingType = MISSING,
+        size_scale: str | None | MissingType = MISSING,
         stack_by: str | bool | Callable[[Any], Any] | None | MissingType = MISSING,
+        animate: Any | MissingType = MISSING,
         show_redundant_args: bool | MissingType = MISSING,
         font_size: int | None | MissingType = MISSING,
         dpi: int | None | MissingType = MISSING,
-        for_paper: bool | MissingType = MISSING,
-        return_graph: bool | MissingType = MISSING,
         order_siblings: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen visualization option bundle."""
 
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
-            "view": _resolve_option_value("view", view, "none", specified_fields),
+            "graph": _resolve_option_value("graph", graph, "forward", specified_fields),
+            "rolled": _resolve_option_value("rolled", rolled, False, specified_fields),
             "depth": _resolve_option_value("depth", depth, 1000, specified_fields),
             "container_path": _resolve_option_value(
                 "container_path", container_path, "graph.gv", specified_fields
             ),
-            "save_only": _resolve_option_value("save_only", save_only, False, specified_fields),
+            "open_viewer": _resolve_option_value(
+                "open_viewer", open_viewer, False, specified_fields
+            ),
             "file_format": _resolve_option_value(
                 "file_format", file_format, "pdf", specified_fields
             ),
@@ -1233,17 +1242,14 @@ class VisualizationOptions:
             ),
             "color_by": _resolve_option_value("color_by", color_by, None, specified_fields),
             "size_by": _resolve_option_value("size_by", size_by, None, specified_fields),
-            "scale": _resolve_option_value("scale", scale, None, specified_fields),
+            "size_scale": _resolve_option_value("size_scale", size_scale, None, specified_fields),
             "stack_by": _resolve_option_value("stack_by", stack_by, None, specified_fields),
             "show_redundant_args": _resolve_option_value(
                 "show_redundant_args", show_redundant_args, False, specified_fields
             ),
             "font_size": _resolve_option_value("font_size", font_size, None, specified_fields),
             "dpi": _resolve_option_value("dpi", dpi, None, specified_fields),
-            "for_paper": _resolve_option_value("for_paper", for_paper, False, specified_fields),
-            "return_graph": _resolve_option_value(
-                "return_graph", return_graph, False, specified_fields
-            ),
+            "animate": _resolve_option_value("animate", animate, None, specified_fields),
             "order_siblings": _resolve_option_value(
                 "order_siblings", order_siblings, True, specified_fields
             ),
@@ -1685,9 +1691,8 @@ def merge_save_options(*, save: SaveOptions | None, **flat_values: Any) -> SaveO
 
 def merge_visualization_options(
     *,
-    function_default_mode: VisModeLiteral,
     visualization: VisualizationOptions | None,
-    view: VisModeLiteral | MissingType = MISSING,
+    rolled: bool | MissingType = MISSING,
     depth: int | MissingType = MISSING,
     layout: VisNodePlacementLiteral | MissingType = MISSING,
     node_style: VisNodeModeLiteral | MissingType = MISSING,
@@ -1697,23 +1702,14 @@ def merge_visualization_options(
     order_siblings: bool | MissingType = MISSING,
 ) -> VisualizationOptions:
     """Merge the canonical flat visualization kwargs into a grouped options object."""
-
     if visualization is None:
         values = VisualizationOptions().to_dict()
-        values["view"] = function_default_mode
         specified_fields: frozenset[str] = frozenset()
     else:
         values = visualization.to_dict()
         specified_fields = _explicit_fields(visualization)
-        if "view" not in specified_fields:
-            # The grouped object's non-explicit view default ("none") must not
-            # shadow the calling function's default mode: show_model_graph
-            # with a VisualizationOptions that leaves view unset used to merge
-            # to view="none" and silently render NOTHING (D04 integration fix).
-            values["view"] = function_default_mode
-
     flat_values: dict[str, Any] = {
-        "view": view,
+        "rolled": rolled,
         "depth": depth,
         "layout": layout,
         "node_style": node_style,
@@ -1813,58 +1809,54 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     Returns
     -------
     dict[str, Any]
-        Keyword arguments expected by ``Trace.draw``.
+        Keyword arguments expected by ``Trace.draw``: the field names, with
+        ``container_path`` as ``path``; ``fold_repeats`` only when set or
+        explicit; the tri-state and optional channels only when set.
     """
 
     kwargs: dict[str, Any] = {
-        "vis_mode": visualization.view,
-        "vis_call_depth": visualization.depth,
         "path": visualization.container_path,
-        "vis_graph_overrides": visualization.graph_overrides,
-        "node_mode": visualization.node_style,
+        "graph": visualization.graph,
+        "rolled": visualization.rolled,
+        "depth": visualization.depth,
+        "graph_overrides": visualization.graph_overrides,
+        "node_style": visualization.node_style,
         "node_spec_fn": visualization.node_spec_fn,
         "collapsed_node_spec_fn": visualization.collapsed_node_spec_fn,
         "collapse_fn": visualization.collapse_fn,
         "collapse": visualization.collapse,
         "skip_fn": visualization.skip_fn,
-        "vis_edge_overrides": visualization.edge_overrides,
-        "vis_grad_edge_overrides": visualization.grad_edge_overrides,
-        "vis_module_overrides": visualization.module_overrides,
-        "vis_save_only": visualization.save_only,
+        "edge_overrides": visualization.edge_overrides,
+        "grad_edge_overrides": visualization.grad_edge_overrides,
+        "module_overrides": visualization.module_overrides,
+        "open_viewer": visualization.open_viewer,
         "file_format": visualization.file_format,
         "show_buffers": visualization.show_buffers,
         "direction": visualization.direction,
-        "vis_node_placement": visualization.layout,
-        "vis_renderer": visualization.renderer,
+        "layout": visualization.layout,
+        "renderer": visualization.renderer,
         "theme": visualization.theme,
-        "vis_intervention_mode": visualization.intervention_mode,
-        "vis_show_cone": visualization.show_cone,
+        "intervention_mode": visualization.intervention_mode,
+        "show_cone": visualization.show_cone,
     }
     if visualization.fold_repeats is not None or visualization.is_field_explicit("fold_repeats"):
         kwargs["fold_repeats"] = visualization.fold_repeats
-    phase7_kwargs = {
+    optional_kwargs = {
         "node_overlay": visualization.node_overlay,
         "node_label_fields": visualization.node_label_fields,
         "show_legend": visualization.show_legend,
         "color_by": visualization.color_by,
         "size_by": visualization.size_by,
-        "scale": visualization.size_scale,
+        "size_scale": visualization.size_scale,
         "stack_by": visualization.stack_by,
+        "animate": visualization.animate,
         "show_redundant_args": visualization.show_redundant_args,
         "font_size": visualization.font_size,
         "dpi": visualization.dpi,
-        "for_paper": visualization.for_paper,
-        "return_graph": visualization.return_graph,
         "order_siblings": visualization.order_siblings,
     }
-    for field_name, value in phase7_kwargs.items():
-        if field_name == "order_siblings":
-            should_include = visualization.is_field_explicit(field_name) or value is False
-        else:
-            should_include = visualization.is_field_explicit(field_name) or (
-                value is not None and value is not False
-            )
-        if should_include:
+    for field_name, value in optional_kwargs.items():
+        if value is not None and value is not False or visualization.is_field_explicit(field_name):
             kwargs[field_name] = value
     return kwargs
 

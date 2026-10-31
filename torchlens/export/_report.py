@@ -379,12 +379,11 @@ def _draw_svg(log: Any, collapse: str, vis_call_depth: int | None) -> str | None
             outpath = os.path.join(tmp, "graph")
             kwargs: dict[str, Any] = {
                 "collapse": collapse,
-                "vis_save_only": True,
                 "path": outpath,
                 "file_format": "svg",
             }
             if vis_call_depth is not None:
-                kwargs["vis_call_depth"] = vis_call_depth
+                kwargs["depth"] = vis_call_depth
             log.draw(**kwargs)
             svg_text = Path(f"{outpath}.svg").read_text(encoding="utf-8")
     except Exception:  # noqa: BLE001 - the ladder decides what happens next
