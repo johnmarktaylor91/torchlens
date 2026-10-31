@@ -992,13 +992,16 @@ def _install_lazy_module_allowlist_shim(records: list[tuple[Any, str, Any]]) -> 
 
     if not _torch_compat.HAS_LAZY_MODULE_ALLOWED_METHODS:
         return
-    mixin = torch.nn.parameter.UninitializedTensorMixin
+    # Resolved by name: torch's stubs do not declare the mixin on the module.
+    mixin: Any = getattr(torch.nn.parameter, "UninitializedTensorMixin", None)
+    if mixin is None:
+        return
     current = vars(mixin).get("_allowed_methods")
     if current is None or _is_shimmed(current):
         return
     view = _LedgerResolvingMembers(current)
     _register_shim(view)
-    mixin._allowed_methods = view  # type: ignore[assignment]
+    mixin._allowed_methods = view
     records.append((mixin, "_allowed_methods", current))
 
 
