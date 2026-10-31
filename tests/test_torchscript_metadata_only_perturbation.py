@@ -277,7 +277,9 @@ def test_parent_in_a_metadata_slot_and_a_value_slot_gets_no_proof() -> None:
     trace, result = _trace_and_validate(_TwoArgModel(same=True), torch.randn(3, 4))
     assert result is True
     op = _boundary_op(trace)
-    (parent,) = op.parents
+    slots = op.parent_arg_positions["args"]
+    parent = slots[0]
+    assert slots[1] == parent
     assert script_metadata_only_proof(op, [parent]) is None
     assert _metadata_decisions(trace) == []
 
