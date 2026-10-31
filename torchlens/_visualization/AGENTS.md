@@ -1,4 +1,4 @@
-# torchlens/visualization architecture and implementation
+# torchlens/_visualization architecture and implementation
 
 Roles are functional: the coordinator owns design and integration, implementers own scoped changes, and reviewers verify evidence. The same rules apply to every harness.
 

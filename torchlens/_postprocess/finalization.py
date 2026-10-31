@@ -1647,7 +1647,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     ``settle_completed``) only STAGES the bundle -- blobs and manifest land in
     the temp directory and the writer stays on ``self._out_writer`` -- and the
     tmp->final publish happens at the settlement seam in
-    ``capture/trace.py``, carrying the settled capture-outcome attestation.
+    ``_capture/trace.py``, carrying the settled capture-outcome attestation.
     A SETTLED trace (the deferred grad-streaming tail in
     ``backends/torch/backward.py``) stages and publishes in one pass.
     Historical behavior published here unconditionally, so a live COMPLETE

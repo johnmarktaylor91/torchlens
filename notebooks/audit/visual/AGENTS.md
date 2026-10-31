@@ -67,7 +67,7 @@ These three claims look similar and must never be conflated:
 
 Also: collapsed boxes carry an honest contents remainder in the
 `N ops + M buffers` form (`format_collapsed_module_contents` in
-`visualization/_render_common.py`; the old `N layers total` label is
+`_visualization/_render_common.py`; the old `N layers total` label is
 test-FORBIDDEN — `tests/test_buffer_visibility.py` and
 `tests/test_auto_collapse_metrics.py` assert it never renders); ops with
 hidden buffer dependencies get a double border (`peripheries=2`).

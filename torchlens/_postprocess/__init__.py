@@ -623,7 +623,7 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         # B1-02: session-time semantic-output scratch. Two of the four pin live
         # user objects (an HF tokenizer, a model-derived metadata key), so this
         # seam is the postprocess-side belt for the capture-boundary drop in
-        # ``capture/trace.py`` -- including the halted postprocess, which
+        # ``_capture/trace.py`` -- including the halted postprocess, which
         # reaches here through ``_finalize_halted_trace``.
         "_output_style",
         "_output_head",

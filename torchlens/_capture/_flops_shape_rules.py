@@ -1,6 +1,6 @@
 """Shape helpers and the shape-derived FLOP rules for weighted, recurrent and chained calls.
 
-Split from ``capture/flops.py`` (size ratchet): the rule tables stay there and
+Split from ``_capture/flops.py`` (size ratchet): the rule tables stay there and
 import these. Conventions are that module's: one multiply-add counts 2 FLOPs,
 and a rule returns ``None`` rather than guess.
 """

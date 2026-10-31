@@ -122,7 +122,7 @@
 - Dual home: top-level `torchlens/facets.py` is a self-replacing stub that swaps
   itself in `sys.modules` for `torchlens._semantic.facets`, so the two module
   objects are identity-equal; the `tl.facets` attribute resolves lazily via
-  `_LAZY_ATTRS` in `torchlens/__init__.py`. Edit `semantic/facets.py` only.
+  `_LAZY_ATTRS` in `torchlens/__init__.py`. Edit `_semantic/facets.py` only.
 - Builtin recipes register when `torchlens._semantic` is first imported (run
   time), not at `import torchlens`; tests must not assume collection-time
   registration.

@@ -1,4 +1,4 @@
-# torchlens/capture architecture and implementation
+# torchlens/_capture architecture and implementation
 
 Roles are functional: the coordinator owns design and integration, implementers own scoped changes, and reviewers verify evidence. The same rules apply to every harness.
 
@@ -22,7 +22,7 @@ partial diagnostics, and fastlog's lightweight `RecordContext` construction.
 | `flops.py` | Forward and backward FLOPs estimates with registry hooks |
 | `outcome.py` | SINGLE authority for terminal capture truth: `CaptureOutcome`/`CaptureStatus`/`CapturePhase`/`FailureOrigin` plus the N1-N5 capability chokepoint |
 | `session.py` | Capture-session lifecycle state |
-| `projectors.py` | Projector CLASSES over a sealed capture core — `RefreshProjector` (consumed by `capture/trace.py` refresh runs) and `RecordingProjection`/`RecordingProjector` (consumed by `fastlog/types.py`), not helper callables for `projections.py` |
+| `projectors.py` | Projector CLASSES over a sealed capture core — `RefreshProjector` (consumed by `_capture/trace.py` refresh runs) and `RecordingProjection`/`RecordingProjector` (consumed by `recording/types.py`), not helper callables for `projections.py` |
 | `plan.py` | Capture planning helpers |
 | `__init__.py` | Empty package marker |
 
@@ -49,7 +49,7 @@ Unattributed tensor-argument markers are collected during arg resolution and war
 once in postprocess.
 
 Fastlog reuses the wrapper hot path but stores `ActivationRecord` data through
-`fastlog/_recorder.py`, `storage_ram.py`, and `storage_disk.py` instead of building
+`recording/_recorder.py`, `storage_ram.py`, and `storage_disk.py` instead of building
 a full `Trace`.
 
 ## Key Functions

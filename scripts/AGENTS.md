@@ -25,7 +25,7 @@ The release pipeline has three defenses against accidental major bumps:
 Do not edit release scripts as part of docs or feature work unless explicitly requested.
 
 ## FLOPs Coverage
-`check_flops_coverage.py` compares `capture/flops.py` rule coverage with
+`check_flops_coverage.py` compares `_capture/flops.py` rule coverage with
 `constants.ORIG_TORCH_FUNCS` and groups uncovered functions. Use it after changing FLOPs
 handlers or torch function discovery.
 

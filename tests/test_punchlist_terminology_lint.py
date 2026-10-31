@@ -65,7 +65,7 @@ _SCAN_SUFFIXES = (".py", ".md", ".ipynb", ".rst", ".txt")
 
 #: R1 scan scope: the shipped docs tree plus the audit-text and caption
 #: sources (intervention audit strings live in torchlens/intervention and
-#: torchlens/bundle; render captions in torchlens/visualization).
+#: torchlens/bundle; render captions in torchlens/_visualization).
 _R1_SCOPES = (
     "docs/",
     "README.md",

@@ -34,7 +34,7 @@ SILENT_CALLS = frozenset(
 EMIT_ATTRS = frozenset({"node", "edge", "attr", "subgraph"})
 EMIT_NAMES = frozenset({"NodeSpec", "LegendRow"})
 
-#: Label-template sources: file (relative to ``torchlens/visualization``) and the
+#: Label-template sources: file (relative to ``torchlens/_visualization``) and the
 #: functions whose strings count (``None`` means the whole file).
 LABEL_SOURCES: Mapping[str, tuple[str, ...] | None] = {
     "_label_format.py": None,

@@ -206,7 +206,7 @@ def test_no_raw_label_strip_sites_outside_the_resolver() -> None:
     slice-stripping ``_RAW_LABEL_SUFFIX`` into a user-facing spelling is always
     wrong. The ONLY sanctioned sites are the constant's definition, the
     explicitly raw-named ``Op.raw_label`` identity property, and the resolver
-    door module itself (``capture/_nonfinite_prefix.py``, home of both
+    door module itself (``_capture/_nonfinite_prefix.py``, home of both
     ``resolve_raw_label`` and the constant-suffix ``strip_raw_label_suffix``
     the preview/neutral finishers use before any ``Trace`` identity map
     exists); every other consumer routes through one of those two functions.

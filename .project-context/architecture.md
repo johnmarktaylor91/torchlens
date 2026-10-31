@@ -333,7 +333,7 @@ decide it.
   `io/` is the public-facing helper namespace (log administration such as `list_logs`
   and `reset_naming_counter`, intervention-spec save) that delegates to `_io` and
   `user_funcs`.
-- `torchlens/viz` + `torchlens/visualization`: `visualization/` is the graph-rendering
+- `torchlens/viz` + `torchlens/_visualization`: `visualization/` is the graph-rendering
   engine (Graphviz DOT emission, smart collapse, dagua renderer dispatch) behind `draw` and
   `show_model_graph`; `viz/` is a user-facing convenience namespace for
   activation/tensor plotting (montage, text tables, feature-map evolution, heatmaps,
@@ -345,6 +345,6 @@ decide it.
   owns the intervention error catalog (severity tags, field-formatted messages) and
   imports from both.
 - `torchlens/facets.py` + `torchlens/_semantic/`: `semantic/` is the canonical
-  implementation (`semantic/facets.py` plus `recipes` and `patching`); top-level
+  implementation (`_semantic/facets.py` plus `recipes` and `patching`); top-level
   `facets.py` is a lazy import-alias stub that replaces itself in `sys.modules` with
   `torchlens._semantic.facets` so the two module objects are identity-equal.

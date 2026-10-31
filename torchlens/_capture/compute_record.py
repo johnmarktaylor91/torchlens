@@ -1,6 +1,6 @@
 """The two-term compute record (A5/A6): true MACs, never flops // 2.
 
-Split from ``capture/flops.py`` (size ratchet); the cost TABLES stay there,
+Split from ``_capture/flops.py`` (size ratchet); the cost TABLES stay there,
 the record layer lives here. Spellings DOCUMENTED-UNSTABLE pending
 naming-session ratification; the C02 FactCore substrate consumes this.
 """

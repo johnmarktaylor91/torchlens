@@ -212,7 +212,7 @@ def test_safe_copy_is_only_detach_lever_in_fastlog() -> None:
     """The fastlog package does not call .detach() directly."""
 
     offenders: list[str] = []
-    for path in Path("torchlens/fastlog").glob("*.py"):
+    for path in Path("torchlens/recording").glob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if (

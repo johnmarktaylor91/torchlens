@@ -68,7 +68,7 @@ Backend integration:
 
 ## Journal Producer (single since producer unification P7)
 - Every torch capture freezes decomposed `OpRecord` rows (`OpCore` + typed facets) through
-  the ONE commit tail `capture/projections.py::commit_op` (freeze -> atomic append): the
+  the ONE commit tail `_capture/projections.py::commit_op` (freeze -> atomic append): the
   three exhaustive `_make_layer_log_entry` sites via `ExhaustiveOpDraft` and the sparse
   `append_projected_event` sites via `SparseOpDraft`. The legacy `OpEvent` producer, its
   dual-path env switch, `_op_event_from_log`, and

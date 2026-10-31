@@ -1557,7 +1557,7 @@ class Trace(
         "_validation_diagnostics": FieldPolicy.DROP,
         # Session-time semantic-output scratch (B1-02). Written at capture
         # entry, consumed only by ``decode_outputs_for_trace``, and dropped on
-        # every settlement path (``capture/trace.py``'s
+        # every settlement path (``_capture/trace.py``'s
         # ``_drop_semantic_output_transients`` plus the postprocess seam).
         # Declared here so the runtime-declaration lockstep gate can SEE them
         # on the halted axis and so the portable scrub is policy-driven rather

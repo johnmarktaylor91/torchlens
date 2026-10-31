@@ -1847,7 +1847,7 @@ def episode_ledger_for(trace: Any) -> EpisodeLedger | None:
         return None
 
 
-#: Travel-drop note code minted by ``capture/_annotations_travel.py``: the one
+#: Travel-drop note code minted by ``_capture/_annotations_travel.py``: the one
 #: episode-key payload shape that legally rides a NON-episode product (a fresh
 #: re-execution whose evidence was dropped), so ``capture_kind_for`` reads it
 #: as plain.

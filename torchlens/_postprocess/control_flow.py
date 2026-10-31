@@ -51,7 +51,7 @@ def _mark_conditional_branches(self: Trace) -> None:
     ``attribute_op()`` work. All Trace-level conditional collections are
     already initialized empty in :meth:`Trace.__init__`, and per-layer
     conditional fields are initialized to their empty defaults during
-    capture (see ``capture/output_tensors.py``). The fast-path is verified
+    capture (see ``_capture/output_tensors.py``). The fast-path is verified
     against the slow-path defaults via ``tests/test_perf_bundle.py``.
     """
 

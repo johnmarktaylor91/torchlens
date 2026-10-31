@@ -18,7 +18,7 @@ Moves (``git mv``):
 Rewrites, per tracked file under the scanned roots (history files excepted):
 
 - dotted ``torchlens.<old>`` and alias ``tl.<old>``, word-bounded;
-- path spellings ``torchlens/<old>/`` and ``torchlens/<old>.py``;
+- path spellings ``torchlens/<old>`` and package-relative ``<old>/module.py`` in prose and strings;
 - relative imports inside ``torchlens/`` that resolve to ``torchlens.<old>`` (``from ..old.x
   import y``; ``from .. import old`` stays bound to its local name);
 - the root lazy table and ``__all__`` of ``torchlens/__init__.py`` (the ``fastlog`` row becomes the
@@ -100,8 +100,9 @@ SUFFIXES = {
 }
 ALT = "|".join(sorted(MAPPING, key=len, reverse=True))
 DOTTED = re.compile(rf"(?<![\w.])(torchlens|tl)\.({ALT})\b")
-PATHED = re.compile(rf"(?<![\w/])torchlens/({ALT})(?=/|\.py\b)")
+PATHED = re.compile(rf"(?<![\w/])torchlens/({ALT})(?!\w)")
 RELPATH = re.compile(rf"(?<=[\"'\s(])({ALT})/((?:\w+/)*(?:\w+\.py\b|_\w+))")
+DOCPATH = re.compile(rf"(?<![\w/.-])({ALT})/((?:\w+/)*\w+\.py)\b")
 REL_FROM = re.compile(rf"^(\s*from\s+)(\.+)({ALT})\b", re.M)
 REL_BARE = re.compile(r"^(\s*from\s+)(\.+)(\s+import\s+)(\(?)([^\n#]*)", re.M)
 ABS_BARE = re.compile(r"^(\s*from\s+)(torchlens)(\s+import\s+)(\(?)([^\n#]*)", re.M)
@@ -181,6 +182,8 @@ def rewrite_text(text: str, path: Path, repo: Path) -> str:
     text = PATHED.sub(lambda m: f"torchlens/{MAPPING[m.group(1)]}", text)
     if path.suffix == ".py":
         text = RELPATH.sub(lambda m: f"{MAPPING[m.group(1)]}/{m.group(2)}", text)
+    if path.suffix in {".md", ".rst", ".txt", ".ipynb", ".py"}:
+        text = DOCPATH.sub(lambda m: f"{MAPPING[m.group(1)]}/{m.group(2)}", text)
     text = ABS_BARE.sub(lambda m: _rewrite_bare(m, path, repo), text)
     if path.suffix == ".py" and path.relative_to(repo).parts[0] == "torchlens":
         text = REL_FROM.sub(

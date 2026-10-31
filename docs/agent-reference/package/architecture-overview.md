@@ -14,7 +14,7 @@ import torchlens
 trace(model, input, save=..., intervene=..., lookback=..., storage=...)
   |- backends/registry.py      - resolve torch / MLX / JAX / tinygrad / Paddle / TensorFlow backend
   |- backends/torch/model_prep.py - ensure torch is wrapped, prepare modules/buffers/params
-  |- capture/trace.py          - run forward pass with active logging
+  |- _capture/trace.py          - run forward pass with active logging
   |- backends/torch/ops.py     - build raw torch op records during wrapper calls
   |- postprocess/              - current 26-step graph cleanup/finalization pipeline
                                  (contract keys 0..20 + 5 fractional inserts)
