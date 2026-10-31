@@ -421,7 +421,9 @@ def _gradient_events(trace: Any, start_ordinal: int) -> tuple[list[dict[str, Any
     """
 
     try:
-        backward_passes = list(getattr(trace, "backward_passes", ()) or ())
+        backward_passes = list(
+            getattr(getattr(trace, "autograd", None), "backward_passes", ()) or ()
+        )
     except (ValueError, AttributeError):
         backward_passes = []
     if not backward_passes:

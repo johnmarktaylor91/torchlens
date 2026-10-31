@@ -319,7 +319,7 @@ def _str_after_pass(self: "Trace") -> str:
 
     s += "\n\tTensor info:"
     s += (
-        f"\n\t\t- {bound}{self.num_tensors} total tensors ({self.total_activation_memory}) "
+        f"\n\t\t- {bound}{len(self)} total tensors ({self.total_activation_memory}) "
         f"computed in forward pass{' (lower bound: capture unverified)' if unverified else ''}."
     )
     s += f"\n\t\t- {self.num_saved_ops} tensors ({self.saved_activation_memory}) with saved outs."

@@ -621,7 +621,9 @@ class _TlSpecWriter:
         """
 
         leaf_records = getattr(source, "derived_grads", {})
-        intermediate_records = getattr(source, "intermediate_derived_grads", {})
+        intermediate_records = getattr(
+            getattr(source, "autograd", None), "intermediate_derived_grads", {}
+        )
         leaf_count = _safe_len(leaf_records)
         intermediate_count = _safe_len(intermediate_records)
         if leaf_count == 0 and intermediate_count == 0:
@@ -900,8 +902,10 @@ class _TlSpecWriter:
         return {
             "has_backward_pass": bool(getattr(source, "has_backward_pass", False)),
             "num_backward_passes": int(getattr(source, "num_backward_passes", 0) or 0),
-            "num_grad_fns": int(getattr(source, "num_grad_fns", 0) or 0),
-            "num_grad_fn_calls": int(getattr(source, "num_grad_fn_calls", 0) or 0),
+            "num_grad_fns": _safe_len(getattr(source, "grad_fn_logs", None)),
+            "num_grad_fn_calls": _safe_len(
+                getattr(getattr(source, "autograd", None), "grad_fn_calls", None)
+            ),
             "num_saved_grad_records": saved_grad_records,
             "gradient_blob_count": sum(1 for entry in tensor_entries if entry.kind in grad_kinds),
             "gradient_blob_kinds": sorted(

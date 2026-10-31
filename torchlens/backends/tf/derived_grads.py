@@ -274,7 +274,9 @@ def attach_tf_derived_grads(
             module_tree.forward_args_by_call.update(previous_forward_args)
     trace.derived_grads = DerivedGradAccessor(records)
     if grad_options.intermediate_grads:
-        trace._autograd_intermediate_derived_grads = intermediate_accessor
+        from ...data_classes._trace_stats import set_intermediate_derived_grads
+
+        set_intermediate_derived_grads(trace, intermediate_accessor)
     mirror_param_derived_grads(trace, records)
 
 

@@ -49,7 +49,7 @@ def test_gpt2_at_16_tokens_external_pins() -> None:
     try:
         assert log.num_params == GPT2_DECLARED_UNIQUE_PARAMS
         assert log.num_params == sum(p.numel() for p in model.parameters())
-        assert log.num_params_by_path == GPT2_PER_PATH_PARAMS
+        assert log.params.numel_by_path == GPT2_PER_PATH_PARAMS
         assert log.graph.tied_param_groups, "the wte/lm_head tie must be detected and named"
         assert int(log.cost.total_flops_forward) == GPT2_TRUE_FORWARD_FLOPS_T16
         # The alias overstatement is dead: the old printed figure is unreachable.

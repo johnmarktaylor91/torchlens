@@ -9,6 +9,21 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : The finalized record of one executed path: operations, dataflow edges, module context, selected
   payloads, and capture metadata. `tl.trace(...)` returns a `Trace`.
 
+**Trace.cost / Trace.graph / Trace.autograd / Trace.source**
+: Read-only concern groups of a `Trace`. `trace.cost` holds compute and timing totals
+  (`total_flops`, `total_macs`, `macs_by_kind`, `overhead_duration`, ...); `trace.graph` holds
+  graph-shape facts (`edges`, `is_recurrent`, `is_dynamic`, `max_ops_per_layer`, degree and edge
+  counts, `orphans`, `tied_param_groups`); `trace.autograd` holds the backward records
+  (`backward_passes`, `grad_fns`, `grad_fn_calls`, `saved_grad_fns`,
+  `intermediate_derived_grads`, ...); `trace.source` holds the model source facts
+  (`class_location`, `forward_location`, `init_location`, `cls`).
+
+**Trace.params filters and totals**
+: `trace.params.trainable`, `.frozen`, `.executed` and `.unexecuted` are parameter collections;
+  `len()` counts their Param records and `.numel` adds up their elements (ties counted once);
+  `trace.params.numel_by_path` counts ties once per module path; `.labels` gives the addresses
+  (`trace.params.unexecuted.labels`).
+
 **Recording**
 : A sparse, torch-only event stream returned by `tl.record(model, inputs, save=...)`.
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected

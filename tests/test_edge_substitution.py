@@ -73,7 +73,7 @@ def test_trace_edges_family_and_provenance_gate(capture):
     torch.manual_seed(0)
     plain = tl.trace(_Net(), torch.randn(1, 1, 12, 12))
     with pytest.raises(SelectionError) as excinfo:
-        _ = plain.edges
+        _ = plain.graph.edges
     assert excinfo.value.fields["code"] == "edge_provenance_unavailable"
 
 

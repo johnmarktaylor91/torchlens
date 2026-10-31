@@ -52,6 +52,18 @@ from .op import Op
 from .param import ParamAccessor
 
 
+def set_intermediate_derived_grads(
+    trace: "Trace", records: IntermediateDerivedGradAccessor
+) -> None:
+    """Install backend-derived intermediate grad records on ``trace``.
+
+    Backends call this instead of writing the private storage directly, so
+    the records stay owned by the Trace (``trace.autograd.intermediate_derived_grads``).
+    """
+
+    trace._autograd_intermediate_derived_grads = records
+
+
 class _CallableDict(dict[Any, Any]):
     """Dict that returns a plain dict when called.
 
@@ -205,12 +217,6 @@ class TraceStatsMixin(_TraceMixinBase):
         return len(self.conditionals) > 0
 
     @property
-    def num_conditionals(self: "Trace") -> int:
-        """Number of conditional-flow records."""
-
-        return len(self.conditionals)
-
-    @property
     def _graph_is_dynamic(self: "Trace") -> bool:
         """Whether execution depends on runtime tensor values."""
 
@@ -239,11 +245,6 @@ class TraceStatsMixin(_TraceMixinBase):
         if self.init_source_file is None or self.init_source_line is None:
             return None
         return f"{self.init_source_file}:{self.init_source_line}"
-
-    @property
-    def num_tensors(self: "Trace") -> int:
-        """Total number of tensor operations."""
-        return len(self)
 
     @property
     def _cost_last_backward_duration(self: "Trace") -> Duration | None:
@@ -573,24 +574,6 @@ class TraceStatsMixin(_TraceMixinBase):
     # pre-forward scan, so ties are counted once and disclosed, never merged.
 
     @property
-    def num_params_executed(self: "Trace") -> int:
-        """Total elements of declared parameters CONSUMED by a captured op."""
-
-        return sum(int(pl.num_params) for pl in self.param_logs if pl.used_by_ops)
-
-    @property
-    def num_params_unexecuted(self: "Trace") -> int:
-        """Total elements of declared parameters no captured op consumed."""
-
-        return sum(int(pl.num_params) for pl in self.param_logs if not pl.used_by_ops)
-
-    @property
-    def unexecuted_param_names(self: "Trace") -> tuple[str, ...]:
-        """Addresses of declared parameters no captured op consumed."""
-
-        return tuple(pl.address for pl in self.param_logs if not pl.used_by_ops)
-
-    @property
     def _graph_tied_param_groups(self: "Trace") -> tuple[tuple[str, ...], ...]:
         """Alias-address groups of parameters registered at more than one path."""
 
@@ -600,21 +583,6 @@ class TraceStatsMixin(_TraceMixinBase):
             if len(addresses) > 1:
                 groups.append(addresses)
         return tuple(groups)
-
-    @property
-    def num_params_by_path(self: "Trace") -> int:
-        """Per-module-path parameter total (ties counted once PER PATH).
-
-        This is the ``named_parameters(remove_duplicate=False)`` tally --
-        torchinfo's number. It differs from ``num_params`` exactly when
-        parameters are tied; the summary footer prints both and names the tie.
-        """
-
-        total = 0
-        for pl in self.param_logs:
-            addresses = getattr(pl, "all_addresses", None) or (pl.address,)
-            total += int(pl.num_params) * len(addresses)
-        return total
 
     @property
     def ops(self: "Trace") -> TraceOpAccessor:
@@ -1095,12 +1063,6 @@ class TraceStatsMixin(_TraceMixinBase):
         self.__dict__[_TRACE_MODULE_CALL_ACCESSOR_ATTR] = accessor
         return accessor
 
-    @property
-    def num_module_calls(self: "Trace") -> int:
-        """Total number of module invocations recorded in this Trace."""
-
-        return len(self.module_calls)
-
     def _root_call(self: "Trace") -> "ModuleCall":
         """Return the top-level ModuleCall for internal call-tree traversal.
 
@@ -1173,24 +1135,6 @@ class TraceStatsMixin(_TraceMixinBase):
     def root_module(self: "Trace") -> "Module":
         """The root module (the model itself)."""
         return cast("Module", self._module_logs["self"])
-
-    @property
-    def num_layers(self: "Trace") -> int:
-        """Number of distinct Layer records in this Trace."""
-
-        return len(self.layers)
-
-    @property
-    def num_compute_layers(self: "Trace") -> int:
-        """Number of compute Layers in this Trace."""
-
-        return len(self.compute_layers)
-
-    @property
-    def num_compute_ops(self: "Trace") -> int:
-        """Number of compute Ops in this Trace."""
-
-        return len(self.compute_ops)
 
     @property
     def num_edges(self: "Trace") -> int:
@@ -1292,12 +1236,6 @@ class TraceStatsMixin(_TraceMixinBase):
         return max((op.num_children for op in self.compute_ops), default=0)
 
     @property
-    def num_saved_grad_ops(self: "Trace") -> int:
-        """Number of Ops with saved gradients."""
-
-        return len(self.saved_grad_ops)
-
-    @property
     def _autograd_intermediate_derived_grads(self: "Trace") -> IntermediateDerivedGradAccessor:
         """Access exact op-level derived gradient records, when a backend provides them.
 
@@ -1326,24 +1264,6 @@ class TraceStatsMixin(_TraceMixinBase):
         """
 
         self.__dict__["_intermediate_derived_grads"] = value
-
-    @property
-    def num_saved_grad_layers(self: "Trace") -> int:
-        """Number of Layers containing at least one saved-gradient Op."""
-
-        return len(self.saved_grad_layers)
-
-    @property
-    def num_param_tensors_trainable(self: "Trace") -> int:
-        """Number of trainable parameter tensors in this Trace."""
-
-        return sum(1 for param in self.params if param.is_trainable)
-
-    @property
-    def num_param_tensors_frozen(self: "Trace") -> int:
-        """Number of frozen parameter tensors in this Trace."""
-
-        return sum(1 for param in self.params if not param.is_trainable)
 
     @property
     def has_trainable_params(self: "Trace") -> bool:
@@ -1568,12 +1488,6 @@ class TraceStatsMixin(_TraceMixinBase):
             _materialize_backward_projections(self)
 
     @property
-    def num_grad_fn_calls(self: "Trace") -> int:
-        """Total number of GradFnCall records in this Trace."""
-
-        return len(self.autograd.grad_fn_calls)
-
-    @property
     def saved_ops(self: "Trace") -> Accessor[Op]:
         """Access Ops with saved activations."""
 
@@ -1670,12 +1584,6 @@ class TraceStatsMixin(_TraceMixinBase):
         )
 
     @property
-    def num_saved_modules(self: "Trace") -> int:
-        """Number of Modules with at least one saved-activation ModuleCall."""
-
-        return len(self.saved_modules)
-
-    @property
     def saved_grad_module_calls(self: "Trace") -> Accessor[Any]:
         """Access ModuleCalls whose outputs include saved gradients."""
 
@@ -1693,18 +1601,6 @@ class TraceStatsMixin(_TraceMixinBase):
                 if module.address in saved_addresses
             )
         )
-
-    @property
-    def num_saved_grad_module_calls(self: "Trace") -> int:
-        """Number of ModuleCalls whose outputs include saved gradients."""
-
-        return len(self.saved_grad_module_calls)
-
-    @property
-    def num_saved_grad_modules(self: "Trace") -> int:
-        """Number of Modules with at least one saved-gradient ModuleCall."""
-
-        return len(self.saved_grad_modules)
 
     @property
     def _autograd_saved_grad_fn_calls(self: "Trace") -> Accessor[Any]:
@@ -1773,12 +1669,6 @@ class TraceStatsMixin(_TraceMixinBase):
         return len(dict.fromkeys(self.input_layers))
 
     @property
-    def num_input_ops(self: "Trace") -> int:
-        """Number of flat input-boundary Ops."""
-
-        return len(self.input_ops)
-
-    @property
     def output_ops(self: "Trace") -> Accessor[Op]:
         """Access flat output-boundary Ops."""
 
@@ -1791,12 +1681,6 @@ class TraceStatsMixin(_TraceMixinBase):
         """Number of distinct output-boundary Layers (a multi-pass Layer counts once)."""
 
         return len(dict.fromkeys(self.output_layers))
-
-    @property
-    def num_output_ops(self: "Trace") -> int:
-        """Number of flat output-boundary Ops."""
-
-        return len(self.output_ops)
 
     @property
     def num_buffer_layers(self: "Trace") -> int:
@@ -1831,30 +1715,6 @@ class TraceStatsMixin(_TraceMixinBase):
         ]
 
     @property
-    def num_buffer_read_ops(self: "Trace") -> int:
-        """Number of buffer Ops that read registered-buffer values into the graph."""
-
-        return len(self.buffer_read_ops)
-
-    @property
-    def num_buffer_write_ops(self: "Trace") -> int:
-        """Number of buffer Ops that record registered-buffer write events."""
-
-        return len(self.buffer_write_ops)
-
-    @property
-    def num_buffer_source_ops(self: "Trace") -> int:
-        """Number of buffer source Ops that read registered buffers."""
-
-        return len(self.buffer_read_ops)
-
-    @property
-    def num_buffer_sink_ops(self: "Trace") -> int:
-        """Number of buffer sink Ops that record registered-buffer writes."""
-
-        return len(self.buffer_write_ops)
-
-    @property
     def internal_source_layers(self: "Trace") -> Accessor[Layer]:
         """Access Layers representing internal-source positions."""
 
@@ -1869,18 +1729,6 @@ class TraceStatsMixin(_TraceMixinBase):
         )
 
     @property
-    def num_internal_source_layers(self: "Trace") -> int:
-        """Number of internal-source Layers."""
-
-        return len(self.internal_source_layers)
-
-    @property
-    def num_internal_source_ops(self: "Trace") -> int:
-        """Number of internal-source Ops."""
-
-        return len(self.internal_source_ops)
-
-    @property
     def internal_sink_layers(self: "Trace") -> Accessor[Layer]:
         """Access Layers representing internal-sink positions."""
 
@@ -1893,18 +1741,6 @@ class TraceStatsMixin(_TraceMixinBase):
             ),
             source_trace=self,
         )
-
-    @property
-    def num_internal_sink_layers(self: "Trace") -> int:
-        """Number of internal-sink Layers."""
-
-        return len(self.internal_sink_layers)
-
-    @property
-    def num_internal_sink_ops(self: "Trace") -> int:
-        """Number of internal-sink Ops."""
-
-        return len(self.internal_sink_ops)
 
     @property
     def num_uncalled_modules(self: "Trace") -> int | None:
@@ -1931,28 +1767,6 @@ class TraceStatsMixin(_TraceMixinBase):
             [op for op in self.layer_list if op.num_params > 0],
             self.layer_num_calls,
         )
-
-    @property
-    def num_ops_with_params(self: "Trace") -> int:
-        """Number of Ops that use at least one parameter tensor."""
-
-        return len(self.ops_with_params)
-
-    @property
-    def num_grad_fns(self: "Trace") -> int:
-        """Number of unique autograd grad_fn_handle nodes discovered."""
-        return len(self.grad_fn_logs)
-
-    @property
-    def num_grad_fns_with_op(self: "Trace") -> int:
-        """Number of GradFn records paired with a forward Op."""
-
-        return sum(1 for grad_fn_handle in self.grad_fn_logs.values() if grad_fn_handle.has_op)
-
-    @property
-    def num_grad_fns_without_op(self: "Trace") -> int:
-        """Number of grad_fn_handle nodes without a corresponding forward Layer."""
-        return sum(1 for grad_fn_handle in self.grad_fn_logs.values() if not grad_fn_handle.has_op)
 
     def between(self: "Trace", sources: Any, sinks: Any) -> "TraceSlice":
         """Return the sub-DAG view carrying influence from sources to sinks.

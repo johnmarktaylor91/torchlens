@@ -1054,7 +1054,7 @@ def _emit_and_finish_forward(
             # The typed raise names the saved source path, so keep the file.
             _raise_graphviz_timeout(
                 "forward graph (notebook display)",
-                f"{trace.num_tensors} nodes",
+                f"{len(trace)} nodes",
                 notebook_source_path,
                 render_timeout,
                 error,
@@ -1222,7 +1222,7 @@ def _publish_forward_render(
         except subprocess.TimeoutExpired as error:
             _raise_graphviz_timeout(
                 "forward graph",
-                f"{trace.num_tensors} nodes",
+                f"{len(trace)} nodes",
                 source_path,
                 render_timeout,
                 error,

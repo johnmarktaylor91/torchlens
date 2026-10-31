@@ -189,9 +189,9 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "num_module_calls": core.counts.module_calls,
             "num_inputs": len(getattr(trace, "input_ops", ()) or ()),
             "num_outputs": len(getattr(trace, "output_ops", ()) or ()),
-            "is_recurrent": getattr(trace, "is_recurrent", False),
-            "has_conditionals": getattr(trace, "has_conditionals", False),
-            "num_conditionals": getattr(trace, "num_conditionals", 0),
+            "is_recurrent": getattr(getattr(trace, "graph", None), "is_recurrent", False),
+            "has_conditionals": getattr(getattr(trace, "graph", None), "has_conditionals", False),
+            "num_conditionals": len(getattr(trace, "conditionals", ())),
         },
         "parameters": {
             "num_params": core.params.total,

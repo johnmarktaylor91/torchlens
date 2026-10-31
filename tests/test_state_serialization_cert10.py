@@ -334,7 +334,7 @@ def test_backward_pass_setstate_present_but_wrong_typed_grad_fn_calls_is_coerced
     restored = BackwardPass.__new__(BackwardPass)
     restored.__setstate__(state)
 
-    assert isinstance(restored.autograd.grad_fn_calls, list)
+    assert isinstance(restored.grad_fn_calls, list)
 
 
 # ---------------------------------------------------------------------------

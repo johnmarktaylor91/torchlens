@@ -5,7 +5,7 @@ capability table declares ``backward_capture=False`` instead of returning
 silently-empty results. The guarded surface is wider than the three headline
 accessors: ``Op.grads`` / ``Module.grads``, ``Trace.autograd.backward_passes``,
 ``Trace.saved_grad_ops``, ``Trace.autograd.last_backward_pass``,
-``Trace.num_saved_grad_ops``, ``Trace.saved_grad_module_calls``, and
+``len(Trace.saved_grad_ops)``, ``Trace.saved_grad_module_calls``, and
 ``Trace.saved_grad_modules`` all route through this guard, so on
 ``backward_capture=False`` backends they raise where they previously returned
 ``None``/``0``/empty. The registered table, not a hardcoded backend-name set,

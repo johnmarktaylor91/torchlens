@@ -2381,7 +2381,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         """
 
         trace = self._source_trace
-        records = getattr(trace, "intermediate_derived_grads", None)
+        records = getattr(getattr(trace, "autograd", None), "intermediate_derived_grads", None)
         if records is None:
             return None
         if self.label not in records:

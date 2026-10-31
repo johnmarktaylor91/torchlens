@@ -1843,7 +1843,7 @@ def test_log_model_metadata(default_input1):
     model = example_models.SimpleFF()
     mh = log_model_metadata(model, default_input1)
     assert len(mh.layer_labels) > 0
-    assert mh.num_tensors > 0
+    assert len(mh) > 0
 
 
 def test_trace_getitem_by_index(default_input1):

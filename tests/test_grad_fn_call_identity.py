@@ -30,6 +30,12 @@ class _TraceStandIn:
         self._backward_projection_revision = 0
 
     @property
+    def autograd(self) -> _TraceStandIn:
+        """Serve ``trace.autograd.grad_fn_calls`` from the stand-in itself."""
+
+        return self
+
+    @property
     def grad_fn_calls(self) -> TraceGradFnCallAccessor:
         """Return the accessor over the stand-in's calls."""
 

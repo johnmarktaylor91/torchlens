@@ -135,8 +135,8 @@ def test_buffer_layers():
 def test_tensor_info_fields(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert isinstance(mh.num_tensors, int)
-    assert mh.num_tensors > 0
+    assert isinstance(len(mh), int)
+    assert len(mh) > 0
     assert isinstance(mh.total_activation_memory, (int, float))
     assert mh.total_activation_memory > 0
     assert isinstance(mh.total_activation_memory, torchlens.Bytes)

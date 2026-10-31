@@ -111,7 +111,7 @@ def test_tie_is_named_and_per_path_total_printed() -> None:
     log = _capture(model, torch.tensor([[1, 2]]))
     try:
         assert log.graph.tied_param_groups == (("emb.weight", "head.weight"),)
-        assert log.num_params_by_path == 80
+        assert log.params.numel_by_path == 80
         # The footer prints both totals and names the tie (A2).
         rebuilt = log.summary()
         assert "40 declared unique" in rebuilt
@@ -144,9 +144,9 @@ def test_declared_executed_unexecuted_split_named() -> None:
     log = _capture(model, torch.randn(2, 6))
     try:
         assert log.num_params == 36 + 21  # declared: used 6*6 + dead 6*3+3
-        assert log.num_params_executed == 36
-        assert log.num_params_unexecuted == 21
-        assert set(log.unexecuted_param_names) == {"dead.weight", "dead.bias"}
+        assert log.params.executed.numel == 36
+        assert log.params.unexecuted.numel == 21
+        assert set(log.params.unexecuted.labels) == {"dead.weight", "dead.bias"}
         # The footer names the unexecuted split, never drops it (A3).
         rebuilt = log.summary()
         assert "21 never ran: dead" in rebuilt

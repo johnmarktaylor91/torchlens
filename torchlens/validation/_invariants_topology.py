@@ -109,10 +109,10 @@ def _check_trace_self_consistency(ml: Trace) -> None:
         )
 
     # Tensor counts
-    if ml.num_tensors < ml.num_saved_ops:
+    if len(ml) < ml.num_saved_ops:
         raise MetadataInvariantError(
             name,
-            f"num_tensors={ml.num_tensors} < num_saved_ops={ml.num_saved_ops}",
+            f"num_tensors={len(ml)} < num_saved_ops={ml.num_saved_ops}",
         )
 
 

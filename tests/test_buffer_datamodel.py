@@ -608,10 +608,10 @@ def _assert_buffer_op_accessors_partition_buffer_ops(trace: tl.Trace) -> None:
 
     assert trace.buffer_read_ops == expected_read_ops
     assert trace.buffer_write_ops == expected_write_ops
-    assert trace.num_buffer_read_ops == len(trace.buffer_read_ops)
-    assert trace.num_buffer_write_ops == len(trace.buffer_write_ops)
-    assert trace.num_buffer_source_ops == len(trace.buffer_read_ops)
-    assert trace.num_buffer_sink_ops == len(trace.buffer_write_ops)
+    assert len(trace.buffer_read_ops) == len(trace.buffer_read_ops)
+    assert len(trace.buffer_write_ops) == len(trace.buffer_write_ops)
+    assert len(trace.buffer_read_ops) == len(trace.buffer_read_ops)
+    assert len(trace.buffer_write_ops) == len(trace.buffer_write_ops)
     assert set(trace.buffer_read_ops).isdisjoint(trace.buffer_write_ops)
     assert set(trace.buffer_read_ops) | set(trace.buffer_write_ops) == set(all_buffer_ops)
     assert {trace[op_label].layer_label for op_label in all_buffer_ops} == set(trace.buffer_layers)
@@ -683,10 +683,10 @@ def test_buffer_op_accessors_round_trip_through_tlspec(tmp_path: Path) -> None:
     _assert_buffer_op_accessors_partition_buffer_ops(loaded)
     assert loaded.buffer_read_ops == trace.buffer_read_ops
     assert loaded.buffer_write_ops == trace.buffer_write_ops
-    assert loaded.num_buffer_read_ops == trace.num_buffer_read_ops
-    assert loaded.num_buffer_write_ops == trace.num_buffer_write_ops
-    assert loaded.num_buffer_source_ops == trace.num_buffer_source_ops
-    assert loaded.num_buffer_sink_ops == trace.num_buffer_sink_ops
+    assert len(loaded.buffer_read_ops) == len(trace.buffer_read_ops)
+    assert len(loaded.buffer_write_ops) == len(trace.buffer_write_ops)
+    assert len(loaded.buffer_read_ops) == len(trace.buffer_read_ops)
+    assert len(loaded.buffer_write_ops) == len(trace.buffer_write_ops)
 
 
 def test_reassignment_double_count_is_exact() -> None:

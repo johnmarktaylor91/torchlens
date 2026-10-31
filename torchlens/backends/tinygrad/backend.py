@@ -1279,15 +1279,20 @@ class TinygradBackend:
         snapshots = _snapshot_tinygrad_grads(self, leaves)
         try:
             if grad_options.intermediate_grads:
-                trace._autograd_intermediate_derived_grads = (
-                    self._derive_intermediate_grads_no_realize(
-                        trace=trace,
-                        model=model,
-                        args=args,
-                        captured_output=captured_output,
-                        grad_options=grad_options,
-                        snapshots=snapshots,
-                    )
+                from ...data_classes._trace_stats import set_intermediate_derived_grads
+
+                set_intermediate_derived_grads(
+                    trace,
+                    (
+                        self._derive_intermediate_grads_no_realize(
+                            trace=trace,
+                            model=model,
+                            args=args,
+                            captured_output=captured_output,
+                            grad_options=grad_options,
+                            snapshots=snapshots,
+                        )
+                    ),
                 )
                 _restore_tinygrad_grads(snapshots)
                 snapshots = _snapshot_tinygrad_grads(self, leaves)

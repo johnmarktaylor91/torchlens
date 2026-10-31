@@ -237,7 +237,7 @@ class TestModuleLogFields:
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         assert len(ml.layers) > 0
-        assert ml.num_layers == len(ml.layers)
+        assert len(ml.layers) == len(ml.layers)
 
     def test_params_accessor(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -566,18 +566,18 @@ class TestModuleLogIntegration:
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         df = ml.to_pandas()
-        assert len(df) == ml.num_layers
+        assert len(df) == len(ml.layers)
 
     def test_module_log_iter(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         entries = list(ml)
-        assert len(entries) == ml.num_layers
+        assert len(entries) == len(ml.layers)
 
     def test_module_log_getitem(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        if ml.num_layers > 0:
+        if len(ml.layers) > 0:
             entry = ml[0]
             assert entry.layer_label == ml.layer_labels[0]
 

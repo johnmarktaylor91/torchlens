@@ -423,7 +423,7 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
         path=target,
         provenance=provenance,
         receipt=receipt,
-        total_ops=getattr(trace, "num_tensors", None),
+        total_ops=len(trace) if hasattr(trace, "__len__") else None,
         policy={
             "theme": theme,
             "collapse": resolved_collapse,

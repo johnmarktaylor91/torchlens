@@ -205,7 +205,7 @@ def test_param_tensor_counts_split_frozen_and_trainable(two_linear_trace) -> Non
     # the never-called dead = Linear(3, 3) trainable: 2 frozen, 4 trainable.
     trace = two_linear_trace
     ops, layers, modules, calls = _by_label(trace)
-    assert (int(trace.num_param_tensors_frozen), int(trace.num_param_tensors_trainable)) == (2, 4)
+    assert (int(len(trace.params.frozen)), int(len(trace.params.trainable))) == (2, 4)
     expected = {"linear_1_1": (2, 0), "relu_1_2": (0, 0), "linear_2_3": (0, 2)}
     for label, pair in expected.items():
         for record in (layers[label], ops[f"{label}:1"]):
@@ -484,11 +484,11 @@ def test_gradient_bytes_on_layers_modules_and_buffers(outer_case) -> None:
 def test_backward_graph_counts_match_a_raw_recount(case: str, passes: int, request) -> None:
     _, trace, loss, tally = request.getfixturevalue(case)
     nodes, edges = _raw_graph(loss)
-    assert int(trace.num_grad_fns) == len(nodes)
+    assert int(len(trace.autograd.grad_fns)) == len(nodes)
     assert int(trace.autograd.num_backward_edges) == len(edges)
     # Every reachable node ran once per pass, by its hook.
     assert set(tally.values()) == {passes} and len(tally) == len(nodes)
-    assert int(trace.num_grad_fn_calls) == sum(tally.values())
+    assert int(len(trace.autograd.grad_fn_calls)) == sum(tally.values())
     # A node pairs with an Op when it is the grad_fn of an Op's own tensor:
     # Grad has addmm, relu, addmm; Outer has addmm, relu, mul per block call,
     # the head's addmm and the sum. The CloneBackward0 between the loss and
@@ -497,8 +497,8 @@ def test_backward_graph_counts_match_a_raw_recount(case: str, passes: int, reque
     # tensor is the model output and shares its parent's node. The input
     # needs no gradient, so the input Op's tensor has no node.
     with_op = 3 if case != "outer_case" else 2 * 3 + 1 + 1
-    assert int(trace.num_grad_fns_with_op) == with_op
-    assert int(trace.num_grad_fns_without_op) == len(nodes) - with_op
+    assert int(sum(1 for g in trace.autograd.grad_fns if g.has_op)) == with_op
+    assert int(sum(1 for g in trace.autograd.grad_fns if not g.has_op)) == len(nodes) - with_op
 
 
 def test_grad_fn_pairing_with_a_grad_requiring_input() -> None:
@@ -525,10 +525,10 @@ def test_grad_fn_pairing_with_a_grad_requiring_input() -> None:
             "SumBackward0",
         ]
         trace.backward(loss)
-        assert int(trace.num_grad_fns) == len(nodes) == 7
+        assert int(len(trace.autograd.grad_fns)) == len(nodes) == 7
         assert int(trace.autograd.num_backward_edges) == len(edges) == 6
-        assert int(trace.num_grad_fns_with_op) == 3  # input copy, mul, add
-        assert int(trace.num_grad_fns_without_op) == 4
+        assert int(sum(1 for g in trace.autograd.grad_fns if g.has_op)) == 3  # input copy, mul, add
+        assert int(sum(1 for g in trace.autograd.grad_fns if not g.has_op)) == 4
     finally:
         trace.cleanup()
 
@@ -581,7 +581,7 @@ def test_backward_and_total_flops(grad_once, outer_case) -> None:
         assert int(layers[label].total_flops_total) == forward + backward
     backward_sum = sum(backward for _, backward in GRAD_FLOPS.values())  # 660
     forward_sum = sum(forward for forward, _ in GRAD_FLOPS.values())  # 342
-    for scope in (trace, modules["self"]):
+    for scope in (trace.cost, modules["self"]):
         assert int(scope.total_flops_backward) == backward_sum
         assert int(scope.total_flops) == forward_sum + backward_sum
     assert (int(modules["a"].total_flops_backward), int(modules["a"].total_flops)) == (432, 648)
