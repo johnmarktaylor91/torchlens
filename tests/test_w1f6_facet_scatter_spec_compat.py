@@ -237,7 +237,7 @@ def test_check_spec_compat_executable_hash_mismatch_returns_confirmation(tmp_pat
     )
     compat = check_spec_compat(spec, log_b)
     assert compat.outcome == "COMPATIBLE_WITH_CONFIRMATION"
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
 
 
 def test_check_spec_compat_executable_unresolvable_mismatch_still_raises(tmp_path: Any) -> None:
@@ -269,7 +269,7 @@ def test_check_spec_compat_same_graph_stays_exact(tmp_path: Any) -> None:
 
     compat = check_spec_compat(spec, same_log)
     assert compat.outcome == "EXACT"
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
 
 
 def test_check_spec_compat_nonexecutable_mismatch_still_confirmation(tmp_path: Any) -> None:
@@ -318,7 +318,7 @@ def test_v2_16_executable_fixtures_compat_is_confirmation_not_refusal(fixture_na
     assert log.graph_shape_hash not in saved_hashes  # confirm the mismatch is real
     compat = check_spec_compat(spec, log)
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
 
 
 def _capture_cnn_relu_ablation() -> Any:

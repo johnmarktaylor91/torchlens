@@ -74,7 +74,7 @@ def test_dead_layer_gradient_fact_fires_and_naive_change_is_vacuous(mechanism: s
     no_grad_names = {
         finding.names[0]
         for finding in report.findings
-        if finding.check == "param_received_no_gradient"
+        if finding.check_name == "param_received_no_gradient"
     }
     expected_cone = {"dead.weight", "dead.bias"}
     if mechanism == "graph_cut":
@@ -129,7 +129,7 @@ def test_no_grad_findings_distinguish_none_from_zero() -> None:
     kinds = {
         finding.names[0]: finding.message
         for finding in report.findings
-        if finding.check == "param_received_no_gradient"
+        if finding.check_name == "param_received_no_gradient"
     }
     # graph_cut detaches the branch: those params never get a grad AT ALL.
     assert "grad is None" in kinds["dead.weight"]
@@ -233,7 +233,7 @@ def test_update_ratio_raw_and_lr_normalized_with_zero_baseline() -> None:
 
     zero_baseline = [f for f in report.findings if f.code == "update_ratio_zero_baseline"]
     assert zero_baseline and zero_baseline[0].zero_baseline is True
-    assert zero_baseline[0].names == ("bias",)
+    assert zero_baseline[0].param_names == ("bias",)
     # inf is reported as a None value slot (values carry floats-or-None),
     # with the flag carrying the semantics -- never an epsilon-clamped fake.
     assert zero_baseline[0].values["update_ratio"] is None
@@ -290,7 +290,9 @@ def test_membership_and_train_eval_disclosures() -> None:
     assert "1" in train_eval["eval_mode_modules"]
     # The frozen param is NEVER named by the no-gradient detector: without
     # the membership disclosure it would name every frozen param (D4).
-    no_grad_names = {f.names[0] for f in report.findings if f.check == "param_received_no_gradient"}
+    no_grad_names = {
+        f.names[0] for f in report.findings if f.check_name == "param_received_no_gradient"
+    }
     assert "0.weight" not in no_grad_names
 
 
@@ -305,7 +307,7 @@ def test_unknown_optimizer_band_unavailable_with_reason() -> None:
     model = nn.Linear(4, 2)
     optimizer = ExoticOptimizer(model.parameters(), lr=0.1)
     facts = _adapters.optimizer_facts(optimizer)
-    assert not facts.known
+    assert not facts.is_known
     assert "no adapter" in (facts.band_reason or "")
 
     session = tc.ChecksSession(model, optimizer)
@@ -345,7 +347,7 @@ def test_decay_band_movement_fact_carries_betas() -> None:
     finally:
         session.detach()
 
-    decay_facts = [f for f in report.findings if f.check == "param_movement_decay_band"]
+    decay_facts = [f for f in report.findings if f.check_name == "param_movement_decay_band"]
     if decay_facts:  # momentum bleed-out timing is model-sized; fact shape is the pin
         fact = decay_facts[0]
         assert fact.severity == "info" and fact.action == "collect"

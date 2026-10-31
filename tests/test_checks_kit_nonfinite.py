@@ -60,7 +60,7 @@ def test_sb_raise_pre_write_without_scaler(dtype: torch.dtype, kind: str) -> Non
     model = _model(dtype)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     session = tc.ChecksSession(model, optimizer)
-    session.register_nonfinite_gradient_check()
+    session.register_nonfinite_grad_check()
     session.attach()
     before = _snapshot(model)
     try:
@@ -115,7 +115,7 @@ def test_nan_backward_smear_sets_smeared_attribution() -> None:
     model = Poisoned()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     session = tc.ChecksSession(model, optimizer)
-    session.register_nonfinite_gradient_check()
+    session.register_nonfinite_grad_check()
     session.attach()
     try:
         optimizer.zero_grad()
@@ -145,7 +145,7 @@ def test_clip_collateral_counted_and_disclosed() -> None:
     model = _model()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     session = tc.ChecksSession(model, optimizer, clip_norm=1.0)
-    session.register_nonfinite_gradient_check()
+    session.register_nonfinite_grad_check()
     session.attach()
     before = _snapshot(model)
     try:
@@ -172,7 +172,7 @@ def test_scaler_makes_the_event_a_harmless_skip(kind: str) -> None:
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     scaler = GradScaler("cpu")
     session = tc.ChecksSession(model, optimizer, scaler=scaler)
-    session.register_nonfinite_gradient_check()  # active, never fires
+    session.register_nonfinite_grad_check()  # active, never fires
     session.attach()
     before = _snapshot(model)
     try:
@@ -223,7 +223,7 @@ def test_actions_demote_per_registration() -> None:
     model = _model()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     session = tc.ChecksSession(model, optimizer)
-    session.register_nonfinite_gradient_check(action="collect")
+    session.register_nonfinite_grad_check(action="collect")
     session.attach()
     try:
         optimizer.zero_grad()

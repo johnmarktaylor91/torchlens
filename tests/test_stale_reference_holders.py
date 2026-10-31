@@ -654,7 +654,7 @@ def test_opaque_module_return_is_disclosed_adopted_and_fails_validation(
     with pytest.warns(UserWarning, match=_PROVENANCE):
         assert tl.validate(model, x, scope="forward") is False
     failure = tl.validation.last_validation_failure()
-    assert failure is not None and failure.check == "source_provenance"
+    assert failure is not None and failure.check_name == "source_provenance"
     assert failure.extra["reasons"] == ["module_boundary_adoption"]
 
 

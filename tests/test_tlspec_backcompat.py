@@ -248,7 +248,7 @@ def _assert_intervention_matches(
 
     compat = check_spec_compat(fixture_spec, live_log)
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
 
 
 @pytest.mark.parametrize(

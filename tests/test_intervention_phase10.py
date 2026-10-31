@@ -148,7 +148,7 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     assert tl.load(path) == spec
     compat = check_spec_compat(spec, _log(_ReluModel(), x))
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
 
 
 def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:

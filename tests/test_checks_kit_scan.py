@@ -49,7 +49,7 @@ def test_audit_params_clean_model_rows_and_export() -> None:
 
     assert audit.schema_version == _records.CHECK_REPORT_SCHEMA_VERSION == 1
     assert len(audit.rows) == 9  # 6 params + 3 batchnorm buffers
-    assert all(row.audited for row in audit.rows)
+    assert all(row.is_audited for row in audit.rows)
     assert audit.coverage["scope"] == "process_local"
     assert audit.coverage["global_reduce"] == "not_applied"
     payload = json.loads(audit.to_json())
@@ -90,7 +90,7 @@ def test_audit_params_severity_mapping() -> None:
 
     audit = torchlens.report.param_health(mapping, bounds={"bounded": (-1.0, 1.0)})
 
-    by_check = {(f.check, f.names[0]): f for f in audit.findings}
+    by_check = {(f.check_name, f.names[0]): f for f in audit.findings}
     assert by_check[("dtype_headroom", "near_max")].severity == "warning"
     assert by_check[("param_subnormal", "subnormal_heavy")].severity == "warning"
     assert by_check[("param_all_same", "constant")].severity == "warning"
@@ -236,7 +236,7 @@ def test_fp16_scan_never_widens_whole_tensors() -> None:
     with recorder:
         rows = _scan.scan_named_tensors([("t", "parameter", tensor)])
 
-    assert rows[0].audited
+    assert rows[0].is_audited
     assert not recorder.saw_widened_float, "whole-tensor float widening is forbidden"
     assert recorder.max_intermediate_bytes <= input_bytes, (
         f"an intermediate allocated {recorder.max_intermediate_bytes} bytes > "
@@ -256,7 +256,7 @@ def test_scan_counts_are_exact_on_fp16() -> None:
 
     (row,) = _scan.scan_named_tensors([("t", "parameter", tensor)])
 
-    assert (row.n_nan, row.n_posinf, row.n_neginf) == (3, 1, 1)
+    assert (row.num_nan, row.n_posinf, row.n_neginf) == (3, 1, 1)
     assert row.finite_min == -1.25 and row.finite_max == 2.5 and row.abs_max == 2.5
     assert row.zero_fraction == pytest.approx(993 / 1000)
     assert row.dtype_max == pytest.approx(65504.0)

@@ -55,7 +55,7 @@ class TestTierP:
         assert steps[-1] == 107  # last step force-sampled at close
         assert 105 in steps  # the cadence hit (105 % 5 == 0)
         report = session.close()
-        assert report.final_sample_forced
+        assert report.is_final_sample_forced
         assert report.first_step == 100
         assert report.last_step == 107
 
@@ -362,7 +362,7 @@ class TestLoudFailures:
         sink = trk.MemorySink()
         session = trk.watch(model, to=sink, optimizer=opt)
         report = session.close()
-        assert report.disabled
+        assert report.is_disabled
         assert [p.tag for p in sink.scalars] == ["torchlens/run/disabled"]
 
 

@@ -109,7 +109,7 @@ def test_golden_scorecard_canonical_bytes() -> None:
         RosterModel(family, "config_built", lambda: (abs, -1.0)) for family in ("fn", "mod")
     )
     card = scorecard_from_report(_golden_report(), roster, framework_version="1.2.3")
-    text = card.to_canonical_json()
+    text = card.to_json()
     assert hashlib.sha256(text.encode("utf-8")).hexdigest() == _GOLDEN_BYTES_SHA256
     assert card.sha256 == _GOLDEN_EMBEDDED_SHA256
     assert card.counts == {
@@ -152,7 +152,7 @@ def test_absent_framework_skips_every_case_and_scores_not_run(
     assert card.counts["not_run"] == _PREVIEW_DENOMINATOR - 3
     assert card.counts["denominator"] == _PREVIEW_DENOMINATOR
     assert card.highest_tier == "C0"
-    assert "conformant" not in card.to_canonical_json().lower()
+    assert "conformant" not in card.to_json().lower()
 
 
 class _RefusingAdapter:

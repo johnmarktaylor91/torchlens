@@ -182,7 +182,7 @@ def test_c0_claim_never_says_conformant() -> None:
 
     report = run_conformance("torch", tiers=("C0",))
     assert report.earned_tier == "C0"
-    assert report.claim_eligible is True
+    assert report.is_claim_eligible is True
     claim = claim_string(report)
     assert claim == "TorchLens provider API compatible, C0"
     assert "conformant" not in claim
@@ -198,7 +198,7 @@ def test_pretrained_family_floor_gates_c1_claims(tmp_path: Path) -> None:
 
     assert CLAIM_MIN_PRETRAINED_FAMILIES == 2
     one = run_conformance("torch", tiers=("C0", "C1"), roster=_tiny_roster("pretrained", 1))
-    assert one.earned_tier == "C1" and one.claim_eligible is False
+    assert one.earned_tier == "C1" and one.is_claim_eligible is False
     with pytest.raises(ConfigurationError):
         claim_string(one)
     two = run_conformance("torch", tiers=("C0", "C1"), roster=_tiny_roster("pretrained", 2))
@@ -234,7 +234,7 @@ def test_attestation_digest_recomputes_over_canonical_bytes() -> None:
         _canonical_report_json(report, include_attestation=False).encode("utf-8")
     ).hexdigest()
     assert report.attestation_sha256 == recomputed
-    payload = json.loads(report.to_canonical_json())
+    payload = json.loads(report.to_json())
     assert payload["attestation_sha256"] == recomputed
     assert payload["environment"]["torchlens_version"]
     # Canonical bytes are cwd-independent.

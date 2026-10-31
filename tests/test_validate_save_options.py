@@ -83,7 +83,7 @@ def test_intervention_scope_honors_save_options() -> None:
 
     model, x = _net_and_input()
     report = tl.validate(model, x, scope="intervention", output_device="cpu", save_budget=None)
-    assert report.invariance is True
+    assert report.is_invariant is True
     with pytest.raises(SaveBudgetExceededError):
         tl.validate(model, x, scope="intervention", save_budget=64)
 

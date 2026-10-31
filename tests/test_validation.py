@@ -129,7 +129,7 @@ def _assert_validation_fails_only_on_adoption(model: nn.Module, x: torch.Tensor)
         assert validate_forward_pass(model, [x], input_kwargs={}) is False
     assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
     failure = last_validation_failure()
-    assert failure is not None and failure.check == "source_provenance"
+    assert failure is not None and failure.check_name == "source_provenance"
     assert failure.extra["reasons"] == ["module_boundary_adoption"]
 
 
@@ -201,7 +201,7 @@ def test_validation_replay_unverified_status_semantics() -> None:
         source="live",
         reason="region_not_per_op_replayable",
         message="synthetic partial replay",
-        replayed_node_count=3,
+        num_replayed_ops=3,
         unverified_node_count=2,
     )
 
@@ -220,7 +220,7 @@ def test_validation_replay_status_aggregate_fold() -> None:
     mixed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=4,
+        num_replayed_ops=4,
         unverified_node_count=1,
     )
     failed_status = ValidationStatus.from_replay_counts(
@@ -840,7 +840,7 @@ def test_trace_clears_forward_global_container_tensor_labels_between_sessions() 
         with pytest.warns(UserWarning, match="no graph/source provenance"):
             assert validate_forward_pass(model, x, validate_metadata=True) is False
         failure = last_validation_failure()
-        assert failure is not None and failure.check == "source_provenance"
+        assert failure is not None and failure.check_name == "source_provenance"
         with pytest.warns(UserWarning, match="no graph/source provenance"):
             second_trace = tl.trace(
                 model,
@@ -1439,7 +1439,7 @@ def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
     assert warning.fields["first_graph_hash"] != warning.fields["retrace_graph_hash"]
     assert warning.fields["first_divergence"] is not None
     assert len(diagnostics) == 1
-    assert diagnostics[0][0].check == "trace_retrace_structure_mismatch"
+    assert diagnostics[0][0].check_name == "trace_retrace_structure_mismatch"
     assert diagnostics[0][0].extra["first_op_count"] == warning.fields["first_op_count"]
 
 
@@ -1487,7 +1487,7 @@ def test_validate_forward_pass_retrace_mismatch_records_a_structured_failure() -
     assert len(observed) == 1
     failure = get_validation_failure(observed[0])
     assert failure is not None
-    assert failure.check == "retrace_mismatch"
+    assert failure.check_name == "retrace_mismatch"
     assert "stateful/non-reproducible" in failure.summary()
 
 
@@ -1643,7 +1643,7 @@ def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
 
     assert execution_count == [2]
     assert len(diagnostics) == 1
-    assert diagnostics[0][0].check == "trace_retrace_pristine_copy_unavailable"
+    assert diagnostics[0][0].check_name == "trace_retrace_pristine_copy_unavailable"
 
 
 def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted() -> None:
@@ -1821,7 +1821,7 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
             is False
         )
         first = get_validation_failure(None)
-        assert first is not None and first.check == "retrace_mismatch"
+        assert first is not None and first.check_name == "retrace_mismatch"
 
         assert (
             user_public_impls._validate_forward_pass_torch(nn.Linear(3, 2), torch.randn(2, 3))

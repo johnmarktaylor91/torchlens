@@ -325,7 +325,7 @@ def test_symmetric_edge_drop_is_caught_by_value_rooted_replay():
         # sweep disabled this chain plant still fails, but only later, through
         # BFS completeness (the dropped producer's ancestors become unreached),
         # which would leave the value-rooted half silently unpinned (r18 V04).
-        assert failure.check == CHECK_ARG_LOGGING, failure
+        assert failure.check_name == CHECK_ARG_LOGGING, failure
         assert "unattributed tensor arg" in failure.message, failure
     finally:
         log.cleanup()

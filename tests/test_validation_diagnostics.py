@@ -88,7 +88,7 @@ def test_describe_tensor_mismatch_computes_metrics() -> None:
         saved, recomputed, check=CHECK_REPLAY, op_label="op_1", func_name="linear"
     )
 
-    assert failure.check == CHECK_REPLAY
+    assert failure.check_name == CHECK_REPLAY
     assert failure.op_label == "op_1"
     assert failure.func_name == "linear"
     assert failure.saved_shape == (3, 4)
@@ -150,7 +150,7 @@ def test_record_validation_failure_is_first_write_wins() -> None:
     record_validation_failure(trace, ValidationFailure(check_name="second"))
     failure = get_validation_failure(trace)
     assert failure is not None
-    assert failure.check == "first"
+    assert failure.check_name == "first"
 
 
 def test_to_dict_roundtrips_fields() -> None:
@@ -229,7 +229,7 @@ def test_regression_replay_diagnostic_carries_real_mismatch() -> None:
         # (2) the failure carries the real mismatch, not repr(False).
         failure = get_validation_failure(trace)
         assert failure is not None
-        assert failure.check == CHECK_REPLAY
+        assert failure.check_name == CHECK_REPLAY
         assert failure.op_label is not None and patched_label.split(":")[0] in failure.op_label
         assert failure.func_name == "__mul__"
         assert failure.saved_shape == (2, 8)
@@ -259,7 +259,7 @@ def test_regression_ground_truth_diagnostic_carries_real_mismatch() -> None:
         assert result.state == "failed"
         failure = get_validation_failure(trace)
         assert failure is not None
-        assert failure.check == CHECK_GROUND_TRUTH
+        assert failure.check_name == CHECK_GROUND_TRUTH
         assert failure.saved_shape == (2, 4)
         assert failure.recomputed_shape == (2, 4)
         assert failure.max_abs_diff is not None

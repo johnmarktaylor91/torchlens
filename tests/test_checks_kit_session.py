@@ -272,7 +272,7 @@ def test_profile_reports_measured_numbers() -> None:
     """profile() returns min-of-N data with the load recorded (D21)."""
 
     session = tc.ChecksSession(_net())
-    payload = session.profile()
+    payload = session.overhead()
     assert payload["scan_ms_min_of_3"] > 0
     assert payload["n_tensors"] == 4
     assert len(payload["loadavg"]) == 3

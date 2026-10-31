@@ -247,7 +247,7 @@ def test_provenance_only_stamp_records_applied_not_audited(model, resolution, tm
 def test_audit_provenance_stamp_carries_its_verdict(model, resolution, tmp_path) -> None:
     """A PreprocessingComparison provenance stamp rides with its own verdict."""
 
-    report = pp.audit(resolution, resolution)
+    report = pp.compare(resolution, resolution)
     out_dir = tmp_path / "auditstamp"
     tl.extract_dataset(
         model,

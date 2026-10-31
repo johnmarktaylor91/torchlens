@@ -188,7 +188,7 @@ def _assert_fails_completeness(model: nn.Module, x: torch.Tensor) -> None:
         warnings.simplefilter("ignore")
         assert validate_forward_pass(model, [x], input_kwargs={}) is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == CHECK_COMPLETENESS
+    assert failure is not None and failure.check_name == CHECK_COMPLETENESS
 
 
 def test_scripted_helper_is_one_boundary_op_and_validates() -> None:

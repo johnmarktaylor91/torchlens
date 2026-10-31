@@ -242,7 +242,7 @@ def test_merged_finding_payload_round_trip_preserves_key_and_ranks() -> None:
         key=(WORLD, 0, "coll", 3),
         ranks=(0, 1),
     )
-    payload = finding.to_payload()
+    payload = finding.to_dict()
     rebuilt = MergedFinding.from_dict(payload)
     assert rebuilt == finding
 

@@ -26,7 +26,7 @@ def test_payload_byte_totals_at_capture_and_now(tmp_path) -> None:
     trace = tl.trace(Grad().eval(), torch.randn(2, 4))
     try:
         totals = trace.summary().totals
-        assert totals.at_capture_bytes == SAVED_BYTES
+        assert totals.captured_bytes == SAVED_BYTES
         assert totals.retained_now_bytes == SAVED_BYTES  # every payload is resident
         path = tmp_path / "stripped.tlspec"
         tl.save(trace, path, include_outs=False)

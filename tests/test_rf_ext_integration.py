@@ -339,7 +339,7 @@ def test_folded_validate_tripwire_catches_injected_inconsistency() -> None:
         ReceptiveFieldDirection.RECEPTIVE,
         ReceptiveFieldDirection.PROJECTIVE,
     }
-    assert all(failure.n_violations > 0 for failure in failures)
+    assert all(failure.num_violations > 0 for failure in failures)
 
 
 class _AddZero(nn.Module):

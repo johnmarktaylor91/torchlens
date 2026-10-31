@@ -108,7 +108,7 @@ class TestLiveMerge:
         log = _capture()
         report = tl.merge_report([log])
         assert report.alignment.value == "aligned"
-        assert report.n_joins == 1
+        assert report.num_joins == 1
         assert report.to_markdown().startswith("# Cross-rank merge report")
 
     def test_join_ops_resolve_to_boundary_nodes(self, gloo_world):
