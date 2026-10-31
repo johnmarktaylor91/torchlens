@@ -50,6 +50,26 @@ def test_mlx_linear_mlp_smoke() -> None:
 
 
 @pytest.mark.optional
+def test_mlx_unwrapped_output_marks_capture_unverified() -> None:
+    """An output no wrapped op produced flags the trace instead of passing silently.
+
+    Array operators (``v + 1.0``), array methods and ``mx.*`` functions outside
+    the wrapped surface are not logged; a forward ending in one used to return a
+    trace with zero output ops and ``capture_verified`` still True.
+    """
+
+    with pytest.warns(UserWarning, match="not produced by a wrapped operation"):
+        trace = tl.trace(lambda v: v + 1.0, mx.array([1.0, 2.0]), backend="mlx")
+    assert trace.capture_verified is False
+    assert trace.capture_verification_reason == "mlx_output_not_produced_by_wrapped_op"
+    assert not list(trace.output_ops)
+
+    wrapped = tl.trace(lambda v: mx.add(v, 1.0), mx.array([1.0, 2.0]), backend="mlx")
+    assert wrapped.capture_verified is True
+    assert len(list(wrapped.output_ops)) == 1
+
+
+@pytest.mark.optional
 def test_mlx_preview_rejects_random_seed() -> None:
     """MLX preview refuses an explicit seed instead of storing inert metadata."""
 

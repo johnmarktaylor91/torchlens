@@ -2256,11 +2256,29 @@ class MLXBackend:
     def _mark_outputs(self, trace: Trace, output: object) -> None:
         """Mark final output-parent operations for an MLX trace."""
 
+        unlabeled = 0
         for value in self._iter_arrays(output):
             label = self.tensor_store.get_label(value)
             if label is None:
+                unlabeled += 1
                 continue
             mark_output_label(trace, label)
+        if unlabeled:
+            # The forward's result was produced by something the wrapper surface
+            # does not cover (an array operator such as ``a + b``, an array
+            # method, or an unwrapped ``mx.*`` function), so the trace is missing
+            # at least the op that made it. Say so instead of handing back a
+            # trace with no output op as if the capture were complete.
+            warnings.warn(
+                f"MLX capture: {unlabeled} output array(s) were not produced by a "
+                "wrapped operation (array operators, array methods and functions "
+                "outside the wrapped mx/nn surface are not logged); this capture is "
+                "marked capture_verified=False.",
+                UserWarning,
+                stacklevel=3,
+            )
+            trace.capture_verified = False
+            trace.capture_verification_reason = "mlx_output_not_produced_by_wrapped_op"
 
     def _finish_trace(self, trace: Trace, module_tree: MLXModuleTree | None = None) -> None:
         """Finalize a manually captured MLX Trace.
