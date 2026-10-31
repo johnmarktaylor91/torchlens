@@ -58,9 +58,6 @@ torchlens.intervention.hooks:live_selector_matches_site:LiveModeLabelError::1	KN
 torchlens.intervention.hooks:_normalize_sticky_hook_specs:ReplayPreconditionError::1	KNOWN-GAP		memo 3.5 witness: codeless on the default-capture path
 torchlens.intervention.hooks:expand_facet_hook_entries:SiteResolutionError::1	KNOWN-GAP		memo 3.5 witness family: zero-match refusal typed and teaching in prose, code=None
 torchlens._fast_run:_FastSparseSession.build:RunCapabilityUnavailableError::1	CONTRACTED	run_capability_unavailable	coded, documented (runnable contract), user-reachable on analysis-only loads
-torchlens._option_receipt:option_receipt:InvalidArgumentError::1	CONTRACTED	option_receipt_not_options	new public diagnostic site contracted in its own change (compo 0.5)
-torchlens._option_receipt:option_receipt:InvalidArgumentError::2	CONTRACTED	option_receipt_unknown_field	new public diagnostic site contracted in its own change (compo 0.5)
-torchlens._option_receipt:option_receipt:InvalidArgumentError::3	CONTRACTED	option_receipt_reason_invalid	new public diagnostic site contracted in its own change (compo 0.5)
 torchlens._model_wrappers:check_model_wrapper:UninstrumentableModelWrapperError::1	CONTRACTED	model_wrapper_uninstrumentable	new capture-entry teaching refusal contracted in its own change (A02 wave 0, mikit F10)
 torchlens._io.save_policy:_refuse_incoherent_structure_only_write:TorchLensIOError::1	INTERNAL		save-side M-C2 mirror (W3, lane A08): fires only on a TorchLens scrub/capture defect that would write a poison structure-only artifact; not reachable from lawful user input
 torchlens._io.save_policy:_resolve_include_flags:InvalidArgumentError::1	CONTRACTED	save_payload_level_conflict	structure-only x executable_with_callables save refusal (WT1 A-IV item 22, lane A08); typed + code + remedy

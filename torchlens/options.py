@@ -33,12 +33,10 @@ from ._literals import (
 )
 from ._option_receipt import (
     EchoOptions,
-    OptionReceiptEntry,
     _explicit_fields,
     _field_is_explicit,
     _resolve_option_value,
     _set_frozen_fields,
-    option_receipt,
 )
 from ._options_validation import (
     _normalize_layout,
@@ -1955,11 +1953,9 @@ __all__ = [
     "EchoOptions",
     "EpisodeSpec",
     "InterventionOptions",
-    "OptionReceiptEntry",
     "ReplayOptions",
     "SaveOptions",
     "StreamingOptions",
-    "option_receipt",
     "to_disk",
     "VisualizationOptions",
     "suppress_mutate_warnings",
