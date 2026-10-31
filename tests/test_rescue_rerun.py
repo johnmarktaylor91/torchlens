@@ -83,6 +83,8 @@ def test_rescue_restores_rng_to_capture_entry() -> None:
             _had_unattributed_tensor_args=len(draws) == 1,
             ops=[],
             _layer_list=[],
+            _provenance_verified=None,
+            _provenance_verification_reason=None,
         )
 
     capture_with_rescue(run_capture)
@@ -168,7 +170,8 @@ def _stub_trace(
         "ops": rows,
         "_layer_list": rows,
         "modules": modules or [],
-        "capture_verification_reason": None,
+        "_provenance_verified": None,
+        "_provenance_verification_reason": None,
     }
     fields.update(extra)
     return types.SimpleNamespace(**fields)
@@ -500,7 +503,7 @@ def test_recovered_rescue_never_clobbers_dynamo_verdict() -> None:
     rescued = _stub_trace(
         ["relu", "cos"],
         _raw_dynamo_region_detected=True,
-        capture_verification_reason="dynamo_region_not_logged",
+        _provenance_verification_reason="dynamo_region_not_logged",
     )
 
     def run_capture() -> Any:
@@ -856,7 +859,7 @@ def test_recovered_rescue_preserves_specific_verification_reasons() -> None:
     primary = _stub_trace(["none", "linear"], signal=True)
     rescued = _stub_trace(
         ["cos", "linear"],
-        capture_verification_reason="owner_thread_tripwire_changed",
+        _provenance_verification_reason="owner_thread_tripwire_changed",
     )
     traces = iter([primary, rescued])
 

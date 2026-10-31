@@ -206,7 +206,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 "function": callsite.function if callsite is not None else None,
                 "owner_thread_id": state.owner_thread_id,
                 "guard_pass_index": state.guard_pass_index,
-                "capture_mode": getattr(trace, "_options_mode", None),
+                "capture_mode": trace._options_mode,
                 "scope": "active_logging",
                 "enforced": False,
                 "in_replacement_hook": event.in_replacement_hook,
@@ -247,20 +247,21 @@ def _finalize_census(state: _WitnessState) -> None:
         )
     reports = trace.__dict__.setdefault("completeness_diagnostics", [])
     reports.extend(diagnostics)
-    trace._health_num_witness_events = int(getattr(trace, "_health_num_witness_events", 0)) + len(
-        state.events
-    )
+    trace._health_num_witness_events = int(
+        trace.__dict__.get("_health_num_witness_events", 0)
+    ) + len(state.events)
     trace._health_num_accounted_witness_events = (
-        int(getattr(trace, "_health_num_accounted_witness_events", 0)) + accounted_count
+        int(trace.__dict__.get("_health_num_accounted_witness_events", 0)) + accounted_count
     )
     trace._health_num_expected_opaque_witness_events = (
-        int(getattr(trace, "_health_num_expected_opaque_witness_events", 0)) + expected_opaque_count
+        int(trace.__dict__.get("_health_num_expected_opaque_witness_events", 0))
+        + expected_opaque_count
     )
     trace._health_num_unaccounted_witness_events = int(
-        getattr(trace, "_health_num_unaccounted_witness_events", 0)
+        trace.__dict__.get("_health_num_unaccounted_witness_events", 0)
     ) + len(diagnostics)
     trace._health_completeness_callback_ns = (
-        int(getattr(trace, "_health_completeness_callback_ns", 0)) + state.callback_ns
+        int(trace.__dict__.get("_health_completeness_callback_ns", 0)) + state.callback_ns
     )
     trace._health_completeness_verified = not reports
     if reports:
@@ -293,7 +294,7 @@ def _finalize_census(state: _WitnessState) -> None:
         # of the same bypassed compiled region.
         trace._provenance_verified = False
         trace._provenance_verification_reason = "dynamo_region_not_logged"
-    elif getattr(trace, "_health_escape_detector_verified", None) is False:
+    elif trace.__dict__.get("_health_escape_detector_verified") is False:
         trace._provenance_verified = False
         trace._provenance_verification_reason = "callable_escape_shadow_report"
     elif getattr(trace, "_raw_transform_escape_detected", False):
@@ -306,7 +307,7 @@ def _finalize_census(state: _WitnessState) -> None:
         trace._provenance_verification_reason = None
     else:
         trace._provenance_verified = True
-        detector_verified = getattr(trace, "_health_escape_detector_verified", None)
+        detector_verified = trace.__dict__.get("_health_escape_detector_verified")
         trace._provenance_verification_reason = (
             "dispatch_witness_and_detector_verified"
             if detector_verified is True
@@ -330,7 +331,7 @@ def _is_value_free_capture(trace: Any) -> bool:
         marker still fails the settlement invariant's lost-marker check.
     """
 
-    if bool(getattr(trace, "_options_structure_only", False)):
+    if bool(trace._options_structure_only):
         return True
     from ...capture._weightsfree_admission import admission_record_for
 
@@ -386,7 +387,7 @@ def _init_witness_fields(trace: Any, mode: str) -> None:
     """Initialize the witness disclosure fields and counters on the trace."""
 
     trace._health_completeness_mode = mode
-    if not hasattr(trace, "_health_completeness_verified"):
+    if "_health_completeness_verified" not in trace.__dict__:
         trace._health_completeness_verified = None
     trace.__dict__.setdefault("completeness_diagnostics", [])
     trace.__dict__.setdefault("_health_completeness_decompositions", [])

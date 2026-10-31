@@ -462,11 +462,11 @@ def build_summary_data(
     )
     outcome = getattr(trace, "outcome", None)
     capture = CaptureFacts(
-        backend=getattr(trace, "_provenance_backend", None),
-        model_class_name=getattr(trace, "_source_class_name", None),
+        backend=trace._provenance_backend,
+        model_class_name=trace._source_class_name,
         outcome_status=getattr(getattr(outcome, "status", None), "value", None),
-        is_verified=getattr(trace, "_provenance_verified", None),
-        is_structure_only=bool(getattr(trace, "_options_structure_only", False)),
+        is_verified=trace._provenance_verified,
+        is_structure_only=bool(trace._options_structure_only),
         health_verdict=facts.verdict,
         capture_fingerprint=core.capture_fingerprint,
         advisories=len(

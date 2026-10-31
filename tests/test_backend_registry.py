@@ -1133,7 +1133,7 @@ def test_backend_identity_invariant_rejects_non_string_backend(bad_backend: Any)
     from torchlens.validation.invariants import _check_backend_identity_invariants
 
     class _BadBackendStub:
-        backend = bad_backend
+        _provenance_backend = bad_backend
 
     with pytest.raises(MetadataInvariantError, match="non-empty string"):
         _check_backend_identity_invariants(_BadBackendStub())

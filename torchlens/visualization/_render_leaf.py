@@ -2052,7 +2052,7 @@ def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trac
         ``"IF"`` or ``"ELIF"`` (falls back to ``"IF"`` if no bool is reachable).
     """
     bool_kind: dict[str, str] = {}
-    for event in getattr(trace, "_graph_conditional_records", ()) or ():
+    for event in trace._graph_conditional_records or ():
         for bool_label in getattr(event, "bool_layers", ()) or ():
             bool_layer = trace[bool_label]
             bool_ops = tuple(getattr(bool_layer, "ops", {}).values())

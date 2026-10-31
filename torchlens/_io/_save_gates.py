@@ -80,7 +80,11 @@ def _refuse_shard_local_erasure(trace: Any) -> None:
     never a narrowing, no D-ruling owed.
     """
 
-    if getattr(trace, "_provenance_distributed_scope", None) != "rank_local_shard":
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
+    if (
+        trace._provenance_distributed_scope if is_live_trace(trace) else None
+    ) != "rank_local_shard":
         return
     from .._data_classes.trace import Trace as _Trace
     from . import FieldPolicy

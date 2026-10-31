@@ -109,13 +109,17 @@ def capture_verification(log: Any) -> dict[str, Any]:
         ``None``), ``capture_verification_reason``, and ``rescue_rerun``.
     """
 
+    from ._data_classes._trace_missing_attrs import is_live_trace
+
     outcome = getattr(log, "outcome", None)
     status = getattr(outcome, "status", None)
     status_value = getattr(status, "value", None)
     return {
         "capture_status": str(status_value) if status_value is not None else "unknown",
-        "capture_verified": getattr(log, "_provenance_verified", None),
-        "capture_verification_reason": getattr(log, "_provenance_verification_reason", None),
+        "capture_verified": log._provenance_verified if is_live_trace(log) else None,
+        "capture_verification_reason": log._provenance_verification_reason
+        if is_live_trace(log)
+        else None,
         "rescue_rerun": bool(getattr(log, "__dict__", {}).get("_rescue_rerun") or False),
     }
 
@@ -252,7 +256,7 @@ def record_host_tensor_source_advisory(trace: Any) -> None:
         Completed capture.
     """
 
-    if getattr(trace, "_provenance_verified", None) is not None:
+    if trace._provenance_verified is not None:
         return
     annotations = getattr(trace, "annotations", None)
     if not isinstance(annotations, dict):
@@ -389,10 +393,12 @@ def capture_honesty_facts(log: Any) -> dict[str, Any]:
         disclosure (when present, M5), and advisories (when present).
     """
 
+    from ._data_classes._trace_missing_attrs import is_live_trace
+
     facts: dict[str, Any] = {
         "schema": CAPTURE_HONESTY_SCHEMA,
         **capture_verification(log),
-        "structure_only": bool(getattr(log, "_options_structure_only", False)),
+        "structure_only": bool(log._options_structure_only if is_live_trace(log) else False),
         **poison_facts(log),
     }
     if facts["structure_only"]:
@@ -421,13 +427,14 @@ def _structure_evidence_facts(log: Any) -> dict[str, Any]:
     that should stop it.
     """
 
+    from ._data_classes._trace_missing_attrs import is_live_trace
     from .capture.structure_only import claim_status_for, registered_discharge
 
     facts: dict[str, Any] = {
         "claim_status": claim_status_for(log).value,
         "values_available": False,
     }
-    envelope = getattr(log, "_graph_structure_evidence", None)
+    envelope = log._graph_structure_evidence if is_live_trace(log) else None
     if isinstance(envelope, dict):
         facts["substrate"] = envelope.get("substrate")
         facts["structure_evidence"] = envelope

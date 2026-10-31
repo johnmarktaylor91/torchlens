@@ -306,6 +306,8 @@ class _TreeBuilder:
     ) -> None:
         """Capture the view arguments and derive the shared indexes."""
 
+        from .._data_classes._trace_missing_attrs import is_live_trace
+
         self.trace = trace
         self.agg = agg
         self.top_k = top_k
@@ -313,7 +315,9 @@ class _TreeBuilder:
         self.fold_repeats = fold_repeats
         self.partition_total = int(agg.partition_total)
         self.calls = {str(call.label): call for call in trace.module_calls.values()}
-        self.model_root_name = str(getattr(trace, "_source_class_name", None) or "model")
+        self.model_root_name = str(
+            (trace._source_class_name if is_live_trace(trace) else None) or "model"
+        )
         self.rows: list[CostTreeRow] = []
         self.hidden_flops = 0
         self._ownership()

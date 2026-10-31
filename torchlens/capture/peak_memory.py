@@ -391,7 +391,7 @@ def record_backward_peak(trace: Any, backend: str, peak_delta: int) -> None:
         trace._cost_backward_peak_memory = None
         trace.backward_peak_memory_reason = CPU_PEAK_NOT_REQUESTED_REASON
         return
-    prior_value = getattr(trace, "_cost_backward_peak_memory", None)
+    prior_value = trace._cost_backward_peak_memory
     prior = int(prior_value) if prior_value is not None else 0
     trace._cost_backward_peak_memory = Bytes(
         max(prior, peak_delta) if backend == "cpu" else prior + peak_delta

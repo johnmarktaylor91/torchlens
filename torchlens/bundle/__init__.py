@@ -2409,11 +2409,7 @@ class Bundle:
             Fingerprint value.
         """
 
-        return getattr(log, "_provenance_param_hash_full", None) or getattr(
-            log,
-            "_provenance_param_hash_quick",
-            None,
-        )
+        return log._provenance_param_hash_full or log._provenance_param_hash_quick
 
     @staticmethod
     def _weak_model(log: Trace) -> Any | None:

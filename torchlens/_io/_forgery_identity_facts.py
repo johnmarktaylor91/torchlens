@@ -103,7 +103,7 @@ def _validate_root_entry_point(trace: Trace) -> None:
     FAIL-CLOSED (F41).
     """
 
-    value = getattr(trace, "_provenance_root_entry_point", None)
+    value = trace._provenance_root_entry_point
     if value is None:
         _refuse_absent_root_entry_point_on_current_schema(trace)
         return
@@ -202,7 +202,7 @@ def _validate_tl_authored_root(trace: Trace) -> None:
         if value:
             marked_labels.append(label)
     if marked_labels:
-        root_fact = getattr(trace, "_provenance_root_entry_point", None)
+        root_fact = trace._provenance_root_entry_point
         if not (isinstance(root_fact, str) and root_fact.startswith("bound_method:")):
             _refuse_identity(
                 f"ops {marked_labels[:3]!r} carry tl_authored_root=True but the "

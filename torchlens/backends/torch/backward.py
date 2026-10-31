@@ -174,7 +174,7 @@ def _ensure_not_inference_only_backward(trace: Any) -> None:
         If the trace was captured with ``inference_only=True``.
     """
 
-    if getattr(trace, "_options_inference_only", False):
+    if trace._options_inference_only:
         raise ConfigurationError(_INFERENCE_ONLY_BACKWARD_ERROR)
 
 
@@ -192,7 +192,7 @@ def _ensure_not_chunked_forward_backward(trace: Any) -> None:
         If the trace was captured with ``chunk_size``.
     """
 
-    if getattr(trace, "_options_chunk_size", False):
+    if trace._options_chunk_size:
         raise ConfigurationError(_CHUNKED_FORWARD_BACKWARD_ERROR)
 
 
@@ -226,7 +226,7 @@ def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
     while frame is not None:
         filename = os.path.abspath(frame.f_code.co_filename)
         if not filename.startswith(_TORCHLENS_PKG_DIR):
-            source_loading_enabled = bool(getattr(trace, "_options_save_source_context", False))
+            source_loading_enabled = bool(trace._options_save_source_context)
             func_name = frame.f_code.co_name
             return FuncCallLocation(
                 file=frame.f_code.co_filename,
@@ -3261,9 +3261,7 @@ def _run_backward_with_capture(
     events = _ensure_backward_event_stream(trace)
     previous_save_grads_policy = getattr(trace, "_active_save_grads_policy", None)
     previous_had_save_grads_policy = "_active_save_grads_policy" in trace.__dict__
-    active_save_grads_policy = (
-        getattr(trace, "_options_save_grads", None) if save_grads is MISSING else save_grads
-    )
+    active_save_grads_policy = trace._options_save_grads if save_grads is MISSING else save_grads
     # Publish the backward window through the admission lock (R54: the raw
     # unlocked save/swap here was the one site left when tf/paddle converted;
     # a cross-thread interleave could snapshot a concurrent capture's trace as

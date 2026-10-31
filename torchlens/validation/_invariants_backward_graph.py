@@ -124,10 +124,10 @@ def _refuse_backward_evidence_without_registry(trace: Trace, name: str) -> None:
             f"num_backward_passes={num_backward_passes} exceeds the "
             f"{len(backward_pass_logs)} recorded pass record(s)"
         )
-    grad_fn_order = getattr(trace, "_autograd_grad_fn_order", None) or ()
+    grad_fn_order = trace._autograd_grad_fn_order or ()
     if grad_fn_order:
         evidence.append(f"grad_fn_order holds {len(grad_fn_order)} id(s)")
-    root_ids = getattr(trace, "_autograd_backward_root_grad_fn_object_ids", None) or ()
+    root_ids = trace._autograd_backward_root_grad_fn_object_ids or ()
     if root_ids:
         evidence.append(f"backward_root_grad_fn_object_ids holds {len(root_ids)} id(s)")
     if evidence:

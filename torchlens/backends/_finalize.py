@@ -147,7 +147,7 @@ def finalize_single_pass_trace(
         if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
     )
     if compute_input_output_distances is None:
-        compute_input_output_distances = bool(getattr(trace, "_options_mark_layer_depths", False))
+        compute_input_output_distances = bool(trace._options_mark_layer_depths)
     trace._options_mark_layer_depths = bool(compute_input_output_distances)
     if compute_input_output_distances:
         # The flood runs BEFORE the relabel epilogue: edges and the trace-side
@@ -166,7 +166,7 @@ def finalize_single_pass_trace(
     trace._options_recurrence_detection = assignments is not None
     trace._options_grouping_policy = build_grouping_policy_stamp(
         ran_recurrence_grouping=assignments is not None,
-        requested=getattr(trace, "_options_grouping", "structural"),
+        requested=trace._options_grouping,
     )
     if update_param_totals_from_layers:
         _update_param_totals_from_layers(trace)

@@ -307,4 +307,8 @@ def trace_input_provenance(trace: Any) -> InputProvenance | None:
         gold history).
     """
 
-    return provenance_from_record(getattr(trace, "_provenance_input_preprocessor", None))
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
+    return provenance_from_record(
+        trace._provenance_input_preprocessor if is_live_trace(trace) else None
+    )

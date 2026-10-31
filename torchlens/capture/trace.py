@@ -130,7 +130,7 @@ def _structure_only_forward_boundary(trace: "Trace") -> "contextlib.AbstractCont
     lazy import keeps this backend-neutral module torch-light.
     """
 
-    if bool(getattr(trace, "_options_structure_only", False)):
+    if bool(trace._options_structure_only):
         return _weightsfree_and_belt_boundary(trace)
     return contextlib.nullcontext()
 
@@ -361,7 +361,7 @@ def _backend_name_for_trace(trace: "Trace") -> BackendName:
         for old or partially constructed trace objects.
     """
 
-    return cast(BackendName, getattr(trace, "_provenance_backend", "torch"))
+    return cast(BackendName, trace._provenance_backend)
 
 
 def _capture_backend_from_registry(
@@ -1566,7 +1566,7 @@ def run_and_log_inputs_through_model(
         # The private stream keeps both properties: byte-exact global-engine
         # neutrality AND fresh seeds per capture.
         seed = _AUTO_SEED_ENTROPY.randint(1, 4294967294)
-    self._options_seed = seed  # type: ignore[assignment]
+    self._options_seed = seed
     # The per-capture code-context cache (and the call-site anchor stored
     # inside it) is only valid for the stack of ONE capture run: the anchor
     # frame is proven alive by identity for the duration of a single capture,

@@ -1208,7 +1208,7 @@ class TinygradBackend:
             enrich_layer=_enrich_tinygrad_layer,
             update_param_totals_from_layers=True,
             finish_before_module_logs=False,
-            recurrence_detection=bool(getattr(trace, "_options_recurrence_detection", False)),
+            recurrence_detection=bool(trace._options_recurrence_detection),
         )
 
     def _attach_object_module_logs(self, trace: Trace, tree: TinygradModuleTree) -> None:

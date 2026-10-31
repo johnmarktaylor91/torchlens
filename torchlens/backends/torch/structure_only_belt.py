@@ -357,7 +357,7 @@ def structure_only_escape_belt(trace: Any) -> Iterator[None]:
     slot member must be DELETED on restore, never written back.
     """
 
-    if not bool(getattr(trace, "_options_structure_only", False)):
+    if not bool(trace._options_structure_only):
         yield
         return
 
@@ -551,7 +551,7 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
     byte-untouched.
     """
 
-    if not bool(getattr(trace, "_options_structure_only", False)):
+    if not bool(trace._options_structure_only):
         yield
         return
     try:

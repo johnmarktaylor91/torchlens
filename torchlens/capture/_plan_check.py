@@ -199,9 +199,7 @@ def check_plan(trace: Any, plan: Any) -> PlanCheckReport:
         sites=tuple(checks),
         source_digest=tl_hash.trace(trace),
         evidence_status=(
-            claim_status_for(trace).value
-            if bool(getattr(trace, "_options_structure_only", False))
-            else "measured"
+            claim_status_for(trace).value if bool(trace._options_structure_only) else "measured"
         ),
     )
 

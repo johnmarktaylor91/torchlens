@@ -1535,7 +1535,7 @@ def _not_saved_by_user_justification(
         return None
     if bool(getattr(layer, "has_saved_activation", False)):
         return None
-    if bool(getattr(trace, "_options_save_args", False)):
+    if bool(trace._options_save_args):
         return None
     raw_label = getattr(layer, "_label_raw", None)
     if raw_label is None:
@@ -1559,7 +1559,7 @@ def _not_saved_by_user_justification(
         f"(original_reason={original_reason}, op_label={label}, func_name={func_name}, "
         f"predicate_decision_key={decision_key!r}, predicate_save_out=False, "
         f"has_saved_activation=False, saved_args_present={saved_args_present}, "
-        f"save_arg_values={bool(getattr(trace, '_options_save_args', False))}, "
+        f"save_arg_values={bool(trace._options_save_args)}, "
         f"default_op={default_op}, keep_op={keep_op_name})"
     )
 

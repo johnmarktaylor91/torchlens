@@ -48,7 +48,7 @@ def raise_if_no_backward_capture(trace: Any, *, plural_subject: str) -> None:
         readmitting the silently-empty accessor behavior it exists to remove.
     """
 
-    backend = str(getattr(trace, "_provenance_backend", "torch"))
+    backend = str(trace._provenance_backend)
     try:
         capabilities = get_backend_spec(backend).capabilities
     except BackendRegistryError as exc:

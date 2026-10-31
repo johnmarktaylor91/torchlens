@@ -442,7 +442,7 @@ class TFBackend:
         self._finish_trace(
             trace,
             module_tree,
-            recurrence_detection=bool(getattr(trace, "_options_recurrence_detection", False)),
+            recurrence_detection=bool(trace._options_recurrence_detection),
         )
         if grad_options is not None:
             from .derived_grads import GradOptions, attach_tf_derived_grads
@@ -661,11 +661,7 @@ class TFBackend:
         trace._provenance_backend_config = {"version": trace._provenance_backend_version}
         trace.backend_runtime_device_summary = _tf_device_summary(tf)
         trace._pre_forward_rng_states = None
-        setattr(
-            trace,
-            "_options_seed",
-            cast(int, seed) if seed is not None else random.randint(1, 4294967294),
-        )
+        trace._options_seed = cast(int, seed) if seed is not None else random.randint(1, 4294967294)
         return trace
 
     def _attach_param_logs(self, trace: Trace, module_tree: TFModuleTree | None) -> None:

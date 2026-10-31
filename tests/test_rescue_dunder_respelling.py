@@ -178,6 +178,7 @@ def _stub_trace(op_names: list[str], *, signal: bool = False) -> Any:
         ops=rows,
         _layer_list=rows,
         modules=[],
+        _provenance_verified=None,
         _provenance_verification_reason=None,
     )
 

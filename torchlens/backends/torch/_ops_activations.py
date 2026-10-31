@@ -525,7 +525,7 @@ def _save_activation_fields(
             func_name=fields_dict.get("func_name"),
             is_inplace=bool(fields_dict.get("is_inplace", False)),
         )
-        save_raw_activations = getattr(trace, "_options_save_raw_activations", True)
+        save_raw_activations = trace._options_save_raw_activations
         store_raw = save_raw_activations or activation_transform is None
         # Explorer P2: when nothing raw is retained AND the transform declares
         # the non-differentiable summary role, the transient safe_copy is
@@ -561,7 +561,7 @@ def _save_activation_fields(
                 trace,
                 t,
                 fields_dict["annotations"],
-                getattr(trace, "_options_save_args", False),
+                trace._options_save_args,
             )
             if store_raw and save_mode == "copy"
             else None
@@ -607,7 +607,7 @@ def _save_activation_fields(
                     raw_out,
                     fields_dict["_layer_label_raw"],
                     fields_dict["annotations"],
-                    getattr(trace, "_options_save_args", False),
+                    trace._options_save_args,
                 )
             if isinstance(raw_out, torch.Tensor):
                 mark_detached_saved_activation(
@@ -635,9 +635,7 @@ def _save_activation_fields(
                 transformed_tensor=transformed_out,
                 transform_kind="activation",
                 tripwire_armed=train_mode_tripwire_armed(
-                    backward_ready=fields_dict.get(
-                        "backward_ready", getattr(trace, "_options_backward_ready", False)
-                    ),
+                    backward_ready=fields_dict.get("backward_ready", trace._options_backward_ready),
                     transform=activation_transform,
                 ),
                 label=fields_dict.get("_layer_label_raw"),

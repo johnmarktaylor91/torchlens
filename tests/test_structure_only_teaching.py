@@ -378,7 +378,7 @@ def test_install_census_every_surface_member_is_escalated_in_mode() -> None:
     from torchlens.backends.torch import structure_only_belt as belt
 
     class _FakeTrace:
-        structure_only = True
+        _options_structure_only = True
 
     tensor_originals = {
         name: getattr(torch.Tensor, name, None) for name in belt._TENSOR_METHOD_SURFACE

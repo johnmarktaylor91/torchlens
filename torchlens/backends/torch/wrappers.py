@@ -434,7 +434,7 @@ def transform_builder_decorator(
 
             trace = cast(Any, _state._active_trace)
             capture_start_time = time.time()
-            save_rng = getattr(trace, "_options_save_rng", False)
+            save_rng = trace._options_save_rng
             rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
             autocast_state = log_current_autocast_state()
             func_call_id = _state.next_func_call_id()
@@ -543,7 +543,7 @@ def direct_transform_decorator(
             inner_fn=user_fn,
         )
         capture_start_time = time.time()
-        save_rng = getattr(trace, "_options_save_rng", False)
+        save_rng = trace._options_save_rng
         rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
@@ -1016,11 +1016,11 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
     if (
         _COW_ENABLED
         and not getattr(trace, "is_replayable", False)
-        and not getattr(trace, "_options_backward_ready", False)
-        and getattr(trace, "_options_save_grads", None) in (None, False)
-        and getattr(trace, "_options_activation_transform", None) is None
-        and getattr(trace, "_options_mode", None) != "predicate"
-        and getattr(trace, "_options_save_mode", "copy") == "copy"
+        and not trace._options_backward_ready
+        and trace._options_save_grads in (None, False)
+        and trace._options_activation_transform is None
+        and trace._options_mode != "predicate"
+        and trace._options_save_mode == "copy"
         and getattr(trace, "_out_writer", None) is None
     ):
         model_ref = getattr(trace, "_source_model_ref", None)
@@ -1224,8 +1224,8 @@ def _propagate_mutation_label_to_storage_aliases(
     # per-(label, consumer) payload keying, then lift this scope.
     if (
         getattr(trace, "is_replayable", False)
-        or getattr(trace, "_options_backward_ready", False)
-        or getattr(trace, "_options_save_grads", None) not in (None, False)
+        or trace._options_backward_ready
+        or trace._options_save_grads not in (None, False)
     ):
         return
 
@@ -1822,7 +1822,7 @@ def torch_func_decorator(
         # matching barcode => this is the bottom-level (leaf) function.
         func_call_barcode = make_random_barcode()
         trace._wrapper_runtime_ws.current_func_barcode = func_call_barcode
-        _save_rng = getattr(trace, "_options_save_rng", False)
+        _save_rng = trace._options_save_rng
         rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
@@ -2927,7 +2927,9 @@ def _refuse_unwrap_during_active_capture() -> None:
     if _state._active_trace is None and not _state._logging_enabled:
         return
     trace = _state._active_trace
-    model_name = getattr(trace, "model_name", None) or getattr(trace, "_source_class_name", None)
+    model_name = getattr(trace, "model_name", None) or (
+        trace._source_class_name if trace is not None else None
+    )
     raise CaptureNotActiveError(
         "unwrap_torch() was called while a TorchLens capture is still active"
         + (f" for model {model_name!r}" if model_name else ""),

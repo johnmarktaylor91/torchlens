@@ -88,7 +88,7 @@ def _healthy_stamp(trace: Any, role: str) -> dict[str, Any]:
     gap to relax here.
     """
 
-    stamp = getattr(trace, "_options_grouping_policy", None)
+    stamp = trace._options_grouping_policy
     if (
         not isinstance(stamp, dict)
         or stamp.get("effective") is not True

@@ -1147,7 +1147,7 @@ class _FastLiveSession:
                     (),
                     {},
                     False,
-                    activation_transform=getattr(self.trace, "_options_activation_transform", None),
+                    activation_transform=self.trace._options_activation_transform,
                 )
 
     def capture_module(self, address: str, output: Any) -> None:
@@ -1430,7 +1430,7 @@ class _FastLiveSession:
         readiness = ReadinessReport(
             status=ReadinessStatus.READY,
             provider=RunProvider.LIVE,
-            backend=str(getattr(self.trace, "_provenance_backend", "torch")),
+            backend=str(self.trace._provenance_backend),
             capability="guarded_static_native_forward",
             resolver_records=(),
             state_sources_available=(StateSource.LIVE_MODEL_STATE,),

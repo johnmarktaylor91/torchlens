@@ -490,11 +490,11 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
 
     capture = {
         **capture_verification(log),
-        "backend": str(getattr(log, "_provenance_backend", "unknown")),
-        "model_class": str(getattr(log, "_source_class_name", type(log).__name__)),
-        "structure_only": bool(getattr(log, "_options_structure_only", False)),
-        "grouping": str(getattr(log, "_options_grouping", "unknown")),
-        "has_backward_pass": bool(getattr(log, "_autograd_has_backward_pass", False)),
+        "backend": str(log._provenance_backend if is_live_trace(log) else "unknown"),
+        "model_class": str(log._source_class_name if is_live_trace(log) else type(log).__name__),
+        "structure_only": bool(log._options_structure_only if is_live_trace(log) else False),
+        "grouping": str(log._options_grouping if is_live_trace(log) else "unknown"),
+        "has_backward_pass": bool(log._autograd_has_backward_pass if is_live_trace(log) else False),
         "device_summary": getattr(log, "backend_runtime_device_summary", None),
         # Poison, episode, and advisory facts are honesty disclosures: a
         # diverged sparse run or a forced-tokens episode must never dump as an

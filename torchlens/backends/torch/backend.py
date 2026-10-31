@@ -240,7 +240,7 @@ def _promote_layers_to_save_output_parent(
         in_ram=streaming is None or streaming.bundle_path is None or streaming.retain_in_memory,
         on_disk=streaming is not None and streaming.bundle_path is not None,
     )
-    output_device = getattr(trace, "_options_output_device", None)
+    output_device: str | None = trace._options_output_device
     if output_device == "same":
         output_device = None
     spec = CaptureSpec(
@@ -248,7 +248,7 @@ def _promote_layers_to_save_output_parent(
         save_metadata=True,
         save_grad=False,
         device=output_device,
-        save_mode=cast(Any, getattr(trace, "_options_save_mode", "copy")),
+        save_mode=cast(Any, trace._options_save_mode),
     )
     # Output-parent promotion retains real payloads and must be visible to
     # the save-budget accountant like every other RAM retention: this path
@@ -270,11 +270,11 @@ def _promote_layers_to_save_output_parent(
         tensor,
         spec,
         intent,
-        activation_transform=getattr(trace, "_options_activation_transform", None),
-        save_raw_activations=getattr(trace, "_options_save_raw_activations", True),
+        activation_transform=trace._options_activation_transform,
+        save_raw_activations=trace._options_save_raw_activations,
         ctx=ctx,
         kind="activation",
-        detach_saved_activations=bool(getattr(trace, "_options_detach_saved_activations", True)),
+        detach_saved_activations=bool(trace._options_detach_saved_activations),
     )
     if budget is not None and reservation is not None:
         budget.commit(reservation, (ram_payload, transformed_ram_payload))

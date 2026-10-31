@@ -1951,7 +1951,7 @@ class JAXBackend:
         assignments = self._jax_recurrence_assignments(trace)
         trace._options_grouping_policy = build_grouping_policy_stamp(
             ran_recurrence_grouping=bool(trace._options_recurrence_detection),
-            requested=getattr(trace, "_options_grouping", "structural"),
+            requested=trace._options_grouping,
         )
         raw_labels = tuple(trace._raw_graph_ws.raw_layer_labels_list)
         raw_to_final_op_label: dict[str, str] = {}
@@ -2222,7 +2222,7 @@ class JAXBackend:
         # Layer objects, not the ops the flood must mutate); running it after
         # the finished flag flips is still required so relabeled child edges
         # are present on the ops the index collects.
-        trace._options_mark_layer_depths = bool(getattr(trace, "_options_mark_layer_depths", False))
+        trace._options_mark_layer_depths = bool(trace._options_mark_layer_depths)
         if trace._options_mark_layer_depths:
             from .._finalize import compute_preview_input_output_distances
 

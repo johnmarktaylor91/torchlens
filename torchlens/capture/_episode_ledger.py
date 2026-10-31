@@ -1477,7 +1477,7 @@ def _build_header(
 ) -> EpisodeLedgerHeader:
     """Build the finalized ledger header from the settled trace."""
 
-    entry_seed = getattr(trace, "_options_seed", None)
+    entry_seed = trace._options_seed
     if not isinstance(entry_seed, int) or isinstance(entry_seed, bool):
         raise _ledger_error(
             "episode ledger requires the capture's effective random_seed (the "
@@ -1717,7 +1717,7 @@ def _write_settled_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> Epis
     )
 
     frontier: dict[str, str] | None = None
-    halt_frontier = getattr(trace, "_graph_stop_frontier", None)
+    halt_frontier = trace._graph_stop_frontier
     if halt_frontier:
         first = halt_frontier[0] if isinstance(halt_frontier, (list, tuple)) else halt_frontier
         frontier = {"boundary_kind": "op", "boundary_label": str(first)}

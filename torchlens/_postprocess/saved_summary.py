@@ -117,9 +117,7 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
     from .._quantities import Bytes
     from ..backends import TORCH_BACKEND_NAME
 
-    backend_name = str(
-        getattr(trace, "_provenance_backend", TORCH_BACKEND_NAME) or TORCH_BACKEND_NAME
-    )
+    backend_name = str(trace._provenance_backend or TORCH_BACKEND_NAME)
     if backend_name != TORCH_BACKEND_NAME:
         trace._cost_pinned_autograd_memory = None
         return

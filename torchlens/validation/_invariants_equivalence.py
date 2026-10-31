@@ -625,7 +625,7 @@ _OUTINDEX_TOKEN = re.compile(r"_outindex(\d+)")
 def _is_call_site_grouped(trace: Trace) -> bool:
     """Whether step 7 grouped this trace by call site (stamp ``detector``)."""
 
-    stamp = getattr(trace, "_options_grouping_policy", None)
+    stamp = trace._options_grouping_policy
     return isinstance(stamp, dict) and stamp.get("detector") == "callsite_v1"
 
 

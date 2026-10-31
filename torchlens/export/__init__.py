@@ -384,6 +384,8 @@ def speedscope(trace: Any, path: str | Path) -> Path:
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     _require_structure_only_capability(trace, "measurement_exports")
 
     destination = Path(path)
@@ -405,7 +407,7 @@ def speedscope(trace: Any, path: str | Path) -> Path:
         "profiles": [
             {
                 "type": "evented",
-                "name": getattr(trace, "_source_class_name", "TorchLens forward"),
+                "name": trace._source_class_name if is_live_trace(trace) else "TorchLens forward",
                 "unit": "microseconds",
                 "startValue": 0,
                 "endValue": cursor_us,
@@ -442,12 +444,14 @@ def flamegraph(trace: Any, path: str | Path) -> Path:
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     _require_structure_only_capability(trace, "measurement_exports")
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     lines = []
-    model_class_name = str(getattr(trace, "_source_class_name", "TorchLens"))
+    model_class_name = str(trace._source_class_name if is_live_trace(trace) else "TorchLens")
     # The folded-stack format has no comment/metadata slot, so the honesty
     # facts ride a ZERO-WEIGHT synthetic frame: standard flamegraph tools
     # accept the line and render nothing for weight 0, but the exported file
@@ -900,13 +904,17 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
         Chrome trace event records.
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     events: list[dict[str, Any]] = [
         {
             "name": "process_name",
             "ph": "M",
             "pid": 1,
             "tid": 0,
-            "args": {"name": str(getattr(log, "_source_class_name", "TorchLens forward"))},
+            "args": {
+                "name": str(log._source_class_name if is_live_trace(log) else "TorchLens forward")
+            },
         }
     ]
     cursor_us = 0

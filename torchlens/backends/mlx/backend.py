@@ -1244,11 +1244,7 @@ class MLXBackend:
         trace._mlx_intervention_plan = intervention_plan
         trace._mlx_halt_selector = halt_selector
         trace._pre_forward_rng_states = None
-        setattr(
-            trace,
-            "_options_seed",
-            cast(int, seed) if seed is not None else random.randint(1, 4294967294),
-        )
+        trace._options_seed = cast(int, seed) if seed is not None else random.randint(1, 4294967294)
         self.tensor_store.clear()
         # R07: the try owns the wrap call itself -- a raise anywhere between
         # wrapper install and the forward (session prep, input normalization,
@@ -2296,7 +2292,7 @@ class MLXBackend:
             attach_object_module_logs=self._attach_object_module_logs,
             attach_op_params=attach_module_owned_op_params,
             count_layers_with_attached_params=True,
-            recurrence_detection=bool(getattr(trace, "_options_recurrence_detection", False)),
+            recurrence_detection=bool(trace._options_recurrence_detection),
         )
 
     def _attach_object_module_logs(self, trace: Trace, tree: MLXModuleTree) -> None:
@@ -2951,10 +2947,7 @@ def _mlx_model_args_from_value_args(value_args: tuple[Any, ...], trace: Trace) -
         Positional model input arguments.
     """
 
-    if (
-        getattr(trace, "_provenance_param_source", "none") == "native-module"
-        and len(value_args) > 1
-    ):
+    if trace._provenance_param_source == "native-module" and len(value_args) > 1:
         return value_args[1:]
     return value_args
 

@@ -26,11 +26,13 @@ class _DummyLog:
         self.render_calls: list[dict[str, Any]] = []
         self.summary_calls: list[dict[str, Any]] = []
         self.summary_result = "summary output"
-        self.total_activation_memory = "0 B"
+        self._cost_total_activation_memory = "0 B"
+        self._provenance_verified: Any = None
         self.validate_calls: list[dict[str, Any]] = []
-        self.verbose = False
+        self._options_verbose = False
+        self._options_structure_only = False
         # Save options a real ``Trace`` records from its capture call.
-        self.output_device = "same"
+        self._options_output_device = "same"
         self.save_budget: Any = "auto"
 
     def cleanup(self) -> None:

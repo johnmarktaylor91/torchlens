@@ -833,7 +833,7 @@ def _metadata_invariant_contracts_for_trace(
 
     from ..backends.registry import get_backend_spec
 
-    spec = get_backend_spec(getattr(trace, "_provenance_backend", "torch"))
+    spec = get_backend_spec(trace._provenance_backend)
     torch_spec = get_backend_spec("torch")
     backend_family: Literal["torch", "non_torch"] = "torch" if spec is torch_spec else "non_torch"
     return _metadata_invariant_contracts_for_backend(backend_family, spec=spec)
