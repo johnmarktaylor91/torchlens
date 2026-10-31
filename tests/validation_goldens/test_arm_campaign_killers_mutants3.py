@@ -869,6 +869,7 @@ def test_loop_detection_invariants_fires_on_cross_pass_equivalence_type_drift() 
         has_params=False,
     )
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         _layer_list=[anchor],
         op_labels=["relu_1", "relu_2"],
         _layer_logs={},
