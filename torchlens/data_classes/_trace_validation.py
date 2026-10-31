@@ -910,7 +910,7 @@ class TraceValidationMixin(_TraceMixinBase):
                         self,
                         run_inputs,
                         seed=seed,
-                        on_divergence=on_divergence,
+                        on_divergence=DivergencePolicy(on_divergence),
                         until=until,
                     ),
                     run_save_labels,

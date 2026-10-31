@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import glob
+import importlib
 import io
 import json
 import os
@@ -1440,9 +1441,11 @@ def load(
 
                 return load_fastlog(bundle_path)  # type: ignore[return-value]
             if isinstance(candidate, dict) and _is_extraction_manifest(candidate):
-                from ..dataset_extraction import load_extraction
-
-                return load_extraction(bundle_path)  # type: ignore[return-value]
+                # Resolved by name: a static import would pull the extraction
+                # engine (which imports the root facade) into this module's
+                # import cycle for the type checker.
+                extraction = importlib.import_module("torchlens.dataset_extraction")
+                return extraction.load_extraction(bundle_path)
         from ..io import detect_tlspec_format
 
         tlspec_format = detect_tlspec_format(bundle_path)
