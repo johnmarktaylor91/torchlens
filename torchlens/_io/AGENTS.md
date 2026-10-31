@@ -19,6 +19,13 @@ hostile input, and every load path here is fail-closed.
   `allowed_custom_callable_modules` allowlist, which stays enforced even alongside broad trust.
 - Trust keys on the resolved object's REAL module, never the pickled path; known-dangerous
   modules (`os`, `sys`, `subprocess`, `builtins`, `importlib`, ...) are hard-denied.
+- No file bytes ever reach `torch.load`: `torch.storage._load_from_bytes` (the storage leg of
+  torch's default tensor reduction) is refused by name. Plain metadata tensors (annotation
+  values, small raw inputs/outputs) are written by `_canonical_pickle.py` through the
+  TorchLens-owned inline reduction in `_inline_tensor.py` (raw bytes, dtype, shape,
+  `requires_grad`, device), which validates every argument, checks the byte length exactly
+  and yields a non-resizable storage. Older files that embedded a tensor refuse typed with a
+  re-save remedy.
 
 ## manifest.py / tlspec.py
 - `Manifest`, `TensorEntry`, `Provenance`; `enforce_version_policy()` gates artifact versions;
