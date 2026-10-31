@@ -693,16 +693,6 @@ class OpEvent:
     seq: int = 0
 
 
-@dataclass(frozen=True, slots=True)
-class ConditionalEvent:
-    """Captured conditional-control-flow event."""
-
-    conditional_id: int
-    record: object
-    arm_entry_edges: tuple[tuple[str, str], ...]
-    edge_call_indices: tuple[tuple[str, str, int, str, int], ...]
-
-
 @dataclass(slots=True)
 class InterventionState:
     """Final Trace intervention state folded from capture/runtime metadata."""
