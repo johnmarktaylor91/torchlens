@@ -307,7 +307,7 @@ Key entry points:
   `False` honored). Rolled multi-pass field sources resolve through the name-keyed allowlist in
   `torchlens/_visualization/_encoding.py`; varying/first-pass-only sources stay unencoded with a
   legend note (honest-visuals tripwire), and unclassified sources refuse `encoding_source_invalid`.
-  Wave-1 size channel `Trace.draw(size_by=..., scale=...)` (UNSTABLE, D4 default-applied):
+  Wave-1 size channel `Trace.draw(size_by=..., size_scale=...)` (UNSTABLE, D4 default-applied):
   scalar field / `"dims"` (non-batch numel) / callable mapped to width/height MINIMUMS
   (`fixedsize=false`, area clamped 4x default, fonts never scale, strictly opt-in). Rolled
   multi-pass sources that cannot be certified single-valued refuse `size_by_rolled_varying`
@@ -381,7 +381,7 @@ runnable_path = "architecture.tlspec"
 torch_trace.save(runnable_path, level="runnable", include_weights=True)
 loaded_trace = tl.load(runnable_path)
 verified = loaded_trace.run(inputs=x, seed=42, on_divergence="raise")
-overview_svg = torch_trace.draw(collapse="auto", file_format="svg", vis_save_only=True)
+overview_svg = torch_trace.draw(collapse="auto", file_format="svg")
 module_scores = torch_trace.module_collapse_order
 
 # Influence geometry follows the real captured DAG in both directions.

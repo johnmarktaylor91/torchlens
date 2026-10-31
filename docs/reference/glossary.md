@@ -2253,8 +2253,8 @@ shim owed*
   label rows (slate 8.7). See the "show_redundant_args" entry above.
 
 **direction="rightleft" (draw value)** — *unstable — no deprecation shim owed*
-: The fourth layout direction on `Trace.draw(direction=)`, `draw_backward(vis_direction=)` and
-  `draw_combined(vis_direction=)`: edges flow right to left (Graphviz `rankdir=RL`), beside
+: The fourth layout direction on `Trace.draw(direction=)`, `draw_backward(direction=)` and
+  `draw_combined(direction=)`: edges flow right to left (Graphviz `rankdir=RL`), beside
   `"bottomup"`, `"topdown"` and `"leftright"`. An unknown value refuses
   `visualization_direction_invalid` naming all four.
 
@@ -3123,7 +3123,7 @@ describe each surface in depth.
 | `tl.stats.RunningStats` | Always-on scalar spine accumulator (StreamingStat; D8) |
 | `tl.stats.TensorStats` | Frozen tensor statistics shared by tensor displays and narration; per-family evidence owns every claim |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
-| `tl._quickstart.Drawing` | Detached one-call render result. Always returned, never None |
+| `tl.viz.Drawing` | Detached one-call render result. Always returned, never None |
 | `tl.stats.NarrationObserver` | Live stats-line echo mounted on the shipped observer surface |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
 | `tl.stats.narrate` | Create an echo observer (the live line density) for one site |
@@ -3334,7 +3334,7 @@ describe each surface in depth.
 | `num_kv_heads=` | keyword of `tl.mechinterp.HeadWeightViews` |
 | `num_nan=` | keyword of `tl.stats.TensorStats` |
 | `num_neginf=` | keyword of `tl.stats.TensorStats` |
-| `num_ops=` | keyword of `tl._quickstart.Drawing` |
+| `num_ops=` | keyword of `tl.viz.Drawing` |
 | `num_posinf=` | keyword of `tl.stats.TensorStats` |
 | `num_positions=` | keyword of `tl.mechinterp.TrajectoryStats` |
 | `num_stimuli=` | keyword of `tl.neuro.ExtractionPlan`, `tl.neuro.plan_extraction` |

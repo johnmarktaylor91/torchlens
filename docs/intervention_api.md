@@ -268,11 +268,11 @@ returns, so a fork made right after a rerun costs the same as any other
 (about 420,000 calls; about 1.25 million before, when that capture's cleanup
 ran inside whatever came next, typically the next fork).
 
-`Trace.draw(vis_intervention_mode=...)` visualizes the planned intervention
+`Trace.draw(intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
 `log.set(...)` or `log.do(...)`. Each edited node gets a purple ring and a
 last row naming the edit (`Δ zero_ablate`), and the header names the edits;
-`vis_show_cone=True` (off by default) adds a translucent purple underlay
+`show_cone=True` (off by default) adds a translucent purple underlay
 under the arrows and node outlines the edit changed downstream. Capture-time `intervene=...` calls record
 fire metadata on matched layers, but they are not replay plans and are not
 drawn as planned sites.

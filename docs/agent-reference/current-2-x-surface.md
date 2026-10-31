@@ -319,7 +319,7 @@
   Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
   `torchlens._visualization.show_bundle_graph(b, nodes="members")` draws members and relation rows;
   `torchlens._visualization.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
-  and key (member lists only where members differ), and `trace.draw_backward(theme="dark")`
+  and key (member lists only where members differ), and `trace.draw(graph="backward", theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiment_ledger.md`):
@@ -429,7 +429,7 @@
   with channels active. Typed refusals: `encoding_source_invalid`, `encoding_value_invalid`
   (bools and non-scalar tensors refuse — a bool is not a magnitude), `encoding_callable_error`
   (chains the user exception), `encoding_requires_dot_layout`.
-- `Trace.draw(size_by=..., scale="sqrt"|"linear")` (UNSTABLE spellings, keyword-only) is the
+- `Trace.draw(size_by=..., size_scale="sqrt"|"linear")` (UNSTABLE spellings, keyword-only) is the
   wave-1 SIZE channel, shipped with the D4 DEFAULT APPLIED (D4 unruled at merge: sqrt scale +
   conservative area-only mapping + typed refusal on rolled varying sources). Sources: a scalar
   record field, the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only

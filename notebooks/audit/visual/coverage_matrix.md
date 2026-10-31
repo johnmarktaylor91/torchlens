@@ -11,8 +11,8 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 
 | Axis | Meaning | Covered by page(s) |
 |------|---------|--------------------|
-| `vis_mode:unrolled` | vis_mode='unrolled' (per-pass op nodes) | p3 |
-| `vis_mode:rolled` | vis_mode='rolled' (aggregate layer nodes, (xN) labels) | p24 |
+| `vis_mode:unrolled` | rolled=False (per-pass op nodes) | p3 |
+| `vis_mode:rolled` | rolled=True (aggregate layer nodes, (xN) labels) | p24 |
 | `collapse:none` | collapse='none' (full graph) | p32 |
 | `collapse:auto` | collapse='auto' (readability-targeted engine) | p32 |
 | `collapse:max` | collapse='max' (aggressive condensation + segments) | p32 |
@@ -24,8 +24,8 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `direction:bottomup` | direction='bottomup' (default) | p10 |
 | `direction:topdown` | direction='topdown' | p10 |
 | `direction:leftright` | direction='leftright' | p10 |
-| `node_mode:default` | node_mode='default' | p42 |
-| `node_mode:profiling` | node_mode='profiling' (time/memory rows) | p42 |
+| `node_mode:default` | node_style='default' | p42 |
+| `node_mode:profiling` | node_style='profiling' (time/memory rows) | p42 |
 | `node_spec_fn:vision` | node_spec_fn=vision_node_mode (conv-oriented rows) | p43 |
 | `node_spec_fn:attention` | node_spec_fn=attention_node_mode (attention-oriented rows) | p43 |
 | `theme:torchlens` | theme='torchlens' (default) | p53 |
@@ -59,22 +59,22 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `code_panel:init_forward` | code_panel='init+forward' source panel | p48 |
 | `font_size` | font_size= override | p49 |
 | `dpi` | dpi= render density override | p49 |
-| `for_paper` | for_paper=True publication styling | p49 |
+| `for_paper` | theme="paper" publication styling | p49 |
 | `order_siblings:on` | order_siblings=True (default) sibling ordering post-pass | p11 |
 | `order_siblings:off` | order_siblings=False raw dot order | p11 |
-| `placement:dot` | vis_node_placement='dot' Graphviz engine | p13 |
-| `placement:rank` | vis_node_placement='rank' internal rank layout | p13 |
+| `placement:dot` | layout='dot' Graphviz engine | p13 |
+| `placement:rank` | layout='rank' internal rank layout | p13 |
 | `overrides:graph` | vis_graph_overrides dict | p22 |
 | `overrides:edge` | vis_edge_overrides dict | p22 |
 | `overrides:module` | vis_module_overrides dict | p22 |
-| `intervention:node_mark` | vis_intervention_mode='node_mark' | p62 |
-| `intervention:as_node` | vis_intervention_mode='as_node' hook nodes | p62 |
-| `cone:on` | vis_show_cone=True downstream highlighter | p63 |
-| `cone:off` | vis_show_cone=False (default) | p63 |
+| `intervention:node_mark` | intervention_mode='node_mark' | p62 |
+| `intervention:as_node` | intervention_mode='as_node' hook nodes | p62 |
+| `cone:on` | show_cone=True downstream highlighter | p63 |
+| `cone:off` | show_cone=False (default) | p63 |
 | `input_transform_summary` | show_input_transform_summary=True input xlabel | p51 |
 | `raw_io_render` | save_raw_input/save_raw_output thumbnails on boundary nodes | p50 |
 | `draw_backward:rolled` | draw_backward default rolled grad_fn graph | p55 |
-| `draw_backward:unrolled` | draw_backward vis_mode='unrolled' | p55 |
+| `draw_backward:unrolled` | draw_backward rolled=False | p55 |
 | `draw_backward:bwd` | draw_backward bwd= pass selection | p56 |
 | `draw_combined` | draw_combined forward+backward graph | p57 |
 | `combined:intervening_cluster` | draw_combined intervening_cluster placement | p58 |
