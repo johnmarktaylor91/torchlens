@@ -358,7 +358,7 @@ def test_stateful_set_overloads_return_a_verdict_on_the_copy_path(
         assert failure is None
     else:
         assert failure is not None
-        assert failure.check == "retrace_mismatch"
+        assert failure.check_name == "retrace_mismatch"
     _assert_restored(model, objects, values)
 
 
@@ -409,7 +409,7 @@ def _storage_view_trace(
     model = model_cls()
     x = torch.rand(4)
     ground_truth = copy.deepcopy(model)(x)
-    trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", save_arg_values=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", save_args=True))
     set_op = next(op for op in trace.layer_list if op.func_name == "set_")
     return model, trace, ground_truth, set_op
 
@@ -474,7 +474,7 @@ def test_wrong_storage_view_still_fails_replay(position: int, wrong_value: objec
         assert status.state == "failed"
         failure = get_validation_failure(trace)
         assert failure is not None
-        assert failure.check == "forward_replay"
+        assert failure.check_name == "forward_replay"
         assert failure.op_label is not None and failure.op_label.startswith("set_")
     finally:
         trace.cleanup()
