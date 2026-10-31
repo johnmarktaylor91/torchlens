@@ -1024,7 +1024,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     # (present in `_raw_layer_dict`); synthetic halt reasons that are NOT op
     # labels ("linear:exit:1" module-exit reasons, "" empty, custom fastlog
     # strings) are left untouched.
-    for halt_field in ("stop_reason", "halt_frontier"):
+    for halt_field in ("stop_reason", "_graph_stop_frontier"):
         raw_halt_label = getattr(self, halt_field, None)
         if raw_halt_label is not None and raw_halt_label in self._raw_graph_ws.raw_layer_dict:
             setattr(self, halt_field, self._raw_graph_ws.raw_layer_dict[raw_halt_label].layer_label)
