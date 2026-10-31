@@ -16,23 +16,23 @@ prepares the model and calls `wrap_torch()` from `backends/torch/`.
 
 ## Architecture Overview
 
-Required reference: [Architecture Overview](../docs/agent-reference/package/architecture-overview.md).
+Required reference: [Architecture Overview](../docs/internal/agent-reference/package/architecture-overview.md).
 
 ## Top-Level Modules
 
-Required reference: [Top-Level Modules](../docs/agent-reference/package/top-level-modules.md).
+Required reference: [Top-Level Modules](../docs/internal/agent-reference/package/top-level-modules.md).
 
 ## Subpackages
 
-Required reference: [Subpackages](../docs/agent-reference/package/subpackages.md).
+Required reference: [Subpackages](../docs/internal/agent-reference/package/subpackages.md).
 
 ## Key Concepts
 
-Required reference: [Key Concepts](../docs/agent-reference/package/key-concepts.md).
+Required reference: [Key Concepts](../docs/internal/agent-reference/package/key-concepts.md).
 
 ## Files in This Directory
 
-Required reference: [Files in This Directory](../docs/agent-reference/package/files-in-this-directory.md).
+Required reference: [Files in This Directory](../docs/internal/agent-reference/package/files-in-this-directory.md).
 
 ## Attribute Conventions
 
@@ -44,7 +44,7 @@ Required reference: [Files in This Directory](../docs/agent-reference/package/fi
 
 ## Public Surface
 
-Required reference: [Public Surface](../docs/agent-reference/package/public-surface.md).
+Required reference: [Public Surface](../docs/internal/agent-reference/package/public-surface.md).
 
 ## Constants as Ordering Spec
 
@@ -70,7 +70,7 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
 
 ## Newer 2.x Subsystems
 
-Required reference: [Newer 2.x Subsystems](../docs/agent-reference/package/newer-2-x-subsystems.md).
+Required reference: [Newer 2.x Subsystems](../docs/internal/agent-reference/package/newer-2-x-subsystems.md).
 
 ## Package Layout Policy
 

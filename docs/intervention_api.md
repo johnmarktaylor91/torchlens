@@ -8,7 +8,7 @@ To apply one intervention to many forwards or a `generate()` loop, use `spec.bin
 return_output=True)` when you need activations too, or rerun a steered trace with
 `trace.run(model, x)` (the guarded fast engine when the spec targets modules; see the glossary
 entry "Guarded fast rerun"). Recipe: "Steering many forwards / generation" in
-[agent-reference/common-patterns.md](agent-reference/common-patterns.md).
+[agent-reference/common-patterns.md](internal/agent-reference/common-patterns.md).
 
 ## Selectors
 

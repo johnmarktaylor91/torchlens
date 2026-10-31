@@ -6,7 +6,7 @@ asks for the evidence rather than assuming it.
 ## Public surface
 
 - [ ] The public surface is unchanged, or the glossary (`docs/reference/glossary.md`), the
-      agent reference pages (`docs/agent-reference/`), `examples/` and `notebooks/audit/`
+      agent reference pages (`docs/internal/agent-reference/`), `examples/` and `notebooks/audit/`
       are updated in the same change. `python tools/name_lockstep check --base ref:<base>`
       exits 0.
 - [ ] No new top-level `tl.*` name without a reason; new names live in submodules.

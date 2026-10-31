@@ -171,7 +171,7 @@ the generated index gives each one's first docstring line.
 
 - A module's one-line purpose and size: [where.md](where.md).
 - Step order and contracts in postprocess: `torchlens/_postprocess/_contracts.py`.
-- The invariants a change must keep: `docs/agent-reference/critical-invariants.md`.
+- The invariants a change must keep: `docs/internal/agent-reference/critical-invariants.md`.
 - The saved-file contract: `torchlens/schemas/writer_contract_v10.json` and
   `docs/reference/runnable_tlspec_contract.md`.
 - The public surface, name by name: `docs/reference/glossary.md`.

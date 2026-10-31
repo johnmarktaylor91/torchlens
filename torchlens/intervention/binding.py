@@ -247,7 +247,7 @@ _GRAPH_TERM_KINDS: tuple[tuple[str, str], ...] = (
 
 _LABEL_OP_TYPE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*?)(?:_\d+){1,2}(?:_raw)?(?::\d+)?$")
 
-_POINTER = "see 'Labels inside a binding' in docs/agent-reference/known-gotchas.md"
+_POINTER = "see 'Labels inside a binding' in docs/internal/agent-reference/known-gotchas.md"
 
 
 def _label_term_unmatchable(kind: str, value: str) -> bool:

@@ -59,7 +59,7 @@ def _corpus(root: Path, glossary: str, example: str) -> check.Corpus:
 
     for relative, text in {
         "docs/reference/glossary.md": glossary,
-        "docs/agent-reference/surface.md": "Use `tl.trace(model, x)`.\n",
+        "docs/internal/agent-reference/surface.md": "Use `tl.trace(model, x)`.\n",
         "examples/demo.py": example,
     }.items():
         path = root / relative
