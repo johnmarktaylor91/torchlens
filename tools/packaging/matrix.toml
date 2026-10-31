@@ -78,8 +78,10 @@ extras = []
 group = "pr"
 
 [sets.all]
-# `all` is pyproject's "everything that installs together" rollup.
+# `all` is pyproject's "everything that installs together" rollup. inseq
+# requires treescope, so the treescope gate resolves here too (measured).
 extras = ["all"]
+present_gates = ["treescope"]
 group = "pr"
 
 [sets.neuro]
@@ -235,18 +237,19 @@ group = "extended"
 #
 # expect = "install_fails": the resolver refuses the combination.
 # expect = "install_or_refuse": either the resolver refuses it, or it installs
-# and every gate in `refuses` raises its typed MissingDependencyError.
+# and every gate in `refuses` raises its typed MissingDependencyError and every
+# module in `import_fails` raises ImportError on import.
 
 # neuro + brainscore: named in pyproject.toml's neuro comment and
 # docs/reference/neuro.md (brainscore_vision pins scikit-learn<1.6, rsatoolbox
-# 0.3.x needs scikit-learn>=1.6). On 3.11 the resolver backs rsatoolbox off to
-# an older release and installs, so the conflict surfaces at import. Below 3.11
-# the brainscore extra is empty, so the pair runs on 3.11.
+# 0.3.x needs scikit-learn>=1.6). The documented outcome: the pair resolves
+# (rsatoolbox 0.3.2 with scikit-learn 1.5.2, measured) and `import rsatoolbox`
+# fails. Below 3.11 the brainscore extra is empty, so the pair runs on 3.11.
 [sets.neuro-brainscore]
 extras = ["neuro", "brainscore"]
 python = "3.11"
 expect = "install_or_refuse"
-refuses = ["neuro"]
+import_fails = ["rsatoolbox"]
 group = "pr"
 
 # sae-lens>=6.45 and inseq>=0.6 have no common transformers band.
