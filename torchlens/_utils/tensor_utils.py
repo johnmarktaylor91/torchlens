@@ -24,6 +24,10 @@ from typing import Any, Literal, cast, get_args
 
 import torch
 
+# ``_state`` is the package's import leaf (it imports nothing from torchlens
+# but the ``errors._base`` leaf), so a module-level import cannot cycle; the
+# per-call paths below read it on every wrapped call.
+from .. import _state
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
 from ._sparse_parts import sparse_component_tensors
 from ._torch_compat import (
@@ -705,8 +709,6 @@ def _unwrapped_tensor_size_method(method: _TensorSizeMethod) -> _TensorSizeMetho
         Original method when TorchLens has decorated it, otherwise ``method``.
     """
 
-    from .. import _state
-
     return cast(_TensorSizeMethod, _state._decorated_to_orig.get(id(method), method))
 
 
@@ -1196,8 +1198,6 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
     global _DEFER_BUSY
     if not _DEFER_PENDING or _DEFER_BUSY:
         return
-    from .. import _state
-
     if (
         _state._active_trace is not None
         and _state._active_owner_thread_id is not None
