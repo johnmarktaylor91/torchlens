@@ -449,6 +449,7 @@ def test_loop_detection_invariants_fires_on_noncontiguous_pass_numbering() -> No
         pass_index=1,
     )
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         op_labels=["op_1_1", "op_2_1"],
         _layer_logs={"op_1_1": anchor, "op_2_1": member},
         _layer_dict_all_keys={},

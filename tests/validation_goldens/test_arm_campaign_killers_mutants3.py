@@ -699,6 +699,7 @@ def test_loop_detection_invariants_fires_on_shortcut_func_mismatch() -> None:
         pass_index=2,
     )
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         _layer_list=[layer1, layer2],
         op_labels=["relu_1:1", "relu_1:2"],
         _layer_logs={},
@@ -737,6 +738,7 @@ def test_loop_detection_invariants_fires_on_shortcut_num_passes_mismatch() -> No
         pass_index=2,
     )
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         _layer_list=[layer1, layer2],
         op_labels=["relu_1:1", "relu_1:2"],
         _layer_logs={},

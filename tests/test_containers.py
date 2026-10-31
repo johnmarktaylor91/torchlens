@@ -520,11 +520,12 @@ def test_trace_container_capability_fails_closed_on_unknown_backend() -> None:
 
     from torchlens._data_classes.container import Role, _trace_container_capability
 
-    unknown = SimpleNamespace(backend="no_such_backend_zzz")
+    unknown = SimpleNamespace(_provenance_backend="no_such_backend_zzz")
     assert _trace_container_capability(unknown, Role.CALL_OUTPUT) == "none"
     assert _trace_container_capability(unknown, Role.MODEL_INPUT) == "none"
 
-    legacy = SimpleNamespace()  # no backend attribute at all
+    # A legacy trace without a backend: the stored key holds no backend name.
+    legacy = SimpleNamespace(_provenance_backend=None)
     torch_caps = tl.backends.spec("torch").capabilities
     assert _trace_container_capability(legacy, Role.CALL_OUTPUT) == str(
         torch_caps.output_container_structure
