@@ -2185,14 +2185,6 @@
  },
  {
   "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/_postprocess/_executor.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_postprocess/_executor.py",
   "has_default": false,
@@ -7173,6 +7165,14 @@
   "file": "torchlens/intervention/edge_substitution.py",
   "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/intervention/hooks.py",
+  "has_default": false,
+  "sites": 6,
   "via_getattr": false
  },
  {

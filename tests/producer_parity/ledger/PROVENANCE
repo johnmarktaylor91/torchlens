@@ -2979,3 +2979,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: b9c2dedbdc19ae0e4ae78b5f9a5667cb70660619 (dirty)
 recorded: 2026-10-31T11:38:57.428769+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push batch A1 (receipt, contracts-delete, hygiene-2, coverage-cut, ci-shape, governance-scripts): owning-tool refresh after the merges
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 22c3b639c87e5aeb7d6b21fc3fd6d1e5da63e5ae (dirty)
+recorded: 2026-10-31T14:05:47.832883+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push batch A1 (receipt, contracts-delete, hygiene-2, coverage-cut, ci-shape, governance-scripts): owning-tool refresh after the merges
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 22c3b639c87e5aeb7d6b21fc3fd6d1e5da63e5ae (dirty)
+recorded: 2026-10-31T14:05:54.168466+00:00
