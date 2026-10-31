@@ -403,7 +403,7 @@ class TinygradBackend:
         layer_visualizers = _resolve_optional_capture_field(
             capture, "layer_visualizers", layer_visualizers
         )
-        random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
+        random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
         layers_to_save = _default_if_missing(layers_to_save, "all")
         keep_orphans = _default_if_missing(keep_orphans, False)
         output_device = _default_if_missing(output_device, "same")

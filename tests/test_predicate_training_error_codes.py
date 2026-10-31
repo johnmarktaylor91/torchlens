@@ -70,7 +70,7 @@ def test_accumulated_predicate_failures_carry_predicate_evaluation_failed() -> N
 
 
 def test_keep_grad_integer_dtype_carries_predicate_storage_conflict() -> None:
-    """keep_grad=True with an integer payload dtype stamps the storage code."""
+    """save_grad=True with an integer payload dtype stamps the storage code."""
 
     with pytest.raises(PredicateError) as exc_info:
         tl.record(

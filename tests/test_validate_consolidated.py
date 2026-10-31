@@ -153,7 +153,7 @@ def test_validate_scope_backward_random_seed(
     ) as validator:
         assert tl.validate(model, x, scope="backward", seed=42)
     assert validator.call_args is not None
-    assert validator.call_args.kwargs["random_seed"] == 42
+    assert validator.call_args.kwargs["seed"] == 42
     assert tl.validate(model, x, scope="backward", seed=42)
 
 

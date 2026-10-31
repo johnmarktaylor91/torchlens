@@ -296,7 +296,7 @@ def trace_text(
     style = {} if structure_only else {"output_style": "hf_text"}
     capture = tl.options.merge_capture_options(
         capture=kwargs.pop("capture", None),
-        transform=transform,
+        input_transform=transform,
         **style,
     )
     had_tokenizer = hasattr(model, "_torchlens_output_tokenizer")
@@ -341,7 +341,7 @@ def trace_image(model: Any, image: Any, **kwargs: Any) -> Trace:
     transform, record = _resolve_image_preprocessing(model)
     capture = tl.options.merge_capture_options(
         capture=kwargs.pop("capture", None),
-        transform=_make_image_transform(transform),
+        input_transform=_make_image_transform(transform),
     )
     log = tl.trace(model, image, capture=capture, **kwargs)
     log.input_preprocessor = record
@@ -400,7 +400,7 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     )
     capture = tl.options.merge_capture_options(
         capture=kwargs.pop("capture", None),
-        transform=transform,
+        input_transform=transform,
     )
     log = tl.trace(model, cast(Any, input_dict), capture=capture, **kwargs)
     log.input_preprocessor = record
@@ -686,10 +686,11 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
             "torchlens.preprocessing.attach_authority(model, weights) (torchvision models "
             "keep no handle to their weights preset); or pass your loader's own "
             "transform, e.g. "
-            "capture=tl.options.CaptureOptions(transform=weights.transforms()); "
+            "capture=tl.options.CaptureOptions(input_transform=weights.transforms()); "
             "or opt in to the ImageNet default (resize 256, center-crop 224, "
             "ImageNet mean/std) with "
-            "capture=tl.options.CaptureOptions(transform=torchlens.preprocessing.imagenet_default()); "
+            "capture=tl.options.CaptureOptions("
+            "input_transform=torchlens.preprocessing.imagenet_default()); "
             "or pass an already-preprocessed tensor"
         ),
         model_type=type(model).__name__,

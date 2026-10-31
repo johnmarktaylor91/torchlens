@@ -113,13 +113,14 @@ def test_session_records_op_join_markers() -> None:
     """
 
     from torchlens import observability as obs
+    from torchlens.observability._kineto import extract_events
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
     x = torch.randn(2, 4)
     with obs.session() as sess:
         log = tl.trace(model, x)
     assert sess.result is not None and sess.result.facts["mode"] == "owned"
-    extraction = obs.extract_events(sess.closed_profiler)
+    extraction = extract_events(sess.closed_profiler)
     assert extraction.path in ("in_memory", "chrome_stream")
     key_markers = [
         e for e in extraction.events if e.kind == "marker" and e.name.startswith("torchlens::op::")

@@ -176,7 +176,7 @@ class TFBackend:
         save_raw_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         save_grads = resolve_optional_capture_field(capture, "save_grads", save_grads)
-        random_seed = resolve_optional_capture_field(capture, "random_seed", random_seed)
+        random_seed = resolve_optional_capture_field(capture, "seed", random_seed)
         name = resolve_optional_capture_field(capture, "name", name)
         module_filter = resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = resolve_optional_capture_field(capture, "transform", transform)
@@ -1111,9 +1111,9 @@ def _reject_unsupported_options(
             "activation_transform": activation_transform,
             "detach_saved_activations": detach_saved_activations,
             "save_grads": save_grads,
-            "save_arg_values": save_args,
-            "save_code_context": save_source_context,
-            "save_rng_states": save_rng,
+            "save_args": save_args,
+            "save_source_context": save_source_context,
+            "save_rng": save_rng,
             "backward_ready": backward_ready,
             "module_filter": module_filter,
             "transform": transform,

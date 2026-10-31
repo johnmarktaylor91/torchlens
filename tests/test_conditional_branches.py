@@ -724,7 +724,7 @@ class ShapePredicateModel(nn.Module):
 
 
 class SaveSourceContextOffModel(nn.Module):
-    """Model used to strengthen the ``save_code_context=False`` path."""
+    """Model used to strengthen the ``save_source_context=False`` path."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the conditional forward pass.
@@ -747,7 +747,7 @@ class SaveSourceContextOffModel(nn.Module):
 
 
 class SaveSourceContextOffAssertModel(nn.Module):
-    """Model that combines ``assert`` with ``save_code_context=False``."""
+    """Model that combines ``assert`` with ``save_source_context=False``."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the forward pass.

@@ -53,7 +53,7 @@ class BatchEnvelope:
         Positional arguments for ``model.forward``.
     kwargs:
         Keyword arguments for ``model.forward``.
-    row_count:
+    num_rows:
         INPUT-derived number of stimulus rows in this batch — the row-truth
         every selected output is validated against (extract D13).
     mask:
@@ -180,7 +180,7 @@ def coerce_envelope(
     if isinstance(raw, BatchEnvelope):
         if raw.num_rows <= 0:
             raise InvalidArgumentError(
-                f"collate= returned a BatchEnvelope with row_count="
+                f"collate= returned a BatchEnvelope with num_rows="
                 f"{raw.num_rows} for batch {batch_index}; the row count is "
                 "the row-truth every stored shard is validated against, so "
                 "it must be a positive integer.",
@@ -199,7 +199,7 @@ def coerce_envelope(
                 "be derived.",
                 code="extraction_collate_invalid",
                 remedy=(
-                    "return a BatchEnvelope with an explicit row_count, or "
+                    "return a BatchEnvelope with an explicit num_rows, or "
                     "include a batched tensor in the mapping"
                 ),
                 batch_index=batch_index,
@@ -272,7 +272,7 @@ def _envelope_from_sequence(
             code="extraction_collate_ambiguous",
             remedy=(
                 "return a torchlens.dataset_extraction.BatchEnvelope "
-                "(args=..., kwargs=..., row_count=...), a Mapping "
+                "(args=..., kwargs=..., num_rows=...), a Mapping "
                 "(kwargs), or a single Tensor"
             ),
             batch_index=batch_index,

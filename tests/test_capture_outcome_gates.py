@@ -66,7 +66,7 @@ def test_halted_tlspec_round_trip_adopts_attestation(tmp_path) -> None:
     loaded = tl.load(bundle)
     assert loaded.outcome.status is CaptureStatus.STOPPED
     assert loaded.outcome.is_derived is False
-    assert loaded.outcome.reason == trace.stop_reason
+    assert loaded.outcome.reason == trace.halt_reason
 
 
 def test_pickle_round_trip_adopts_attestation() -> None:
@@ -368,7 +368,7 @@ def test_unstamped_recording_outcome_derives() -> None:
     # deserialized object: the derivation settles UNATTESTED, never a blessed
     # COMPLETE (R06 -- same doctrine as the trace-side structural lattice).
     assert derived.status is CaptureStatus.UNATTESTED
-    assert derived.derived is True
+    assert derived.is_derived is True
 
 
 def test_partial_trace_wrapper_has_one_outcome_answer() -> None:

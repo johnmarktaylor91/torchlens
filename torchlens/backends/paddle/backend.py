@@ -367,7 +367,7 @@ class PaddleBackend:
         save_raw_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
-        random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
+        random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
         name = _resolve_optional_capture_field(capture, "name", name)
         module_filter = _resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = _resolve_optional_capture_field(capture, "transform", transform)
@@ -436,9 +436,9 @@ class PaddleBackend:
                 "output_device": output_device,
                 "activation_transform": activation_transform,
                 "detach_saved_activations": detach_saved_activations,
-                "save_arg_values": save_arg_values,
-                "save_code_context": save_code_context,
-                "save_rng_states": save_rng_states,
+                "save_args": save_arg_values,
+                "save_source_context": save_code_context,
+                "save_rng": save_rng_states,
                 "backward_ready": backward_ready,
                 "module_filter": module_filter,
                 "transform": transform,

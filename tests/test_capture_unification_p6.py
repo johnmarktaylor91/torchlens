@@ -70,7 +70,7 @@ def test_trace_predicate_save_to_disk_loads_layer_out(tmp_path: Path) -> None:
 def test_trace_predicate_disk_only_rejects_keep_grad(tmp_path: Path) -> None:
     """Disk-only predicate storage rejects graph-connected payload requests."""
 
-    with pytest.raises(PredicateError, match="keep_grad=True.*disk-only"):
+    with pytest.raises(PredicateError, match="save_grad=True.*disk-only"):
         tl.trace(
             EncoderBlock(),
             torch.ones(1, 4),

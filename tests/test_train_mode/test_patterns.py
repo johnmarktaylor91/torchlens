@@ -470,14 +470,14 @@ def test_fastlog_train_mode_default_op_true_errors() -> None:
 
 
 def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
-    """CaptureSpec keep_grad=False contradicts backward_ready keep-grad sugar."""
+    """CaptureSpec save_grad=False contradicts backward_ready keep-grad sugar."""
 
-    with pytest.raises(tl.errors.TrainingModeConfigError, match="keep_grad=False"):
+    with pytest.raises(tl.errors.TrainingModeConfigError, match="save_grad=False"):
         tl.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
             backward_ready=True,
-            default_op=tl.fastlog.CaptureSpec(keep_grad=False),
+            default_op=tl.fastlog.CaptureSpec(save_grad=False),
         )
 
 

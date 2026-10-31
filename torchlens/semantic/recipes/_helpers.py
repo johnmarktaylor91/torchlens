@@ -68,7 +68,7 @@ def first_input(module: Any) -> Any | AbsenceReason:
     if input_ops:
         return needs_capture(
             "module input value was not captured",
-            "save_arg_values=True or save=... including the module input",
+            "save_args=True or save=... including the module input",
         )
     return structural("module call has no positional inputs")
 
@@ -83,7 +83,7 @@ def first_input_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
     ``forward_args``/``forward_kwargs`` for every ``module_identity_mode`` except
     ``pytree_module``/``object_module`` -- i.e. for the standard/default
     ``torch_module`` mode used by ordinary ``nn.Module`` tracing -- regardless of
-    whether ``save_arg_values=True`` was passed. Without this fallback the
+    whether ``save_args=True`` was passed. Without this fallback the
     "input"/"indices" facet was reported as never captured even when the value
     was fully captured, saved, and trivially readable one line away via
     ``call.input_ops[0]``.
@@ -451,7 +451,7 @@ def fused_sdpa_facet(module: Any, facet: ReconstructionFacet, recipe_id: str) ->
     if isinstance(value, MissingFacet):
         return needs_capture(
             value.reason,
-            "reconstruction_ready=True or save_arg_values=True including SDPA arguments",
+            "reconstruction_ready=True or save_args=True including SDPA arguments",
         )
     return value
 
@@ -467,12 +467,12 @@ def fused_sdpa_pattern(module: Any) -> Any:
         f"attention pattern not captured: model uses a fused attention kernel "
         f"(SDPA/FlashAttention) at {label}. "
         f"{value.detail} To READ pattern/scores/z, re-run with reconstruction_ready=True "
-        "(or save_arg_values=True). To EDIT the pattern, capture a model that runs eager / "
+        "(or save_args=True). To EDIT the pattern, capture a model that runs eager / "
         "unfused attention so it is a real, editable op -- e.g. load HF models with "
         "attn_implementation='eager' (AutoModel.from_pretrained(..., attn_implementation='eager')). "
         "The reconstructed pattern is read-only by design: editing it would silently change the "
         "attention kernel, so capture eager for a consistent baseline.",
-        "reconstruction_ready=True or save_arg_values=True including SDPA arguments",
+        "reconstruction_ready=True or save_args=True including SDPA arguments",
     )
 
 

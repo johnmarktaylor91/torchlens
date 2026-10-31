@@ -5071,7 +5071,7 @@ def test_index_put_index_parent_is_not_exempt() -> None:
 
 
 def test_save_arg_values_keeps_inplace_alias_contract_versions() -> None:
-    """save_arg_values=True keeps alias-contract snapshots for in-place ops."""
+    """save_args=True keeps alias-contract snapshots for in-place ops."""
 
     class InplaceModel(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -7738,10 +7738,10 @@ class TestValidationBugfixes:
 
 
 class TestValidationNoSavedArgs:
-    """Validation with save_arg_values=False."""
+    """Validation with save_args=False."""
 
     def test_validation_no_args(self):
-        """validate with save_arg_values=False should not crash."""
+        """validate with save_args=False should not crash."""
         from torchlens import trace as trace_fn
 
         model = _SimpleLinear()

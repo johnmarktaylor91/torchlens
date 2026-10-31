@@ -258,7 +258,7 @@ def head_scores(
                 code="mi_payload_missing",
                 message=f"The pattern at {getattr(module, 'address', '?')} is not readable.",
                 remedy="save the attention interior (retention_plan(analyses=['head_scores'])); "
-                "fused SDPA needs capture=CaptureOptions(save_arg_values=True)",
+                "fused SDPA needs capture=CaptureOptions(save_args=True)",
                 analysis="head_scores",
             )
         pattern = pattern.detach().to(torch.promote_types(pattern.dtype, torch.float32))

@@ -461,7 +461,7 @@ class JAXBackend:
         layer_visualizers = _resolve_optional_capture_field(
             capture, "layer_visualizers", layer_visualizers
         )
-        random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
+        random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
         layers_to_save = _default_if_missing(layers_to_save, "all")
         keep_orphans = _default_if_missing(keep_orphans, False)
         output_device = _default_if_missing(output_device, "same")
@@ -2775,7 +2775,7 @@ class JAXBackend:
             Returns when all options are supported.
         """
 
-        if options["save_rng_states"]:
+        if options["save_rng"]:
             raise BackendUnsupportedError(
                 "JAX backend preview requires explicit PRNG keys as params/input leaves; "
                 "save_rng_states and torch-style RNG replay are unsupported."

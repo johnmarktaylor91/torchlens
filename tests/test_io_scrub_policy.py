@@ -354,7 +354,7 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "disarm_triggers": "mutates armed trigger state",
     "backward": "autograd execution; writes gradient state",
     "log_backward": "autograd execution; writes gradient state",
-    "recording_backward": "autograd execution; writes gradient state",
+    "capture_backward": "autograd execution; writes gradient state",
     "cleanup": "destructive teardown of the trace",
     "release_param_refs": "destructive; nulls live parameter refs",
     "do": "intervention editor (mutates fork state)",

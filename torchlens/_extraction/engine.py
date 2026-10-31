@@ -129,7 +129,7 @@ class _RunPlan:
     acknowledge_v1_prefix:
         The explicit in-progress-v1 resume acknowledgment (extract D16).
     transform_raw:
-        The caller's original ``transform=`` value (classified for the
+        The caller's original ``output_transform=`` value (classified for the
         callable-identity block when chains hold opaque steps).
     input_transform:
         The coerced B5 INPUT-transform callable (or ``None``), applied to
@@ -403,7 +403,7 @@ def _refuse_unbindable_default_positionals(
             "pass collate= returning the model input for a batch of items: "
             "a single Tensor, a Mapping of forward kwargs, or a "
             "torchlens.dataset_extraction.BatchEnvelope(args=..., "
-            "kwargs=..., row_count=...)"
+            "kwargs=..., num_rows=...)"
         ),
         batch_index=batch_index,
         n_positional=n_positional,

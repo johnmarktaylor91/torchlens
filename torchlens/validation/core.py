@@ -1851,7 +1851,7 @@ def _raise_if_replay_arg_version_data_incomplete(self: "Trace", target_layer: Op
         "Cannot validate saved layer "
         f"{target_layer.label}: this trace does not have complete saved argument "
         "values or child-version snapshots for replay validation. "
-        "Use tl.trace(..., capture=tl.options.CaptureOptions(save_arg_values=True)) "
+        "Use tl.trace(..., capture=tl.options.CaptureOptions(save_args=True)) "
         "for replay validation."
     )
 

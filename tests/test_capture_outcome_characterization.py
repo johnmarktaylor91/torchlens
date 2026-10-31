@@ -156,7 +156,7 @@ def test_planted_step20_failure_propagates_original(monkeypatch) -> None:
 
 
 def test_halted_postprocess_failure_propagates_with_halt_context(monkeypatch) -> None:
-    """A halted-postprocess failure keeps the original error and HaltSignal chain."""
+    """A halted-postprocess failure keeps the original error and StopSignal chain."""
 
     def _boom(*args: object, **kwargs: object) -> None:
         raise ValueError("planted halted-pp")
@@ -197,7 +197,7 @@ def test_halted_trace_basic_shape() -> None:
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     assert trace.halted is True
     assert trace._tracing_finished is True
-    assert trace.halt_frontier == trace.stop_reason
+    assert trace.halt_frontier == trace.halt_reason
 
 
 def test_halted_trace_has_no_transient_attribution_leak() -> None:
@@ -326,7 +326,7 @@ def test_recorder_keyboard_interrupt_leaves_no_product() -> None:
 
     recorder = Recorder(FailingForwardModel(KeyboardInterrupt()), save=lambda ctx: True)
     with pytest.raises(KeyboardInterrupt), recorder as active:
-        active.log(torch.ones(1, 3))
+        active(torch.ones(1, 3))
     with pytest.raises(RecorderStateError):
         _ = recorder.recording
 

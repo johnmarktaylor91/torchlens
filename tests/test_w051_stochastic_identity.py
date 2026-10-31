@@ -126,7 +126,7 @@ _TWO_PROCESS_SCRIPT = textwrap.dedent(
     def capture(model, seed):
         torch.manual_seed(seed)
         return tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(
-            intervention_ready=True, random_seed=seed))
+            intervention_ready=True, seed=seed))
 
     torch.manual_seed(0)
     model = TwoBlock()

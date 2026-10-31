@@ -614,7 +614,7 @@ def _trace_kwargs(
 
     The patching helpers cannot work without ``layers_to_save="all"`` (facet
     values must be readable on every candidate module) and
-    ``save_arg_values=True`` (reconstructed facets read saved op args), and
+    ``save_args=True`` (reconstructed facets read saved op args), and
     attribution additionally needs ``save_grads``. These used to be supplied
     only when the caller passed NO ``capture=`` at all -- any user
     ``capture=`` silently dropped every one of them, so facets came up
@@ -686,7 +686,7 @@ def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
             f"Patching helpers require capture options {required!r}, but the supplied "
             f"capture= explicitly sets {conflicts!r} to conflicting values. Facet values "
             "must be readable on every candidate module (layers_to_save='all') and "
-            "reconstructed facets read saved op args (save_arg_values=True); a narrower "
+            "reconstructed facets read saved op args (save_args=True); a narrower "
             "capture silently shrinks or empties the patch table. Drop these fields from "
             "capture= (they are filled in automatically) or set them to the required "
             "values."

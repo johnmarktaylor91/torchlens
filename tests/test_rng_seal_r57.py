@@ -298,7 +298,7 @@ def test_auto_seed_freshness_survives_the_restore() -> None:
     """Auto-seeded captures still draw FRESH seeds after the restore.
 
     The seed pick (``random.randint``) deliberately stays OUTSIDE the restore
-    bracket: restoring the pick too would make every ``random_seed=None``
+    bracket: restoring the pick too would make every ``seed=None``
     capture reuse the identical seed, silently correlating dropout patterns
     across runs.
     """
@@ -391,7 +391,7 @@ def test_capture_is_rng_neutral_to_the_host_process() -> None:
     untouched (queued RNG-reseed fork); only the leak is closed. The
     auto-seed pick itself draws from a PRIVATE entropy stream (never the
     user's global engines), so neutrality holds even with
-    ``random_seed=None`` while consecutive captures still get fresh seeds.
+    ``seed=None`` while consecutive captures still get fresh seeds.
     """
 
     import random as _random

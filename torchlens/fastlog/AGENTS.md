@@ -45,7 +45,7 @@ torch operations do not recursively log events.
 Storage is resolved from streaming/recording options:
 - RAM-only when no bundle path is supplied.
 - RAM plus disk mirror when `retain_in_memory=True`.
-- Disk-only when `retain_in_memory=False`, rejecting `keep_grad=True`.
+- Disk-only when `retain_in_memory=False`, rejecting `save_grad=True`.
 
 Forward exceptions are opt-in partials. The default is the historical
 `on_forward_error="raise"` path. `on_forward_error="attach_partial"` attaches a failed
@@ -64,7 +64,7 @@ Trace has a separate failed-capture diagnostic: failed `tl.trace(...)` exception
 
 ## Training Semantics
 `backward_ready=True` promotes omitted defaults to graph-connected out capture. Explicit
-defaults still win, but incompatible `keep_grad=False` or disk-only settings raise
+defaults still win, but incompatible `save_grad=False` or disk-only settings raise
 configuration errors. Disk mirrors are detached inspection copies; trainable payloads are RAM
 copies.
 

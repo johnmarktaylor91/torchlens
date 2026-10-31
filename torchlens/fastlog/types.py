@@ -157,7 +157,7 @@ class CaptureSpec:
         Whether tensor payloads should be retained for this event.
     save_metadata:
         Whether non-payload metadata should be retained for this event.
-    keep_grad:
+    save_grad:
         Whether the in-RAM tensor clone should stay attached to autograd.
     device:
         Optional target device for retained payloads.
@@ -188,7 +188,7 @@ class CaptureSpec:
                 argument="save_mode",
             )
         if self.save_mode == "view" and not self.save_grad:
-            object.__setattr__(self, "keep_grad", True)
+            object.__setattr__(self, "save_grad", True)
 
 
 CaptureDecision = bool | CaptureSpec | None
@@ -909,7 +909,7 @@ class Recording(TraceLike):
             from .exceptions import RecorderStateError
 
             raise RecorderStateError(
-                "Cannot call log_backward on failed partial Recording; "
+                "Cannot call backward on failed partial Recording; "
                 "user-op failures exclude the failing call; TL-side capture failures may "
                 "include a skipped/partial current-call event.",
                 code="N3",
@@ -920,7 +920,7 @@ class Recording(TraceLike):
             from .exceptions import RecorderStateError
 
             raise RecorderStateError(
-                f"Cannot call log_backward on halted Recording (halt_reason={self.stop_reason!r}).",
+                f"Cannot call backward on halted Recording (stop_reason={self.stop_reason!r}).",
                 code="recording_backward_halted",
                 capability="backward",
                 status="halted",
@@ -935,7 +935,7 @@ class Recording(TraceLike):
             from .exceptions import RecorderStateError
 
             raise RecorderStateError(
-                "Cannot call log_backward on this Recording: its forward ran under "
+                "Cannot call backward on this Recording: its forward ran under "
                 "torch.no_grad() or torch.inference_mode(), so tl.record implied "
                 "inference_only=True and no autograd graph was built. Remedy: record again "
                 "with gradients enabled and pass backward_ready=True or save_grads= to tl.record.",
@@ -946,7 +946,7 @@ class Recording(TraceLike):
             from .exceptions import RecorderStateError
 
             raise RecorderStateError(
-                "Cannot call log_backward on this Recording: tl.record installs gradient hooks "
+                "Cannot call backward on this Recording: tl.record installs gradient hooks "
                 "only when a backward is requested up front, so this backward would record "
                 "nothing. Remedy: pass backward_ready=True or save_grads= to tl.record (or "
                 "Recorder) and record again.",
@@ -1327,6 +1327,6 @@ def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -
     recording.stops_by_pass.setdefault(pass_index, reason)
     if recording.is_stopped:
         return
-    object.__setattr__(recording, "halted", True)
+    object.__setattr__(recording, "is_stopped", True)
     object.__setattr__(recording, "status", "halted")
-    object.__setattr__(recording, "halt_reason", reason)
+    object.__setattr__(recording, "stop_reason", reason)

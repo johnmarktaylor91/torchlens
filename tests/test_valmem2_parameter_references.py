@@ -1,11 +1,11 @@
 """Forward validation keeps its own parameter arguments by reference, under a version guard.
 
-Validation captures with ``save_arg_values=True`` on a deep copy of the model.
+Validation captures with ``save_args=True`` on a deep copy of the model.
 During that one capture a parameter argument is kept by reference rather than
 copied, and its version counter is recorded. These tests pin:
 
 * the reference is taken only inside validation's capture, on the deep copy;
-  a user's ``save_arg_values=True`` trace still saves copies, and the context
+  a user's ``save_args=True`` trace still saves copies, and the context
   is cleared on every exit, an exception included;
 * a model that writes a parameter in place during forward makes validation
   rerun with every argument copied (the guard's fallback, recorded as a

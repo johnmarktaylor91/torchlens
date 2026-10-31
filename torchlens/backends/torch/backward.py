@@ -3102,7 +3102,7 @@ def log_recording_backward(
         and _is_static_truthy_keep_grad(effective_save_grads)
     ):
         raise InvalidStorageError(
-            "save_grads=True with CaptureSpec(keep_grad=True) is incompatible with "
+            "save_grads=True with CaptureSpec(save_grad=True) is incompatible with "
             "disk-only fastlog gradient storage"
         )
     selected_forward_labels = _selected_fastlog_forward_labels(recording)
@@ -3119,7 +3119,7 @@ def log_recording_backward(
                 and _is_static_truthy_keep_grad(decision)
             ):
                 raise InvalidStorageError(
-                    "save_grads returned CaptureSpec(keep_grad=True), which is incompatible "
+                    "save_grads returned CaptureSpec(save_grad=True), which is incompatible "
                     "with disk-only fastlog gradient storage"
                 )
             return decision

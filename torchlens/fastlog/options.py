@@ -106,11 +106,11 @@ class RecordingOptions:
     #: the narration engine -- seams read the armed session off the trace.
     echo: Any | None
     #: Whether a retained activation whose capture spec does not ask for
-    #: ``keep_grad`` is detached from the autograd graph. ``True`` (the
+    #: ``save_grad`` is detached from the autograd graph. ``True`` (the
     #: ``record`` default) stores detached copies; ``False`` stores
     #: graph-connected copies wherever the source tensor carries autograd
     #: history, as ``tl.trace``'s default save does. A spec with
-    #: ``keep_grad=True`` stays attached either way. Disk payloads are always
+    #: ``save_grad=True`` stays attached either way. Disk payloads are always
     #: detached inspection copies.
     detach_saved_activations: bool
     _specified_fields: frozenset[str] = field(
@@ -427,7 +427,8 @@ def merge_recording_options(
         "default_grad": default_grad,
         "grad_transform": grad_transform,
         "save_raw_grads": save_raw_grads,
-        "narrate": narrate,
+        # The narrate= keyword fills the stored echo field.
+        "echo": narrate,
         "detach_saved_activations": detach_saved_activations,
     }
     for field_name, value in incoming.items():

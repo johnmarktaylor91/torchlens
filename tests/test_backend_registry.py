@@ -202,7 +202,7 @@ def _register_fake_backend(name: str = "fake", *, priority: int = 50) -> None:
                 interventions=False,
                 rng_replay=False,
                 payload_materialization=False,
-                streaming=False,
+                has_streaming=False,
                 module_identity_modes=("function_root",),
                 save_levels=("audit",),
             ),
@@ -299,7 +299,7 @@ def test_capture_backend_factory_checked_at_registration() -> None:
                     interventions=False,
                     rng_replay=False,
                     payload_materialization=False,
-                    streaming=False,
+                    has_streaming=False,
                 ),
                 capture_backend=bad_capture_backend,
             )
@@ -329,7 +329,7 @@ def test_capture_backend_factory_import_error_is_not_exempted() -> None:
                     interventions=False,
                     rng_replay=False,
                     payload_materialization=False,
-                    streaming=False,
+                    has_streaming=False,
                 ),
                 capture_backend=bad_capture_backend,
             )
@@ -355,7 +355,7 @@ def test_replace_backend_spec_removes_stale_aliases() -> None:
             interventions=False,
             rng_replay=False,
             payload_materialization=False,
-            streaming=False,
+            has_streaming=False,
         ),
     )
     new_spec = BackendSpec(
@@ -808,10 +808,10 @@ def test_tf_detector_reraises_genuine_backend_mismatch(
         _tf_can_handle(keras_model, object(), None)
 
 
-def test_tf_backend_rejects_random_seed_without_importing_tensorflow() -> None:
-    """TensorFlow preview random_seed is a typed unsupported option."""
+def test_tf_backend_rejects_seed_without_importing_tensorflow() -> None:
+    """TensorFlow preview seed= is a typed unsupported option."""
 
-    with pytest.raises(BackendUnsupportedError, match="random_seed"):
+    with pytest.raises(BackendUnsupportedError, match="does not support: seed"):
         TFBackend().capture_trace(lambda x: x, object(), seed=123)
 
 

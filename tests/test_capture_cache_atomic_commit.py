@@ -148,7 +148,7 @@ def test_hard_crash_temp_debris_is_swept_age_gated(tmp_path) -> None:
 
     A hard crash (SIGKILL) between ``mkstemp`` and the atomic ``os.replace``
     strands ``.<name>.tmp.<rand>`` files that no ``*.pkl`` glob sees: they
-    were invisible to eviction accounting AND ``clear_capture_cache``,
+    were invisible to eviction accounting AND ``clear_cache``,
     accumulating without bound. Fresh temps (a possibly in-flight store)
     must survive the sweep.
     """
@@ -174,7 +174,7 @@ def test_hard_crash_temp_debris_is_swept_age_gated(tmp_path) -> None:
     assert not stale.exists(), "stale mkstemp debris must be swept at eviction"
     assert fresh.exists(), "a fresh (possibly in-flight) temp must survive"
 
-    # clear_capture_cache sweeps stale debris too (same age gate), and never
+    # clear_cache sweeps stale debris too (same age gate), and never
     # touches the secret file.
     stale.write_bytes(b"debris-again")
     os.utime(stale, (two_hours_ago, two_hours_ago))

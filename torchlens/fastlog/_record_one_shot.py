@@ -112,7 +112,7 @@ def record(
         autograd graph. Defaults to ``True``. ``False`` keeps graph-connected
         copies wherever the recorded tensor carries autograd history, so a
         loss built from ``record.ram_payload`` backpropagates into the model.
-        A spec with ``keep_grad=True`` stays attached either way; disk payloads
+        A spec with ``save_grad=True`` stays attached either way; disk payloads
         are always detached. ``backward_ready=True`` refuses an explicit
         ``True``.
     save_grads, default_grad, grad_transform, save_raw_gradients:

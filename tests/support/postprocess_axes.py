@@ -220,7 +220,7 @@ class AssigningVarNamesModel(nn.Module):
     Closes the matrix gap behind the ``("11.5", "var_names")`` permanent
     no-op row (module-internal calls never name the wrapped function in
     their assignment line, so the oracle axes resolve to the empty
-    default). Runs under ``save_code_context=True``.
+    default). Runs under ``save_source_context=True``.
     """
 
     def __init__(self) -> None:

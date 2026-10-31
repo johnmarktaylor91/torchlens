@@ -19,5 +19,5 @@ def test_register_op_rule_affects_flops() -> None:
 def test_fastlog_grad_capture_spec() -> None:
     """Fastlog capture specs expose the grad retention flag."""
 
-    spec = tl.fastlog.CaptureSpec(keep_grad=True)
+    spec = tl.fastlog.CaptureSpec(save_grad=True)
     assert spec.save_grad is True

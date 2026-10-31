@@ -186,14 +186,14 @@ def _resolve_train_mode_default(
     if value is True:
         raise TrainingModeConfigError(
             f"backward_ready=True conflicts with {field_name}=True because True uses "
-            "keep_grad=False; use CaptureSpec(keep_grad=True) or omit the default. "
-            "Remedy: pass CaptureSpec(keep_grad=True) or omit the default.",
+            "save_grad=False; use CaptureSpec(save_grad=True) or omit the default. "
+            "Remedy: pass CaptureSpec(save_grad=True) or omit the default.",
             code="backward_ready_conflict",
         )
     if isinstance(value, CaptureSpec) and not value.save_grad:
         raise TrainingModeConfigError(
-            f"backward_ready=True conflicts with {field_name}=CaptureSpec(keep_grad=False). "
-            "Remedy: pass CaptureSpec(keep_grad=True) or omit the default.",
+            f"backward_ready=True conflicts with {field_name}=CaptureSpec(save_grad=False). "
+            "Remedy: pass CaptureSpec(save_grad=True) or omit the default.",
             code="backward_ready_conflict",
         )
     return value
@@ -260,7 +260,7 @@ class Recorder:
             transformed payload is retained on the record. Defaults to
             ``True`` to mirror the slow path.
         backward_ready:
-            If True, omitted defaults are promoted to ``CaptureSpec(keep_grad=True)``.
+            If True, omitted defaults are promoted to ``CaptureSpec(save_grad=True)``.
             Gradient hooks are installed only when ``backward_ready=True``,
             ``save_grads=`` or ``default_grad=`` is given (``save_grads=None``
             or ``False`` and ``default_grad=False`` do not count); otherwise
@@ -271,9 +271,9 @@ class Recorder:
             the autograd graph. Defaults to ``True`` (detached copies). ``False``
             keeps graph-connected copies wherever the recorded tensor carries
             autograd history, so a loss built from them backpropagates into the
-            model; unlike ``CaptureSpec(keep_grad=True)`` it does not refuse
+            model; unlike ``CaptureSpec(save_grad=True)`` it does not refuse
             integer tensors or detached transforms. A spec with
-            ``keep_grad=True`` stays attached either way, and disk payloads are
+            ``save_grad=True`` stays attached either way, and disk payloads are
             always detached. ``backward_ready=True`` refuses an explicit
             ``True``.
         """
@@ -573,7 +573,7 @@ class Recorder:
             self._absorb_pass_events(trace)
             object.__setattr__(
                 self._state.recording,
-                "n_ops",
+                "num_ops",
                 max(self._state.recording.num_ops, self._next_pass_index),
             )
             self._mark_halted_pass(
@@ -641,7 +641,7 @@ class Recorder:
         self._output_tensor_addresses = output_tensor_addresses
         object.__setattr__(
             self._state.recording,
-            "n_ops",
+            "num_ops",
             max(self._state.recording.num_ops, self._next_pass_index),
         )
         return output
@@ -771,14 +771,14 @@ class Recorder:
             if getattr(getattr(event, "record_context", None), "kind", None) == "op"
         ]
         object.__setattr__(recording, "status", "partial_error")
-        object.__setattr__(recording, "failed", True)
+        object.__setattr__(recording, "is_failed", True)
         object.__setattr__(recording, "error_repr", safe_exception_repr(exc))
         object.__setattr__(
             recording,
             "error_traceback",
             "".join(traceback_module.format_exception(type(exc), exc, exc.__traceback__)),
         )
-        object.__setattr__(recording, "n_ops_completed", len(successful_op_labels))
+        object.__setattr__(recording, "num_committed_ops", len(successful_op_labels))
         object.__setattr__(
             recording,
             "last_successful_op_label",

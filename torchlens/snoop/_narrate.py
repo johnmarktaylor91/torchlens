@@ -205,10 +205,10 @@ def narrate_recording(
         )
     header = None
     footer: list[str] = []
-    if getattr(recording, "failed", False):
+    if getattr(recording, "is_failed", False):
         header = f"!! forward failed: {recording.error_repr}"
         footer.append("-- the raising call is not in the record: it produced no output to log --")
-    elif getattr(recording, "halted", False):
+    elif getattr(recording, "is_stopped", False):
         footer.append(f"-- capture halted (not failed): {recording.stop_reason} --")
     return _render_block(_select_rows(rows, select), last=last, header=header, footer_lines=footer)
 

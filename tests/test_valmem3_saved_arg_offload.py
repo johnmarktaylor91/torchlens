@@ -1,6 +1,6 @@
 """Forward validation keeps its own saved-argument copies on ``output_device``.
 
-Validation captures with ``save_arg_values=True``. With an ``output_device``
+Validation captures with ``save_args=True``. With an ``output_device``
 other than ``"same"``, its own capture now keeps the retained copy of every
 non-parameter tensor argument on that device, tagged with the device the op
 consumed it on, and replay holds one layer's tagged arguments back on those
@@ -117,7 +117,7 @@ def _validation_capture(
 
     def runner(*args: Any, **kwargs: Any) -> Any:
         trace = real_runner(*args, **kwargs)
-        if kwargs["save_arg_values"]:
+        if kwargs["save_args"]:
             inspect(trace, kwargs["model"])
         return trace
 

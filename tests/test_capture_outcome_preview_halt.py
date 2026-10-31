@@ -3,7 +3,7 @@
 Every preview backend (tf / mlx / tinygrad / paddle / jax) settles through the
 ONE ``stamp_backend_finalized`` chokepoint as the last act of its capture
 entry. Paddle ships ``halt=`` and MLX carries ``_mlx_halt_selector``; both
-catch their ``HaltSignal``, write the structural halt fields, and fall through
+catch their ``StopSignal``, write the structural halt fields, and fall through
 the same tail to that stamp. Before the fix the stamp was unconditionally
 COMPLETE, so a halted preview product carried a wrongly-blessed settled
 status: on save+load the coherence matrix saw ``complete`` against structural
@@ -54,7 +54,7 @@ def test_preview_stamp_settles_halted_when_trace_is_halted() -> None:
     # An attested stamp, not a structural derivation.
     assert outcome.is_derived is False
     assert outcome.is_partial is True
-    assert outcome.reason == trace.stop_reason
+    assert outcome.reason == trace.halt_reason
     assert outcome.boundary_label == trace.halt_frontier
     assert outcome.frontier_labels == tuple(trace.output_layers)
     assert outcome.num_committed_ops is not None
@@ -90,7 +90,7 @@ def test_preview_halted_stamp_is_coherent_and_survives_save_load(tmp_path) -> No
     path = tmp_path / "preview_halted.tlspec"
     tl.save(trace, str(path))
     loaded = tl.load(str(path))
-    assert loaded.is_stopped is True
+    assert loaded.halted is True
     assert loaded.outcome is not None
     assert loaded.outcome.status is CaptureStatus.STOPPED
     # N1: a non-degraded halted artifact re-saves.
@@ -115,7 +115,7 @@ def test_halt_capable_preview_backend_falls_through_to_the_single_stamp(backend:
     """
 
     source = (TORCHLENS_DIR / "backends" / backend / "backend.py").read_text(encoding="utf-8")
-    assert "except HaltSignal" in source, backend
+    assert "except StopSignal" in source, backend
     assert re.search(r"trace\.halted\s*=\s*True", source), backend
     stamp_lines = [
         index
@@ -207,7 +207,7 @@ def test_preview_stamp_refuses_swallowed_halt_and_settles_failed() -> None:
     """A latched stop request with no structural halt is a swallowed signal.
 
     The halt-capable preview raise sites latch a ``StopRequest`` before
-    raising ``HaltSignal`` (torch ``evaluate_halt`` parity). If user code eats
+    raising ``StopSignal`` (torch ``evaluate_halt`` parity). If user code eats
     the signal in a broad ``except``, the capture reaches the stamp un-halted;
     before the fix that took the COMPLETE arm -- a wrongly-blessed settled
     status for a capture whose halt never actually stopped the forward.
@@ -240,7 +240,7 @@ def test_preview_stamp_consumes_latch_on_the_normal_halted_arm() -> None:
     trace = _halted_trace()
     trace.__dict__["_stop_requested"] = StopRequest(
         kind="halt",
-        reason=trace.stop_reason,
+        reason=trace.halt_reason,
         boundary_label=trace.halt_frontier,
     )
     outcome = stamp_backend_finalized(trace)
@@ -250,22 +250,22 @@ def test_preview_stamp_consumes_latch_on_the_normal_halted_arm() -> None:
 
 @pytest.mark.parametrize("backend", _HALT_CAPABLE_PREVIEW_BACKENDS)
 def test_halt_capable_preview_backend_latches_stop_request_before_raising(backend: str) -> None:
-    """Source lockstep: every preview HaltSignal raise latches the request first.
+    """Source lockstep: every preview StopSignal raise latches the request first.
 
-    The latch write must precede EVERY ``raise HaltSignal`` in the backend so
+    The latch write must precede EVERY ``raise StopSignal`` in the backend so
     a swallowed signal is detectable at the stamp; a raise without a latch
     reopens the swallowed-halt COMPLETE blessing for that site.
     """
 
     source = (TORCHLENS_DIR / "backends" / backend / "backend.py").read_text(encoding="utf-8")
     lines = source.splitlines()
-    raise_lines = [index for index, line in enumerate(lines) if "raise HaltSignal(" in line]
+    raise_lines = [index for index, line in enumerate(lines) if "raise StopSignal(" in line]
     assert raise_lines, backend
     latch_lines = [index for index, line in enumerate(lines) if '"_stop_requested"' in line]
     for raise_line in raise_lines:
         preceding = [index for index in latch_lines if 0 <= raise_line - index <= 12]
         assert preceding, (
-            f"{backend}: raise HaltSignal at line {raise_line + 1} has no "
+            f"{backend}: raise StopSignal at line {raise_line + 1} has no "
             "StopRequest latch write within the preceding 12 lines"
         )
 

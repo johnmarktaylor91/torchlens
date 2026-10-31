@@ -150,19 +150,19 @@ def test_halt_leaves_no_residue() -> None:
 
 
 def test_halt_imports_resolvable() -> None:
-    """Every HaltSignal except site has a matching import."""
+    """Every StopSignal except site has a matching import."""
 
     repo_root = Path(__file__).resolve().parents[1]
     files_with_except = [
         path
         for path in (repo_root / "torchlens").rglob("*.py")
-        if "except HaltSignal" in path.read_text(encoding="utf-8")
+        if "except StopSignal" in path.read_text(encoding="utf-8")
     ]
 
     assert files_with_except
     for path in files_with_except:
         text = path.read_text(encoding="utf-8")
-        assert "import HaltSignal" in text, path.relative_to(repo_root)
+        assert "import StopSignal" in text, path.relative_to(repo_root)
 
 
 def test_halt_from_inside_module_enter_predicate() -> None:
@@ -350,7 +350,7 @@ def test_recording_log_backward_on_halted_raises() -> None:
         tl.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth)
     )
 
-    with pytest.raises(RecorderStateError, match="Cannot call log_backward on halted Recording"):
+    with pytest.raises(RecorderStateError, match="Cannot call backward on halted Recording"):
         recording.backward(torch.ones((), requires_grad=True))
 
 
@@ -411,7 +411,7 @@ def test_fastlog_halt_finalizes_disk_storage(tmp_path: Path) -> None:
 
 
 def test_halt_signal_inherits_from_base_exception_not_exception() -> None:
-    """HaltSignal bypasses regular Exception handlers."""
+    """StopSignal bypasses regular Exception handlers."""
 
     assert issubclass(StopSignal, BaseException)
     assert not issubclass(StopSignal, Exception)
@@ -426,6 +426,6 @@ def test_recording_log_backward_refusals_carry_stable_codes() -> None:
 
     halted = _as_recording(tl.record(FiveOpModel(), torch.tensor(1.0), save=_keep_ops_until_fourth))
     with pytest.raises(RecorderStateError) as halted_exc:
-        halted.log_backward(torch.ones((), requires_grad=True))
+        halted.backward(torch.ones((), requires_grad=True))
     assert halted_exc.value.fields["code"] == "recording_backward_halted"
     assert halted_exc.value.fields["capability"] == "backward"

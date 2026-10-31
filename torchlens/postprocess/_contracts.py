@@ -1043,7 +1043,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
         placeholder_probes=frozenset(("out_ref",)),
     ),
     # Step 11.5 previously declared an EMPTY write set, silently wrong under
-    # save_code_context=True where it assigns op.var_names on every op
+    # save_source_context=True where it assigns op.var_names on every op
     # (design-ppdag-v3 defect 3). The audit never tripped because no recorded
     # enforcement axis enabled save_code_context. Note: the design's expected
     # _arg_expressions_cache companion write does NOT fire here —

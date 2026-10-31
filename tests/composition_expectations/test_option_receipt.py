@@ -98,7 +98,8 @@ def test_receipt_refusals_are_typed_teaching() -> None:
 def test_receipt_works_across_the_options_families() -> None:
     """Any _specified_fields-carrying options object yields a receipt."""
 
-    from torchlens.options import ReplayOptions, SaveOptions, option_receipt
+    from torchlens._option_receipt import option_receipt
+    from torchlens.options import ReplayOptions, SaveOptions
 
     save_receipt = option_receipt(SaveOptions())
     replay_receipt = option_receipt(ReplayOptions(append=True))

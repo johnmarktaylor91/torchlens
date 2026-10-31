@@ -262,7 +262,7 @@ class TestAuditOracle:
             description="fallback",
         )
         assert fallback.status == pp.STATUS_UNVERIFIED_FALLBACK
-        resolution = pp.Resolution(record=fallback, declared=None, transform=None)
+        resolution = pp.Resolution(preprocessing=fallback, declared=None, transform=None)
         report = pp.audit(resolution, None)
         assert report.verdict == "unknown"
         assert "authority_status_unverified_fallback" in report.unknown_reasons

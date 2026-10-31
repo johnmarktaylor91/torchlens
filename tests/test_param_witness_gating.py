@@ -31,7 +31,7 @@ _RUNNABLE_CAP = {
     "intervention_ready": True,
     "capture_container_structure": True,
     "cache": False,
-    "random_seed": 7,
+    "seed": 7,
 }
 
 

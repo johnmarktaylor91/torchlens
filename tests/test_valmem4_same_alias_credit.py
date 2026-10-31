@@ -240,7 +240,7 @@ def _validate_corrupted(corrupt: Any) -> tuple[bool, list[str]]:
 
     def runner(*args: Any, **kwargs: Any) -> Any:
         trace = real_runner(*args, **kwargs)
-        if kwargs["save_arg_values"]:
+        if kwargs["save_args"]:
             corrupt(trace)
         return trace
 

@@ -184,7 +184,7 @@ def test_reconstructed_sdpa_missing_prerequisite_names_arg_capture() -> None:
 
     assert "pattern" not in facets.keys()
     assert facets.menu()["pattern"].status == "needs_capture"
-    with pytest.raises(MissingFacetError, match="save_arg_values=True"):
+    with pytest.raises(MissingFacetError, match="save_args=True"):
         facets.pattern
 
 
@@ -301,7 +301,7 @@ def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
         assert menu["pattern"].status == "needs_capture"
         assert menu["hook_pattern"].status == "needs_capture"
         assert menu["hook_pattern"].save_hint == menu["pattern"].save_hint
-        with pytest.raises(MissingFacetError, match="save_arg_values=True"):
+        with pytest.raises(MissingFacetError, match="save_args=True"):
             view["hook_pattern"]
     finally:
         facets_mod.enable_transformerlens_aliases(False)

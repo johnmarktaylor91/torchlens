@@ -5,7 +5,7 @@ cert9-f5 fix (round-8-prep peripheral MAJOR): ``first_input``/``first_input_spec
 finalization ("GC-11", ``torchlens/postprocess/finalization.py``) unconditionally
 nulls for the default ``torch_module`` module-identity mode -- the mode ordinary
 ``nn.Module`` tracing uses. That made the built-in ``"input"``/``"indices"`` facet
-falsely report "not captured -- re-run with save_arg_values=True" even when the
+falsely report "not captured -- re-run with save_args=True" even when the
 value WAS captured and was trivially readable via the op graph, exactly the
 fallback its sibling ``module_input_op_spec`` already implements.
 

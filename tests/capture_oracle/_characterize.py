@@ -942,17 +942,17 @@ def _outcome_projection(product: Any, exception: BaseException | None) -> dict[s
     if isinstance(product, Recording):
         return {
             "status": product.status,
-            "failed": product.failed,
-            "halted": product.halted,
+            "failed": product.is_failed,
+            "halted": product.is_stopped,
             "halt_reason": product.stop_reason,
             "n_ops_completed": product.num_committed_ops,
             "last_successful_op_label": product.last_successful_op_label,
             "last_event_label": product.last_event_label,
             "last_event_func": product.last_event_func,
             "error_type": None
-            if not product.failed or exception is None
+            if not product.is_failed or exception is None
             else type(exception).__name__,
-            "error_message": None if not product.failed or exception is None else str(exception),
+            "error_message": None if not product.is_failed or exception is None else str(exception),
         }
     if hasattr(product, "raw_layers"):
         return {

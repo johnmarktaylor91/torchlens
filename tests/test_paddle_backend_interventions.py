@@ -203,8 +203,8 @@ def test_paddle_halt_stops_execution_at_frontier() -> None:
     trace = tl.trace(mlp_with_flag, _inputs(), backend="paddle", halt=tl.func("functional.relu"))
     assert executed == []
     assert trace.halted is True
-    assert "relu" in str(trace.stop_reason)
-    assert trace.halt_frontier == trace.stop_reason
+    assert "relu" in str(trace.halt_reason)
+    assert trace.halt_frontier == trace.halt_reason
     assert not any("linear_2" in label for label in trace.layer_labels)
     assert any("relu" in label for label in trace.layer_labels)
     assert PaddleBackend().validate_trace(trace) is True

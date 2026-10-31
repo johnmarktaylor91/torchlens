@@ -1175,7 +1175,7 @@ def test_validate_backward_default_detects_corrupted_captured_op_grad(
 
 
 def test_validate_backward_pass_random_seed_kwarg_public_wrapper() -> None:
-    """The public backward wrapper forwards ``random_seed`` into the dispatcher."""
+    """The public backward wrapper forwards ``seed`` into the dispatcher."""
 
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
@@ -1185,11 +1185,11 @@ def test_validate_backward_pass_random_seed_kwarg_public_wrapper() -> None:
     ) as validator:
         assert tl.validate(model, x, scope="backward", seed=42)
     assert validator.call_args is not None
-    assert validator.call_args.kwargs["random_seed"] == 42
+    assert validator.call_args.kwargs["seed"] == 42
 
 
 def test_validation_validate_backward_pass_random_seed_kwarg_user_funcs_path() -> None:
-    """The validation subpackage path forwards ``random_seed`` to the source validator."""
+    """The validation subpackage path forwards ``seed`` to the source validator."""
 
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
@@ -1199,7 +1199,7 @@ def test_validation_validate_backward_pass_random_seed_kwarg_user_funcs_path() -
     ) as validator:
         assert tl_validation.validate_backward_pass(model, x, seed=42)
     assert validator.call_args is not None
-    assert validator.call_args.kwargs["random_seed"] == 42
+    assert validator.call_args.kwargs["seed"] == 42
 
 
 def test_validate_backward_random_seed_deterministic() -> None:

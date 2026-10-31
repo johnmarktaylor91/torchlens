@@ -84,7 +84,7 @@ from ..utils.rng import (
 _ACTIVE_CAPTURE_BACKEND: CaptureBackend | None = None
 
 _AUTO_SEED_ENTROPY = random.Random()
-"""Private entropy stream for ``random_seed=None`` capture seed picks (R57).
+"""Private entropy stream for ``seed=None`` capture seed picks (R57).
 
 Seeded once from OS entropy at import. Drawing the auto seed from the user's
 global ``random`` engine either advanced that stream past the capture's
@@ -1558,7 +1558,7 @@ def run_and_log_inputs_through_model(
         # entropy stream, never the user's global ``random`` engine. Drawing
         # from the global stream either leaked one ``randint`` advance past
         # the restore bracket below (capture not byte-neutral to a seeded
-        # host process) or, if bracketed, made every ``random_seed=None``
+        # host process) or, if bracketed, made every ``seed=None``
         # capture reuse the identical seed (correlated dropout across runs).
         # The private stream keeps both properties: byte-exact global-engine
         # neutrality AND fresh seeds per capture.

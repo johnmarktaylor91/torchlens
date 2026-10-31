@@ -826,7 +826,7 @@ class ShapePredicateModel(nn.Module):
 
 
 class SaveSourceContextOffAssertModel(nn.Module):
-    """Model that combines ``assert`` with ``save_code_context=False``."""
+    """Model that combines ``assert`` with ``save_source_context=False``."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the forward pass.
@@ -926,7 +926,7 @@ def _log_model(
     model: nn.Module,
     x: torch.Tensor,
     *,
-    save_code_context: bool = True,
+    save_source_context: bool = True,
     layers_to_save: str | Sequence[str] | None = "all",
 ) -> Trace:
     """Capture a ``Trace`` for a small integration-test model.
@@ -937,7 +937,7 @@ def _log_model(
         Model to execute.
     x:
         Input tensor.
-    save_code_context:
+    save_source_context:
         Whether rich source loading is enabled during capture.
     layers_to_save:
         Activation-saving selection passed through to ``trace``.
@@ -951,7 +951,7 @@ def _log_model(
         model,
         x,
         capture=tl.options.CaptureOptions(
-            save_source_context=save_code_context, layers_to_save=layers_to_save
+            save_source_context=save_source_context, layers_to_save=layers_to_save
         ),
     )
 

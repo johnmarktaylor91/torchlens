@@ -109,7 +109,7 @@
   unification; doc of record `docs/reference/capture_outcomes.md`).
   `Trace.outcome` / `Recording.outcome` / `PartialTrace.outcome` return a frozen
   `CaptureOutcome` (`tl.types.{CaptureOutcome, CaptureStatus, CapturePhase,
-  FailureOrigin}`): status one of COMPLETE / HALTED / ABORTED_NONFINITE / FAILED
+  FailureOrigin}`): status one of COMPLETE / STOPPED / ABORTED_NONFINITE / FAILED
   (with FORWARD/FINALIZE/POSTPROCESS/TEARDOWN phase) / UNATTESTED (legacy
   finished artifacts without attestation — never blessed COMPLETE) / UNKNOWN
   (unprovable, most restrictive). The outcome PERSISTS (`_capture_outcome`,
@@ -1337,7 +1337,7 @@
   contract digest); `tl.io.read_safetensors(path)` reads it back bit-equal.
 - BRAINPIPE (F20; every spelling DOCUMENTED-UNSTABLE): `torchlens.brainpipe` is the
   whole-model extraction planner over the extraction artifact --
-  `extraction_plan(model, probe_inputs, sites=, n_stimuli=, batch_size=, transform=,
+  `extraction_plan(model, probe_inputs, sites=, n_stimuli=, batch_size=, output_transform=,
   memory_budget=, engine="trace")` runs one unmeasured warm-up + TWO measured probes
   (batch b and 2b), fits per-site bytes linearly (batch-invariant sites detected, never
   total-scaled), executes the transform chain LIVE at the probe, and keys the plan to
@@ -1383,7 +1383,7 @@
   `CaptureOptions(input_transform=torchlens.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
   outcome vocabulary HAS NO match member. `ResolvedPreprocessing.status` derives the
   closed authority standing (authoritative/unverified_fallback/unknown); a
-  `tl.trace(transform=)` capture whose transform IS a recognized authority (the object
+  `CaptureOptions(input_transform=)` capture whose transform IS a recognized authority (the object
   `weights.transforms()` returns, an HF image processor) stamps that authority's own
   record, any other transform honest `user_transform` provenance; `attach_authority`
   records an authority a model cannot carry (torchvision weights), discovery also reads

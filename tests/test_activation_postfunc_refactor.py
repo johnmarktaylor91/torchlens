@@ -113,7 +113,7 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
 
 
 def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
-    """save_raw_gradients=False drops raw grad storage but preserves raw metadata."""
+    """save_raw_grads=False drops raw grad storage but preserves raw metadata."""
 
     trace = tl.trace(
         _TinyModel(),

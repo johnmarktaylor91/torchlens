@@ -68,8 +68,8 @@ def test_halted_capture_settles_attested_halted() -> None:
     assert outcome.status is CaptureStatus.STOPPED
     assert outcome.is_derived is False
     assert outcome.is_partial is True
-    assert outcome.reason == trace.stop_reason
-    assert outcome.boundary_label == trace.stop_reason
+    assert outcome.reason == trace.halt_reason
+    assert outcome.boundary_label == trace.halt_reason
     # Frontier labels are the FINAL post-postprocess output labels.
     assert outcome.frontier_labels == tuple(trace.output_layers)
     session = trace.__dict__.get("_capture_session")
@@ -90,8 +90,8 @@ def test_halted_trace_analysis_save_round_trips(tmp_path) -> None:
     bundle = tmp_path / "halted_analysis.tlspec"
     tl.save(trace, bundle, overwrite=True)
     loaded = tl.load(bundle)
-    assert loaded.is_stopped is True
-    assert loaded.stop_reason == trace.stop_reason
+    assert loaded.halted is True
+    assert loaded.halt_reason == trace.halt_reason
 
 
 # ---------------------------------------------------------------------------
@@ -387,7 +387,7 @@ def test_cooked_halted_outcome_matches_exhaustive_settlement() -> None:
     exhaustive path's 'op'), and its single ``reason`` parameter received the
     Recording-space RAW label (e.g. ``relu_1_3_raw``) while
     ``frontier_labels`` was final -- one outcome mixing label spaces, and
-    ``outcome.reason != trace.stop_reason``, the invariant the exhaustive
+    ``outcome.reason != trace.halt_reason``, the invariant the exhaustive
     path pins above.
     """
 
@@ -403,7 +403,7 @@ def test_cooked_halted_outcome_matches_exhaustive_settlement() -> None:
 
     assert outcome.boundary_kind == exhaustive.outcome.boundary_kind == "op"
     # Coherence with the trace's own remapped halt fields (final label space).
-    assert outcome.reason == cooked.stop_reason
+    assert outcome.reason == cooked.halt_reason
     assert outcome.boundary_label == cooked.halt_frontier
     assert "_raw" not in str(outcome.reason)
     assert "_raw" not in str(outcome.boundary_label)

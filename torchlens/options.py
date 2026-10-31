@@ -480,7 +480,7 @@ class CaptureOptions:
             default) the seed is drawn from a private entropy-seeded stream, not
             the global ``random`` engine, so ``torch.manual_seed(k)`` before an
             unseeded capture does NOT make the capture reproducible; pass
-            ``random_seed=`` explicitly for that. The seed used is recorded on
+            ``seed=`` explicitly for that. The seed used is recorded on
             ``trace.seed``.
         source_context_lines:
             Number of source-context lines to store.
@@ -675,7 +675,7 @@ class CaptureOptions:
 
         Examples
         --------
-        >>> opts = CaptureOptions(layers_to_save=["fc1"], random_seed=0)
+        >>> opts = CaptureOptions(layers_to_save=["fc1"], seed=0)
         >>> opts.layers_to_save
         ['fc1']
     """

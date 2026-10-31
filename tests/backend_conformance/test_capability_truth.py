@@ -5,7 +5,7 @@ backend feature support, fail-closed in BOTH directions on EVERY backend:
 
 - Flag ``False`` refuses the corresponding public surface typed — torch
   included, so an in-place flip of torch's table refuses ``intervene=``,
-  ``random_seed=``, ``backward_ready=``, and ``tl.record()`` instead of
+  ``seed=``, ``backward_ready=``, and ``tl.record()`` instead of
   silently running them.
 - Flag ``True`` on a preview whose declarative policy rejects the option is a
   self-contradictory registration and refuses
@@ -95,7 +95,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "fastlog": True,
         "interventions": True,
         "rng_replay": True,
-        "streaming": True,
+        "has_streaming": True,
         # Lifted 2026-08 (L7a wave 0): structure-only capture with the typed
         # chokepoint in torchlens.capture.structure_only
         # (tests/test_structure_only_entry.py); DOCUMENTED-UNSTABLE pending
@@ -110,7 +110,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         # recipes= keep typed refusals inside the dispatch path.
         "interventions": True,
         "rng_replay": False,
-        "streaming": False,
+        "has_streaming": False,
         "structure_only_capture": False,
     },
     "jax": {
@@ -118,7 +118,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "fastlog": False,
         "interventions": False,
         "rng_replay": False,
-        "streaming": False,
+        "has_streaming": False,
         "structure_only_capture": False,
     },
     "tinygrad": {
@@ -126,7 +126,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "fastlog": False,
         "interventions": False,
         "rng_replay": False,
-        "streaming": False,
+        "has_streaming": False,
         "structure_only_capture": False,
     },
     "paddle": {
@@ -137,7 +137,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         # value-dependent predicates and recipes= keep typed refusals.
         "interventions": True,
         "rng_replay": False,
-        "streaming": False,
+        "has_streaming": False,
         "structure_only_capture": False,
     },
     "tf": {
@@ -148,7 +148,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         # halt= and value-dependent predicates keep typed refusals.
         "interventions": True,
         "rng_replay": False,
-        "streaming": False,
+        "has_streaming": False,
         "structure_only_capture": False,
     },
 }
@@ -197,8 +197,8 @@ def test_extra_kwarg_gates_are_fail_closed_biconditional(name: str) -> None:
     sentinel = object()
     for option, flag in (
         ("intervene", "interventions"),
-        ("storage", "streaming"),
-        ("streaming", "streaming"),
+        ("storage", "has_streaming"),
+        ("streaming", "has_streaming"),
     ):
         if EXPECTED_GATED_CAPABILITIES[name][flag]:
             # Lifted capability: the flag is True with a real binding, the
@@ -223,14 +223,14 @@ def test_extra_kwarg_gates_are_fail_closed_biconditional(name: str) -> None:
 @pytest.mark.smoke_cells("test_option_policy_gates_are_fail_closed_biconditional[jax]")
 @pytest.mark.parametrize("name", _PREVIEW_NAMES)
 def test_option_policy_gates_are_fail_closed_biconditional(name: str) -> None:
-    """save_grads/backward_ready/save_rng_states refuse in every flag state:
+    """save_grads/backward_ready/save_rng refuse in every flag state:
     False via the policy message, True via the undispatched-binding refusal."""
 
     spec = tl.backends.spec(name)
     policy = _OPTION_POLICIES[name]
     cases = [("save_grads", "backward_capture"), ("backward_ready", "backward_capture")]
-    if "save_rng_states" in (policy.rejected_truthy_messages or {}):
-        cases.append(("save_rng_states", "rng_replay"))
+    if "save_rng" in (policy.rejected_truthy_messages or {}):
+        cases.append(("save_rng", "rng_replay"))
     for option, flag in cases:
         options = dict(_OPTION_POLICY_DEFAULTS)
         options[option] = True
@@ -263,12 +263,12 @@ def test_in_place_capability_flip_refuses_end_to_end() -> None:
     """Review probe: mutating the frozen table in place must refuse typed at trace()."""
 
     spec = tl.backends.spec("mlx")
-    object.__setattr__(spec.capabilities, "streaming", True)
+    object.__setattr__(spec.capabilities, "has_streaming", True)
     try:
         with pytest.raises(BackendCapabilityConformanceError):
-            require_capability_implementation(spec, "streaming")
+            require_capability_implementation(spec, "has_streaming")
     finally:
-        object.__setattr__(spec.capabilities, "streaming", False)
+        object.__setattr__(spec.capabilities, "has_streaming", False)
 
 
 def test_record_gate_reads_the_capability_table() -> None:
@@ -430,7 +430,7 @@ def test_backward_accessors_raise_for_all_non_backward_backends() -> None:
         ("rng_replay", {"capture": tl.options.CaptureOptions(save_rng=True)}),
         ("backward_capture", {"capture": tl.options.CaptureOptions(backward_ready=True)}),
         ("backward_capture", {"capture": tl.options.CaptureOptions(save_grads="all")}),
-        ("streaming", {"storage": "STORAGE"}),
+        ("has_streaming", {"storage": "STORAGE"}),
     ],
 )
 def test_torch_flag_false_refuses_the_surface(flag: str, trace_kwargs: dict) -> None:

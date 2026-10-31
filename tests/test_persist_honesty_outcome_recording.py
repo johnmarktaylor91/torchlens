@@ -136,7 +136,7 @@ def test_recover_still_salvages_clean_crash_debris_as_unknown(tmp_path):
     (bundle / "manifest.json").unlink()
     recovered = tl.fastlog.recover(bundle)
     assert recovered.is_recovered is True
-    assert recovered.failed is False
+    assert recovered.is_failed is False
     assert recovered.outcome.status is CaptureStatus.UNKNOWN
 
 

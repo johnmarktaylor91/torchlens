@@ -18,6 +18,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import observability as obs
+from torchlens.observability._kineto import extract_events
 
 
 def _backward_session(model: nn.Module, x: torch.Tensor, **backward_kwargs):
@@ -32,7 +33,7 @@ def _backward_session(model: nn.Module, x: torch.Tensor, **backward_kwargs):
         )
         loss = log.output_ops[0].out.sum()
         log.log_backward(loss, **backward_kwargs)
-    extraction = obs.extract_events(sess.closed_profiler)
+    extraction = extract_events(sess.closed_profiler)
     return log, extraction
 
 
@@ -79,7 +80,7 @@ def test_second_pass_markers_carry_pass_index() -> None:
         loss = log.output_ops[0].out.sum()
         log.log_backward(loss, retain_graph=True)
         log.log_backward(loss)
-    extraction = obs.extract_events(sess.closed_profiler)
+    extraction = extract_events(sess.closed_profiler)
     markers = [e for e in extraction.events if e.name.startswith("torchlens::gradfn::")]
     pass_indexes = {int(e.name.rsplit("::", 1)[-1].split(":")[1]) for e in markers}
     assert pass_indexes == {1, 2}
@@ -122,7 +123,7 @@ def test_raising_node_leaks_are_drained_and_disclosed() -> None:
         loss = log.output_ops[0].out.sum()
         with pytest.raises(RuntimeError, match="injected backward failure"):
             log.log_backward(loss)
-    extraction = obs.extract_events(sess.closed_profiler)
+    extraction = extract_events(sess.closed_profiler)
     # No marker survives the pass boundary: the profiler's marker stack was
     # fully unwound before the session closed (otherwise export would show
     # an unterminated user annotation), and the leak counter disclosed it.

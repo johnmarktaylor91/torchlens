@@ -1323,7 +1323,7 @@ def _validate_forward_pass_torch(
        through the wrapper layer it is meant to check (R75-1). If they
        cannot be removed (a capture is active), validation refuses with
        ``False`` rather than blessing a wrap-state-dependent ground truth.
-    2. Run ``trace`` with ``save_arg_values=True`` and ``layers_to_save='all'``
+    2. Run ``trace`` with ``save_args=True`` and ``layers_to_save='all'``
        to capture every out and its creating function's arguments.
     3. Call ``Trace.validate_forward_pass`` which replays the forward pass
        layer-by-layer from saved outs, checking that the output matches
@@ -1332,7 +1332,7 @@ def _validate_forward_pass_torch(
     4. If ``validate_metadata=True``, run comprehensive invariant checks on all
        metadata cross-references (graph edges, module containment, labels, etc.).
 
-    **Why save_arg_values=True is required:**  The validation replay re-executes
+    **Why save_args=True is required:**  The validation replay re-executes
     each function using its saved non-tensor arguments (e.g., stride, padding for
     conv2d).  Without them, replay cannot reconstruct the correct computation.
 
@@ -1684,7 +1684,7 @@ def _validate_forward_pass_torch(
             )
 
         # Step 2: Run the model *through* TorchLens, saving all outs.
-        # save_arg_values=True is essential - the replay needs each function's
+        # save_args=True is essential - the replay needs each function's
         # non-tensor arguments to re-execute the computation from saved outs.
         from . import _state
 

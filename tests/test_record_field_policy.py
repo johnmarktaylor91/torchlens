@@ -335,7 +335,7 @@ def test_postprocess_write_audit_covers_save_code_context_axis(
     """Step 11.5's var_names writes pass enforcement under save_code_context.
 
     Design-ppdag-v3 defect 3: step 11.5 declared an EMPTY write set, silently
-    wrong under ``save_code_context=True`` (it assigns ``op.var_names`` on
+    wrong under ``save_source_context=True`` (it assigns ``op.var_names`` on
     every op). No recorded enforcement axis enabled the flag, so the audit
     never tripped. This axis pins the repaired declaration.
     """

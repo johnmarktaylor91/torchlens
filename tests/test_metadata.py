@@ -678,7 +678,7 @@ def test_saved_args_populated(small_input):
         if not entry.is_input and entry.saved_args is not None:
             found = True
             break
-    assert found, "save_arg_values=True should populate saved_args"
+    assert found, "save_args=True should populate saved_args"
 
 
 def test_saved_args_not_populated(small_input):
@@ -1449,7 +1449,7 @@ def test_custom_num_context_lines(small_input):
                     return
     pytest.fail(
         "No non-input layer with code context found. SimpleFF traced with "
-        "save_code_context=True is fully under this test's control, so an empty "
+        "save_source_context=True is fully under this test's control, so an empty "
         "code-context surface is a capture regression, not an environment limit "
         "(hardened from a silent fall-through skip, R79 skip audit 2026-08-15)."
     )
@@ -1909,7 +1909,7 @@ class TestConditionalBranchDetection:
         assert found, "IF detection should work without source context"
 
     def test_then_empty_without_source_context(self):
-        """conditional_then_children stays empty when save_code_context=False."""
+        """conditional_then_children stays empty when save_source_context=False."""
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input(), save_source_context=False)
         for label in mh.layer_labels:

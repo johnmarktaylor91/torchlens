@@ -171,11 +171,11 @@ def test_trace_defaults_are_stable(
     assert captured_calls[-1]["activation_transform"] is None
     assert captured_calls[-1]["mark_layer_depths"] is True
     assert captured_calls[-1]["detach_saved_activations"] is False
-    assert captured_calls[-1]["save_arg_values"] is False
+    assert captured_calls[-1]["save_args"] is False
     assert captured_calls[-1]["save_grads"] is False
     assert captured_calls[-1]["num_context_lines"] == 7
-    assert captured_calls[-1]["save_code_context"] is False
-    assert captured_calls[-1]["save_rng_states"] is False
+    assert captured_calls[-1]["save_source_context"] is False
+    assert captured_calls[-1]["save_rng"] is False
     assert captured_calls[-1]["recurrence_detection"] is True
     assert captured_calls[-1]["save_outs_to"] is None
     assert captured_calls[-1]["keep_outs_in_memory"] is True
@@ -204,7 +204,7 @@ def test_trace_accepts_explicit_opt_in_overrides(
 
     assert result is dummy_logs[-1]
     assert captured_calls[-1]["mark_layer_depths"] is True
-    assert captured_calls[-1]["save_code_context"] is True
+    assert captured_calls[-1]["save_source_context"] is True
     assert captured_calls[-1]["recurrence_detection"] is False
     assert dummy_logs[-1].render_calls == []
 
@@ -325,9 +325,9 @@ def test_validate_forward_pass_uses_validation_overrides(
     assert replay_call["mark_layer_depths"] is False
     assert replay_call["detach_saved_activations"] is False
     assert replay_call["save_grads"] is False
-    assert replay_call["save_arg_values"] is True
-    assert replay_call["save_rng_states"] is True
-    assert reproducibility_call["save_arg_values"] is False
-    assert reproducibility_call["save_rng_states"] is False
+    assert replay_call["save_args"] is True
+    assert replay_call["save_rng"] is True
+    assert reproducibility_call["save_args"] is False
+    assert reproducibility_call["save_rng"] is False
     assert dummy_logs[-2].validate_calls[-1]["validate_metadata"] is False
     assert dummy_logs[-2].cleanup_calls == 1

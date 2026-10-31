@@ -58,12 +58,12 @@ def test_status_vocabulary_is_frozen() -> None:
 
 
 def test_partial_property_tristate() -> None:
-    assert CaptureOutcome(status=CaptureStatus.COMPLETE).partial is False
-    assert CaptureOutcome(status=CaptureStatus.STOPPED).partial is True
-    assert CaptureOutcome(status=CaptureStatus.ABORTED_NONFINITE).partial is True
-    assert CaptureOutcome(status=CaptureStatus.FAILED).partial is True
-    assert CaptureOutcome(status=CaptureStatus.UNATTESTED).partial is None
-    assert CaptureOutcome(status=CaptureStatus.UNKNOWN).partial is None
+    assert CaptureOutcome(status=CaptureStatus.COMPLETE).is_partial is False
+    assert CaptureOutcome(status=CaptureStatus.STOPPED).is_partial is True
+    assert CaptureOutcome(status=CaptureStatus.ABORTED_NONFINITE).is_partial is True
+    assert CaptureOutcome(status=CaptureStatus.FAILED).is_partial is True
+    assert CaptureOutcome(status=CaptureStatus.UNATTESTED).is_partial is None
+    assert CaptureOutcome(status=CaptureStatus.UNKNOWN).is_partial is None
 
 
 def test_payload_round_trip() -> None:

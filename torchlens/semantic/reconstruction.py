@@ -204,7 +204,7 @@ def _missing_sdpa_prerequisite(op: Any) -> str | None:
     """
 
     if getattr(op, "saved_args", None) is None or getattr(op, "saved_kwargs", None) is None:
-        return "save_arg_values=True or reconstruction_ready=True"
+        return "save_args=True or reconstruction_ready=True"
     args = list(getattr(op, "saved_args", ()) or ())
     if len(args) < 3 or not all(isinstance(value, torch.Tensor) for value in args[:3]):
         return "saved SDPA Q/K/V tensor args"

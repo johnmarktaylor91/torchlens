@@ -2,7 +2,7 @@
 
 The pre-execution perturbation exemptions run before the missing-saved-args guard of the
 per-op replay check, so ``_check_setitem_exempt`` sees
-``saved_args is None`` whenever a trace was captured with ``save_arg_values=False``.
+``saved_args is None`` whenever a trace was captured with ``save_args=False``.
 It must answer "not exempt" (the later guard then reports the op unverified), and it must
 never exempt a case that would fail today.
 """

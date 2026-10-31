@@ -619,7 +619,7 @@ def _sweep_stale_capture_cache_temp_files(cache_root: Path) -> None:
     EXCEPTION path, but a hard crash (SIGKILL, power loss) between
     ``mkstemp`` and the atomic ``os.replace`` strands ``.<name>.tmp.<rand>``
     files that no glob over ``*.pkl`` ever sees: they were invisible to both
-    eviction accounting and ``clear_capture_cache``, accumulating without
+    eviction accounting and ``clear_cache``, accumulating without
     bound. The sweep is age-gated so a concurrent in-flight store is never
     raced.
     """
@@ -811,7 +811,7 @@ def _trace_mlx_model(
     capture_options = merge_capture_options(
         capture=capture,
         layers_to_save=layers_to_save,
-        transform=transform,
+        input_transform=transform,
         save_raw_input=save_raw_input,
         batch_render=batch_render,
         output_transform=output_transform,
@@ -1660,7 +1660,7 @@ def _run_model_and_save_specified_outs(
             persisted in the streamed bundle (streaming counterpart of
             tl.save's include_buffer_values).
         stream_async_writes: Tri-state async-write routing for the streaming
-            writer (StreamingOptions.async_writes): None/True arm the bounded
+            writer (StorageOptions.async_writes): None/True arm the bounded
             async pipeline, False keeps synchronous per-blob writes.
         stream_max_pending_bytes: Pending snapshot byte budget for the async
             pipeline (None uses the writer default).
@@ -2646,7 +2646,7 @@ def trace(
         streams predicate-selected saves to a disk bundle during the
         forward pass. ``None`` preserves the existing in-RAM behavior.
     streaming:
-        Grouped streaming-save options (``StreamingOptions``).
+        Grouped streaming-save options (``StorageOptions``).
     chunk_size:
         If supplied, split a positional tensor input into forward
         chunks of this size along dimension 0 and append them into one
@@ -2781,7 +2781,7 @@ def trace(
         if (
             backend is None
             and chunk_size in (MISSING, None)
-            and (capture is None or not capture.is_field_explicit("transform"))
+            and (capture is None or not capture.is_field_explicit("input_transform"))
         ):
             from . import autoroute
 
@@ -2805,7 +2805,7 @@ def trace(
                 "recipes": recipes,
                 "episode": episode,
                 "grouping": grouping,
-                "echo": narrate,
+                "narrate": narrate,
                 "on_zero_fire": on_zero_fire,
             }
             for detector in autoroute.input.iter_by_priority():
@@ -3002,7 +3002,7 @@ def _trace_torch_model(
     capture_options = merge_capture_options(
         capture=capture,
         layers_to_save=layers_to_save,
-        transform=transform,
+        input_transform=transform,
         save_raw_input=save_raw_input,
         batch_render=batch_render,
         output_transform=output_transform,

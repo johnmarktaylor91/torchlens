@@ -135,9 +135,9 @@ def _resolve_storage(
         Whether the payload is an activation or a gradient.
     detach_saved_activations:
         Whether a RAM activation payload whose spec does not ask for
-        ``keep_grad`` is detached. ``False`` keeps a graph-connected copy
+        ``save_grad`` is detached. ``False`` keeps a graph-connected copy
         wherever the source carries autograd history, without the strict
-        ``keep_grad`` checks; gradient and disk payloads always detach.
+        ``save_grad`` checks; gradient and disk payloads always detach.
 
     Raises
     ------
@@ -146,22 +146,22 @@ def _resolve_storage(
     TorchLensPostfuncError
         If the out transform raises while transforming a payload.
     TrainingModeConfigError
-        If ``keep_grad=True`` and the transformed RAM payload is not a
+        If ``save_grad=True`` and the transformed RAM payload is not a
         grad-capable tensor connected to the autograd graph.
     """
 
     if spec.save_grad and intent.on_disk and not intent.in_ram:
         message = (
-            f"keep_grad=True is not valid for disk-only {kind} storage. "
-            "Remedy: set retain_in_memory=True or drop keep_grad=True."
+            f"save_grad=True is not valid for disk-only {kind} storage. "
+            "Remedy: set retain_in_memory=True or drop save_grad=True."
         )
         if kind == "grad":
             raise InvalidStorageError(message, code="predicate_storage_conflict")
         raise PredicateError(message, code="predicate_storage_conflict")
     if spec.save_grad and (tensor.dtype in _INTEGER_DTYPES or spec.dtype in _INTEGER_DTYPES):
         raise PredicateError(
-            "keep_grad=True is not valid for integer or bool tensors. "
-            "Remedy: drop keep_grad=True or keep the payload in a floating dtype.",
+            "save_grad=True is not valid for integer or bool tensors. "
+            "Remedy: drop save_grad=True or keep the payload in a floating dtype.",
             code="predicate_storage_conflict",
         )
     if spec.save_mode not in {"copy", "reference", "view", "cpu_async"}:
@@ -334,14 +334,14 @@ def _transform_error_message(
     if ctx is None:
         return (
             "activation_transform raised while resolving a fastlog payload "
-            f"(storage_target={storage_target}, keep_grad={spec.save_grad})."
+            f"(storage_target={storage_target}, save_grad={spec.save_grad})."
         )
     return (
         f"activation_transform raised for fastlog event "
         f"label={ctx.label!r} kind={ctx.kind} func={ctx.func_name} "
         f"shape={tuple(ctx.shape) if ctx.shape is not None else None} "
         f"dtype={ctx.dtype} storage_target={storage_target} "
-        f"keep_grad={spec.save_grad}."
+        f"save_grad={spec.save_grad}."
     )
 
 
@@ -381,7 +381,7 @@ def _validate_train_mode_transformed(
     label = ctx.label if ctx is not None else "<unknown>"
     if not isinstance(transformed, torch.Tensor):
         raise TrainingModeConfigError(
-            "activation_transform must return a torch.Tensor while keep_grad=True "
+            "activation_transform must return a torch.Tensor while save_grad=True "
             f"for fastlog event {label!r}. "
             "Remedy: return a differentiable torch.Tensor from activation_transform, "
             "or declare a non-differentiable reducer with "
@@ -400,7 +400,7 @@ def _validate_train_mode_transformed(
     if raw_tensor.requires_grad and transformed.grad_fn is None:
         raise TrainingModeConfigError(
             "activation_transform returned a tensor disconnected from the autograd "
-            "graph (grad_fn is None) while keep_grad=True. The transformed out "
+            "graph (grad_fn is None) while save_grad=True. The transformed out "
             f"for fastlog event {label!r} must remain differentiable. "
             "Remedy: keep activation_transform on the autograd graph (no detach/no_grad), "
             "or declare a non-differentiable reducer with "

@@ -704,7 +704,7 @@ def _sparse_output_ref(
 
     The caller resolves both flags from the capture spec: the recorded detach
     flag is ``False`` whenever the payload was kept graph-connected, either by
-    ``keep_grad`` or by an attached session.
+    ``save_grad`` or by an attached session.
     """
 
     return OutputRef(

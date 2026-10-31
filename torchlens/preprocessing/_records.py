@@ -147,7 +147,7 @@ class Resolution:
 
     Attributes
     ----------
-    record:
+    preprocessing:
         The persisted-friendly :class:`~torchlens.data_classes.trace.\
 ResolvedPreprocessing` provenance record (source, identifier, verified,
         config, description).

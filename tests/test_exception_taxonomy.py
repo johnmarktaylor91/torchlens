@@ -1166,7 +1166,7 @@ def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyP
 # The lineage golden above pins only ``dir(torchlens.errors)`` — historically
 # ~24 exception classes defined elsewhere in the package sat OUTSIDE that
 # universe entirely (ReentrantTraceError, WildcardRecvUnsupportedError,
-# TorchCapabilityWarning, HaltSignal, ...), so a new stranded class could ship
+# TorchCapabilityWarning, StopSignal, ...), so a new stranded class could ship
 # with no conscious registration decision. The closure scan below statically
 # walks EVERY module in ``torchlens/`` for exception-lineage class definitions
 # and demands each one is EITHER resolvable through ``torchlens.errors`` OR on
@@ -1309,7 +1309,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "sprint with the extraction-v2 spellings"
     ),
     # -- Internal control-flow signals / private helpers (never user-caught) --
-    "torchlens.fastlog._halt.HaltSignal": (
+    "torchlens.fastlog._halt.StopSignal": (
         "internal control-flow stop signal (BaseException); converted to recording status"
     ),
     "torchlens._fast_live_until.FastUntilReached": (

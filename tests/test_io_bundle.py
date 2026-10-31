@@ -1024,7 +1024,7 @@ def test_bundle_save_raw_input_stringifies_unpicklable_value_keeps_tensors(
     """``save_raw_input=True`` must stringify un-picklable objects, not pickle them raw.
 
     Unmocked, public-API-only repro of the root cause behind the BLOCKER
-    above: ``save_raw_input=True``/``save_raw_output=True`` (documented
+    above: ``save_raw_input=True``/``save_transformed_output=True`` (documented
     top-level ``tl.trace()`` kwargs) previously routed raw values through
     the unsafe ``_scrub_value()`` passthrough, so a generator (or any other
     live, un-picklable object) nested inside a raw input reached

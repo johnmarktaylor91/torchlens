@@ -50,7 +50,7 @@ def _build_log(
     *,
     seed: int = 0,
     save_args: bool = False,
-    save_rng_states: bool = False,
+    save_rng: bool = False,
 ) -> Trace:
     """Build a deterministic ``Trace`` for lazy I/O tests.
 
@@ -60,7 +60,7 @@ def _build_log(
         Random seed used for model initialization and inputs.
     save_args:
         Whether function arguments should be captured in the log.
-    save_rng_states:
+    save_rng:
         Whether RNG state tensors should be captured in the log.
 
     Returns
@@ -78,7 +78,7 @@ def _build_log(
         capture=tl.options.CaptureOptions(
             layers_to_save="all",
             save_args=save_args,
-            save_rng=save_rng_states,
+            save_rng=save_rng,
             seed=seed,
         ),
     )
@@ -89,7 +89,7 @@ def _save_bundle(
     *,
     seed: int = 0,
     save_args: bool = False,
-    save_rng_states: bool = False,
+    save_rng: bool = False,
     include_saved_args: bool = False,
     include_rng_states: bool = False,
     path_name: str = "bundle.tl",
@@ -104,7 +104,7 @@ def _save_bundle(
         Random seed used for model initialization and inputs.
     save_args:
         Whether function arguments should be captured in the source log.
-    save_rng_states:
+    save_rng:
         Whether RNG state tensors should be captured in the source log.
     include_saved_args:
         Whether nested captured args should be persisted in the bundle.
@@ -122,7 +122,7 @@ def _save_bundle(
     trace = _build_log(
         seed=seed,
         save_args=save_args,
-        save_rng=save_rng_states,
+        save_rng=save_rng,
     )
     bundle_path = tmp_path / path_name
     save(
