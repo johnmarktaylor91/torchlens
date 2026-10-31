@@ -70,7 +70,7 @@ def test_readme_keeps_the_unhidden_surfaces_visible() -> None:
         "tl.stats.aggregate",
         "tl.stats",
         ".profile(",
-        "honesty()",
+        "evidence_labels()",
         "emit_nvtx=True",
         "register_op_rule",
         "Recorder",

@@ -441,7 +441,7 @@ def test_path_only_container_view_degrades_without_reconstruction() -> None:
     # what a final-output op exposes when no registry record backs it (a legacy
     # artifact), so detach the registry to reach that degraded view.
     trace.__dict__.pop("_containers", None)
-    op = trace.ops[trace.output_layers[0]].copy()
+    op = trace.ops[trace.output_layers[0]]._copy_with_shallow_fields(frozenset())
     op.source_trace = trace
     op.container_spec = None
     op.container_path = (TupleIndex(0),)

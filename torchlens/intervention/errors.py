@@ -2,9 +2,8 @@
 
 from typing import Literal
 
-from torchlens._selection import SelectionError
-
 from .._errors import KeywordConflictError
+from .._selection import SelectionError
 from ..errors._base import (
     CaptureError,
     CompatibilityError,

@@ -275,7 +275,9 @@ def test_log_model_metadata_forces_metadata_defaults(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(user_funcs, "trace", _fake_trace)
 
-    result = tl.io.log_model_metadata(_TinyModel(), _tiny_input())
+    # The public spelling left the surface (a metadata-only capture is a plain
+    # trace); the wrapper behind it keeps its metadata-only defaults.
+    result = user_funcs.log_model_metadata(_TinyModel(), _tiny_input())
 
     assert result is dummy_log
     # The metadata wrapper migrated from the deprecated flat kwargs to the

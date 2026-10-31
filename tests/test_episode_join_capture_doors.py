@@ -27,7 +27,6 @@ CAPTURE_DOOR_ALLOWLIST: dict[str, str] = {
         "not live capture (its name merely mentions Trace)"
     ),
     "Trace": "the product class itself; constructing one records nothing",
-    "ReentrantTraceError": "an exception class whose name mentions Trace",
 }
 
 

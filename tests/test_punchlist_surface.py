@@ -133,7 +133,8 @@ DEMOTED: dict[str, tuple[str, ...]] = {
 #: Audit rows deliberately KEPT advertised: evidence gained since the sweep.
 KEPT_WITH_EVIDENCE: dict[str, tuple[str, ...]] = {
     "torchlens.stats": ("StreamingStat",),
-    "torchlens.semantic": ("AttentionHeadView",),
+    # The facets vocabulary is published as tl.facets (its module home).
+    "torchlens.semantic.facets": ("AttentionHeadView",),
 }
 
 #: Batch-8-retired alias spellings that must never be re-advertised by ANY
@@ -273,5 +274,7 @@ def test_canonical_replacement_verbs_stay_advertised() -> None:
     # The replay verbs (do, push, push_from, run) left the module surfaces in the
     # 2.x rename; ``Trace.do`` is the one edit verb.
     assert callable(getattr(torchlens.Trace, "do", None))
-    for canonical in ("pluck", "extract_dataset", "span"):
+    for canonical in ("pluck", "extract_dataset"):
         assert canonical in torchlens.__all__, canonical
+    # ``span`` is an observer verb: its public home is tl.observers.
+    assert "span" in torchlens.observers.__all__

@@ -228,7 +228,7 @@ _AUTO_REPR_ALLOWED = {
     # C06-owned re-exports (bounded descriptors; ownership seam):
     "HistogramDescriptor",
     "HistogramResult",
-    "SpineResult",
+    "RunningStatsResult",
     # C02/F08/F09-owned bounded FACT rows (measured <=320 chars on a real
     # capture; the unbounded containers FactCore / ComputeAggregation /
     # IdentityIndex got designed reprs in F10):

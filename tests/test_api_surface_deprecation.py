@@ -44,7 +44,7 @@ REMOVED_TOP_LEVEL_CASES = [
     ("TraceState", "torchlens.io", "TraceState"),
     ("SiteTable", "torchlens.intervention.resolver", "SiteTable"),
     ("SpecCompat", "torchlens.types", "SpecCompat"),
-    ("StreamingOptions", "torchlens.options", "StreamingOptions"),
+    ("StreamingOptions", "torchlens.options", "StorageOptions"),
     ("TargetManifestDiff", "torchlens.types", "TargetManifestDiff"),
     ("TorchLensPostfuncError", "torchlens.errors", "UserTransformError"),
     ("TrainingModeConfigError", "torchlens.errors", "TrainingModeConfigError"),
@@ -72,7 +72,8 @@ REMOVED_TOP_LEVEL_CASES = [
 ]
 
 #: Old top-level spellings whose later submodule home also left the public
-#: surface: the redirect refuses with no canonical spelling to resolve.
+#: surface: the redirect teaches the replacement workflow (``Trace.draw`` or
+#: ``fastlog.dry_run``), not a renamed function.
 REMOVED_SURFACE_NAMES = [
     "build_render_audit",
     "preview_fastlog",

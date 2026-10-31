@@ -235,7 +235,11 @@ def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> No
     reset_compiled_model_unwrap_warning_state()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        metadata = tl.io.log_model_metadata(torch.compile(_Tiny(), backend="eager"), input_tensor)
+        metadata = tl.trace(
+            torch.compile(_Tiny(), backend="eager"),
+            input_tensor,
+            capture=tl.options.CaptureOptions(layers_to_save="none"),
+        )
     assert "_orig_mod" not in {module.address for module in metadata.modules.values()}
     assert_single_note(caught)
 

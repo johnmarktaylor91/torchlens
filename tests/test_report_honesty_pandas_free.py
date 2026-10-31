@@ -23,7 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import debug as dbg
 from torchlens.debug._gradients import gradient_flow_audit_rows
-from torchlens.debug._graph import _compare_rows
+from torchlens.debug._graph import _compare_rows, dead_neurons_rows
 
 
 @pytest.fixture(scope="module")
@@ -69,7 +69,8 @@ def test_hot_path_rows_runs_without_pandas(grad_trace: tl.Trace) -> None:
 def test_dead_neurons_rows_runs_without_pandas(grad_trace: tl.Trace) -> None:
     """dead_neurons_rows returns per-op row dicts + honesty attrs, no pandas."""
 
-    rows, attrs = dbg.dead_neurons_rows(grad_trace)
+    # The pandas-free row core is private; the public verb is dbg.dead_neurons.
+    rows, attrs = dead_neurons_rows(grad_trace)
     assert isinstance(rows, list)
     assert "insufficient sample" in attrs["note"]
     assert "torchlens_capture_honesty" in attrs
