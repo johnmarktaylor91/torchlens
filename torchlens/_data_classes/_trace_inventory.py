@@ -168,13 +168,13 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
     return {
         "capture": {
             "backend": trace._provenance_backend,
-            "_source_class_name": trace._source_class_name,
+            "model_class_name": trace._source_class_name,
             "outcome_status": getattr(getattr(outcome, "status", None), "value", None),
-            "_provenance_verified": trace._provenance_verified,
+            "capture_verified": trace._provenance_verified,
             "structure_only": trace._options_structure_only,
             "grouping": trace._options_grouping,
             "save_mode": trace._options_save_mode,
-            "_provenance_duration": capture_duration,
+            "capture_duration": capture_duration,
             **poison_facts(trace),
             "advisories": capture_advisories(trace),
         },
@@ -216,7 +216,7 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "retained_now_memory": Bytes(memory_facts.retained_bytes),
             "num_present_now": memory_facts.retained_present_ops,
             "num_lazy_now": memory_facts.retained_lazy_ops,
-            "_cost_total_activation_memory": trace._cost_total_activation_memory,
+            "total_activation_memory": trace._cost_total_activation_memory,
         },
         "backward": {
             "num_grad_fn_records": len(trace._grad_fn_logs or {}),
