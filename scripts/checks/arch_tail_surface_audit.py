@@ -17,22 +17,22 @@ generator output), and the root facade's ``dir()`` advertises every row.
 from __future__ import annotations
 
 import importlib
-from pathlib import Path
+import sys
 
-import pytest
+from _harness import TESTS_DIR, run_checks
 
 import torchlens
 from torchlens._architecture import layer_for_module
 from torchlens._surface import surface_rows
 
-TABLE = Path(__file__).with_name("test_arch_spine_surface_table.tsv")
+TABLE = TESTS_DIR / "test_arch_spine_surface_table.tsv"
 
 _HEADER = (
     "canonical_path\thome_module\timplementation_layer\tproduct_role\tin_all\tlegacy_top_level"
 )
 
 
-def test_frozen_table_hygiene() -> None:
+def check_frozen_table_hygiene() -> None:
     """Sorted, duplicate-free, exact header: hand edits cannot hide."""
 
     lines = [line for line in TABLE.read_text().splitlines() if not line.startswith("#")]
@@ -42,7 +42,7 @@ def test_frozen_table_hygiene() -> None:
     assert len(paths) == len(set(paths)), "frozen table holds duplicate canonical_path rows"
 
 
-def test_dir_advertises_every_surface_row() -> None:
+def check_dir_advertises_every_surface_row() -> None:
     """The five-step ``__getattr__``'s ``dir()`` covers the whole table."""
 
     listed = set(dir(torchlens))
@@ -54,8 +54,7 @@ def test_dir_advertises_every_surface_row() -> None:
     assert missing == [], f"surface rows invisible to dir(torchlens): {missing}"
 
 
-@pytest.mark.heavy
-def test_deep_reachable_walk_resolves_with_layer_rows() -> None:
+def check_deep_reachable_walk_resolves_with_layer_rows() -> None:
     """Every advertised member of every lazy namespace resolves to a layered home.
 
     The denominator is walked from code, never hand-listed: the root facade's
@@ -97,3 +96,20 @@ def test_deep_reachable_walk_resolves_with_layer_rows() -> None:
         "add the package/module row to torchlens/_architecture.py (or declare "
         "__tl_layer__ in the home module) in the same change that adds the name"
     )
+
+
+CHECKS = (
+    check_frozen_table_hygiene,
+    check_dir_advertises_every_surface_row,
+    check_deep_reachable_walk_resolves_with_layer_rows,
+)
+
+
+def main() -> int:
+    """Run every arch_tail_surface_audit check and return the exit status."""
+
+    return run_checks("arch_tail_surface_audit", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
