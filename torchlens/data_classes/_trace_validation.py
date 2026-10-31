@@ -401,7 +401,7 @@ class TraceValidationMixin(_TraceMixinBase):
         require_structure_only_capability(self, "validation_entry")
         _refuse_stats_capture(self, "validation_entry")
         status = self.validation_replay_status
-        if bool(getattr(self, "_loaded_from_bundle", False)) and not status.available:
+        if bool(getattr(self, "_loaded_from_bundle", False)) and not status.is_available:
             setattr(self, "_validation_replay_status", status)
             return status
         spec = get_backend_spec(getattr(self, "backend", "torch"))

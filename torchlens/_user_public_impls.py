@@ -1233,12 +1233,12 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
                 "re-trace diverged structurally, so the overall validation "
                 "result is unverified."
             ),
-            num_replayed_ops=current_status.replayed_node_count,
-            num_unverified_ops=max(1, current_status.unverified_node_count),
+            num_replayed_ops=current_status.num_replayed_ops,
+            num_unverified_ops=max(1, current_status.num_unverified_ops),
             payload_load_status=current_status.payload_load_status,
-            num_pure_unverified_ops=current_status.pure_unverified_node_count,
-            num_effect_region_ops=current_status.effect_region_node_count,
-            num_failed_ops=current_status.failed_node_count,
+            num_pure_unverified_ops=current_status.num_pure_unverified_ops,
+            num_effect_region_ops=current_status.num_effect_region_ops,
+            num_failed_ops=current_status.num_failed_ops,
             unverified_reason_counts=unverified_reason_counts,
             exempted_reason_counts=current_status.exempted_reason_counts,
             decisions=current_status.decisions,

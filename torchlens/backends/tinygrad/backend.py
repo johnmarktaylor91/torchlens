@@ -581,7 +581,7 @@ class TinygradBackend:
         """
 
         status = trace.validation_replay_status
-        if not status.available:
+        if not status.is_available:
             setattr(trace, "_validation_replay_status", status)
             return status
         try:

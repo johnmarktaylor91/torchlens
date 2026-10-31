@@ -1684,7 +1684,7 @@ class MLXBackend:
         """
 
         status = trace.validation_replay_status
-        if not status.available or _mlx_loaded_replay_unavailable(trace):
+        if not status.is_available or _mlx_loaded_replay_unavailable(trace):
             status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=self.name,
                 payload_load_status=getattr(trace, "payload_load_status", None),

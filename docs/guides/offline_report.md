@@ -65,7 +65,7 @@ omissions land in the manifest.
   with disclosure.
 - `graph="flat"` — try the uncollapsed layout first (same byte ladder).
 - `graph="none"` — omit, disclosed.
-- `HtmlReportOptions(vis_call_depth=...)` — forwarded to the renderer and
+- `HtmlReportOptions(depth=...)` — forwarded to the renderer and
   disclosed.
 
 The full flat graph is never linked as a sibling file (one-file contract);

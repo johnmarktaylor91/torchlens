@@ -206,10 +206,10 @@ def test_validation_replay_unverified_status_semantics() -> None:
     )
 
     assert status.state == "unverified"
-    assert status.available is True
-    assert status.replayed_node_count == 3
-    assert status.unverified_node_count == 2
-    assert status.failed_node_count == 0
+    assert status.is_available is True
+    assert status.num_replayed_ops == 3
+    assert status.num_unverified_ops == 2
+    assert status.num_failed_ops == 0
     with pytest.raises(TypeError, match="not a boolean"):
         bool(status)
 
@@ -226,22 +226,22 @@ def test_validation_replay_status_aggregate_fold() -> None:
     failed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=0,
-        unverified_node_count=3,
-        failed_node_count=2,
+        num_replayed_ops=0,
+        num_unverified_ops=3,
+        num_failed_ops=2,
     )
     passed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=4,
-        unverified_node_count=0,
+        num_replayed_ops=4,
+        num_unverified_ops=0,
     )
 
     assert mixed_status.state == "unverified"
-    assert mixed_status.replayed_node_count == 4
-    assert mixed_status.unverified_node_count == 1
+    assert mixed_status.num_replayed_ops == 4
+    assert mixed_status.num_unverified_ops == 1
     assert failed_status.state == "failed"
-    assert failed_status.failed_node_count == 2
+    assert failed_status.num_failed_ops == 2
     assert bool(failed_status) is False
     assert passed_status.state == "passed"
     assert bool(passed_status) is True
@@ -280,7 +280,7 @@ def test_validation_decision_recorder_counts_distinct_nodes() -> None:
     # output decision is a different phase entirely (counting it let
     # "exemptions alone" traces pass the no_nodes_replay_validated guard --
     # b1-fable round-2 F1).
-    assert status.replayed_node_count == 1
+    assert status.num_replayed_ops == 1
     assert status.state == "passed"
 
 
@@ -299,7 +299,7 @@ def test_validation_decision_recorder_distinct_node_count_keeps_failure_tripwire
 
     status = recorder.as_status()
 
-    assert status.failed_node_count == 1
+    assert status.num_failed_ops == 1
     assert status.state == "failed"
     assert bool(status) is False
 
@@ -320,7 +320,7 @@ def test_validation_all_exempted_cannot_pass_without_replayed_nodes() -> None:
 
     assert status.state == "unverified"
     assert status.reason == "no_nodes_replay_validated"
-    assert status.replayed_node_count == 0
+    assert status.num_replayed_ops == 0
     with pytest.raises(TypeError, match="not a boolean"):
         bool(status)
 
@@ -340,7 +340,7 @@ def test_validation_positive_replay_coverage_can_still_pass() -> None:
     status = recorder.as_status()
 
     assert status.state == "passed"
-    assert status.replayed_node_count == 1
+    assert status.num_replayed_ops == 1
     assert bool(status) is True
 
 

@@ -23,7 +23,7 @@ class ValidationStatus:
     ----------
     state:
         Replay-validation state.
-    available:
+    is_available:
         Whether replay validation can run for this trace.
     backend:
         Trace backend name.
@@ -35,19 +35,19 @@ class ValidationStatus:
         Human-readable status explanation.
     payload_load_status:
         Optional payload materialization status attached by ``tl.load``.
-    replayed_node_count:
+    num_replayed_ops:
         Number of ops or regions replay-validated for a completed result.
-    unverified_node_count:
+    num_unverified_ops:
         Legacy aggregate number of nodes or regions excluded from per-op
         replay.
-    pure_unverified_node_count:
+    num_pure_unverified_ops:
         Number of pure value nodes that classified cleanly but were not
         replayed, usually because no faithful backend raw-op replay is
         available.
-    effect_region_node_count:
+    num_effect_region_ops:
         Number of effectful or stateful nodes excluded from pure per-op
         replay.
-    failed_node_count:
+    num_failed_ops:
         Number of replay-validation failures contributing to a failed result.
     unverified_reason_counts:
         Stable reason-code counts for nodes that replay could not verify.
@@ -59,17 +59,17 @@ class ValidationStatus:
     """
 
     state: ValidationReplayState
-    available: bool
+    is_available: bool
     backend: str
     source: ValidationReplaySource
     reason: str | None
     message: str
     payload_load_status: str | None = None
-    replayed_node_count: int = field(default=0, repr=False)
-    unverified_node_count: int = field(default=0, repr=False)
-    pure_unverified_node_count: int = field(default=0, repr=False)
-    effect_region_node_count: int = field(default=0, repr=False)
-    failed_node_count: int = field(default=0, repr=False)
+    num_replayed_ops: int = field(default=0, repr=False)
+    num_unverified_ops: int = field(default=0, repr=False)
+    num_pure_unverified_ops: int = field(default=0, repr=False)
+    num_effect_region_ops: int = field(default=0, repr=False)
+    num_failed_ops: int = field(default=0, repr=False)
     unverified_reason_counts: Mapping[str, int] = field(default_factory=dict, repr=False)
     exempted_reason_counts: Mapping[str, int] = field(default_factory=dict, repr=False)
     decisions: Sequence[Mapping[str, Any]] = field(default_factory=tuple, repr=False)
@@ -103,7 +103,7 @@ class ValidationStatus:
 
         return cls(
             state="available",
-            available=True,
+            is_available=True,
             backend=backend,
             source="live",
             reason=None,
@@ -139,17 +139,17 @@ class ValidationStatus:
             Trace source.
         payload_load_status:
             Optional payload materialization status attached by ``tl.load``.
-        replayed_node_count:
+        num_replayed_ops:
             Number of ops or regions that replay-validated successfully.
-        unverified_node_count:
+        num_unverified_ops:
             Legacy aggregate number of nodes or regions excluded from per-op
             replay.
-        pure_unverified_node_count:
+        num_pure_unverified_ops:
             Number of pure value nodes not replayed by a backend raw-op
             replay.
-        effect_region_node_count:
+        num_effect_region_ops:
             Number of effectful or stateful nodes excluded from pure replay.
-        failed_node_count:
+        num_failed_ops:
             Number of replay failures. Defaults to ``0`` for legacy boolean
             callers that only report aggregate pass/fail.
         unverified_reason_counts:
@@ -168,17 +168,17 @@ class ValidationStatus:
         state: Literal["passed", "failed"] = "passed" if passed else "failed"
         return cls(
             state=state,
-            available=True,
+            is_available=True,
             backend=backend,
             source=source,
             reason=None,
             message=f"Replay validation {state}.",
             payload_load_status=payload_load_status,
-            replayed_node_count=num_replayed_ops,
-            unverified_node_count=num_unverified_ops,
-            pure_unverified_node_count=num_pure_unverified_ops,
-            effect_region_node_count=num_effect_region_ops,
-            failed_node_count=num_failed_ops,
+            num_replayed_ops=num_replayed_ops,
+            num_unverified_ops=num_unverified_ops,
+            num_pure_unverified_ops=num_pure_unverified_ops,
+            num_effect_region_ops=num_effect_region_ops,
+            num_failed_ops=num_failed_ops,
             unverified_reason_counts=dict(unverified_reason_counts or {}),
             exempted_reason_counts=dict(exempted_reason_counts or {}),
             decisions=tuple(decisions or ()),
@@ -214,19 +214,19 @@ class ValidationStatus:
             Stable reason code for the unverified region classification.
         message:
             Human-readable explanation.
-        replayed_node_count:
+        num_replayed_ops:
             Number of ops or regions that replay-validated successfully.
-        unverified_node_count:
+        num_unverified_ops:
             Legacy aggregate number of nodes or regions excluded from per-op
             replay.
         payload_load_status:
             Optional payload materialization status attached by ``tl.load``.
-        pure_unverified_node_count:
+        num_pure_unverified_ops:
             Number of pure value nodes not replayed by a backend raw-op
             replay.
-        effect_region_node_count:
+        num_effect_region_ops:
             Number of effectful or stateful nodes excluded from pure replay.
-        failed_node_count:
+        num_failed_ops:
             Number of replay failures. Must be zero for an unverified result.
         unverified_reason_counts:
             Stable reason-code counts for unverified replay decisions.
@@ -244,17 +244,17 @@ class ValidationStatus:
 
         return cls(
             state="unverified",
-            available=True,
+            is_available=True,
             backend=backend,
             source=source,
             reason=reason,
             message=message,
             payload_load_status=payload_load_status,
-            replayed_node_count=num_replayed_ops,
-            unverified_node_count=num_unverified_ops,
-            pure_unverified_node_count=num_pure_unverified_ops,
-            effect_region_node_count=num_effect_region_ops,
-            failed_node_count=num_failed_ops,
+            num_replayed_ops=num_replayed_ops,
+            num_unverified_ops=num_unverified_ops,
+            num_pure_unverified_ops=num_pure_unverified_ops,
+            num_effect_region_ops=num_effect_region_ops,
+            num_failed_ops=num_failed_ops,
             unverified_reason_counts=dict(unverified_reason_counts or {}),
             exempted_reason_counts=dict(exempted_reason_counts or {}),
             decisions=tuple(decisions or ()),
@@ -284,18 +284,18 @@ class ValidationStatus:
             Trace backend name.
         source:
             Trace source.
-        replayed_node_count:
+        num_replayed_ops:
             Number of ops or regions that replay-validated successfully.
-        unverified_node_count:
+        num_unverified_ops:
             Legacy aggregate number of nodes or regions excluded from per-op
             replay. When separate pure/effect counts are supplied, this is
             treated as an additional legacy/importer-region bucket.
-        pure_unverified_node_count:
+        num_pure_unverified_ops:
             Number of pure value nodes not replayed by a backend raw-op
             replay.
-        effect_region_node_count:
+        num_effect_region_ops:
             Number of effectful or stateful nodes excluded from pure replay.
-        failed_node_count:
+        num_failed_ops:
             Number of replay failures.
         payload_load_status:
             Optional payload materialization status attached by ``tl.load``.
@@ -418,7 +418,7 @@ class ValidationStatus:
 
         return cls(
             state="unavailable",
-            available=False,
+            is_available=False,
             backend=backend,
             source="loaded",
             reason="loaded_trace_runtime_capture_stripped",
@@ -446,7 +446,7 @@ class ValidationStatus:
 
         return cls(
             state="unavailable",
-            available=False,
+            is_available=False,
             backend=backend,
             source="unknown",
             reason="backend_validation_replay_unsupported",

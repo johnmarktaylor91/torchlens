@@ -91,7 +91,7 @@ def test_paddle_validation_healthy_two_layer_mlp_passes() -> None:
     assert backend.validate_trace(trace) is True
     status = trace.validation_replay_status
     assert status.state == "passed"
-    assert status.replayed_node_count >= 1
+    assert status.num_replayed_ops >= 1
     assert PaddleBackend().validate_entry(_functional_mlp, _inputs()) is True
 
 
@@ -239,7 +239,7 @@ def test_paddle_validation_layer_parameters_are_known_sources() -> None:
 
     assert trace.module_identity_mode == "object_module"
     assert PaddleBackend().validate_trace(trace) is True
-    assert trace.validation_replay_status.replayed_node_count == 2
+    assert trace.validation_replay_status.num_replayed_ops == 2
     linear = next(c for c in trace._paddle_op_captures if c.op_name == "functional.linear")
     assert sorted(leaf.param_address for leaf in linear.tensor_inputs if leaf.label is None) == [
         "linear.bias",

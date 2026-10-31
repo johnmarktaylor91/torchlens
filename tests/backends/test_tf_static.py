@@ -158,5 +158,5 @@ def test_tf_static_control_flow_regions_are_unverified() -> None:
         "_tf_validation_result",
         None,
     )
-    assert getattr(trace.validation_replay_status, "effect_region_node_count") >= len(regions)
+    assert getattr(trace.validation_replay_status, "num_effect_region_ops") >= len(regions)
     assert status is trace.validation_replay_status

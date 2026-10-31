@@ -98,8 +98,8 @@ def test_tf_repeated_dense_groups_into_passes() -> None:
     result = TFBackend().validate_trace(trace)
     status = trace.validation_replay_status
     assert result is True or status.state == "unverified"
-    assert status.failed_node_count == 0
-    assert status.replayed_node_count >= 1
+    assert status.num_failed_ops == 0
+    assert status.num_replayed_ops >= 1
 
 
 def test_tf_grouping_matches_ungrouped_validation_verdict() -> None:
@@ -130,8 +130,8 @@ def test_tf_grouping_matches_ungrouped_validation_verdict() -> None:
     assert ungrouped_result is True or ungrouped.validation_replay_status.state == "unverified"
     grouped_status = grouped.validation_replay_status
     ungrouped_status = ungrouped.validation_replay_status
-    assert grouped_status.failed_node_count == ungrouped_status.failed_node_count == 0
-    assert grouped_status.replayed_node_count == ungrouped_status.replayed_node_count
+    assert grouped_status.num_failed_ops == ungrouped_status.num_failed_ops == 0
+    assert grouped_status.num_replayed_ops == ungrouped_status.num_replayed_ops
     assert ungrouped.recurrence_detection is False
     assert all(op.num_passes == 1 for op in ungrouped.layer_list)
 
@@ -207,7 +207,7 @@ def test_tf_tamper_swapped_sidecar_labels_fail_validation() -> None:
     trace._tf_op_captures = tuple(captures)
 
     status = TFBackend().validate_trace(trace)
-    assert status is False or status.failed_node_count > 0
+    assert status is False or status.num_failed_ops > 0
 
 
 def test_tf_tamper_dangling_sidecar_label_fails_validation() -> None:
@@ -222,7 +222,7 @@ def test_tf_tamper_dangling_sidecar_label_fails_validation() -> None:
     trace._tf_op_captures = tuple(captures)
 
     status = TFBackend().validate_trace(trace)
-    assert status is False or status.failed_node_count > 0
+    assert status is False or status.num_failed_ops > 0
 
 
 def test_tf_intermediate_derived_grads_survive_grouping() -> None:

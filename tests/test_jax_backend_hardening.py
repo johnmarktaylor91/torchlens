@@ -1209,7 +1209,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     loaded_status = loaded_portable.validate_forward_pass([])
     assert loaded_status is loaded_portable.validation_replay_status
     assert loaded_status.state == "unavailable"
-    assert loaded_status.available is False
+    assert loaded_status.is_available is False
     assert loaded_status.reason == "loaded_trace_runtime_capture_stripped"
     assert loaded_status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):

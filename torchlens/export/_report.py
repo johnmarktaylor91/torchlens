@@ -81,7 +81,7 @@ class HtmlReportOptions:
     #: Suppress the manifest timestamp (byte-exact regeneration).
     deterministic: bool = False
     #: Optional graph-depth knob, forwarded to ``draw`` and disclosed.
-    vis_call_depth: int | None = None
+    depth: int | None = None
     #: Thumbnail site budget, enforced before payloads are written.
     max_array_sites: int = MAX_ARRAY_SITES_DEFAULT
     #: Thumbnail byte budget, enforced before payloads are written.
@@ -589,7 +589,7 @@ def write_report(
     opts = options if options is not None else HtmlReportOptions()
     share_safe = opts.share_safe
     deterministic = opts.deterministic
-    vis_call_depth = opts.vis_call_depth
+    vis_call_depth = opts.depth
     max_array_sites = opts.max_array_sites
     max_array_bytes = opts.max_array_bytes
     destination = Path(path)

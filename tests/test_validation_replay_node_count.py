@@ -1,4 +1,4 @@
-"""``replayed_node_count`` must count REPLAY-phase validations only (R08/R75).
+"""``num_replayed_ops`` must count REPLAY-phase validations only (R08/R75).
 
 ``ValidationDecisionRecorder.node_count("validated")`` was phase-blind: the
 ground-truth output decisions and the trace-level dispatch-census decision
@@ -55,14 +55,14 @@ def test_exemptions_alone_cannot_produce_a_passing_status() -> None:
     """Zero interior replay validations must settle unverified, never passed.
 
     Red-capable: pre-fix the ground-truth and census decisions inflated
-    ``replayed_node_count`` to 2 and this exact census reported
+    ``num_replayed_ops`` to 2 and this exact census reported
     ``passed=True``.
     """
 
     recorder = _recorder_with_no_interior_replays()
     assert recorder.replay_validated_node_count() == 0
     status = recorder.as_status()
-    assert status.replayed_node_count == 0
+    assert status.num_replayed_ops == 0
     # Unverified statuses refuse boolean coercion by design; the point is
     # that the state is NOT "passed".
     assert status.state == "unverified"
@@ -114,10 +114,10 @@ def test_end_to_end_replayed_count_excludes_ground_truth_phase() -> None:
         and decision["phase"] == "replay"
         and decision["op_label"] is not None
     }
-    assert status.replayed_node_count == len(replay_labels)
+    assert status.num_replayed_ops == len(replay_labels)
     # The phase-blind census is strictly larger on any passing trace (ground
     # truth always contributes at least one validated decision).
     blind = {
         decision["op_label"] for decision in status.decisions if decision["decision"] == "validated"
     }
-    assert len(blind) > status.replayed_node_count
+    assert len(blind) > status.num_replayed_ops

@@ -442,9 +442,9 @@ def _case_summary(status: ValidationStatus) -> dict[str, Any]:
 
     return {
         "state": status.state,
-        "replayed_node_count": status.replayed_node_count,
-        "unverified_node_count": status.unverified_node_count,
-        "failed_node_count": status.failed_node_count,
+        "replayed_node_count": status.num_replayed_ops,
+        "unverified_node_count": status.num_unverified_ops,
+        "failed_node_count": status.num_failed_ops,
         "unverified_reason_counts": dict(status.unverified_reason_counts),
         "exempted_reason_counts": dict(status.exempted_reason_counts),
         "decisions": list(status.decisions),

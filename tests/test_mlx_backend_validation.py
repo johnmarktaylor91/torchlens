@@ -36,7 +36,7 @@ def test_mlx_validation_healthy_two_layer_mlp_passes() -> None:
     assert MLXBackend().validate_trace(trace) is True
     status = trace.validation_replay_status
     assert status.state == "passed"
-    assert status.replayed_node_count >= 1
+    assert status.num_replayed_ops >= 1
 
 
 def test_mlx_validation_registered_spec_dispatches() -> None:

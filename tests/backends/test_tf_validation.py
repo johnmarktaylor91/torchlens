@@ -169,7 +169,7 @@ def test_tf_validation_identity_annotation_passes_legitimate_passthrough() -> No
 
     The graph needs at least one genuinely replayable (non-exempt) node:
     a bare ``tf.identity`` call is the ONLY op, so with Identity exempted as
-    an annotation ``replayed_node_count`` would be 0 and validation would
+    an annotation ``num_replayed_ops`` would be 0 and validation would
     legitimately refuse to call that "passed" (exemptions alone cannot
     produce a passing result -- see ``validation/status.py``'s
     ``no_nodes_replay_validated`` guard). Add a real op so the identity
@@ -232,8 +232,8 @@ def test_tf_validation_reports_unverified_for_pure_allowlist_gap() -> None:
 
     assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
-    assert result.pure_unverified_node_count == 1
-    assert result.replayed_node_count == 0
+    assert result.num_pure_unverified_ops == 1
+    assert result.num_replayed_ops == 0
 
 
 def test_tf_validation_fails_on_unclassified_op_type() -> None:
@@ -270,8 +270,8 @@ def test_tf_validation_positive_cnn_and_transformer_report_replay_coverage() -> 
         assert result is True or (
             isinstance(result, ValidationStatus) and result.state == "unverified"
         )
-        assert status.failed_node_count == 0
-        assert status.replayed_node_count > 0
+        assert status.num_failed_ops == 0
+        assert status.num_replayed_ops > 0
         assert getattr(trace, "_tf_validation_result").replayed_histogram
 
 

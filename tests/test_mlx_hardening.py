@@ -642,7 +642,7 @@ def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
     status = loaded.validate_forward_pass([])
     assert status is loaded.validation_replay_status
     assert status.state == "unavailable"
-    assert status.available is False
+    assert status.is_available is False
     assert status.reason == "loaded_trace_runtime_capture_stripped"
     assert status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):
