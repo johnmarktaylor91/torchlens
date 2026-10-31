@@ -756,7 +756,6 @@ def _reference_reaches(workspace: Any, src_label: str, dst_label: str) -> bool:
     return False
 
 
-@pytest.mark.smoke
 def test_adaptive_reachability_matches_reference_on_random_dags() -> None:
     """Sparse, dense, and repeated queries all match ground-truth reachability.
 
