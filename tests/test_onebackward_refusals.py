@@ -394,7 +394,7 @@ class TestTableRefusals:
         loaded = ob.load_read_table(path)
         assert len(loaded) == len(table)
         assert loaded.is_rescorable is False
-        assert loaded.provenance.is_rescorable is False
+        assert loaded.provenance.rescorable is False
         for key, row in table.items():
             assert loaded[key].score == row.score
 
