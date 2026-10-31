@@ -162,16 +162,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 2,
     "num_passes": 1,
     "num_pos_args": 2,
     "op_labels": [
@@ -244,16 +240,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b19c3a3d2f8c06db8bb594a5afcac6c96f806f31b3e99ffaa8568f90449dbb4f",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -424,16 +410,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 2,
     "op_labels": [
@@ -492,13 +474,6 @@
      "label": null
     },
     "step_index": 4,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.bool",
-     "requires_grad": false,
-     "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -676,16 +651,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 2,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -740,16 +711,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "8dde58384fe66c0956cc75fe2805332f2caa885ad3e5684e34a65d10533b6c04",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -910,16 +871,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -995,16 +952,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -1192,16 +1139,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 1,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -1250,13 +1193,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b9c9bf59250b86bd0103d995d0a3837954964b192387195aa1826bd7c2f4a7e9",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -1443,16 +1379,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -1517,16 +1449,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -1706,16 +1628,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -1776,13 +1694,6 @@
      "label": null
     },
     "step_index": 3,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "c0e336a5f371ef22cd534e094269f2c1a9635cd080b71ffa671086832d3b60b7",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -1879,7 +1790,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 6,
     "num_layers": 7,
-    "num_ops": 7,
     "num_output_edges": 0,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -1965,15 +1875,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_addresses": [],
-    "call_children_modules": [],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_address": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -2079,9 +1985,7 @@
     "num_edges": 6,
     "num_input_edges": 0,
     "num_internal_edges": 6,
-    "num_layers": 7,
     "num_output_edges": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -2137,7 +2041,6 @@
     "params": "<torchlens.data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [],
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -2153,7 +2056,6 @@
     "total_macs_forward": 0,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -2295,7 +2197,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -2433,16 +2334,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 2,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 2,
     "num_passes": 1,
     "num_pos_args": 2,
     "ops": [
@@ -2521,16 +2419,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b19c3a3d2f8c06db8bb594a5afcac6c96f806f31b3e99ffaa8568f90449dbb4f",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -2683,7 +2571,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -2809,16 +2696,13 @@
     ],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 2,
     "ops": [
@@ -2884,13 +2768,6 @@
      "label": null
     },
     "step_index": 4,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.bool",
-     "requires_grad": false,
-     "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-     "shape": []
-    },
     "terminal_bool_for": [
      "cond_gt_1_4",
      0
@@ -3023,7 +2900,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "none",
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -3134,16 +3010,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 2,
     "num_inputs": 0,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -3213,16 +3086,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "8dde58384fe66c0956cc75fe2805332f2caa885ad3e5684e34a65d10533b6c04",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -3360,7 +3223,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -3490,16 +3352,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -3585,16 +3444,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -3758,7 +3607,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -3872,16 +3720,13 @@
     ],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 0,
     "num_kwargs": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -3943,13 +3788,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b9c9bf59250b86bd0103d995d0a3837954964b192387195aa1826bd7c2f4a7e9",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -4112,7 +3950,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -4243,16 +4080,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -4327,16 +4161,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -4492,7 +4316,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -4617,16 +4440,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -4694,13 +4514,6 @@
      "label": null
     },
     "step_index": 3,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "c0e336a5f371ef22cd534e094269f2c1a9635cd080b71ffa671086832d3b60b7",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -6053,16 +5866,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 2,
     "num_passes": 1,
     "num_pos_args": 2,
     "op_labels": [
@@ -6135,16 +5944,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b19c3a3d2f8c06db8bb594a5afcac6c96f806f31b3e99ffaa8568f90449dbb4f",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -6315,16 +6114,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 2,
     "op_labels": [
@@ -6383,13 +6178,6 @@
      "label": null
     },
     "step_index": 4,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.bool",
-     "requires_grad": false,
-     "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -6567,16 +6355,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 2,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -6631,16 +6415,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "8dde58384fe66c0956cc75fe2805332f2caa885ad3e5684e34a65d10533b6c04",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -6801,16 +6575,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -6886,16 +6656,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -7083,16 +6843,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 1,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -7141,13 +6897,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b9c9bf59250b86bd0103d995d0a3837954964b192387195aa1826bd7c2f4a7e9",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -7334,16 +7083,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -7408,16 +7153,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -7597,16 +7332,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -7667,13 +7398,6 @@
      "label": null
     },
     "step_index": 3,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "c0e336a5f371ef22cd534e094269f2c1a9635cd080b71ffa671086832d3b60b7",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -7770,7 +7494,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 6,
     "num_layers": 7,
-    "num_ops": 7,
     "num_output_edges": 0,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -7856,15 +7579,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_addresses": [],
-    "call_children_modules": [],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_address": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -7970,9 +7689,7 @@
     "num_edges": 6,
     "num_input_edges": 0,
     "num_internal_edges": 6,
-    "num_layers": 7,
     "num_output_edges": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -8028,7 +7745,6 @@
     "params": "<torchlens.data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [],
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -8044,7 +7760,6 @@
     "total_macs_forward": 0,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -8186,7 +7901,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -8324,16 +8038,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 2,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 2,
     "num_passes": 1,
     "num_pos_args": 2,
     "ops": [
@@ -8412,16 +8123,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b19c3a3d2f8c06db8bb594a5afcac6c96f806f31b3e99ffaa8568f90449dbb4f",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -8574,7 +8275,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -8700,16 +8400,13 @@
     ],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 2,
     "ops": [
@@ -8775,13 +8472,6 @@
      "label": null
     },
     "step_index": 4,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.bool",
-     "requires_grad": false,
-     "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-     "shape": []
-    },
     "terminal_bool_for": [
      "cond_gt_1_4",
      0
@@ -8914,7 +8604,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "none",
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -9025,16 +8714,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 2,
     "num_inputs": 0,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -9104,16 +8790,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "8dde58384fe66c0956cc75fe2805332f2caa885ad3e5684e34a65d10533b6c04",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -9251,7 +8927,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -9381,16 +9056,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -9476,16 +9148,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -9649,7 +9311,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -9763,16 +9424,13 @@
     ],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 0,
     "num_kwargs": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -9834,13 +9492,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b9c9bf59250b86bd0103d995d0a3837954964b192387195aa1826bd7c2f4a7e9",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -10003,7 +9654,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -10134,16 +9784,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -10218,16 +9865,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -10383,7 +10020,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -10508,16 +10144,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -10585,13 +10218,6 @@
      "label": null
     },
     "step_index": 3,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "c0e336a5f371ef22cd534e094269f2c1a9635cd080b71ffa671086832d3b60b7",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -11936,16 +11562,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 2,
     "num_passes": 1,
     "num_pos_args": 2,
     "op_labels": [
@@ -12018,16 +11640,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b19c3a3d2f8c06db8bb594a5afcac6c96f806f31b3e99ffaa8568f90449dbb4f",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -12198,16 +11810,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 2,
     "op_labels": [
@@ -12266,13 +11874,6 @@
      "label": null
     },
     "step_index": 4,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.bool",
-     "requires_grad": false,
-     "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -12450,16 +12051,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 2,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -12514,16 +12111,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "8dde58384fe66c0956cc75fe2805332f2caa885ad3e5684e34a65d10533b6c04",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -12684,16 +12271,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -12769,16 +12352,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -12966,16 +12539,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 1,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -13024,13 +12593,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b9c9bf59250b86bd0103d995d0a3837954964b192387195aa1826bd7c2f4a7e9",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -13217,16 +12779,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -13291,16 +12849,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -13480,16 +13028,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -13550,13 +13094,6 @@
      "label": null
     },
     "step_index": 3,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "c0e336a5f371ef22cd534e094269f2c1a9635cd080b71ffa671086832d3b60b7",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -13653,7 +13190,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 6,
     "num_layers": 7,
-    "num_ops": 7,
     "num_output_edges": 0,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -13739,15 +13275,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_addresses": [],
-    "call_children_modules": [],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_address": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -13853,9 +13385,7 @@
     "num_edges": 6,
     "num_input_edges": 0,
     "num_internal_edges": 6,
-    "num_layers": 7,
     "num_output_edges": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -13911,7 +13441,6 @@
     "params": "<torchlens.data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [],
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -13927,7 +13456,6 @@
     "total_macs_forward": 0,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -14069,7 +13597,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -14207,16 +13734,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 2,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 2,
     "num_passes": 1,
     "num_pos_args": 2,
     "ops": [
@@ -14295,16 +13819,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b19c3a3d2f8c06db8bb594a5afcac6c96f806f31b3e99ffaa8568f90449dbb4f",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -14457,7 +13971,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -14583,16 +14096,13 @@
     ],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 2,
     "ops": [
@@ -14658,13 +14168,6 @@
      "label": null
     },
     "step_index": 4,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.bool",
-     "requires_grad": false,
-     "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-     "shape": []
-    },
     "terminal_bool_for": [
      "cond_gt_1_4",
      0
@@ -14797,7 +14300,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "none",
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -14908,16 +14410,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 2,
     "num_inputs": 0,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -14987,16 +14486,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "8dde58384fe66c0956cc75fe2805332f2caa885ad3e5684e34a65d10533b6c04",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -15134,7 +14623,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -15264,16 +14752,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -15359,16 +14844,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -15532,7 +15007,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -15646,16 +15120,13 @@
     ],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 0,
     "num_kwargs": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -15717,13 +15188,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b9c9bf59250b86bd0103d995d0a3837954964b192387195aa1826bd7c2f4a7e9",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -15886,7 +15350,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -16017,16 +15480,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -16101,16 +15561,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -16266,7 +15716,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -16391,16 +15840,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -16468,13 +15914,6 @@
      "label": null
     },
     "step_index": 3,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "c0e336a5f371ef22cd534e094269f2c1a9635cd080b71ffa671086832d3b60b7",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -17821,16 +17260,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 2,
     "num_passes": 1,
     "num_pos_args": 2,
     "op_labels": [
@@ -17903,16 +17338,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b19c3a3d2f8c06db8bb594a5afcac6c96f806f31b3e99ffaa8568f90449dbb4f",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -18083,16 +17508,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 2,
     "op_labels": [
@@ -18151,13 +17572,6 @@
      "label": null
     },
     "step_index": 4,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.bool",
-     "requires_grad": false,
-     "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -18335,16 +17749,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 2,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -18399,16 +17809,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "8dde58384fe66c0956cc75fe2805332f2caa885ad3e5684e34a65d10533b6c04",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -18569,16 +17969,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -18654,16 +18050,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -18851,16 +18237,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 1,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -18909,13 +18291,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b9c9bf59250b86bd0103d995d0a3837954964b192387195aa1826bd7c2f4a7e9",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -19102,16 +18477,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -19176,16 +18547,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -19365,16 +18726,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -19435,13 +18792,6 @@
      "label": null
     },
     "step_index": 3,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "c0e336a5f371ef22cd534e094269f2c1a9635cd080b71ffa671086832d3b60b7",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -19538,7 +18888,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 6,
     "num_layers": 7,
-    "num_ops": 7,
     "num_output_edges": 0,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -19624,15 +18973,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_addresses": [],
-    "call_children_modules": [],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_address": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -19738,9 +19083,7 @@
     "num_edges": 6,
     "num_input_edges": 0,
     "num_internal_edges": 6,
-    "num_layers": 7,
     "num_output_edges": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -19796,7 +19139,6 @@
     "params": "<torchlens.data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [],
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -19812,7 +19154,6 @@
     "total_macs_forward": 0,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -19954,7 +19295,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -20092,16 +19432,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 2,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 2,
     "num_passes": 1,
     "num_pos_args": 2,
     "ops": [
@@ -20180,16 +19517,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b19c3a3d2f8c06db8bb594a5afcac6c96f806f31b3e99ffaa8568f90449dbb4f",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -20342,7 +19669,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -20468,16 +19794,13 @@
     ],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 2,
     "ops": [
@@ -20543,13 +19866,6 @@
      "label": null
     },
     "step_index": 4,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.bool",
-     "requires_grad": false,
-     "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-     "shape": []
-    },
     "terminal_bool_for": [
      "cond_gt_1_4",
      0
@@ -20682,7 +19998,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "none",
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -20793,16 +20108,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 2,
     "num_inputs": 0,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -20872,16 +20184,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "8dde58384fe66c0956cc75fe2805332f2caa885ad3e5684e34a65d10533b6c04",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -21019,7 +20321,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -21149,16 +20450,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -21244,16 +20542,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -21417,7 +20705,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -21531,16 +20818,13 @@
     ],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 0,
     "num_kwargs": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -21602,13 +20886,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b9c9bf59250b86bd0103d995d0a3837954964b192387195aa1826bd7c2f4a7e9",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -21771,7 +21048,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -21902,16 +21178,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -21986,16 +21259,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -22151,7 +21414,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -22276,16 +21538,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -22353,13 +21612,6 @@
      "label": null
     },
     "step_index": 3,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "c0e336a5f371ef22cd534e094269f2c1a9635cd080b71ffa671086832d3b60b7",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -23720,16 +22972,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 2,
     "num_passes": 1,
     "num_pos_args": 2,
     "op_labels": [
@@ -23802,16 +23050,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b19c3a3d2f8c06db8bb594a5afcac6c96f806f31b3e99ffaa8568f90449dbb4f",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -23982,16 +23220,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 2,
     "op_labels": [
@@ -24050,13 +23284,6 @@
      "label": null
     },
     "step_index": 4,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.bool",
-     "requires_grad": false,
-     "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -24234,16 +23461,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 2,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -24298,16 +23521,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "8dde58384fe66c0956cc75fe2805332f2caa885ad3e5684e34a65d10533b6c04",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -24468,16 +23681,12 @@
     "multi_output_name": null,
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "op_labels": [
@@ -24542,16 +23751,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -24739,16 +23938,12 @@
     "multi_output_name": null,
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 1,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -24797,13 +23992,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b9c9bf59250b86bd0103d995d0a3837954964b192387195aa1826bd7c2f4a7e9",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -24990,16 +24178,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -25064,16 +24248,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -25253,16 +24427,12 @@
     "multi_output_name": null,
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_kwargs": 0,
-    "num_ops": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "op_labels": [
@@ -25323,13 +24493,6 @@
      "label": null
     },
     "step_index": 3,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "c0e336a5f371ef22cd534e094269f2c1a9635cd080b71ffa671086832d3b60b7",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "total_activation_memory": "<measured>",
     "total_autograd_memory": "<measured>",
@@ -25426,7 +24589,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 6,
     "num_layers": 7,
-    "num_ops": 7,
     "num_output_edges": 0,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -25512,15 +24674,11 @@
     "buffer_layers": [],
     "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
     "call_children": [],
-    "call_children_addresses": [],
-    "call_children_modules": [],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
-    "call_parent_address": null,
-    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -25626,9 +24784,7 @@
     "num_edges": 6,
     "num_input_edges": 0,
     "num_internal_edges": 6,
-    "num_layers": 7,
     "num_output_edges": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -25684,7 +24840,6 @@
     "params": "<torchlens.data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
-    "recursive_param_addresses": [],
     "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -25700,7 +24855,6 @@
     "total_macs_forward": 0,
     "total_output_activation_memory": "<measured>",
     "total_output_gradient_memory": "<measured>",
-    "total_param_memory": "<measured>",
     "trace": {
      "__ref__": "Trace",
      "label": null
@@ -25842,7 +24996,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -25953,16 +25106,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 2,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 2,
     "num_passes": 1,
     "num_pos_args": 2,
     "ops": [
@@ -26041,16 +25191,6 @@
      "label": null
     },
     "step_index": 2,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b19c3a3d2f8c06db8bb594a5afcac6c96f806f31b3e99ffaa8568f90449dbb4f",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -26203,7 +25343,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -26314,16 +25453,13 @@
     ],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 2,
     "ops": [
@@ -26389,13 +25525,6 @@
      "label": null
     },
     "step_index": 4,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.bool",
-     "requires_grad": false,
-     "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-     "shape": []
-    },
     "terminal_bool_for": [
      "cond_gt_1_4",
      0
@@ -26528,7 +25657,6 @@
     "grad_fn": null,
     "grad_fn_class_name": "none",
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -26636,16 +25764,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 2,
     "num_inputs": 0,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -26715,16 +25840,6 @@
      "label": null
     },
     "step_index": 0,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "8dde58384fe66c0956cc75fe2805332f2caa885ad3e5684e34a65d10533b6c04",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -26862,7 +25977,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -26974,16 +26088,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 0,
     "num_autograd_tensors": null,
-    "num_children": 0,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 0,
     "ops": [
@@ -27058,16 +26169,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -27228,7 +26329,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -27339,16 +26439,13 @@
     ],
     "num_args_total": 2,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 0,
     "num_kwargs": 1,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 0,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -27410,13 +26507,6 @@
      "label": null
     },
     "step_index": 1,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b9c9bf59250b86bd0103d995d0a3837954964b192387195aa1826bd7c2f4a7e9",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -27577,7 +26667,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -27690,16 +26779,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -27774,16 +26860,6 @@
      "label": null
     },
     "step_index": 5,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
-     "shape": [
-      2,
-      2
-     ]
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
@@ -27939,7 +27015,6 @@
     "grad_fn": null,
     "grad_fn_class_name": null,
     "grad_fn_class_qualname": null,
-    "grad_fn_cls": null,
     "grad_fn_handle": null,
     "grad_fn_label": null,
     "grad_fn_object_id": "<measured>",
@@ -28046,16 +27121,13 @@
     "non_tensor_pos_args": [],
     "num_args_total": 1,
     "num_autograd_tensors": null,
-    "num_children": 1,
     "num_inputs": 1,
     "num_kwargs": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
     "num_params_frozen": 0,
     "num_params_trainable": 0,
-    "num_parents": 1,
     "num_passes": 1,
     "num_pos_args": 1,
     "ops": [
@@ -28123,13 +27195,6 @@
      "label": null
     },
     "step_index": 3,
-    "tensor": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "c0e336a5f371ef22cd534e094269f2c1a9635cd080b71ffa671086832d3b60b7",
-     "shape": []
-    },
     "terminal_bool_for": null,
     "terminal_conditional_id": null,
     "tl_authored_root": null,
