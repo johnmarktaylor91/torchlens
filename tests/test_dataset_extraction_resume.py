@@ -352,7 +352,7 @@ def test_hard_process_death_mid_shard_write_then_resume(tmp_path: Path) -> None:
             stimuli,
             {"relu": "relu", "logits": "output_1"},
             batch_size=2,
-            output_dir=out_dir,
+            path=out_dir,
             progress=False,
             shard_format="pt",
         )

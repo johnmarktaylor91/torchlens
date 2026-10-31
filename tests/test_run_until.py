@@ -161,9 +161,9 @@ def test_live_truncation_leaves_no_halted_trace_registered():
     from torchlens import io as tlio
     from torchlens.capture.outcome import CaptureStatus
 
-    prior = tlio.list_logs()
+    prior = tlio.list_traces()
     _model, _log, result = _live_until_relu()
-    fresh = [entry for entry in tlio.list_logs() if not any(entry is p for p in prior)]
+    fresh = [entry for entry in tlio.list_traces() if not any(entry is p for p in prior)]
     halted_fresh = [
         entry
         for entry in fresh

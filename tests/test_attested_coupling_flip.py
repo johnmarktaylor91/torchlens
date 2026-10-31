@@ -137,7 +137,7 @@ def test_episode_x_intervene_cell_is_coupled():
 
     torch.manual_seed(0)
     runner = GreedyRunner(TinyLM(), n_steps=4)
-    log = _coupled(runner, _ids(), tl.when(tl.func("tanh"), tl.scale(0.5)), n_steps=4)
+    log = _coupled(runner, _ids(), tl.when(tl.func("tanh"), tl.scale(0.5)), num_steps=4)
     attestation = log.episode_coupling
     assert attestation.coupled is True
     assert attestation.bound is True  # product binding: the capture digest
@@ -161,7 +161,7 @@ def test_fires_before_inside_and_after_a_stepped_call():
     # every step. One spec fires at all three positions (add is dtype-safe
     # on the integer token sites where scale would refuse).
     spec = tl.when(tl.func("abs") | tl.func("mul") | tl.func("tanh"), tl.add(1))
-    log = _coupled(runner, _ids(), spec, n_steps=3)
+    log = _coupled(runner, _ids(), spec, num_steps=3)
     assert _fire_counts(log) == [1, 1, 1]  # tanh only: one per step
     # The before/after fires are outside-step evidence: folded into the
     # digest, never guessed into a row. A tanh-only capture (no
@@ -171,7 +171,7 @@ def test_fires_before_inside_and_after_a_stepped_call():
         GreedyRunner(TinyLM(), n_steps=3),
         _ids(),
         tl.when(tl.func("tanh"), tl.scale(1.0)),
-        n_steps=3,
+        num_steps=3,
     )
     assert _fire_counts(tanh_only) == [1, 1, 1]
     assert _header(log)["intervention_digest"] != _header(tanh_only)["intervention_digest"]
@@ -184,7 +184,7 @@ def test_zero_and_multiple_fires_are_first_class():
     runner = GreedyRunner(TinyLM(), n_steps=3)
     with pytest.warns(UserWarning, match="matched zero sites"):
         zero = _coupled(
-            runner, _ids(), tl.when(tl.func("nonexistent_func"), tl.zero_ablate()), n_steps=3
+            runner, _ids(), tl.when(tl.func("nonexistent_func"), tl.zero_ablate()), num_steps=3
         )
     assert _fire_counts(zero) == [0, 0, 0]  # measured zeros, never None
     attestation = zero.episode_coupling
@@ -196,7 +196,7 @@ def test_zero_and_multiple_fires_are_first_class():
         GreedyRunner(TinyLM(), n_steps=3),
         _ids(),
         tl.when(tl.func("tanh") | tl.func("mean"), tl.scale(1.0)),
-        n_steps=3,
+        num_steps=3,
     )
     assert _fire_counts(multi) == [2, 2, 2]
 
@@ -206,7 +206,9 @@ def test_step_qualified_intervention_fires_at_exactly_one_step():
 
     torch.manual_seed(0)
     runner = GreedyRunner(TinyLM(), n_steps=4)
-    log = _coupled(runner, _ids(), tl.when(tl.func("tanh") & at_step(2), tl.scale(0.5)), n_steps=4)
+    log = _coupled(
+        runner, _ids(), tl.when(tl.func("tanh") & at_step(2), tl.scale(0.5)), num_steps=4
+    )
     assert _fire_counts(log) == [0, 0, 1, 0]
     assert _header(log)["fidelity_basis"] == "perturbed"
 
@@ -259,7 +261,7 @@ def test_identical_coupled_reruns_mint_identical_digests():
         torch.manual_seed(0)
         runner = GreedyRunner(TinyLM(), n_steps=3)
         return _coupled(
-            runner, _ids(), tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)), n_steps=3
+            runner, _ids(), tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)), num_steps=3
         )
 
     first, second = capture(), capture()
@@ -279,7 +281,7 @@ def test_replay_refuses_coupled_products_on_both_engines():
     torch.manual_seed(0)
     runner = GreedyRunner(TinyLM(), n_steps=3)
     ids = _ids()
-    log = _coupled(runner, ids, tl.when(tl.func("tanh"), tl.scale(0.5)), n_steps=3)
+    log = _coupled(runner, ids, tl.when(tl.func("tanh"), tl.scale(0.5)), num_steps=3)
     for inputs in (ids, torch.tensor([[4, 5, 6]])):
         for fast in (False, True):
             with pytest.raises(EpisodeCaptureError) as excinfo:
@@ -433,7 +435,9 @@ def test_coupled_product_survives_save_load_and_loaded_replay_refuses(tmp_path):
 
     torch.manual_seed(0)
     runner = GreedyRunner(TinyLM(), n_steps=3)
-    log = _coupled(runner, _ids(), tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)), n_steps=3)
+    log = _coupled(
+        runner, _ids(), tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)), num_steps=3
+    )
     target = tmp_path / "coupled.tlspec"
     log.save(target)
     loaded = tl.load(target)
@@ -510,6 +514,6 @@ def test_the_old_refusal_site_is_retired():
 
     torch.manual_seed(0)
     runner = GreedyRunner(TinyLM(), n_steps=2)
-    log = _coupled(runner, _ids(), tl.when(tl.func("tanh"), tl.scale(0.5)), n_steps=2)
+    log = _coupled(runner, _ids(), tl.when(tl.func("tanh"), tl.scale(0.5)), num_steps=2)
     assert log.outcome.status.name == "COMPLETE"
     assert log.episode_coupling.coupled is True

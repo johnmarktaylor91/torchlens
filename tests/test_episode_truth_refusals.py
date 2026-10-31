@@ -120,14 +120,14 @@ def test_step_ceiling_refuses_at_declaration_and_override_admits():
         EpisodeOptions(stepped_module=model.step, num_steps=EPISODE_DECLARED_STEP_CEILING),
         model,
     )
-    assert at_ceiling.num_steps == EPISODE_DECLARED_STEP_CEILING
+    assert at_ceiling.n_steps == EPISODE_DECLARED_STEP_CEILING
 
     # Beyond the ceiling with the explicit acknowledgement: admitted.
     acknowledged = resolve_episode_declaration(
         EpisodeOptions(stepped_module=model.step, num_steps=over, acknowledge_step_cost=True),
         model,
     )
-    assert acknowledged.num_steps == over
+    assert acknowledged.n_steps == over
 
 
 def test_entry_refusal_via_trace_keeps_root_unexecuted():

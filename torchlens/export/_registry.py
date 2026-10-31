@@ -30,7 +30,7 @@ __tl_layer__ = "L7"
 EXPORT_TARGET_TIERS = frozenset({"present", "bridge"})
 
 _EXPORT_REGISTRY = create_registry(
-    "list_targets",
+    "export_targets",
     kind_label="export target",
     missing_provider_behavior="typed_refusal",
 )

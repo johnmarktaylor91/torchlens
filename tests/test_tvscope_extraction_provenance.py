@@ -141,7 +141,7 @@ def test_resume_with_differing_input_path_refuses_typed(model, resolution, tmp_p
     """The input identity rides the ONE signature door (D16)."""
 
     out_dir = tmp_path / "sig"
-    kwargs = {"batch_size": 2, "output_dir": out_dir, "progress": False}
+    kwargs = {"batch_size": 2, "path": out_dir, "progress": False}
     tl.extract_dataset(model, _stimuli(), ["conv"], input_transform=resolution, **kwargs)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
         tl.extract_dataset(model, _stimuli(), ["conv"], resume=True, **kwargs)
@@ -153,7 +153,7 @@ def test_resume_never_grafts_new_provenance(model, resolution, tmp_path) -> None
     """Composition row 3: a compatible resume keeps the artifact's own block."""
 
     out_dir = tmp_path / "graft"
-    kwargs = {"batch_size": 2, "output_dir": out_dir, "progress": False}
+    kwargs = {"batch_size": 2, "path": out_dir, "progress": False}
     paths = tl.extract_dataset(model, _stimuli(), ["conv"], input_transform=resolution, **kwargs)
     before = json.loads((out_dir / "manifest.json").read_text())["input_preprocessing"]
     again = tl.extract_dataset(

@@ -117,7 +117,7 @@ def episode_rig() -> dict[str, Any]:
     def spec(**overrides: Any) -> Any:
         base: dict[str, Any] = {
             "stepped_module": root.step,
-            "n_steps": 3,
+            "num_steps": 3,
             "step_output_kind": "digest",
         }
         base.update(overrides)

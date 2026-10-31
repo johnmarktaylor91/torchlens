@@ -166,7 +166,7 @@ def test_intervened_resume_continues_and_refuses_a_changed_intervention(tmp_path
     """Same spec resumes to identical rows; another spec or a clean run refuses."""
 
     model = _Chain().eval()
-    kwargs = {"batch_size": 2, "output_dir": tmp_path, "progress": False}
+    kwargs = {"batch_size": 2, "path": tmp_path, "progress": False}
     extract_dataset(model, _stimuli(), _LAYERS, intervene=_spec(), **kwargs)
     full = open_extraction(tmp_path).materialize()
     receipt_digest = _manifest(tmp_path)[HARVEST_BLOCK_KEY]["receipt_digest"]
@@ -270,7 +270,7 @@ def test_pre_r208_manifest_still_loads_and_resumes(tmp_path: Path) -> None:
     """A manifest without the harvest block (older writers) opens and resumes clean."""
 
     model = _Chain().eval()
-    kwargs = {"batch_size": 2, "output_dir": tmp_path, "progress": False}
+    kwargs = {"batch_size": 2, "path": tmp_path, "progress": False}
     extract_dataset(model, _stimuli(), _LAYERS, **kwargs)
     full = open_extraction(tmp_path).materialize()
     manifest = _manifest(tmp_path)
