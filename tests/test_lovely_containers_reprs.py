@@ -59,7 +59,7 @@ def test_trace_str_is_bounded_with_folds(deep_trace) -> None:
     lines = text.splitlines()
     assert len(lines) < 80, f"bounded execution log regressed to {len(lines)} lines"
     assert any("buffer rows folded" in line for line in lines)
-    assert any("more layers (see .layer_list)" in line for line in lines)
+    assert any("more layers (see .ops)" in line for line in lines)
 
 
 @pytest.mark.smoke

@@ -415,7 +415,7 @@ def _bounded_layer_roster(self: "Trace") -> list[str]:
         elided = len(roster) - _STR_ROSTER_HEAD - _STR_ROSTER_TAIL
         roster = (
             roster[:_STR_ROSTER_HEAD]
-            + [f"\t\t  ... {elided} more layers (see .layer_list)"]
+            + [f"\t\t  ... {elided} more layers (see .ops)"]
             + roster[-_STR_ROSTER_TAIL:]
         )
     return roster

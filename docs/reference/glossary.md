@@ -3197,16 +3197,19 @@ describe each surface in depth.
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
+| `can_intervene=` | keyword of `BackendCapabilities` |
 | `draw_index=` | keyword of `tl.attribution.CausalAuditSet` |
 | `extra_facets=` | keyword of `tl.facets.snapshot` |
 | `frozen_sites=` | keyword of `tl.attribution.AttributionGraph` |
 | `function_id=` | keyword of `FacetSpec.computed`, `FacetSpec.from_home`, `tl.facets.FacetSpec` |
 | `function_version=` | keyword of `FacetSpec.computed`, `FacetSpec.from_home`, `tl.facets.FacetSpec` |
 | `functions=` | Immutable active recipe entries |
+| `has_changes=` | keyword of `PreHookEffect` |
 | `has_demeaned_logits=` | keyword of `tl.attribution.AttributionGraph` |
 | `has_fused_qkv=` | keyword of `tl.mechinterp.ProjectionSource` |
 | `has_semantic_values=` | True only when the values are caller-supplied real data. Gates derived-semantics claims |
 | `is_batch_invariant=` | keyword of `tl.neuro.PlanSite` |
+| `is_capture_complete=` | keyword of `ModuleInputSnapshot` |
 | `is_coarsened=` | keyword of `tl.trackers.SeriesPoint` |
 | `is_detached=` | keyword of `tl.attribution.ReadRow` |
 | `is_frozen_requested=` | keyword of `tl.attribution.ReadRow` |
@@ -3216,16 +3219,12 @@ describe each surface in depth.
 | `is_magnitude_based=` | keyword of `tl.stats.TensorStats` |
 | `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
 | `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
+| `mutation_version=` | keyword of `TensorInputObservation` |
 | `num_examples=` | keyword of `tl.mechinterp.TrajectoryStats` |
+| `num_finite=` | keyword of `RunningStatsResult` |
 | `num_kv_heads=` | keyword of `tl.mechinterp.HeadWeightViews` |
 | `num_nan=` | keyword of `tl.stats.TensorStats` |
-| `num_finite=` | keyword of `RunningStatsResult` (was `count_finite=`) |
-| `num_negative=` | keyword of `RunningStatsResult` (was `count_negative=`) |
-| `can_intervene=` | keyword of `BackendCapabilities` (was `interventions=`) |
-| `has_changes=` | keyword of `PreHookEffect` (was `changed=`) |
-| `is_capture_complete=` | keyword of `ModuleInputSnapshot` (was `capture_complete=`) |
-| `mutation_version=` | keyword of `TensorInputObservation` (was `version=`) |
-| `python_object_id=` | keyword of `TensorInputObservation` (was `object_id=`) |
+| `num_negative=` | keyword of `RunningStatsResult` |
 | `num_neginf=` | keyword of `tl.stats.TensorStats` |
 | `num_ops=` | keyword of `tl._quickstart.Drawing` |
 | `num_posinf=` | keyword of `tl.stats.TensorStats` |
@@ -3233,6 +3232,7 @@ describe each surface in depth.
 | `num_stimuli=` | keyword of `tl.neuro.ExtractionPlan`, `tl.neuro.plan_extraction` |
 | `num_true=` | keyword of `tl.stats.TensorStats` |
 | `num_zero=` | keyword of `tl.stats.TensorStats` |
+| `python_object_id=` | keyword of `TensorInputObservation` |
 | `run_record=` | keyword of `tl.trackers.HistoryView` |
 | `signal=` | keyword of `tl.stats.NarrationObserver` |
 | `std_evidence=` | keyword of `tl.stats.TensorStats` |
