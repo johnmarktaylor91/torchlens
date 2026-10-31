@@ -1425,7 +1425,7 @@ def _module_contents_label(trace: tl.Trace, module: Any) -> str:
     """
 
     return format_collapsed_module_contents(
-        module.num_layers,
+        len(module.layer_labels),
         sum(trace[label].is_buffer for label in module.layer_labels),
     )
 
@@ -2710,7 +2710,7 @@ def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
         assert format_collapsed_module_contents(remainder_layers, remainder_buffers) in block_line
         assert _module_contents_label(trace, module) not in block_line
         assert f"{remainder_params} params" in block_line
-        assert remainder_layers + len(surfaced_ops) == module.num_layers
+        assert remainder_layers + len(surfaced_ops) == len(module.layer_labels)
         assert remainder_params + surfaced_params == module.num_params
     finally:
         trace.cleanup()

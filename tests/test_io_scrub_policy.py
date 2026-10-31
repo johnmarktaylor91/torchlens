@@ -472,7 +472,6 @@ def _op_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     """Return caller-per-method for every swept public ``Op`` method."""
 
     return {
-        "copy": lambda o: o.copy(),
         "get_children": lambda o: o.get_children(),
         "get_parents": lambda o: o.get_parents(),
         "grad_for": lambda o: o.grad_for(bwd=0),

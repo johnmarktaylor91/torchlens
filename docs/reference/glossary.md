@@ -1337,7 +1337,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   exceed what an eager forward saves; with `backward_ready=True` they match eager.
 
 **Module and call counts**
-: `ModuleCall.num_ops` counts the call's pass-qualified Ops (the root call included: a Layer it
+: `len(ModuleCall.ops)` counts the call's pass-qualified Ops (the root call included: a Layer it
   runs twice counts twice) and `ModuleCall.num_layers` the distinct Layers among them.
   `Trace.num_buffer_layers` counts distinct buffer Layers, not their passes. `Param.num_calls` is
   the number of Ops that consumed the parameter (0 for a never-called module's parameters).

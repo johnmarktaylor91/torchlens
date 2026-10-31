@@ -285,7 +285,7 @@ def test_module_scope_edge_and_layer_counts(graph_trace) -> None:
         ) == (0, 1, 1)
     # The root holds every node, so every edge is internal.
     root, root_call = modules["self"], calls["self:1"]
-    assert int(root.num_layers) == G_LAYERS
+    assert len(root.layer_labels) == G_LAYERS
     for scope in (root, root_call):
         assert (
             int(scope.num_internal_edges),

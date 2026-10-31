@@ -88,7 +88,6 @@ def test_op_and_layer_convenience_properties() -> None:
     assert op.has_frozen_params == (op.num_params_frozen > 0)
     assert op.is_compute_op is True
 
-    assert layer.num_ops == len(layer.ops)
     assert layer.total_activation_memory == sum(
         (child.activation_memory or 0) for child in layer.ops.values()
     )

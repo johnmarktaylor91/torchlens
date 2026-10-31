@@ -508,7 +508,7 @@ class TestModuleAccessorSummary:
 
         # 3) trace.modules["addr"].to_pandas() -- the per-module layer export.
         fc1_layers_df = fc1.to_pandas()
-        assert len(fc1_layers_df) == fc1.num_layers
+        assert len(fc1_layers_df) == len(fc1.layer_labels)
         fc1_layer_row = fc1_layers_df[fc1_layers_df["layer_label"] == multi_pass_labels[0]].iloc[0]
         assert fc1_layer_row["transformed_out"] is None
         assert fc1_layer_row["transformed_grad"] is None
@@ -600,7 +600,7 @@ class TestModuleLogIntegration:
 
         block_layers = [log.modules[f"blocks.{idx}"].layer_labels for idx in range(4)]
         block_counts = [len(log.modules[f"blocks.{idx}"].layer_labels) for idx in range(4)]
-        batchnorm_counts = [log.modules[f"blocks.{idx}.bn"].num_layers for idx in range(4)]
+        batchnorm_counts = [len(log.modules[f"blocks.{idx}.bn"].layer_labels) for idx in range(4)]
 
         assert block_counts == [7, 7, 7, 7]
         assert [len(labels) for labels in block_layers] == block_counts

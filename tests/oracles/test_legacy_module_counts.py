@@ -195,10 +195,10 @@ def test_layer_and_op_counts_on_the_root_call() -> None:
     try:
         root = trace.module_calls["self:1"]
         assert len(root.ops) == G_OPS  # 13: the Linear ran twice
-        assert root.num_layers == G_LAYERS  # 12: its two passes share one Layer
+        assert len(root.layer_labels) == G_LAYERS  # 12: its two passes share one Layer
         assert trace.num_layers == G_LAYERS
-        assert trace.modules["self"].num_layers == G_LAYERS
-        assert trace.modules["fc"].num_layers == 1  # one Layer, two passes
+        assert len(trace.modules["self"].layer_labels) == G_LAYERS
+        assert len(trace.modules["fc"].layer_labels) == 1  # one Layer, two passes
         for label in ("fc:1", "fc:2"):
             assert trace.module_calls[label].num_ops == 1
             assert trace.module_calls[label].num_layers == 1
