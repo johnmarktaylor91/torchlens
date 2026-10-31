@@ -29,3 +29,9 @@ unwrapped-model sentences in "Reading intermediate values", the graph-root line 
 gradient example (it raised on a frozen model, as the plain-PyTorch example did before
 its fix), the batched vector-Jacobian sentence, the batch-size sentence and pitfall 8
 (in-place overwrites), so this file covers the same task traps as the plain-PyTorch file.
+
+API check against transformer-lens 4.3.0 (30 Oct 2026, a T1 run with processing off on the
+benchmark base): canonical hook names exist without compatibility mode; BOS follows
+`cfg.default_prepend_bos` (off for Pythia); `enable_compatibility_mode(no_processing=True)`
+keeps raw weights; the bridge forces eager attention; `run_with_cache` returns detached
+tensors; `hook.name` is the native name. The file was corrected to match.

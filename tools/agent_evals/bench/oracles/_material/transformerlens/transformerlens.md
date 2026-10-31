@@ -13,12 +13,13 @@ from transformer_lens.model_bridge import TransformerBridge
 bridge = TransformerBridge.boot_transformers("gpt2", device="cpu")   # fp32, eager attention
 bridge.enable_compatibility_mode()      # HookedTransformer-equivalent names and weight processing
 prompt = "The Eiffel Tower is in the city of"
-tokens = bridge.to_tokens(prompt)       # [batch, pos], BOS prepended
+tokens = bridge.to_tokens(prompt, prepend_bos=False)   # [batch, pos]
 ```
 
 Install: `pip install transformer_lens`. Gated models need `HF_TOKEN`. Without
-`enable_compatibility_mode()` the bridge runs the raw Hugging Face weights and
-exposes Bridge-native hook names only.
+`enable_compatibility_mode()` the bridge runs the raw Hugging Face weights; the
+canonical hook names below exist in both modes. `enable_compatibility_mode(no_processing=True)`
+keeps the raw weights. The bridge always loads eager attention.
 
 ## Reading intermediate values
 
@@ -76,15 +77,16 @@ store = {}
 def keep(act, hook):
     if not act.requires_grad:           # frozen model: make this tensor the graph root
         act.requires_grad_(True)
-    act.retain_grad(); store[hook.name] = act
+    act.retain_grad(); store["r6"] = act   # hook.name is the native name, not the alias
     return act
 logits = bridge.run_with_hooks(prompt, fwd_hooks=[("blocks.6.hook_resid_post", keep)])
 paris = bridge.to_single_token(" Paris")
 logits[0, -1, paris].backward()
-grad = store["blocks.6.hook_resid_post"].grad
-grad_times_act = grad * store["blocks.6.hook_resid_post"].detach()
+grad = store["r6"].grad
+grad_times_act = grad * store["r6"].detach()
 ```
 
+`run_with_cache` returns detached tensors; take gradients through `run_with_hooks`.
 Backward hooks: `run_with_hooks(..., bwd_hooks=[(name, fn)])` receives the gradient
 at that hook point. Attribution patching is the forward value difference times the
 gradient at the same hook; `torch.autograd.grad` with `grad_outputs` gives a
@@ -105,13 +107,15 @@ keep the number of hooked points small in timed loops and use `names_filter`.
 Compatibility mode folds layer norms and centres weights (`fold_ln`,
 `center_writing_weights`, `center_unembed`); raw-HF comparisons must use the same
 load configuration (fp32, eager attention) or turn compatibility mode off.
-Determinism: `torch.manual_seed`, `do_sample=False`, CPU float32, and the same batch
+Eager attention makes values differ slightly (about 1e-4 relative) from a
+default-loaded `transformers` model. Determinism: `torch.manual_seed`, `do_sample=False`, CPU float32, and the same batch
 size as any reference (CPU kernels can differ by about 1e-5 between batch sizes).
 
 ## Pitfalls
 
-1. `to_tokens` prepends BOS by default; position indices from the raw tokenizer are
-   off by one. Pass `prepend_bos=False` when comparing with plain `transformers`.
+1. Whether `to_tokens` prepends BOS comes from the model config
+   (`bridge.cfg.default_prepend_bos`); pass `prepend_bos=` explicitly so positions match
+   the raw tokenizer.
 2. Compatibility mode changes the weights (folded layer norm, centred unembed), so
    residual values differ from the raw Hugging Face model even though logits agree.
 3. A hook that returns nothing and did not edit in place changes nothing.
