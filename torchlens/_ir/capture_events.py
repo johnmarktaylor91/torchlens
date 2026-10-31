@@ -357,7 +357,7 @@ class CaptureEvents:
         """
 
         return cls(
-            pass_index_base=int(getattr(trace, "num_backward_passes", 0) or 0),
+            pass_index_base=int(getattr(trace, "_num_backward_passes", 0) or 0),
             base_total_gradient_memory=int(getattr(trace, "total_gradient_memory", 0) or 0),
             base_total_backward_memory=int(getattr(trace, "total_backward_memory", 0) or 0),
             base_saved_grad_labels=frozenset(getattr(trace, "_saved_grad_labels", ()) or ()),

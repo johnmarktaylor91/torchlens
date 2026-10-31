@@ -901,7 +901,7 @@ class _TlSpecWriter:
             saved_grad_records = _safe_len(getattr(source, "saved_grad_ops", None))
         return {
             "has_backward_pass": bool(getattr(source, "has_backward_pass", False)),
-            "num_backward_passes": int(getattr(source, "num_backward_passes", 0) or 0),
+            "num_backward_passes": int(getattr(source, "_num_backward_passes", 0) or 0),
             "num_grad_fns": _safe_len(getattr(source, "_grad_fn_logs", None)),
             "num_grad_fn_calls": _safe_len(
                 getattr(getattr(source, "autograd", None), "grad_fn_calls", None)

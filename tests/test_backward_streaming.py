@@ -142,7 +142,7 @@ def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
     )
 
     assert restored.has_backward_pass is True
-    assert restored.num_backward_passes == trace.num_backward_passes
+    assert len(restored.autograd.backward_passes) == len(trace.autograd.backward_passes)
     assert restored.backward_memory_backend == trace.backward_memory_backend
     assert len(restored._grad_fn_logs) == len(trace._grad_fn_logs)
     # Portable grad-fn identities are remapped to deterministic sequential ids

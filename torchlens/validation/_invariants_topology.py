@@ -75,10 +75,10 @@ def _check_trace_self_consistency(ml: Trace) -> None:
     param_logs = list(getattr(ml, "_param_logs", []) or [])
     expected_param_sum = len(param_logs)
     expected_num_params = sum(int(pl.num_params) for pl in param_logs)
-    if ml.num_param_tensors != expected_param_sum:
+    if len(ml.params) != expected_param_sum:
         raise MetadataInvariantError(
             name,
-            f"num_param_tensors={ml.num_param_tensors} != "
+            f"num_param_tensors={len(ml.params)} != "
             f"len(param_logs)={expected_param_sum} (parameter-identity basis)",
         )
     if ml.num_params != expected_num_params:
@@ -109,10 +109,10 @@ def _check_trace_self_consistency(ml: Trace) -> None:
         )
 
     # Tensor counts
-    if len(ml) < ml.num_saved_ops:
+    if len(ml) < len(ml.saved_ops):
         raise MetadataInvariantError(
             name,
-            f"len(trace)={len(ml)} < num_saved_ops={ml.num_saved_ops}",
+            f"len(trace)={len(ml)} < num_saved_ops={len(ml.saved_ops)}",
         )
 
 

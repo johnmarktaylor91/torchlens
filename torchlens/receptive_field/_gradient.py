@@ -197,7 +197,7 @@ def _snapshot_probe_state(trace: Trace) -> _ProbeSnapshot:
 
     trace_dict = trace.__dict__
     return _ProbeSnapshot(
-        num_backward_passes=int(getattr(trace, "num_backward_passes", 0)),
+        num_backward_passes=int(getattr(trace, "_num_backward_passes", 0)),
         has_gradients=bool(getattr(trace, "has_gradients", False)),
         backward_event_count=_backward_event_count(trace),
         active_index_present="_active_backward_pass_index" in trace_dict,

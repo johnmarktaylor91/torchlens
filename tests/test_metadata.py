@@ -202,7 +202,7 @@ def test_measure_python_peak_memory_opt_in_reports_positive_peak(small_input):
 def test_param_info_fields(small_input):
     model = example_models.BatchNormModel()
     mh = trace_fn(model, small_input)
-    assert isinstance(mh.num_param_tensors, int)
+    assert isinstance(len(mh.params), int)
     assert isinstance(mh.num_params, int)
     assert mh.num_params > 0
 
@@ -659,8 +659,8 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
         }
     )
 
-    assert trace.num_saved_layers == expected
-    assert trace.num_saved_layers == trace.num_saved_ops
+    assert len(trace.saved_layers) == expected
+    assert len(trace.saved_layers) == len(trace.saved_ops)
 
 
 # =============================================================================

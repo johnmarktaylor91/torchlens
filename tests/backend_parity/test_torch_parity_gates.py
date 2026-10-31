@@ -425,9 +425,9 @@ def _trace_projection(trace: Trace) -> dict[str, Any]:
         "module_identity_mode": trace.module_identity_mode,
         "param_source": trace.param_source,
         "num_ops": trace.num_ops,
-        "num_saved_ops": trace.num_saved_ops,
+        "num_saved_ops": len(trace.saved_ops),
         "has_backward_pass": trace.has_backward_pass,
-        "num_backward_passes": trace.num_backward_passes,
+        "num_backward_passes": len(trace.autograd.backward_passes),
         "output_layers": list(trace.output_layers),
         "ops": [_op_projection(op) for op in trace._layer_list],
         "lookup_keys": {

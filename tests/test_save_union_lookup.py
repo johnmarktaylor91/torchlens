@@ -240,7 +240,7 @@ def _trace_fingerprint(trace: Any) -> tuple[Any, ...]:
         )
         for op in trace._layer_list
     ]
-    return rows, trace.num_saved_module_calls
+    return rows, len(trace.saved_module_calls)
 
 
 def _record_both_ways(

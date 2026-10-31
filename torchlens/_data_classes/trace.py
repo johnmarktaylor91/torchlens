@@ -275,10 +275,6 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "total_gradient_memory": 0,
     "total_backward_memory": 0,
     "saved_gradient_memory": 0,
-    "num_saved_layers": 0,
-    "num_saved_module_calls": 0,
-    "num_saved_grad_fns": 0,
-    "num_saved_grad_fn_calls": 0,
     "total_param_gradient_memory": 0,
     "forward_peak_memory": 0,
     "forward_memory_backend": "unknown",
@@ -1293,7 +1289,6 @@ class Trace(
         "capture_tensor_grad_hooks": FieldPolicy.KEEP,
         "_grad_op_nums_to_save": FieldPolicy.KEEP,
         "grad_transform": FieldPolicy.DROP,
-        "grad_transform_repr": FieldPolicy.KEEP,
         "save_raw_gradients": FieldPolicy.KEEP,
         "save_code_context": FieldPolicy.KEEP,
         "save_rng_states": FieldPolicy.KEEP,
@@ -1361,7 +1356,6 @@ class Trace(
         "_by_pass": FieldPolicy.KEEP,
         "_layer_nums_to_save": FieldPolicy.KEEP,
         "num_ops": FieldPolicy.KEEP,
-        "num_modules": FieldPolicy.DROP,
         "_raw_to_final_layer_labels": FieldPolicy.KEEP,
         "_raw_to_final_parent_layer_labels": FieldPolicy.KEEP,
         "_raw_to_final_op_labels": FieldPolicy.KEEP,
@@ -1401,15 +1395,9 @@ class Trace(
         "total_backward_memory": FieldPolicy.KEEP,
         "total_autograd_memory": FieldPolicy.KEEP,
         "pinned_autograd_memory": FieldPolicy.DROP,  # live graph only
-        "num_saved_ops": FieldPolicy.KEEP,
         "saved_activation_memory": FieldPolicy.KEEP,
         "saved_gradient_memory": FieldPolicy.KEEP,
-        "num_saved_layers": FieldPolicy.KEEP,
-        "num_saved_module_calls": FieldPolicy.KEEP,
-        "num_saved_grad_fns": FieldPolicy.KEEP,
-        "num_saved_grad_fn_calls": FieldPolicy.KEEP,
         "_param_logs": FieldPolicy.KEEP,
-        "num_param_tensors": FieldPolicy.KEEP,
         "num_layers_with_params": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
         "num_params_trainable": FieldPolicy.KEEP,
@@ -1517,7 +1505,7 @@ class Trace(
         "_session_buffer_identity": FieldPolicy.DROP,
         "backward_root_grad_fn_object_ids": FieldPolicy.KEEP,
         "backward_durations": FieldPolicy.KEEP,
-        "num_backward_passes": FieldPolicy.KEEP,
+        "_num_backward_passes": FieldPolicy.KEEP,
         "backward_peak_memory": FieldPolicy.KEEP,
         "backward_memory_backend": FieldPolicy.KEEP,
         "backward_peak_memory_reason": FieldPolicy.KEEP,
@@ -1763,7 +1751,6 @@ class Trace(
         self.save_raw_activations = save_raw_activations
         self.input_annotations: dict[str, Any] = {}
         self.grad_transform = grad_transform
-        self.grad_transform_repr = repr(grad_transform) if grad_transform is not None else None
         self.save_raw_gradients = save_raw_grads
         self.save_mode = save_mode
         self._source_code_blob: dict[str, str] = {}
@@ -1934,17 +1921,11 @@ class Trace(
         self.total_backward_memory: Bytes = Bytes(0)
         self.total_autograd_memory: Bytes | None = None
         self.pinned_autograd_memory: Bytes | None = None  # pinned-autograd disclosure
-        self.num_saved_ops: int = 0  # layers with has_saved_activation=True
         self.saved_activation_memory: Bytes = Bytes(0)
         self.saved_gradient_memory: Bytes = Bytes(0)
-        self.num_saved_layers: int = 0
-        self.num_saved_module_calls: int = 0
-        self.num_saved_grad_fns: int = 0
-        self.num_saved_grad_fn_calls: int = 0
 
         # Param info:
         self._param_logs: ParamAccessor = ParamAccessor({})
-        self.num_param_tensors: int = 0
         self.num_layers_with_params: int = 0
         self.num_params: int = 0
         self.num_params_trainable: int = 0
@@ -1990,7 +1971,7 @@ class Trace(
         self._session_buffer_identity: dict[int, Any] = {}
         self.backward_root_grad_fn_object_ids: list[int] = []
         self.backward_durations: list[Duration] = []
-        self.num_backward_passes: int = 0
+        self._num_backward_passes: int = 0
         self.backward_peak_memory: Bytes | None = Bytes(0)  # CPU None: see the reason
         self.backward_memory_backend: str = "unknown"
         self.backward_peak_memory_reason: str | None = None
@@ -3125,7 +3106,6 @@ class Trace(
             "_visualizer_dir": None,
             "input_annotations": {},
             "grad_transform": None,
-            "grad_transform_repr": None,
             "save_raw_gradients": True,
             "save_grads": None,
             "capture_tensor_grad_hooks": True,
@@ -3136,7 +3116,7 @@ class Trace(
             "_backward_pass_logs": OrderedDict(),
             "backward_root_grad_fn_object_ids": [],
             "backward_durations": [],
-            "num_backward_passes": 0,
+            "_num_backward_passes": 0,
             "backward_peak_memory": 0,
             "backward_memory_backend": "unknown",
             "backward_peak_memory_reason": None,
@@ -3707,7 +3687,6 @@ class Trace(
             "graph_shape_hash",
             "_raw_event_shape_hash",
             "_raw_call_fingerprint",
-            "num_saved_ops",
             "saved_activation_memory",
             "total_activation_memory",
             "saved_gradient_memory",

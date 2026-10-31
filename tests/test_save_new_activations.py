@@ -331,7 +331,7 @@ class TestSaveNewActivationsRegression:
                 expected = model(next_x)
                 output = log[log.output_layers[0]].out
                 assert output is not None
-                assert log.num_saved_ops > 0
+                assert len(log.saved_ops) > 0
                 assert torch.allclose(output, expected)
         finally:
             log.cleanup()
@@ -398,7 +398,7 @@ class TestSaveNewActivationsStateReset:
                 log.save_new_outs(model, next_x, **trace_kwargs)
                 output = log[log.output_layers[0]].out
                 assert output is not None
-                assert log.num_saved_ops > 0
+                assert len(log.saved_ops) > 0
                 assert torch.allclose(output, model(next_x))
         finally:
             log.cleanup()

@@ -1315,16 +1315,6 @@ class TraceStatsMixin(_TraceMixinBase):
         return self._buffer_accessor  # type: ignore[return-value]
 
     @property
-    def num_modules(self: "Trace") -> int:
-        """Total number of registered source-model submodules."""
-
-        return len(self._module_logs)
-
-    @num_modules.deleter
-    def num_modules(self: "Trace") -> None:
-        """Ignore cleanup deletion for derived module count."""
-
-    @property
     def _graph_orphans(self: "Trace") -> OrphanAccessor:
         """Access retained orphan island operations by raw or final label."""
 

@@ -30,7 +30,7 @@ def test_linear_trace_facts_hold_from_first_principles():
         # One module, one weight + one bias parameter: from the definition.
         assert log.backend == "torch"
         assert log.model_class_name == "Linear"
-        assert log.num_modules == 1
+        assert len(log.modules) == 1
         # Exactly one compute op (the linear kernel); input and output nodes
         # exist besides it.
         compute_funcs = [op.func_name for op in log.compute_ops]

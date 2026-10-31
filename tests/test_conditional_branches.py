@@ -1972,7 +1972,7 @@ def test_selective_save_preserves_conditional_metadata_for_unsaved_layers() -> N
     )
 
     assert log.layer_labels
-    assert log.num_saved_ops == 0
+    assert len(log.saved_ops) == 0
     assert _collect_model_conditional_labels(log).issubset(set(log.layer_labels))
     assert all(
         parent_label in log._layer_logs and child_label in log._layer_logs

@@ -157,7 +157,7 @@ def test_default_budget_does_not_fire_on_an_ordinary_model() -> None:
     """The shipped default must never refuse a normal capture."""
 
     trace = tl.trace(_model(), _input())
-    assert trace.num_saved_ops > 0
+    assert len(trace.saved_ops) > 0
     assert int(trace.saved_activation_memory) > 0
 
 
@@ -170,7 +170,7 @@ def test_default_capture_is_unchanged_by_the_budget() -> None:
     unbudgeted = tl.trace(model, x, capture=CaptureOptions(save_budget=None))
 
     assert budgeted.layer_labels == unbudgeted.layer_labels
-    assert budgeted.num_saved_ops == unbudgeted.num_saved_ops
+    assert len(budgeted.saved_ops) == len(unbudgeted.saved_ops)
     assert int(budgeted.saved_activation_memory) == int(unbudgeted.saved_activation_memory)
 
 
@@ -195,7 +195,7 @@ def test_metadata_only_capture_is_never_charged() -> None:
         _model(), _input(), capture=CaptureOptions(save_budget=64, layers_to_save="none")
     )
     assert len(trace.layer_labels) > 0
-    assert trace.num_saved_ops == 0
+    assert len(trace.saved_ops) == 0
 
 
 def test_disk_streamed_payloads_are_not_charged(tmp_path: Path) -> None:
@@ -359,7 +359,7 @@ def test_budget_refusal_leaves_the_model_reusable() -> None:
     # The model still runs normally, and a subsequent ordinary capture works.
     assert model(x).shape == (8, 64)
     trace = tl.trace(model, x)
-    assert trace.num_saved_ops > 0
+    assert len(trace.saved_ops) > 0
 
 
 def test_typed_error_is_reachable_from_public_errors_namespace() -> None:
@@ -482,7 +482,7 @@ def test_lookback_promotions_stay_charged_after_capture() -> None:
     ledger = trace._save_budget_accountant.ledgers["cpu"]
     # linear_1 is promoted (2 KB) and linear_2's candidate is still in the
     # bounded window (2 KB): both are genuinely retained, so both stay charged.
-    assert trace.num_saved_ops == 1
+    assert len(trace.saved_ops) == 1
     assert int(trace.saved_activation_memory) == 2048
     assert ledger.committed_bytes == 4096
 

@@ -232,10 +232,10 @@ def test_fork_probe_does_not_mint_parent_backward_pass() -> None:
     fork_target = _op(fork, "conv2d")
     fork_target.receptive_field.gradient((0, 0, 2, 2), retain_graph=True)
 
-    assert trace.num_backward_passes == 0
+    assert len(trace.autograd.backward_passes) == 0
     assert getattr(trace, "has_gradients", False) is False
     assert len(list(getattr(trace, "backward_events", []))) == 0
-    assert fork.num_backward_passes == 0
+    assert len(fork.autograd.backward_passes) == 0
 
     from torchlens import _state
 

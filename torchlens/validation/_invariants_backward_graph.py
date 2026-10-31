@@ -118,7 +118,7 @@ def _refuse_backward_evidence_without_registry(trace: Trace, name: str) -> None:
     )
     if ok_pass_count:
         evidence.append(f"backward_pass_logs holds {ok_pass_count} ok-status pass record(s)")
-    num_backward_passes = getattr(trace, "num_backward_passes", 0) or 0
+    num_backward_passes = getattr(trace, "_num_backward_passes", 0) or 0
     if isinstance(num_backward_passes, int) and num_backward_passes > len(backward_pass_logs):
         evidence.append(
             f"num_backward_passes={num_backward_passes} exceeds the "
@@ -435,13 +435,13 @@ def _check_backward_pass_index_density(trace: Trace, name: str) -> None:
         If backward pass log keys are not exactly ``1..num_backward_passes``.
     """
 
-    expected_pass_indices = list(range(1, trace.num_backward_passes + 1))
+    expected_pass_indices = list(range(1, trace._num_backward_passes + 1))
     actual_pass_indices = sorted(getattr(trace, "_backward_pass_logs", {}).keys())
     if actual_pass_indices != expected_pass_indices:
         raise MetadataInvariantError(
             name,
             f"backward_pass_logs keys {actual_pass_indices!r} are not dense "
-            f"1..{trace.num_backward_passes}",
+            f"1..{trace._num_backward_passes}",
         )
 
 

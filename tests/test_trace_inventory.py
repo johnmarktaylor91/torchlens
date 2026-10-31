@@ -116,7 +116,7 @@ def test_bill_of_materials_reports_captured_facts() -> None:
     assert bom["capture"]["model_class_name"] == "Sequential"
     assert bom["graph"]["num_ops"] == len(trace._layer_list)
     assert bom["graph"]["num_layers"] == len(trace.layers)
-    assert bom["graph"]["num_modules"] == trace.num_modules
+    assert bom["graph"]["num_modules"] == len(trace.modules)
     assert bom["parameters"]["num_params"] == trace.num_params
     assert bom["parameters"]["num_param_tensors"] == len(trace.params)
     assert bom["buffers"]["num_buffer_tensors"] == len(trace.buffers)

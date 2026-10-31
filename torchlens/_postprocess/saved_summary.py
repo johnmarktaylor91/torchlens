@@ -77,12 +77,12 @@ def refresh_saved_module_call_count(
     trace: "Trace",
     saved_op_labels: Iterable[str] | None = None,
 ) -> int:
-    """Refresh and return ``trace.num_saved_module_calls``.
+    """Return the saved ModuleCall count.
 
     Parameters
     ----------
     trace:
-        Trace whose stored counter should be refreshed.
+        Trace whose saved ModuleCalls are counted.
     saved_op_labels:
         Optional saved Op labels forwarded to
         ``count_saved_module_calls_from_output_ops``.
@@ -90,11 +90,10 @@ def refresh_saved_module_call_count(
     Returns
     -------
     int
-        Refreshed saved ModuleCall count.
+        Saved ModuleCall count.
     """
 
     count = count_saved_module_calls_from_output_ops(trace, saved_op_labels)
-    trace.num_saved_module_calls = count
     return count
 
 

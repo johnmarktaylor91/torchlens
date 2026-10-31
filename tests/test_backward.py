@@ -297,7 +297,7 @@ def test_recording_backward_context_manager() -> None:
     with trace.capture_backward():
         loss.backward(retain_graph=True)
         (loss * 2).backward()
-    assert trace.num_backward_passes == 2
+    assert len(trace.autograd.backward_passes) == 2
 
 
 def _backward_projection_snapshot(trace: tl.Trace) -> dict:
@@ -363,9 +363,9 @@ def _backward_projection_snapshot(trace: tl.Trace) -> dict:
         "op_grads": op_grads,
         "param_grads": param_grads,
         "order": list(trace.grad_fn_order),
-        "num_passes": trace.num_backward_passes,
-        "num_calls": trace.num_saved_grad_fn_calls,
-        "num_fns": trace.num_saved_grad_fns,
+        "num_passes": len(trace.autograd.backward_passes),
+        "num_calls": len(trace.autograd.saved_grad_fn_calls),
+        "num_fns": len(trace.autograd.saved_grad_fns),
         "saved_labels": set(trace._saved_grad_labels),
         "total_grad_mem": int(trace.total_gradient_memory),
         "total_bwd_mem": int(trace.total_backward_memory),
@@ -390,7 +390,7 @@ def test_backward_reprojection_folds_incrementally() -> None:
             loss.backward(retain_graph=True)
             loss.backward(retain_graph=True)
             loss.backward()
-    assert trace.num_backward_passes == 3
+    assert len(trace.autograd.backward_passes) == 3
     assert len(full_rebuild_sizes) == 1, (
         f"later same-graph passes must fold incrementally, not rebuild: {full_rebuild_sizes}"
     )
@@ -846,7 +846,7 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
     assert fork._saved_grad_labels == set()
     assert not any(param_log._grad_records for param_log in fork._param_logs.values())
     assert int(fork.total_param_gradient_memory) == 0
-    assert fork.num_backward_passes == 0
+    assert len(fork.autograd.backward_passes) == 0
 
     assert trace.has_gradients
     assert trace._saved_grad_labels
@@ -920,7 +920,7 @@ def test_recording_backward_delegates_foreign_graphs() -> None:
         (foreign * 2).sum().backward()
         loss.backward()
     assert foreign.grad is not None
-    assert trace.num_backward_passes == 1
+    assert len(trace.autograd.backward_passes) == 1
 
     control_model, _control_x, control_trace = _logged_model()
     control_loss = _output_loss(control_trace)
@@ -948,7 +948,7 @@ def test_recording_backward_foreign_only_block_stays_empty() -> None:
     ]
     assert len(unmatched_warnings) == 1, "unmatched-backward warning must fire exactly once"
     assert foreign.grad is not None
-    assert trace.num_backward_passes == 0
+    assert len(trace.autograd.backward_passes) == 0
     assert len(trace._grad_fn_logs) == 0
 
 
@@ -1358,7 +1358,7 @@ def test_higher_order_grads_basic_support() -> None:
     """create_graph=True backward calls run through capture."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace), create_graph=True)
-    assert trace.num_backward_passes == 1
+    assert len(trace.autograd.backward_passes) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1598,7 +1598,7 @@ def test_restored_trace_supports_backward_capture() -> None:
     assert "_backward_projection_fold_state" not in restored.__dict__
 
     restored.log_backward(loss)
-    assert restored.num_backward_passes == 1
+    assert len(restored.autograd.backward_passes) == 1
     assert restored._grad_fn_logs
     assert restored._backward_pass_logs[1].status == "ok"
     _invariant_check(restored)
@@ -1676,7 +1676,7 @@ def test_restored_trace_with_prior_backward_extends_pass_numbering() -> None:
     _model, _x, trace = _logged_model()
     loss = _output_loss(trace)
     trace.log_backward(loss, retain_graph=True)
-    assert trace.num_backward_passes == 1
+    assert len(trace.autograd.backward_passes) == 1
 
     restored = pickle.loads(pickle.dumps(trace))
     assert restored._capture_events.pass_index_base == 1
@@ -1696,7 +1696,7 @@ def test_restored_trace_with_prior_backward_extends_pass_numbering() -> None:
 
     restored.log_backward(loss, retain_graph=True)
 
-    assert restored.num_backward_passes == 2
+    assert len(restored.autograd.backward_passes) == 2
     assert set(restored._backward_pass_logs) == {1, 2}
     # The earlier pass's projection is intact — the SAME preserved record,
     # not a lookalike rebuilt from a stream that never saw pass 1.
@@ -1728,7 +1728,7 @@ def test_restored_trace_with_prior_backward_extends_pass_numbering() -> None:
     }
     assert any(two_pass_call_snapshot.values())
     restored_again.log_backward(loss)
-    assert restored_again.num_backward_passes == 3
+    assert len(restored_again.autograd.backward_passes) == 3
     assert set(restored_again._backward_pass_logs) == {1, 2, 3}
     for object_id, snapshot in two_pass_call_snapshot.items():
         record = restored_again._grad_fn_logs[object_id]
@@ -1782,9 +1782,9 @@ def test_fork_after_backward_gets_detached_event_stream() -> None:
 
     assert len(trace._capture_events.backward_events) == parent_event_count
     assert trace._capture_events.backward_revision == parent_revision
-    assert trace.num_backward_passes == 1
+    assert len(trace.autograd.backward_passes) == 1
     assert set(trace._backward_pass_logs) == {1}
-    assert fork.num_backward_passes == 2
+    assert len(fork.autograd.backward_passes) == 2
     assert set(fork._backward_pass_logs) == {1, 2}
     # The parent's persistent tensor hooks redirect their observations to the
     # bracket-holding fork (shared label space), so the fork's pass records
@@ -2199,13 +2199,13 @@ def test_failed_backward_walk_keeps_start_and_gains_failed_end() -> None:
     assert [s.pass_index for s in starts] == [1], "the attempted pass keeps its start"
     assert [e.pass_index for e in ends] == [1], "the attempted pass gains a terminal end"
     assert ends[0].status == "error"
-    assert trace.num_backward_passes == 1
+    assert len(trace.autograd.backward_passes) == 1
     check_metadata_invariants(trace)
 
     # A later real backward numbers itself after the failed attempt and the
     # whole stream still satisfies the exact bracketing invariants.
     trace.log_backward(_output_loss(trace))
-    assert trace.num_backward_passes == 2
+    assert len(trace.autograd.backward_passes) == 2
     check_metadata_invariants(trace)
 
 
@@ -2337,7 +2337,7 @@ def test_refresh_projection_with_inplace_op_keeps_one_grad_owner_per_label() -> 
     trace.save_new_outs(model, torch.randn(2, 3, requires_grad=True), seed=1)
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
-    pass_index = trace.num_backward_passes
+    pass_index = len(trace.autograd.backward_passes)
     per_label = Counter(
         event.op_label
         for event in trace._capture_events.backward_events

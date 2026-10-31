@@ -243,7 +243,6 @@ def _tally_params_by_identity(self: "Trace", mbd: dict[str, Any]) -> None:
     self.num_params = 0
     self.num_params_trainable = 0
     self.num_params_frozen = 0
-    self.num_param_tensors = 0
     self.total_param_memory = Bytes(0)
     for pl in self._param_logs:
         count, memory = _effective_param_geometry(pl)
@@ -252,7 +251,6 @@ def _tally_params_by_identity(self: "Trace", mbd: dict[str, Any]) -> None:
             self.num_params_trainable += count
         else:
             self.num_params_frozen += count
-        self.num_param_tensors += 1
         self.total_param_memory += memory
 
         containing_modules: set[str] = set()
@@ -764,11 +762,11 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
     """
 
     # Quick loop to count how many tensors are saved:
-    for layer_entry in self:
-        if getattr(layer_entry, "is_orphan", False):
-            continue
-        if layer_entry.has_saved_activation:
-            self.num_saved_ops += 1
+    num_saved_ops = sum(
+        1
+        for layer_entry in self
+        if not getattr(layer_entry, "is_orphan", False) and layer_entry.has_saved_activation
+    )
 
     num_logged_tensors = sum(
         1 for layer_entry in self if not getattr(layer_entry, "is_orphan", False)
@@ -806,7 +804,7 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
 
     self._layers_logged = True
 
-    if self.num_saved_ops == len(self._layer_list):
+    if num_saved_ops == len(self._layer_list):
         self._layers_saved = True
     else:
         self._layers_saved = False

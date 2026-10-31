@@ -44,7 +44,7 @@ def _input() -> torch.Tensor:
 def _capture_summary(log: Any) -> tuple[list[str], int]:
     """Return stable fields for comparing captures."""
 
-    return (list(log._layer_logs.keys()), int(log.num_saved_ops))
+    return (list(log._layer_logs.keys()), int(len(log.saved_ops)))
 
 
 def test_trace_grouped_capture_options_route_warning_free() -> None:

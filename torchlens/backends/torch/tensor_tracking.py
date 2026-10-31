@@ -473,7 +473,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
             _close_implicit_backward_pass_if_open(trace)
         else:
             return int(pass_index)
-    pass_index = int(getattr(trace, "num_backward_passes", 0)) + 1
+    pass_index = int(getattr(trace, "_num_backward_passes", 0)) + 1
     trace._active_backward_pass_index = pass_index
     trace._implicit_backward_pass_open = True
     if current_task_id is not None:

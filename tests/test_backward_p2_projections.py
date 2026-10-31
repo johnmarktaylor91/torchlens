@@ -65,7 +65,7 @@ def test_backward_passes_and_grad_fn_calls_are_event_projections() -> None:
 
     trace = _captured_two_pass_trace()
     try:
-        assert trace.num_backward_passes == 2
+        assert len(trace.autograd.backward_passes) == 2
         backward_passes = trace.autograd.backward_passes
         assert [backward_pass.pass_index for backward_pass in backward_passes] == [1, 2]
         assert backward_passes[0] is backward_passes.for_pass(1)

@@ -4127,7 +4127,7 @@ def _trace_torch_model(
     if (
         capture_options.module_filter is not None
         and module_filter_suppressed > 0
-        and int(getattr(trace, "num_saved_ops", 0) or 0) == 0
+        and len(getattr(trace, "saved_ops", ())) == 0
     ):
         from .errors import TorchLensWarning as _TorchLensWarning
 
@@ -4162,7 +4162,7 @@ def _trace_torch_model(
     _vprint(
         trace,
         f"Done: {len(trace._layer_logs)} layers, "
-        f"{trace.num_saved_ops} saved, "
+        f"{len(trace.saved_ops)} saved, "
         f"{trace.total_activation_memory}",
     )
 

@@ -521,7 +521,6 @@ class TinygradBackend:
         self._mark_output_events(trace, outputs, uop_labels, captures)
         if use_object_module and module_tree is not None:
             trace._param_logs = ParamAccessor(tinygrad_param_logs(module_tree, trace))
-            trace.num_param_tensors = len(trace._param_logs)
             trace.num_params = sum(param.num_params for param in trace._param_logs)
             trace.num_params_trainable = sum(
                 param.num_params for param in trace._param_logs if param.is_trainable
@@ -530,7 +529,6 @@ class TinygradBackend:
             trace.param_source = "native-module"
         else:
             trace._param_logs = ParamAccessor({})
-            trace.num_param_tensors = 0
             trace.num_params = 0
             trace.num_params_trainable = 0
             trace.num_params_frozen = 0

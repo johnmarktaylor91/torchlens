@@ -47,7 +47,7 @@ def test_probe_does_not_mutate_any_backward_or_gradient_state() -> None:
     before_records = _gradient_record_snapshot(trace)
     before_events = tuple(trace.event_stream.backward_events)
     before_disarmed = trace._tl_backward_triggers_disarmed
-    before_passes = trace.num_backward_passes
+    before_passes = len(trace.autograd.backward_passes)
     before_has_gradients = trace.has_gradients
     before_active_index = (
         "_active_backward_pass_index" in trace.__dict__,
@@ -60,7 +60,7 @@ def test_probe_does_not_mutate_any_backward_or_gradient_state() -> None:
 
     gradient_for_unit(target, (0, 0, 2, 2), input_op=input_op)
 
-    assert trace.num_backward_passes == before_passes
+    assert len(trace.autograd.backward_passes) == before_passes
     assert trace.has_gradients is before_has_gradients
     assert tuple(trace.event_stream.backward_events) == before_events
     assert _gradient_record_snapshot(trace) == before_records
@@ -113,7 +113,7 @@ def test_suppression_restores_exact_flag_state_when_probe_raises() -> None:
 
     assert trace._tl_rf_probe_active == "prior-sentinel"
     assert trace._tl_backward_triggers_disarmed is True
-    assert trace.num_backward_passes == 0
+    assert len(trace.autograd.backward_passes) == 0
     assert not trace.has_gradients
     assert not trace.event_stream.backward_events
 
@@ -140,7 +140,7 @@ def test_suppression_restores_absent_flag_after_mid_probe_autograd_failure(
 
     assert "_tl_rf_probe_active" not in trace.__dict__
     assert trace._tl_backward_triggers_disarmed is False
-    assert trace.num_backward_passes == 0
+    assert len(trace.autograd.backward_passes) == 0
     assert not trace.has_gradients
     assert not trace.event_stream.backward_events
     assert all(parameter.grad is None for parameter in model.parameters())

@@ -387,7 +387,7 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
     valid_param_sources = {"native-module", "pytree-derived", "none"}
     if param_source not in valid_param_sources:
         raise MetadataInvariantError(name, f"param_source={param_source!r} is invalid")
-    if param_source == "none" and getattr(trace, "num_param_tensors", 0) != 0:
+    if param_source == "none" and len(getattr(trace, "params", ())) != 0:
         raise MetadataInvariantError(
             name,
             "param_source='none' requires num_param_tensors=0",
@@ -422,7 +422,7 @@ def _check_non_torch_backward_inert(trace: Trace) -> None:
             name,
             "non-torch traces must not populate backward_root_grad_fn_object_ids",
         )
-    if getattr(trace, "num_backward_passes", 0) != 0:
+    if getattr(trace, "_num_backward_passes", 0) != 0:
         raise MetadataInvariantError(name, "non-torch traces must have num_backward_passes=0")
 
 

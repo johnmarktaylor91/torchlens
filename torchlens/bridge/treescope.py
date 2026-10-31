@@ -526,7 +526,9 @@ def _trace_fact_lines(obj: Any) -> list[str]:
         lines.append(f"outcome: {outcome_status}")
     num_ops = getattr(obj, "num_ops", None)
     if num_ops is not None:
-        lines.append(f"ops: {num_ops} (saved: {getattr(obj, 'num_saved_ops', '?')})")
+        lines.append(
+            f"ops: {num_ops} (saved: {len(obj.saved_ops) if hasattr(obj, 'saved_ops') else '?'})"
+        )
     return lines
 
 

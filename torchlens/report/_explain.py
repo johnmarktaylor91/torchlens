@@ -682,7 +682,7 @@ def _backward_summary_lines(log: Any) -> list[str]:
 
     if not bool(getattr(log, "has_backward_pass", False)):
         return ["- No backward passes are recorded on this log."]
-    pass_count = int(getattr(log, "num_backward_passes", 0) or 0)
+    pass_count = int(getattr(log, "_num_backward_passes", 0) or 0)
     grad_fn_count = len(getattr(getattr(log, "autograd", None), "grad_fns", None) or ())
     grad_fn_call_count = len(getattr(getattr(log, "autograd", None), "grad_fn_calls", None) or ())
     saved_grad_count = _safe_len(getattr(log, "saved_grad_ops", None))

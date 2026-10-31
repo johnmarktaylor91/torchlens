@@ -599,7 +599,7 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
     assert unsaved_ops
     assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
-    assert trace.num_saved_ops == len(saved_ops)
+    assert len(trace.saved_ops) == len(saved_ops)
     assert int(trace.saved_activation_memory) == sum(
         int(op.activation_memory or 0) for op in saved_ops
     )
@@ -611,9 +611,9 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
     out_entries = [entry for entry in manifest["body_index"] if entry.get("intended_use") == "out"]
     loaded = tl.load(path)
 
-    assert len(out_entries) == trace.num_saved_ops
+    assert len(out_entries) == len(trace.saved_ops)
     assert loaded.backend == "tinygrad"
-    assert len(list(loaded.saved_ops)) == trace.num_saved_ops
+    assert len(list(loaded.saved_ops)) == len(trace.saved_ops)
     assert [op.has_saved_activation for op in loaded._layer_list] == [
         op.has_saved_activation for op in trace._layer_list
     ]
@@ -652,7 +652,7 @@ def test_tinygrad_module_predicate_selects_function_root() -> None:
 
     trace = _trace(save=tl.in_module("self"))
 
-    assert trace.num_saved_ops == len(trace._layer_list)
+    assert len(trace.saved_ops) == len(trace._layer_list)
     assert trace.validate_forward_pass([_tiny_block(Tensor([1.0, -2.0, 3.0]))]) is True
 
 
@@ -851,7 +851,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.param_source == "none"
     assert list(trace.params.keys()) == []
     assert trace.has_backward_pass is False
-    assert trace.num_backward_passes == 0
+    assert len(trace.autograd.backward_passes) == 0
     assert trace.autograd.num_backward_edges is None
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
     assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])

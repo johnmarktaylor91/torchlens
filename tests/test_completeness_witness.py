@@ -1254,7 +1254,7 @@ def test_mid_forward_autograd_grad_is_an_exact_backward_boundary() -> None:
     assert len(boundary_rows) == 1
     assert boundary_rows[0]["scope"] == "expected_opaque"
     assert boundary_rows[0]["aten_ops"]
-    assert trace.num_backward_passes == 1
+    assert len(trace.autograd.backward_passes) == 1
     assert trace.completeness_diagnostics == []
     assert trace.capture_verified is True
 

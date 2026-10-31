@@ -26,7 +26,6 @@ MODELLOG_FIELD_USAGE: dict[str, str] = {
     "model_class_name": "Graph caption title.",
     "num_tensors": "Graph caption tensor count.",
     "total_activation_memory": "Graph caption out-memory summary.",
-    "num_param_tensors": "Caption metadata for model scale.",
     "num_params": "Graph caption parameter summary.",
     "num_params_trainable": "Graph caption trainable/frozen breakdown.",
     "num_params_frozen": "Graph caption trainable/frozen breakdown.",

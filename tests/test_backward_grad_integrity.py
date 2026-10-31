@@ -100,7 +100,7 @@ def test_reentered_recording_backward_restores_tensor_backward() -> None:
             torch.Tensor.backward = original_backward  # type: ignore[method-assign]
             pytest.fail("re-entered recording_backward() leaked a wrapper on torch.Tensor.backward")
     # The backward inside the nested block is still recorded exactly once.
-    assert trace.num_backward_passes == 1
+    assert len(trace.autograd.backward_passes) == 1
 
 
 def test_op_grad_payloads_charge_the_save_budget() -> None:

@@ -70,7 +70,7 @@ def compute_backward_style_inventory(
     orders = [getattr(grad_fn_handle, "order", None) for grad_fn_handle in visible]
     has_higher_order = any(order is not None and order > 1 for order in orders)
     grad_shapes = [_format_backward_output_shape(grad_fn_handle) for grad_fn_handle in visible]
-    num_passes = int(getattr(trace, "num_backward_passes", 1) or 1)
+    num_passes = int(getattr(trace, "_num_backward_passes", 1) or 1)
     return BackwardStyleInventory(
         has_higher_order=has_higher_order,
         has_intervening=any(not grad_fn_handle.has_op for grad_fn_handle in visible),

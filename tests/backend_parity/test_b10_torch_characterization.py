@@ -267,7 +267,7 @@ def test_selective_layers_to_save_uses_fast_pass_save_new_outs() -> None:
 
     saved = [(layer.func_name, layer.has_saved_activation) for layer in trace._layer_list]
     assert trace.capture_mode == "exhaustive"
-    assert trace.num_saved_ops == 3
+    assert len(trace.saved_ops) == 3
     assert saved == [
         ("none", False),
         ("linear", False),

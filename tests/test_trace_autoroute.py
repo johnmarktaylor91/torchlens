@@ -59,7 +59,7 @@ def test_string_input_hf_model_matches_trace_text() -> None:
 
     assert auto_log.num_ops == direct_log.num_ops
     assert len(auto_log._layer_logs) == len(direct_log._layer_logs)
-    assert auto_log.num_modules == direct_log.num_modules
+    assert len(auto_log.modules) == len(direct_log.modules)
 
 
 @pytest.mark.slow
@@ -72,7 +72,7 @@ def test_list_of_strings_input_hf_model_batches() -> None:
     log = tl.trace(model, ["a", "b", "c"], capture=tl.options.CaptureOptions(layers_to_save="none"))
 
     assert log.num_ops > 0
-    assert log.num_modules > 0
+    assert len(log.modules) > 0
 
 
 def test_chat_message_input_enables_chat_template(monkeypatch: pytest.MonkeyPatch) -> None:

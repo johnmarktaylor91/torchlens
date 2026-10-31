@@ -112,13 +112,13 @@ def test_gradfn_weakref_pickle_roundtrip_with_real_backward_pass() -> None:
     """
 
     live_trace = _build_backward_trace()
-    assert live_trace.num_backward_passes >= 1
+    assert len(live_trace.autograd.backward_passes) >= 1
     assert len(live_trace._grad_fn_logs) > 0
 
     data = pickle.dumps(live_trace)
     restored = pickle.loads(data)
 
-    assert restored.num_backward_passes == live_trace.num_backward_passes
+    assert len(restored.autograd.backward_passes) == len(live_trace.autograd.backward_passes)
     assert len(restored._grad_fn_logs) == len(live_trace._grad_fn_logs)
     # `Trace.__setstate__` deliberately reconnects each GradFn's
     # `trace` back-reference to the newly-restored (live) Trace, so

@@ -1135,7 +1135,7 @@ def test_wiped_grad_fn_registry_on_detached_trace_fails_invariants() -> None:
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     check_metadata_invariants(trace)
     assert trace._backward_pass_logs, "backward evidence precondition"
-    assert trace.num_backward_passes >= 1
+    assert len(trace.autograd.backward_passes) >= 1
     assert trace._grad_fn_logs, "registry precondition"
 
     # The journal is a run-scoped live-capture fact: pickle restore, fork, and

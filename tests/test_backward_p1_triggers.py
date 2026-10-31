@@ -134,7 +134,7 @@ def test_plain_tensor_backward_triggers_capture() -> None:
 
     starts = _backward_starts(trace)
     assert trace.has_backward_pass
-    assert trace.num_backward_passes == 1
+    assert len(trace.autograd.backward_passes) == 1
     assert starts[-1].trigger == "autograd_backward"
     assert starts[-1].implicit is False
     assert trace._grad_fn_logs
@@ -151,7 +151,7 @@ def test_disarm_triggers_suppresses_plain_backward_capture() -> None:
     trace.disarm_triggers()
     loss.backward()
 
-    assert trace.num_backward_passes == 0
+    assert len(trace.autograd.backward_passes) == 0
     assert _backward_starts(trace) == []
     trace.cleanup()
 
@@ -195,7 +195,7 @@ def test_fast_pass_refreshes_grad_fn_identity_and_hook_registry() -> None:
     assert id(trace["linear_2"].grad_fn_handle) == grad_fn_object_id
     trace[trace.output_layers[0]].out.sum().backward()
     _close_implicit_backward_pass_if_open(trace)
-    assert trace.num_backward_passes == 1
+    assert len(trace.autograd.backward_passes) == 1
     assert any(event.op_label == trace["linear_2"].layer_label for event in _op_grad_events(trace))
     assert trace["linear_2"].grad is not None
     trace.cleanup()

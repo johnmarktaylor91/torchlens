@@ -1310,7 +1310,6 @@ class MLXBackend:
             delattr(trace, "capture_events")
             if use_object_module and module_tree is not None:
                 trace._param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
-                trace.num_param_tensors = len(trace._param_logs)
                 trace.num_params = sum(param.num_params for param in trace._param_logs)
                 trace.num_params_trainable = sum(
                     param.num_params for param in trace._param_logs if param.is_trainable
@@ -1319,7 +1318,6 @@ class MLXBackend:
                 trace.param_source = "native-module"
             else:
                 trace._param_logs = ParamAccessor({})
-                trace.num_param_tensors = 0
                 trace.num_params = 0
                 trace.num_params_trainable = 0
                 trace.num_params_frozen = 0
@@ -1375,7 +1373,6 @@ class MLXBackend:
             address: param for address, param in trace.params.items() if param.barcode in attached
         }
         trace._param_logs = ParamAccessor(kept)
-        trace.num_param_tensors = len(kept)
         trace.num_params = sum(param.num_params for param in kept.values())
         trace.num_params_trainable = sum(
             param.num_params for param in kept.values() if param.is_trainable

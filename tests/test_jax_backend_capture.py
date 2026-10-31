@@ -1404,7 +1404,7 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
     assert unsaved_ops
     assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
-    assert trace.num_saved_ops == len(saved_ops)
+    assert len(trace.saved_ops) == len(saved_ops)
     assert int(trace.saved_activation_memory) == sum(
         int(op.activation_memory or 0) for op in saved_ops
     )
@@ -1416,9 +1416,9 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
     out_entries = [entry for entry in manifest["body_index"] if entry.get("intended_use") == "out"]
     loaded = tl.load(path)
 
-    assert len(out_entries) == trace.num_saved_ops
+    assert len(out_entries) == len(trace.saved_ops)
     assert loaded.backend == "jax"
-    assert len(list(loaded.saved_ops)) == trace.num_saved_ops
+    assert len(list(loaded.saved_ops)) == len(trace.saved_ops)
     assert [op.has_saved_activation for op in loaded._layer_list] == [
         op.has_saved_activation for op in trace._layer_list
     ]

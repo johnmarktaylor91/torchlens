@@ -360,11 +360,11 @@ def test_rerun_honors_metadata_only_save_scope() -> None:
     x = torch.randn(2, 3)
     log = tl.trace(ReluAdd(), x, save=lambda _ctx: False)
 
-    assert log.num_saved_ops == 0
+    assert len(log.saved_ops) == 0
 
     log.run(ReluAdd(), x + 1)
 
-    assert log.num_saved_ops == 0
+    assert len(log.saved_ops) == 0
     assert log.last_run["engine"] == "rerun"
 
 

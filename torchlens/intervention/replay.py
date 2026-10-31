@@ -333,7 +333,7 @@ def _reset_backward_projection(log: Trace) -> None:
     log._backward_pass_logs = OrderedDict()
     log.backward_root_grad_fn_object_ids = []
     log.backward_durations = []
-    log.num_backward_passes = 0
+    log._num_backward_passes = 0
     log.backward_peak_memory = Bytes(0)
     log.backward_peak_memory_reason = None
     log.total_backward_memory = Bytes(0)

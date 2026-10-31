@@ -5654,7 +5654,7 @@ def test_backend_identity_invariants_reject_torch_param_source_none_with_params(
         assert log.backend == "torch"
         assert log.module_identity_mode == "torch_module"
         assert log.param_source == "native-module"
-        assert log.num_param_tensors > 0
+        assert len(log.params) > 0
 
         log.param_source = "none"
 
@@ -5674,7 +5674,7 @@ def test_backend_identity_invariants_pass_healthy_resnet() -> None:
         assert log.backend == "torch"
         assert log.module_identity_mode == "torch_module"
         assert log.param_source == "native-module"
-        assert log.num_param_tensors > 0
+        assert len(log.params) > 0
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()

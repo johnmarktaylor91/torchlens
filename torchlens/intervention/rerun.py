@@ -1252,7 +1252,7 @@ def _rerun_save_scope(log: Trace) -> tuple[str | list[int | str] | None, Any | N
                 # fall back to "metadata_only".
                 str(options.lookback_payload_policy),
             )
-    if getattr(log, "num_saved_ops", 0) == 0:
+    if len(getattr(log, "saved_ops", ())) == 0:
         return None, None, 0, "metadata_only"
     layer_nums = getattr(log, "_layer_nums_to_save", "all")
     if layer_nums == "all":
@@ -1288,7 +1288,7 @@ def _refuse_shifted_raw_index_resave(old_log: Trace, new_log: Trace) -> None:
     if (
         request.get("replayable", False)
         or getattr(options, "keep_op", None) is not None
-        or getattr(old_log, "num_saved_ops", 0) == 0
+        or len(getattr(old_log, "saved_ops", ())) == 0
         or getattr(old_log, "_layer_nums_to_save", "all") == "all"
     ):
         return

@@ -170,7 +170,7 @@ def _validity_token(trace: Any) -> tuple[Any, ...]:
 
     refs = trace.__dict__.get("_backward_gradfn_refs")
     return (
-        int(getattr(trace, "num_backward_passes", 0)),
+        int(getattr(trace, "_num_backward_passes", 0)),
         None if refs is None else len(refs),
         bool(trace.__dict__.get("_tl_cleaned_up", False)),
     )

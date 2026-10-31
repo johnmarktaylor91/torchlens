@@ -108,7 +108,7 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
         "nonfinite_evidence": "trace.first_nonfinite()",
         "nonfinite_coverage": "trace.nonfinite_coverage",
     }
-    if int(getattr(log, "num_saved_ops", 0) or 0) > 0:
+    if len(getattr(log, "saved_ops", ())) > 0:
         steps["one_activation"] = "trace[<layer_label>].out"
     steps["receptive_field"] = "trace[<layer_label>].receptive_field"
     steps["draw_graph"] = "trace.draw()"
@@ -253,7 +253,7 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
             "layers": _safe_len(getattr(log, "layer_labels", None)),
             "operations": int(getattr(log, "num_ops", 0) or 0),
             "tensors_total": len(log) if hasattr(log, "__len__") else 0,
-            "tensors_saved": int(getattr(log, "num_saved_ops", 0) or 0),
+            "tensors_saved": len(getattr(log, "saved_ops", ())),
             "parameters": int(getattr(log, "num_params", 0) or 0),
             "modules": module_row_count,
         }

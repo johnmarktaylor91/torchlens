@@ -322,7 +322,7 @@ def _str_after_pass(self: "Trace") -> str:
         f"\n\t\t- {bound}{len(self)} total tensors ({self.total_activation_memory}) "
         f"computed in forward pass{' (lower bound: capture unverified)' if unverified else ''}."
     )
-    s += f"\n\t\t- {self.num_saved_ops} tensors ({self.saved_activation_memory}) with saved outs."
+    s += f"\n\t\t- {len(self.saved_ops)} tensors ({self.saved_activation_memory}) with saved outs."
     nonfinite = self.first_nonfinite()
     if not nonfinite.startswith("No non-finite"):
         s += f"\n\t\t- NaN/Inf: {nonfinite}"
@@ -346,7 +346,7 @@ def _str_after_pass(self: "Trace") -> str:
     s += "\n\tLayers"
     if self._layers_saved:
         s += " (all have saved outs):"
-    elif self.num_saved_ops == 0:
+    elif len(self.saved_ops) == 0:
         s += " (no layer outs are saved):"
     else:
         s += " (* means layer has saved outs):"

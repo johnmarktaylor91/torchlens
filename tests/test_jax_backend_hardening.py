@@ -1148,7 +1148,7 @@ def test_jax_module_predicate_selects_function_root() -> None:
 
     trace = _trace(save=tl.in_module("self"))
 
-    assert trace.num_saved_ops == len(trace._layer_list)
+    assert len(trace.saved_ops) == len(trace._layer_list)
     assert trace.validate_forward_pass([]) is True
 
 
@@ -1183,7 +1183,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.param_source == "pytree-derived"
     assert set(trace.params.keys()) == {"w", "b"}
     assert trace.has_backward_pass is False
-    assert trace.num_backward_passes == 0
+    assert len(trace.autograd.backward_passes) == 0
     assert trace.autograd.num_backward_edges is None
 
     outpath = tmp_path / "jax_graph"

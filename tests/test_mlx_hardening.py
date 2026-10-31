@@ -151,7 +151,7 @@ def _assert_static_save_summary(trace: tl.Trace, expected_func_names: set[str]) 
     assert all(op.out is not None for op in saved_ops)
     assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
-    assert trace.num_saved_ops == len(saved_ops)
+    assert len(trace.saved_ops) == len(saved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
     assert int(trace.saved_activation_memory) == sum(
         int(op.activation_memory or 0) for op in saved_ops
@@ -728,7 +728,7 @@ def test_mlx_static_func_save_filters_public_payloads(tmp_path: Path) -> None:
     loaded_unsaved_ops = [op for op in loaded._layer_list if not op.has_saved_activation]
 
     _assert_mlx_materialized_manifest(manifest, {"out"})
-    assert len(manifest["body_index"]) == trace.num_saved_ops
+    assert len(manifest["body_index"]) == len(trace.saved_ops)
     assert loaded_saved_ops
     assert all(isinstance(op.out, mx.array) for op in loaded_saved_ops)
     assert all(op.out is None for op in loaded_unsaved_ops)

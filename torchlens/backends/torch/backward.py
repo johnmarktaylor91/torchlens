@@ -456,8 +456,8 @@ def _close_implicit_backward_pass_if_open(trace: Any, *, _close_path: str = "syn
                     close_path=_close_path,
                 )
             )
-            trace.num_backward_passes = max(
-                int(getattr(trace, "num_backward_passes", 0)), int(pass_index)
+            trace._num_backward_passes = max(
+                int(getattr(trace, "_num_backward_passes", 0)), int(pass_index)
             )
             trace.__dict__.pop("_active_backward_pass_index", None)
             # Close the open-pass flag BEFORE the fallible record clear
@@ -1988,10 +1988,8 @@ def _refresh_backward_pass_counters(trace: Any, state: _BackwardFoldState) -> No
         *base_root_ids,
         *(root_id for roots in roots_by_pass.values() for root_id in roots),
     ]
-    trace.num_backward_passes = max(state.built_pass_indices, default=0)
+    trace._num_backward_passes = max(state.built_pass_indices, default=0)
     trace.has_backward_pass = bool(state.built_pass_indices)
-    trace.num_saved_grad_fn_calls = len(trace.autograd.saved_grad_fn_calls)
-    trace.num_saved_grad_fns = len(trace.autograd.saved_grad_fns)
 
 
 def _torch_dtype_from_string(dtype_name: str) -> torch.dtype | str:
@@ -2147,7 +2145,7 @@ def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE regi
             getattr(
                 live_trace,
                 "_active_backward_pass_index",
-                getattr(live_trace, "num_backward_passes", 0) + 1,
+                getattr(live_trace, "_num_backward_passes", 0) + 1,
             )
         )
         _set_live_grad_fn_call_backward_pass_index(grad_fn_handle, call_index, pass_index)
@@ -2706,7 +2704,7 @@ def _walk_and_hook_backward_graph(
     strong_refs = trace.__dict__.setdefault("_backward_gradfn_refs", [])
     strong_refs.extend(root_grad_fns)
     pass_index = int(
-        getattr(trace, "_active_backward_pass_index", getattr(trace, "num_backward_passes", 0) + 1)
+        getattr(trace, "_active_backward_pass_index", getattr(trace, "_num_backward_passes", 0) + 1)
     )
     roots_by_pass = trace.__dict__.setdefault("_backward_roots_by_pass", {})
     roots_by_pass.setdefault(pass_index, [])
@@ -3285,7 +3283,7 @@ def _run_backward_with_capture(
         intervention_spec=intervention_spec,
     )
     trace._active_save_grads_policy = active_save_grads_policy
-    pass_index = int(getattr(trace, "num_backward_passes", 0)) + 1
+    pass_index = int(getattr(trace, "_num_backward_passes", 0)) + 1
     trace._active_backward_pass_index = pass_index
     trace._implicit_backward_pass_open = False
     start_event = BackwardPassStart(
@@ -3344,7 +3342,7 @@ def _run_backward_with_capture(
                 order_attribution_coverage=None,
             )
         )
-        trace.num_backward_passes = max(int(getattr(trace, "num_backward_passes", 0)), pass_index)
+        trace._num_backward_passes = max(int(getattr(trace, "_num_backward_passes", 0)), pass_index)
         for handle in handles:
             with contextlib.suppress(BaseException):
                 handle.remove()
@@ -3422,8 +3420,8 @@ def _run_backward_with_capture(
             # backward re-enters hook code and appends phantom events).
             # Mirror the walk-failure arm's unconditional cleanup, then
             # re-raise the rewalk error.
-            trace.num_backward_passes = max(
-                int(getattr(trace, "num_backward_passes", 0)), pass_index
+            trace._num_backward_passes = max(
+                int(getattr(trace, "_num_backward_passes", 0)), pass_index
             )
             with contextlib.suppress(BaseException):
                 _clear_pending_accumulate_grad_records(trace)
@@ -3441,7 +3439,7 @@ def _run_backward_with_capture(
             with contextlib.suppress(BaseException):
                 _materialize_backward_projections(trace)
             raise rewalk_error
-        trace.num_backward_passes = max(int(getattr(trace, "num_backward_passes", 0)), pass_index)
+        trace._num_backward_passes = max(int(getattr(trace, "_num_backward_passes", 0)), pass_index)
         # Fenced like the rewalk-error arm above (b3-sol-R14-1): an unfenced
         # failure in the pending-record clear stranded every grad-fn hook and
         # strong forward graph ref registered by the walk. Each cleanup step

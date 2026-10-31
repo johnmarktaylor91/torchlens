@@ -48,7 +48,7 @@ def test_trace_call_tree_and_num_modules() -> None:
     stream = StringIO()
     calls = list(trace.walk_calls())
 
-    assert trace.num_modules == len(trace.modules)
+    assert len(trace.modules) == len(trace.modules)
     assert len(trace.module_calls) == len(trace.module_calls)
     assert len(calls) == len(trace.module_calls)
     assert calls[0].call_label == "self:1"

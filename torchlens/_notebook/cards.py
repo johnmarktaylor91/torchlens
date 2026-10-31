@@ -162,7 +162,7 @@ def _save_counts(trace_like: Any) -> tuple[int | None, int | None]:
         total: int | None = len(tuple(trace_like.op_labels or ()))
     except Exception:  # noqa: BLE001 - unfinished/legacy logs may lack labels
         total = None
-    saved = getattr(trace_like, "num_saved_ops", None)
+    saved = len(trace_like.saved_ops) if hasattr(trace_like, "saved_ops") else None
     return total, saved
 
 
@@ -377,7 +377,7 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
         CardText(
             f"Layers: {len(layers)} | Ops: {getattr(trace, 'num_ops', '?')} | "
             f"backend: {getattr(trace, 'backend', '?')} | "
-            f"modules: {getattr(trace, 'num_modules', '?')}"
+            f"modules: {len(trace.modules) if hasattr(trace, 'modules') else '?'}"
         ),
         CardText(
             f"params: {getattr(trace, 'num_params', '?')} | "

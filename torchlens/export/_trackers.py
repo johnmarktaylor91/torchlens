@@ -405,7 +405,7 @@ def _summary_metrics(log: Any) -> dict[str, int]:
 
     return {
         "num_layers": len(getattr(log, "_layer_list", [])),
-        "num_saved_ops": int(getattr(log, "num_saved_ops", 0) or 0),
+        "num_saved_ops": len(getattr(log, "saved_ops", ())),
         "total_activation_memory": int(getattr(log, "total_activation_memory", 0) or 0),
     }
 
