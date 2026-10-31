@@ -36,8 +36,8 @@ from typing import Any
 
 import torch
 
+from ..._utils._torch_compat import HAS_NODE_PREHOOK
 from ...errors import TorchLensWarning
-from ...utils._torch_compat import HAS_NODE_PREHOOK
 from ._accessor import ReadEdgeIndex, SiteEdge
 from ._errors import ReadError
 from ._facet_bridge import FrozenResolution, resolve_frozen_policy

@@ -12,7 +12,7 @@ import math
 import pytest
 import torch
 
-from torchlens.observability import (
+from torchlens._observability import (
     DEFAULT_DESCRIPTOR,
     Histogram,
     HistogramDescriptor,
@@ -21,7 +21,7 @@ from torchlens.observability import (
     merge_histogram_results,
     merge_spine_results,
 )
-from torchlens.observability._kernels import (
+from torchlens._observability._kernels import (
     INT32_COUNT_MAX,
     histogram_result_from_vector,
     merge_spine_vectors,

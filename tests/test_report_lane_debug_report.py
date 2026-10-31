@@ -1,4 +1,4 @@
-"""U42.2: every report-shaped ``tl.debug`` helper returns the one ``DebugReport``.
+"""U42.2: every report-shaped ``tl._debug`` helper returns the one ``DebugReport``.
 
 One test per helper checks the common surface (type, lead facts, ``to_dict``,
 ``to_pandas``, the printed form). The six table helpers additionally pin that
@@ -68,7 +68,7 @@ def grad_trace(model: nn.Module, x: torch.Tensor) -> Iterator[Any]:
 def _helper_calls() -> dict[str, Callable[[dict[str, Any]], Any]]:
     """Each report-shaped helper, called on the module fixtures."""
 
-    debug = tl.debug
+    debug = tl._debug
     return {
         "audit_trace": lambda f: debug.audit_trace(f["trace"]),
         "check_determinism": lambda f: debug.check_determinism(f["model"], f["x"]),
@@ -102,11 +102,11 @@ def fixtures(model: nn.Module, x: torch.Tensor, trace: Any, grad_trace: Any) -> 
 def test_helper_returns_the_debug_report(helper: str, fixtures: dict[str, Any]) -> None:
     report = _helper_calls()[helper](fixtures)
 
-    assert isinstance(report, tl.debug.DebugReport)
+    assert isinstance(report, tl._debug.DebugReport)
     assert isinstance(report, BoundedReport)
     assert report.report_type and report.subject and report.status
     payload = report.to_dict()
-    if type(report).to_dict is tl.debug.DebugReport.to_dict:
+    if type(report).to_dict is tl._debug.DebugReport.to_dict:
         assert payload["report_type"] == report.report_type
         assert payload["status"] == report.status
     json.dumps(payload)
@@ -127,14 +127,14 @@ def test_helper_returns_the_debug_report(helper: str, fixtures: dict[str, Any]) 
 def test_param_audit_prints_exactly_as_before(model: nn.Module) -> None:
     """ParamAudit kept its house-voice summary: str() is its unchanged repr."""
 
-    audit = tl.debug.audit_params(model)
+    audit = tl._debug.audit_params(model)
     text = str(audit)
     assert text == audit.__repr__()
     assert text.splitlines()[0].startswith("ParamAudit: ")
 
 
 def test_table_report_never_is_a_dataframe(trace: Any) -> None:
-    report = tl.debug.hot_path(trace)
+    report = tl._debug.hot_path(trace)
 
     assert not isinstance(report, pd.DataFrame)
     assert not hasattr(report, "columns")
@@ -161,19 +161,19 @@ def _assert_same(report: Any, expected: Any) -> None:
 
 
 def test_hot_path_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = tl.debug.hot_path_rows(trace, "flops")
+    rows, attrs = tl._debug.hot_path_rows(trace, "flops")
     columns = ["source_file:line", "op_count", "total_cost", "pct_total"]
-    _assert_same(tl.debug.hot_path(trace), _frame(rows, columns, attrs))
+    _assert_same(tl._debug.hot_path(trace), _frame(rows, columns, attrs))
 
 
 def test_dead_neurons_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = tl.debug.dead_neurons_rows(trace, dim=1, threshold=0.0)
+    rows, attrs = tl._debug.dead_neurons_rows(trace, dim=1, threshold=0.0)
     columns = ["op", "total_units", "dead_count", "dead_frac", "sample_dead_idx", "reason"]
-    _assert_same(tl.debug.dead_neurons(trace), _frame(rows, columns, attrs))
+    _assert_same(tl._debug.dead_neurons(trace), _frame(rows, columns, attrs))
 
 
 def test_compare_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = tl.debug.compare_rows(trace, trace)
+    rows, attrs = tl._debug.compare_rows(trace, trace)
     columns = [
         "op",
         "status",
@@ -184,19 +184,19 @@ def test_compare_frame_is_unchanged(trace: Any) -> None:
         "allclose",
         "reason",
     ]
-    _assert_same(tl.debug.compare(trace, trace), _frame(rows, columns, attrs))
+    _assert_same(tl._debug.compare(trace, trace), _frame(rows, columns, attrs))
 
 
 def test_gradient_flow_audit_frame_is_unchanged(grad_trace: Any) -> None:
-    from torchlens.debug._gradients import _GRAD_AUDIT_COLUMNS
+    from torchlens._debug._gradients import _GRAD_AUDIT_COLUMNS
 
-    rows, attrs = tl.debug.gradient_flow_audit_rows(grad_trace)
+    rows, attrs = tl._debug.gradient_flow_audit_rows(grad_trace)
     expected = _frame(rows, list(_GRAD_AUDIT_COLUMNS), attrs)
-    _assert_same(tl.debug.gradient_flow_audit(grad_trace), expected)
+    _assert_same(tl._debug.gradient_flow_audit(grad_trace), expected)
 
 
 def test_recompute_candidates_frame_is_unchanged(trace: Any) -> None:
-    from torchlens.debug._common import _compute_ops, _op_label
+    from torchlens._debug._common import _compute_ops, _op_label
 
     rows = []
     for op in _compute_ops(trace):
@@ -216,7 +216,7 @@ def test_recompute_candidates_frame_is_unchanged(trace: Any) -> None:
     columns = ["op", "activation_memory", "flops_forward", "mem_per_flop", "suggested"]
     expected = _frame(rows, columns, {"total_freeable": sum(r["activation_memory"] for r in rows)})
     assert rows, "the fixture must yield candidates"
-    _assert_same(tl.debug.recompute_candidates(trace), expected)
+    _assert_same(tl._debug.recompute_candidates(trace), expected)
 
 
 def test_compare_params_frame_is_unchanged() -> None:
@@ -249,4 +249,4 @@ def test_compare_params_frame_is_unchanged() -> None:
         "reason",
     ]
     expected = _frame(rows, columns, {"matched": 1, "value_diverged": 1})
-    _assert_same(tl.debug.compare_params(left, right), expected)
+    _assert_same(tl._debug.compare_params(left, right), expected)

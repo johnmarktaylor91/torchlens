@@ -35,7 +35,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **PartialTrace**
 : A recoverable prefix of a failed `tl.trace(...)` capture. A raised capture exception may expose
-  `exc.partial_log`; recover it with `tl.partial.from_failed_capture(exc)`. A partial trace is not
+  `exc.partial_log`; recover it with `tl._partial.from_failed_capture(exc)`. A partial trace is not
   silently treated as complete.
 
 **Failed partial Recording**
@@ -1224,7 +1224,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StreamingOptions`.
 
 **Structural hash**
-: `tl.hash` is the provisional structural-hash namespace; `tl.assert_unchanged` asserts
+: `tl.fingerprint` is the provisional structural-hash namespace; `tl.assert_unchanged` asserts
   a model still matches a pinned address-free structural hash.
 
 **Container registration**
@@ -1324,7 +1324,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `"fma2"` (default; one multiply-accumulate = 2 FLOPs) or `"fma1"` (recounted
   from each op's two-term compute record; refuses typed with
   `flop_convention_unavailable` when an op has no MAC split). Accepted by
-  `summary(...)` and `tl.utils.flop_count(...)`; the removed `count_fma_as_two=`
+  `summary(...)` and `tl._utils.flop_count(...)`; the removed `count_fma_as_two=`
   spelling refuses typed naming it.
 
 **Autograd-saved bytes**
@@ -1383,7 +1383,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Merge vocabularies**
 : `MergeAlignment`, `BoundaryConsistency`, `MergeValueStatus`, and `MergedErrorCode` are
-  frozen vocabularies in `torchlens.merged`, release-gated against
+  frozen vocabularies in `torchlens._merged`, release-gated against
   [the merged-trace contract](merged_trace_contract.md).
 
 **Trace.distributed_scope** — *unstable — no deprecation shim owed*
@@ -1686,14 +1686,14 @@ S2-gated*
   `structure_only_refuted_hypothesis`, `structure_only_discharge_precondition`,
   `structure_only_type_invalid`.
 
-**tl.ir.ModuleCaptureWorkspace.root_forward_args** — *unstable — no deprecation shim owed*
+**tl._ir.ModuleCaptureWorkspace.root_forward_args** — *unstable — no deprecation shim owed*
 : The root call's `(args, kwargs)`, kept on a capture's module workspace while the capture
   runs: the root forward is never decorated, so the per-module forward-argument table has no
   entry for it. Set at capture entry, read when finalization builds the root module pass, then
   cleared with the other temporary build state (`None` outside a capture). The
   `ModuleCaptureWorkspace(..., root_forward_args=...)` keyword sets the same field.
 
-**tl.ir.RawGraphWorkspace.buffer_version_keys** — *unstable — no deprecation shim owed*
+**tl._ir.RawGraphWorkspace.buffer_version_keys** — *unstable — no deprecation shim owed*
 : Raw buffer label to the buffer version it was logged from: the tensor's object id, storage
   key and version counter, or `None` when the storage or counter cannot be read. Recorded when a
   buffer is logged; postprocess merges two buffer nodes only when they name the same version, and
@@ -1701,7 +1701,7 @@ S2-gated*
   `RawGraphWorkspace(..., buffer_version_keys=...)` keyword sets the same field.
 
 **PredicateProtocol** — *unstable — no deprecation shim owed*
-: `torchlens.ir.predicate_registry.PredicateProtocol` — the frozen callable
+: `torchlens._ir.predicate_registry.PredicateProtocol` — the frozen callable
   signature for the capture-lifecycle `save`/`halt`/`until` predicate slots:
   one positional concrete `RecordContext`, returning a normalized decision.
   The S4 seam contract; normative page:
@@ -1710,7 +1710,7 @@ S2-gated*
 
 **coerce_predicate(value, \*, slot)** — *unstable — no deprecation shim owed*
 : The single documented coercion door for predicate consumers
-  (`torchlens.ir.predicate_registry`). Closed value domain {raw callable,
+  (`torchlens._ir.predicate_registry`). Closed value domain {raw callable,
   registered-name str}; raw callables (including `BaseSelector` instances and
   `followed_by` composites) return BY IDENTITY, registered names return a
   slot-aware enforcing wrapper carrying
@@ -2345,7 +2345,7 @@ shim owed*
   on `callback.settings`; `hist_every=` is a constructor argument too. A
   malformed variable refuses `watch_env_config_invalid`.
 
-**StepBlockRecord.trace_ref (torchlens.observability)** — *unstable — no deprecation shim owed*
+**StepBlockRecord.trace_ref (torchlens._observability)** — *unstable — no deprecation shim owed*
 : Nullable pointer (path or URI) from a history step block to a retained
   `Trace` for that step; there is no raw-tensor snapshot tier. History schema
   version 2 (`HISTORY_SCHEMA_VERSION`); version-1 artifacts load with
@@ -2355,7 +2355,7 @@ shim owed*
   `OpTierCollector.instrumented_forward(...)` runs the per-step pass without
   committing a block.
 
-**WatchSettings(sketch_embeddings=, artifact_budget_bytes=) (torchlens.observability)** — *unstable — no deprecation shim owed*
+**WatchSettings(sketch_embeddings=, artifact_budget_bytes=) (torchlens._observability)** — *unstable — no deprecation shim owed*
 : `sketch_embeddings=False` (default) reduces embedding-table parameters with
   at least `EMBEDDING_SKETCH_CAP_NUMEL` (2**20) elements spine-only and says
   so in the plan table; `True` sketches them. `artifact_budget_bytes` (default
@@ -2562,8 +2562,8 @@ deprecation shim owed*
   Trajectory statistics over many batches: `tl.stats.measure_trajectory`. See
   [facets](../facets.md).
 
-**render_logit_lens_heatmap (torchlens.tviz)** — *unstable — no deprecation shim owed*
-: `torchlens.tviz.render_logit_lens_heatmap(result, path)` draws a
+**render_logit_lens_heatmap (torchlens.transformer)** — *unstable — no deprecation shim owed*
+: `torchlens.transformer.render_logit_lens_heatmap(result, path)` draws a
   `LogitLensResult` as a layers-by-positions heatmap: one row per projected
   block, one column per input position, each cell printing that layer's
   top-1 next-token prediction and colored on a fixed 0-to-1 probability
@@ -2576,7 +2576,7 @@ deprecation shim owed*
   wider than 48 positions refuse `tv_record_invalid` until `positions=`
   names the columns; nothing is cropped silently. Returns an `Artifact`.
 
-**kv-group receipts (torchlens.tviz)** — *unstable — no deprecation shim owed*
+**kv-group receipts (torchlens.transformer)** — *unstable — no deprecation shim owed*
 : `tviz.receipt_from_patch_grid(grid, ..., kv_groups=tviz.GqaInfo(...))`
   builds a `CausalReceipt` whose cells are grouped-query KV groups, for
   grids over a key or value site. The receipt's `kv_groups` field holds the
@@ -2592,7 +2592,7 @@ deprecation shim owed*
   "effect source: ..." on the grid figure, and passing `kv_groups=` for it
   refuses `tv_receipt_invalid`.
 
-**Receipt cells and patch-grid baselines (torchlens.tviz, torchlens.mechinterp)** — *unstable — no deprecation shim owed*
+**Receipt cells and patch-grid baselines (torchlens.transformer, torchlens.mechinterp)** — *unstable — no deprecation shim owed*
 : A `mechinterp.PatchGrid` from `mechinterp.grid`, its presets or
   `mechinterp.patch_query_heads_grid` keeps `values` as the metric of each
   patched run (`to_pandas` names the column `metric`) and records the
@@ -2706,8 +2706,8 @@ deprecation shim owed*
   `AttentionCall` records (`module_name`, `probs`, `num_key_value_heads`,
   `mask_kind`, `sdpa_checked`), and `.nbytes` is the retained total.
 
-**DebugReport (`tl.debug.DebugReport`)** — *unstable — no deprecation shim owed*
-: The one typed result of every report-shaped `tl.debug` helper (U42.2):
+**DebugReport (`tl._debug.DebugReport`)** — *unstable — no deprecation shim owed*
+: The one typed result of every report-shaped `tl._debug` helper (U42.2):
   `report_type`, `subject` and `status` (the lead), `to_dict()` (a plain,
   JSON-friendly payload; tensors and graph records summarized, never
   inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:

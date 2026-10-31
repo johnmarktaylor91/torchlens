@@ -37,8 +37,8 @@ from pathlib import Path
 import pytest
 from _source_corpus import package_ast, package_files
 
-from torchlens.merged._errors import MergeInputError
-from torchlens.merged._presenter import MergedTrace, _rank_raw_to_final_op_labels
+from torchlens._merged._errors import MergeInputError
+from torchlens._merged._presenter import MergedTrace, _rank_raw_to_final_op_labels
 
 # Module-wide smoke dropped (r3settle2 budget lint): the repo-wide reach-in
 # count scan below measures over the 5s smoke partition; per-test marks.

@@ -17,8 +17,8 @@ from typing import Any
 import pytest
 from test_merged_engine import boundary, seeded_ledger, trace_for_boundaries
 
-from torchlens.merged import MergedErrorCode, merge_ranks
-from torchlens.merged._errors import MergeInputError
+from torchlens._merged import MergedErrorCode, merge_ranks
+from torchlens._merged._errors import MergeInputError
 
 
 def _core(mutate) -> Any:

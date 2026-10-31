@@ -12,7 +12,47 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import Any, Final, cast
 
+from ..._data_classes._compaction import compact_op_metadata
+from ..._data_classes.derived_grad import (
+    DerivedGradAccessor,
+    DerivedGradRecord,
+    IntermediateDerivedGradAccessor,
+    IntermediateDerivedGradRecord,
+)
+from ..._data_classes.layer import Layer
+from ..._data_classes.param import Param, ParamAccessor
+from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
+from ..._ir.capture_events import CaptureEvents
+from ..._ir.container import ContainerSpec, DictKey, OutputPathComponent, TupleIndex
+from ..._ir.events import (
+    ArgTemplateRef,
+    FunctionCallRef,
+    ModuleFrame,
+    OpEvent,
+    OutputRef,
+    ParentEdge,
+    is_control_edge_use,
+)
+from ..._ir.op_record import amend_preview_output_parent_rebind
+from ..._ir.predicate import RecordContext
+from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._ir.workspaces import _init_module_hierarchy_data
+from ..._postprocess._grouping_stamp import build_grouping_policy_stamp
+from ..._postprocess._materialize import materialize_from_events
+from ..._postprocess._selective_save import (
+    apply_static_label_save_policy,
+    pop_static_label_save_predicate,
+)
+from ..._postprocess.finalization import _build_module_logs
+from ..._postprocess.loop_grouping_adapter import (
+    RecurrenceAssignment,
+    RecurrenceGroupingGraph,
+    RecurrenceNode,
+    group_recurrent_nodes,
+)
+from ..._quantities import Bytes, Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends import BackendName, BackendUnsupportedError, get_backend_spec
 from ...backends._finalize import (
@@ -27,48 +67,8 @@ from ...backends._finalize import (
 )
 from ...capture._nonfinite_prefix import strip_raw_label_suffix
 from ...capture.outcome import stamp_backend_finalized
-from ...data_classes._compaction import compact_op_metadata
-from ...data_classes.derived_grad import (
-    DerivedGradAccessor,
-    DerivedGradRecord,
-    IntermediateDerivedGradAccessor,
-    IntermediateDerivedGradRecord,
-)
-from ...data_classes.layer import Layer
-from ...data_classes.param import Param, ParamAccessor
-from ...data_classes.trace import Trace
 from ...fastlog.types import CaptureSpec
-from ...ir.capture_events import CaptureEvents
-from ...ir.container import ContainerSpec, DictKey, OutputPathComponent, TupleIndex
-from ...ir.events import (
-    ArgTemplateRef,
-    FunctionCallRef,
-    ModuleFrame,
-    OpEvent,
-    OutputRef,
-    ParentEdge,
-    is_control_edge_use,
-)
-from ...ir.op_record import amend_preview_output_parent_rebind
-from ...ir.predicate import RecordContext
-from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...ir.workspaces import _init_module_hierarchy_data
 from ...options import CaptureOptions, merge_capture_options
-from ...postprocess._grouping_stamp import build_grouping_policy_stamp
-from ...postprocess._materialize import materialize_from_events
-from ...postprocess._selective_save import (
-    apply_static_label_save_policy,
-    pop_static_label_save_predicate,
-)
-from ...postprocess.finalization import _build_module_logs
-from ...postprocess.loop_grouping_adapter import (
-    RecurrenceAssignment,
-    RecurrenceGroupingGraph,
-    RecurrenceNode,
-    group_recurrent_nodes,
-)
-from ...quantities import Bytes, Duration
 from ...validation.status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,

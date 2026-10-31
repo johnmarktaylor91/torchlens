@@ -31,7 +31,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.data_classes.param import Param, ParamValueBasis
+from torchlens._data_classes.param import Param, ParamValueBasis
 from torchlens.errors import CheckpointSeriesLiveParamsError
 
 _CODE = "checkpoint_series_live_params"

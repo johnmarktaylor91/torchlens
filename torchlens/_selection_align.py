@@ -197,7 +197,7 @@ def _target_op_for_entry(entry: Any, target: Any, source_trace: Any = None) -> A
 def _join_verdict_for_key(source_trace: Any, target: Any, structural_key: str) -> str:
     """Run the SHIPPED guarded join for one key and return its verdict value."""
 
-    from .postprocess._site_join import join_site_profiles, site_profile
+    from ._postprocess._site_join import join_site_profiles, site_profile
 
     if source_trace is None:
         return "unjoined"

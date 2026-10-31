@@ -13,12 +13,12 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
+from .._ir.intervention import FireResult
 from .._state import pause_logging
+from .._utils.arg_handling import copy_arg_tree
 from ..backends.torch._tl import copy_replacement_meta
 from ..capture.arg_positions import _normalize_func_name
-from ..data_classes._site_key import call_instance_id, render_site_key, site_axis
-from ..ir.intervention import FireResult
-from ..utils.arg_handling import copy_arg_tree
 from ._module_boundary import (
     _apply_module_boundary_live_hooks as _apply_module_boundary_live_hooks,
     _peek_module_intervention_parent_labels as _peek_module_intervention_parent_labels,
@@ -1472,7 +1472,7 @@ class _LiveSiteMinter:
     door fires BEFORE its op is journaled, so it PEEKS the key the postprocess
     minter will assign: consume every op already journaled on the capture's
     ``capture_events.op_events`` in execution order under the same cohort rule as
-    :class:`~torchlens.data_classes._site_key.SiteKeyMinter` (pass-qualified
+    :class:`~torchlens._data_classes._site_key.SiteKeyMinter` (pass-qualified
     innermost call instance, pass-free module site, layer type, output
     slot), then report ``seen + 1`` for the firing op without consuming it
     (it is consumed when its own record lands). Both doors therefore derive

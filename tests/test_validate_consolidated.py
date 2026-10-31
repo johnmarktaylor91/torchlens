@@ -234,7 +234,7 @@ def test_validate_scope_end_trims_the_host_allocator(
 
     from torch import nn
 
-    from torchlens.data_classes import cleanup as cleanup_mod
+    from torchlens._data_classes import cleanup as cleanup_mod
 
     calls = {"n": 0}
     real_trim = cleanup_mod._trim_host_allocator

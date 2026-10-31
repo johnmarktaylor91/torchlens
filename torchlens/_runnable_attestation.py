@@ -7,6 +7,14 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ._utils.rng import (
+    deterministic_fill_governs,
+    qualname_is_uninit_growth_resize,
+    qualname_is_uninit_size_gated_alloc,
+    qualname_is_uninit_total_writer,
+    qualname_is_uninitialized_alloc,
+    uninit_new_call_is_size_form,
+)
 from .runnable import (
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
@@ -15,14 +23,6 @@ from .runnable import (
     SparseRunDescriptor,
     TensorSlotRole,
     is_mode_sensitive_qualname,
-)
-from .utils.rng import (
-    deterministic_fill_governs,
-    qualname_is_uninit_growth_resize,
-    qualname_is_uninit_size_gated_alloc,
-    qualname_is_uninit_total_writer,
-    qualname_is_uninitialized_alloc,
-    uninit_new_call_is_size_form,
 )
 
 if TYPE_CHECKING:

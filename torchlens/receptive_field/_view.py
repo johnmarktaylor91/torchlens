@@ -27,7 +27,7 @@ from ._types import (
 if TYPE_CHECKING:
     from PIL import Image
 
-    from ..data_classes.op import Op
+    from .._data_classes.op import Op
     from ._engine import _ReceptiveFieldSolution
     from ._engine_forward import _ProjectiveFieldSolution
 

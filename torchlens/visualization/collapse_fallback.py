@@ -36,8 +36,8 @@ from .auto_collapse import (
 from .collapse_plan import CollapsePlan, count
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.trace import Trace
     from .collapse_plan import RenderContext
     from .source_graph import SourceGraph
 

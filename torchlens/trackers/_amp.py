@@ -30,7 +30,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
-from ..observability import CommittedBlock, HistogramResult, SpineResult
+from .._observability import CommittedBlock, HistogramResult, SpineResult
 from ._errors import TrackersError
 
 __tl_layer__ = "L8"

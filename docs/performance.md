@@ -88,7 +88,7 @@ current-call event. Failed partials cannot be converted with `Recording.to_trace
 `"return_partial"`/`"attach_partial"`, and materializing the partial allocates *more* memory
 inside an already-exhausted heap — under genuine memory pressure keep the default
 `on_forward_error="raise"`. Full `tl.trace(...)` failures expose `exc.partial_log`, recoverable
-with `tl.partial.from_failed_capture(exc)`.
+with `tl._partial.from_failed_capture(exc)`.
 
 ## Speed knobs
 

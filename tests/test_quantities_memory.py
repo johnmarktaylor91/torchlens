@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.constants import (
+from torchlens._constants import (
     BUFFER_LOG_FIELD_ORDER,
     GRAD_FN_LOG_FIELD_ORDER,
     GRAD_FN_PASS_LOG_FIELD_ORDER,

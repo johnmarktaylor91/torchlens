@@ -9,16 +9,16 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
-from torchlens.capture.projections import _record_from_record_context
-from torchlens.fastlog.storage_disk import _ctx_from_json, _ctx_to_json
-from torchlens.fastlog.types import CaptureSpec, RecordContext
-from torchlens.ir import (
+from torchlens._ir import (
     _DEFERRED_VALUE,
     CaptureEvents,
     FunctionEventInput,
     MLXValueUnavailableError,
 )
+from torchlens.backends import BackendUnsupportedError
+from torchlens.capture.projections import _record_from_record_context
+from torchlens.fastlog.storage_disk import _ctx_from_json, _ctx_to_json
+from torchlens.fastlog.types import CaptureSpec, RecordContext
 
 
 def _minimal_context(**updates: Any) -> RecordContext:

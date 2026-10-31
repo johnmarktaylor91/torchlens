@@ -2,7 +2,7 @@
 
 TorchLens never builds dashboards; it computes MORE and BETTER statistics
 than the trackers' built-in watchers and FEEDS their dashboards. One
-collection/reduction engine (the C06 ``torchlens.observability`` substrate)
+collection/reduction engine (the C06 ``torchlens._observability`` substrate)
 produces immutable, tensor-free records; this package owns conversion,
 namespace rendering, buffering, delivery, and sink failures:
 

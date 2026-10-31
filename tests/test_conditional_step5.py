@@ -13,8 +13,8 @@ import torch
 import torch.nn as nn
 
 from torchlens import trace as trace_fn
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import ConditionalEvent, Trace
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import ConditionalEvent, Trace
 from torchlens.options import CaptureOptions
 
 
@@ -552,8 +552,8 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
     node being merged away, exactly as the dedup does for value-identical
     duplicates.
     """
-    import torchlens.postprocess as pp
-    import torchlens.postprocess.control_flow as cf
+    import torchlens._postprocess as pp
+    import torchlens._postprocess.control_flow as cf
 
     real_fix = pp._fix_buffer_layers
     merged: dict[str, str] = {}

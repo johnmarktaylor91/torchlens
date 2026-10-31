@@ -45,7 +45,7 @@ from pathlib import Path
 import pytest
 from _source_corpus import package_ast, package_files
 
-from torchlens.merged import MergedErrorCode
+from torchlens._merged import MergedErrorCode
 from torchlens.runnable import RunnableErrorCode
 
 # Per-test smoke marks (the former module-level pytestmark was additive

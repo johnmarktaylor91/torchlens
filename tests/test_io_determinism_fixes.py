@@ -368,15 +368,17 @@ def test_content_hash_is_address_and_insertion_order_independent() -> None:
     right_a = _TiedReprKey("a")
     right_b = _TiedReprKey("b")
 
-    assert tl.hash.content(left_a) == tl.hash.content(right_a)
-    assert tl.hash.content({left_a: 1, left_b: 2}) == tl.hash.content({right_b: 2, right_a: 1})
+    assert tl.fingerprint.content(left_a) == tl.fingerprint.content(right_a)
+    assert tl.fingerprint.content({left_a: 1, left_b: 2}) == tl.fingerprint.content(
+        {right_b: 2, right_a: 1}
+    )
 
 
 @pytest.mark.smoke
 def test_loop_signature_sorts_sets_by_emitted_tokens() -> None:
     """Set signature order is total even when distinct elements share repr."""
 
-    from torchlens.postprocess.loop_detection import _append_signature_tokens
+    from torchlens._postprocess.loop_detection import _append_signature_tokens
 
     tokens: list[str] = []
     _append_signature_tokens(
@@ -393,7 +395,7 @@ def test_loop_signature_sorts_sets_by_emitted_tokens() -> None:
 def test_merged_tree_hash_frames_paths_by_length() -> None:
     """Newlines and NUL-like boundaries in member paths cannot forge entries."""
 
-    from torchlens.merged._artifact import _tree_hash_entry
+    from torchlens._merged._artifact import _tree_hash_entry
 
     path = "nested/name\nwith-newline"
     framed = _tree_hash_entry(path, 3, "00" * 32)
@@ -554,10 +556,10 @@ def test_codec_metadata_round_trip_preserves_tuples() -> None:
 def test_computed_record_fields_are_not_portable() -> None:
     """Reported computed facade fields must not claim portable storage."""
 
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.op import Op
+    from torchlens._data_classes.trace import Trace
     from torchlens._io import FieldPolicy
-    from torchlens.data_classes.layer import Layer
-    from torchlens.data_classes.op import Op
-    from torchlens.data_classes.trace import Trace
 
     expected_drops = {
         Trace: ("ops_with_params",),

@@ -10,10 +10,10 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
+from .._utils._multipass_access import get_multipass_attr
+from .._utils.display import format_flops, human_readable_size
 from ..capture.flops import append_attention_note
 from ..errors._base import TorchLensWarning
-from ..utils._multipass_access import get_multipass_attr
-from ..utils.display import format_flops, human_readable_size
 
 OverlayScores = Mapping[str, Any]
 

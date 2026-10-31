@@ -9,13 +9,13 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._partial import PartialTrace, from_failed_capture
 from torchlens.capture._episode_ledger import (
     EPISODE_DECLARED_STEP_CEILING,
     resolve_episode_declaration,
 )
 from torchlens.errors.episode import EpisodeDeclarationError, EpisodeLedgerError
 from torchlens.options import EpisodeSpec
-from torchlens.partial import PartialTrace, from_failed_capture
 
 V = 16
 N_STEPS = 3

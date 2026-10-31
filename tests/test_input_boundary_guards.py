@@ -32,8 +32,8 @@ from torchlens._input_walk import (
     snapshot_input_boundary,
     walk_input_boundary,
 )
+from torchlens._utils.arg_handling import copy_arg_tree
 from torchlens.backends.default_specs import _simple_leaves
-from torchlens.utils.arg_handling import copy_arg_tree
 
 
 def _deep_list(depth: int, leaf: object) -> object:
@@ -245,7 +245,7 @@ def test_input_search_ceiling_locksteps_the_shared_ceiling() -> None:
     silently dropped its tensor leaves into a traversal gap.
     """
 
-    from torchlens.utils.introspection import INPUT_SEARCH_DEPTH_LIMIT
+    from torchlens._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT
 
     assert INPUT_SEARCH_DEPTH_LIMIT > INPUT_TREE_MAX_DEPTH
 
@@ -253,7 +253,7 @@ def test_input_search_ceiling_locksteps_the_shared_ceiling() -> None:
 def test_input_search_walker_reaches_ceiling_depth_tensor_leaves() -> None:
     """A tensor leaf at legal depth (>64, <=ceiling) is enumerated, gap-free."""
 
-    from torchlens.utils.introspection import (
+    from torchlens._utils.introspection import (
         INPUT_SEARCH_DEPTH_LIMIT,
         get_vars_of_type_from_obj,
     )
@@ -693,7 +693,7 @@ def test_safe_copy_input_tree_ignores_user_deepcopy_substitution() -> None:
     tree -- zero refusals.
     """
 
-    from torchlens.utils.arg_handling import safe_copy_input_tree
+    from torchlens._utils.arg_handling import safe_copy_input_tree
 
     protocol_calls: list[str] = []
 
@@ -721,7 +721,7 @@ def test_safe_copy_input_tree_ignores_user_deepcopy_substitution() -> None:
 def test_safe_copy_input_tree_dict_subclass_state_kept_no_ctor() -> None:
     """Dict-subclass inputs copy inertly: no ctor re-run, state preserved."""
 
-    from torchlens.utils.arg_handling import safe_copy_input_tree
+    from torchlens._utils.arg_handling import safe_copy_input_tree
 
     class ModeBox(dict):
         """Dict subclass whose ctor observably resets a mode attribute."""
@@ -782,7 +782,7 @@ def test_safe_copy_input_tree_preserves_view_topology_and_grad_paths() -> None:
     object; unknown wrappers pass by reference.
     """
 
-    from torchlens.utils.arg_handling import safe_copy_input_tree
+    from torchlens._utils.arg_handling import safe_copy_input_tree
 
     base = torch.arange(6.0)
     left, right = base[0:3], base[3:6]

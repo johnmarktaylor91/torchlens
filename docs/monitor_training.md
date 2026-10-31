@@ -17,7 +17,7 @@ the figure.
 
 ```python
 import torch
-from torchlens.observability import HistoryCollector, StepTruth
+from torchlens._observability import HistoryCollector, StepTruth
 
 collector = HistoryCollector(model, streams=("activation", "param", "param_delta"))
 collector.discover(x)              # one REAL forward; returns your output
@@ -43,7 +43,7 @@ element budget of the whole rest of the model). Cadence is per-stream.
 ## 2. Read the contact sheet
 
 ```python
-from torchlens.observability import HistoryView, render_contact_sheet
+from torchlens._observability import HistoryView, render_contact_sheet
 
 view = HistoryView.from_collector(collector)
 svg = render_contact_sheet(view)          # page 0
@@ -58,7 +58,7 @@ hidden top-N truncation. The first real gpt2 sheet this repo produced is
 ## 3. Drill into a site
 
 ```python
-from torchlens.observability import render_fan, render_waterfall, render_detail
+from torchlens._observability import render_fan, render_waterfall, render_detail
 
 fan = render_fan(view, site_id)        # the default per-site view
 wf = render_waterfall(view, site_id)   # step x signed-log2-bin density
@@ -97,7 +97,7 @@ naming one refuses (`watch_phase_ambiguous`).
 
 ```python
 import torchlens as tl
-from torchlens.observability import OpTierCollector, split_heads
+from torchlens._observability import OpTierCollector, split_heads
 
 collector = OpTierCollector(model, save=tl.func("softmax"))
 collector.discover(x)                      # metadata-only pass; prices the plan
@@ -109,7 +109,7 @@ with collector.step(step):
 Route B rides fastlog: every selected OP becomes a site (567 on gpt2 vs
 ~125 leaf modules), reduced at the save point by a declared summary
 transform. The plumbing that makes this affordable is public:
-`torchlens.observability.summary(fn)` declares a NON-DIFFERENTIABLE reducer
+`torchlens._observability.summary(fn)` declares a NON-DIFFERENTIABLE reducer
 (integer outputs legal even under `backward_ready=True`), and with
 `save_raw_activations=False` the raw clone is skipped entirely -- reduce,
 never copy. `facets={label: split_heads(n, dim=...)}` gives per-head series
@@ -125,7 +125,7 @@ and removes the wrap at `close()` (see the trackers reference, tier O).
 ## 7. Export: dashboards, pandas, resume
 
 ```python
-from torchlens.observability import histogram_payload
+from torchlens._observability import histogram_payload
 
 payload = histogram_payload(observation)   # add_histogram_raw's fields,
                                            # canonical bucket_limits/counts

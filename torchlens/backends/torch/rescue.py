@@ -41,12 +41,12 @@ from torch.overrides import TorchFunctionMode
 
 from ... import _state
 from ..._errors import OutputAttributionError, TorchLensCaptureGapWarning
+from ..._utils.display import user_stacklevel
+from ..._utils.rng import log_current_rng_states, set_rng_from_saved_states
 from ...errors._base import TorchLensWarning
-from ...utils.display import user_stacklevel
-from ...utils.rng import log_current_rng_states, set_rng_from_saved_states
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 __all__ = [
     "CaptureAttemptFailedWarning",

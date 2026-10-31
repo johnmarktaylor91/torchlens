@@ -41,6 +41,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import HAS_NAMED_TENSOR_API
 from torchlens.errors import (
     PathDivergenceError,
     RunnablePreflightError,
@@ -48,7 +49,6 @@ from torchlens.errors import (
 )
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
-from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 

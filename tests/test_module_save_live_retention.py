@@ -26,8 +26,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._ir.selector_eval as selector_eval
 import torchlens.capture.session as session_mod
-import torchlens.ir.selector_eval as selector_eval
 from torchlens.errors import TorchLensWarning
 
 

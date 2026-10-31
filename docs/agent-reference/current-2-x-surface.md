@@ -89,7 +89,7 @@
   (`BackwardPass.executed_flops_record`), so a loaded trace reads it; a pass that raised has
   no count. All DOCUMENTED-UNSTABLE. `tl.report.backward_estimate(trace)` stays hypothetical.
   Trace-side failed captures expose `exc.partial_log`, recoverable with
-  `tl.partial.from_failed_capture(exc)`.
+  `tl._partial.from_failed_capture(exc)`.
 - **A default `tl.trace` is a pure observer** (U40.1, AGT-2360; `carry_state`,
   `Module.attribute_writes` and `torchlens.types.AttributeWrite` DOCUMENTED-UNSTABLE): buffers
   (persistent and non-persistent), every module's `training` flag, the global random states and
@@ -142,17 +142,17 @@
 - QUICKSTART INPUT LADDER (F17; every quickstart spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `tl.trace`/`tl.summary`/the render facade share ONE input resolver --
   a real input (gold rung) XOR `input_size=` (declared shape, seed-0 local synthesis,
-  fail-closed static dtype facts with `torchlens.quickstart.InputSpec` as the override;
+  fail-closed static dtype facts with `torchlens._quickstart.InputSpec` as the override;
   flat tuple / sequence of tuples / forward-keyword-to-shape mapping, which reaches
   multi-input models like CLIP today) XOR nothing (inference verifies once and the
   surface consumes the EXACT verified trace; non-default capture kwargs recapture with
   disclosure). Mixing refuses `input_rung_conflict`. Synthesized rungs persist an
   `InputProvenance` payload inside the existing `Trace.input_preprocessor` KEEP field
-  (`torchlens.quickstart.trace_input_provenance` re-hydrates it; absent payload reads as
+  (`torchlens._quickstart.trace_input_provenance` re-hydrates it; absent payload reads as
   gold); derived-semantics claims (`decode_output`/`output_table`) refuse
   `nongold_semantics_unavailable` on synthesized values and the first raw `Layer.out`
   read warns once per trace (`nongold_raw_value_read`, internal readers ack via
-  `torchlens.quickstart.internal_read()`). `render(model, ...)` (home
+  `torchlens._quickstart.internal_read()`). `render(model, ...)` (home
   `torchlens.user_funcs.render`; `tl.render` root spelling awaits the F35 registration
   sweep) is a curated facade over the resolver + `Trace.draw`: metadata-only pinned
   eval/no-grad capture with flags/RNG/norm-buffers restored and state-dict-hash
@@ -545,7 +545,7 @@
   compared; demote-only digest witnesses with the totalized `BoundaryConsistency` derivation)
   runs at merge time and again verbatim at load rederivation. Frozen vocabularies
   (`MergeAlignment` stored-vs-effective, `BoundaryConsistency`, `MergeValueStatus`,
-  `MergedErrorCode`, finding kinds) live in `torchlens.merged` and are release-gated against
+  `MergedErrorCode`, finding kinds) live in `torchlens._merged` and are release-gated against
   `docs/reference/merged_trace_contract.md`. `merged.save(path)` writes the `merged-directory`
   artifact (canonical-JSON descriptor CACHE + per-member tree hashes + byte-identical rank
   cores); every load reruns the derivation and requires EXACT cache equality (tamper refuses
@@ -585,7 +585,7 @@
   caches stay intact with the warm artifact bitwise-reproduced afterward, and TorchLens wrapper
   install/uninstall costs a bounded burst of recompilations on the first compiled call
   after each capture, then steady state (measured: none on `resnet18`, six to seven frames on a tiny GPT-2;
-  verify with `tl.debug.count_compiles()`; correlate breaks with `tl.debug.graph_breaks()`). Compiled child
+  verify with `tl._debug.count_compiles()`; correlate breaks with `tl._debug.graph_breaks()`). Compiled child
   `nn.Module`s are still unwrapped to their eager source in both regimes. On torch < 2.6 (or a
   stance that fails to engage) the exact historical fallback holds: a Dynamo-traced region reached
   mid-capture is bypassed with a one-per-forward warning and the returned `Trace` honestly contains
@@ -1036,7 +1036,7 @@
   L1 site_key (read-only; keyless legacy refuses `site_key_unavailable`).
 - PREDICATE RUNTIME EXTENSION POINT (S4 seam; every spelling
   DOCUMENTED-UNSTABLE pending naming-session ratification):
-  `torchlens.ir.predicate_registry` is the ONE documented door through which
+  `torchlens._ir.predicate_registry` is the ONE documented door through which
   predicate consumers accept user predicates for the capture-lifecycle
   `save`/`halt`/`until` slots (`PredicateProtocol` — one positional concrete
   `RecordContext`; `coerce_predicate(value, slot=...)` — raw callables incl.
@@ -1108,7 +1108,7 @@
   sections low-value-first with a disclosed `Truncation` section; capture-status honesty
   facts and partial-capture failure evidence never drop, and `max_tokens` refuses typed
   with `format="json"`. Doc: `docs/for-ai-agents.md`.
-- TRANSFORMER PICTURES (`torchlens.tviz`; every spelling DOCUMENTED-UNSTABLE pending the
+- TRANSFORMER PICTURES (`torchlens.transformer`; every spelling DOCUMENTED-UNSTABLE pending the
   naming session): the CircuitsVis/BertViz/Ecco/inspectus picture families on typed
   session-only display records -- `attention_views(trace, tokens=)` reads the semantic
   `pattern` facet into canonical `[query_head, destination, source]` `AttentionView`s
@@ -1227,13 +1227,13 @@
   or `run_id=`) and `disclosure`; an untraceable batch warns
   `lightning_profile_skipped` and training continues.
 - OBSERVABILITY HOME (C06 + F24/F25/F27; DOCUMENTED-UNSTABLE):
-  `torchlens.observability` (~100 names) carries the L5 record schema,
+  `torchlens._observability` (~100 names) carries the L5 record schema,
   summary transforms, `HistoryView` (bounded exactly-mergeable training
   history), contact sheets, `measure_ab`, pass peaks, the categorized
   memory-timeline v2, and the Kineto/native-profile join (`native_profile`;
-  `hot_path(by="device_time")`; `tl.region` correlation). `torchlens.observe`
+  `hot_path(by="device_time")`; `tl.region` correlation). `torchlens._observe`
   is the user-facing verbs door.
-- ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens.ecosystem` --
+- ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens._ecosystem` --
   `compat_window(...)` (dated support-window ledger; would have caught the
   v2.33.0-cannot-load-v2.34.1 class), `migrate` (tl.migrate v1,
   `MigrationReport`/`MigrationStep`), and `plugins` (entry-point discovery
@@ -1244,12 +1244,12 @@
   (the op-inventory check that fails when a backend silently drops an op).
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `echo=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
-  substrate, 3-4x cheaper than settrace); `torchlens.snoop` owns
+  substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
   `NarrationEvent`/`EchoSession`/sinks and post-hoc `narrate_trace` /
   `narrate_recording` / `narrate_partial`; `Trace.narrate` replays a finished
   capture as narration.
-- `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
-  the submodule is imported as `tl.debug` and is deliberately not in `__all__`.
+- `torchlens._debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
+  the submodule is imported as `tl._debug` and is deliberately not in `__all__`.
 - `tl.receptive_field` is a lazy power-user submodule. `Op`, `Layer`, `ModuleCall`, and
   `Module` expose `receptive_field` and `projective_field` views; `Trace` exposes the matching
   `receptive_fields()` and `projective_fields()` tables.

@@ -10,22 +10,17 @@ from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
 from ... import _state
-from ..._deprecations import MISSING, MissingType
-from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendName, BackendUnsupportedError, get_backend_spec
-from ...capture.outcome import StopRequest, stamp_backend_finalized
-from ...data_classes.derived_grad import (
+from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
 )
-from ...data_classes.param import Param, ParamAccessor
-from ...data_classes.trace import Trace
-from ...fastlog._halt import HaltSignal
-from ...fastlog.types import CaptureSpec
-from ...ir.capture_events import CaptureEvents
-from ...ir.events import (
+from ..._data_classes.param import Param, ParamAccessor
+from ..._data_classes.trace import Trace
+from ..._deprecations import MISSING, MissingType
+from ..._ir.capture_events import CaptureEvents
+from ..._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
     InterventionAppliedEvent,
@@ -34,17 +29,22 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
-from ...ir.intervention import FireResult, FunctionEventInput
-from ...ir.predicate import RecordContext
-from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...options import CaptureOptions, merge_capture_options
-from ...postprocess._materialize import materialize_from_events
-from ...postprocess._selective_save import (
+from ..._ir.intervention import FireResult, FunctionEventInput
+from ..._ir.predicate import RecordContext
+from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._postprocess._materialize import materialize_from_events
+from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
     pop_static_label_save_predicate,
 )
-from ...quantities import Duration
+from ..._quantities import Duration
+from ..._trace_core.relation_views import freeze_trace_relation_views
+from ...backends import BackendName, BackendUnsupportedError, get_backend_spec
+from ...capture.outcome import StopRequest, stamp_backend_finalized
+from ...fastlog._halt import HaltSignal
+from ...fastlog.types import CaptureSpec
+from ...options import CaptureOptions, merge_capture_options
 from ...validation.status import ValidationReplaySource, ValidationReplayStatus
 from .._finalize import (
     attach_function_root_module,

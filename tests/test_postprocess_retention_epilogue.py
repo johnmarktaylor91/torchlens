@@ -24,8 +24,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.postprocess as pp
-from torchlens.postprocess import ast_branches
+import torchlens._postprocess as pp
+from torchlens._postprocess import ast_branches
 
 # Markers are per-test, not module-level: every case here is smoke-fast EXCEPT the
 # `-O` gate proof, which spawns a fresh interpreter that pays a full cold torchlens
@@ -214,7 +214,7 @@ def test_the_window_open_sits_inside_the_try(monkeypatch) -> None:
 
     import inspect
 
-    from torchlens.postprocess import _executor
+    from torchlens._postprocess import _executor
 
     source = inspect.getsource(_executor.run_pipeline)
     body = source.split("for spec in STEP_REGISTRY:", 1)[1]
@@ -264,7 +264,7 @@ def test_arming_the_audit_under_dash_O_is_a_hard_error_not_a_silent_no_op() -> N
     program = (
         "import os;"
         "os.environ['TORCHLENS_POSTPROCESS_ASSERTIONS']='1';"
-        "import torchlens.postprocess as pp;"
+        "import torchlens._postprocess as pp;"
         "pp._postprocess_assertions_enabled()"
     )
     result = subprocess.run(

@@ -24,7 +24,7 @@ __tl_layer__ = "L5"
 
 #: Follow-up spelling every gradient-cone finding must point at (memo D3):
 #: the finding names a cone; the repaired frontier names the culprit.
-FRONTIER_FOLLOW_UP = "tl.debug.gradient_flow_audit(trace)  # module + is_frontier columns"
+FRONTIER_FOLLOW_UP = "tl._debug.gradient_flow_audit(trace)  # module + is_frontier columns"
 
 
 def validate_action(action: str) -> str:

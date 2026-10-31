@@ -52,7 +52,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.utils.rng as rng_mod
+import torchlens._utils.rng as rng_mod
+from torchlens._utils.rng import (
+    HOST_NONDETERMINISM_REGISTRY,
+    TORCH_RNG_SURFACE,
+    _call_site_explicit_time_value,
+    _torch_rng_holder_module,
+    host_nondeterminism_monitor,
+)
 from torchlens.backends.torch.completeness_witness import (
     HOST_VALUE_ESCAPE_METHODS,
     HOST_VALUE_ESCAPE_MODULE_FUNCS,
@@ -75,13 +82,6 @@ from torchlens.runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     ReadinessStatus,
-)
-from torchlens.utils.rng import (
-    HOST_NONDETERMINISM_REGISTRY,
-    TORCH_RNG_SURFACE,
-    _call_site_explicit_time_value,
-    _torch_rng_holder_module,
-    host_nondeterminism_monitor,
 )
 
 try:  # POSIX-only; the getrusage recipe skips on platforms without it.

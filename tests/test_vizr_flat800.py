@@ -27,8 +27,8 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens._quickstart import render
 from torchlens.errors._base import TorchLensWarning
-from torchlens.quickstart import render
 
 #: Wall budget for the whole default render (capture included), seconds.
 FLAT_800_TIME_BUDGET_S = 60.0

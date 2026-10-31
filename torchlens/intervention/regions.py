@@ -391,7 +391,7 @@ def region(slice_: Any, *, exits: Any = None) -> RegionTarget:
         / ``region_exits_incomplete`` / ``region_exit_address_underivable``.
     """
 
-    from ..trace_slice import TraceSlice
+    from .._trace_slice import TraceSlice
 
     if not isinstance(slice_, TraceSlice):
         raise RegionError(

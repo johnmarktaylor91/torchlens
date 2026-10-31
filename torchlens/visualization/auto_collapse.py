@@ -66,9 +66,9 @@ from ._render_common import strict_collapse_checks_enabled
 from .collapse_plan import RenderContext, collapse_plan_for_trace, count
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .collapse_optimizer import OptimizerResult
 
 

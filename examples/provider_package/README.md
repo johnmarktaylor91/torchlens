@@ -20,7 +20,7 @@ activation is one explicit call naming the distribution.
 ```python
 import torch
 import torchlens as tl
-from torchlens.ecosystem import plugins
+from torchlens._ecosystem import plugins
 from torchlens.export import resolve_export_target
 
 rows = plugins.discover("torchlens.export_targets")  # metadata only, nothing imported

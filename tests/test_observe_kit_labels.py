@@ -108,13 +108,13 @@ def test_one_label_across_every_nan_surface() -> None:
     outcome = exc.partial_log.trace.outcome
     assert outcome.boundary_label == error_label
 
-    live = tl.debug.find_nan(_FaultModel(), x)
+    live = tl._debug.find_nan(_FaultModel(), x)
     assert live.found and live.label == error_label
     assert live.label_status == "final"
 
     completed = tl.trace(_FaultModel(), x)
     try:
-        bisected = tl.debug.bisect_nan(completed)
+        bisected = tl._debug.bisect_nan(completed)
         assert bisected.found and bisected.label == error_label
         in_trace = completed.find_nan()
         assert in_trace.found and in_trace.label == error_label
@@ -171,7 +171,7 @@ def test_multipass_offender_gets_pass_qualified_canonical_label() -> None:
 def test_failed_finalization_yields_none_plus_status_never_raw(monkeypatch) -> None:
     """When the prefix postprocess cannot run, labels are None + status."""
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
     def _boom(self: object, *args: object, **kwargs: object) -> None:
         raise RuntimeError("forced finalization failure (fixture)")
@@ -182,7 +182,7 @@ def test_failed_finalization_yields_none_plus_status_never_raw(monkeypatch) -> N
     assert exc.fields["layer_status"] == "unavailable"
     assert isinstance(exc.fields["layer_raw"], str)
     _assert_no_raw_spelling(str(exc))
-    outcome = tl.partial.from_failed_capture(exc).trace.outcome
+    outcome = tl._partial.from_failed_capture(exc).trace.outcome
     assert str(outcome.status) == "CaptureStatus.ABORTED_NONFINITE"
     assert outcome.boundary_label is None
 

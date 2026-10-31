@@ -6,7 +6,7 @@ fast path (``_native_multi_head_attention`` / ``_transformer_encoder_layer_fwd``
 -- one opaque op with no cost rule -- so a 2-layer TransformerEncoder read
 0 FLOPs (lower bound) from the model door against 29520 from the trace door.
 The door now holds the fused path off for the capture through
-``torchlens.utils._torch_compat.force_mha_slow_path`` (the public
+``torchlens._utils._torch_compat.force_mha_slow_path`` (the public
 ``torch.backends.mha`` switch when available, restored afterwards; a
 per-module ``training`` flip on torch 2.1-2.2, where the switch does not
 exist yet).
@@ -25,8 +25,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import get_mha_fastpath_switch_support
 from torchlens.report import flops_report
-from torchlens.utils._torch_compat import get_mha_fastpath_switch_support
 
 
 class _Inner(nn.Module):

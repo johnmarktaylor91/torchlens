@@ -26,7 +26,7 @@ __tl_layer__ = "L5"
 CHECK_REPORT_SCHEMA_VERSION = 1
 
 #: Severity trio -- deliberately the shipped ``AuditSeverity`` vocabulary
-#: (torchlens.debug), gaining no sibling (memo D16).
+#: (torchlens._debug), gaining no sibling (memo D16).
 SEVERITIES = ("critical", "warning", "info")
 
 #: Orthogonal control-flow axis (memo 4.5); overridable per registration.

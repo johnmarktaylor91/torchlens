@@ -12,8 +12,8 @@ from typing import Any
 
 import torch
 
-from ...utils._multipass_access import get_multipass_attr
-from ...utils.display import human_readable_size
+from ..._utils._multipass_access import get_multipass_attr
+from ..._utils.display import human_readable_size
 from ...visualization.node_spec import (
     INTERVENTION_CONE_COLOR,
     INTERVENTION_SITE_COLOR,

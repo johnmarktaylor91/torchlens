@@ -19,8 +19,8 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._io import PreReleaseArtifactError
 from torchlens._io.prerelease import PRERELEASE_STATE_KEY, activate_prerelease_fields
+from torchlens._ir.events import BackwardCoverageGap, GradFnFired
 from torchlens.backends.torch import backward as backward_mod
-from torchlens.ir.events import BackwardCoverageGap, GradFnFired
 
 
 class _Tiny(nn.Module):

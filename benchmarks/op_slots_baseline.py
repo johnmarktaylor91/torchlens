@@ -18,9 +18,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import torchlens as tl  # noqa: E402
-from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER  # noqa: E402
-from torchlens.data_classes.op import Op  # noqa: E402
-from torchlens.utils.display import _timed_phase  # noqa: E402
+from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER  # noqa: E402
+from torchlens._data_classes.op import Op  # noqa: E402
+from torchlens._utils.display import _timed_phase  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -275,7 +275,7 @@ def _seed_fields_for_synthetic_ops() -> dict[str, Any]:
     with torch.no_grad():
         trace = tl.trace(model, x, profile=True, save=lambda _ctx: False)
     seed_op = next(op for op in trace.layer_list if op.func_name not in {None, "none"})
-    from torchlens.data_classes.op import _OP_SLOT_NAMES
+    from torchlens._data_classes.op import _OP_SLOT_NAMES
 
     physical_fields = set(_OP_SLOT_NAMES)
     return {

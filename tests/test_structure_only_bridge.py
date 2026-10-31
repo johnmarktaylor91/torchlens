@@ -146,15 +146,15 @@ def test_entry_conflict_teaches_the_runnable_ready_flip_event() -> None:
 
 
 def test_bound_digests_route_through_the_one_content_authority() -> None:
-    """Bind digests ARE tl.hash.content byte digests — one authority, and
+    """Bind digests ARE tl.fingerprint.content byte digests — one authority, and
     same-geometry different-bytes values digest differently."""
 
     a = torch.tensor([1.0, 2.0, 3.0])
     b = torch.tensor([1.0, 2.0, 4.0])
     digests = compute_bound_state_digests({"a": a, "b": b})
     assert set(digests) == {"a", "b"}
-    assert digests["a"] == tl.hash.content(a)
-    assert digests["b"] == tl.hash.content(b)
+    assert digests["a"] == tl.fingerprint.content(a)
+    assert digests["b"] == tl.fingerprint.content(b)
     assert digests["a"] != digests["b"]
 
 
@@ -177,7 +177,7 @@ def test_bound_digest_failure_refuses_and_chains_never_skips(monkeypatch) -> Non
     def _boom(value):
         raise ValueError("bytes unreadable")
 
-    monkeypatch.setattr(tl.hash, "content", _boom)
+    monkeypatch.setattr(tl.fingerprint, "content", _boom)
     with pytest.raises(StateBindingError) as excinfo:
         compute_bound_state_digests({"scale": torch.ones(3)})
     assert excinfo.value.fields["code"] == "state_metadata_mismatch"
@@ -220,7 +220,7 @@ def test_declared_digest_failure_degrades_to_the_sentinel_grammar(monkeypatch) -
     def _boom(value):
         raise RuntimeError("no geometry")
 
-    monkeypatch.setattr(tl.hash, "content", _boom)
+    monkeypatch.setattr(tl.fingerprint, "content", _boom)
     sentinel = declared_slot_geometry_digest(torch.ones(2))
     assert sentinel == "unavailable:RuntimeError"
     assert _SENTINEL_GRAMMAR.match(sentinel)
@@ -266,8 +266,8 @@ def test_late_bound_values_validate_through_the_s1_surface(loaded_runnable_trace
     (slot_key,) = binding.staged
     assert set(binding.bind_digests) == set(binding.staged)
     assert set(binding.declared_digests) == set(binding.staged)
-    assert binding.bind_digests[slot_key] == tl.hash.content(binding.staged[slot_key])
-    assert binding.bind_digests[slot_key] == tl.hash.content(bound)
+    assert binding.bind_digests[slot_key] == tl.fingerprint.content(binding.staged[slot_key])
+    assert binding.bind_digests[slot_key] == tl.fingerprint.content(bound)
     # G2 on the real path: the two families never cross.
     assert binding.bind_digests[slot_key] != binding.declared_digests[slot_key]
 

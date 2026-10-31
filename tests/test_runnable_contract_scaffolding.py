@@ -266,7 +266,7 @@ def test_trace_run_satisfies_protocol_minimum() -> None:
     existing typed consumer keeps compiling while unstable keywords incubate.
     """
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
     protocol_params = inspect.signature(RunnableTraceProtocol.run).parameters
     concrete = inspect.signature(Trace.run)

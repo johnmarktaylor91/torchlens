@@ -142,15 +142,15 @@ CANONICAL_SUBMODULES = [
     "torchlens.experimental.dagua",
     "torchlens.export",
     "torchlens.fastlog",
-    "torchlens.hash",
+    "torchlens.fingerprint",
     "torchlens.io",
     "torchlens.options",
-    "torchlens.partial",
+    "torchlens._partial",
     "torchlens.report",
     "torchlens.semantic",
     "torchlens.stats",
     "torchlens.types",
-    "torchlens.utils",
+    "torchlens._utils",
     "torchlens.validation",
     "torchlens.visualization",
     "torchlens.viz",
@@ -194,7 +194,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     `release_model` = 93. The predicate-interpreter consolidation exports
     `grad_fn_label` (its own selector kind after the label-kind collision fix) = 94.
     Merge-ranks rung C1 adds `merge_ranks` and `merge_report` (spec'd
-    top-level entry points; machinery lives in `torchlens.merged`) = 96.
+    top-level entry points; machinery lives in `torchlens._merged`) = 96.
     The grind R39 cache remedy exports `clear_capture_cache` (the agreed
     user-facing half of the capture-cache bounds fix) = 97.
     The L6 selection algebra (feature work, DOCUMENTED-UNSTABLE pending

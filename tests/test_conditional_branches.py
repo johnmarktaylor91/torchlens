@@ -27,22 +27,22 @@ from test_conditional_multipass import (  # noqa: E402
 from test_conditional_rendering import BranchEntryWithArgLabelModel  # noqa: E402
 from test_conditional_step5 import ElifLadderModel, SimpleIfElseModel  # noqa: E402
 
+import torchlens._postprocess.ast_branches as ast_branches  # noqa: E402
+import torchlens._postprocess.graph_traversal as graph_traversal  # noqa: E402
+import torchlens._utils.introspection as introspection  # noqa: E402
 import torchlens.backends.torch.ops as output_tensors  # noqa: E402
 import torchlens.backends.torch.sources as source_tensors  # noqa: E402
-import torchlens.postprocess.ast_branches as ast_branches  # noqa: E402
-import torchlens.postprocess.graph_traversal as graph_traversal  # noqa: E402
-import torchlens.utils.introspection as introspection  # noqa: E402
 from torchlens import trace as trace_fn  # noqa: E402
-from torchlens.data_classes.layer import Layer  # noqa: E402
-from torchlens.data_classes.op import Op  # noqa: E402
-from torchlens.data_classes.trace import ConditionalEvent, Trace  # noqa: E402
+from torchlens._data_classes.layer import Layer  # noqa: E402
+from torchlens._data_classes.op import Op  # noqa: E402
+from torchlens._data_classes.trace import ConditionalEvent, Trace  # noqa: E402
+from torchlens._utils._torch_compat import HAS_CODE_POSITIONS  # noqa: E402
 from torchlens.options import CaptureOptions  # noqa: E402
-from torchlens.utils._torch_compat import HAS_CODE_POSITIONS  # noqa: E402
 from torchlens.validation import check_metadata_invariants  # noqa: E402
 
 # Same-line ternary arm attribution needs PEP 657 per-instruction columns; the
 # degraded runtime deliberately fails closed instead (see the module docstring
-# of torchlens/postprocess/ast_branches.py and the gated fail-closed pin
+# of torchlens/_postprocess/ast_branches.py and the gated fail-closed pin
 # test_ternary_py310_fail_closed_model_drops_same_line_arm_attribution).
 requires_code_positions = pytest.mark.skipif(
     not HAS_CODE_POSITIONS,

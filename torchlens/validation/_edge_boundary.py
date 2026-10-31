@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .core import ValidationCheckResult
 
 
@@ -203,7 +203,7 @@ def _reexecute_edge_boundary(
 ) -> ValidationCheckResult:
     """Re-execute the child from the spliced tier-(ii) values and compare outputs."""
 
-    from ..utils.tensor_utils import tensor_nanequal
+    from .._utils.tensor_utils import tensor_nanequal
     from .core import (
         ValidationCheckResult,
         _execute_func_with_restored_state,
@@ -323,7 +323,7 @@ def _capture_payload_equal(trace: Trace, candidate: Op, target_layer: Op, value:
     Unknown evidence (no payload, no digest) reads as not equal.
     """
 
-    from ..utils.tensor_utils import tensor_nanequal
+    from .._utils.tensor_utils import tensor_nanequal
     from .core import _saved_out_payload
 
     if not isinstance(value, torch.Tensor):

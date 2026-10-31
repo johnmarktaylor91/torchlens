@@ -13,7 +13,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
-from torchlens.postprocess.graph_traversal import output_payload_aliases_parent
+from torchlens._postprocess.graph_traversal import output_payload_aliases_parent
 from torchlens.validation import check_metadata_invariants
 
 # =============================================================================

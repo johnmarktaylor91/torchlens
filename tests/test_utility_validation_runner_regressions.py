@@ -33,9 +33,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens.utils.hashing as tl_hashing
-from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.utils.hashing import compute_graph_shape_hash, make_short_barcode_from_input
+import torchlens._utils.hashing as tl_hashing
+from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._utils.hashing import compute_graph_shape_hash, make_short_barcode_from_input
 from torchlens.validation import validate_forward_pass
 
 # ---------------------------------------------------------------------------
@@ -195,7 +195,7 @@ print(mod.make_short_barcode_from_input({payload!r}), end="")
 def _barcode_in_subprocess(hash_seed: str) -> str:
     """Compute the reference barcode in a fresh process with a given seed.
 
-    Loads ``torchlens/utils/hashing.py`` standalone (stdlib-only imports) so
+    Loads ``torchlens/_utils/hashing.py`` standalone (stdlib-only imports) so
     the subprocess does not pay the full ``import torch`` cost.
 
     Parameters

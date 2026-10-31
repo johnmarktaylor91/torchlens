@@ -234,7 +234,7 @@ def _all_dispatcher_schemas() -> list[Any]:
     refusal -- the census cannot be vetted, so arming must not proceed.
     """
 
-    from ..utils._torch_compat import get_jit_all_schemas
+    from .._utils._torch_compat import get_jit_all_schemas
 
     schemas = get_jit_all_schemas()
     if schemas is None:
@@ -319,7 +319,7 @@ def has_vetted_snapshot() -> bool:
     TorchLens-owned census fact, not a generic torch capability (it compares
     the runtime against OUR reviewed allowlist, not against a torch API's mere
     presence), so it lives here next to the snapshot table rather than in
-    ``torchlens/utils/_torch_compat.py``.
+    ``torchlens/_utils/_torch_compat.py``.
 
     Use this to gate tests and call sites that require full collective arming
     to succeed: on an unvetted torch, :func:`derive_collective_recognizer` (and

@@ -21,7 +21,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable_state_context import _ambient_execution_context_restored
-from torchlens.utils import _torch_compat
+from torchlens._utils import _torch_compat
 
 
 def _globals() -> dict[str, Any]:

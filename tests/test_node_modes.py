@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
+from torchlens._data_classes.layer import Layer
 from torchlens.experimental import node_styles
 from torchlens.experimental.dagua import NodeSpec
 

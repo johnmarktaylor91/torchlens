@@ -1,7 +1,7 @@
 """Callback integration namespace with lazy Lightning support.
 
 Attribute access resolves through the shared five-step facade order
-(``torchlens.utils.facade``); the ``lightning`` integration module itself is
+(``torchlens._utils.facade``); the ``lightning`` integration module itself is
 import-inert without the foreign peer.
 """
 
@@ -35,7 +35,7 @@ def __getattr__(name: str) -> ModuleType:
         ``AttributeError``.
     """
 
-    from ..utils.facade import resolve_facade_attr
+    from .._utils.facade import resolve_facade_attr
 
     resolved: ModuleType = resolve_facade_attr(
         owner=__name__,
@@ -55,7 +55,7 @@ def __dir__() -> list[str]:
         Sorted callback module names plus real public globals.
     """
 
-    from ..utils.facade import facade_dir
+    from .._utils.facade import facade_dir
 
     return facade_dir(globals(), _CALLBACK_MODULES)
 

@@ -14,15 +14,15 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
+from torchlens._data_classes._state_adapter import state_items
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
+from torchlens._data_classes.trace import Trace
 from torchlens._io.scrub import _RAW_IMAGE_SENTINEL, _RAW_INPUT_IMAGE_BYTES_LIMIT
-from torchlens.data_classes._state_adapter import state_items
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
-from torchlens.data_classes.trace import Trace
 
 
 class _TinyIOModel(nn.Module):
@@ -186,7 +186,7 @@ def test_transform_repr_redacts_heap_addresses() -> None:
 
     import functools
 
-    from torchlens.data_classes.trace import _scrubbed_transform_repr
+    from torchlens._data_classes.trace import _scrubbed_transform_repr
 
     class _CallableWithDefaultRepr:
         def __call__(self, t: torch.Tensor) -> torch.Tensor:
@@ -735,9 +735,9 @@ def test_ledgered_undeclared_trace_field_refusal_teaches(tmp_path: Path) -> None
     name the user never touched.
     """
 
+    from torchlens._data_classes._trace_components import TRACE_EXTERNAL_WRITE_EXEMPTIONS
     from torchlens._io import TorchLensIOError
     from torchlens._io.scrub import _is_runtime_only_trace_field
-    from torchlens.data_classes._trace_components import TRACE_EXTERNAL_WRITE_EXEMPTIONS
 
     field_name = next(
         name

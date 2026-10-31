@@ -35,13 +35,13 @@ from torchlens._input_walk import (
     snapshot_input_boundary,
 )
 from torchlens._io import runnable_load
+from torchlens._ir.container import register_container
 from torchlens.errors import (
     PathDivergenceError,
     RunCapabilityUnavailableError,
     RunnablePreflightError,
     RunPreconditionError,
 )
-from torchlens.ir.container import register_container
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
 
@@ -260,7 +260,7 @@ def _registered_test_containers():
     ``test_no_module_level_registry_mutation_in_tests`` lints for).
     """
 
-    from torchlens.ir.container import _CONTAINER_REGISTRY
+    from torchlens._ir.container import _CONTAINER_REGISTRY
 
     register_container(
         _RegBox,

@@ -240,7 +240,7 @@ def _present_row_key(data: dict[str, Any], row_key: str | tuple[str, ...] | None
 def _handle_doctor(args: dict[str, Any]) -> dict[str, Any]:
     """Environment health report."""
 
-    from ..utils import doctor
+    from .._utils import doctor
 
     report = doctor()
     data = {

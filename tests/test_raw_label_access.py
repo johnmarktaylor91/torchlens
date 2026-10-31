@@ -6,7 +6,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.constants import RAW_LABEL_SUFFIX
+from torchlens._constants import RAW_LABEL_SUFFIX
 
 pd_types = pytest.importorskip("pandas.api.types")
 is_bool_dtype = pd_types.is_bool_dtype

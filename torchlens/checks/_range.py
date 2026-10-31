@@ -22,7 +22,7 @@ from typing import Any
 import torch
 
 from .. import _state
-from ..observability._chassis import EventStream, ObserverEvent
+from .._observability._chassis import EventStream, ObserverEvent
 from ._errors import CheckConfigError
 from ._records import CheckFinding, severity_sorted
 

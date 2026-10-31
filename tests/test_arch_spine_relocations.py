@@ -100,8 +100,8 @@ class TestNodeSpecRelocation:
 
 class TestSiteKeyRelocation:
     def test_shim_and_home_serve_one_object(self) -> None:
-        shim = importlib.import_module("torchlens.postprocess._site_key")
-        home = importlib.import_module("torchlens.data_classes._site_key")
+        shim = importlib.import_module("torchlens._postprocess._site_key")
+        home = importlib.import_module("torchlens._data_classes._site_key")
         assert shim.SiteKeyMinter is home.SiteKeyMinter
         assert shim.parse_site_key is home.parse_site_key
         assert shim.SITE_KEY_PREFIX == home.SITE_KEY_PREFIX
@@ -111,10 +111,10 @@ class TestSiteKeyRelocation:
         for consumer in (
             "torchlens/backends/_finalize.py",
             "torchlens/backends/jax/_site_dialect.py",
-            "torchlens/data_classes/_trace_inventory.py",
+            "torchlens/_data_classes/_trace_inventory.py",
             "torchlens/validation/_invariants_sites.py",
             "torchlens/_io/forgery_validation.py",
-            "torchlens/postprocess/loop_detection.py",
+            "torchlens/_postprocess/loop_detection.py",
         ):
             source = (REPO / consumer).read_text()
             assert "postprocess._site_key" not in source, (

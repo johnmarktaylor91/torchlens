@@ -13,9 +13,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._snoop import EchoConfigError, normalize_echo
 from torchlens.fastlog.options import RecordingOptions
 from torchlens.options import EchoOptions
-from torchlens.snoop import EchoConfigError, normalize_echo
 
 
 class OneOp(nn.Module):
@@ -147,7 +147,7 @@ def test_echo_on_non_torch_backend_refuses_typed() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.snoop._entry import refuse_echo_non_torch
+    from torchlens._snoop._entry import refuse_echo_non_torch
 
     with pytest.raises(EchoConfigError) as excinfo:
         refuse_echo_non_torch(True, SimpleNamespace(name="tf"))

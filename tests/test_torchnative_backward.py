@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens import observability as obs
+from torchlens import _observability as obs
 
 
 def _backward_session(model: nn.Module, x: torch.Tensor, **backward_kwargs):

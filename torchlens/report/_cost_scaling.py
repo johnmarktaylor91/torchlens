@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 from .._errors import InvalidArgumentError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: Closed position-scaling vocabulary (D12).
 POSITION_SCALING_CLASSES: tuple[str, ...] = (

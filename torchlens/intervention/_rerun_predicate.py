@@ -246,7 +246,7 @@ def refuse_unmatchable_staged_labels(capture_spec: Any) -> None:
         *(getattr(capture_spec, "target_value_specs", None) or ()),
         *(getattr(capture_spec, "hook_specs", None) or ()),
     ]
-    from ..ir.selector_eval import looks_like_finalized_label
+    from .._ir.selector_eval import looks_like_finalized_label
 
     for entry in entries:
         target = entry.site_target

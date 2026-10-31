@@ -32,7 +32,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from ..stats._tensor_stats import TensorStats
 
 #: Typed row states (D18): every op gets a row; absence of numbers is a

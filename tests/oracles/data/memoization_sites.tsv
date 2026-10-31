@@ -4,9 +4,9 @@ torchlens/_runnable_state_context.py::_count_bounded_fake_tensor_mode_class
 torchlens/_runnable_state_context.py::_fake_tensor_mode_class
 torchlens/_state.py::call_token
 torchlens/_state.py::module_token
-torchlens/constants.py::_get_torch_overridable_functions
+torchlens/_constants.py::_get_torch_overridable_functions
 torchlens/user_funcs.py::<assign> cache_config
-torchlens/utils/_callable_safety.py::_torch_overridable_callable_ids
+torchlens/_utils/_callable_safety.py::_torch_overridable_callable_ids
 torchlens/visualization/_fonts.py::_fontconfig_file_for
 torchlens/visualization/_header_block.py::_private_swatch_dir
 torchlens/visualization/_header_block.py::_text_width

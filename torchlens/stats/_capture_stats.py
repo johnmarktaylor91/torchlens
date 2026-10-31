@@ -22,7 +22,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
-from ..observability._kernels import Spine, _as_reduction_tensor
+from .._observability._kernels import Spine, _as_reduction_tensor
 
 __all__ = [
     "STATS_REDUCER_REPR",

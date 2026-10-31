@@ -6,8 +6,8 @@ from collections import defaultdict
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..data_classes.layer import Layer
-    from ..data_classes.trace import Trace
+    from .._data_classes.layer import Layer
+    from .._data_classes.trace import Trace
     from .invariants import (
         MetadataInvariantError,
         _check_conditional_arm_child_pass_union,

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import torch
 
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 from torchlens.mechinterp import PatchGrid
 
 GQA = tviz.GqaInfo(n_query_heads=8, n_kv_heads=2)

@@ -21,9 +21,9 @@ from collections import deque
 
 from test_ir_basic import _build_ir_instances
 
-from torchlens.ir.capture_events import CaptureEvents
-from torchlens.ir.events import OpEvent, ParentEdge
-from torchlens.ir.live_index import LiveIndex
+from torchlens._ir.capture_events import CaptureEvents
+from torchlens._ir.events import OpEvent, ParentEdge
+from torchlens._ir.live_index import LiveIndex
 
 
 class _Handle:

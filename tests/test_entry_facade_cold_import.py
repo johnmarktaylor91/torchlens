@@ -9,7 +9,7 @@ One fresh interpreter per matrix run proves, with no test-session state:
   REAL ``torchlens.recipes`` entry point planted via dist-info on the path --
   never imports or executes the provider (``EntryPoint.load()`` at probe
   time was the launch-blocking defect);
-- the reachability rows (tl.bridge / tl.callbacks / tl.neuro / tl.notebook /
+- the reachability rows (tl.bridge / tl.callbacks / tl.neuro / tl._notebook /
   tl.load_extraction) resolve cold, order-independent;
 - explicit activation DOES import and run the planted provider, exactly
   once.
@@ -42,7 +42,7 @@ import torchlens as tl
 results["post_import_absent"] = [
     name for name in (
         "torchlens.bridge", "torchlens.callbacks", "torchlens.neuro",
-        "torchlens.notebook", "torchlens.semantic",
+        "torchlens._notebook", "torchlens.semantic",
         "rsatoolbox", "brainscore_core", "IPython", "jupyter_client",
         "fake_recipe_pkg",
     ) if name in sys.modules
@@ -54,7 +54,7 @@ probe_names = (
     "__wrapped__", "rdms", "datasets",
 )
 probe_failures = []
-for namespace_name in ("tl", "tl.neuro", "tl.notebook", "tl.bridge", "tl.callbacks"):
+for namespace_name in ("tl", "tl.neuro", "tl._notebook", "tl.bridge", "tl.callbacks"):
     namespace = eval(namespace_name)
     for name in probe_names:
         try:
@@ -72,7 +72,7 @@ results["rows"] = {
     "bridge": tl.bridge.__name__,
     "callbacks": tl.callbacks.__name__,
     "neuro": tl.neuro.__name__,
-    "notebook": tl.notebook.__name__,
+    "notebook": tl._notebook.__name__,
     "load_extraction_callable": callable(tl.load_extraction),
 }
 
@@ -181,7 +181,7 @@ def test_cold_import_subprocess_matrix(tmp_path: Path) -> None:
         "bridge": "torchlens.bridge",
         "callbacks": "torchlens.callbacks",
         "neuro": "torchlens.neuro",
-        "notebook": "torchlens.notebook",
+        "notebook": "torchlens._notebook",
         "load_extraction_callable": True,
     }
 

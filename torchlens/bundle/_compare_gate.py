@@ -32,7 +32,7 @@ from ..intervention.errors import BundleRelationshipError
 from ..intervention.types import Relationship
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from ._relations import MemberRelationTable
 
 # MODEL-AXIS projection of the reported ``Relationship`` vocabulary (A-GATE,

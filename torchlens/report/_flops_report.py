@@ -40,7 +40,7 @@ from ._factcore import factcore
 from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 
 @dataclass(frozen=True)
@@ -324,7 +324,7 @@ def flops_report(
     Parameters
     ----------
     subject:
-        A finished :class:`~torchlens.data_classes.trace.Trace` (the
+        A finished :class:`~torchlens._data_classes.trace.Trace` (the
         retroactive door), or an ``nn.Module`` (the model door -- runs
         ONE capture under the summary execution contract: eval mode,
         ``torch.no_grad()``, module training flags and RNG state restored
@@ -380,7 +380,7 @@ def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any
 
     The fused ``nn.MultiheadAttention`` / ``nn.TransformerEncoderLayer`` fast
     path is held OFF for the capture through
-    :func:`torchlens.utils._torch_compat.force_mha_slow_path`. Under eval +
+    :func:`torchlens._utils._torch_compat.force_mha_slow_path`. Under eval +
     ``no_grad`` those modules otherwise dispatch to
     ``_native_multi_head_attention`` / ``_transformer_encoder_layer_fwd``:
     ONE opaque op each with no cost rule, so the report read 0 FLOPs
@@ -396,9 +396,9 @@ def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any
 
     import torch
 
+    from .._utils._torch_compat import force_mha_slow_path
+    from .._utils.rng import log_current_rng_states, set_rng_from_saved_states
     from ..user_funcs import trace as _trace
-    from ..utils._torch_compat import force_mha_slow_path
-    from ..utils.rng import log_current_rng_states, set_rng_from_saved_states
 
     saved_training_flags = [(module, module.training) for module in model.modules()]
     rng_snapshot = log_current_rng_states()

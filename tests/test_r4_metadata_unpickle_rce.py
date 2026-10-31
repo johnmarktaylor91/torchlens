@@ -31,8 +31,8 @@ from torchlens._io._safe_unpickle import (
     _safe_getattr,
     _safe_load_from_bytes,
 )
+from torchlens._utils.display import identity
 from torchlens.options import CaptureOptions
-from torchlens.utils.display import identity
 
 _CAP = CaptureOptions(
     intervention_ready=True,
@@ -407,9 +407,9 @@ def test_foreign_recipe_bare_reference_load_tolerated_without_import() -> None:
 def test_torchlens_owned_recipe_admitted_without_trust() -> None:
     """A torchlens-owned recipe/transform resolves to the real callable, no trust."""
 
-    from torchlens.utils.display import identity
+    from torchlens._utils.display import identity
 
-    blob = _global_ref_pickle("torchlens.utils.display", "identity")
+    blob = _global_ref_pickle("torchlens._utils.display", "identity")
     resolved = SafeBundleUnpickler(io.BytesIO(blob)).load()
     assert resolved is identity
 

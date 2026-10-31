@@ -8,20 +8,20 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, Literal, TypeAlias, cast
 
+from .._data_classes._compaction import compact_op_metadata
+from .._data_classes._site_key import SiteKeyMinter
+from .._data_classes.layer import Layer
+from .._data_classes.module import ModuleAccessor
+from .._data_classes.trace import Trace
+from .._ir.op_record import amend_preview_output_parent_mark
+from .._ir.workspaces import _init_module_hierarchy_data
+from .._postprocess._grouping_stamp import build_grouping_policy_stamp
+from .._postprocess._recurrence import compute_preview_recurrence_assignments, relabel_edge_metadata
+from .._postprocess.finalization import _build_module_logs, _build_root_module_log
+from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
+from .._quantities import Bytes
+from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from ..capture._nonfinite_prefix import strip_raw_label_suffix
-from ..data_classes._compaction import compact_op_metadata
-from ..data_classes._site_key import SiteKeyMinter
-from ..data_classes.layer import Layer
-from ..data_classes.module import ModuleAccessor
-from ..data_classes.trace import Trace
-from ..ir.op_record import amend_preview_output_parent_mark
-from ..ir.workspaces import _init_module_hierarchy_data
-from ..postprocess._grouping_stamp import build_grouping_policy_stamp
-from ..postprocess._recurrence import compute_preview_recurrence_assignments, relabel_edge_metadata
-from ..postprocess.finalization import _build_module_logs, _build_root_module_log
-from ..postprocess.loop_grouping_adapter import RecurrenceAssignment
-from ..quantities import Bytes
-from ..utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]
@@ -226,7 +226,7 @@ def _set_per_op_tracing_finished(trace: Trace) -> None:
 
     Notes
     -----
-    Mirrors ``torchlens.postprocess.finalization._set_tracing_finished``, which
+    Mirrors ``torchlens._postprocess.finalization._set_tracing_finished``, which
     also flips this flag on every retained ``OpLog`` (not just the trace). Without
     this, preview-backend ops stay stuck on the "mid-capture" ``__str__``/repr
     branch, which assumes torch-only attributes (e.g. ``grad_fn``) and crashes

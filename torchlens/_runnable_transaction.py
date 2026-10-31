@@ -15,6 +15,10 @@ from ._runnable_state import (
     RunResourceCeiling,
     runnable_tensor_byte_digest,
 )
+from ._utils.rng import (
+    restore_host_rng,
+    snapshot_host_rng,
+)
 from .errors import (
     PathDivergenceError,
     RunCapabilityUnavailableError,
@@ -38,10 +42,6 @@ from .runnable import (
     StateSource,
     TensorSlotRole,
     _RunUntilPlan,
-)
-from .utils.rng import (
-    restore_host_rng,
-    snapshot_host_rng,
 )
 
 if TYPE_CHECKING:
@@ -1245,7 +1245,7 @@ def _live_runtime_input_leaves(input_args: Any, input_kwargs: Any) -> list[torch
     caller then skips classification entirely (never masks the native error).
     """
 
-    from .utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
+    from ._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
 
     try:
         if isinstance(input_args, (list, tuple)):

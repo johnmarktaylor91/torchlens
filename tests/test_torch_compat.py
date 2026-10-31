@@ -1,4 +1,4 @@
-"""Tests for the torch version-compatibility shim (torchlens/utils/_torch_compat.py).
+"""Tests for the torch version-compatibility shim (torchlens/_utils/_torch_compat.py).
 
 The shim lets TorchLens run on torch 2.1+ by routing the two torch-2.4-only
 autocast-query APIs (``is_autocast_enabled(device_type)`` /
@@ -21,8 +21,8 @@ from typing import cast
 import pytest
 import torch
 
-from torchlens.utils import _torch_compat as tc
-from torchlens.utils.rng import log_current_autocast_state
+from torchlens._utils import _torch_compat as tc
+from torchlens._utils.rng import log_current_autocast_state
 
 # The functorch transform-level API (torch._C._functorch.maybe_current_level) is a
 # torch-2.4+ addition, genuinely absent on the supported 2.1-2.3 range. Probe torch
@@ -494,7 +494,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_TRACING_TENSOR_TYPES": tc.HAS_TRACING_TENSOR_TYPES,
         # Compile rung-2 probes: set_stance (torch >= 2.6) lets capture run
         # compiled callables through their original eager Python, and Dynamo's
-        # compile counters back tl.debug.count_compiles. Build-dependent, so
+        # compile counters back tl._debug.count_compiles. Build-dependent, so
         # mirror the live values.
         "HAS_SET_STANCE": tc.HAS_SET_STANCE,
         # CUDA-graph bindings exist only on CUDA builds; mirror the live value.
@@ -761,7 +761,7 @@ def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None
 
     L8 floor fix: a torch build whose ``torch.utils.deterministic`` submodule
     is absent (torch 2.1.x) must still show the flag in the diagnostic
-    snapshot (``tl.compat.report()`` / ``tl.utils.doctor()``), mirroring the
+    snapshot (``tl.compat.report()`` / ``tl._utils.doctor()``), mirroring the
     live capability rather than dropping the key.
     """
 
@@ -1099,7 +1099,7 @@ def test_unimported_rng_extras_are_classified_whatever_was_imported_first() -> N
     RNG endpoint. On torch without the module the row must be absent.
     """
 
-    from torchlens.utils.rng import _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS, TORCH_RNG_SURFACE
+    from torchlens._utils.rng import _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS, TORCH_RNG_SURFACE
 
     targets = {row.target for row in TORCH_RNG_SURFACE}
     torch_root = Path(torch.__file__).parent

@@ -28,12 +28,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import TorchCapabilityWarning
 from torchlens.backends.torch import _ops_interventions, ops as torch_ops
 from torchlens.intervention import runtime as intervention_runtime
 from torchlens.intervention.hooks import NormalizedHookEntry
 from torchlens.intervention.selectors import CompositeSelector
 from torchlens.intervention.spec import InterventionSpec
-from torchlens.utils._torch_compat import TorchCapabilityWarning
 
 _MAGNITUDE = 2.0
 _VOLATILE_KEYS = ("time", "duration", "elapsed", "_at", "timestamp", "memory", "pid", "id(")

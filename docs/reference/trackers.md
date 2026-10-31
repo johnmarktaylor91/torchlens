@@ -5,7 +5,7 @@
 
 TorchLens never builds dashboards. It computes more and better statistics
 than the trackers' built-in watchers and feeds their dashboards: one
-collection engine (the `torchlens.observability` per-step records), one
+collection engine (the `torchlens._observability` per-step records), one
 conversion layer, and first-party sinks.
 
 ```python

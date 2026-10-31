@@ -11,12 +11,12 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import get_torch_capability_snapshot
+from torchlens._utils.rng import log_current_rng_states, set_rng_from_saved_states
+from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
 from torchlens.compat import CompatReport, _report as compat_report_module, report
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import get_torch_capability_snapshot
-from torchlens.utils.rng import log_current_rng_states, set_rng_from_saved_states
-from torchlens.utils.tensor_utils import tensor_nanequal
 
 EXPECTED_COMPAT_ROW_KEYS = {
     "accelerate_cpu_disk_offload",
@@ -407,14 +407,14 @@ def test_rng_snapshot_uses_all_cuda_devices(monkeypatch: pytest.MonkeyPatch) -> 
     ``is_initialized`` is part of the fiction: the snapshot deliberately skips
     CUDA entirely until this process has actually initialized it, so that a
     CPU-only capture never force-initializes a visible device (see
-    ``torchlens/utils/rng.py::_snapshot_cuda_rng_states``).
+    ``torchlens/_utils/rng.py::_snapshot_cuda_rng_states``).
     """
 
     calls: list[str] = []
     fake_states = [torch.tensor([1], dtype=torch.uint8), torch.tensor([2], dtype=torch.uint8)]
 
-    monkeypatch.setattr("torchlens.utils.tensor_utils._cuda_available", True)
-    monkeypatch.setattr("torchlens.utils.rng._is_cuda_available", lambda: True)
+    monkeypatch.setattr("torchlens._utils.tensor_utils._cuda_available", True)
+    monkeypatch.setattr("torchlens._utils.rng._is_cuda_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "is_initialized", lambda: True)
     monkeypatch.setattr(torch.cuda, "get_rng_state_all", lambda: fake_states)
 
@@ -459,7 +459,7 @@ def test_torch_compile_row_discloses_mid_forward_creation_exception() -> None:
     inline torch.compile interior absent while the row read pass/logged).
     """
 
-    from torchlens.utils import _torch_compat
+    from torchlens._utils import _torch_compat
 
     if not _torch_compat.HAS_SET_STANCE:
         pytest.skip("set_stance unavailable on this torch")

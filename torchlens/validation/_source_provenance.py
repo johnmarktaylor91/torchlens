@@ -29,7 +29,7 @@ from .._capture_honesty import (
 from .diagnostics import CHECK_SOURCE_PROVENANCE, ValidationFailure, record_validation_failure
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .core import ValidationDecisionRecorder
 
 _GAP_ADVISORY_KINDS = (

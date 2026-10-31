@@ -9,8 +9,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.constants import MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.trace import ResolvedPostprocessing, ResolvedPreprocessing, Trace
+from torchlens._constants import MODEL_LOG_FIELD_ORDER
+from torchlens._data_classes.trace import ResolvedPostprocessing, ResolvedPreprocessing, Trace
 
 
 class _ProfileTiny(nn.Module):

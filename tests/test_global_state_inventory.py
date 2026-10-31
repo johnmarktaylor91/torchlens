@@ -572,8 +572,8 @@ _HOT_STATE_SUBSET_PREFIXES = (
     "torchlens/backends/torch/",
     "torchlens/capture/",
     "torchlens/fastlog/",
-    "torchlens/utils/rng.py",
-    "torchlens/utils/_torch_compat.py",
+    "torchlens/_utils/rng.py",
+    "torchlens/_utils/_torch_compat.py",
 )
 
 
@@ -1109,7 +1109,7 @@ def test_register_container_racing_lookup_never_breaks_iteration() -> None:
     snapshots under the registry lock.
     """
 
-    from torchlens.ir import container as container_mod
+    from torchlens._ir import container as container_mod
 
     registered_types: list[type] = []
     errors: list[BaseException] = []
@@ -1479,7 +1479,7 @@ def test_interrupted_partial_diagnostics_still_restore_the_model(
     ``requires_grad``, ``tl_*`` attributes, and an installed buffer tracker.
     """
 
-    from torchlens import partial as partial_module
+    from torchlens import _partial as partial_module
 
     class _FailingModel(nn.Module):
         """Register a frozen parameter and then fail the forward."""

@@ -24,8 +24,8 @@ from torchlens._capture_state_helpers import (
     reset_compiled_model_unwrap_warning_state,
     unwrap_compiled_submodules,
 )
+from torchlens._utils._torch_compat import get_dynamo_optimized_module_type
 from torchlens.user_funcs import _reject_opaque_wrappers
-from torchlens.utils._torch_compat import get_dynamo_optimized_module_type
 
 
 class _Tiny(nn.Module):

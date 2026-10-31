@@ -52,8 +52,8 @@ from torchlens._io._safe_unpickle import (
     _name_has_dunder_walk,
 )
 from torchlens._io.bundle import _RenameAwareUnpickler
+from torchlens._utils._callable_safety import _DENIED_MODULES
 from torchlens.io import detect_tlspec_format, inspect_tlspec
-from torchlens.utils._callable_safety import _DENIED_MODULES
 
 _UNPICKLERS = [SafeBundleUnpickler, _RenameAwareUnpickler]
 

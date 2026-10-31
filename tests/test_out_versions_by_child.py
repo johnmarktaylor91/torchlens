@@ -7,8 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir.intervention import FunctionEventInput
 from torchlens.backends.torch.aliasing import detect_torch_alias_contract
-from torchlens.ir.intervention import FunctionEventInput
 
 
 class FastPassAliasMutationModel(nn.Module):

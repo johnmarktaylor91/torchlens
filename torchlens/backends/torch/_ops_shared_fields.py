@@ -6,25 +6,25 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state as _st
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._data_classes.op import (
+    Op,
+)
+from ..._ir.events import (
+    OutputVersionEvent,
+)
+from ..._utils.introspection import (
+    _get_code_context,
+    get_arg_tensors_for_resolution,
+)
+from ..._utils.tensor_utils import (
+    tensor_nanequal,
+)
 from ...capture.arg_positions import (
     _normalize_func_name,
 )
 from ...capture.projections import LiveOpView
 from ...capture.salient_args import extract_salient_args
-from ...data_classes.internal_types import FuncExecutionContext
-from ...data_classes.op import (
-    Op,
-)
-from ...ir.events import (
-    OutputVersionEvent,
-)
-from ...utils.introspection import (
-    _get_code_context,
-    get_arg_tensors_for_resolution,
-)
-from ...utils.tensor_utils import (
-    tensor_nanequal,
-)
 from ._tl import (
     get_live_label_list,
     get_tensor_label,
@@ -42,7 +42,7 @@ from .tensor_tracking import (
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 if TYPE_CHECKING:
     from .ops import (

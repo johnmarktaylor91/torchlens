@@ -15,13 +15,13 @@ from .._capture_state_helpers import unwrap_compiled_model
 from .._input_coerce import _coerce_input_args
 from .._input_walk import INPUT_TREE_MAX_DEPTH, raise_input_tree_depth_refusal
 from .._robustness import check_model_and_input_variants
+from .._utils.arg_handling import normalize_input_args
+from .._utils.display import warn_parallel
+from .._utils.rng import set_random_seed
+from .._utils.tensor_utils import param_grad_tolerances_for_dtype
 from ..errors import TorchLensWarning
 from ..intervention.errors import AppendStateValidationWarning
 from ..options import CaptureOptions
-from ..utils.arg_handling import normalize_input_args
-from ..utils.display import warn_parallel
-from ..utils.rng import set_random_seed
-from ..utils.tensor_utils import param_grad_tolerances_for_dtype
 from ._live_model_state import (
     held_parameter_grads,
     load_state_dict_restore,
@@ -73,7 +73,7 @@ def _sum_tensors(
     if not isinstance(value, (dict, list, tuple)):
         raise ValueError("validate_backward_pass requires the model to return at least one tensor.")
     from .._errors import InvalidArgumentError
-    from ..ir.container_registry import OUTPUT_TREE_MAX_DEPTH
+    from .._ir.container_registry import OUTPUT_TREE_MAX_DEPTH
 
     if _depth >= OUTPUT_TREE_MAX_DEPTH:
         raise InvalidArgumentError(
@@ -120,7 +120,7 @@ def _clone_inputs_with_grad(
     """Clone tensor inputs and enable grads on floating tensors.
 
     Depth-bounded and memoized (grind-p3 T11), mirroring
-    :func:`torchlens.utils.arg_handling.copy_arg_tree`: an over-deep nest
+    :func:`torchlens._utils.arg_handling.copy_arg_tree`: an over-deep nest
     refuses typed through the shared input-boundary ceiling instead of a raw
     ``RecursionError``; a mutable container is registered in the memo BEFORE
     its children so a reference cycle resolves to the in-progress copy; and a
@@ -448,7 +448,7 @@ def _reconstruct_candidate_output_for_loss(trace: Any) -> Any:
     output_structure = getattr(root_call, "output_structure", None)
     if output_structure is None:
         return output_layers
-    from ..ir.container import rebuild_container_from_spec
+    from .._ir.container import rebuild_container_from_spec
 
     try:
         return rebuild_container_from_spec(output_structure, output_layers)
@@ -573,15 +573,15 @@ def validate_backward_pass(
     atol:
         Absolute tolerance for the parameter-gradient ``torch.allclose``.
         ``None`` (default) derives the tolerance PER GRADIENT DTYPE via
-        :func:`~torchlens.utils.tensor_utils.param_grad_tolerances_for_dtype`
+        :func:`~torchlens._utils.tensor_utils.param_grad_tolerances_for_dtype`
         (fp32 resolves to the legacy
-        :data:`~torchlens.utils.tensor_utils.PARAM_GRAD_VALIDATION_ATOL`;
+        :data:`~torchlens._utils.tensor_utils.PARAM_GRAD_VALIDATION_ATOL`;
         fp64 tightens by the eps ratio, fp16/bf16 get a few-storage-ULP
         budget). An explicit float applies to every dtype unchanged.
     rtol:
         Relative tolerance for the parameter-gradient ``torch.allclose``.
         ``None`` (default) derives per gradient dtype (fp32 row ==
-        :data:`~torchlens.utils.tensor_utils.PARAM_GRAD_VALIDATION_RTOL`).
+        :data:`~torchlens._utils.tensor_utils.PARAM_GRAD_VALIDATION_RTOL`).
     validate_layer_grads:
         If True (default), validate captured per-module-output gradients in
         addition to parameter gradients. False preserves the legacy
@@ -593,14 +593,14 @@ def validate_backward_pass(
     layer_grad_atol:
         Optional absolute tolerance for per-module-output gradients. ``None``
         derives per gradient dtype via
-        :func:`~torchlens.utils.tensor_utils.layer_grad_tolerances_for_dtype`
-        (fp32 row == :data:`~torchlens.utils.tensor_utils.LAYER_GRAD_VALIDATION_ATOL`;
+        :func:`~torchlens._utils.tensor_utils.layer_grad_tolerances_for_dtype`
+        (fp32 row == :data:`~torchlens._utils.tensor_utils.LAYER_GRAD_VALIDATION_ATOL`;
         module-output grads are compared ELEMENTWISE with no cross-element
         reduction, so they earn a 10x tighter pair than parameter grads).
     layer_grad_rtol:
         Optional relative tolerance for per-module-output gradients. ``None``
         derives per gradient dtype (fp32 row ==
-        :data:`~torchlens.utils.tensor_utils.LAYER_GRAD_VALIDATION_RTOL`).
+        :data:`~torchlens._utils.tensor_utils.LAYER_GRAD_VALIDATION_RTOL`).
 
     Returns
     -------
@@ -715,7 +715,7 @@ def validate_backward_pass(
         # may preserve a complete-coverage claim. No reason class has been
         # proven yet, so every recorded gap sinks the verdict rather than
         # hiding inside a tolerance.
-        from ..ir.events import BackwardCoverageGap
+        from .._ir.events import BackwardCoverageGap
 
         proven_framework_exclusions: frozenset[str] = frozenset()
         unexplained_gaps = [

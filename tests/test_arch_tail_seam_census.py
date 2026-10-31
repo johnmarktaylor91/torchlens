@@ -44,7 +44,7 @@ SEAM_DISPOSITIONS: dict[str, tuple[str, str]] = {
         "metadata-only inventory + explicit activation (semantic/recipes; the "
         "autoloader defect class is dead, gate G2)",
     ),
-    "autoroute": ("MET", "torchlens.autoroute._registry direction-specific doors"),
+    "autoroute": ("MET", "torchlens._autoroute._registry direction-specific doors"),
     "receptive_field_rules": ("MET", "register_rf_rule + epoch-backed invalidation"),
     "sidecar_families": ("MET", "L1 namespaced typed sidecar door (test_arch_spine_sidecar)"),
     "user_callable_identity_contract": (
@@ -58,7 +58,7 @@ SEAM_DISPOSITIONS: dict[str, tuple[str, str]] = {
     "transform_providers": ("MET", "torchlens.transforms._registry (transforms memo owns)"),
     "lens_skin_door": ("MET", "visualization.theme_registry + lenses roster (themes N12)"),
     "preprocessing_authorities": ("MET", "torchlens.preprocessing.register_authority_adapter"),
-    "entry_point_activation": ("MET", "torchlens.ecosystem.plugins five-group consent law"),
+    "entry_point_activation": ("MET", "torchlens._ecosystem.plugins five-group consent law"),
     "edit_spec_providers": (
         "OPEN",
         "sequenced AFTER InterventionSpec per the memo; no provider door yet -- "
@@ -111,12 +111,12 @@ def test_met_doors_are_importable_through_their_public_spellings() -> None:
     probes: dict[str, tuple[str, str]] = {
         "backend_specs": ("torchlens.backends", "BackendSpec"),
         "facet_recipes": ("torchlens.semantic.recipes", "installed_recipe_providers"),
-        "autoroute": ("torchlens.autoroute._registry", ""),
+        "autoroute": ("torchlens._autoroute._registry", ""),
         "receptive_field_rules": ("torchlens.receptive_field._rules", "register_rf_rule"),
         "transform_providers": ("torchlens.transforms._registry", ""),
         "lens_skin_door": ("torchlens.visualization.theme_registry", ""),
         "preprocessing_authorities": ("torchlens.preprocessing", "register_authority_adapter"),
-        "entry_point_activation": ("torchlens.ecosystem.plugins", "activate"),
+        "entry_point_activation": ("torchlens._ecosystem.plugins", "activate"),
     }
     failures = []
     for seam, (module_path, attr) in sorted(probes.items()):

@@ -12,14 +12,14 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._constants import PRIMITIVE_OP_FIELD_ORDER
+from torchlens._data_classes.aten_op import AtenOp, OpRef
 from torchlens._io import TorchLensIOError
 from torchlens._io.prerelease import activate_prerelease_fields
+from torchlens._ir.events import _AtenExecutionContext, _AtenTensorFact
 from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-from torchlens.constants import PRIMITIVE_OP_FIELD_ORDER
-from torchlens.data_classes.aten_op import AtenOp, OpRef
 from torchlens.intervention import SuperAtenOp
-from torchlens.ir.events import _AtenExecutionContext, _AtenTensorFact
 from torchlens.validation._invariants_primitive_ops import _check_primitive_op_invariants
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
@@ -272,7 +272,7 @@ def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> No
     subclass three more times -- four honest crossings there, not a regression.
     """
 
-    from torchlens.utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
+    from torchlens._utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
 
     with _activate_aten_recording_for_tests():
         trace = tl.trace(_SubclassCtorModel(), torch.ones(2, 3))

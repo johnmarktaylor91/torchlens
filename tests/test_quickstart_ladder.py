@@ -12,7 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.quickstart import (
+from torchlens._quickstart import (
     InputSpec,
     SynthesizedValueReadWarning,
     internal_read,
@@ -257,7 +257,7 @@ class TestTypedRefusalProvocation:
     def test_render_pipeline_failure_refuses_typed(self) -> None:
         """A graphviz pipeline failure surfaces as one typed refusal."""
 
-        from torchlens.quickstart._render import _render_dot_source
+        from torchlens._quickstart._render import _render_dot_source
 
         with pytest.raises(Exception) as excinfo:
             _render_dot_source("digraph { a -> b }", "not_a_real_format")
@@ -270,7 +270,7 @@ class TestTypedRefusalProvocation:
 
         import sys as _sys
 
-        from torchlens.quickstart._render import _render_dot_source
+        from torchlens._quickstart._render import _render_dot_source
 
         monkeypatch.setitem(_sys.modules, "graphviz", None)  # import raises ImportError
         with pytest.raises(Exception) as excinfo:
@@ -287,7 +287,7 @@ class TestTypedRefusalProvocation:
         import os as _os
         import sys as _sys
 
-        from torchlens.quickstart._render import _open_viewer
+        from torchlens._quickstart._render import _open_viewer
 
         opened: list[str] = []
         monkeypatch.setattr(_sys, "platform", "win32")

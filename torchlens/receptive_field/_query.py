@@ -24,7 +24,7 @@ from ._types import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
+    from .._data_classes.op import Op
 
 
 _PROGRESSION_BUDGET = 16

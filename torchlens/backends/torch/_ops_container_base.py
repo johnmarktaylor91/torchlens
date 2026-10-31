@@ -7,29 +7,29 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ...ir.container import (
+from ..._ir.container import (
     ContainerSpec,
     DictKey,
     NamedField,
     OutputPathComponent,
     TupleIndex,
 )
-from ...ir.events import (
+from ..._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
     ModuleFrame,
 )
-from ...ir.intervention import FireResult
-from ...utils._torch_compat import (
+from ..._ir.intervention import FireResult
+from ..._utils._torch_compat import (
     torch_structseq_field_names,
 )
-from ...utils.introspection import (
+from ..._utils.introspection import (
     get_vars_of_type_from_obj,
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
-    from ...ir.op_record import OpRecord
+    from ..._data_classes.trace import Trace
+    from ..._ir.op_record import OpRecord
 
 if TYPE_CHECKING:
     from .ops import (
@@ -78,7 +78,7 @@ def _op_record_from_log(
     absent facet != fabricated empty facet).
     """
 
-    from ...ir.op_record import (
+    from ..._ir.op_record import (
         AncestryFacet,
         AnnotationsFacet,
         AutogradFacet,

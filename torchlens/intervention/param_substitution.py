@@ -73,8 +73,8 @@ from .masked_edit import _derive_masked_edit, _validate_edited
 from .types import Edit, FireRecord, LiteralTensor
 
 if TYPE_CHECKING:
-    from ..data_classes.param import Param
-    from ..data_classes.trace import Trace
+    from .._data_classes.param import Param
+    from .._data_classes.trace import Trace
 
 __all__ = ["apply_param_substitution_do", "buffer_operand_selection"]
 

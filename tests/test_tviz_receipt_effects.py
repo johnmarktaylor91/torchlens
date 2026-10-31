@@ -16,9 +16,9 @@ import torch
 
 pytest.importorskip("matplotlib")
 
-import torchlens.tviz as tviz  # noqa: E402
+import torchlens.transformer as tviz  # noqa: E402
 from torchlens.mechinterp import PatchGrid  # noqa: E402
-from torchlens.tviz import _receipts  # noqa: E402
+from torchlens.transformer import _receipts  # noqa: E402
 
 BASELINE = 0.75
 

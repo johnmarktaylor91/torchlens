@@ -22,8 +22,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._utils.rng as rng
 import torchlens.intervention.rerun as rerun_module
-import torchlens.utils.rng as rng
 from torchlens.options import CaptureOptions, InterventionOptions
 
 _FIELDS = (

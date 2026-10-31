@@ -105,13 +105,13 @@ def test_import_of_a_same_named_object_elsewhere_is_not_definite(tmp_path: Path)
             "torchlens/__init__.py": "",
             "torchlens/export/__init__.py": (
                 "def timeline(log):\n"
-                "    from torchlens.observe import timeline as build\n"
+                "    from torchlens._observe import timeline as build\n"
                 "    return build(log)\n"
             ),
-            "torchlens/observe/__init__.py": (
+            "torchlens/_observe/__init__.py": (
                 "from ._impl import timeline\n\n__all__ = ['timeline']\n"
             ),
-            "torchlens/observe/_impl.py": "def timeline(trace):\n    return trace\n",
+            "torchlens/_observe/_impl.py": "def timeline(trace):\n    return trace\n",
         },
     )
     row = {
@@ -137,29 +137,29 @@ def test_imports_through_a_reexporting_module_follow_the_export(tmp_path: Path) 
             "torchlens/__init__.py": "",
             "torchlens/checks/__init__.py": "from ._audit import OldAudit\n",
             "torchlens/checks/_audit.py": "class OldAudit:\n    pass\n",
-            "torchlens/debug/__init__.py": "from ._shim import OldAudit\n",
-            "torchlens/debug/_shim.py": (
+            "torchlens/_debug/__init__.py": "from ._shim import OldAudit\n",
+            "torchlens/_debug/_shim.py": (
                 "from ..checks._audit import OldAudit\n\n__all__ = ['OldAudit']\n"
             ),
-            "tests/test_audit.py": "from torchlens.debug._shim import OldAudit\n",
+            "tests/test_audit.py": "from torchlens._debug._shim import OldAudit\n",
         },
     )
     row = {
-        "id": "export:tl.debug.OldAudit",
+        "id": "export:tl._debug.OldAudit",
         "kind": "export",
         "name": "OldAudit",
         "proposed": "NewAudit",
-        "path": "tl.debug.OldAudit",
-        "owner": "tl.debug",
+        "path": "tl._debug.OldAudit",
+        "owner": "tl._debug",
         "module": "torchlens.checks._audit",
     }
     edits = codemod.plan([row], root, roots=("torchlens", "tests"))
     assert _sites(edits) == {
         ("torchlens/checks/_audit.py", 1, 7, codemod.DEFINITE),
         ("torchlens/checks/__init__.py", 1, 21, codemod.DEFINITE),
-        ("torchlens/debug/_shim.py", 1, 29, codemod.DEFINITE),
-        ("torchlens/debug/_shim.py", 3, 13, codemod.DEFINITE),
-        ("torchlens/debug/__init__.py", 1, 20, codemod.DEFINITE),
+        ("torchlens/_debug/_shim.py", 1, 29, codemod.DEFINITE),
+        ("torchlens/_debug/_shim.py", 3, 13, codemod.DEFINITE),
+        ("torchlens/_debug/__init__.py", 1, 20, codemod.DEFINITE),
         ("tests/test_audit.py", 1, 35, codemod.DEFINITE),
     }
 
@@ -375,7 +375,7 @@ def test_field_table_string_keys_follow_their_field(tmp_path: Path) -> None:
         tmp_path,
         {
             "torchlens/__init__.py": "",
-            "torchlens/constants.py": "TRACE_FIELDS = ('backward_durations', 'label')\n",
+            "torchlens/_constants.py": "TRACE_FIELDS = ('backward_durations', 'label')\n",
             "torchlens/trace.py": (
                 "_DEFAULTS = {'backward_durations': [], 'label': ''}\n"
                 "\n"
@@ -399,17 +399,17 @@ def test_field_table_string_keys_follow_their_field(tmp_path: Path) -> None:
         "path": "Trace.backward_durations",
         "module": "torchlens.trace",
         "owner": "torchlens.trace:Trace",
-        "field_tables": ["torchlens.constants:TRACE_FIELDS"],
+        "field_tables": ["torchlens._constants:TRACE_FIELDS"],
     }
     edits = codemod.plan([row], root, roots=("torchlens",))
     assert _sites(edits) == {
-        ("torchlens/constants.py", 1, 18, codemod.DEFINITE),
+        ("torchlens/_constants.py", 1, 18, codemod.DEFINITE),
         ("torchlens/trace.py", 1, 15, codemod.AMBIGUOUS),
         ("torchlens/trace.py", 4, 14, codemod.DEFINITE),
         ("torchlens/trace.py", 7, 25, codemod.DEFINITE),
     }
     codemod.apply(edits, root)
-    assert (root / "torchlens/constants.py").read_text() == (
+    assert (root / "torchlens/_constants.py").read_text() == (
         "TRACE_FIELDS = ('backward_times', 'label')\n"
     )
     assert "NAMES = ('backward_durations',)" in (root / "torchlens/other.py").read_text()

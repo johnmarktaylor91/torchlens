@@ -22,8 +22,8 @@ from .._io._durability import fsync_dir, fsync_tree
 from .._io._torch_symbols import torch_attr
 from .._io.manifest import Manifest, TensorEntry
 from .._io.streaming import BundleStreamWriter
-from ..ir.predicate import coerce_deferred_value
-from ..ir.refs import DeviceRef, DtypeRef
+from .._ir.predicate import coerce_deferred_value
+from .._ir.refs import DeviceRef, DtypeRef
 from ._indexes import write_label_index, write_pass_index
 from ._storage_resolver import _resolve_storage
 from .exceptions import PredicateError, RecordingConfigError

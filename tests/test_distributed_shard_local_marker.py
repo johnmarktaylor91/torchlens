@@ -111,9 +111,9 @@ class TestShardedPredicate:
 
 class TestMarkerFieldSubstrate:
     def test_field_declared_ordered_and_persisting(self):
+        from torchlens._constants import MODEL_LOG_FIELD_ORDER
+        from torchlens._data_classes.trace import Trace
         from torchlens._io import FieldPolicy
-        from torchlens.constants import MODEL_LOG_FIELD_ORDER
-        from torchlens.data_classes.trace import Trace
 
         assert "distributed_scope" in MODEL_LOG_FIELD_ORDER
         entry = Trace.FIELD_POLICY["distributed_scope"]
@@ -167,9 +167,9 @@ class TestErasurePreventionInvariant:
 
         from dataclasses import replace
 
+        from torchlens._data_classes.trace import Trace
         from torchlens._errors import InvalidArgumentError
         from torchlens._io import FieldPolicy, prerelease
-        from torchlens.data_classes.trace import Trace
 
         log = self._marked_trace()
         entry = Trace.FIELD_POLICY["distributed_scope"]
@@ -211,7 +211,7 @@ class TestMergeScopeMarkerKey:
 
     @requires_vetted_snapshot
     def test_c5r_public_merge_entry_refuses(self, gloo_world):
-        from torchlens.merged._errors import MergeInputError
+        from torchlens._merged._errors import MergeInputError
 
         log = self._rank_core_with_marker(gloo_world)
         with pytest.raises(MergeInputError) as excinfo:
@@ -224,9 +224,9 @@ class TestMergeScopeMarkerKey:
         """The membership-authority precedent: the marker key runs INSIDE
         derive_merge, so directly constructed RankEvidence refuses too."""
 
-        from torchlens.merged._engine import derive_merge
-        from torchlens.merged._errors import MergeInputError
-        from torchlens.merged._evidence import extract_rank_evidence
+        from torchlens._merged._engine import derive_merge
+        from torchlens._merged._errors import MergeInputError
+        from torchlens._merged._evidence import extract_rank_evidence
 
         log = self._rank_core_with_marker(gloo_world)
         evidence = extract_rank_evidence(log, "live[0]")
@@ -243,7 +243,7 @@ class TestMergeScopeMarkerKey:
     def test_marker_field_is_required_not_defaulted(self):
         """Direct construction must consciously supply shard_local."""
 
-        from torchlens.merged._evidence import RankEvidence
+        from torchlens._merged._evidence import RankEvidence
 
         with pytest.raises(TypeError):
             RankEvidence(  # type: ignore[call-arg]

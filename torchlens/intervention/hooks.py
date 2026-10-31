@@ -10,8 +10,7 @@ from typing import Any, Literal, TypeAlias, cast
 
 import torch
 
-from .._state import pause_logging
-from ..ir.selector_eval import (
+from .._ir.selector_eval import (
     _UPFRONT_UNSUPPORTED_KINDS,
     _capability_error,
     _grad_fn_forward_op,
@@ -20,6 +19,7 @@ from ..ir.selector_eval import (
     looks_like_finalized_label,
     normalize_selector_like,
 )
+from .._state import pause_logging
 from .errors import (
     HelperMountError,
     HookSignatureError,

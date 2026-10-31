@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from torchlens._errors import InvalidArgumentError
-from torchlens.utils.env_flags import closed_bool_env
+from torchlens._utils.env_flags import closed_bool_env
 
 _KNOB = "TORCHLENS_TEST_ENV_FLAG"
 

@@ -17,7 +17,7 @@ import torch
 import torchlens as tl
 import torchlens.mechinterp as mi
 from torchlens.mechinterp._errors import MechInterpError
-from torchlens.tviz import receipt_from_patch_grid
+from torchlens.transformer import receipt_from_patch_grid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "real_model" / "r0"))
 

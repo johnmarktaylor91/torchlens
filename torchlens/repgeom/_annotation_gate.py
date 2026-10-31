@@ -14,9 +14,9 @@ from typing import Any
 
 import torch
 
+from .._utils._multipass_access import get_multipass_attr
 from ..backends.registry import TORCH_BACKEND_NAME
 from ..errors._base import TorchLensWarning
-from ..utils._multipass_access import get_multipass_attr
 
 #: Verb-specific vocabulary for the shared site-selection diagnostics, so an
 #: error raised for ``rdm_evolution`` never names ``mds_evolution`` (the

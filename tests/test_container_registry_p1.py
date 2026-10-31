@@ -13,8 +13,8 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.container import ContainerSpec, DictKey
-from torchlens.ir.container_registry import (
+from torchlens._ir.container import ContainerSpec, DictKey
+from torchlens._ir.container_registry import (
     ContainerLeafOccurrence,
     ContainerRecord,
     ContainerRegistry,

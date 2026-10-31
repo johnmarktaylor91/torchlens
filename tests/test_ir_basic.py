@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from torchlens.ir import (
+from torchlens._ir import (
     ArgTemplateRef,
     BackendSemantics,
     BlobRef,
@@ -460,10 +460,10 @@ def test_frozen_dataclasses_are_frozen_and_slotted() -> None:
 def test_container_spec_is_rich_leaf_type() -> None:
     """Assert IR output metadata uses the leaf recursive ContainerSpec."""
 
-    from torchlens.ir.container import ContainerSpec as LeafContainerSpec
+    from torchlens._ir.container import ContainerSpec as LeafContainerSpec
 
     instances = _build_ir_instances()
-    events_module = importlib.import_module("torchlens.ir.events")
+    events_module = importlib.import_module("torchlens._ir.events")
     hints = get_type_hints(
         OutputRef,
         globalns={**vars(events_module), "TensorRef": TensorRef},
@@ -481,7 +481,7 @@ def test_container_leaf_import_order_has_no_cycle() -> None:
             sys.executable,
             "-c",
             (
-                "import torchlens.ir.container; "
+                "import torchlens._ir.container; "
                 "import torchlens.intervention.types; "
                 "print('IMPORT_OK')"
             ),
@@ -541,7 +541,7 @@ def test_capture_events_mutation_and_label_reservation() -> None:
 def test_ir_imports_without_torch_module() -> None:
     """Assert importing IR succeeds when torch is absent from sys.modules."""
     with patch.dict(sys.modules, {"torch": None}):
-        module = importlib.import_module("torchlens.ir")
+        module = importlib.import_module("torchlens._ir")
 
     assert module.TensorRef is TensorRef
 
@@ -550,8 +550,8 @@ def test_capture_events_concat_follows_declared_merge_law() -> None:
     """journal.concat enforces the declared per-lane merge policies."""
     from dataclasses import fields as dataclass_fields
 
-    from torchlens.ir.capture_events import LANE_MERGE_POLICIES, CaptureEvents
-    from torchlens.ir.events import ModulePrepEvent, PreHookProvenanceEvent
+    from torchlens._ir.capture_events import LANE_MERGE_POLICIES, CaptureEvents
+    from torchlens._ir.events import ModulePrepEvent, PreHookProvenanceEvent
 
     # The merge law is total: every journal lane on CaptureEvents has a
     # policy. Lanes are derived structurally (the list-typed journal buffers,
@@ -679,8 +679,8 @@ def _merge_pre_hook_event(address: str) -> PreHookProvenanceEvent:
 def test_concat_merges_intervention_events_lane() -> None:
     """A populated intervention-edit lane merges under append_restamp."""
 
-    from torchlens.ir.capture_events import CaptureEvents
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.capture_events import CaptureEvents
+    from torchlens._ir.events import InterventionAppliedEvent
 
     source = CaptureEvents()
     source.append_intervention(
@@ -703,7 +703,7 @@ def test_lane_appenders_cover_every_merging_policy() -> None:
     runtime (see ``test_concat_fails_closed_on_declared_unwired_lane``).
     """
 
-    from torchlens.ir.capture_events import _LANE_APPENDERS, LANE_MERGE_POLICIES, CaptureEvents
+    from torchlens._ir.capture_events import _LANE_APPENDERS, LANE_MERGE_POLICIES, CaptureEvents
 
     merging_lanes = {lane for lane, policy in LANE_MERGE_POLICIES.items() if policy != "run_local"}
     assert merging_lanes <= set(_LANE_APPENDERS)
@@ -714,8 +714,8 @@ def test_lane_appenders_cover_every_merging_policy() -> None:
 def test_concat_fails_closed_on_declared_unwired_lane(monkeypatch: pytest.MonkeyPatch) -> None:
     """concat refuses (never silently skips) a merging lane with no appender."""
 
-    from torchlens.ir import capture_events as capture_events_module
-    from torchlens.ir.capture_events import CaptureEvents
+    from torchlens._ir import capture_events as capture_events_module
+    from torchlens._ir.capture_events import CaptureEvents
 
     monkeypatch.setitem(
         capture_events_module.LANE_MERGE_POLICIES, "backward_events", "append_restamp"
@@ -728,8 +728,8 @@ def test_concat_fails_closed_on_declared_unwired_lane(monkeypatch: pytest.Monkey
 def test_concat_preserves_source_chronology_across_lanes() -> None:
     """Merged events keep the source stream's cross-lane chronological order."""
 
-    from torchlens.ir.capture_events import CaptureEvents
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.capture_events import CaptureEvents
+    from torchlens._ir.events import InterventionAppliedEvent
 
     source = CaptureEvents()
     source.append_module_prep(_merge_prep_event("a"))
@@ -768,7 +768,7 @@ def test_concat_preserves_source_chronology_across_lanes() -> None:
 def test_concat_clones_events_and_never_mutates_the_source_stream() -> None:
     """Merging restamps clones; the sealed source stream's seqs stay intact."""
 
-    from torchlens.ir.capture_events import CaptureEvents
+    from torchlens._ir.capture_events import CaptureEvents
 
     source = CaptureEvents()
     source.append_module_prep(_merge_prep_event("a"))
@@ -801,8 +801,8 @@ def test_concat_rejects_invalid_source_sequencing() -> None:
     reject the source typed and fail-closed, BEFORE any event moves.
     """
 
-    from torchlens.ir.capture_events import CaptureEvents, SourceSequencingError
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.capture_events import CaptureEvents, SourceSequencingError
+    from torchlens._ir.events import InterventionAppliedEvent
 
     def _duplicate_cross_lane_source() -> CaptureEvents:
         source = CaptureEvents()

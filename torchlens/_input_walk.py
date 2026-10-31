@@ -442,7 +442,7 @@ def classify_input_container(value: Any) -> str:
 
     import torch
 
-    from torchlens.ir.container import get_registered_container
+    from torchlens._ir.container import get_registered_container
 
     if isinstance(value, torch.Tensor):
         return "tensor"
@@ -581,7 +581,7 @@ def walk_input_boundary(
             # indexed components; a throwing/nonconforming hook routes the node to the
             # opaque handler (fail closed: witness coverage downgrades / save refuses),
             # never a silent drop and never an advertise-then-fail at bind.
-            from torchlens.ir.container import get_registered_container
+            from torchlens._ir.container import get_registered_container
 
             registration = get_registered_container(type(value))
             try:
@@ -1344,7 +1344,7 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
 
     import dataclasses as _dc
 
-    from torchlens.ir.container import get_registered_container
+    from torchlens._ir.container import get_registered_container
 
     nodes: list[dict[str, Any]] = []
     refusals: list[dict[str, Any]] = []

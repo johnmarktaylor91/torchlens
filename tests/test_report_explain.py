@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes import FuncCallLocation
+from torchlens._data_classes import FuncCallLocation
 
 
 class TinyReportModel(nn.Module):
@@ -124,7 +124,7 @@ def test_explain_and_audit_diagnose_real_partial_failure() -> None:
 
     with pytest.raises(RuntimeError) as exc_info:
         tl.trace(FailingShapeModel(), torch.randn(2, 4))
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
     last = partial.raw_layers[-1]
     last_label = str(getattr(last, "_label_raw"))
 
@@ -138,7 +138,7 @@ def test_explain_and_audit_diagnose_real_partial_failure() -> None:
     assert "mat1 and mat2 shapes cannot be multiplied" in text
     assert str(exc_info.value) in text
     assert "Failing boundary: forward at" in text
-    assert audit == tl.debug.audit_trace(partial)
+    assert audit == tl._debug.audit_trace(partial)
     failure = next(
         finding for finding in audit.findings if finding.check == "partial_capture_exception"
     )
@@ -362,7 +362,7 @@ def test_explain_max_tokens_never_drops_partial_failure_evidence() -> None:
 
     with pytest.raises(RuntimeError) as exc_info:
         tl.trace(FailingShapeModel(), torch.randn(2, 4))
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
 
     text = tl.report.explain(partial, max_tokens=1)
     assert "This is a partial capture" in text

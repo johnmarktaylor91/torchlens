@@ -13,7 +13,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._errors import TorchLensCaptureGapWarning
-from ...utils._torch_symbols import torch_attr
+from ..._utils._torch_symbols import torch_attr
 from .escape_detection import (
     ExpectedOriginalToken,
 )

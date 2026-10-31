@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.utils._torch_compat import ROLL_TENSOR_SHIFTS_SUPPORTED
+from torchlens._utils._torch_compat import ROLL_TENSOR_SHIFTS_SUPPORTED
 
 
 def _ops_by_func(trace: object, func_name: str) -> list:

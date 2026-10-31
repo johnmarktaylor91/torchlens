@@ -4,7 +4,7 @@ One lead for every report-shaped object: type, subject, status, severity
 counts, coverage, truncation -- then at most five findings and an EXACT
 remainder. Helpers RETURN report objects that HAVE ``.to_pandas()``; they
 are never bare DataFrames (a DataFrame elides its best column and carries
-no honesty facts). ``tl.debug``'s three dialects migrate onto this
+no honesty facts). ``tl._debug``'s three dialects migrate onto this
 protocol under their owning lanes (lovely section 14 ownership seam); the
 protocol and its conformance test land here so the target shape is law
 before the migrations.

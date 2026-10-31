@@ -39,8 +39,8 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._observability._chassis import EventStream, ObserverEvent
 from ..errors._base import TorchLensWarning
-from ..observability._chassis import EventStream, ObserverEvent
 from ._adapters import OptimizerFacts, optimizer_facts
 from ._constants import WATCHDOG_FACTOR
 from ._errors import CheckConfigError, CheckLifecycleError, CheckViolationError
@@ -967,7 +967,7 @@ class ChecksSession:
                 "tripwire (off by default); under fp16 use a GradScaler, which "
                 "makes this event a harmless skipped step"
             ),
-            follow_up="tl.debug.bisect_nan / tl.debug.find_nan on a captured trace",
+            follow_up="tl._debug.bisect_nan / tl._debug.find_nan on a captured trace",
         )
         self._record(finding)
         if finding.action == "raise":

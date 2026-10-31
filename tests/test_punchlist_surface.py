@@ -40,7 +40,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 #: non-inventory tests) at demotion time; internal callers import the names
 #: directly and are unaffected.
 DEMOTED: dict[str, tuple[str, ...]] = {
-    "torchlens.merged": ("CollectiveJoin", "JoinRecord", "MergeDerivation", "PerRankRef"),
+    "torchlens._merged": ("CollectiveJoin", "JoinRecord", "MergeDerivation", "PerRankRef"),
     "torchlens.distributed": (
         "CollectiveRecognizer",
         "LineageEntry",
@@ -56,7 +56,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "merge_visualization_options",
         "visualization_to_render_kwargs",
     ),
-    "torchlens.debug": (
+    "torchlens._debug": (
         "PrecisionRow",
         "AuditFinding",
         "CompileCounts",
@@ -72,7 +72,7 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "SlotByteDigest",
         "refuse_collective_boundary_trace",
     ),
-    "torchlens.ir": (
+    "torchlens._ir": (
         "register_live_event",
         "is_deferred_value",
         "ContainerSnapshot",
@@ -124,8 +124,8 @@ DEMOTED: dict[str, tuple[str, ...]] = {
     ),
     "torchlens.experimental": ("AutoCaptureSession",),
     "torchlens.backends": ("BackendName", "TORCH_BACKEND_NAME", "TINYGRAD_BACKEND_NAME"),
-    "torchlens.data_classes": ("FuncExecutionContext", "VisualizationOverrides"),
-    "torchlens.trace_slice": ("build_slice_between", "build_slice_from_selection"),
+    "torchlens._data_classes": ("FuncExecutionContext", "VisualizationOverrides"),
+    "torchlens._trace_slice": ("build_slice_between", "build_slice_from_selection"),
     "torchlens.errors": ("EpisodeErrorCode",),
     "torchlens.validation": ("ValidationReplayState",),
 }

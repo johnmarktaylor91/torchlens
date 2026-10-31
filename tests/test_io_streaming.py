@@ -11,11 +11,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.postprocess as postprocess_module
+import torchlens._postprocess as postprocess_module
 from torchlens import trace as trace_fn
+from torchlens._data_classes.trace import Trace
 from torchlens._io import TorchLensIOError, streaming as streaming_module
 from torchlens._io.manifest import Manifest
-from torchlens.data_classes.trace import Trace
 from torchlens.errors import ArgumentConflictError, TorchLensPostfuncError
 from torchlens.io import cleanup_tmp, detect_tlspec_format
 from torchlens.validation import validate_tlspec

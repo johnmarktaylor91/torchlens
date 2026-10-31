@@ -25,8 +25,8 @@ import weakref
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.trace import Trace
 
 #: Structural signature row type: ``(num_layers, num_params,
 #: num_params_trainable, num_params_frozen, ops_signature, wiring_digest)``.

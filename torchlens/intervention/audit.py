@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .types import Edit, FireRecord
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
+    from .._data_classes.op import Op
     from .hooks import NormalizedHookEntry
 
 _UNSET: Any = object()

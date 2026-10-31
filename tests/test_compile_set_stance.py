@@ -34,7 +34,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _capture_state_helpers
-from torchlens.utils import _torch_compat
+from torchlens._utils import _torch_compat
 
 pytestmark = [pytest.mark.heavy]
 
@@ -452,19 +452,19 @@ def test_warm_artifact_is_reproduced_and_the_recompile_is_bounded() -> None:
 
 
 def test_count_compiles_verifies_the_coexistence_contract() -> None:
-    """``tl.debug.count_compiles`` measures both contract promises directly."""
+    """``tl._debug.count_compiles`` measures both contract promises directly."""
 
     torch.compiler.reset()
     model = _CompiledAttrModel()
     x = torch.randn(2, 4)
     model(x)  # warm
 
-    with tl.debug.count_compiles() as during, warnings.catch_warnings(record=True):
+    with tl._debug.count_compiles() as during, warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
         tl.trace(model, x)
     assert during.frames_compiled == 0
 
-    with tl.debug.count_compiles() as after:
+    with tl._debug.count_compiles() as after:
         model(x)
     assert after.frames_compiled <= 1
     # The count freezes at block exit: later compile events (a fresh shape
@@ -479,14 +479,14 @@ def test_count_compiles_missing_counters_refuses_typed(
 ) -> None:
     """A torch runtime without Dynamo counters refuses with the stable code."""
 
-    from torchlens.debug import CompileCountsUnavailableError
+    from torchlens._debug import CompileCountsUnavailableError
 
     monkeypatch.setattr(
         _torch_compat, "get_dynamo_compile_counters", lambda force_probe=False: None
     )
 
     with pytest.raises(CompileCountsUnavailableError, match="unavailable") as excinfo:
-        with tl.debug.count_compiles():
+        with tl._debug.count_compiles():
             pass
     assert excinfo.value.fields["code"] == "compile_counts_unavailable"
 
@@ -501,8 +501,8 @@ def test_compat_row_states_the_coexistence_contract_under_stance() -> None:
     assert "set_stance" in row.details
     assert "a bounded burst of recompilations" in row.details
     assert "unwrap_torch()" in row.details
-    assert "tl.debug.graph_breaks" in row.suggestion
-    assert "tl.debug.count_compiles" in row.suggestion
+    assert "tl._debug.graph_breaks" in row.suggestion
+    assert "tl._debug.count_compiles" in row.suggestion
 
     clear_row = tl.compat.report(nn.Identity(), torch.randn(2, 4)).row("torch_compile")
     assert clear_row.detected is False

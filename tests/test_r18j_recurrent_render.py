@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.utils._multipass_access import (
+from torchlens._utils._multipass_access import (
     MISSING,
     MultiPassAmbiguityError,
     get_multipass_attr,
@@ -115,7 +115,7 @@ def test_get_multipass_attr_honesty_guard():
 
     This is the load-bearing honesty guard the whole sprint depends on. Mutation
     proof: replacing the ``except ValueError`` branch in
-    ``torchlens/utils/_multipass_access.py:get_multipass_attr`` with
+    ``torchlens/_utils/_multipass_access.py:get_multipass_attr`` with
     ``return default`` (the naive ``getattr(layer, attr, default)`` behaviour the
     DECISION forbids) makes this assertion return ``0.0`` instead of raising --
     killing the test. Verified executed in R18J_REPORT.md.

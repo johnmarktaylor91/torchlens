@@ -40,7 +40,7 @@ from ..errors.episode import BundleExperimentError
 if TYPE_CHECKING:
     from torch import nn
 
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 __all__ = ["EffectsView", "TopK", "site_sweep", "top_k"]
 

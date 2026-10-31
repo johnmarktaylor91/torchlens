@@ -1620,7 +1620,7 @@ if not TYPE_CHECKING:
             Typed ``facade_redirect`` for a removed spelling, plain otherwise.
         """
 
-        from ..utils.facade import resolve_facade_attr
+        from .._utils.facade import resolve_facade_attr
 
         return resolve_facade_attr(
             owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS

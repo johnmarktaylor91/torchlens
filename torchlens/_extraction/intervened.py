@@ -120,7 +120,7 @@ def _rule_address_class(rule: Any) -> str:
         return "selection"
     if rule.address_class == "recorded":
         return "label"
-    from ..ir.selector_eval import selector_contains_kind
+    from .._ir.selector_eval import selector_contains_kind
 
     for kind, address_class in _STRUCTURAL_KIND_CLASSES:
         if selector_contains_kind(rule.where, kind, unwrap=True):

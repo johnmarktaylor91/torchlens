@@ -84,7 +84,7 @@ _FLOAT_LIST_TENSOR_MIN = 16
 def _classes() -> dict[str, type]:
     """Return the allow-list of classes a state file may rebuild, by name."""
 
-    from ..observability._kernels import Histogram, HistogramDescriptor, Spine
+    from .._observability._kernels import Histogram, HistogramDescriptor, Spine
     from ._aggregate import Aggregator
     from ._per_unit import Quantile, TopK, _UnitLayout
     from ._streaming import CKA, PCA, Covariance, CrossCovariance, Mean, Norm

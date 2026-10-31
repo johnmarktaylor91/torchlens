@@ -17,12 +17,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes._trace_accessors import (
+from torchlens._data_classes._trace_accessors import (
     TraceGradFnCallAccessor,
     TraceModuleCallAccessor,
     TraceOpAccessor,
 )
-from torchlens.data_classes.op import Op
+from torchlens._data_classes.op import Op
 
 
 class Nested(nn.Module):

@@ -14,15 +14,15 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._training_validation import TrainingModeConfigError
-from torchlens.fastlog import CaptureSpec
-from torchlens.ir.summary_role import (
+from torchlens._ir.summary_role import (
     SummaryTransform,
     ensure_summary_output_owns_storage,
     is_summary_transform,
     summary,
     transform_role,
 )
+from torchlens._training_validation import TrainingModeConfigError
+from torchlens.fastlog import CaptureSpec
 
 
 def _histo64(t: torch.Tensor) -> torch.Tensor:

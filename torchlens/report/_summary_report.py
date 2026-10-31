@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 from ._summary_charset import degrade
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: The five-value evidence enum (summary item 10 / costreport D2). Orthogonal
 #: to applicability; a mixed aggregate never upgrades past its weakest member.

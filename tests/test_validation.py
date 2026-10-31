@@ -25,6 +25,7 @@ import torchlens._user_public_impls as user_public_impls
 # imports may be freely re-sorted.
 import torchlens.user_funcs as user_funcs
 from torchlens import Trace, trace as trace_fn
+from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.backends.torch import rescue
 from torchlens.errors import (
     MetadataInvariantError,
@@ -34,7 +35,6 @@ from torchlens.errors import (
 from torchlens.fastlog import RecordContext
 from torchlens.intervention.types import DictKey
 from torchlens.options import SaveOptions
-from torchlens.utils.tensor_utils import tensor_nanequal
 from torchlens.validation import (
     ValidationDiagnostic,
     check_metadata_invariants,
@@ -4426,7 +4426,7 @@ def test_tensor_nanequal_tolerances_are_dtype_derived_boundary() -> None:
     fp32's rtol=1e-4 = 4.5e11 float64 ULPs.
     """
 
-    from torchlens.utils.tensor_utils import _tolerances_for_dtype
+    from torchlens._utils.tensor_utils import _tolerances_for_dtype
 
     for dtype in (torch.float16, torch.bfloat16, torch.float32, torch.float64):
         eps = torch.finfo(dtype).eps
@@ -4515,7 +4515,7 @@ def test_ground_truth_fp8_doctrine_stays_strict() -> None:
     design, never loosen).
     """
 
-    from torchlens.utils.tensor_utils import get_fp8_dtypes
+    from torchlens._utils.tensor_utils import get_fp8_dtypes
     from torchlens.validation.core import _ground_truth_output_matches_saved
 
     fp8_dtypes = get_fp8_dtypes()
@@ -7094,7 +7094,7 @@ def test_raw_label_survival_roster_is_closed():
     shapes (or in the justified allowlist below).
     """
 
-    from torchlens import constants
+    from torchlens import _constants as constants
     from torchlens.validation.invariants import (
         _RAW_LABEL_BEARING_DICT_FIELDS,
         _RAW_LABEL_BEARING_LIST_FIELDS,
@@ -8439,7 +8439,7 @@ def test_validation_teardown_is_per_step_fenced(monkeypatch: pytest.MonkeyPatch)
     once the monkeypatch is live, and the single injected failure lands
     exactly where intended: the function's own teardown restore.
     """
-    from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
+    from torchlens._utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
     get_cpu_float8_deterministic_fill_support(force_probe=True)
 

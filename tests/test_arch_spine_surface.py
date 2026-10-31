@@ -49,7 +49,7 @@ def test_root_budget_is_frozen() -> None:
         "+1 by C04: the lazy L4 submodule namespace tl.transforms (transforms "
         "memo s7 home; not in __all__) -- +2 by F29: the lazy submodule "
         "namespaces tl.agent (the agent inspection surface, FACADE, not in "
-        "__all__) and tl.utils (the docs teach tl.utils.doctor(); the row was "
+        "__all__) and tl._utils (the docs teach tl._utils.doctor(); the row was "
         "missing so the taught spelling raised on a cold import; L1, not in "
         "__all__) -- and +1 by F20: the lazy L6 submodule namespace "
         "tl.brainpipe (brainpipe memo s3 home, the memory-planned extraction "
@@ -92,7 +92,7 @@ def test_no_new_l6_plus_root_names() -> None:
         "torchlens.bridge",
         "torchlens.callbacks",
         "torchlens.neuro",
-        "torchlens.notebook",
+        "torchlens._notebook",
     }
     live_legacy = {row.canonical_path for row in surface_rows() if row.legacy_top_level}
     new_legacy = live_legacy - grandfathered

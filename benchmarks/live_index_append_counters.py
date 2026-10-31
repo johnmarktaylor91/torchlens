@@ -65,9 +65,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import torchlens as tl  # noqa: E402
+from torchlens._ir.live_index import LiveIndex  # noqa: E402
 from torchlens.fastlog import Recorder  # noqa: E402
 from torchlens.fastlog._recorder import Recorder as _RecorderImpl  # noqa: E402
-from torchlens.ir.live_index import LiveIndex  # noqa: E402
 
 PROMPT = torch.tensor([[454, 137, 139, 386]])
 SITE_OPS = ("transformer.h.0.mlp.dropout", "transformer.h.1.mlp.dropout", "transformer.ln_f")

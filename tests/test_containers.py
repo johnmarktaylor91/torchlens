@@ -11,8 +11,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.container import HFKey, NamedField, TupleIndex
-from torchlens.utils.collections import assign_into_container_by_path
+from torchlens._ir.container import HFKey, NamedField, TupleIndex
+from torchlens._utils.collections import assign_into_container_by_path
 
 
 class DemoModelOutput(dict):
@@ -517,8 +517,8 @@ def test_trace_container_capability_fails_closed_on_unknown_backend() -> None:
 
     from types import SimpleNamespace
 
+    from torchlens._data_classes.container import Role, _trace_container_capability
     from torchlens.backends import get_backend_spec
-    from torchlens.data_classes.container import Role, _trace_container_capability
 
     unknown = SimpleNamespace(backend="no_such_backend_zzz")
     assert _trace_container_capability(unknown, Role.CALL_OUTPUT) == "none"

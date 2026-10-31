@@ -22,7 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.postprocess._site_join import join_site_profiles, site_profile
+from torchlens._postprocess._site_join import join_site_profiles, site_profile
 
 
 class _Insertable(nn.Module):

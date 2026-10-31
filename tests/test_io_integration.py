@@ -15,8 +15,8 @@ pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
 from torchlens import load, save, trace as trace_fn  # noqa: E402
+from torchlens._data_classes.trace import Trace  # noqa: E402
 from torchlens._io import BlobRef  # noqa: E402
-from torchlens.data_classes.trace import Trace  # noqa: E402
 from torchlens.io import rehydrate_nested  # noqa: E402
 
 PYARROW_AVAILABLE = importlib.util.find_spec("pyarrow") is not None

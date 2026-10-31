@@ -23,7 +23,7 @@ import torch
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from torchlens.data_classes.trace import ResolvedPreprocessing
+    from torchlens._data_classes.trace import ResolvedPreprocessing
 
 __tl_layer__ = "L5"
 
@@ -43,7 +43,7 @@ def _imagenet_default_record() -> ResolvedPreprocessing:
         ``unverified_fallback``.
     """
 
-    from torchlens.data_classes.trace import ResolvedPreprocessing
+    from torchlens._data_classes.trace import ResolvedPreprocessing
 
     return ResolvedPreprocessing(
         source="imagenet_default",

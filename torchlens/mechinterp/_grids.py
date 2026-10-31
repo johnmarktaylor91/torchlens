@@ -59,7 +59,7 @@ class PatchGrid:
     unpatched baselines are in ``receipts["clean_metric"]`` and
     ``receipts["corrupted_metric"]``; a cell's effect is its value minus
     ``corrupted_metric`` (the run every cell patches into), which is what
-    :func:`torchlens.tviz.receipt_from_patch_grid` plots.
+    :func:`torchlens.transformer.receipt_from_patch_grid` plots.
     """
 
     axes: tuple[str, ...]

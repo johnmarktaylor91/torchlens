@@ -20,7 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import errors
 from torchlens._capture_state_helpers import _detach_nested_for_cache
-from torchlens.data_classes._state_adapter import state_items
+from torchlens._data_classes._state_adapter import state_items
 
 _GZIP_MAGIC = b"\x1f\x8b"
 _EXPECTED_ALLOWLIST = {

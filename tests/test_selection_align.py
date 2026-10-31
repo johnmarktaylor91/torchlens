@@ -176,7 +176,7 @@ def test_refusal_kind_unsupported(pair):
 def test_refusal_grouping_stamp_degraded(pair):
     """A degraded stamp on either side refuses (L1 consumer-matrix row)."""
 
-    from torchlens.postprocess._grouping_stamp import degraded_grouping_policy_stamp
+    from torchlens._postprocess._grouping_stamp import degraded_grouping_policy_stamp
 
     trace_a, trace_b = pair
     resolved = tl.units("relu_1_2", IDX).resolve(trace_a)

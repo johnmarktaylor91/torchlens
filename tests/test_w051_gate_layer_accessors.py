@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from torchlens.data_classes._layer_accessors import LayerAccessor, OpAccessor
+from torchlens._data_classes._layer_accessors import LayerAccessor, OpAccessor
 
 
 def _op(label: str) -> SimpleNamespace:

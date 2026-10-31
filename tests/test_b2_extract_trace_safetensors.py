@@ -20,9 +20,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes._state_adapter import state_items
 from torchlens._errors import InvalidArgumentError
 from torchlens._io.writer_contract import writer_contract, writer_contract_digest
-from torchlens.data_classes._state_adapter import state_items
 
 
 class _Net(nn.Module):

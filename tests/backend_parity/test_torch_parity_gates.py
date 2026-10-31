@@ -34,13 +34,13 @@ from _oracle_env import (
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import FieldPolicy
-from torchlens.constants import (
+from torchlens._constants import (
     LAYER_PASS_LOG_FIELD_ORDER,
     MODEL_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import Trace
+from torchlens._io import FieldPolicy
 from torchlens.options import CaptureOptions
 
 pytestmark = pytest.mark.backend_parity

@@ -23,9 +23,9 @@ from torch import nn
 
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
+from torchlens._data_classes._trace_accessors import boundary_label_ops
+from torchlens._data_classes.op import Op
 from torchlens.agent import call_tool
-from torchlens.data_classes._trace_accessors import boundary_label_ops
-from torchlens.data_classes.op import Op
 from torchlens.report._agent_json import build_agent_json
 
 # This suite drives the structural grouper (grouper_v1), which serves captures

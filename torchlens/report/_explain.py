@@ -265,7 +265,7 @@ def _is_partial_trace(log: Any) -> bool:
         Whether the object is a failed partial capture wrapper.
     """
 
-    from ..partial import PartialTrace
+    from .._partial import PartialTrace
 
     return isinstance(log, PartialTrace)
 
@@ -744,7 +744,7 @@ def _anomaly_lines(log: Any) -> list[str]:
         # A basis exists but coverage has gaps (disk-backed, inference-mode,
         # uncheckable dtypes, unsaved outputs): disclose the exact gaps
         # through the shared wording -- safe, no new scan runs.
-        from ..data_classes._nonfinite import coverage_gap_note
+        from .._data_classes._nonfinite import coverage_gap_note
 
         return [
             (

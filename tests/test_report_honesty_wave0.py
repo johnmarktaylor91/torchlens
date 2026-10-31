@@ -22,7 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._capture_honesty import capture_honesty_facts, honesty_banner_lines
-from torchlens.data_classes._nonfinite import _has_nonfinite
+from torchlens._data_classes._nonfinite import _has_nonfinite
 from torchlens.runnable import PathFaithfulness
 
 ESC = "\x1b"
@@ -185,7 +185,7 @@ def test_guide_next_steps_are_reader_executable() -> None:
     assert steps["inventory"] == "trace.bill_of_materials()"
     assert steps["resource_profile"] == "trace.profile(level='module')"
     assert steps["nonfinite_evidence"] == "trace.first_nonfinite()"
-    assert steps["environment_diagnosis"] == "tl.utils.doctor()"
+    assert steps["environment_diagnosis"] == "tl._utils.doctor()"
 
 
 def test_guide_next_steps_are_conditional_on_state() -> None:
@@ -311,8 +311,8 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
     # absence count instead of a magic number -- it still catches a
     # regression to the legacy verbose per-flag dump, which does not share
     # this structure.
-    from torchlens.utils import format_capability_summary
-    from torchlens.utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
+    from torchlens._utils import format_capability_summary
+    from torchlens._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
 
     absent = [name for name, available in snapshot.items() if not available]
     missing = [name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS]
@@ -334,7 +334,7 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
 def test_doctor_report_repr_is_bounded() -> None:
     """DoctorReport repr is the designed multi-line render with capped lines."""
 
-    doctor_report = tl.utils.doctor()
+    doctor_report = tl._utils.doctor()
     rendered = repr(doctor_report)
     assert rendered.startswith("TorchLens doctor report:")
     for line in rendered.splitlines():

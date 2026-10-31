@@ -26,9 +26,9 @@ from typing import Any
 import numpy as np
 import torch
 
-from ..constants import MODEL_LOG_FIELD_ORDER
-from ..data_classes._state_adapter import state_items, state_new, state_restore
-from ..data_classes.trace import Trace, _scrubbed_transform_repr
+from .._constants import MODEL_LOG_FIELD_ORDER
+from .._data_classes._state_adapter import state_items, state_new, state_restore
+from .._data_classes.trace import Trace, _scrubbed_transform_repr
 from ..errors._base import TorchLensWarning
 from . import TLSPEC_VERSION, BlobRef, FieldPolicy, TorchLensIOError, prerelease as _prerelease
 from ._source_privacy import (
@@ -561,7 +561,7 @@ def detach_conditional_trace_backrefs(value: Any) -> None:
         Scrubbed top-level metadata mapping to update in place.
     """
 
-    from ..data_classes.trace import Conditional, ConditionalAccessor
+    from .._data_classes.trace import Conditional, ConditionalAccessor
 
     if not isinstance(value, MutableMapping):
         return
@@ -723,7 +723,7 @@ def _factory_is_load_reconstructible(factory: Any) -> bool:
     if root == "torch":
         return True
     if root == "torchlens":
-        from ..utils._callable_safety import is_inert_first_party_callable
+        from .._utils._callable_safety import is_inert_first_party_callable
         from ._safe_unpickle import _is_torchlens_owned
 
         return _is_torchlens_owned(factory) and is_inert_first_party_callable(factory)
@@ -1125,7 +1125,7 @@ def _scrub_value(
             # "scrub-declared runtime-only" while no declaration existed) --
             # quote the ledger row so the message names the writer.
             if owner_is_trace and not accessor_hint:
-                from ..data_classes._trace_components import (
+                from .._data_classes._trace_components import (
                     TRACE_EXTERNAL_WRITE_EXEMPTIONS,
                 )
 

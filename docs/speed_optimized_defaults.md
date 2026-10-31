@@ -73,7 +73,7 @@ include a skipped/partial current-call event. Failed partials reject `Recording.
 `Recording.log_backward()`.
 
 Full `tl.trace(...)` failures expose a separate honest partial as `exc.partial_log`; retrieve it
-with `tl.partial.from_failed_capture(exc)`.
+with `tl._partial.from_failed_capture(exc)`.
 
 ## Final-Label Saves
 

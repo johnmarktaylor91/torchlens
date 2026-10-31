@@ -66,16 +66,16 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens.utils import rng as rng_mod
-from torchlens.utils.rng import (
+from torchlens._utils import rng as rng_mod
+from torchlens._utils.rng import (
     _AMBIENT_BRIDGE_LEAF_TYPES,
     _NUMERIC_PAYLOAD_LEAF_TYPES,
     _resolve_slot_member,
     _rng_exempt_instances,
     host_nondeterminism_monitor,
 )
+from torchlens.options import CaptureOptions
+from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
 

@@ -23,11 +23,98 @@ from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state as _st
 from ..._capture_state_helpers import _is_uninitialized_param
+from ..._data_classes._nonfinite import record_op_nonfinite
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._data_classes.op import (
+    Op,
+    _dedup_cached_identity_out,
+    _dedup_saved_activation_out,
+    _dtype_or_none,
+    _effective_activation_save_mode,
+    _memory_or_none,
+    _recursive_safe_copy,
+    _shape_or_none,
+    _stamp_reference_out,
+    apply_transform,
+    register_relation_cell_encoding,
+    train_mode_tripwire_armed,
+    validate_streaming_transform_output,
+    validate_train_mode_transform_output,
+)
 from ..._errors import TorchLensPostfuncError
 from ..._io import BlobRef
+from ..._ir.container import (
+    _SAFE_DEFAULT_FACTORIES,
+    ContainerSpec,
+    DataclassField,
+    DictKey,
+    HFKey,
+    NamedField,
+    OutputPathComponent,
+    TupleIndex,
+    get_registered_container,
+    mapping_extra_instance_state,
+    namedtuple_extra_instance_state,
+    namedtuple_type_can_carry_instance_state,
+    reconstruction_is_lossy,
+)
+from ..._ir.container_registry import (
+    OUTPUT_TREE_MAX_DEPTH,
+    ContainerLeafOccurrence,
+    FuncSite,
+    Phase,
+    Role,
+    walk_container,
+)
+from ..._ir.events import (
+    ArgTemplateRef,
+    FunctionCallRef,
+    ModuleFrame,
+    OutputRef,
+    OutputVersionEvent,
+    ParentEdge,
+)
+from ..._ir.intervention import FireResult, FunctionEventInput
+
+# NOT unused (and NOT dead, despite reading that way to a scanner -- finding
+# B1-23c proposed deleting it and three producer-parity tests died with
+# NameError): the ``_ops_*`` slices below are REBOUND into this module's
+# ``globals()``, so every name their bodies reference must resolve HERE.
+# ``amend_lookback_retention`` is used by the rebound
+# ``_ops_retention.amend_lookback_retention`` caller. That is also why this file
+# carries a module-level ``ruff: noqa: F401``: rebind-required imports look
+# unused to static analysis. Verify with the producer-parity suite before
+# removing any import from this module.
+from ..._ir.op_record import amend_lookback_retention
+from ..._ir.predicate import RetroactiveCaptureDecision
+from ..._ir.refs import ParamRef, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._robustness import UnsupportedTensorVariantError
 from ..._state import pause_logging
 from ..._training_validation import TrainingModeConfigError
+from ..._utils._call_site import CALL_SITE_CLASS_MARKER  # noqa: F401 (rebound helper global)
+from ..._utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
+from ..._utils._torch_compat import (
+    saved_tensors_default_hooks_active,
+    tensor_version_or_none,
+    torch_structseq_field_names,
+)
+from ..._utils.collections import ensure_iterable, index_nested
+from ..._utils.display import _timed_phase
+from ..._utils.introspection import (
+    _get_code_context,
+    _get_tensors_and_params_from_obj,
+    get_arg_tensors_for_resolution,
+    get_vars_of_type_from_obj,
+)
+from ..._utils.tensor_utils import (
+    fp8_widen_for_numeric_ops,
+    get_memory_amount_from_metadata,
+    is_functorch_wrapped_tensor,
+    safe_copy,
+    safe_to,
+    tensor_nanequal,
+)
 from ...capture.arg_positions import (
     DYNAMIC_SPEC_UNCACHEABLE,
     FUNC_ARG_SPECS,
@@ -55,24 +142,6 @@ from ...capture.projections import (
 from ...capture.salient_args import extract_salient_args
 from ...capture.session import capture_session_for
 from ...capture.stop import evaluate_halt_stop, stop_directive_for_trace
-from ...data_classes._nonfinite import record_op_nonfinite
-from ...data_classes.internal_types import FuncExecutionContext
-from ...data_classes.op import (
-    Op,
-    _dedup_cached_identity_out,
-    _dedup_saved_activation_out,
-    _dtype_or_none,
-    _effective_activation_save_mode,
-    _memory_or_none,
-    _recursive_safe_copy,
-    _shape_or_none,
-    _stamp_reference_out,
-    apply_transform,
-    register_relation_cell_encoding,
-    train_mode_tripwire_armed,
-    validate_streaming_transform_output,
-    validate_train_mode_transform_output,
-)
 from ...fastlog._halt import HaltSignal
 from ...fastlog._storage_resolver import _resolve_storage
 from ...fastlog.exceptions import PredicateError
@@ -100,75 +169,6 @@ from ...intervention.types import (
     ParentRef,
     TargetSpec,
     Unsupported,
-)
-from ...ir.container import (
-    _SAFE_DEFAULT_FACTORIES,
-    ContainerSpec,
-    DataclassField,
-    DictKey,
-    HFKey,
-    NamedField,
-    OutputPathComponent,
-    TupleIndex,
-    get_registered_container,
-    mapping_extra_instance_state,
-    namedtuple_extra_instance_state,
-    namedtuple_type_can_carry_instance_state,
-    reconstruction_is_lossy,
-)
-from ...ir.container_registry import (
-    OUTPUT_TREE_MAX_DEPTH,
-    ContainerLeafOccurrence,
-    FuncSite,
-    Phase,
-    Role,
-    walk_container,
-)
-from ...ir.events import (
-    ArgTemplateRef,
-    FunctionCallRef,
-    ModuleFrame,
-    OutputRef,
-    OutputVersionEvent,
-    ParentEdge,
-)
-from ...ir.intervention import FireResult, FunctionEventInput
-
-# NOT unused (and NOT dead, despite reading that way to a scanner -- finding
-# B1-23c proposed deleting it and three producer-parity tests died with
-# NameError): the ``_ops_*`` slices below are REBOUND into this module's
-# ``globals()``, so every name their bodies reference must resolve HERE.
-# ``amend_lookback_retention`` is used by the rebound
-# ``_ops_retention.amend_lookback_retention`` caller. That is also why this file
-# carries a module-level ``ruff: noqa: F401``: rebind-required imports look
-# unused to static analysis. Verify with the producer-parity suite before
-# removing any import from this module.
-from ...ir.op_record import amend_lookback_retention
-from ...ir.predicate import RetroactiveCaptureDecision
-from ...ir.refs import ParamRef, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...utils._call_site import CALL_SITE_CLASS_MARKER  # noqa: F401 (rebound helper global)
-from ...utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
-from ...utils._torch_compat import (
-    saved_tensors_default_hooks_active,
-    tensor_version_or_none,
-    torch_structseq_field_names,
-)
-from ...utils.collections import ensure_iterable, index_nested
-from ...utils.display import _timed_phase
-from ...utils.introspection import (
-    _get_code_context,
-    _get_tensors_and_params_from_obj,
-    get_arg_tensors_for_resolution,
-    get_vars_of_type_from_obj,
-)
-from ...utils.tensor_utils import (
-    fp8_widen_for_numeric_ops,
-    get_memory_amount_from_metadata,
-    is_functorch_wrapped_tensor,
-    safe_copy,
-    safe_to,
-    tensor_nanequal,
 )
 from . import module_stack as _mstack
 from ._param_fingerprint import param_fingerprint
@@ -210,8 +210,8 @@ from .tensor_tracking import (
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
-    from ...ir.op_record import OpRecord
+    from ..._data_classes.trace import Trace
+    from ..._ir.op_record import OpRecord
 
 
 class _AncestorBitset:
@@ -616,7 +616,7 @@ class ExhaustiveOpDraft:
         )
 
 
-# Canonical set lives in ``torchlens.utils._callable_safety`` so this capture-side
+# Canonical set lives in ``torchlens._utils._callable_safety`` so this capture-side
 # keyer, the load-side resolver, and the security gate's recognized-operator predicate
 # can never drift apart on the safe pure-read property surface. The set is STRUCTURALLY
 # computed there (r45) by probing every live ``TensorBase`` getset descriptor for a

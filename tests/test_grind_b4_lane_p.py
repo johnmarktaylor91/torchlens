@@ -27,7 +27,7 @@ from torchlens._io.state_keys import (
     static_class_attr,
 )
 from torchlens._trace_selector_helpers import _predicate_cache_key
-from torchlens.utils.display import cleanup_trace_visualizer_dir, ensure_trace_visualizer_dir
+from torchlens._utils.display import cleanup_trace_visualizer_dir, ensure_trace_visualizer_dir
 from torchlens.visualization import auto_collapse
 from torchlens.visualization.auto_collapse import analyze_collapse
 
@@ -478,7 +478,7 @@ def test_accessor_caches_invalidate_on_rebind_resize_and_invalidator(tmp_path: P
     explicit invalidator.
     """
 
-    from torchlens.data_classes._trace_accessors import (
+    from torchlens._data_classes._trace_accessors import (
         _invalidate_trace_op_layer_accessor_caches,
     )
 
@@ -528,7 +528,7 @@ def test_ops_memo_hit_is_o1_no_label_reads(tmp_path: Path) -> None:
     exponent ~2.1, 9.6ms -> 138.5ms over 102 -> 402 ops).
     """
 
-    from torchlens.data_classes.op import Op
+    from torchlens._data_classes.op import Op
 
     model = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 2))
     trace = tl.trace(model, torch.ones(1, 2))

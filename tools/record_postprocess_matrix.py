@@ -34,7 +34,7 @@ def main() -> None:
     out_path = sys.argv[1] if len(sys.argv) > 1 else "postprocess_matrix.json"
     from support.postprocess_axes import iter_axes
 
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
 
     per_axis: dict[str, dict[str, dict[str, list[str]]]] = {}
     failures: dict[str, str] = {}

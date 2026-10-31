@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from torchlens.observability import (
+from torchlens._observability import (
     HISTORY_SCHEMA_VERSION,
     CommittedBlock,
     HistoryReader,
@@ -25,8 +25,8 @@ from torchlens.observability import (
     Spine,
     StepBlockRecord,
 )
-from torchlens.observability._errors import HistorySchemaError
-from torchlens.observability._op_tier import OpTierCollector
+from torchlens._observability._errors import HistorySchemaError
+from torchlens._observability._op_tier import OpTierCollector
 
 
 def _committed(step: int, trace_ref: str | None) -> CommittedBlock:

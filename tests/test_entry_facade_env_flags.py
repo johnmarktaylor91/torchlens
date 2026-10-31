@@ -19,8 +19,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
+from torchlens._utils.env_flags import ENV_FLAG_REGISTRY, closed_bool_env
 from torchlens.errors import CaptureContextError
-from torchlens.utils.env_flags import ENV_FLAG_REGISTRY, closed_bool_env
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _PACKAGE_ROOT = _REPO_ROOT / "torchlens"
@@ -113,7 +113,7 @@ def test_every_torchlens_env_read_is_registered() -> None:
     }
     assert not unregistered, (
         "TORCHLENS_* environment reads without an ENV_FLAG_REGISTRY row "
-        f"(register them in torchlens/utils/env_flags.py): {unregistered}"
+        f"(register them in torchlens/_utils/env_flags.py): {unregistered}"
     )
 
 
@@ -137,7 +137,7 @@ def test_bool_flags_parse_through_the_one_parser() -> None:
         for kind, rel in sites:
             if kind == "parser":
                 continue
-            if rel.endswith("torchlens/utils/env_flags.py"):
+            if rel.endswith("torchlens/_utils/env_flags.py"):
                 continue
             offenders.setdefault(name, []).append(rel)
     assert not offenders, (

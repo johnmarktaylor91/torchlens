@@ -302,8 +302,8 @@ class TestFuncolRefusalParity:
     def test_merge_refuses_funcol_bearing_core_typed(self, gloo_world):
         """C1 merge scope: a funcol-bearing rank core refuses MERGE_SCOPE_UNSUPPORTED."""
 
-        from torchlens.merged._errors import MergeInputError
-        from torchlens.merged._evidence import extract_rank_evidence
+        from torchlens._merged._errors import MergeInputError
+        from torchlens._merged._evidence import extract_rank_evidence
 
         lifecycle.arm()
         log = tl.trace(WaitedFuncol(), torch.ones(3))
@@ -365,8 +365,8 @@ class TestFuncolPersistence:
     def test_save_load_round_trips_the_boundary_disclosure(self, gloo_world, tmp_path):
         """The v0 payload survives save/load; refusal parity holds on the load."""
 
-        from torchlens.merged._errors import MergeInputError
-        from torchlens.merged._evidence import extract_rank_evidence
+        from torchlens._merged._errors import MergeInputError
+        from torchlens._merged._evidence import extract_rank_evidence
 
         lifecycle.arm()
         log = tl.trace(WaitedFuncol(), torch.ones(3))
@@ -450,11 +450,11 @@ class TestFuncolSessionLeak:
         dead session's bookkeeping is the honest degradation.
         """
 
+        from torchlens._utils._torch_compat import get_funcol_wait_redispatch
         from torchlens.backends.torch.funcol import (
             _FuncolCaptureSession,
             _make_observed_wait_tensor,
         )
-        from torchlens.utils._torch_compat import get_funcol_wait_redispatch
 
         redispatch = get_funcol_wait_redispatch()
         if redispatch is None:

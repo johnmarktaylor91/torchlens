@@ -14,6 +14,9 @@ from ._runnable_state import (
     PreparedRunnableState,
     runnable_tensor_byte_digest,
 )
+from ._utils.rng import (
+    aten_qualname_is_seeded_rng,
+)
 from .errors import (
     NumericAttestationError,
     PathDivergenceError,
@@ -42,9 +45,6 @@ from .runnable import (
     StateSource,
     TensorSlotDescriptor,
     TensorSlotRole,
-)
-from .utils.rng import (
-    aten_qualname_is_seeded_rng,
 )
 
 if TYPE_CHECKING:
@@ -619,7 +619,7 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
         EMPTY_CONTAINER_PATH_MARKER,
         empty_container_kind,
     )
-    from torchlens.ir.container import get_registered_container
+    from torchlens._ir.container import get_registered_container
 
     current = value
     for component in path:

@@ -30,8 +30,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from typing import Any
 
-    from ..data_classes.internal_types import VisualizationOverrides
-    from ..data_classes.trace import Trace
+    from .._data_classes.internal_types import VisualizationOverrides
+    from .._data_classes.trace import Trace
     from .render_ir import RenderIROrderingConstraint
 
 

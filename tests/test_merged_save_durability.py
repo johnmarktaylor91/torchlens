@@ -16,9 +16,9 @@ import torchlens as tl
 
 # Reuse the rank-core builder from the load-identity module.
 from tests.test_merged_load_identity import _rank_trace
-from torchlens.merged._artifact import load_merged, save_merged
-from torchlens.merged._enums import MergedErrorCode
-from torchlens.merged._errors import MergedArtifactError
+from torchlens._merged._artifact import load_merged, save_merged
+from torchlens._merged._enums import MergedErrorCode
+from torchlens._merged._errors import MergedArtifactError
 
 
 def _merged():
@@ -79,7 +79,7 @@ def test_publish_time_overwrite_recheck_refuses(tmp_path: Path, monkeypatch) -> 
     art = tmp_path / "merged.tlspec"
     merged = _merged()
 
-    import torchlens.merged._artifact as artifact_mod
+    import torchlens._merged._artifact as artifact_mod
 
     real_tree_hash = artifact_mod.tree_hash
     created = {"done": False}

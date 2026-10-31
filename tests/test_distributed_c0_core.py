@@ -612,8 +612,8 @@ class TestC10dGroupSeqCompatRouting:
     """
 
     def test_missing_capability_short_circuits_to_none(self, monkeypatch):
+        from torchlens._utils import _torch_compat as tc
         from torchlens.backends.torch import collectives
-        from torchlens.utils import _torch_compat as tc
 
         monkeypatch.setattr(
             tc, "probe_c10d_capabilities", lambda **_: {"HAS_C10D_GROUP_SEQ": False}
@@ -630,8 +630,8 @@ class TestC10dGroupSeqCompatRouting:
         assert Recording.called is False
 
     def test_present_capability_reads_the_private_counter(self, monkeypatch):
+        from torchlens._utils import _torch_compat as tc
         from torchlens.backends.torch import collectives
-        from torchlens.utils import _torch_compat as tc
 
         monkeypatch.setattr(tc, "probe_c10d_capabilities", lambda **_: {"HAS_C10D_GROUP_SEQ": True})
 
@@ -653,8 +653,8 @@ class TestC10dGroupSeqCompatRouting:
 
         import warnings as warnings_module
 
+        from torchlens._utils import _torch_compat as tc
         from torchlens.backends.torch import collectives
-        from torchlens.utils import _torch_compat as tc
 
         monkeypatch.setattr(tc, "HAS_C10D_GROUP_SEQ", True)
         monkeypatch.setattr(tc, "_C10D_GROUP_SEQ_PROBED", True)

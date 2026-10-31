@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
-from ..observability._kernels import Spine, SpineResult
+from .._observability._kernels import Spine, SpineResult
 
 __all__ = ["TRAJECTORY_STATISTICS", "TrajectoryStats", "measure_trajectory"]
 

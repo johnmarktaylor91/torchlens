@@ -39,7 +39,7 @@ _LAZY_MODULE_CASES = (
     ("intervention", "func"),
     ("user_funcs", "trace"),
     ("data_classes", "Buffer"),
-    # r7 R81: the documented tl.autoroute.output spelling used to resolve
+    # r7 R81: the documented tl._autoroute.output spelling used to resolve
     # only by import-order side effect (no lazy row).
     ("autoroute", "output"),
 )
@@ -405,7 +405,7 @@ assert collisions == {
     # C04: the transforms facade's children are all underscore-private.
     "transforms": [],
     "types": [], "user_funcs": [],
-    # F29: tl.utils gained a root row (the docs teach tl.utils.doctor()).
+    # F29: tl._utils gained a root row (the docs teach tl._utils.doctor()).
     "utils": [],
     "validation": [], "visualization": [], "viz": [],
 }
@@ -644,7 +644,7 @@ def test_bare_import_defers_lazified_feature_modules() -> None:
     _run_import_script(
         "import sys; import torchlens; "
         "blocked = ('torchlens.fastlog', 'torchlens.intervention', "
-        "'torchlens.user_funcs', 'torchlens.data_classes'); "
+        "'torchlens.user_funcs', 'torchlens._data_classes'); "
         "assert not any(name == prefix or name.startswith(prefix + '.') "
         "for prefix in blocked for name in sys.modules)"
     )
@@ -708,7 +708,7 @@ def test_torchvision_model_trace_still_covers_torchvision_ops() -> None:
     torchvision_models = pytest.importorskip("torchvision.models")
 
     import torchlens as tl
-    from torchlens.constants import TORCHVISION_FUNCS, get_orig_torch_funcs
+    from torchlens._constants import TORCHVISION_FUNCS, get_orig_torch_funcs
 
     wrapped_targets = set(get_orig_torch_funcs())
     assert set(TORCHVISION_FUNCS).issubset(wrapped_targets)

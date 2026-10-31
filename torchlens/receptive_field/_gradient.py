@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, cast
 import torch
 
 from .. import _state
+from .._utils._torch_compat import tensor_any_over_dims
 from ..backends import BackendUnsupportedError, get_backend_spec
-from ..utils._torch_compat import tensor_any_over_dims
 from . import _engine, _rules
 from ._errors import (
     ReceptiveFieldConfigurationError,
@@ -25,8 +25,8 @@ from ._path import require_path, resolve_graph_point
 from ._types import GradientReceptiveField, GridLayout, ReceptiveFieldDirection
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ._engine_geometry import _InputState
     from ._types import ReceptiveField
 

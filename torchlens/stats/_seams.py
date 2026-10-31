@@ -146,7 +146,7 @@ class EchoObserver:
         """Record one firing; the observed value passes through unchanged."""
 
         from .._state import pause_logging
-        from ..utils.fail_open import fail_open
+        from .._utils.fail_open import fail_open
 
         with pause_logging():
             address = self._address(hook)

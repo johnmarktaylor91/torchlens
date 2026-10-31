@@ -36,6 +36,8 @@ from torch import get_default_dtype, nn
 
 from .. import _state
 from .._capture_state_helpers import CompiledCapturePrep, prepare_compiled_capture
+from .._ir.container_registry import ModelSite, Phase, Role, walk_container
+from .._quantities import Bytes, Duration
 from .._runnable_seam import runnable_trace_state
 from ..backends import (
     TORCH_BACKEND_NAME,
@@ -46,8 +48,6 @@ from ..backends import (
     resolve_backend_spec,
 )
 from ..fastlog._halt import HaltSignal
-from ..ir.container_registry import ModelSite, Phase, Role, walk_container
-from ..quantities import Bytes, Duration
 from . import peak_memory
 from .config import InternalCaptureConfig
 from .outcome import (
@@ -71,10 +71,10 @@ from .session import (
 from .stop import StopDirective, cleared_inference_only_directive, evaluate_halt_stop
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
-from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
-from ..utils.display import _timed_phase, _vprint
-from ..utils.rng import (
+    from .._data_classes.trace import Trace
+from .._data_classes._lookup_keys import _give_user_feedback_about_lookup_key
+from .._utils.display import _timed_phase, _vprint
+from .._utils.rng import (
     host_rng_advanced,
     log_current_rng_states,
     set_rng_from_saved_states,
@@ -1346,7 +1346,7 @@ def _scrub_failed_capture_transients(self: "Trace") -> None:
     None. Mutates ``self.__dict__``.
     """
 
-    from ..utils.tensor_utils import synchronize_pending_cpu_async_copies
+    from .._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
     # A failed forward may leave in-flight cpu_async D2H copies whose
     # pinned host buffers escape on ``exc.partial_log`` (R36-1): fence them
@@ -1754,7 +1754,7 @@ def run_and_log_inputs_through_model(
         if self.capture_mode == "exhaustive":
             self._pre_forward_rng_states = backend.snapshot_rng(self)
 
-        from ..ir import CaptureEvents
+        from .._ir import CaptureEvents
 
         self.capture_events = CaptureEvents()
         capture_events = self.capture_events
@@ -1878,7 +1878,7 @@ def run_and_log_inputs_through_model(
                 # forward is about to run under (defaults, matmul precision,
                 # determinism, TF32/cuDNN flags, SDP toggles) so the sparse runnable
                 # descriptor can restore it explicitly at replay.
-                from ..utils._torch_compat import (
+                from .._utils._torch_compat import (
                     AMBIENT_FP32_UNREPRESENTABLE_KEY,
                     read_legacy_fp32_controls,
                     snapshot_ambient_execution_context,
@@ -1949,7 +1949,7 @@ def run_and_log_inputs_through_model(
                             )
                             _host_rng_before = snapshot_host_rng()
                             if bool(getattr(self, "intervention_ready", False)):
-                                from ..utils.rng import host_nondeterminism_monitor
+                                from .._utils.rng import host_nondeterminism_monitor
 
                                 with host_nondeterminism_monitor(model) as _rng_channels:
                                     outputs = cast(Callable[..., Any], model)(
@@ -2024,8 +2024,8 @@ def run_and_log_inputs_through_model(
         if cleared is not None:  # before settlement stamps the flag on the outcome
             self.inference_only, self._stop_directive = False, cleared
         set_capture_phase(self, CapturePhase.FINALIZE)
-        from ..data_classes._nonfinite import drain_pending_nonfinite
-        from ..utils.tensor_utils import synchronize_pending_cpu_async_copies
+        from .._data_classes._nonfinite import drain_pending_nonfinite
+        from .._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
         # Fence every cpu_async D2H copy recorded this forward BEFORE any
         # host-side consumer (finalize, postprocess digests, ``op.out``,
@@ -2039,7 +2039,7 @@ def run_and_log_inputs_through_model(
 
         output_transform = getattr(self, "_output_transform", None)
         self.raw_output = output_transform(outputs) if output_transform is not None else None
-        from ..autoroute._builtin_output import decode_outputs_for_trace
+        from .._autoroute._builtin_output import decode_outputs_for_trace
 
         decode_outputs_for_trace(
             self,

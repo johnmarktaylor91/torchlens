@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import (
+from torchlens._debug import (
     bisect_precision,
     compare_rows,
     first_divergence,

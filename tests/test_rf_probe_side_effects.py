@@ -7,8 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.field_policy import portable_state_spec_from_policy
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.field_policy import portable_state_spec_from_policy
+from torchlens._data_classes.trace import Trace
 from torchlens.receptive_field._gradient import _probe_suppressed, gradient_for_unit
 
 

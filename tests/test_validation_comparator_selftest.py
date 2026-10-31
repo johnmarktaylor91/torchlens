@@ -107,7 +107,7 @@ class TestSignedZeroDoctrine:
     band; NaN sign stays out of scope (kernels legitimately differ on it)."""
 
     def test_signed_zero_flip_is_not_exact(self) -> None:
-        from torchlens.utils.tensor_utils import tensor_nanequal
+        from torchlens._utils.tensor_utils import tensor_nanequal
 
         neg = torch.tensor([-0.0, 1.0])
         pos = torch.tensor([0.0, 1.0])
@@ -115,20 +115,20 @@ class TestSignedZeroDoctrine:
         assert not tensor_nanequal(pos, neg)
 
     def test_signed_zero_flip_is_within_tolerance(self) -> None:
-        from torchlens.utils.tensor_utils import tensor_nanequal
+        from torchlens._utils.tensor_utils import tensor_nanequal
 
         neg = torch.tensor([-0.0, 1.0])
         pos = torch.tensor([0.0, 1.0])
         assert tensor_nanequal(neg, pos, allow_tolerance=True)
 
     def test_matching_negative_zeros_stay_exact(self) -> None:
-        from torchlens.utils.tensor_utils import tensor_nanequal
+        from torchlens._utils.tensor_utils import tensor_nanequal
 
         neg = torch.tensor([-0.0, 0.0, 1.0])
         assert tensor_nanequal(neg, neg.clone())
 
     def test_complex_component_signed_zero_flip_is_not_exact(self) -> None:
-        from torchlens.utils.tensor_utils import tensor_nanequal
+        from torchlens._utils.tensor_utils import tensor_nanequal
 
         a = torch.tensor([complex(0.0, 0.0), 1 + 2j])
         b = torch.tensor([complex(-0.0, 0.0), 1 + 2j])
@@ -136,7 +136,7 @@ class TestSignedZeroDoctrine:
         assert tensor_nanequal(a, a.clone())
 
     def test_nan_sign_is_out_of_scope(self) -> None:
-        from torchlens.utils.tensor_utils import tensor_nanequal
+        from torchlens._utils.tensor_utils import tensor_nanequal
 
         plus_nan = torch.tensor([float("nan"), 1.0])
         minus_nan = torch.tensor([-float("nan"), 1.0])
@@ -148,7 +148,7 @@ class TestSignedZeroDoctrine:
         """A regression re-blessing signed-zero flips as exact must be
         caught at validation ENTRY by the comparator self-test."""
 
-        from torchlens.utils import tensor_utils
+        from torchlens._utils import tensor_utils
 
         real = tensor_utils.tensor_nanequal
 

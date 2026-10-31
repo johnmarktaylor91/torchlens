@@ -24,18 +24,18 @@ def _drop_module(module_name: str) -> None:
 
 
 def test_notebook_import_stays_inert() -> None:
-    """``import torchlens.notebook`` never imports its foreign extra deps.
+    """``import torchlens._notebook`` never imports its foreign extra deps.
 
     Package import must not touch ``IPython`` / ``jupyter_client`` as a side
     effect, regardless of whether the extra is installed -- the dependency
     check is deferred to first attribute access (see the security fix that
     closes a foreign-import-at-untrusted-bundle-load class).
     """
-    _drop_module("torchlens.notebook")
+    _drop_module("torchlens._notebook")
     _drop_module("IPython")
     _drop_module("jupyter_client")
 
-    module = importlib.import_module("torchlens.notebook")
+    module = importlib.import_module("torchlens._notebook")
 
     # F22 facade contract: __all__ advertises only dependency-present real
     # names, resolved via find_spec WITHOUT importing the foreign packages.
@@ -46,9 +46,9 @@ def test_notebook_import_stays_inert() -> None:
 
 def test_notebook_attribute_access_reports_missing_dependency() -> None:
     """Unknown attribute access teaches AttributeError-lineage regardless of deps."""
-    _drop_module("torchlens.notebook")
+    _drop_module("torchlens._notebook")
 
-    module = importlib.import_module("torchlens.notebook")
+    module = importlib.import_module("torchlens._notebook")
 
     with patch.dict("sys.modules", {"IPython": None}):
         # F22 facade contract: unknown names never mask as ImportError --
@@ -61,9 +61,9 @@ def test_notebook_attribute_access_when_deps_present() -> None:
     """When deps are installed, attribute access raises AttributeError, not ImportError."""
     pytest.importorskip("IPython")
     pytest.importorskip("jupyter_client")
-    _drop_module("torchlens.notebook")
+    _drop_module("torchlens._notebook")
 
-    module = importlib.import_module("torchlens.notebook")
+    module = importlib.import_module("torchlens._notebook")
 
     with pytest.raises(AttributeError):
         module.anything

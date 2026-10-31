@@ -17,7 +17,7 @@ import pytest
 import torchlens as tl
 from tests.test_flops1_backward_dispatch import ZOO_BUILDERS, _traced_backward
 from tests.test_flops2_backward_attribution import SEGMENT_FORWARD, _checkpointed_trace
-from torchlens.data_classes.backward_pass import BackwardPass
+from torchlens._data_classes.backward_pass import BackwardPass
 from torchlens.report import backward_status
 from torchlens.report._backward_attribution import executed_flops_record_problem
 

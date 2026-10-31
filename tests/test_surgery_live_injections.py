@@ -295,12 +295,12 @@ def test_intervene_fire_counter_is_a_declared_session_transient() -> None:
     deleted (declared and exempted are disjoint by gate).
     """
 
-    from torchlens.data_classes._trace_components import (
+    from torchlens._data_classes._trace_components import (
         TRACE_EXTERNAL_WRITE_EXEMPTIONS,
         TRACE_FIELD_OWNERSHIP,
     )
-    from torchlens.data_classes.field_policy import FieldPolicy
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.field_policy import FieldPolicy
+    from torchlens._data_classes.trace import Trace
 
     name = "_tl_intervene_selector_fire_count"
     assert Trace.PORTABLE_STATE_SPEC[name] is FieldPolicy.DROP

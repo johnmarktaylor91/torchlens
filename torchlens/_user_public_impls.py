@@ -23,6 +23,7 @@ from ._capture_state_helpers import (
     _unwrap_data_parallel,
     unwrap_compiled_model,
 )
+from ._data_classes.trace import Trace
 from ._deploy_env import restore_state_dict_resilient
 from ._deprecations import MISSING, MissingType
 from ._input_coerce import _coerce_input_args
@@ -39,6 +40,11 @@ from ._literals import (
 )
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption
+from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
+from ._utils.display import warn_parallel
+from ._utils.hashing import compute_graph_shape_hash
+from ._utils.introspection import get_vars_of_type_from_obj
+from ._utils.rng import set_random_seed
 from ._validation_state_snapshot import (
     COPY_FAILED_CODE,
     StateSnapshot,
@@ -48,7 +54,6 @@ from ._validation_state_snapshot import (
     state_matches_snapshot,
 )
 from .backends import BackendName, BackendUnsupportedError, resolve_backend_spec
-from .data_classes.trace import Trace
 from .errors import TraceNotReproducibleWarning
 from .options import (
     CaptureOptions,
@@ -56,17 +61,12 @@ from .options import (
     merge_visualization_options,
     visualization_to_render_kwargs,
 )
-from .utils.arg_handling import normalize_input_args, safe_copy_input_tree
-from .utils.display import warn_parallel
-from .utils.hashing import compute_graph_shape_hash
-from .utils.introspection import get_vars_of_type_from_obj
-from .utils.rng import set_random_seed
 from .visualization.code_panel import CodePanelOption
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .data_classes.module import Module
+    from ._data_classes.module import Module
 
 
 def release_model(model: nn.Module) -> None:
@@ -210,7 +210,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         A ``SummaryReport`` (``str`` subclass): canonical ASCII payload
         plus the typed result API.
     """
-    from .utils.rng import log_current_rng_states, set_rng_from_saved_states
+    from ._utils.rng import log_current_rng_states, set_rng_from_saved_states
 
     _validate_summary_modes(execution_mode, grad_mode)
     _validate_summary_grammar(summary_kwargs)
@@ -238,7 +238,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     if facade_report is not None:
         return facade_report
     if input_size is not None or (input_args is None and not input_kwargs):
-        from .quickstart._resolve import attach_provenance, resolve_inputs
+        from ._quickstart._resolve import attach_provenance, resolve_inputs
 
         resolved = resolve_inputs(model, input_args, input_kwargs, input_size, verb="summary")
         ladder_provenance = resolved.provenance
@@ -286,7 +286,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         set_rng_from_saved_states(rng_snapshot)
 
     if ladder_provenance is not None:
-        from .quickstart._resolve import attach_provenance
+        from ._quickstart._resolve import attach_provenance
 
         attach_provenance(trace, ladder_provenance)
     return _summary_report_from_trace(
@@ -485,7 +485,7 @@ def _weightsfree_summary_facade(
     from .options import CaptureOptions as _CaptureOptions
 
     if input_size is not None:
-        from .quickstart._resolve import resolve_inputs
+        from ._quickstart._resolve import resolve_inputs
 
         resolved = resolve_inputs(model, None, None, input_size, verb="summary")
         input_args = [
@@ -649,7 +649,7 @@ def show_model_graph(
     try:
         render_kwargs = visualization_to_render_kwargs(visualization_options)
         if module is not None:
-            from .data_classes.module import Module
+            from ._data_classes.module import Module
 
             render_kwargs["module"] = module.address if isinstance(module, Module) else module
         if code_panel is not False:
@@ -1516,7 +1516,7 @@ def _validate_forward_pass_torch(
         # the kernel is missing outright there, so warn_only=True cannot help,
         # and forcing crashed any validation that allocates a fresh Float8
         # CPU tensor.
-        from .utils._torch_compat import get_cpu_float8_deterministic_fill_support
+        from ._utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
         if get_cpu_float8_deterministic_fill_support():
             torch.use_deterministic_algorithms(True, warn_only=True)

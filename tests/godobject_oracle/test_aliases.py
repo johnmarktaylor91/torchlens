@@ -371,7 +371,7 @@ def test_equivalence_group_shared_live_view() -> None:
 
     # LIVE through the sanctioned scrub path: filtering the group once is
     # observed by every member on its next read, sharing intact.
-    from torchlens.data_classes.cleanup import _scrub_per_op_equivalence_lists
+    from torchlens._data_classes.cleanup import _scrub_per_op_equivalence_lists
 
     group_labels = sorted(first.equivalent_ops)
     removed = group_labels[-1]

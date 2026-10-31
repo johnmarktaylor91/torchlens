@@ -9,8 +9,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
-from torchlens.ir.workspaces import (
+from torchlens._data_classes.trace import Trace
+from torchlens._ir.workspaces import (
     LEGACY_TRACE_BUILD_STATE_KEYS,
     ModuleCaptureWorkspace,
     RawGraphWorkspace,

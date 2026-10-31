@@ -15,7 +15,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 from torchlens.semantic.logit_lens import (
     PROVENANCE_NATIVE,
     PROVENANCE_PROJECTED,

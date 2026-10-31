@@ -14,14 +14,14 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 import torch
 
 from .._errors import InvalidArgumentError
-from ..ir.selector_eval import (
+from .._ir.selector_eval import (
     _label_site_index,
     ensure_supported,
     evaluate,
     normalize_selector_like,
     walk_selector,
 )
-from ..utils._callable_safety import (
+from .._utils._callable_safety import (
     _DENIED_MODULES,
     _matches,
     _unwrap_capture_wrapper,
@@ -32,8 +32,8 @@ from ..utils._callable_safety import (
     real_callable_module,
     unsafe_callable_reason,
 )
-from ..utils._torch_compat import resolve_runnable_torch_alias
-from ..utils._torch_symbols import torch_attr
+from .._utils._torch_compat import resolve_runnable_torch_alias
+from .._utils._torch_symbols import torch_attr
 from ._module_alias_guard import refuse_trace_alias_spellings
 from .errors import (
     MultiMatchWarning,
@@ -54,10 +54,10 @@ from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 if TYPE_CHECKING:
     import pandas as pd
 
-    from torchlens.data_classes.grad_fn import GradFn
-    from torchlens.data_classes.layer import Layer
-    from torchlens.data_classes.op import Op
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.grad_fn import GradFn
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.op import Op
+    from torchlens._data_classes.trace import Trace
 
 SelectorInput = BaseSelector | TargetSpec | FrozenTargetSpec | str
 if TYPE_CHECKING:
@@ -96,7 +96,7 @@ def _internal_torch_builtin_key(
         otherwise ``None``.
     """
 
-    from ..utils._torch_compat import get_variable_functions_class
+    from .._utils._torch_compat import get_variable_functions_class
 
     # r-b4 R26-2: routed through _torch_compat (HAS_VARIABLE_FUNCTIONS_CLASS) --
     # namespace drift used to silently downgrade the recorded replay key to the
@@ -147,7 +147,7 @@ def _resolve_internal_torch_builtin_key(
         or qualname != key.qualname
     ):
         return None
-    from ..utils._torch_compat import get_variable_functions_class
+    from .._utils._torch_compat import get_variable_functions_class
 
     resolved = getattr(get_variable_functions_class(), qualname, None)
     return cast(Callable[..., Any], resolved) if callable(resolved) else None
@@ -206,7 +206,7 @@ def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionReg
 
 # Extras-gated "appliance" subpackages whose ``__init__`` imports heavy FOREIGN
 # third-party dependencies at IMPORT TIME (rsatoolbox / brainscore_core for
-# ``torchlens.neuro``, IPython / jupyter_client for ``torchlens.notebook``).
+# ``torchlens.neuro``, IPython / jupyter_client for ``torchlens._notebook``).
 # Mirrors ``torchlens._io._safe_unpickle._TORCHLENS_APPLIANCE_MODULES`` --
 # duplicated here rather than imported to keep this security boundary free of
 # cross-module import-order coupling. A bundle-supplied ``custom`` key naming
@@ -215,7 +215,7 @@ def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionReg
 # receive the exact same deny-by-default / trust-opt-in treatment as a
 # genuinely foreign import path: denied before import, resolved only under an
 # explicit trust opt-in, decided by NAME alone -- never imported to decide it.
-_TORCHLENS_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens.notebook"})
+_TORCHLENS_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens._notebook"})
 
 
 def _is_torchlens_appliance_module(module: str) -> bool:
@@ -361,7 +361,7 @@ def resolve_function_registry_key(
             # importing it executes its top-level code.
             #
             # EXCEPTION: the extras-gated appliance packages (``torchlens.neuro`` /
-            # ``torchlens.notebook``) import FOREIGN third-party dependencies at
+            # ``torchlens._notebook``) import FOREIGN third-party dependencies at
             # import time, so a path naming one of them is NOT safe to import
             # unconditionally -- it must receive the same treatment as a
             # genuinely foreign import path below (denied before import, resolved
@@ -498,7 +498,7 @@ def resolve_function_registry_key(
                     # a genuinely torchlens-owned callable is auto-trusted ONLY if it
                     # is a vetted-inert first-party symbol (public facet recipe /
                     # transform / intervention helper). A PRIVATE torchlens util --
-                    # notably the ``torchlens.utils:_module_is_installed`` import
+                    # notably the ``torchlens._utils:_module_is_installed`` import
                     # gadget -- or any I/O / import / exec / spawn callable is refused
                     # rather than resolved to a live callable.
                     raise UntrustedCallableError(
@@ -1280,7 +1280,7 @@ def _guard_episode_step_query(log: Trace, selector: Any) -> None:
         ``episode_step_unstamped`` on stamp-less episode artifacts.
     """
 
-    from ..ir.selector_eval import selector_contains_kind
+    from .._ir.selector_eval import selector_contains_kind
 
     if not isinstance(selector, BaseSelector) or not selector_contains_kind(
         selector, "episode_step", unwrap=True

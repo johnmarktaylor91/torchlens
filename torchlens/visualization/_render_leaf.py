@@ -7,7 +7,7 @@ from collections import deque
 from contextvars import ContextVar
 
 from .._errors import InvalidArgumentError
-from ..utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from ._backward_inventory import (
     BackwardStyleInventory,
     _backward_pass_row,
@@ -43,9 +43,9 @@ def _backward_dot_node_name(grad_fn_handle: "GradFn") -> str:
 
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn import GradFn
-    from ..data_classes.module import Module
-    from ..data_classes.trace import Trace
+    from .._data_classes.grad_fn import GradFn
+    from .._data_classes.module import Module
+    from .._data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
 
 

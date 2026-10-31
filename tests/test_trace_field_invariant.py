@@ -6,7 +6,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.constants import MODEL_LOG_FIELD_ORDER
+from torchlens._constants import MODEL_LOG_FIELD_ORDER
 
 
 def test_trace_field_set_subset_of_user_facing() -> None:

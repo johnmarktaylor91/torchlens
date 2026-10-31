@@ -240,7 +240,7 @@ def resolve_adapter(backend: str, *, plant: str | None = None) -> Any:
         f"Unknown conformance backend {backend!r}; the runner resolves 'torch' "
         "(the reference), 'fake' (the reserved plant substrate) and the preview "
         f"backends {sorted(PREVIEW_ADAPTER_FACTORIES)}. External providers are "
-        "exercised after explicit activation through torchlens.ecosystem.plugins. "
+        "exercised after explicit activation through torchlens._ecosystem.plugins. "
         "Remedy: pass 'torch', 'fake' or a preview backend name.",
         code="conformance_backend_unknown",
         remedy="pass 'torch', 'fake' or a preview backend name",

@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.quickstart import (
+from torchlens._quickstart import (
     RenderResult,
     provenance_to_record,
     resolve_inputs,

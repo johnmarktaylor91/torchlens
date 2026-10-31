@@ -11,19 +11,19 @@ from __future__ import annotations
 
 import pytest
 
-from torchlens.distributed._ledger import (
-    GroupLifecycleEvent,
-    GroupLifecycleLedger,
-    membership_digest_for_ranks,
-)
-from torchlens.merged import (
+from torchlens._merged import (
     BoundaryConsistency,
     MergeAlignment,
     MergeValueStatus,
     derive_merge,
 )
-from torchlens.merged._errors import MergedFinding
-from torchlens.merged._evidence import RankEvidence
+from torchlens._merged._errors import MergedFinding
+from torchlens._merged._evidence import RankEvidence
+from torchlens.distributed._ledger import (
+    GroupLifecycleEvent,
+    GroupLifecycleLedger,
+    membership_digest_for_ranks,
+)
 
 WORLD = membership_digest_for_ranks([0, 1])
 

@@ -74,7 +74,7 @@ def test_register_status_unregister_roundtrip() -> None:
     assert any("Layer" in name for name in st.handlers)
     assert any("Op" in name for name in st.handlers)
     registry = treescope.type_registries.TREESCOPE_HANDLER_REGISTRY
-    from torchlens.data_classes.layer import Layer
+    from torchlens._data_classes.layer import Layer
 
     assert Layer in registry
     bridge.unregister()
@@ -85,7 +85,7 @@ def test_register_status_unregister_roundtrip() -> None:
 def test_foreign_slot_conflict_refuses_typed() -> None:
     """An occupied slot raises treescope_slot_occupied, never a silent swap."""
 
-    from torchlens.data_classes.op import Op
+    from torchlens._data_classes.op import Op
 
     registry = treescope.type_registries.TREESCOPE_HANDLER_REGISTRY
 
@@ -219,7 +219,7 @@ def _exported_public_classes() -> dict[str, type]:
         value = _resolve(name)
         if isinstance(value, type):
             resolved[f"{value.__module__}.{value.__qualname__}"] = value
-    from torchlens.partial import PartialTrace
+    from torchlens._partial import PartialTrace
 
     resolved[f"{PartialTrace.__module__}.{PartialTrace.__qualname__}"] = PartialTrace
     return resolved

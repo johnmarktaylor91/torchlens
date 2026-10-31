@@ -47,8 +47,8 @@ from ._types import (
 from ._view import ReceptiveFieldView
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 
 _TAINTED_STATUSES = {

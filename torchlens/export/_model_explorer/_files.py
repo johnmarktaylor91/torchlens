@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ...utils.display import atomic_write_text
+from ..._utils.display import atomic_write_text
 from ._collection import to_model_explorer_dict
 from ._options import ModelExplorerOptions
 from ._overlay import STANDARD_OVERLAYS, build_node_data

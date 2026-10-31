@@ -20,7 +20,7 @@ from typing import Any, Literal, TypeAlias, overload
 
 import torch
 
-from ..ir.container import (
+from .._ir.container import (
     DataclassField,
     DictKey,
     HFKey,
@@ -28,8 +28,8 @@ from ..ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
+from .._utils._callable_safety import FACET_RECIPE_MARKER_ATTR
 from ..selection import _SelectionOperand
-from ..utils._callable_safety import FACET_RECIPE_MARKER_ATTR
 from ._families import family_entries, family_spec
 
 RecordScope = Literal["op", "module", "any"]

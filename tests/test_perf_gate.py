@@ -24,15 +24,15 @@ from benchmarks.perf_suite import (
     _assert_baseline_status_writable,
     _validate_baseline_status_args,
 )
-from torchlens.backends.torch.model_prep import _traverse_model_modules
-from torchlens.data_classes._trace_accessors import (
+from torchlens._data_classes._trace_accessors import (
     TraceModuleCallAccessor,
     _invalidate_trace_module_call_accessor_cache,
 )
-from torchlens.data_classes.trace import Trace
-from torchlens.postprocess import ast_branches
-from torchlens.postprocess.loop_grouping_adapter import FrontierNodes, _pop_frontier_node
-from torchlens.utils.tensor_utils import get_memory_amount
+from torchlens._data_classes.trace import Trace
+from torchlens._postprocess import ast_branches
+from torchlens._postprocess.loop_grouping_adapter import FrontierNodes, _pop_frontier_node
+from torchlens._utils.tensor_utils import get_memory_amount
+from torchlens.backends.torch.model_prep import _traverse_model_modules
 
 
 def _row(
@@ -316,7 +316,7 @@ def test_module_calls_accessor_is_cached_with_profiled_rebuild_reduction(
     expected = _fresh_module_calls(trace)
     _invalidate_trace_module_call_accessor_cache(trace)
 
-    from torchlens.data_classes import _trace_stats
+    from torchlens._data_classes import _trace_stats
 
     original_accessor = _trace_stats.TraceModuleCallAccessor
     rebuild_count = 0

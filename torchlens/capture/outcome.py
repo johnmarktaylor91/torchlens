@@ -301,7 +301,7 @@ CAPTURE_OUTCOME_CAPABILITIES: dict[str, dict[CaptureStatus, str]] = {
 _REFUSAL_HINTS: dict[str, str] = {
     "N1": (
         "This capture did not settle as a saveable product. Inspect it live "
-        "(draw, report.explain, tl.partial.from_failed_capture) instead of "
+        "(draw, report.explain, tl._partial.from_failed_capture) instead of "
         "exporting it."
     ),
     "N2": (

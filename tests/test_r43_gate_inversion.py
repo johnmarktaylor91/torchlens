@@ -22,7 +22,7 @@ Successive audits kept defeating that with a sibling the verb list never enumera
   a torch operator-robustness boundary outside the side-effect-free admission contract);
   pinned here as ADMITTED so a future refactor cannot silently name-deny it.
 
-The r43 fix (``torchlens/utils/_callable_safety.py``) DEFAULT-DENIES on those exact roots
+The r43 fix (``torchlens/_utils/_callable_safety.py``) DEFAULT-DENIES on those exact roots
 and admits ONLY structurally-recognized genuine forward operators, decided against
 torch's OWN operator authority (``torch.overrides.get_overridable_functions`` /
 ``torch.ops.aten``) -- independent of the buggy gate and self-updating across torch
@@ -54,12 +54,12 @@ import pytest
 import torch
 from torch.overrides import get_overridable_functions, get_testing_overrides
 
-from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_import_ref
-from torchlens.utils._callable_safety import (
+from torchlens._utils._callable_safety import (
     _unwrap_capture_wrapper,  # mechanical capture-unwrap only; NOT the gate decision
     is_pure_forward_callable,
 )
+from torchlens.intervention.errors import UntrustedCallableError
+from torchlens.intervention.resolver import resolve_import_ref
 
 # --------------------------------------------------------------------------- #
 # INDEPENDENT recognized-operator check (re-derived from torch's authorities, NOT
@@ -472,8 +472,8 @@ def test_safe_tensor_property_getters_admitted() -> None:
     """
 
     from torchlens._io.runnable_load import _safe_tensor_property_getter
+    from torchlens._utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
     from torchlens.intervention.types import FunctionRegistryKey
-    from torchlens.utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
 
     # The shipped canonical allowlist IS the audited frozen surface (drift goes RED).
     assert _PURE_TENSOR_PROPERTY_NAMES == _PROPERTY_NAMES

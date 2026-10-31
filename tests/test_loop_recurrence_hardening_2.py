@@ -465,7 +465,7 @@ def test_arg_signature_ignores_object_key_identity() -> None:
     """
     from types import SimpleNamespace
 
-    from torchlens.postprocess.loop_detection import _structural_arg_signature
+    from torchlens._postprocess.loop_detection import _structural_arg_signature
 
     def _op(key: object) -> SimpleNamespace:
         return SimpleNamespace(non_tensor_pos_args=(), non_tensor_kwargs={"cfg": {key: 1}})
@@ -480,7 +480,7 @@ def test_arg_signature_mixed_key_dict_is_order_and_address_free() -> None:
     """Mixed primitive/object key dicts sign identically across constructions."""
     from types import SimpleNamespace
 
-    from torchlens.postprocess.loop_detection import _structural_arg_signature
+    from torchlens._postprocess.loop_detection import _structural_arg_signature
 
     first = SimpleNamespace(
         non_tensor_pos_args=({_OpaqueKey(): 1, "z": 2},),
@@ -510,7 +510,7 @@ def test_grouping_graph_equivalent_labels_respect_argsig_split(monkeypatch) -> N
     same mixed seed set. The neutral contract requires every member of a
     node's ``equivalent_labels`` to share that node's ``equivalence_key``.
     """
-    import torchlens.postprocess.loop_detection as loop_detection
+    import torchlens._postprocess.loop_detection as loop_detection
 
     captured: dict[str, object] = {}
     real_group = loop_detection.group_recurrent_nodes

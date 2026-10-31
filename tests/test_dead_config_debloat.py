@@ -17,7 +17,7 @@ import pytest
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.postprocess import (
+from torchlens._postprocess import (
     _POSTPROCESS_ASSERT_ENV,
     _READ_AUDIT_ENV,
     _WRITE_AUDIT_RECORD_ENV,

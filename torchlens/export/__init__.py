@@ -22,10 +22,10 @@ from typing import Any
 
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._io._json import loads_bounded
+from .._utils.display import atomic_write_text
 from ..capture.structure_only import (
     require_structure_only_capability as _require_structure_only_capability,
 )
-from ..utils.display import atomic_write_text
 from ._common import _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import NETRON_DISCLAIMER, netron
 from ._registry import (
@@ -557,7 +557,7 @@ def memory_timeline_v2(log: Any, path: str | Path) -> Path:
         Written JSON path.
     """
 
-    from torchlens.observe import memory_timeline_v2 as _build_v2
+    from torchlens._observe import memory_timeline_v2 as _build_v2
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)

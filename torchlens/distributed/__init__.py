@@ -2,7 +2,7 @@
 
 ``torchlens.distributed`` is a power-user submodule (imported as
 ``tl.distributed``; deliberately not in the top-level ``__all__``, matching
-``tl.debug``). It owns the C0 correlation/evidence layer of the merge-ranks
+``tl._debug``). It owns the C0 correlation/evidence layer of the merge-ranks
 tier:
 
 * :func:`arm` -- the explicit process-start opt-in that installs the

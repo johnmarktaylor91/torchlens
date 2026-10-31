@@ -23,8 +23,8 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.utils import introspection
-from torchlens.utils.rng import host_nondeterminism_monitor
+from torchlens._utils import introspection
+from torchlens._utils.rng import host_nondeterminism_monitor
 
 pytestmark = pytest.mark.skipif(
     sys.version_info < (3, 11), reason="column offsets need co_positions (Python 3.11+)"

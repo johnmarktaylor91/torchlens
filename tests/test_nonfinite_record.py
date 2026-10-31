@@ -14,11 +14,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._errors import StructureOnlyOptionConflictError
-from torchlens.data_classes._nonfinite import (
+from torchlens._data_classes._nonfinite import (
     _CAPTURE_STORE_ATTR,
     drain_pending_nonfinite,
 )
+from torchlens._errors import StructureOnlyOptionConflictError
 
 
 class _NanModel(nn.Module):

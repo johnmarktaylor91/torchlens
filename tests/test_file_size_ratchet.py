@@ -129,7 +129,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # dedup split to _op_dedup.py (T77) lands on the merged tree alongside
     # the F10 deletions; re-keyed down to the next 50-line step above the
     # merged measurement (4794).
-    "torchlens/data_classes/op.py": 4800,
+    "torchlens/_data_classes/op.py": 4800,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
@@ -137,7 +137,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # so sys.modules-based detection missed them) land at the one
     # TORCH_RNG_SURFACE chokepoint; next 50-line step above the measured
     # 5065.
-    "torchlens/utils/rng.py": 5100,
+    "torchlens/_utils/rng.py": 5100,
     # 4600 -> 4350 (2026-08-27 C05 fix cycle): the segment descriptor/label
     # family split to _segment_descriptors.py under R43; re-keyed down to the
     # next 50-line step above the post-split measurement (4326).
@@ -249,7 +249,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # bound-method-root mass (4274) fits 4290 alone, and the F28 echo facade
     # residual (+40: the echo= entry param, docstring, and the four thin
     # snoop._entry seam calls; the lane already paid its extraction to
-    # torchlens/snoop/_entry.py at its own gate debt commit) rode the F28
+    # torchlens/_snoop/_entry.py at its own gate debt commit) rode the F28
     # branch; the union measures 4314. Next 50-line step, conscious raise
     # with both contributions named, not silent regrowth; split target
     # (trace-entry resolution vs cache vs chunking) unchanged.
@@ -317,7 +317,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # measure_host_peak_memory DROP knob and the KEEP backward_peak_memory_reason
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
-    "torchlens/data_classes/trace.py": 4050,
+    "torchlens/_data_classes/trace.py": 4050,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the
@@ -406,12 +406,12 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # registration fit by moving the tensor sq_item ctypes layout mirror out to
     # its stdlib-only sibling leaf utils/_type_sequence_slot.py (flag, probe and
     # capability warning stay here); measured 4968. Debloat target: 3450.
-    "torchlens/utils/_torch_compat.py": 5000,
+    "torchlens/_utils/_torch_compat.py": 5000,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
     # wrapped-call site (before-read, OOM attempted-call row, settle); the
-    # sampler/provider live in torchlens/observe/_device_memory.py.
+    # sampler/provider live in torchlens/_observe/_device_memory.py.
     # 3300 -> 3330 (2026-08-28 F33 weightsfree): the W1-CTX slot consult in
     # the factory-injection helper + the W1-BUF-2 snapshot-carrying-call
     # fallback + the meta-safe alias-key reads; conscious raise, the 50-line
@@ -464,7 +464,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # the landed T85 train (3258 alone) unions with F20's reviewed contract
     # additions to 3301 on the merged tree; the F20-side 3350 ceiling already
     # clears the union and stays.
-    "torchlens/postprocess/_contracts.py": 3350,
+    "torchlens/_postprocess/_contracts.py": 3350,
     # 3200 -> 3250 (2026-08-29 F28 re-reconcile): merge union -- the F41
     # owner-identity source-metadata derivation (3184) fits 3200 alone, and
     # the F28 echo module-seam emits (duck-typed _echo_session reads at the
@@ -485,7 +485,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # post-split measurement (2750; ~2760 with the F10 union). Supersedes the
     # F10-side 2950 -> 3000 raise (dropped at the T74b reconcile merge) --
     # the bounce froze this ceiling, so the split is the fix, not the raise.
-    "torchlens/data_classes/module.py": 2800,
+    "torchlens/_data_classes/module.py": 2800,
     # 2100 -> 2150 (2026-08-29 F11 T74b fix): +9 lines documenting the
     # `fingerprints` parameter on the three run-fold assemblers (the D417
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
@@ -516,7 +516,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # (__str__/__repr__/_detached_from_trace; the accessor delta re-landed
     # in _layer_accessors.py) adds +36; the union measures 2133. Next
     # 50-line step, conscious raise, not silent regrowth.
-    "torchlens/data_classes/layer.py": 2150,
+    "torchlens/_data_classes/layer.py": 2150,
     # Re-keyed 2750 -> 2500 at the F03 T69 fix microlane (2026-08-29): the
     # module-level delta/compare helper seam (delta_map/norm_delta/
     # output_delta/compare/aligned_pairs/show_diff + shared metric
@@ -524,7 +524,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 2350 -> 2400: C02 safety tranche lands the OpAccessor basis fix
     # (bug 27) with its coherent get/repr in-place -- the accessor lives
     # with its Layer owner; +11 measured lines, next 50-line step.
-    "torchlens/postprocess/loop_grouping_adapter.py": 2600,
+    "torchlens/_postprocess/loop_grouping_adapter.py": 2600,
     "torchlens/visualization/_render_leaf.py": 2400,
     # Re-keyed down 2450 -> 2350 (r7 R43-F2 slack rule) after the F13 legend
     # rewrite deleted the six-node emitter from this module; 2350 -> 2100 after
@@ -563,8 +563,8 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # final shape carrying both the A08 W3 raise and the A09 split (measured
     # 2069; next 50-step). Shrink freely, raise consciously.
     "torchlens/_io/scrub.py": 2100,
-    "torchlens/debug/_infer_input_shape.py": 2250,
-    "torchlens/postprocess/ast_branches.py": 2250,
+    "torchlens/_debug/_infer_input_shape.py": 2250,
+    "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/visualization/_render_nodes.py": 2150,
     # 2100 -> 2150 (2026-10-02 ci-fix fast2 settle): the numpy bounded-scalar
     # reconstructor trust fix (`fix(io): trust numpy's bounded scalar

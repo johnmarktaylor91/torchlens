@@ -18,9 +18,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._snoop import EchoStatsError
+from torchlens._snoop._stats import exact_stats, reuse_stats, sampled_stats
 from torchlens.options import EchoOptions
-from torchlens.snoop import EchoStatsError
-from torchlens.snoop._stats import exact_stats, reuse_stats, sampled_stats
 
 
 def test_sampled_blindness_regression_t_a() -> None:
@@ -43,7 +43,7 @@ def test_sampled_blindness_regression_t_a() -> None:
 def test_sampled_budget_is_bounded_and_marked() -> None:
     """The sampled rung strides to a fixed budget with mandatory evidence."""
 
-    from torchlens.snoop import SAMPLED_BUDGET
+    from torchlens._snoop import SAMPLED_BUDGET
 
     tensor = torch.randn(64, 1024)
     record = sampled_stats(tensor, identity="budget")
@@ -56,7 +56,7 @@ def test_sampled_budget_is_bounded_and_marked() -> None:
 def test_exact_rung_refuses_above_numel_budget() -> None:
     """Memo test 13: exact-above-budget refuses typed, remedy names sampled."""
 
-    import torchlens.snoop._stats as stats_module
+    import torchlens._snoop._stats as stats_module
 
     original = stats_module.EXACT_NUMEL_BUDGET
     stats_module.EXACT_NUMEL_BUDGET = 8
@@ -72,7 +72,7 @@ def test_exact_rung_refuses_above_numel_budget() -> None:
 def test_exact_budget_refusal_fails_the_capture_typed() -> None:
     """The mid-forward exact refusal propagates typed, never degrades."""
 
-    import torchlens.snoop._stats as stats_module
+    import torchlens._snoop._stats as stats_module
 
     original = stats_module.EXACT_NUMEL_BUDGET
     stats_module.EXACT_NUMEL_BUDGET = 4

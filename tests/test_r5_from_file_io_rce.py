@@ -38,13 +38,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io._safe_unpickle import SafeBundleUnpickler, _safe_getattr
+from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_function_registry_key
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
-from torchlens.utils._callable_safety import is_pure_forward_callable
 
 _CAP = CaptureOptions(
     intervention_ready=True,

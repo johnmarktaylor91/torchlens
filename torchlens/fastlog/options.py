@@ -8,8 +8,8 @@ from typing import Any, Final, Literal, get_args
 
 from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError
+from .._ir.predicate import RetroactiveCaptureDecision
 from ..intervention.predicates import InterventionPredicate
-from ..ir.predicate import RetroactiveCaptureDecision
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
 from .types import CaptureSpec, GradRecordContext, RecordContext

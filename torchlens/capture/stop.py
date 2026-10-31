@@ -351,7 +351,7 @@ def _outputs_carry_autograd_history(outputs: Any) -> bool:
     import torch
 
     from .. import _state
-    from ..utils.introspection import get_vars_of_type_from_obj
+    from .._utils.introspection import get_vars_of_type_from_obj
 
     with _state.pause_logging():
         tensors = get_vars_of_type_from_obj(outputs, torch.Tensor, search_depth=5)

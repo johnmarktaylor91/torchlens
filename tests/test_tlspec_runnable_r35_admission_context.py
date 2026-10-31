@@ -13,6 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import HAS_NAMED_TENSOR_API
 from torchlens.errors import PathDivergenceError, RunPreconditionError
 from torchlens.options import CaptureOptions
 from torchlens.runnable import (
@@ -20,7 +21,6 @@ from torchlens.runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
 )
-from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
 
 
 class _AddOneModel(nn.Module):

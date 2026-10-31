@@ -13,7 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.container_registry import ContainerRecord, Role
+from torchlens._ir.container_registry import ContainerRecord, Role
 
 
 class NestedRoundTripModel(nn.Module):

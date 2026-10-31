@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
-from ..utils.tensor_utils import layer_grad_tolerances_for_dtype
+from .._utils.tensor_utils import layer_grad_tolerances_for_dtype
 from ._errors import (
     AmbiguousCallError,
     AmbiguousInputError,
@@ -53,8 +53,8 @@ rules = _registered_rules
 
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 
 @dataclass(frozen=True)

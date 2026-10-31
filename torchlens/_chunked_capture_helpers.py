@@ -6,9 +6,9 @@ import collections.abc
 import time
 from typing import Any
 
+from ._data_classes.trace import Trace
 from ._deprecations import MISSING
 from ._trace_state import TraceState
-from .data_classes.trace import Trace
 from .fastlog.options import HaltPredicateFn
 from .intervention.errors import AppendMismatchError, ChunkedForwardConfigError
 from .intervention.predicates import InterventionPredicate

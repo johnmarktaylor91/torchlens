@@ -203,7 +203,7 @@ def test_every_direct_check_entry_point_is_enrolled() -> None:
     }
     # Reasoned exclusions only — every entry needs a why.
     excluded: set[tuple[str, str]] = set()
-    scope = ("torchlens/validation/core.py", "torchlens/postprocess/__init__.py")
+    scope = ("torchlens/validation/core.py", "torchlens/_postprocess/__init__.py")
     unenrolled = []
     for rel in scope:
         source = (_REPO_ROOT / rel).read_text(encoding="utf-8")
@@ -566,10 +566,10 @@ def test_executor_family_derivation_reaches_every_step() -> None:
     assert len(run_steps) >= 20, f"only {len(run_steps)} run-step mutants derived"
     assert gates, "no gate-predicate mutants derived"
     for mid, (rel, func, value) in mutants.items():
-        assert rel == "torchlens/postprocess/_executor.py"
+        assert rel == "torchlens/_postprocess/_executor.py"
         assert value == ("None" if func.startswith("_run_step_") else "False"), (mid, value)
     # Cross-check against the live registry: every StepSpec.run is enrolled.
-    from torchlens.postprocess._executor import STEP_REGISTRY
+    from torchlens._postprocess._executor import STEP_REGISTRY
 
     registered_runs = {spec.run.__name__ for spec in STEP_REGISTRY}
     enrolled_funcs = {func for _, func, _ in mutants.values()}

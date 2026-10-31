@@ -12,10 +12,10 @@ from torch import nn
 
 from .._literals import OutputDeviceLiteral
 from .._save_budget import SaveBudgetOption
+from .._utils.display import user_stacklevel
 from ..backends import BackendName, BackendUnsupportedError, resolve_backend_spec
 from ..errors import TorchLensWarning
 from ..options import CaptureOptions
-from ..utils.display import user_stacklevel
 from .backward import validate_backward_pass
 
 if TYPE_CHECKING:
@@ -566,7 +566,7 @@ def validate(
         # setups and none of it feeds the verdict, so default validate calls
         # pay nothing. last_validation_peak_memory() already returns None for
         # the empty off-state.
-        from ..utils.env_flags import closed_bool_env
+        from .._utils.env_flags import closed_bool_env
         from .diagnostics import _LAST_RUN_PEAKS
 
         peaks_enabled = closed_bool_env("TORCHLENS_VALIDATE_PEAK_MEMORY")
@@ -618,7 +618,7 @@ def validate(
             # allocator-free pages, ~1 ms next to a multi-second validate),
             # and after the peak reads above, which are high-water maxima the
             # trim cannot lower.
-            from ..data_classes.cleanup import _trim_host_allocator
+            from .._data_classes.cleanup import _trim_host_allocator
 
             _trim_host_allocator()
         if passed is False:

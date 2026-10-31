@@ -112,7 +112,7 @@ def test_session_records_op_join_markers() -> None:
     name (name matching is forbidden from the join).
     """
 
-    from torchlens import observability as obs
+    from torchlens import _observability as obs
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
     x = torch.randn(2, 4)
@@ -137,7 +137,7 @@ def test_native_chrome_artifact_and_sidecar(tmp_path) -> None:
 
     import json
 
-    from torchlens import observability as obs
+    from torchlens import _observability as obs
 
     model = nn.Sequential(nn.Linear(8, 8), nn.ReLU()).eval()
     path = tmp_path / "native.json"
@@ -154,7 +154,7 @@ def test_native_chrome_artifact_and_sidecar(tmp_path) -> None:
 def test_borrowed_session_never_closed_and_joinable() -> None:
     """Borrowed mode: markers land in the caller's profiler; we never close it."""
 
-    from torchlens import observability as obs
+    from torchlens import _observability as obs
 
     model = nn.Sequential(nn.Linear(8, 8), nn.ReLU()).eval()
     with torch.profiler.profile() as prof, obs.session(mode="borrowed", profiler=prof) as sess:

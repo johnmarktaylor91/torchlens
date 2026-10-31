@@ -28,12 +28,12 @@ import torch.nn as nn
 import torchlens as tl
 import torchlens._state as _state
 import torchlens.backends.torch.wrappers as wrappers_module
+from torchlens._utils.introspection import nested_getattr
 from torchlens.backends.torch.wrappers import (
     get_orig_torch_funcs,
     is_decorated_function,
 )
 from torchlens.distributed import has_vetted_snapshot
-from torchlens.utils.introspection import nested_getattr
 
 # Strong refs to superseded wrapper generations. Wrapper objects minted before a
 # forced regeneration stay reachable for the whole session (other test modules'

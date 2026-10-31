@@ -52,7 +52,7 @@ from ._episode_derivation import (
 from ._episode_ledger_anchors import _anchor_loaded_ledger, quarantine_loaded_ledger
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from ..options import EpisodeSpec
 
 __all__ = [
@@ -1616,7 +1616,7 @@ def write_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> EpisodeLedger
         refusals) carries the settled product on ``exc.partial_log``
         (lane F40a): the capture already ran and postprocessed, so the
         refusal names the declaration mismatch WITHOUT discarding the
-        product -- recover it with ``tl.partial.from_failed_capture(exc)``.
+        product -- recover it with ``tl._partial.from_failed_capture(exc)``.
     """
 
     try:
@@ -1640,7 +1640,7 @@ def _attach_settlement_partial_log(exc: BaseException, trace: Any) -> None:
         return
     if getattr(exc, "partial_log", None) is not None:
         return
-    from ..partial import PartialTrace
+    from .._partial import PartialTrace
 
     try:
         exc.partial_log = PartialTrace(trace=trace, original_exception=exc)  # type: ignore[attr-defined]

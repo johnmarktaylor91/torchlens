@@ -26,7 +26,7 @@ from .._errors import InvalidArgumentError
 from ._compute_truth import ComputeAggregation, compute_aggregation
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: FactCore schema version (bump on any section/field change).
 FACTCORE_SCHEMA_VERSION = 2

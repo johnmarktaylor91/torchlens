@@ -1256,7 +1256,7 @@ def _check_user_lens(
     disagreement = _last_layer_disagreement(trace, lens, lens_by_address, head, tolerance)
     if disagreement is None:
         return
-    from ..utils.display import user_stacklevel
+    from .._utils.display import user_stacklevel
 
     warnings.warn(
         TorchLensWarning(

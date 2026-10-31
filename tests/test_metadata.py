@@ -16,11 +16,11 @@ import torch.nn as nn
 import torchlens
 import torchlens as tl
 from torchlens import trace as trace_fn
+from torchlens._data_classes import FuncCallLocation
 from torchlens.capture.flops import (
     compute_backward_flops,
     compute_forward_flops,
 )
-from torchlens.data_classes import FuncCallLocation
 
 
 class _SharedMultiOutputModel(nn.Module):

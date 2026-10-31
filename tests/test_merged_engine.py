@@ -1,6 +1,6 @@
 """Unit matrix for the C1 merge derivation over synthetic rank evidence.
 
-Pure-function tests of ``torchlens.merged._engine.derive_merge`` (no process
+Pure-function tests of ``torchlens._merged._engine.derive_merge`` (no process
 groups, no torch.distributed init): the PRE-JOIN audit matrix (merge-side
 rows of design-merge-ranks-c v5, 1.3), seq-delta alignment, relation and
 cross-check conflicts, the totalized witness derivation, expected-ranks
@@ -17,12 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from torchlens.distributed._ledger import (
-    GroupLifecycleEvent,
-    GroupLifecycleLedger,
-    membership_digest_for_ranks,
-)
-from torchlens.merged import (
+from torchlens._merged import (
     MERGE_FINDING_KINDS,
     BoundaryConsistency,
     MergeAlignment,
@@ -30,12 +25,17 @@ from torchlens.merged import (
     MergeValueStatus,
     derive_merge,
 )
-from torchlens.merged._errors import MergeInputError
-from torchlens.merged._evidence import (
+from torchlens._merged._errors import MergeInputError
+from torchlens._merged._evidence import (
     P2P_KINDS,
     TENSORLESS_KINDS,
     RankEvidence,
     extract_rank_evidence,
+)
+from torchlens.distributed._ledger import (
+    GroupLifecycleEvent,
+    GroupLifecycleLedger,
+    membership_digest_for_ranks,
 )
 
 WORLD = membership_digest_for_ranks([0, 1])
@@ -632,8 +632,8 @@ class TestRolesDeletionVacuousTruth:
     def test_tensorless_kinds_mirror_capture_side_tensorless_flags(self):
         """The evidence vocabulary tracks ``CollectiveSite.tensorless`` exactly."""
 
+        from torchlens._merged._evidence import TENSORLESS_KINDS
         from torchlens.backends.torch.collectives import COLLECTIVE_SITES
-        from torchlens.merged._evidence import TENSORLESS_KINDS
 
         assert {site.kind for site in COLLECTIVE_SITES if site.tensorless} == TENSORLESS_KINDS
 
@@ -687,8 +687,8 @@ class TestSweepFieldValidation:
     def test_reduce_op_kinds_mirror_capture_side_has_reduce_op_flags(self):
         """The evidence vocabulary tracks ``CollectiveSite.has_reduce_op`` exactly."""
 
+        from torchlens._merged._evidence import REDUCE_OP_KINDS
         from torchlens.backends.torch.collectives import COLLECTIVE_SITES
-        from torchlens.merged._evidence import REDUCE_OP_KINDS
 
         assert {site.kind for site in COLLECTIVE_SITES if site.has_reduce_op} == REDUCE_OP_KINDS
 
@@ -719,21 +719,21 @@ class TestWireVocabularyLockstep:
         }
 
     def test_boundary_schema_matches_writer(self):
+        from torchlens._merged import _evidence
         from torchlens.backends.torch import collectives
-        from torchlens.merged import _evidence
 
         assert collectives.BOUNDARY_SCHEMA == _evidence.BOUNDARY_SCHEMA
 
     def test_install_epoch_vocabulary_matches_ledger_literal(self):
         from typing import get_args
 
+        from torchlens._merged._evidence import _INSTALL_EPOCHS
         from torchlens.distributed._ledger import InstallEpoch
-        from torchlens.merged._evidence import _INSTALL_EPOCHS
 
         assert set(get_args(InstallEpoch)) == set(_INSTALL_EPOCHS)
 
     def test_writer_spells_every_reader_vocabulary_token(self):
-        from torchlens.merged import _evidence
+        from torchlens._merged import _evidence
 
         writer_literals = self._writer_string_literals()
         for vocab_name in (
@@ -750,7 +750,7 @@ class TestWireVocabularyLockstep:
             )
 
     def test_reader_vocabularies_are_pinned(self):
-        from torchlens.merged import _evidence
+        from torchlens._merged import _evidence
 
         assert set(_evidence._COMPLETION_BINDINGS) == {"issue_sync", "unobserved"}
         assert set(_evidence._WITNESS_POLICIES) == {"none", "digest"}
@@ -773,7 +773,7 @@ class TestReleaseContract:
     """
 
     def _merged(self):
-        from torchlens.merged import merge_ranks
+        from torchlens._merged import merge_ranks
 
         return merge_ranks(
             [
@@ -783,7 +783,7 @@ class TestReleaseContract:
         )
 
     def _assert_released_refusal(self, call) -> None:
-        from torchlens.merged._errors import MergedSurfaceUnsupportedError
+        from torchlens._merged._errors import MergedSurfaceUnsupportedError
 
         with pytest.raises(MergedSurfaceUnsupportedError) as excinfo:
             call()
@@ -1443,7 +1443,7 @@ class TestPresenterLookupNarrowing:
             raise KeyError(item)
 
     def _merged(self, trace0, trace1):
-        from torchlens.merged._presenter import MergedTrace, _RankHandle
+        from torchlens._merged._presenter import MergedTrace, _RankHandle
 
         derivation = derive_merge(
             {0: evidence(0, [boundary(0, 0)]), 1: evidence(1, [boundary(1, 0)])}

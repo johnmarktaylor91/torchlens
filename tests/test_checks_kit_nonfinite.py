@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 
 import torchlens.checks as tc
-from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
+from torchlens._utils._torch_compat import HAS_AMP_GRADSCALER
 
 if HAS_AMP_GRADSCALER:
     from torch.amp import GradScaler

@@ -345,7 +345,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # PAID DOWN, not held. F10's 27 lovely-surface fail-open guards (repr/
     # card dunders, honesty-token probes, echo guard, degrade-to-None
     # lookups) now route through the ONE audited blind-except chokepoint
-    # `torchlens.utils.fail_open` -- callers keep their exact degraded
+    # `torchlens._utils.fail_open` -- callers keep their exact degraded
     # forms, enumerable interior failures still surface through the outer
     # funnel, and the ratchet ledgers one site instead of 27. The helper's
     # +1 is offset by folding the pre-existing _copy_rerun_value deepcopy

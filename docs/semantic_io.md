@@ -62,17 +62,17 @@ The default `trace.to_pandas()` schema is unchanged.
 
 ## Custom Output Detectors
 
-Register custom output detectors through `tl.autoroute.output.register(...)`.
+Register custom output detectors through `tl._autoroute.output.register(...)`.
 The detector receives the live model output object plus TorchLens metadata and
 returns a `ResolvedPostprocessing` record or `None`.
 
 ```python
 from typing import Any
 
-from torchlens.data_classes.trace import ResolvedPostprocessing
+from torchlens._data_classes.trace import ResolvedPostprocessing
 
 
-@tl.autoroute.output.register(name="my_labels", priority=5)
+@tl._autoroute.output.register(name="my_labels", priority=5)
 def my_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
     """Resolve a local label bank for output_style='my_labels'."""
 
@@ -97,7 +97,7 @@ trace = tl.trace(model, x, capture=tl.options.CaptureOptions(output_style="my_la
 
 The registration API is intentionally fail-closed: return `None` for non-matches,
 and unregister a temporary detector with
-`tl.autoroute.output.unregister("my_labels")`.
+`tl._autoroute.output.unregister("my_labels")`.
 
 ## Original Input Display
 
@@ -123,7 +123,7 @@ known preprocessing pipeline. For local transforms, attach the same provenance
 record shape when documenting the transform in a demo or integration:
 
 ```python
-from torchlens.data_classes.trace import ResolvedPreprocessing
+from torchlens._data_classes.trace import ResolvedPreprocessing
 
 trace.input_preprocessor = ResolvedPreprocessing(
     source="project.transform",
@@ -329,7 +329,7 @@ template. It demonstrates:
 
 - auto-detected label tables from `config.id2label`;
 - `output_table()`, `decode_output()`, and gated pandas summaries;
-- `output_style=` override and `tl.autoroute.output.register(...)`;
+- `output_style=` override and `tl._autoroute.output.register(...)`;
 - original text input display with `show_input_transform_summary=True`;
 - `trace.raw_input` and `trace.input_preprocessor` provenance.
 
@@ -343,10 +343,10 @@ core flow runs without downloading external model weights.
 - `Trace.output_table(top_n=5, batch_items=None)`
 - `Trace.decode_output(top_n=None)`
 - `Trace.output_postprocessor`
-- `tl.autoroute.output.register(...)`
-- `tl.autoroute.output.unregister(...)`
-- `tl.autoroute.output.list()`
-- `tl.autoroute.output.info(...)`
+- `tl._autoroute.output.register(...)`
+- `tl._autoroute.output.unregister(...)`
+- `tl._autoroute.output.list()`
+- `tl._autoroute.output.info(...)`
 - `tl.trace(..., capture=CaptureOptions(transform=..., save_raw_input=..., batch_render=...))`
 - `Trace.raw_input`
 - `Trace.input_preprocessor`

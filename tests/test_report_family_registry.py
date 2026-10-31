@@ -77,7 +77,7 @@ def partial_trace():
         try:
             tl.trace(Boom(), torch.randn(2, 4))
         except RuntimeError as exc:
-            return tl.partial.from_failed_capture(exc)
+            return tl._partial.from_failed_capture(exc)
     raise AssertionError("the planted failure did not raise")
 
 
@@ -139,7 +139,7 @@ def test_which_do_i_use_docs_page_is_lockstepped() -> None:
 def test_capability_card_is_metadata_only(family_trace, monkeypatch) -> None:
     """D24: building the card never scans, captures, or runs a forward."""
 
-    import torchlens.data_classes._nonfinite as nonfinite_module
+    import torchlens._data_classes._nonfinite as nonfinite_module
 
     def _no_scan(*_args, **_kwargs):
         raise AssertionError("capability_card triggered a payload scan")
@@ -252,7 +252,7 @@ def test_metadata_only_members_trigger_no_scan(family_trace, monkeypatch) -> Non
     """D4 work-metric (composition row 6): no metadata_only member pays for
     a payload scan -- explain, profile, BOM, agent_json, summary included."""
 
-    import torchlens.data_classes._nonfinite as nonfinite_module
+    import torchlens._data_classes._nonfinite as nonfinite_module
 
     calls: list[str] = []
     real_scan = nonfinite_module._scan

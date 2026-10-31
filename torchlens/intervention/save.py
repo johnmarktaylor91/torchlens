@@ -23,7 +23,7 @@ from .._io.manifest import TensorEntry, sha256_of_file
 from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
-from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from .errors import (
     DirectActivationWriteWarning,

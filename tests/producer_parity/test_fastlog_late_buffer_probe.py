@@ -35,8 +35,8 @@ pytestmark = pytest.mark.heavy
 def _cooked_with_spy() -> tuple[Any, dict]:
     """Cook a recording while observing what step 0 actually consumes."""
 
-    import torchlens.postprocess as postprocess_module
-    import torchlens.postprocess._materialize as materialize_module
+    import torchlens._postprocess as postprocess_module
+    import torchlens._postprocess._materialize as materialize_module
 
     original = materialize_module.materialize_from_events
     seen: dict = {}
@@ -87,7 +87,7 @@ def test_late_buffer_append_is_materialized_today() -> None:
 def test_hash_covers_post_pre0_stream_today() -> None:
     """`_raw_event_shape_hash` on the cooked path reflects the late append."""
 
-    from torchlens.utils.hashing import compute_raw_event_shape_hash
+    from torchlens._utils.hashing import compute_raw_event_shape_hash
 
     cooked, seen = _cooked_with_spy()
     assert cooked._raw_event_shape_hash

@@ -21,7 +21,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.observability import (
+from torchlens._observability import (
     Histogram,
     HistoryCollector,
     HistoryView,
@@ -32,8 +32,8 @@ from torchlens.observability import (
     render_contact_sheet,
     render_fan,
 )
-from torchlens.observability._errors import HistorySchemaError
-from torchlens.observability._op_tier import OpTierCollector
+from torchlens._observability._errors import HistorySchemaError
+from torchlens._observability._op_tier import OpTierCollector
 
 
 class _NaNInjector(torch.nn.Module):
@@ -280,7 +280,7 @@ class TestGpt2CpuLeg:
         model.train()
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
         ids = torch.randint(0, 50257, (1, 16))
-        from torchlens.observability import WatchSettings
+        from torchlens._observability import WatchSettings
 
         collector = HistoryCollector(
             model,
@@ -328,7 +328,7 @@ class TestCudaGateRows:
     )
     def test_module_tier_overhead_gates(self, sketch_cadence: int | None, threshold: float) -> None:
         transformers = pytest.importorskip("transformers")
-        from torchlens.observability import WatchSettings, measure_ab, measure_noise_band
+        from torchlens._observability import WatchSettings, measure_ab, measure_noise_band
 
         torch.manual_seed(0)
         device = "cuda"

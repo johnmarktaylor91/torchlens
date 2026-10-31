@@ -17,8 +17,8 @@ import pytest
 import torch
 
 import torchlens.trackers as trk
+from torchlens._utils._torch_compat import HAS_AMP_GRADSCALER
 from torchlens.trackers._amp import unscale_stage
-from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
 _requires_gradscaler = pytest.mark.skipif(
     not HAS_AMP_GRADSCALER,

@@ -40,7 +40,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.utils as tlutils
+import torchlens._utils as tlutils
 from torchlens._io import TorchLensIOError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens.intervention.errors import UntrustedCallableError
@@ -144,15 +144,15 @@ def test_legit_data_types_and_snapshot_still_admit() -> None:
 
     unpickler = SafeBundleUnpickler(io.BytesIO(b""))
     admitted = [
-        ("torchlens.data_classes.op", "Op"),
-        ("torchlens.data_classes.op", "TensorLog"),  # locked rename alias of Op
-        ("torchlens.data_classes.trace", "Trace"),
-        ("torchlens.data_classes.grad_fn_call", "GradFnCall"),  # rename target
+        ("torchlens._data_classes.op", "Op"),
+        ("torchlens._data_classes.op", "TensorLog"),  # locked rename alias of Op
+        ("torchlens._data_classes.trace", "Trace"),
+        ("torchlens._data_classes.grad_fn_call", "GradFnCall"),  # rename target
         ("torchlens.intervention._super.super_op", "SuperOp"),  # rename target
         ("torchlens.intervention.types", "InterventionSpec"),
         ("torchlens.intervention.types", "Edit"),
         ("torchlens.semantic.facets", "FacetRegistrySnapshot"),
-        ("torchlens.ir.container_registry", "ContainerRecord"),
+        ("torchlens._ir.container_registry", "ContainerRecord"),
     ]
     for module, name in admitted:
         resolved = unpickler.find_class(module, name)
@@ -164,10 +164,10 @@ def test_r21_and_import_sink_gadgets_still_denied() -> None:
     """The r21 private import gadget and other torchlens callables stay denied."""
 
     unpickler = SafeBundleUnpickler(io.BytesIO(b""))
-    # r21 gadget: torchlens.utils._module_is_installed (importlib.import_module sink).
+    # r21 gadget: torchlens._utils._module_is_installed (importlib.import_module sink).
     assert hasattr(tlutils, "_module_is_installed")
     with pytest.raises(pickle.UnpicklingError):
-        unpickler.find_class("torchlens.utils", "_module_is_installed")
+        unpickler.find_class("torchlens._utils", "_module_is_installed")
     # os.system reached off a torchlens module path is still denied (real module posix).
     with pytest.raises(pickle.UnpicklingError):
         unpickler.find_class("torchlens._io._safe_unpickle", "io")

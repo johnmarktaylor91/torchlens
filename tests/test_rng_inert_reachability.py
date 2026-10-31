@@ -60,14 +60,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens.utils import rng as rng_mod
-from torchlens.utils.rng import (
+from torchlens._utils import rng as rng_mod
+from torchlens._utils.rng import (
     _AMBIENT_BRIDGE_LEAF_TYPES,
     _rng_exempt_instances,
     host_nondeterminism_monitor,
 )
+from torchlens.options import CaptureOptions
+from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 
 def _make_monitor(model: nn.Module) -> host_nondeterminism_monitor:

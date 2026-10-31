@@ -17,7 +17,7 @@ import pickle
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
-from ..data_classes.trace import Trace
+from .._data_classes.trace import Trace
 from . import TorchLensIOError, _json, bundle as _bundle_module
 from .bundle import _reject_symlink_path, _RenameAwareUnpickler
 from .bundle_metadata import (

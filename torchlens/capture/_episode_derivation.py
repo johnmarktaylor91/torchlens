@@ -187,7 +187,7 @@ def _flat_cpu_snapshot(value: Any) -> Any:
     reinterpretation or ``tolist`` and never re-enters capture state.
     """
 
-    from ..utils.tensor_utils import safe_copy
+    from .._utils.tensor_utils import safe_copy
 
     return safe_copy(value, detach_tensor=True).cpu().reshape(-1)
 

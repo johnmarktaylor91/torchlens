@@ -28,9 +28,9 @@ import torch
 from torch import nn
 
 from torchlens._errors import InvalidArgumentError
+from torchlens._utils._torch_compat import TorchCapabilityWarning
 from torchlens.dataset_extraction import extract_dataset, load_extraction
 from torchlens.errors._base import TorchLensWarning
-from torchlens.utils._torch_compat import TorchCapabilityWarning
 
 
 class _AbsPosModel(nn.Module):

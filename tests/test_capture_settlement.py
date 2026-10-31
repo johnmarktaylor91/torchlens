@@ -18,7 +18,7 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
-import torchlens.postprocess as pp
+import torchlens._postprocess as pp
 from torchlens.capture.outcome import CapturePhase, CaptureStatus, FailureOrigin
 from torchlens.fastlog import Recorder
 from torchlens.fastlog._halt import HaltSignal
@@ -140,7 +140,7 @@ def test_forward_failure_settles_failed_forward_user_op() -> None:
 
     with pytest.raises(RuntimeError, match="user forward boom") as exc_info:
         tl.trace(Exploding(), torch.ones(1, 3))
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
     outcome = partial.trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
@@ -159,7 +159,7 @@ def test_finalize_failure_settles_failed_finalize(monkeypatch) -> None:
     monkeypatch.setattr(TorchBackend, "finalize_forward_session", _boom)
     with pytest.raises(ValueError, match="planted finalize failure") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
     outcome = partial.trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
@@ -173,7 +173,7 @@ def test_postprocess_failure_settles_failed_postprocess(monkeypatch) -> None:
     monkeypatch.setattr(pp, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted step1") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    outcome = tl.partial.from_failed_capture(exc_info.value).trace.outcome
+    outcome = tl._partial.from_failed_capture(exc_info.value).trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
     assert outcome.phase is CapturePhase.POSTPROCESS
@@ -229,7 +229,7 @@ def test_nonfinite_abort_settles_aborted_nonfinite() -> None:
             torch.ones(1, 3),
             capture=tl.options.CaptureOptions(raise_on_nan=True),
         )
-    outcome = tl.partial.from_failed_capture(exc_info.value).trace.outcome
+    outcome = tl._partial.from_failed_capture(exc_info.value).trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.ABORTED_NONFINITE
     assert outcome.boundary_kind == "op"
@@ -538,7 +538,7 @@ def test_hostile_str_forward_keeps_identity_and_settles_failed() -> None:
     with pytest.raises(_HostileStrError) as exc_info:
         tl.trace(_HostileStrModel(), torch.ones(1, 3))
     exc = exc_info.value
-    partial = tl.partial.from_failed_capture(exc)
+    partial = tl._partial.from_failed_capture(exc)
     outcome = partial.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED

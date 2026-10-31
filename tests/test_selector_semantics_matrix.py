@@ -378,8 +378,8 @@ def _probe_spec(
     is resolved via ``find_sites`` and the labels are stored in the cell.
     """
 
+    from torchlens._ir.selector_eval import selector_from_spec
     from torchlens.intervention.selectors import _classify_selector_direction
-    from torchlens.ir.selector_eval import selector_from_spec
 
     try:
         selector = make_selector()

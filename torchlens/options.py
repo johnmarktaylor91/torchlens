@@ -54,8 +54,8 @@ from ._save_budget import SaveBudgetOption
 from ._vocab.node_spec import NodeSpec
 
 if TYPE_CHECKING:
-    from .data_classes.layer import Layer
-    from .data_classes.module import Module
+    from ._data_classes.layer import Layer
+    from ._data_classes.module import Module
 
 T = TypeVar("T")
 ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
@@ -648,7 +648,7 @@ class CaptureOptions:
         session-time knob. Doc: ``docs/reference/capture_outcomes.md``.
     track_device_memory:
         Whether torch capture samples device allocator counters around each op call, served by
-        ``torchlens.observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
+        ``torchlens._observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
         opt-in, never resetting; allocated/reserved before/after, signed deltas, high-water ADVANCE
         per initialized CUDA device; unsupported devices (CPU/MPS) get typed absence, never zeros.
     structure_only:
@@ -1341,7 +1341,7 @@ class VisualizationOptions:
         def __getattr__(self, name: str) -> Any:
             """Name the replacement for a removed public member, else fail as usual."""
 
-            from .utils.facade import refuse_removed_member
+            from ._utils.facade import refuse_removed_member
 
             refuse_removed_member(
                 "VisualizationOptions", name, _REMOVED_VISUALIZATION_OPTION_MEMBERS

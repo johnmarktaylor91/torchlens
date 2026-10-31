@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from typing import Any
 
 from ... import _state
-from ...ir.events import ModuleFrame
+from ..._ir.events import ModuleFrame
 from .model_prep import MLXModuleTree
 
 _ACTIVE_TAP_OBSERVER: object | None = None

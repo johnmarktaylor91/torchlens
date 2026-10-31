@@ -11,8 +11,8 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._data_classes import op as op_module
 from torchlens.backends.torch.ops import _save_activation_fields
-from torchlens.data_classes import op as op_module
 from torchlens.options import CaptureOptions
 
 

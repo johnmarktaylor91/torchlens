@@ -15,7 +15,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.trace import Trace
 from torchlens.visualization import _render_utils
 from torchlens.visualization._rank_layout_internal import layout as rank_layout
 from torchlens.visualization._render_common import GraphvizRenderError, GraphvizUnavailableError
@@ -1032,7 +1032,7 @@ def _attach_probe_image(trace: Trace) -> Path:
 
     from PIL import Image
 
-    from torchlens.utils.display import ensure_trace_visualizer_dir
+    from torchlens._utils.display import ensure_trace_visualizer_dir
 
     root = ensure_trace_visualizer_dir(trace)
     image_path = root / "probe.png"

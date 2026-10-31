@@ -25,8 +25,8 @@ from ._path import descendant_labels, require_path, resolve_graph_point
 from ._types import GradientReceptiveField, ReceptiveFieldDirection
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ._engine_forward import _ProjectiveFieldSolution
 
 

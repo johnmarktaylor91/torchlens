@@ -22,12 +22,12 @@ Key entry points:
   `trace.grouping`, with the load-validated `grouping_policy_v1` stamp on
   `trace.grouping_policy` (C1-C8 coherence; degrade-settlement monotonic).
   Persisted rows are live as of the tlspec v8 bump (load-validated); join/fold
-  machinery in `torchlens/postprocess/_site_key.py` / `_site_join.py` /
+  machinery in `torchlens/_postprocess/_site_key.py` / `_site_join.py` /
   `_grouping_stamp.py`.
 - Quickstart input ladder (F17; spellings DOCUMENTED-UNSTABLE): trace/summary/
   render share one resolver -- real input XOR `input_size=` (flat tuple /
   sequence / keyword-to-shape mapping; seed-0 local synthesis; fail-closed
-  dtype facts, `torchlens.quickstart.InputSpec` override) XOR zero-arg
+  dtype facts, `torchlens._quickstart.InputSpec` override) XOR zero-arg
   inference (the exact verified trace is consumed, never recaptured).
   Synthesized rungs persist `InputProvenance` inside the existing
   `Trace.input_preprocessor` KEEP field; `decode_output`/`output_table`
@@ -107,7 +107,7 @@ Key entry points:
   standalone as `tl.repgeom.rdm_compare_interval` / `cka_interval`);
   `tl.repgeom.metric_disagreement(scores)` ranks sites per metric and flags
   opposite orders. Doc: `docs/reference/neuro.md`.
-- Transformer pictures (`torchlens.tviz`; every spelling DOCUMENTED-UNSTABLE
+- Transformer pictures (`torchlens.transformer`; every spelling DOCUMENTED-UNSTABLE
   pending the naming session): typed session-only display records
   (`AttentionView`/`TokenScores`/`PredictionTrajectory`/`PredictionTable`/
   `TokenMetrics`/`ScoreDecomposition`/`CausalReceipt`/`Annotation`/`Artifact`)
@@ -242,7 +242,7 @@ Key entry points:
   `trace.grad_fn_site_summary` per-site backward rollups (read-only L1
   consumption).
 - Predicate runtime extension point (DOCUMENTED-UNSTABLE, S4 seam):
-  `torchlens.ir.predicate_registry` — `PredicateProtocol` (one positional
+  `torchlens._ir.predicate_registry` — `PredicateProtocol` (one positional
   concrete `RecordContext`), `coerce_predicate(value, slot="save"|"halt"|"until")`
   (raw callables incl. `BaseSelector` returned BY IDENTITY; registered names
   via a slot-aware enforcing wrapper), `register_predicate(name)` (no
@@ -257,7 +257,7 @@ Key entry points:
   string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields.
   user-op failures exclude the failing call; TL-side capture failures may include a
   skipped/partial current-call event. Trace failed captures separately expose
-  `exc.partial_log`, recoverable with `tl.partial.from_failed_capture(exc)`.
+  `exc.partial_log`, recoverable with `tl._partial.from_failed_capture(exc)`.
 - Every capture product carries one settled typed outcome: `Trace.outcome` /
   `Recording.outcome` / `PartialTrace.outcome` return a frozen `CaptureOutcome`
   (COMPLETE / HALTED / ABORTED_NONFINITE / FAILED+phase / UNATTESTED / UNKNOWN),
@@ -283,14 +283,14 @@ Key entry points:
   model output. Doc of record:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
-  importing `torchlens.kernel_telemetry` installs `gpu_kernels` views over
+  importing `torchlens._kernel_telemetry` installs `gpu_kernels` views over
   the ATen execution profile; rows persist as of tlspec v8 (`FieldPolicy.KEEP`)
   and counts are lower bounds wherever `mode_paused_interior` is non-empty.
   Doc of record: `docs/reference/kernel_telemetry.md`.
 - Lazy decoration: `torchlens/backends/torch/model_prep.py:_ensure_model_prepared()` calls
   `wrap_torch()` and the belt/rescue stale-reference machinery
 - Forward-pass orchestration: `torchlens/capture/trace.py`
-- Postprocess: `torchlens/postprocess/__init__.py` current 26-step pipeline (declared
+- Postprocess: `torchlens/_postprocess/__init__.py` current 26-step pipeline (declared
   contract keys `0`..`20` plus fractional inserts `11.5`/`11.75`/`15.5`/`16.5`/`17.5` in
   `postprocess/_contracts.py::POSTPROCESS_STEP_CONTRACTS`)
 - Portable I/O: `torchlens/_io/bundle.py`, `torchlens/_io/tlspec.py`, `torchlens/io/__init__.py`

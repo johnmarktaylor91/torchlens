@@ -14,6 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
 from torchlens._errors import (
     ArgumentTypeError,
     InvalidArgumentError,
@@ -22,7 +23,6 @@ from torchlens._errors import (
 from torchlens._io import FieldPolicy
 from torchlens._io.prerelease import registered_prerelease_fields
 from torchlens.backends.registry import get_backend_spec
-from torchlens.data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
 

@@ -9,7 +9,7 @@ but unusable (stale driver, mismatched build, one bad device in a multi-GPU box)
 aborted with the driver error instead of completing on the CPU.  That is the bug
 that forced ``CUDA_VISIBLE_DEVICES=""`` on every command in this repo.
 
-The fix (``torchlens/utils/rng.py::_snapshot_cuda_rng_states``) skips the CUDA
+The fix (``torchlens/_utils/rng.py::_snapshot_cuda_rng_states``) skips the CUDA
 snapshot entirely until the process has actually initialized CUDA, and degrades
 to a warning if the read fails anyway.  Real CUDA captures are unaffected: a
 capture that touches CUDA has initialized it by definition.
@@ -28,7 +28,7 @@ import textwrap
 import pytest
 import torch
 
-from torchlens.utils import rng as tl_rng, tensor_utils
+from torchlens._utils import rng as tl_rng, tensor_utils
 
 # Markers are additive: a file-level smoke pytestmark would keep the heavy tests
 # in the `-m smoke` tier, so tier marks are applied per test instead.

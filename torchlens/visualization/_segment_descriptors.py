@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING
 from .collapse_plan import RenderContext, SegmentDescriptor
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .auto_collapse import CollapseAnalysis
 
 

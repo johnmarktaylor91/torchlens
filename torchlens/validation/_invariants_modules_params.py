@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .invariants import (
         MetadataInvariantError,
         _param_address_index,

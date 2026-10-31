@@ -22,9 +22,9 @@ from torch.utils.checkpoint import checkpoint
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._ir.events import CheckpointInvocationObserved
 from torchlens.backends.torch import backward as backward_mod
 from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
-from torchlens.ir.events import CheckpointInvocationObserved
 
 
 class _OneCheckpoint(nn.Module):

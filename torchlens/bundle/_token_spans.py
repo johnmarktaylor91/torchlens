@@ -59,7 +59,7 @@ from ._fed_by import (
 from ._relations import MemberRelationRow
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from . import Bundle
 
 #: Boundary tokens the matcher may trim per side of a run.

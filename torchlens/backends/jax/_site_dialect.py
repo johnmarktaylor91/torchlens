@@ -15,10 +15,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ...data_classes._site_key import SiteKeyMinter
+from ..._data_classes._site_key import SiteKeyMinter
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 
 def _jax_site_components(op_log: Any) -> tuple[tuple[str, ...], str]:

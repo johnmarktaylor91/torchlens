@@ -13,7 +13,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.observability import (
+from torchlens._observability import (
     HistoryView,
     StepTruth,
     WatchLifecycleError,
@@ -21,8 +21,8 @@ from torchlens.observability import (
     render_contact_sheet,
     render_fan,
 )
-from torchlens.observability._op_tier import OpTierCollector, split_heads
-from torchlens.observability._quantiles import WatchRenderError
+from torchlens._observability._op_tier import OpTierCollector, split_heads
+from torchlens._observability._quantiles import WatchRenderError
 
 
 def _model() -> torch.nn.Module:

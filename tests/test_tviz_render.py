@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 import torch
 
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 
 
 @pytest.fixture()

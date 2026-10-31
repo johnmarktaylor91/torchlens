@@ -16,8 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.tensor_utils import safe_copy
 from torchlens.options import CaptureOptions
-from torchlens.utils.tensor_utils import safe_copy
 
 
 class _LpiLike(nn.Module):

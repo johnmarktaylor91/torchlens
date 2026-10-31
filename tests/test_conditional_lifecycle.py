@@ -10,9 +10,9 @@ import torch.nn as nn
 pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
-from torchlens.data_classes.cleanup import _remove_log_entry_references  # noqa: E402
-from torchlens.data_classes.trace import ConditionalEvent, Trace  # noqa: E402
-from torchlens.postprocess.labeling import (  # noqa: E402
+from torchlens._data_classes.cleanup import _remove_log_entry_references  # noqa: E402
+from torchlens._data_classes.trace import ConditionalEvent, Trace  # noqa: E402
+from torchlens._postprocess.labeling import (  # noqa: E402
     _rename_model_history_layer_names,
     _replace_layer_names_for_layer_entry,
 )
@@ -60,7 +60,7 @@ class _StubTrace:
         self._raw_to_final_layer_labels: dict[str, str] = {}
         self._raw_to_final_parent_layer_labels: dict[str, str] = {}
         self._raw_to_final_op_labels: dict[str, str] = {}
-        from torchlens.ir.workspaces import (
+        from torchlens._ir.workspaces import (
             ModuleCaptureWorkspace,
             RawGraphWorkspace,
             WrapperRuntimeWorkspace,

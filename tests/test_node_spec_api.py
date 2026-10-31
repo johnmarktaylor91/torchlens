@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
+from torchlens._data_classes.layer import Layer
 from torchlens.experimental.dagua import NodeSpec
 from torchlens.visualization import node_spec as node_spec_mod
 from torchlens.visualization.overlays import external_overlay_value

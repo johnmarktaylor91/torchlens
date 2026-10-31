@@ -16,7 +16,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ..._errors import InvalidArgumentError
-from ...utils.display import atomic_write_text, user_stacklevel
+from ..._utils.display import atomic_write_text, user_stacklevel
 from .. import _render_utils
 from .._render_common import GraphvizRenderError, GraphvizUnavailableError
 from .._render_utils import _open_file_quietly, cluster_caption_attrs, compute_module_penwidth

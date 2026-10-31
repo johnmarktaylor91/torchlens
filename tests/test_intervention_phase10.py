@@ -15,6 +15,8 @@ from example_models import TinyReluAdd as _ReluModel
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir.container import TupleIndex
+from torchlens._ir.selector_eval import selector_from_spec
 from torchlens.intervention.errors import (
     MultiMatchWarning,
     OpaqueCallableInExecutableSaveError,
@@ -37,8 +39,6 @@ from torchlens.intervention.types import (
     InterventionSpec,
 )
 from torchlens.io import load_intervention_spec
-from torchlens.ir.container import TupleIndex
-from torchlens.ir.selector_eval import selector_from_spec
 from torchlens.validation import check_spec_compat
 
 _INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention.resolver")
@@ -861,9 +861,9 @@ def test_red_team_custom_module_side_effect_is_not_imported(
 
 _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE = [
     ("torchlens._io.tlspec:os.system", "system"),
-    ("torchlens.utils:importlib.import_module", "import_module"),
+    ("torchlens._utils:importlib.import_module", "import_module"),
     ("torchlens.intervention.selectors:builtins.eval", "eval"),
-    ("torchlens.utils:subprocess.getoutput", "getoutput"),
+    ("torchlens._utils:subprocess.getoutput", "getoutput"),
 ]
 
 

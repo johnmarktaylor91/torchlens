@@ -312,7 +312,7 @@ def test_env_var_census_shapes() -> None:
         "planted.module",
         """
         import os
-        from torchlens.utils.env_flags import closed_bool_env
+        from torchlens._utils.env_flags import closed_bool_env
 
         _AUDIT_ENV = "TORCHLENS_PLANTED_CONSTANT"
 

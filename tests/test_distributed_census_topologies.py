@@ -929,7 +929,7 @@ class TestGroupCRefusalParity:
         the marker-keyed merge-scope refusal is asserted on BOTH derive_merge
         entry paths in tests/test_distributed_shard_local_marker.py."""
 
-        from torchlens.constants import MODEL_LOG_FIELD_ORDER
+        from torchlens._constants import MODEL_LOG_FIELD_ORDER
 
         assert "distributed_scope" in MODEL_LOG_FIELD_ORDER
         log = tl.trace(_dense_model(), _dense_input())

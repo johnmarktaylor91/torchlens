@@ -415,7 +415,7 @@ def test_per_pass_field_refuses_on_rolled(varying_log: tl.Trace, tmp_path: Path)
 
 
 def test_unclassified_source_on_rolled_refuses(varying_log: tl.Trace, tmp_path: Path) -> None:
-    from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER
+    from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER
 
     assert "num_inputs" in LAYER_PASS_LOG_FIELD_ORDER
     assert "num_inputs" not in LAYER_SOURCE_ROWS

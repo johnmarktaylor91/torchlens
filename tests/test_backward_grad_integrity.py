@@ -189,7 +189,7 @@ def test_backward_finalize_drains_pending_cpu_async_copies() -> None:
     CUDA copy event (CPU-only hosts record no real events).
     """
 
-    from torchlens.utils import tensor_utils
+    from torchlens._utils import tensor_utils
 
     class _FenceSpy:
         """Pending-copy stand-in recording whether it was synchronized."""
@@ -226,8 +226,8 @@ def test_backward_graph_task_id_routes_through_torch_compat(
     ``getattr(torch._C, "_current_graph_task_id", None)`` probe bypassed it.
     """
 
+    from torchlens._utils import _torch_compat
     from torchlens.backends.torch import tensor_tracking
-    from torchlens.utils import _torch_compat
 
     assert hasattr(_torch_compat, "HAS_CURRENT_GRAPH_TASK_ID")
     assert "HAS_CURRENT_GRAPH_TASK_ID" in _torch_compat._CAPABILITY_ATTRS
@@ -326,7 +326,7 @@ def test_saved_grad_hook_clones_once_and_transforms_once() -> None:
     )
     trace.log_backward(_loss(trace))
 
-    from torchlens.ir.events import OpGradObserved
+    from torchlens._ir.events import OpGradObserved
 
     grad_events = [e for e in trace.backward_events if isinstance(e, OpGradObserved)]
     fired = [

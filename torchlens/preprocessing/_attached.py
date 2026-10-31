@@ -23,7 +23,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.trace import ResolvedPreprocessing
+    from torchlens._data_classes.trace import ResolvedPreprocessing
 
     from ._records import Resolution
 

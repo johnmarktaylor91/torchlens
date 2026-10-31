@@ -328,8 +328,8 @@ def test_without_the_node_resolver_the_count_reads_unknown_never_a_guess(
 ) -> None:
     """``HAS_CURRENT_AUTOGRAD_NODE`` False: no call is charged to a node and the count is unknown."""
 
+    from torchlens._utils import _torch_compat
     from torchlens.backends.torch import _backward_dispatch
-    from torchlens.utils import _torch_compat
 
     monkeypatch.setattr(_torch_compat, "HAS_CURRENT_AUTOGRAD_NODE", False)
     monkeypatch.setattr(_backward_dispatch, "get_current_autograd_node_fn", lambda: None)

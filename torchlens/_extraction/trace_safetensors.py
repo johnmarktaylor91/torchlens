@@ -32,7 +32,7 @@ from typing import Any, NoReturn
 import torch
 
 from .._errors import InvalidArgumentError
-from ..utils._torch_symbols import torch_attr
+from .._utils._torch_symbols import torch_attr
 
 __tl_layer__ = "L5"
 
@@ -386,13 +386,13 @@ def _portable_trace_state(trace: Any) -> dict[str, Any]:
         A shallow state copy with the privacy policy applied.
     """
 
+    from .._data_classes._state_adapter import state_items
     from .._io._source_privacy import (
         _apply_advisory_source_policy,
         _apply_source_metadata_policy,
         _apply_trace_blob_policy,
     )
     from .._io.scrub import _ScrubOptions
-    from ..data_classes._state_adapter import state_items
 
     state = dict(state_items(trace))
     if isinstance(state.get("annotations"), dict):
@@ -431,10 +431,10 @@ def write_trace_safetensors(trace: Any, path: str | Path) -> Path:
 
     from .. import __version__
     from .._capture_honesty import capture_honesty_facts
+    from .._data_classes._state_adapter import state_items
+    from .._data_classes.trace import Trace
     from .._io import TLSPEC_VERSION
     from .._io.writer_contract import writer_contract, writer_contract_digest
-    from ..data_classes._state_adapter import state_items
-    from ..data_classes.trace import Trace
 
     if not isinstance(trace, Trace):
         raise InvalidArgumentError(

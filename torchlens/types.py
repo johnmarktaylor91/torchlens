@@ -10,20 +10,20 @@ __tl_role__ = "FACADE"
 
 import torch
 
+from ._data_classes.aten_op import AtenOp, OpRef
+from ._data_classes.attribute_write import AttributeWrite
+from ._data_classes.backward_pass import BackwardPass
+from ._data_classes.buffer import Buffer
+from ._data_classes.func_call_location import FuncCallLocation
+from ._data_classes.grad_fn import GradFn
+from ._data_classes.grad_fn_call import GradFnCall
+from ._data_classes.module import Module, ModuleCall
+from ._data_classes.op import TensorLog
+from ._data_classes.param import Param
+from ._data_classes.prehook import ModuleInputSnapshot, PreHookEffect, TensorInputObservation
+from ._quantities import Bytes, Duration, Flops, Macs, Quantity
 from .capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
-from .data_classes.aten_op import AtenOp, OpRef
-from .data_classes.attribute_write import AttributeWrite
-from .data_classes.backward_pass import BackwardPass
-from .data_classes.buffer import Buffer
-from .data_classes.func_call_location import FuncCallLocation
-from .data_classes.grad_fn import GradFn
-from .data_classes.grad_fn_call import GradFnCall
-from .data_classes.module import Module, ModuleCall
-from .data_classes.op import TensorLog
-from .data_classes.param import Param
-from .data_classes.prehook import ModuleInputSnapshot, PreHookEffect, TensorInputObservation
 from .intervention import SaveLevel, SiteTable, SpecCompat, TargetManifestDiff, TensorSliceSpec
-from .quantities import Bytes, Duration, Flops, Macs, Quantity
 
 ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
 GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]

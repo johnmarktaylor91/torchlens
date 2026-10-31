@@ -42,8 +42,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.utils import _rng_channels
-from torchlens.utils.rng import HOST_NONDETERMINISM_REGISTRY, host_nondeterminism_monitor
+from torchlens._utils import _rng_channels
+from torchlens._utils.rng import HOST_NONDETERMINISM_REGISTRY, host_nondeterminism_monitor
 
 
 class _LinearNoBias(nn.Module):
@@ -414,7 +414,7 @@ def test_torchlens_initiated_waits_are_not_joins() -> None:
         session = monitor._owner_sync_session
         condition = threading.Condition()
         fake_frame = type("F", (), {})()
-        fake_frame.f_globals = __import__("torchlens.utils.rng", fromlist=["x"]).__dict__
+        fake_frame.f_globals = __import__("torchlens._utils.rng", fromlist=["x"]).__dict__
         fake_frame.f_code = test_torchlens_initiated_waits_are_not_joins.__code__
         fake_frame.f_back = None
         _rng_channels.classify_owner_wait(

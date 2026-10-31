@@ -1,7 +1,7 @@
 """Regression tests for the r18e debug-module hardening fixes.
 
 Covers:
-- H5: ``tl.debug.lineage`` no longer crashes on recurrent models (getattr-multipass class).
+- H5: ``tl._debug.lineage`` no longer crashes on recurrent models (getattr-multipass class).
 - H2/M8: ``audit_trace`` honesty -- surfaces real bisect_nan/dtype_range findings and
   counts empty/insufficient checks as SKIPPED, not RUN.
 - H6/H7: ``graph_breaks`` runs the Dynamo probe on clean torch and does not mutate the
@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.utils import _torch_compat
+from torchlens._utils import _torch_compat
 
 
 class _Recurrent(nn.Module):
@@ -63,19 +63,19 @@ def test_lineage_recurrent_model_never_raises() -> None:
         ("output_1", "ancestors"),
         ("input_1", "descendants"),
     ):
-        result = tl.debug.lineage(trace, label, direction=direction)
+        result = tl._debug.lineage(trace, label, direction=direction)
         assert result.nodes, (label, direction)
         # No internal raw-namespace markers leak into node labels.
         assert all(not node[0].endswith("_raw") for node in result.nodes)
 
     # A bare recurrent label is per-pass ambiguous -> honest message, no crash.
-    ambiguous = tl.debug.lineage(trace, "linear_1_1", direction="descendants")
+    ambiguous = tl._debug.lineage(trace, "linear_1_1", direction="descendants")
     assert ambiguous.nodes == []
     assert "recurrent" in ambiguous.message
     assert "select a pass" in ambiguous.message
 
     # A pass-qualified start resolves cleanly.
-    qualified = tl.debug.lineage(trace, "linear_1_1:2", direction="descendants")
+    qualified = tl._debug.lineage(trace, "linear_1_1:2", direction="descendants")
     assert qualified.start_label == "linear_1_1:2"
     assert qualified.nodes
 
@@ -246,7 +246,7 @@ def test_graph_breaks_after_prior_capture_is_break_free() -> None:
     """
 
     tl.trace(_BreakFree(), torch.ones(2, 3))  # install persistent wrappers
-    report = tl.debug.graph_breaks(_BreakFree(), torch.ones(2, 3))
+    report = tl._debug.graph_breaks(_BreakFree(), torch.ones(2, 3))
     assert report.breaks == ()
 
 
@@ -259,7 +259,7 @@ def test_graph_breaks_does_not_mutate_stateful_model() -> None:
 
     model = _StatefulBranch()
     before = model.n.item()
-    report = tl.debug.graph_breaks(model, torch.randn(2, 4))
+    report = tl._debug.graph_breaks(model, torch.randn(2, 4))
     assert model.n.item() == before  # neither probe nor eager trace leaks mutation
     # The correlated ops must come from the branch actually taken by both runs
     # (the odd/IF branch: add then mul), not the else branch (relu/sub).
@@ -288,7 +288,7 @@ def test_infer_input_shape_preserves_global_rng() -> None:
     before = torch.randn(3).tolist()
 
     torch.manual_seed(0)
-    result = tl.debug.infer_input_shape(model, seed=1234)
+    result = tl._debug.infer_input_shape(model, seed=1234)
     after = torch.randn(3).tolist()
 
     assert result.found  # inference still works
@@ -315,7 +315,7 @@ def test_infer_input_shape_failed_result_strategy_is_not_probe_success() -> None
 
             return x["tokens"]
 
-    result = tl.debug.infer_input_shape(_DictModel())
+    result = tl._debug.infer_input_shape(_DictModel())
 
     assert result.found is False
     assert result.strategy != "probe_success"
@@ -360,7 +360,7 @@ def test_find_nan_live_label_has_no_raw_namespace_leak() -> None:
             h = torch.log(h - h)
             return self.b(h)
 
-    result = tl.debug.find_nan(_NanMid(), torch.ones(1, 2))
+    result = tl._debug.find_nan(_NanMid(), torch.ones(1, 2))
 
     assert result.found
     assert result.label is not None

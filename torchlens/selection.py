@@ -50,7 +50,7 @@ import torch
 from .errors._base import ConfigurationError, TorchLensError
 
 if TYPE_CHECKING:
-    from .data_classes.trace import Trace
+    from ._data_classes.trace import Trace
 
 __all__ = [
     "ResolvedSelection",
@@ -368,7 +368,7 @@ def _graph_entry_order(trace: Any, entries: Iterable[SiteEntry]) -> tuple[SiteEn
     site-key sort, appended after placed entries deterministically.
     """
 
-    from .utils.fail_open import fail_open
+    from ._utils.fail_open import fail_open
 
     placed = _canonical_entry_order(entries)
 

@@ -13,15 +13,15 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.backends._protocol import CaptureBackend
-from torchlens.backends.torch._tl import get_tensor_label
-from torchlens.data_classes.trace import Trace
-from torchlens.ir.workspaces import (
+from torchlens._data_classes.trace import Trace
+from torchlens._ir.workspaces import (
     LEGACY_TRACE_BUILD_STATE_KEYS,
     ModuleCaptureWorkspace,
     RawGraphWorkspace,
     WrapperRuntimeWorkspace,
 )
+from torchlens.backends._protocol import CaptureBackend
+from torchlens.backends.torch._tl import get_tensor_label
 from torchlens.visualization._summary_internal._builder import _live_op_count
 
 

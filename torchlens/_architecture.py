@@ -170,7 +170,7 @@ PACKAGE_LAYERS: dict[str, str] = {
 
 #: Packages licensed to touch torch privates: direct ``torch._*`` use or
 #: consumption of the sanctioned torch-compat chokepoint
-#: (``torchlens/utils/_torch_compat.py``). The license is a PER-MODULE
+#: (``torchlens/_utils/_torch_compat.py``). The license is a PER-MODULE
 #: contract orthogonal to layer (memo 3.2); this count is printed by the
 #: lint and may only SHRINK -- a new package touching torch privates
 #: without a row here is RED. Target: burn down toward engine- and

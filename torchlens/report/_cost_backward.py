@@ -46,7 +46,7 @@ from ..capture.flops import DISPATCH_COUNTING_CONVENTION
 from ._backward_attribution import node_resolver_missing, pass_failed
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: Closed state vocabulary (D14).
 BACKWARD_STATES: tuple[str, ...] = (

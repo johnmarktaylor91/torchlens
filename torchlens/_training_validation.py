@@ -9,9 +9,9 @@ import torch
 from torch import nn
 
 from ._errors import InvalidArgumentError
+from ._utils._torch_compat import get_dynamo_optimized_module_type
+from ._utils._torch_symbols import torch_attr
 from .errors._base import ConfigurationError
-from .utils._torch_compat import get_dynamo_optimized_module_type
-from .utils._torch_symbols import torch_attr
 
 if TYPE_CHECKING:
     from .options import CaptureOptions

@@ -2,7 +2,7 @@
 
 C0 correlation/evidence layer for merge-ranks: arming, group-lifetime identity, and
 the membership-lineage audit. Imported lazily as `tl.distributed` and deliberately
-not in the top-level `__all__` (matching `tl.debug`). Explicit `torch.distributed`
+not in the top-level `__all__` (matching `tl._debug`). Explicit `torch.distributed`
 collectives inside a traced forward become first-class boundary nodes; the boundary
 op capture itself lives in `backends/torch/collectives.py`.
 
@@ -39,7 +39,7 @@ op capture itself lives in `backends/torch/collectives.py`.
   answers whether THIS runtime matches a row, so callers (including tests) can
   know in advance whether `arm()` can succeed instead of branching on the raised
   exception. It is exported as `tl.distributed.has_vetted_snapshot` and documented
-  there; it lives here (not `torchlens/utils/_torch_compat.py`) because it checks
+  there; it lives here (not `torchlens/_utils/_torch_compat.py`) because it checks
   against our own census table, not a generic torch API capability. F1 ruling
   2026-10-01: on an unvetted torch, the gloo/distributed/merge-ranks test suites
   assert the typed `UncapturedCollectiveOpError` fail-closed refusal (gated

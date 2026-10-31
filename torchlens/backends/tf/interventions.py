@@ -28,14 +28,14 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from ...intervention.selectors import BaseSelector
-from ...intervention.types import Edit, InterventionDecision
-from ...ir.intervention import FireResult
-from ...ir.op_record import amend_module_exit_intervention
-from ...postprocess._selective_save import (
+from ..._ir.intervention import FireResult
+from ..._ir.op_record import amend_module_exit_intervention
+from ..._postprocess._selective_save import (
     _STATIC_INTERVENTION_SELECTOR_KINDS,
     reject_selector_outside_kinds,
 )
+from ...intervention.selectors import BaseSelector
+from ...intervention.types import Edit, InterventionDecision
 from ..registry import BackendUnsupportedError
 
 # Alias of the neutral authority table (the ``output`` drop is declared

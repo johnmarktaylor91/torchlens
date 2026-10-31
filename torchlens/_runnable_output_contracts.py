@@ -168,14 +168,14 @@ def _diagnose_live_output(trace: Any) -> LiveOutputDiagnosis:
     # The REBOUND spellings: the raw ``_runnable_call_outputs`` functions resolve
     # their own helpers (``_op_for_label``) only through the execution module's
     # globals.
+    from ._data_classes.container import container_from_op
+    from ._ir.container import declared_leaf_slots
     from ._runnable_execution import (
         _container_spec_reconstruction_lossy,
         _fresh_bare_tensor_root,
         _output_container_spec,
     )
     from ._runnable_output_contracts import LiveOutputDiagnosis, _unfaithful_root_diagnosis
-    from .data_classes.container import container_from_op
-    from .ir.container import declared_leaf_slots
 
     output_labels = tuple(getattr(trace, "output_layers", ()) or ())
     lossy = _container_spec_reconstruction_lossy(_output_container_spec(trace))
@@ -719,7 +719,7 @@ def _raw_runtime_output(
 def _registered_flatten_children(value: Any) -> list[Any] | None:
     """Return a registered container's flatten children, else ``None`` (r67 C2, corr1-3)."""
 
-    from torchlens.ir.container import get_registered_container
+    from torchlens._ir.container import get_registered_container
 
     if isinstance(value, (torch.Tensor, Mapping, list, tuple, str, bytes)) or value is None:
         return None

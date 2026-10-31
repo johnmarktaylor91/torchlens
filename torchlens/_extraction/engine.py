@@ -1515,7 +1515,7 @@ def _batch_iterable(plan: _RunPlan, remaining: Any) -> Iterable[Any]:
     if isinstance(remaining, torch.Tensor):
         total = (remaining.shape[0] + plan.batch_size - 1) // plan.batch_size
     if plan.progress:
-        from ..utils.display import progress_bar
+        from .._utils.display import progress_bar
 
         batches = progress_bar(batches, total=total, desc="torchlens.extract", enabled=True)
     return batches

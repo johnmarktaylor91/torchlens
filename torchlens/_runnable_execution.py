@@ -34,6 +34,16 @@ from . import (
     _state,
 )
 from ._io._torch_symbols import torch_attr
+from ._ir.container import (
+    CONTAINER_KIND_CAPABILITIES,
+    ContainerReconstructionError,
+    ContainerSpec,
+    _reconstruction_would_substitute_plain,
+    namedtuple_type_can_carry_instance_state,
+    rebuild_container_from_spec,
+    reconstruction_is_lossy_by_type,
+    resolve_container_type,
+)
 from ._runnable_retention import _check_unretained_extent, _fail_open_unless_admitted
 from ._runnable_state import (
     _INPUT_STRUCTURE_SITE_PREFIX,
@@ -55,6 +65,19 @@ from ._split_rebind import (
     rebind_function as _rebind_function,
     rebind_lru_cache as _rebind_lru_cache,
 )
+from ._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
+from ._utils.alias_footprint import touched_bytes_relation
+from ._utils.rng import (
+    aten_qualname_is_seeded_rng,
+    deterministic_fill_governs,
+    qualname_is_uninit_growth_resize,
+    qualname_is_uninit_size_gated_alloc,
+    qualname_is_uninit_total_writer,
+    qualname_is_uninitialized_alloc,
+    restore_host_rng,
+    snapshot_host_rng,
+    uninit_new_call_is_size_form,
+)
 from .errors import (
     NumericAttestationError,
     PathDivergenceError,
@@ -64,16 +87,6 @@ from .errors import (
     RuntimeSignatureDriftError,
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
-from .ir.container import (
-    CONTAINER_KIND_CAPABILITIES,
-    ContainerReconstructionError,
-    ContainerSpec,
-    _reconstruction_would_substitute_plain,
-    namedtuple_type_can_carry_instance_state,
-    rebuild_container_from_spec,
-    reconstruction_is_lossy_by_type,
-    resolve_container_type,
-)
 from .runnable import (
     NONDETERMINISTIC_SOURCE_VOCABULARY,
     ActivationPayloadLayerDescriptor,
@@ -113,19 +126,6 @@ from .runnable import (
     derived_witness_completeness,
     is_mode_sensitive_qualname,
     mark_trace_path_status,
-)
-from .utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
-from .utils.alias_footprint import touched_bytes_relation
-from .utils.rng import (
-    aten_qualname_is_seeded_rng,
-    deterministic_fill_governs,
-    qualname_is_uninit_growth_resize,
-    qualname_is_uninit_size_gated_alloc,
-    qualname_is_uninit_total_writer,
-    qualname_is_uninitialized_alloc,
-    restore_host_rng,
-    snapshot_host_rng,
-    uninit_new_call_is_size_form,
 )
 
 _RUN_FORK_COUNTER = count(1)

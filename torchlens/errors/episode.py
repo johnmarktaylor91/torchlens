@@ -184,7 +184,7 @@ class EpisodeJoinError(EpisodeCaptureError, ValidationError, RuntimeError):
     ``fields["break_step"]`` names the broken join's step where one exists.
     Strict-arm instances raised mid-capture carry the settled partial
     product on ``exc.partial_log`` (recover with
-    ``tl.partial.from_failed_capture(exc)``).
+    ``tl._partial.from_failed_capture(exc)``).
     """
 
 

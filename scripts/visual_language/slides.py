@@ -102,8 +102,8 @@ def constants() -> dict[str, Any]:
 
     import inspect
 
+    from torchlens._data_classes._trace_viz import TraceVisualizationMixin
     from torchlens._vocab import node_spec
-    from torchlens.data_classes._trace_viz import TraceVisualizationMixin
     from torchlens.visualization import (
         _edge_multiplicity,
         _encoding,
@@ -1439,7 +1439,7 @@ OTHER_PICTURES: tuple[tuple[str, str, str, str], ...] = (
         "docs/reference/glossary.md",
     ),
     ("Summary", "a text table of layers", "trace.summary()", "docs/reference/summary.md"),
-    ("tviz", "transformer pictures", "torchlens.tviz", "docs/reference/tviz.md"),
+    ("tviz", "transformer pictures", "torchlens.transformer", "docs/reference/tviz.md"),
     (
         "Model Explorer",
         "export to Google Model Explorer",

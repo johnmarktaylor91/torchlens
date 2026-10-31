@@ -615,7 +615,7 @@ def _newton_step(
 def _model_type(trace: Any) -> str | None:
     """Return the traced model's ``config.model_type``, or ``None``."""
 
-    from ..data_classes._runtime_handles import source_model_from_trace
+    from .._data_classes._runtime_handles import source_model_from_trace
 
     found = getattr(getattr(source_model_from_trace(trace), "config", None), "model_type", None)
     return found if isinstance(found, str) else None

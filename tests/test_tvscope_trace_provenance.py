@@ -15,7 +15,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.preprocessing as pp
-from torchlens.data_classes.trace import ResolvedPreprocessing
+from torchlens._data_classes.trace import ResolvedPreprocessing
 
 
 class _Tiny(nn.Module):

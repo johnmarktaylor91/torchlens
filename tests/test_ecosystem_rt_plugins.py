@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from torchlens.ecosystem import plugins
-from torchlens.ecosystem.plugins import (
+from torchlens._ecosystem import plugins
+from torchlens._ecosystem.plugins import (
     ENTRY_POINT_GROUPS,
     PluginLoadWarning,
     activate,

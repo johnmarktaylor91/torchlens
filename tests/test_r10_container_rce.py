@@ -7,7 +7,7 @@ KEEP strings plus literal constructor args. Reconstruction did its OWN
 OUTSIDE both the r1-r9 unpickler/callable gates. A crafted bundle naming
 ``subprocess`` / ``Popen`` therefore executed arbitrary code on a plain
 ``tl.load()`` + ``trace.run()`` -- the documented flow. The fix
-(``torchlens/ir/container.py``) makes the container-type resolver default-deny: it never
+(``torchlens/_ir/container.py``) makes the container-type resolver default-deny: it never
 imports an attacker-named module (resolves ONLY from ``sys.modules``) and returns a type
 ONLY when it structurally matches the benign container kind recorded in the spec, so a
 disallowed type is refused BEFORE any construction.
@@ -34,14 +34,14 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import TorchLensIOError
 from torchlens._io.bundle_container import _resolve_bundle_member_path
-from torchlens.errors.runnable import RunPreconditionError
-from torchlens.ir.container import (
+from torchlens._ir.container import (
     ContainerReconstructionError,
     ContainerSpec,
     NamedField,
     _resolve_container_type,
     rebuild_container_from_spec,
 )
+from torchlens.errors.runnable import RunPreconditionError
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(

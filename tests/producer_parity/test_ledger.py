@@ -67,7 +67,7 @@ EXPECTED_APPEND_AMENDMENT_CALLER_FILES = {
     "torchlens/user_funcs.py",  # graph_edge_insertion (register_tensor_connection)
     "torchlens/backends/torch/model_prep.py",  # raw hook / module exit / boundary retention
     "torchlens/backends/torch/backend.py",  # output_parent_promotion
-    "torchlens/postprocess/graph_traversal.py",  # late_buffer_output_parent (pre-0)
+    "torchlens/_postprocess/graph_traversal.py",  # late_buffer_output_parent (pre-0)
     # preview_output_parent_mark for tf/mlx/paddle was hoisted into the
     # neutral absorber by the b5-parity R46-1 wave (5290caa7): same channel,
     # one shared site instead of three per-backend copies.
@@ -75,7 +75,7 @@ EXPECTED_APPEND_AMENDMENT_CALLER_FILES = {
     "torchlens/backends/tf/interventions.py",  # module_exit_intervention (site fire)
     "torchlens/backends/jax/backend.py",  # preview_output_parent_rebind
     "torchlens/backends/tinygrad/backend.py",  # preview_output_parent_rebind
-    "torchlens/ir/capture_events.py",  # concat lane transport (re-append)
+    "torchlens/_ir/capture_events.py",  # concat lane transport (re-append)
 }
 
 

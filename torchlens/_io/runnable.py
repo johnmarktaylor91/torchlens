@@ -17,9 +17,12 @@ import numpy as np
 import torch
 
 from .. import __version__ as TORCHLENS_VERSION
+from .._data_classes._state_adapter import state_items
+from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._ir.container_registry import ModelSite, Role
 from .._runnable_state import runnable_tensor_byte_digest
+from .._utils._callable_safety import _STORAGE_UNSAFE_NAMES
 from ..backends.registry import BackendRegistryError, get_backend_spec
-from ..data_classes._state_adapter import state_items
 from ..errors import RunnablePreflightError
 from ..errors.runnable import SparseCorePayloadError
 from ..intervention.types import (
@@ -30,8 +33,6 @@ from ..intervention.types import (
     ParentRef,
     Unsupported,
 )
-from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
-from ..ir.container_registry import ModelSite, Role
 from ..runnable import (
     RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
     RUNNABLE_CALL_RECIPE_VERSION,
@@ -92,7 +93,6 @@ from ..runnable import (
     derived_witness_completeness,
     encode_input_site_position,
 )
-from ..utils._callable_safety import _STORAGE_UNSAFE_NAMES
 from . import TorchLensIOError
 
 
@@ -682,7 +682,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     # degenerate totality means every legal empty shape initializes without
     # sampling, so no advertised descriptor can reach a raw math error.
     ambient_context = _ambient_execution_context(trace, calls, registry_entries, slot_drafts)
-    from ..utils._torch_compat import AMBIENT_FP32_UNREPRESENTABLE_KEY
+    from .._utils._torch_compat import AMBIENT_FP32_UNREPRESENTABLE_KEY
 
     capture_ambient = trace._runnable.capture_ambient
     unrepresentable_fp32: tuple[str, ...] = (

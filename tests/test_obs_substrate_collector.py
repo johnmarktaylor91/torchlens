@@ -11,7 +11,7 @@ import pytest
 import torch
 from torch import nn
 
-from torchlens.observability import (
+from torchlens._observability import (
     EventStream,
     HistoryArtifactError,
     HistoryCollector,

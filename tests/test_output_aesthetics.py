@@ -325,8 +325,8 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 pass
 
         # Show that buffer is also accessible as a layer (isinstance check)
-        from torchlens.data_classes.buffer import Buffer
-        from torchlens.data_classes.op import Op
+        from torchlens._data_classes.buffer import Buffer
+        from torchlens._data_classes.op import Op
 
         out.write(f"  isinstance(log.buffers[0], Buffer): {isinstance(first_buf, Buffer)}\n")
         out.write(f"  isinstance(log.buffers[0], Op): {isinstance(first_buf, Op)}\n")

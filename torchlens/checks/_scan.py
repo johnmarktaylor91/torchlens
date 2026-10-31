@@ -1,6 +1,6 @@
 """The ONE shared batched tensor-scan kernel (checks memo item 1 / 4.4).
 
-One kernel, two spellings: ``tl.debug.audit_params`` shapes rows into a
+One kernel, two spellings: ``tl._debug.audit_params`` shapes rows into a
 :class:`~torchlens.checks.ParamAudit`, and the registry's scheduled scan
 consumes the same rows with report shaping skipped. Engineering contract
 (memo 4.4): batched per ``(device, dtype)`` group with ~1 host sync per
@@ -22,7 +22,7 @@ from typing import Any
 import torch
 
 from .. import _state
-from ..utils.tensor_utils import fp8_widen_for_numeric_ops
+from .._utils.tensor_utils import fp8_widen_for_numeric_ops
 from ._errors import CheckConfigError
 
 __tl_layer__ = "L5"

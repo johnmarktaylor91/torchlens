@@ -217,13 +217,13 @@ def test_rerun_colliding_hook_identifiers_do_not_hide_misses() -> None:
 
     from types import SimpleNamespace
 
+    from torchlens._ir.intervention import FireResult
     from torchlens.intervention.hooks import NormalizedHookEntry
     from torchlens.intervention.rerun import (
         _assign_unique_plan_ids,
         _hook_plan_identifier,
         _reconcile_rerun_hook_fires,
     )
-    from torchlens.ir.intervention import FireResult
 
     def same_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
         """Shared callable planned under two different targets."""

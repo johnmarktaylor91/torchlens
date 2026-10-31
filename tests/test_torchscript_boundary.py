@@ -20,6 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from torchlens.backends.torch._script_boundary import (
     SCRIPT_FUNCTION_FUNC_NAME,
     SCRIPT_FUNCTION_TRANSFORM_KIND,
@@ -29,7 +30,6 @@ from torchlens.backends.torch._script_boundary import (
 from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_BOUNDARIES
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.errors import TorchLensWarning
-from torchlens.utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from torchlens.validation import last_validation_failure, validate_forward_pass
 from torchlens.validation.diagnostics import CHECK_COMPLETENESS
 

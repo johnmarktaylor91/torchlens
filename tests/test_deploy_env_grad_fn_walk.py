@@ -1,4 +1,4 @@
-"""tl.debug grad_fn walker (lane F37; approved diagnostic, R grad_fn ruling).
+"""tl._debug grad_fn walker (lane F37; approved diagnostic, R grad_fn ruling).
 
 Structure-only post-hoc sketching of a tensor's autograd graph: a REAL loss
 tensor from a real architecture class walks completely with named parameter
@@ -15,7 +15,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens.debug import GradFnWalkError, sketch_grad_fn, walk_grad_fn
+from torchlens._debug import GradFnWalkError, sketch_grad_fn, walk_grad_fn
 
 
 def test_walk_names_leaves_and_orients_edges_forward() -> None:

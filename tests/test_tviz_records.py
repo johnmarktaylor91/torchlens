@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 
 
 def _view(n_heads: int = 2, n_dst: int = 4, n_src: int = 4, **kwargs) -> tviz.AttentionView:

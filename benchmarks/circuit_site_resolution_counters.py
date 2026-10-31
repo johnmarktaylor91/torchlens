@@ -62,8 +62,8 @@ _CAPTURE = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=Tr
 #: (path suffix, function name) of each counted function, by report key.
 COUNTED: dict[str, tuple[str, str]] = {
     "resolve_sites": ("torchlens/intervention/resolver.py", "resolve_sites"),
-    "selector_eval_evaluate": ("torchlens/ir/selector_eval.py", "evaluate"),
-    "op_getattribute": ("torchlens/data_classes/op.py", "__getattribute__"),
+    "selector_eval_evaluate": ("torchlens/_ir/selector_eval.py", "evaluate"),
+    "op_getattribute": ("torchlens/_data_classes/op.py", "__getattribute__"),
     "op_store_cell_get": ("torchlens/_trace_core/op_store.py", "cell_get"),
     "replays": ("torchlens/intervention/replay.py", "_run_replay"),
     "graph_builds": ("torchlens/mechinterp/_edges.py", "component_graph"),
@@ -214,7 +214,7 @@ def _counts(stats: pstats.Stats) -> dict[str, int]:
         for key, (suffix, name) in COUNTED.items():
             if func == name and posix.endswith(suffix):
                 counts[key] += ncalls
-        if func == "fork" and "torchlens/data_classes/" in posix:
+        if func == "fork" and "torchlens/_data_classes/" in posix:
             counts["forks"] += ncalls
     counts["python_function_calls"] = python_calls
     counts["total_calls"] = int(stats.total_calls)  # type: ignore[attr-defined]

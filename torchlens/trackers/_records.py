@@ -1,8 +1,8 @@
 """The sink-neutral emission view over the C06 history records (memo 3.1-3.5).
 
 One conversion layer turns explorer-owned completed records
-(:class:`~torchlens.observability.StepBlockRecord` +
-:class:`~torchlens.observability.ObservationRecord`) into immutable,
+(:class:`~torchlens._observability.StepBlockRecord` +
+:class:`~torchlens._observability.ObservationRecord`) into immutable,
 tensor-free emission points every sink serializes from. Nothing here touches
 a live tensor, rescans a payload, or invents a second step axis.
 
@@ -32,7 +32,7 @@ import json
 import math
 from dataclasses import dataclass, field
 
-from ..observability import (
+from .._observability import (
     HISTORY_SCHEMA_VERSION,
     CommittedBlock,
     HistogramResult,

@@ -25,7 +25,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.capture_events import (
+from torchlens._ir.capture_events import (
     REBINDABLE_TARGET_LANES,
     AmendmentTargetError,
     CaptureEvents,
@@ -35,7 +35,7 @@ from torchlens.ir.capture_events import (
     SealedJournalWriteError,
     _clone_op_event_for_replay,
 )
-from torchlens.ir.op_record import (
+from torchlens._ir.op_record import (
     FACET_DEFAULTS,
     AmendmentValidationError,
     OpAmendment,
@@ -223,8 +223,8 @@ def test_absent_facet_materializes_from_defaults_with_planted_s5_violation(
 
     # Planted S5 violation: a drifted defaults table must be CAUGHT by the
     # assertion above — proving the check is sensitive, not vacuous.
-    from torchlens.ir import op_record as op_record_module
-    from torchlens.ir.op_record import InterventionFacet
+    from torchlens._ir import op_record as op_record_module
+    from torchlens._ir.op_record import InterventionFacet
 
     planted = dict(op_record_module.FACET_DEFAULTS)
     planted["intervention"] = lambda: InterventionFacet(
@@ -457,7 +457,7 @@ def test_graph_edge_insertion_folds_parents(leg: str, leg_templates: dict[str, l
 
     journal = _fresh_journal(leg_templates[leg])
     parent, child = journal.op_events[0], journal.op_events[1]
-    from torchlens.ir import ParentEdge
+    from torchlens._ir import ParentEdge
 
     new_parents = (
         *child.parents,
@@ -560,7 +560,7 @@ def test_sealed_journal_still_accepts_backward_events(
     sealed journal.
     """
 
-    from torchlens.ir.events import BackwardCoverageGap
+    from torchlens._ir.events import BackwardCoverageGap
 
     journal = _fresh_journal(leg_templates["decomposed"])
     journal.core_seal_watermark = journal.amendment_seq

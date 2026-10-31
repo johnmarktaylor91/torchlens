@@ -70,7 +70,7 @@ from .._io.sidecar import (
 from ..errors.episode import BundleRelationError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 FED_BY_KIND = "fed_by"
 FED_BY_BASES = frozenset({"declared", "verified", "matched"})

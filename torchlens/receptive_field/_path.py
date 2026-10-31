@@ -15,8 +15,8 @@ from ._errors import (
 from ._types import ReceptiveFieldDirection
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ._query import _IndexSet
 
 
@@ -47,9 +47,9 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
         If a module call has zero or multiple output operations.
     """
 
-    from ..data_classes.layer import Layer
-    from ..data_classes.module import Module, ModuleCall
-    from ..data_classes.op import Op
+    from .._data_classes.layer import Layer
+    from .._data_classes.module import Module, ModuleCall
+    from .._data_classes.op import Op
     from ..intervention.errors import MultiOutputModuleError
 
     if isinstance(handle, str):

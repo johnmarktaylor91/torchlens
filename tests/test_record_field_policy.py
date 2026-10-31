@@ -12,7 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.constants import (
+from torchlens._constants import (
     BACKWARD_PASS_FIELD_ORDER,
     BUFFER_LOG_FIELD_ORDER,
     GRAD_FN_LOG_FIELD_ORDER,
@@ -24,20 +24,20 @@ from torchlens.constants import (
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes.backward_pass import BackwardPass
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.field_policy import (
+from torchlens._data_classes.backward_pass import BackwardPass
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.field_policy import (
     field_order_from_policy,
     fork_policy_from_policy,
     portable_state_spec_from_policy,
 )
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.grad_fn_call import GradFnCall
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
+from torchlens._data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness, ReadinessStatus
 
@@ -460,7 +460,7 @@ def test_postprocess_write_audit_trips_on_undeclared_column(
 ) -> None:
     """An undeclared op-store column write fails the step-contract tripwire."""
 
-    from torchlens.postprocess import POSTPROCESS_STEP_CONTRACTS, PostprocessStepContract
+    from torchlens._postprocess import POSTPROCESS_STEP_CONTRACTS, PostprocessStepContract
 
     original = POSTPROCESS_STEP_CONTRACTS["4"]
     assert original.writes, "step 4 must declare a non-empty write set"
@@ -494,7 +494,7 @@ def test_postprocess_write_audit_catches_in_place_container_mutation(
     (step 10). The content-fingerprint diff now surfaces it.
     """
 
-    import torchlens.postprocess as postprocess_mod
+    import torchlens._postprocess as postprocess_mod
 
     real_rename = postprocess_mod._rename_model_history_layer_names
 
@@ -544,7 +544,7 @@ def test_postprocess_write_audit_trips_on_unsanctioned_row_removal(
 ) -> None:
     """Removing rows in a step without a removes_rows sanction still trips."""
 
-    from torchlens.postprocess import POSTPROCESS_STEP_CONTRACTS, PostprocessStepContract
+    from torchlens._postprocess import POSTPROCESS_STEP_CONTRACTS, PostprocessStepContract
 
     original = POSTPROCESS_STEP_CONTRACTS["3"]
     assert "deletes" in original.row_effects, "step 3 must sanction orphan-row removal"

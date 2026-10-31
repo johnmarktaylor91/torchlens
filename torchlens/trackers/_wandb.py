@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..observability import HistogramDescriptor
+from .._observability import HistogramDescriptor
 from ._errors import SinkProtocolError, TrackersError
 from ._records import HistogramPoint, ScalarPoint, TextPoint
 

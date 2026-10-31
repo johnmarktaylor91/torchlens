@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.trackers as trk
-from torchlens.observability import split_heads
+from torchlens._observability import split_heads
 from torchlens.trackers import WatchConfigError
 
 

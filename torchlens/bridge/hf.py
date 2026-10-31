@@ -12,6 +12,7 @@ from typing import Any, cast
 
 import torch
 
+from torchlens._data_classes.trace import ResolvedPreprocessing, Trace
 from torchlens._errors import InvalidArgumentError
 from torchlens.bridge.hf_attention import (
     AttentionCall,
@@ -19,7 +20,6 @@ from torchlens.bridge.hf_attention import (
     record_attention,
     register_attention,
 )
-from torchlens.data_classes.trace import ResolvedPreprocessing, Trace
 
 _MODALITY_KEYS = frozenset({"text", "image", "images", "audio", "videos"})
 

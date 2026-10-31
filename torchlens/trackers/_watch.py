@@ -41,7 +41,7 @@ from typing import Any
 import torch
 
 from .. import _state
-from ..observability import (
+from .._observability import (
     CommittedBlock,
     EventStream,
     HistogramDescriptor,
@@ -49,10 +49,10 @@ from ..observability import (
     ObserverEvent,
     WatchSettings,
 )
-from ..observability._collector import StepTruth
-from ..observability._kernels import spine_result_from_vector, spine_vector
-from ..observability._schema import validate_step_order
-from ..utils.env_flags import closed_bool_env
+from .._observability._collector import StepTruth
+from .._observability._kernels import spine_result_from_vector, spine_vector
+from .._observability._schema import validate_step_order
+from .._utils.env_flags import closed_bool_env
 from ._amp import correct_spine, corrected_gradient_block, observed_grad_scale, unscale_stage
 from ._errors import SinkProtocolError, TrackersError, WatchConfigError, WatchRuntimeError
 from ._op_grain import (
@@ -74,7 +74,7 @@ from ._records import (
 
 __tl_layer__ = "L8"
 
-#: The kill switch (off-only; registered in torchlens.utils.env_flags).
+#: The kill switch (off-only; registered in torchlens._utils.env_flags).
 WATCH_DISABLE_ENV = "TORCHLENS_WATCH_DISABLE"
 
 #: Closed signal vocabulary -> C06 stream (or a typed deferral).
@@ -1139,7 +1139,7 @@ def watch(
         Advanced C06 collector plumbing (ring capacity, output_dir, ...).
     facets:
         ``grain="op"`` only: ``{op_label: splitter}`` declaring facet slices
-        of op sites (``torchlens.observability.split_heads(n)`` slices
+        of op sites (``torchlens._observability.split_heads(n)`` slices
         attention heads); each slice is its own series under
         ``<op label>/<facet>``.
     allow_forward_wrap:

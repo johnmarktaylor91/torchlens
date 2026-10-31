@@ -25,7 +25,7 @@ real fixture in its declared state.
 | `tl.report.roofline(trace, ridge_intensity=...)` | Theoretical intensity/work map; bound verdicts are hypotheses. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.instrumented_rate(trace)` | The boxed CPU-only FLOPs-per-instrumented-second triage diagnostic. | RUN-RESOURCES | RANK | metadata_only |
 | `tl.report.cost_report(model, x)` | Measured capture cost on YOUR model and host (never an estimate). | RUN-RESOURCES | SHAPE | new_forward |
-| `tl.utils.doctor()` | Is my environment healthy: versions, capabilities, degradations. | ENVIRONMENT | VERDICT | env_probe |
+| `tl._utils.doctor()` | Is my environment healthy: versions, capabilities, degradations. | ENVIRONMENT | VERDICT | env_probe |
 
 ## Refusal conditions
 

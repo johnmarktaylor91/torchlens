@@ -173,7 +173,7 @@ def _fork_rng_devices() -> list[int]:
     pre-fix gate ``utils/rng.py`` documents.
     """
 
-    from ..utils.tensor_utils import _is_cuda_initialized
+    from .._utils.tensor_utils import _is_cuda_initialized
 
     if _is_cuda_initialized() and torch.cuda.is_available():
         return list(range(torch.cuda.device_count()))
@@ -183,7 +183,7 @@ def _fork_rng_devices() -> list[int]:
 def _snapshot_rng() -> dict[str, Any]:
     """Capture the global CPU (and CUDA, when live) RNG state."""
 
-    from ..utils.rng import _snapshot_cuda_rng_states
+    from .._utils.rng import _snapshot_cuda_rng_states
 
     snapshot: dict[str, Any] = {"cpu": torch.get_rng_state()}
     # Initialized-CUDA-only, latch-guarded (R36-4): returns [] on a
@@ -1139,9 +1139,9 @@ def _resolve_input_leaf_by_role(
         silent fallback would rerun an unpatched counterfactual).
     """
 
+    from .._utils.arg_handling import normalize_input_args
+    from .._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
     from ..backends.torch.backend import _get_input_arg_names
-    from ..utils.arg_handling import normalize_input_args
-    from ..utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
 
     args = normalize_input_args(x, model)
     arg_names = _get_input_arg_names(model, args)

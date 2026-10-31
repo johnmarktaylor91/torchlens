@@ -14,7 +14,7 @@ import pytest
 import torch
 
 import torchlens.trackers as trk
-from torchlens.observability import (
+from torchlens._observability import (
     Histogram,
     HistogramDescriptor,
     ObservationRecord,
@@ -23,9 +23,9 @@ from torchlens.observability import (
     Spine,
     StepBlockRecord,
 )
-from torchlens.observability._artifact import CommittedBlock
+from torchlens._observability._artifact import CommittedBlock
+from torchlens._utils._torch_compat import HAS_AMP_GRADSCALER
 from torchlens.trackers._errors import TagGrammarError, TrackersError
-from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
 _requires_gradscaler = pytest.mark.skipif(
     not HAS_AMP_GRADSCALER,

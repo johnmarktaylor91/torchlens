@@ -19,7 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchlens as tl
-from torchlens.postprocess.graph_traversal import output_payload_aliases_parent
+from torchlens._postprocess.graph_traversal import output_payload_aliases_parent
 from torchlens.receptive_field import ReceptiveFieldStatus, ReceptiveFieldValidationStatus
 
 torch.manual_seed(0)

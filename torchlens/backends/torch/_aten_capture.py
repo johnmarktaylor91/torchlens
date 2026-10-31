@@ -14,13 +14,13 @@ from typing import Any
 import torch
 
 from ... import _state
-from ...ir.events import (
+from ..._ir.events import (
     _AtenCallEvent,
     _AtenExecutionContext,
     _AtenTensorFact,
     _ModePausedInteriorEvent,
 )
-from ...utils._torch_compat import get_current_autograd_node_fn
+from ..._utils._torch_compat import get_current_autograd_node_fn
 from ._backward_markers import _ACTIVE_BACKWARD_GRAD_FN_REFS, executing_grad_fn_ref
 
 _RECORD_ATEN_FOR_TESTS: ContextVar[bool] = ContextVar(

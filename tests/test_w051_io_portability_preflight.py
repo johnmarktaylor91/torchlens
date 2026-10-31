@@ -24,7 +24,7 @@ from torchlens._io._portability_preflight import (
     sanitize_annotation_tensors,
 )
 from torchlens._io.bundle import _RenameAwareUnpickler
-from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
+from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
 #: The preflight's own load-preflight dry run round-trips the metadata bytes through
 #: the SAME default-deny unpickler a real tl.load() would use, so an embedded tensor

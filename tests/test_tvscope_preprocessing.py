@@ -19,7 +19,7 @@ import torch
 pytest.importorskip("torchvision")
 
 import torchlens.preprocessing as pp  # noqa: E402
-from torchlens.data_classes.trace import ResolvedPreprocessing  # noqa: E402
+from torchlens._data_classes.trace import ResolvedPreprocessing  # noqa: E402
 
 
 @pytest.fixture(scope="module")

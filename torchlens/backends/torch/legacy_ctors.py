@@ -27,9 +27,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from ...constants import LEGACY_TENSOR_CONSTRUCTOR_SITES
-from ...utils import _torch_compat
-from ...utils._type_new_slot import (
+from ..._constants import LEGACY_TENSOR_CONSTRUCTOR_SITES
+from ..._utils import _torch_compat
+from ..._utils._type_new_slot import (
     TypeNewPatch,
     effective_new_entry,
     has_python_new_trampoline,

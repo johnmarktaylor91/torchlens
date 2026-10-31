@@ -5,12 +5,12 @@ from __future__ import annotations
 from contextlib import AbstractContextManager
 from typing import Any, Protocol
 
-from ..ir.events import OpEvent
-from ..ir.intervention import FireResult, FunctionEventInput
-from ..ir.predicate import RecordContext
-from ..ir.refs import ReservedLabel, TensorRef
-from ..ir.semantics import BackendSemantics, CapturePolicy
-from ..ir.workspaces import RawGraphWorkspace
+from .._ir.events import OpEvent
+from .._ir.intervention import FireResult, FunctionEventInput
+from .._ir.predicate import RecordContext
+from .._ir.refs import ReservedLabel, TensorRef
+from .._ir.semantics import BackendSemantics, CapturePolicy
+from .._ir.workspaces import RawGraphWorkspace
 
 
 class CaptureBackend(Protocol):

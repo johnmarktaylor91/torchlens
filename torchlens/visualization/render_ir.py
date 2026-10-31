@@ -12,8 +12,8 @@ from .request import RenderContext
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from ..data_classes.module import Module
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.trace import Trace
     from ._render_common import RenderedNodeEmission
     from ._render_edges import _SegmentLookup
     from .auto_collapse import ModuleRepeatFold
@@ -418,8 +418,8 @@ def _warn_if_render_exceeds_disclosure_ceiling(num_nodes: int, num_edges: int) -
         return
     import warnings
 
+    from .._utils.display import user_stacklevel
     from ..errors._base import TorchLensWarning
-    from ..utils.display import user_stacklevel
 
     warnings.warn(
         f"TorchLens is rendering {num_nodes} nodes / {num_edges} edges; Graphviz "

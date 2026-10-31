@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.observe import (
+from torchlens._observe import (
     estimated_liveness,
     memory_timeline_v2,
     module_rollup,

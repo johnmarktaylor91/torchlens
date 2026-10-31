@@ -2,7 +2,7 @@
 
 cert9-f5 fix (round-8-prep peripheral MAJOR): ``first_input``/``first_input_spec``
 (``torchlens/semantic/recipes/_helpers.py``) read ``ModuleCall.forward_args``, which
-finalization ("GC-11", ``torchlens/postprocess/finalization.py``) unconditionally
+finalization ("GC-11", ``torchlens/_postprocess/finalization.py``) unconditionally
 nulls for the default ``torch_module`` module-identity mode -- the mode ordinary
 ``nn.Module`` tracing uses. That made the built-in ``"input"``/``"indices"`` facet
 falsely report "not captured -- re-run with save_arg_values=True" even when the

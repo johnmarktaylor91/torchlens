@@ -8,9 +8,9 @@ from ._accessor_base import SuperAccessor
 from ._base import Super, _TensorBearing
 
 if TYPE_CHECKING:
-    from ...data_classes.aten_op import AtenOp
-    from ...data_classes.layer import Layer
-    from ...data_classes.op import Op
+    from ..._data_classes.aten_op import AtenOp
+    from ..._data_classes.layer import Layer
+    from ..._data_classes.op import Op
     from .._topology.topology import SupergraphNode
 
 

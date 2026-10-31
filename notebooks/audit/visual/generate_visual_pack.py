@@ -203,7 +203,7 @@ def _preprocessed_trace(model_key: str):
     """
 
     def _build():
-        from torchlens.data_classes.trace import ResolvedPreprocessing
+        from torchlens._data_classes.trace import ResolvedPreprocessing
 
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x)

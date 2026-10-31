@@ -1222,7 +1222,7 @@ def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
     with pytest.raises(PoisonedRunError):
         poisoned.to_pandas()
     with pytest.raises(PoisonedRunError):
-        tl.debug.compare(poisoned, poisoned)
+        tl._debug.compare(poisoned, poisoned)
     with pytest.raises(PoisonedRunError):
         poisoned.push_from(poisoned.layer_list[0])
     with pytest.raises(PoisonedRunError):

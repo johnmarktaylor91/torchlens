@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 import pytest
 import torch
 
-from torchlens.observability import (
+from torchlens._observability import (
     CommittedBlock,
     Histogram,
     HistoryCollector,

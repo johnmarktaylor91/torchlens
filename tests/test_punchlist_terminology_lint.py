@@ -253,7 +253,7 @@ def test_three_axes_stay_apart() -> None:
 def test_merged_trace_vocabulary_stays_domain_specific() -> None:
     """R2: MergedTrace's frozen enums are pinned, never re-graded."""
 
-    from torchlens.merged import (
+    from torchlens._merged import (
         BoundaryConsistency,
         MergeAlignment,
         MergedErrorCode,

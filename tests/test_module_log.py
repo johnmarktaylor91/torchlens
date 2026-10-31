@@ -7,7 +7,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
-from torchlens.data_classes import ModuleAccessor, ParamAccessor
+from torchlens._data_classes import ModuleAccessor, ParamAccessor
 from torchlens.types import Module, ModuleCall
 
 # ---------------------------------------------------------------------------
@@ -363,7 +363,7 @@ class TestSinglePassDelegation:
     def test_forward_args_delegates(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        # GC-11 (torchlens/postprocess/finalization.py) unconditionally nulls
+        # GC-11 (torchlens/_postprocess/finalization.py) unconditionally nulls
         # ModuleCall.forward_args/forward_kwargs after Trace construction for
         # the default "torch_module" identity mode -- the only modes GC-11
         # exempts ("pytree_module"/"object_module") are JAX/TF/MLX/paddle/
@@ -389,7 +389,7 @@ class TestSinglePassDelegation:
         ``_single_pass_or_error`` delegation mechanism, rather than trivially
         passing regardless of what the property returns.
         """
-        from torchlens.data_classes.module import Module
+        from torchlens._data_classes.module import Module
 
         def _swapped_forward_args_summary(self: Module) -> str:
             """Wrong delegation: returns kwargs summary instead of args summary."""

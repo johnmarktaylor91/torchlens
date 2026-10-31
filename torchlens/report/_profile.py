@@ -15,13 +15,13 @@ from collections.abc import Hashable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from ..utils._multipass_access import is_multipass_layer
+from .._utils._multipass_access import is_multipass_layer
 from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
 
 ProfileLevel = Literal["op", "module", "call"]

@@ -15,7 +15,7 @@ from ..capture.arg_positions import _normalize_func_name
 from ._errors import ReceptiveFieldConfigurationError
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
+    from .._data_classes.op import Op
 
 
 RuleCallback: TypeAlias = Callable[..., object]

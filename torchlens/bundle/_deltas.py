@@ -20,7 +20,7 @@ from ..intervention._metrics import is_scalar_like, relative_l1_scalar, resolve_
 from ..intervention.errors import BundleMemberError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from . import Bundle
 
 

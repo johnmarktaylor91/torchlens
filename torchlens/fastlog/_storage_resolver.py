@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 from .._errors import TorchLensPostfuncError
+from .._ir.summary_role import ensure_summary_output_owns_storage, is_summary_transform
 from .._state import pause_logging
 from .._training_validation import TrainingModeConfigError
-from ..ir.summary_role import ensure_summary_output_owns_storage, is_summary_transform
-from ..utils.tensor_utils import SaveMode, safe_copy
+from .._utils.tensor_utils import SaveMode, safe_copy
 from .exceptions import InvalidStorageError, PredicateError
 from .types import CaptureSpec, RecordContext, StorageIntent
 
@@ -385,7 +385,7 @@ def _validate_train_mode_transformed(
             f"for fastlog event {label!r}. "
             "Remedy: return a differentiable torch.Tensor from activation_transform, "
             "or declare a non-differentiable reducer with "
-            "torchlens.observability.summary(fn).",
+            "torchlens._observability.summary(fn).",
             code="transform_not_differentiable",
         )
     if transformed.dtype in _INTEGER_DTYPES:
@@ -394,7 +394,7 @@ def _validate_train_mode_transformed(
             f"event {label!r}. Integer and bool dtypes cannot propagate grads. "
             "Remedy: adjust activation_transform to return a floating dtype, or "
             "declare a non-differentiable reducer with "
-            "torchlens.observability.summary(fn).",
+            "torchlens._observability.summary(fn).",
             code="transform_not_differentiable",
         )
     if raw_tensor.requires_grad and transformed.grad_fn is None:
@@ -404,7 +404,7 @@ def _validate_train_mode_transformed(
             f"for fastlog event {label!r} must remain differentiable. "
             "Remedy: keep activation_transform on the autograd graph (no detach/no_grad), "
             "or declare a non-differentiable reducer with "
-            "torchlens.observability.summary(fn).",
+            "torchlens._observability.summary(fn).",
             code="transform_not_differentiable",
         )
     _ = spec

@@ -7,6 +7,11 @@ from typing import Any, cast
 import pytest
 
 import torchlens as tl
+from torchlens._data_classes.derived_grad import (
+    IntermediateDerivedGradAccessor,
+    IntermediateDerivedGradRecord,
+)
+from torchlens._ir.refs import DtypeRef
 from torchlens.backends import BackendUnsupportedError
 from torchlens.backends.jax import GradOptions
 from torchlens.backends.jax.backend import (
@@ -15,11 +20,6 @@ from torchlens.backends.jax.backend import (
     _JaxIntermediateTapSpec,
 )
 from torchlens.backends.jax.jaxpr import _jax_zero_tap
-from torchlens.data_classes.derived_grad import (
-    IntermediateDerivedGradAccessor,
-    IntermediateDerivedGradRecord,
-)
-from torchlens.ir.refs import DtypeRef
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")

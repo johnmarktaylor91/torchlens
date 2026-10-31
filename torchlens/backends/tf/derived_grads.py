@@ -19,14 +19,14 @@ from typing import Any
 
 import numpy as np
 
-from ...data_classes.derived_grad import (
+from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
 )
-from ...data_classes.trace import Trace
-from ...ir.refs import DtypeRef
+from ..._data_classes.trace import Trace
+from ..._ir.refs import DtypeRef
 from .._finalize import mirror_param_derived_grads, stable_callable_name as _callable_identity
 from .._validation_shared import float_replay_tolerances
 from ..registry import BackendUnsupportedError

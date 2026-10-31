@@ -15,7 +15,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.quantities import Duration
+from torchlens._quantities import Duration
 
 
 class _ReusedModule(nn.Module):

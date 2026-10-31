@@ -21,10 +21,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes._trace_pristine import derive_pristine, pristine_touch_evidence
 from torchlens._trace_state import TraceState
 from torchlens.backends import registered_backend_specs
 from torchlens.backends._intervention_evidence import records_intervention_evidence
-from torchlens.data_classes._trace_pristine import derive_pristine, pristine_touch_evidence
 from torchlens.intervention.errors import BaselineUndeterminedError
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness

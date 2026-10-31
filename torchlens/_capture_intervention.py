@@ -20,7 +20,7 @@ from .intervention.resolver import _selector_resolution_direction
 from .intervention.types import InterventionDecision, InterventionSpec, TargetSpec
 
 if TYPE_CHECKING:
-    from .data_classes.trace import Trace
+    from ._data_classes.trace import Trace
 
 
 def _backward_intervention_spec_from_predicate(

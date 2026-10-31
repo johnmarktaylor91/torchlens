@@ -1,4 +1,4 @@
-"""Compatibility tests for the lazy :mod:`torchlens.utils` facade."""
+"""Compatibility tests for the lazy :mod:`torchlens._utils` facade."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-import torchlens.utils as utils
+import torchlens._utils as utils
 
 _EXPECTED_EXPORTS = (
     "AutocastRestore",

@@ -206,7 +206,7 @@ class _RegisteredProbe:
         self.t = t
 
 
-from torchlens.ir.container import register_container as _register_container  # noqa: E402
+from torchlens._ir.container import register_container as _register_container  # noqa: E402
 
 _register_container(
     _RegisteredProbe,

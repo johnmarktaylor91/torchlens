@@ -120,7 +120,7 @@ Row rationales, stated once:
 - **UNKNOWN** refusals replace what was previously an ungated pass-through of
   provably-unfinished artifacts (`tl.save` of failed partials) or an
   undefined crash on unbuilt structures. The nearest legitimate workflows
-  (partial inspection, `draw`, `tl.partial.from_failed_capture`) all remain
+  (partial inspection, `draw`, `tl._partial.from_failed_capture`) all remain
   open.
 - **N5** converted two broken behaviors into typed refusals: halted refresh
   crashed with a misleading "computational graph changed" error, and halted

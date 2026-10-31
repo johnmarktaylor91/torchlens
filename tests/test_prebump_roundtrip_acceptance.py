@@ -180,16 +180,16 @@ _ANNOTATION_ROWS = frozenset({"Trace.annotations.episode", "Trace.annotations._k
 
 #: Owner-class resolution for the per-family activation check.
 _OWNER_CLASSES: dict[str, str] = {
-    "Trace": "torchlens.data_classes.trace",
-    "Op": "torchlens.data_classes.op",
-    "AtenOp": "torchlens.data_classes.aten_op",
-    "OpRef": "torchlens.data_classes.aten_op",
-    "_ModePausedInteriorGap": "torchlens.data_classes.aten_op",
-    "_PrimitiveOpProfile": "torchlens.data_classes.aten_op",
-    "_AtenTensorFact": "torchlens.ir.events",
-    "_AtenExecutionContext": "torchlens.ir.events",
-    "KernelLaunch": "torchlens.kernel_telemetry",
-    "_TelemetryPayload": "torchlens.kernel_telemetry",
+    "Trace": "torchlens._data_classes.trace",
+    "Op": "torchlens._data_classes.op",
+    "AtenOp": "torchlens._data_classes.aten_op",
+    "OpRef": "torchlens._data_classes.aten_op",
+    "_ModePausedInteriorGap": "torchlens._data_classes.aten_op",
+    "_PrimitiveOpProfile": "torchlens._data_classes.aten_op",
+    "_AtenTensorFact": "torchlens._ir.events",
+    "_AtenExecutionContext": "torchlens._ir.events",
+    "KernelLaunch": "torchlens._kernel_telemetry",
+    "_TelemetryPayload": "torchlens._kernel_telemetry",
     "Edit": "torchlens.intervention.types",
     "FireRecord": "torchlens.intervention.types",
 }
@@ -441,7 +441,7 @@ def _armed_aten_trace() -> tl.Trace:
 
 
 def _telemetry_trace() -> tl.Trace:
-    from torchlens import kernel_telemetry as telemetry
+    from torchlens import _kernel_telemetry as telemetry
 
     torch.manual_seed(0)
     return telemetry._profile_trace_with_cuda_kernels(
@@ -493,7 +493,7 @@ def test_l3_aten_profile_family_roundtrip(tmp_path) -> None:
 
 
 def test_l3_kernel_telemetry_family_roundtrip(tmp_path) -> None:
-    from torchlens import kernel_telemetry as telemetry
+    from torchlens import _kernel_telemetry as telemetry
 
     trace = _telemetry_trace()
     live_payload = trace.annotations["_kernel_telemetry"]
@@ -771,8 +771,8 @@ def test_tamper_grouping_policy_validated_degrades_typed(tmp_path) -> None:
     (fail-closed settlement), re-proven here so the ledger's validated class
     has an in-module witness alongside the owning lane suite."""
 
+    from torchlens._postprocess._grouping_stamp import degraded_grouping_policy_stamp
     from torchlens.errors import TorchLensWarning
-    from torchlens.postprocess._grouping_stamp import degraded_grouping_policy_stamp
 
     assert FORGERY_SURFACE_LEDGER["Trace.grouping_policy"].startswith("validated")
     trace = _tiny_trace()

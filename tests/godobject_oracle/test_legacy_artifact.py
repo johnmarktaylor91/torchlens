@@ -19,7 +19,7 @@ from _oracle_env import expect_bundle_minor_version_mismatch
 from surface_oracle._snapshot import canonical_dump, snapshot_trace_surface
 
 import torchlens as tl
-from torchlens import kernel_telemetry as _kernel_telemetry
+from torchlens import _kernel_telemetry as _kernel_telemetry
 
 from .test_aliases import _SEED
 

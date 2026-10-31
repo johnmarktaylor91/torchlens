@@ -53,7 +53,7 @@ from typing import TYPE_CHECKING, Any
 from .._errors import InvalidArgumentError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 # ---------------------------------------------------------------------------
 # Rolled-aggregate source allowlist rows (design memo 2.3b, r4 shape).
@@ -708,7 +708,7 @@ def resolve_color_by(color_by: Any) -> EncodingChannelSpec | None:
                 source=normalized,
                 display_name=normalized,
             )
-        from ..constants import LAYER_PASS_LOG_FIELD_ORDER
+        from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 
         if color_by in LAYER_SOURCE_ROWS or color_by in LAYER_PASS_LOG_FIELD_ORDER:
             return EncodingChannelSpec(
@@ -783,7 +783,7 @@ def resolve_size_by(size_by: Any) -> EncodingChannelSpec | None:
                 source=SIZE_DIMS_TOKEN,
                 display_name=SIZE_DIMS_TOKEN,
             )
-        from ..constants import LAYER_PASS_LOG_FIELD_ORDER
+        from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 
         if size_by in LAYER_SOURCE_ROWS or size_by in LAYER_PASS_LOG_FIELD_ORDER:
             return EncodingChannelSpec(
@@ -863,13 +863,13 @@ def _node_key(node: Any) -> str:
     record object, so the keying is consistent within one draw.
     """
 
-    from ..data_classes.layer import Layer
+    from .._data_classes.layer import Layer
 
     if isinstance(node, Layer):
         layer_label = getattr(node, "layer_label", None)
         if isinstance(layer_label, str):
             return layer_label
-    from ..utils._multipass_access import get_multipass_attr
+    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(node, "label", None, multipass=None)
     if isinstance(label, str):
@@ -881,7 +881,7 @@ def _node_key(node: Any) -> str:
 def _is_rolled_multipass(node: Any) -> bool:
     """Return whether ``node`` is a rolled multi-pass aggregate Layer."""
 
-    from ..data_classes.layer import Layer
+    from .._data_classes.layer import Layer
 
     return isinstance(node, Layer) and len(node.ops) > 1
 
@@ -1003,7 +1003,7 @@ def _varying_marker(node: Any) -> dict[str, Any]:
 def _mirror_backed_op_field(field_name: str) -> str | None:
     """Return the Op field backing a mirrored Layer name, if any."""
 
-    from ..data_classes._layer_spec import _LAYER_MIRROR_SPEC
+    from .._data_classes._layer_spec import _LAYER_MIRROR_SPEC
 
     entry = _LAYER_MIRROR_SPEC.get(field_name)
     return entry[0] if entry is not None else None
@@ -1087,7 +1087,7 @@ def _rolled_per_pass(state: EncodingState, node: Any, field_name: str) -> float 
 def _rolled_wrong_type_read(state: EncodingState, node: Any, field_name: str) -> float | None:
     """Shape / non-numeric rows: read and let the wrong-type rule speak."""
 
-    from ..utils._multipass_access import get_multipass_attr
+    from .._utils._multipass_access import get_multipass_attr
 
     return _coerce_scalar(state, node, get_multipass_attr(node, field_name, None, multipass=None))
 
@@ -1142,12 +1142,12 @@ def _resolve_device_time(
     the join attributed no kernels to reads honest n/a, never zero.
     """
 
-    from ..observability._join import require_availability
-    from ..observability._native_profile import join_result_for
+    from .._observability._join import require_availability
+    from .._observability._native_profile import join_result_for
 
     result = join_result_for(trace)
     if result is None:
-        from ..observability._errors import ProfilerSessionError
+        from .._observability._errors import ProfilerSessionError
 
         raise ProfilerSessionError(
             f"{argument}='device_time' is unavailable: this trace carries no "
@@ -1155,7 +1155,7 @@ def _resolve_device_time(
             "owned profiler session).",
             code="device_time_unavailable",
             remedy=(
-                "capture through torchlens.observability.native_profile on a "
+                "capture through torchlens._observability.native_profile on a "
                 "CUDA host, then draw the returned result.trace"
             ),
         )
@@ -1244,7 +1244,7 @@ def _resolve_source_value(state: EncodingState, trace: Trace, node: Any) -> floa
 
     if _is_rolled_multipass(node):
         return _resolve_field_on_rolled(state, node, field_name)
-    from ..utils._multipass_access import get_multipass_attr
+    from .._utils._multipass_access import get_multipass_attr
 
     value = get_multipass_attr(node, field_name, None, multipass=None)
     if value is None:
@@ -1345,7 +1345,7 @@ def _resolve_size_field_on_rolled(state: EncodingState, node: Any, field_name: s
         )
     # ROW_SHAPE / ROW_NON_NUMERIC: read and let the wrong-type rule speak
     # (a shape field names its own remedy: size_by="dims").
-    from ..utils._multipass_access import get_multipass_attr
+    from .._utils._multipass_access import get_multipass_attr
 
     return coerce(node, get_multipass_attr(node, field_name, None, multipass=None))
 
@@ -1407,7 +1407,7 @@ def _resolve_node_shape(state: EncodingState, node: Any) -> tuple[int, ...] | No
             raise _size_rolled_refusal(node, "shape", "the output shape varies across passes")
         shape = getattr(node, "shape", None)
     else:
-        from ..utils._multipass_access import get_multipass_attr
+        from .._utils._multipass_access import get_multipass_attr
 
         shape = get_multipass_attr(node, "shape", None, multipass=None)
     if shape is None:
@@ -1474,7 +1474,7 @@ def _resolve_size_source_value(state: EncodingState, trace: Trace, node: Any) ->
     field_name = spec.source
     if _is_rolled_multipass(node):
         return _resolve_size_field_on_rolled(state, node, field_name)
-    from ..utils._multipass_access import get_multipass_attr
+    from .._utils._multipass_access import get_multipass_attr
 
     value = get_multipass_attr(node, field_name, None, multipass=None)
     if value is None:
@@ -1799,7 +1799,7 @@ def resolve_encoding_engine(
     if resolved_engine == "rank":
         import warnings
 
-        from ..utils.display import user_stacklevel
+        from .._utils.display import user_stacklevel
         from ._rank_layout_internal import layout as _rank_layout
 
         warnings.warn(

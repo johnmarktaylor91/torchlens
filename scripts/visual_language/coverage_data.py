@@ -470,7 +470,7 @@ ROWS: Mapping[str, Row] = {
         "output.all_draw_parameters",
         "cheat-sheet",
         C,
-        "torchlens.data_classes._trace_viz:TraceVisualizationMixin.draw",
+        "torchlens._data_classes._trace_viz:TraceVisualizationMixin.draw",
     ),
     # Side pictures
     "VS01": _R("side.bundle_graph", "other-pictures", C, "_bundle_graph:_add_bundle_forward_nodes"),

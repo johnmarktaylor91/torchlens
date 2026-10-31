@@ -17,7 +17,7 @@ import pytest
 import torch
 
 import torchlens as tl
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 
 transformers = pytest.importorskip("transformers")
 

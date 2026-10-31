@@ -14,15 +14,15 @@ import torch
 
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
+from ..._data_classes.op import Op
+from ..._ir.events import BackwardPassStart, OpGradObserved
 from ..._state import pause_logging
-from ...data_classes.op import Op
+from ..._utils._torch_compat import get_current_graph_task_id_fn
+from ..._utils.display import _record_phase_timing
+from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
+from ..._utils.tensor_utils import SaveMode, safe_copy
 from ...fastlog.types import CaptureSpec
 from ...intervention.selectors import BaseSelector
-from ...ir.events import BackwardPassStart, OpGradObserved
-from ...utils._torch_compat import get_current_graph_task_id_fn
-from ...utils.display import _record_phase_timing
-from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
-from ...utils.tensor_utils import SaveMode, safe_copy
 from ._tl import (
     get_param_meta,
     get_tensor_label,
@@ -32,7 +32,7 @@ from ._tl import (
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 
 _IMPLICIT_BACKWARD_TASK_IDS: weakref.WeakKeyDictionary[Any, int] = weakref.WeakKeyDictionary()

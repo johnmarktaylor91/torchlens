@@ -47,9 +47,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.capture_events import CaptureEvents
-from torchlens.ir.events import OpEvent
-from torchlens.ir.op_record import (
+from torchlens._ir.capture_events import CaptureEvents
+from torchlens._ir.events import OpEvent
+from torchlens._ir.op_record import (
     _FACET_ATTRIBUTES,
     AMENDMENT_FAMILIES,
     PATH_TO_FLAT,
@@ -383,8 +383,8 @@ def _journal_templates(monkeypatch: pytest.MonkeyPatch, producer: str) -> list[A
     is synthesized through the retained inverse adapter (S15 stand-in).
     """
 
-    postprocess_module = importlib.import_module("torchlens.postprocess")
-    materialize_module = importlib.import_module("torchlens.postprocess._materialize")
+    postprocess_module = importlib.import_module("torchlens._postprocess")
+    materialize_module = importlib.import_module("torchlens._postprocess._materialize")
     original = materialize_module.materialize_from_events
     grabbed: list[Any] = []
 

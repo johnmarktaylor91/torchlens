@@ -12,7 +12,7 @@ from ._errors import ReceptiveFieldConfigurationError
 from ._types import ReceptiveFieldStatus
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
+    from .._data_classes.op import Op
 
 
 @dataclass(frozen=True)

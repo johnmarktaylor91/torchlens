@@ -15,7 +15,7 @@ from .._errors import InvalidArgumentError
 from . import TorchLensIOError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 
 def _refuse_incoherent_structure_only_write(scrubbed_state: dict[str, Any]) -> None:

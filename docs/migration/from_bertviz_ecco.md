@@ -2,7 +2,7 @@
 
 This page maps BertViz's attention views and Ecco's saliency, logit-lens and
 neuron-factor views to TorchLens: their spelling on the left, the TorchLens spelling on
-the right. The pictures live in `torchlens.tviz` (`import torchlens.tviz as tviz`); their
+the right. The pictures live in `torchlens.transformer` (`import torchlens.transformer as tviz`); their
 spellings are documented-unstable. Saving a picture needs matplotlib
 (`pip install "torchlens[viz]"`).
 
@@ -42,7 +42,7 @@ import tempfile
 import torch
 import transformers
 import torchlens as tl
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 from torchlens.semantic.logit_lens import logit_lens_predictions
 
 torch.manual_seed(0)

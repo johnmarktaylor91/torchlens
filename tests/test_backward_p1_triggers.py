@@ -9,12 +9,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir.events import BackwardPassEnd, BackwardPassStart, OpGradObserved
 from torchlens.backends.torch import backward as backward_mod
 from torchlens.backends.torch.backward import (
     _BACKWARD_GRAD_FN_REGISTRY,
     _close_implicit_backward_pass_if_open,
 )
-from torchlens.ir.events import BackwardPassEnd, BackwardPassStart, OpGradObserved
 
 
 class _PlainBackwardModel(nn.Module):

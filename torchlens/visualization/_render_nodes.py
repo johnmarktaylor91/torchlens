@@ -72,8 +72,8 @@ def _normalize_buffer_visibility(
 
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn import GradFn
-    from ..data_classes.trace import Trace
+    from .._data_classes.grad_fn import GradFn
+    from .._data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
 
 
@@ -1060,7 +1060,7 @@ def _raw_input_visualizer_dir(trace: "Trace") -> Path:
         Directory where image artifacts can be written.
     """
 
-    from ..utils.display import ensure_trace_visualizer_dir
+    from .._utils.display import ensure_trace_visualizer_dir
 
     input_dir = ensure_trace_visualizer_dir(trace) / "raw_inputs"
     input_dir.mkdir(parents=True, exist_ok=True)

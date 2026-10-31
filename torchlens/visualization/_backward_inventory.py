@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn import GradFn
-    from ..data_classes.trace import Trace
+    from .._data_classes.grad_fn import GradFn
+    from .._data_classes.trace import Trace
     from ._render_common import BackwardPassFilter
 
 __all__ = [
@@ -98,7 +98,7 @@ def _backward_pass_row(
     unrolled calls carry their one pass index.
     """
 
-    from ..utils.display import int_list_to_compact_str
+    from .._utils.display import int_list_to_compact_str
 
     if inventory is not None and inventory.suppress_bwd_row:
         return []
