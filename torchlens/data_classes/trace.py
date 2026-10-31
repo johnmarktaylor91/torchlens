@@ -1820,8 +1820,8 @@ class Trace(
         # journal for armed captures (census criteria 2-4 evidence). DROP
         # under its private name; never survives save/load. DOCUMENTED-UNSTABLE.
         self._distributed_plane_p: Any | None = None
-        self.is_stopped = False
-        self.stop_reason: str | None = None
+        self.halted = False
+        self.halt_reason: str | None = None
         self.halt_frontier: str | None = None
         self._layers_logged = False
         self._layers_saved = False

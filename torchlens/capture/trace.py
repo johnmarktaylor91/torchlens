@@ -1499,8 +1499,8 @@ def _finalize_halted_trace(
             "trace(halt=...) could not identify a tensor frontier for the halted partial graph."
         ) from halt_exc
 
-    self.is_stopped = True
-    self.stop_reason = halt_exc.reason
+    self.halted = True
+    self.halt_reason = halt_exc.reason
     self.halt_frontier = halt_exc.reason
     self.raw_output = None
     if not postprocess:

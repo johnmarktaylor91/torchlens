@@ -563,7 +563,7 @@ class PaddleBackend:
             )
             if halt_signal is not None:
                 trace.halted = True
-                trace.stop_reason = halt_signal.reason
+                trace.halt_reason = halt_signal.reason
                 trace.halt_frontier = halt_signal.reason
                 trace.raw_output = None
             elif intervention_runtime is not None:

@@ -562,7 +562,7 @@ class Recorder:
                     input_kwargs,
                     layers_to_save=[],
                     grad_layers_to_save=[],
-                    seed=self.options.seed,
+                    random_seed=self.options.seed,
                     postprocess=False,
                     reservation_resume=reservation_token,
                 )

@@ -1204,7 +1204,7 @@ class Recording(TraceLike):
             frontier_label, frontier_tensor = self._recover_halt_frontier()
             projection.bind_halt_frontier(frontier_tensor, frontier_label)
             trace.halted = True
-            trace.stop_reason = self.stop_reason
+            trace.halt_reason = self.stop_reason
             trace.halt_frontier = self.stop_reason
             trace.raw_output = None
             trace.output_layers = [frontier_label]

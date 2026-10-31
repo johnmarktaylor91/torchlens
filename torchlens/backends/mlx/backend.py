@@ -1270,7 +1270,7 @@ class MLXBackend:
                 halt_signal = signal
                 output = signal.frontier_output
                 trace.halted = True
-                trace.stop_reason = signal.reason
+                trace.halt_reason = signal.reason
                 trace.halt_frontier = signal.reason
             # Forward-time-only state: the emit path reads these during the
             # model call; leaving them on the trace breaks the portable-state
