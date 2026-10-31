@@ -389,7 +389,7 @@ def _trace(cell: Cell) -> None:
     torch.manual_seed(SEED)
     trace = tl.trace(cell.model, cell.fresh_inputs(), **kwargs)
     cell.expect(len(trace.ops) > 0, "empty trace")
-    want = CaptureStatus.HALTED if cell.changes("outcome") else CaptureStatus.COMPLETE
+    want = CaptureStatus.STOPPED if cell.changes("outcome") else CaptureStatus.COMPLETE
     cell.expect(trace.outcome.status is want, f"outcome {trace.outcome.status!r}, wanted {want!r}")
     cell.trace = trace
 

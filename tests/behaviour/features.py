@@ -52,7 +52,7 @@ class Feature:
         One line, from the matrix.
     changes:
         Oracle names whose meaning this feature changes: ``forward_match``
-        (replaced by a replay or prefix match), ``outcome`` (HALTED instead
+        (replaced by a replay or prefix match), ``outcome`` (STOPPED instead
         of COMPLETE), ``payloads`` (saved payloads are not compared).
     requires:
         Case tags the feature needs; a case without one is not applicable.
@@ -136,7 +136,7 @@ def _prepare_halt(cell: Cell) -> None:
 
 def _after_halt(cell: Cell) -> None:
     trace = cell.require_trace()
-    cell.expect(trace.outcome.status is CaptureStatus.HALTED, f"outcome {trace.outcome.status!r}")
+    cell.expect(trace.outcome.status is CaptureStatus.STOPPED, f"outcome {trace.outcome.status!r}")
     from tests.behaviour.harness import execution_order
 
     got = tuple(op.func_name for op in execution_order(trace))
@@ -232,7 +232,7 @@ def _after_draw(cell: Cell) -> None:
         if trace is None:
             continue
         out = cell.tmp / f"graph-{name}"
-        trace.draw(vis_outpath=str(out), vis_save_only=True, vis_fileformat="svg")
+        trace.draw(path=str(out), vis_save_only=True, file_format="svg")
         rendered = list(cell.tmp.glob(f"graph-{name}*"))
         cell.expect(bool(rendered), f"{name} draw wrote nothing under {out}")
 

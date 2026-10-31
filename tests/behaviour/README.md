@@ -7,7 +7,7 @@ oracles through the public surface:
 
 | oracle | what it checks |
 | --- | --- |
-| `trace` | `tl.trace` finishes with ops and the outcome the features declare (COMPLETE, or HALTED under `halt`) |
+| `trace` | `tl.trace` finishes with ops and the outcome the features declare (COMPLETE, or STOPPED under `halt`) |
 | `validate` | `tl.validate(model, inputs, scope="forward", validate_metadata=True)` is true, with the default tolerances |
 | `save` | `trace.save(path, level="portable")` succeeds |
 | `load` | `tl.load(path)` returns a trace |
