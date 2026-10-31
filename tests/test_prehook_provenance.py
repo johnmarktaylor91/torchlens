@@ -129,7 +129,7 @@ def test_observational_hook_records_unchanged_without_dedicated_payload() -> Non
     call = _call(trace)
 
     assert seen == [torch.Size([2])]
-    assert call.forward_pre_hook_effects[0].changed is False
+    assert call.forward_pre_hook_effects[0].has_changes is False
     assert call.inputs_before_pre_hooks.tensor_observations[0].payload_origin == (
         "immutable_producer_snapshot"
     )
@@ -231,13 +231,13 @@ def test_opaque_object_tensor_mutation_downgrades_provenance_fail_closed() -> No
     call = _call(trace)
     effect = call.forward_pre_hook_effects[0]
 
-    assert effect.changed is None
+    assert effect.has_changes is None
     assert effect.change_kinds == ()
     assert effect.incomplete_reasons == ("opaque_object_untraversed",)
     assert call.inputs_before_pre_hooks is not None
-    assert call.inputs_before_pre_hooks.capture_complete is False
+    assert call.inputs_before_pre_hooks.is_capture_complete is False
     assert call.inputs_before_pre_hooks.incomplete_reasons == ("opaque_object_untraversed",)
-    assert call.inputs_after_pre_hooks.capture_complete is False
+    assert call.inputs_after_pre_hooks.is_capture_complete is False
     assert call.inputs_after_pre_hooks.incomplete_reasons == ("opaque_object_untraversed",)
 
 
@@ -426,7 +426,7 @@ def test_spectral_norm_module_state_hook_is_not_input_change() -> None:
     trace = tl.trace(model, torch.ones(1, 2))
     effect = _call(trace, "0:1").forward_pre_hook_effects[0]
 
-    assert effect.changed is False
+    assert effect.has_changes is False
     assert effect.change_kinds == ()
 
 
@@ -619,7 +619,7 @@ def test_version_edges_and_alias_deduplication() -> None:
     call = _call(trace)
     observations = call.inputs_before_pre_hooks.tensor_observations
 
-    assert call.forward_pre_hook_effects[0].changed is True
+    assert call.forward_pre_hook_effects[0].has_changes is True
     assert call.forward_pre_hook_effects[0].change_kinds == ("in_place_tensor",)
     assert len({item.alias_group for item in observations}) == 1
     assert observations[0].payload.data_ptr() == observations[1].payload.data_ptr()
@@ -799,7 +799,7 @@ def test_requires_grad_metadata_mutation_is_detected_without_version_increment()
     trace = tl.trace(model, torch.ones(1))
     effect = _call(trace, "self:1").forward_pre_hook_effects[0]
 
-    assert effect.changed is True
+    assert effect.has_changes is True
     assert effect.change_kinds == ("tensor_metadata",)
 
 
@@ -820,7 +820,7 @@ def test_full_backward_hook_rewrap_does_not_redefine_snapshot_b() -> None:
 
     call = _call(trace, "self:1")
     assert torch.equal(call.inputs_after_pre_hooks.args[0], torch.tensor([3.0]))
-    assert call.forward_pre_hook_effects[0].changed is True
+    assert call.forward_pre_hook_effects[0].has_changes is True
 
 
 def test_registration_bypass_downgrades_but_keeps_after_snapshot_truthful() -> None:
@@ -854,7 +854,7 @@ def test_registration_bypass_downgrades_but_keeps_after_snapshot_truthful() -> N
 
     assert call.inputs_before_pre_hooks is None
     assert torch.equal(call.inputs_after_pre_hooks.args[0], torch.tensor([8.0]))
-    assert call.inputs_after_pre_hooks.capture_complete is False
+    assert call.inputs_after_pre_hooks.is_capture_complete is False
     assert "registration_interposition_bypassed" in (call.inputs_after_pre_hooks.incomplete_reasons)
     assert call.forward_pre_hook_effects == ()
-    assert call.had_pre_hook_input_change is None
+    assert call.has_pre_hook_input_change is None

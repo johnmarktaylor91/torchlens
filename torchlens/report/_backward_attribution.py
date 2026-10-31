@@ -27,7 +27,7 @@ checkpoints, or a trace with no checkpoint evidence) the recompute share is
 ``None`` (unknown), never a guess.
 
 The attribution of a pass is written onto the pass as a small closed record
-(``BackwardPass.executed_flops_record``) so a saved and loaded trace reads
+(``BackwardPass._executed_flops_record``) so a saved and loaded trace reads
 the counted answer; the per-call census itself is session-time.
 """
 
@@ -562,7 +562,7 @@ def _record_coherence_problem(record: Mapping[str, Any]) -> tuple[str, str] | No
 
 
 def executed_flops_record_problem(record: Any) -> tuple[str, str] | None:
-    """Why a persisted ``executed_flops_record`` is malformed, or ``None`` when sound.
+    """Why a persisted ``_executed_flops_record`` is malformed, or ``None`` when sound.
 
     Returns ``(message, reason)``: the closed key set, ints and short strings
     only, and rows plus unattributed equal to a known executed count.

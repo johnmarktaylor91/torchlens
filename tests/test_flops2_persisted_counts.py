@@ -1,4 +1,4 @@
-"""The counted executed backward survives save and load (BackwardPass.executed_flops_record).
+"""The counted executed backward survives save and load (BackwardPass._executed_flops_record).
 
 A live pass contributes its census attribution as a closed record when the
 trace is saved; a loaded trace reads the counted answer and its attribution
@@ -55,7 +55,7 @@ def test_loaded_trace_reads_the_saved_count_and_attribution(case: str, tmp_path:
         assert attribution.source == "saved record" and attribution.other_trace_ops is None
         (record,) = loaded.autograd.backward_passes
         assert record.aten_ops is None
-        assert executed_flops_record_problem(record.executed_flops_record) is None
+        assert executed_flops_record_problem(record._executed_flops_record) is None
     finally:
         trace.cleanup()
 
@@ -81,18 +81,18 @@ def test_artifacts_saved_without_the_field_load_none_and_read_unknown(
 
     record = BackwardPass(pass_index=1, trigger="log_backward", implicit=False)
     state = dict(record.__getstate__())
-    state.pop("executed_flops_record", None)
+    state.pop("_executed_flops_record", None)
     state["tlspec_version"] = version
     restored = BackwardPass.__new__(BackwardPass)
     restored.__setstate__(state)
-    assert restored.executed_flops_record is None
+    assert restored._executed_flops_record is None
     assert restored.flops_attribution is None
 
     trace = _traced_backward(*ZOO_BUILDERS["frozen_backbone"]())
     try:
         loaded = _save_load(trace, tmp_path, "pre_field")
         (loaded_pass,) = loaded.autograd.backward_passes
-        loaded_pass.executed_flops_record = None  # what an artifact saved before the field holds
+        loaded_pass._executed_flops_record = None  # what an artifact saved before the field holds
         status = backward_status(loaded)
         assert status.executed_flops is None and status.executed_evidence == "unknown"
         assert "no dispatch record" in status.reason
@@ -143,7 +143,7 @@ def test_malformed_record_refuses_at_load(tmp_path: Path) -> None:
         loaded = _save_load(trace, tmp_path, "tampered")
         (loaded_pass,) = loaded.autograd.backward_passes
         validate_persisted_forgery_surfaces(loaded)
-        loaded_pass.executed_flops_record = {**_GOOD, "executed_flops": -1}
+        loaded_pass._executed_flops_record = {**_GOOD, "executed_flops": -1}
         with pytest.raises(ArtifactError) as refusal:
             validate_persisted_forgery_surfaces(loaded)
         assert refusal.value.fields["code"] == "artifact_executed_flops_record_invalid"

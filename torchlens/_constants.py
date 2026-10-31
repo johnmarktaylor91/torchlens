@@ -796,7 +796,7 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "inputs_before_pre_hooks",
     "inputs_after_pre_hooks",
     "forward_pre_hook_effects",
-    "had_pre_hook_input_change",
+    "has_pre_hook_input_change",
     "forward_duration",
     "backward_duration",
     "output_activation_memory",
@@ -1008,7 +1008,7 @@ BACKWARD_PASS_FIELD_ORDER = [
     "status",
     "order_attribution_coverage",
     "grad_fn_calls",
-    "executed_flops_record",
+    "_executed_flops_record",
 ]
 
 PRIMITIVE_OP_FIELD_ORDER = [

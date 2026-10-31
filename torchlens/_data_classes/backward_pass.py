@@ -50,7 +50,7 @@ _TO_PANDAS_EXCLUDED_BACKWARD_PASS_FIELDS: frozenset[str] = frozenset(
         "grad_fn_calls",
         # Nested per-pass count and attribution record (closed dict), read
         # through ``flops_attribution`` and ``tl.report.backward_status``.
-        "executed_flops_record",
+        "_executed_flops_record",
     }
 )
 
@@ -69,7 +69,7 @@ class BackwardPass:
         Whether this pass was inferred from orphan tensor-hook emissions.
     outer_context:
         Optional outer TorchLens trigger context when this pass was nested.
-    executed_flops_record:
+    _executed_flops_record:
         The pass's counted executed backward and its attribution as a small
         closed record, written when the trace is saved so a loaded trace
         keeps the counted answer; ``None`` on a live pass (read the census
@@ -95,7 +95,7 @@ class BackwardPass:
         "status": FieldPolicy.KEEP,
         "order_attribution_coverage": FieldPolicy.KEEP,
         "grad_fn_calls": FieldPolicy.KEEP,
-        "executed_flops_record": FieldPolicy.KEEP,
+        "_executed_flops_record": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
     _FIELD_POLICY = build_record_field_policy_table(
@@ -125,14 +125,14 @@ class BackwardPass:
     status: str = "ok"
     order_attribution_coverage: float | None = None
     grad_fn_calls: list[Any] = field(default_factory=list)
-    executed_flops_record: dict[str, Any] | None = None
+    _executed_flops_record: dict[str, Any] | None = None
     _source_trace_ref: Any = None
 
     def __tl_state_items__(self) -> Any:
         """Yield live state pairs from the backing row (M9 facade hook).
 
         A live pass with a recorded census contributes its counted executed
-        backward as ``executed_flops_record``, so every saved copy carries it.
+        backward as ``_executed_flops_record``, so every saved copy carries it.
         """
 
         from .._trace_core.record_rows import record_state_items
@@ -140,13 +140,13 @@ class BackwardPass:
         live = self._census_record()
         seen = False
         for name, value in record_state_items(self):
-            if name == "executed_flops_record":
+            if name == "_executed_flops_record":
                 seen = True
                 if value is None:
                     value = live
             yield name, value
         if not seen and live is not None:
-            yield "executed_flops_record", live
+            yield "_executed_flops_record", live
 
     def _census_record(self) -> dict[str, Any] | None:
         """The persisted form of this pass's census attribution, if it has one."""
@@ -193,7 +193,7 @@ class BackwardPass:
             "peak_memory": None,
             "status": "ok",
             "order_attribution_coverage": None,
-            "executed_flops_record": None,
+            "_executed_flops_record": None,
             "_source_trace_ref": None,
         }
         default_fill_state(state, defaults=backward_pass_setstate_defaults)
@@ -262,7 +262,7 @@ class BackwardPass:
 
         if trace is not None and ops is not None:
             return attribute_census(trace, self, ops)
-        record = self.executed_flops_record
+        record = self._executed_flops_record
         if record is None:
             return None
         return attribution_from_record(trace, self.pass_index, record)
@@ -324,7 +324,7 @@ _BACKWARD_PASS_STORED_FIELDS: tuple[str, ...] = (
     "status",
     "order_attribution_coverage",
     "grad_fn_calls",
-    "executed_flops_record",
+    "_executed_flops_record",
     "_source_trace_ref",
 )
 

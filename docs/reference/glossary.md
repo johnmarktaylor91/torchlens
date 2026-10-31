@@ -2503,7 +2503,7 @@ shim owed*
   `flops_by_op()` sums rows per forward op. `None` when the pass has no
   census on this object; a pass that raised has `executed_flops` `None`.
 
-**BackwardPass.executed_flops_record** — *unstable — no deprecation shim owed*
+**BackwardPass._executed_flops_record** — *unstable — no deprecation shim owed*
 : The pass's counted executed backward and its attribution as a closed
   record (`convention`, `executed_flops`, `uncounted_ops`, `rows`,
   `unattributed`; ints, `None` and short strings only), written when the
