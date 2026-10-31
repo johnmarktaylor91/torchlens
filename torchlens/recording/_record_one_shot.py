@@ -52,6 +52,21 @@ _CAPTURE_DOOR_FIELDS: tuple[str, ...] = (
 )
 
 
+#: The one-shot door's historical defaults for the knobs it used to take flat.
+_RECORD_FLAT_DEFAULTS: dict[str, Any] = {
+    "history_size": 8,
+    "lookback": 0,
+    "lookback_payload_policy": "metadata_only",
+    "include_source_events": False,
+    "max_predicate_failures": 32,
+    "on_predicate_error": "auto",
+    "on_forward_error": "raise",
+    "save_raw_activations": True,
+    "save_raw_grads": True,
+    "postprocess": "none",
+}
+
+
 def _unfold_record_options(
     capture: CaptureOptions | None, recording: RecordingOptions | None
 ) -> dict[str, Any]:
@@ -87,10 +102,11 @@ def _unfold_record_options(
         explicit = capture is not None and capture.is_field_explicit(name)
         flat[name] = getattr(capture, name) if explicit else MISSING
     flat["backward_ready"] = bool(capture.backward_ready) if capture is not None else False
-    if flat["postprocess"] is MISSING:
-        flat["postprocess"] = "none"
-    if flat["on_forward_error"] is MISSING:
-        flat["on_forward_error"] = "raise"
+    # The door's former flat defaults, resolved here so the generation path
+    # (which reads the bundle directly) sees the same values the Recorder would.
+    for name, default in _RECORD_FLAT_DEFAULTS.items():
+        if flat[name] is MISSING:
+            flat[name] = default
     return flat
 
 

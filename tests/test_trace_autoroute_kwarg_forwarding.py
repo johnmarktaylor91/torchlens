@@ -42,8 +42,6 @@ AUTOROUTE_EXEMPT_PARAMS = {
     "backend",
     # chunk_paths without CaptureOptions(chunk_size=) raises before the branch
     "chunk_paths",
-    # the extra-positional catch-all refuses before dispatch
-    "extra_positional",
     # quickstart input ladder (F17): any non-None input_size returns via
     # _trace_via_ladder before the autoroute branch, so autoroute only ever
     # runs with input_shape=None (the ladder re-enters trace() with a real
