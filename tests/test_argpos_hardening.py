@@ -32,9 +32,7 @@ from torchlens._capture.arg_positions import (
     _schema_tensor_arg_kind,
 )
 from torchlens._constants import get_orig_torch_funcs
-from torchlens.backends.torch.ops import (
-    _extract_arg_tensors_and_params,
-)
+from torchlens.backends.torch._ops_predicate_events import _extract_arg_tensors_and_params
 
 _PROVENANCE_MATCH = "no graph/source provenance"
 

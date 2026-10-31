@@ -1538,7 +1538,7 @@ def _validate_forward_pass_torch(
                 {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
         from ._errors import CaptureNotActiveError
-        from .backends.torch.ops import _walk_output_tensors_with_paths
+        from .backends.torch._ops_containers import _walk_output_tensors_with_paths
         from .validation._pristine import pristine_torch_oracle
 
         # R75-1: the phase-0 ground truth must observe through PRISTINE

@@ -31,19 +31,6 @@ if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
     from ..._ir.op_record import OpRecord
 
-if TYPE_CHECKING:
-    from .ops import (
-        _SAFE_DEFAULT_FACTORIES,
-        _build_container_spec,
-        _build_edge_use_records,
-        _exhaustive_capture_policy,
-        _exhaustive_freeze_refs,
-        _exhaustive_output_ref,
-        _literal_value_supported,
-        _param_refs_from_fields,
-        _parent_edges_from_fields,
-        _resolve_call_function_ref,
-    )
 
 __all__ = (
     "_op_record_from_log",
@@ -497,3 +484,25 @@ def _leaf_is_reconstructable(item: Any) -> bool:
     if isinstance(item, torch.Tensor):
         return True
     return bool(_literal_value_supported(item) or isinstance(item, torch.Size))
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_arguments import (  # noqa: E402
+    _build_edge_use_records,
+    _literal_value_supported,
+)
+from ._ops_capture_records import (  # noqa: E402
+    _exhaustive_capture_policy,
+    _exhaustive_freeze_refs,
+    _exhaustive_output_ref,
+    _param_refs_from_fields,
+    _parent_edges_from_fields,
+    _resolve_call_function_ref,
+)
+from ._ops_containers import (  # noqa: E402
+    _build_container_spec,
+)
+from .ops import (  # noqa: E402
+    _SAFE_DEFAULT_FACTORIES,
+)

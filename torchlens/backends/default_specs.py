@@ -631,7 +631,7 @@ def _torch_interventions_implementation() -> object:
         ``trace(intervene=...)`` sites.
     """
 
-    from .torch.ops import apply_live_hooks_to_outputs
+    from .torch._ops_emission import apply_live_hooks_to_outputs
 
     return apply_live_hooks_to_outputs
 

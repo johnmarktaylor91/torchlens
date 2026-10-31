@@ -494,7 +494,7 @@ def log_source_tensor_exhaustive(
 
     # Reuse the shared entry-creation logic from output_tensors.
     # Imported here (not at module level) to avoid circular imports.
-    from .ops import _make_layer_log_entry
+    from ._ops_finalize import _make_layer_log_entry
 
     # Creates a Buffer if is_buffer=True, else Op.
     _make_layer_log_entry(self, t, fields_dict, (), {}, self.activation_transform)

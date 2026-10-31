@@ -37,10 +37,6 @@ from .buffer_writes import session_validated_buffer_address
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        _SAFE_TENSOR_PROPERTY_NAMES,
-    )
 
 __all__ = (
     "_function_registry_key",
@@ -445,3 +441,10 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
         and meta.buffer_source is not None
         and meta.buffer_source in live_labels
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from .ops import (  # noqa: E402
+    _SAFE_TENSOR_PROPERTY_NAMES,
+)

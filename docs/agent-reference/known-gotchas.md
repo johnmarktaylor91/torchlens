@@ -113,9 +113,10 @@
   state record a different graph, so validation's re-trace called it non-reproducible.
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`
   failures.
-- `backends/torch/ops.py` rebinds the split `_ops_*` functions onto its own globals
-  (`_rebind_function`), so any new module-level name used inside a rebound function must also be
-  bound in `ops.py` (and a test patches such a name on `ops`, not on the split module).
+- The `_ops_*` split modules under `backends/torch/` import one another and `ops.py`'s constants
+  at their bottoms (they form import cycles, so the imports run once every definition exists); a
+  new module-level name used in a split module is imported there, and a test patches a helper on
+  the split module that defines it, never on `ops`.
 - Fast-path module decoration skips `_record_module_entry_metadata`; alignment state must be
   replicated manually.
 - `get_memory_amount()` deliberately avoids `pause_logging()`: it resolves the

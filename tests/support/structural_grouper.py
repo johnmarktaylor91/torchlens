@@ -15,7 +15,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from torchlens.backends.torch import _ops_activations, ops
+from torchlens.backends.torch import _ops_activations
 
 
 def _no_call_site(*_args: object, **_kwargs: object) -> None:
@@ -23,7 +23,6 @@ def _no_call_site(*_args: object, **_kwargs: object) -> None:
 
 
 def _patch(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ops, "_call_site_equivalence_class", _no_call_site)
     monkeypatch.setattr(_ops_activations, "_call_site_equivalence_class", _no_call_site)
 
 

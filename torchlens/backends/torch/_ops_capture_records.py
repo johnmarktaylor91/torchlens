@@ -34,24 +34,11 @@ from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
-
-from .ops import (
-    CaptureProducerMode,
-    CaptureProducerPolicy,
-)
-
-if TYPE_CHECKING:
-    from .ops import (
-        _ANCESTOR_FIELD_NAMES,
-        _ANCESTOR_SLOT_DESCRIPTORS,
-        _CAPTURE_PRODUCER_POLICIES,
-        _EMIT_BY_MODE,
-        _FUNCTION_REF_PER_OUTPUT_FIELDS,
-        _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
-        _LABEL_VERSION_SNAPSHOT,
-        _VIEW_MUTATION_RELABELS,
-        _AncestorBitset,
+    from .ops import (  # annotations only; runtime binding at the bottom
+        CaptureProducerMode,
+        CaptureProducerPolicy,
     )
+
 
 __all__ = (
     "_get_ancestor_field",
@@ -732,3 +719,19 @@ def _exhaustive_capture_policy(trace: "Trace", fields_dict: dict[str, Any]) -> C
         save_grad=fields_dict["save_grads"],
         save_mode=getattr(trace, "save_mode", "copy"),
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from .ops import (  # noqa: E402
+    _ANCESTOR_FIELD_NAMES,
+    _ANCESTOR_SLOT_DESCRIPTORS,
+    _CAPTURE_PRODUCER_POLICIES,
+    _EMIT_BY_MODE,
+    _FUNCTION_REF_PER_OUTPUT_FIELDS,
+    _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
+    _LABEL_VERSION_SNAPSHOT,
+    _VIEW_MUTATION_RELABELS,
+    CaptureProducerPolicy,
+    _AncestorBitset,
+)

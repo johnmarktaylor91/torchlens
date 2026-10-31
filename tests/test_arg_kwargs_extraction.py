@@ -28,7 +28,7 @@ from torchlens._capture.arg_positions import (
     _normalize_func_name,
     extract_tensors_and_params,
 )
-from torchlens.backends.torch.ops import _extract_arg_tensors_and_params
+from torchlens.backends.torch._ops_predicate_events import _extract_arg_tensors_and_params
 from torchlens.intervention.types import ParentRef
 from torchlens.options import CaptureOptions
 

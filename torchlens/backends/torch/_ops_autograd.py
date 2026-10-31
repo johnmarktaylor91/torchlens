@@ -28,17 +28,8 @@ from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from .ops import _OutputTensorEntry  # annotations only; runtime binding at the bottom
 
-from .ops import (
-    _OutputTensorEntry,
-)
-
-if TYPE_CHECKING:
-    from .ops import (
-        _collect_tensor_values,
-        _iter_autograd_saved_candidates,
-        _walk_output_tensors_with_paths,
-    )
 
 __all__ = (
     "_add_autograd_saved_tensor",
@@ -433,3 +424,17 @@ def _get_autograd_saved_stats_for_tensor(
         return None, None
     stats_by_index = _get_autograd_saved_stats_by_output(tensor)
     return stats_by_index.get(0, (None, None))
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_containers import (  # noqa: E402
+    _walk_output_tensors_with_paths,
+)
+from ._ops_exhaustive import (  # noqa: E402
+    _collect_tensor_values,
+    _iter_autograd_saved_candidates,
+)
+from .ops import (  # noqa: E402
+    _OutputTensorEntry,
+)

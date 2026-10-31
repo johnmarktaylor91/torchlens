@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens.backends.torch.ops as tlops
+import torchlens.backends.torch._ops_predicate_events
 
 
 class _MaskedFillBoolMask(nn.Module):
@@ -132,7 +132,7 @@ def drop_edge_injector(
     ``tl.validate``.
     """
 
-    original = tlops._build_graph_relationship_fields
+    original = torchlens.backends.torch._ops_predicate_events._build_graph_relationship_fields
     state: dict[str, Any] = {"active": False, "func_name": None, "pred": None, "dropped": 0}
 
     def patched(
@@ -153,7 +153,9 @@ def drop_edge_injector(
             self, fields_dict, parent_layer_labels, parent_layer_entries, args, kwargs, out_orig
         )
 
-    monkeypatch.setattr(tlops, "_build_graph_relationship_fields", patched)
+    monkeypatch.setattr(
+        torchlens.backends.torch._ops_predicate_events, "_build_graph_relationship_fields", patched
+    )
 
     def arm(func_name: str, pred: Callable[..., bool]) -> dict:
         """Activate the injector for one wrapped function name."""
@@ -233,7 +235,7 @@ def test_fn6_wrong_parent_between_value_identical_producers_fails(
 ) -> None:
     """A consistent wrong-parent swap to a value-identical producer fails."""
 
-    original = tlops._build_graph_relationship_fields
+    original = torchlens.backends.torch._ops_predicate_events._build_graph_relationship_fields
     state = {"hits": 0}
 
     def patched(
@@ -262,7 +264,9 @@ def test_fn6_wrong_parent_between_value_identical_producers_fails(
                     positions[domain][key] = replacements[0]
         return result
 
-    monkeypatch.setattr(tlops, "_build_graph_relationship_fields", patched)
+    monkeypatch.setattr(
+        torchlens.backends.torch._ops_predicate_events, "_build_graph_relationship_fields", patched
+    )
     torch.manual_seed(0)
     x = torch.randn(4)
 

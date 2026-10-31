@@ -322,10 +322,10 @@ def test_r35_repr_parsers_are_deleted() -> None:
     import inspect
 
     import torchlens._runnable_witness_contracts
-    import torchlens.backends.torch.ops as ops
+    import torchlens.backends.torch._ops_container_base
 
     for source in (
-        inspect.getsource(ops._torch_return_type_fields),
+        inspect.getsource(torchlens.backends.torch._ops_container_base._torch_return_type_fields),
         inspect.getsource(torchlens._runnable_witness_contracts._torch_structseq_field_names),
     ):
         assert "re.findall" not in source

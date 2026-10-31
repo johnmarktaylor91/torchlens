@@ -36,7 +36,7 @@ from .._trace_core.relation_views import freeze_trace_relation_views as _freeze_
 from .._utils.hashing import (
     compute_raw_event_shape_hash,
 )
-from ..backends.torch.ops import _compact_ancestor_sets
+from ..backends.torch._ops_capture_records import _compact_ancestor_sets
 from . import ast_branches
 from ._executor import StepContext, run_pipeline
 from ._materialize import materialize_from_events

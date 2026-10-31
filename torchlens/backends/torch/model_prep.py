@@ -1184,7 +1184,7 @@ def _record_module_entry_metadata(
     forward_args_template = None
     forward_kwargs_template = None
     if should_capture_template:
-        from .ops import _build_args_template
+        from ._ops_arguments import _build_args_template
 
         captured_template = _build_args_template(module.forward, args, kwargs)
         forward_args_template = captured_template
@@ -1564,7 +1564,8 @@ def _ensure_module_output_tensor_logged(
         module-exit and op logging can continue.
     """
 
-    from .ops import _make_layer_log_entry, _pop_tensor_live_fire_results
+    from ._ops_finalize import _make_layer_log_entry
+    from ._ops_interventions import _pop_tensor_live_fire_results
 
     is_internal_source = kind == "internal_source"
     if is_internal_source:
@@ -1989,7 +1990,7 @@ def _record_module_exit_metadata(
         _record_module_intervention_parent_labels,
         _record_tensor_live_fire_results,
     )
-    from .ops import _walk_output_tensors_with_paths
+    from ._ops_containers import _walk_output_tensors_with_paths
 
     output_entries = list(_walk_output_tensors_with_paths(out))
     output_tensors = [entry[0] for entry in output_entries]
@@ -2081,7 +2082,7 @@ def _record_module_exit_metadata(
         if tensor_label is None:
             continue
         if fire_results:
-            from .ops import _pop_tensor_live_fire_results
+            from ._ops_interventions import _pop_tensor_live_fire_results
 
             remaining_fire_results = _pop_tensor_live_fire_results(t)
             if remaining_fire_results:
@@ -2181,7 +2182,7 @@ def _record_predicate_module_boundary_outputs(
     from ...intervention.runtime import _peek_module_intervention_parent_labels
     from ...intervention.selectors import BaseSelector
     from ...recording.types import ActivationRecord
-    from .ops import _walk_output_tensors_with_paths
+    from ._ops_containers import _walk_output_tensors_with_paths
 
     log_predicate_boundary_replacements(trace, state, out)
     predicate = state.options.keep_op

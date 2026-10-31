@@ -48,16 +48,8 @@ from ._tl import (
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from .ops import _RetainedLookbackPayload  # annotations only; runtime binding at the bottom
 
-from .ops import (
-    _RetainedLookbackPayload,
-)
-
-if TYPE_CHECKING:
-    from .ops import (
-        _RetainedLookbackCandidate,
-        _retention_device,
-    )
 
 __all__ = (
     "_admit_save_budget",
@@ -871,3 +863,14 @@ def _build_trace_predicate_context(
         is_transform=bool(fields_dict.get("is_transform", False)),
         transform_kind=fields_dict.get("transform_kind"),
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_activations import (  # noqa: E402
+    _retention_device,
+)
+from .ops import (  # noqa: E402
+    _RetainedLookbackCandidate,
+    _RetainedLookbackPayload,
+)

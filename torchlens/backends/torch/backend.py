@@ -43,6 +43,9 @@ from ...recording.types import CaptureSpec, ModuleStackFrame, StorageIntent
 from . import _tl
 from ._completeness_origins import internal_scalar_read
 from ._held_refs_capture import rebind_held_torch_refs, restore_held_torch_refs
+from ._ops_autograd import _get_autograd_saved_stats_for_tensor
+from ._ops_containers import _walk_output_tensors_with_paths, runnable_output_losslessness
+from ._ops_emission import log_function_output_tensors
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
 from .completeness_witness import capture_completeness_witness, capture_scalar_escape_warning
@@ -53,12 +56,6 @@ from .model_prep import (
     _prepare_model_session,
 )
 from .module_stack import pop_frame, push_existing_frame
-from .ops import (
-    _get_autograd_saved_stats_for_tensor,
-    _walk_output_tensors_with_paths,
-    log_function_output_tensors,
-    runnable_output_losslessness,
-)
 from .sources import log_source_tensor as _log_source_tensor
 from .structure_only_belt import structure_only_escape_belt
 from .wrappers import unwrap_torch, wrap_torch
@@ -734,7 +731,7 @@ class TorchBackend:
             Torch producer policy metadata is updated in place.
         """
 
-        from .ops import set_capture_producer_policy
+        from ._ops_capture_records import set_capture_producer_policy
 
         set_capture_producer_policy(cast("Trace", session), cast(Any, capture_mode))
 

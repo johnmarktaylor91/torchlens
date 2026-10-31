@@ -66,6 +66,14 @@ from ._callable_location import _callable_source_location
 from ._function_boundary import EXPORT_FUNC_NAMES, note_function_export
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
+from ._ops_autograd import register_call_input_container_snapshots
+from ._ops_capture_records import (
+    _is_inplace_augmented_assignment_dunder,
+    _record_label_version_snapshot,
+    _stamp_same_object_mutation,
+)
+from ._ops_containers import _walk_output_tensors_with_paths
+from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
 from ._storage_overlap import (
     _storage_overlap_byte_interval,
@@ -105,15 +113,6 @@ from .escape_detection import (
     expected_original_call,
     mark_expected_original_accounted,
     reset_detector_tables,
-)
-from .ops import (
-    _is_inplace_augmented_assignment_dunder,
-    _record_label_version_snapshot,
-    _stamp_same_object_mutation,
-    _walk_output_tensors_with_paths,
-    apply_live_hooks_to_outputs,
-    log_function_output_tensors,
-    register_call_input_container_snapshots,
 )
 from .param_mutation import (
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
@@ -1207,8 +1206,8 @@ def _propagate_mutation_label_to_storage_aliases(
         The mutating op's freshly issued raw label.
     """
 
+    from ._ops_capture_records import _record_label_version_snapshot
     from ._tl import session_storage_alias_candidates, storage_alias_index_key
-    from .ops import _record_label_version_snapshot
 
     # SCOPE (r26 reconcile): descriptor/grad-bound captures keep the HISTORICAL
     # topology. The runnable recipe + numeric attestation key payloads PER

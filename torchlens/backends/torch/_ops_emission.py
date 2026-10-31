@@ -19,24 +19,8 @@ from ._tl import (
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from .ops import CaptureProducerPolicy  # annotations only; runtime binding at the bottom
 
-from .ops import (
-    CaptureProducerPolicy,
-)
-
-if TYPE_CHECKING:
-    from .ops import (
-        _SETTER_MUTATION_FUNC_NAMES,
-        CaptureProducerMode,
-        _apply_live_hooks_to_outputs_legacy,
-        _hook_plan_reaches_op_door,
-        _intervene_reaches_op_door,
-        _is_inplace_augmented_assignment_dunder,
-        _session_validated_parameter,
-        _tensor_has_known_provenance,
-        _trace_intervene_options,
-        get_capture_producer_policy,
-    )
 
 __all__ = (
     "_unattributed_tensor_arg_positions",
@@ -476,3 +460,25 @@ def apply_live_hooks_to_outputs(
         call_input_snapshots,
         record_is_inplace,
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_arguments import (  # noqa: E402
+    _session_validated_parameter,
+    _tensor_has_known_provenance,
+)
+from ._ops_capture_records import (  # noqa: E402
+    _is_inplace_augmented_assignment_dunder,
+    get_capture_producer_policy,
+)
+from ._ops_interventions import (  # noqa: E402
+    _apply_live_hooks_to_outputs_legacy,
+    _hook_plan_reaches_op_door,
+    _intervene_reaches_op_door,
+    _trace_intervene_options,
+)
+from .ops import (  # noqa: E402
+    _SETTER_MUTATION_FUNC_NAMES,
+    CaptureProducerMode,
+)
