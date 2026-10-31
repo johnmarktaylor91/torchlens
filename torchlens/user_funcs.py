@@ -4358,6 +4358,7 @@ _PUBLIC_IMPL_WRAPPER_NAMES = (
     "show_model_graph",
     "draw_backward",
     "draw_combined",
+    "show_bundle_graph",
     "validate_forward_pass",
     "validate_backward_pass",
     "validate_batch_of_models_and_inputs",
