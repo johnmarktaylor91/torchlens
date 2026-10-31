@@ -116,6 +116,35 @@ class _CleanupEntry:
     completed: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class LiveGradientReference:
+    """The live tensor an in-place op hands back, pinned at the op's version.
+
+    An in-place op logs its output against a safe copy whose ``grad_fn`` is a
+    dead-end ``CloneBackward`` node, so the deferred gradient install cannot
+    hook that copy: the gradient flows through the live tensor the model keeps
+    using. A later in-place write gives the live tensor a newer ``grad_fn``,
+    so the reference keeps the node (and output slot) the op produced, which
+    is where a tensor hook registered at op time would have fired.
+
+    Parameters
+    ----------
+    tensor
+        Live tensor that took gradient ownership of the op's label.
+    grad_fn
+        Autograd node of ``tensor`` right after the op.
+    output_nr
+        Output slot of ``tensor`` on ``grad_fn``.
+    owning_backward_only
+        Whether the hook sits on model state (see ``_add_tensor_backward_hook``).
+    """
+
+    tensor: Any
+    grad_fn: Any
+    output_nr: int
+    owning_backward_only: bool
+
+
 # A plain (non-slotted) dataclass stays weakref-able on every supported
 # interpreter -- ``weakref_slot=True`` needs py3.11+, and the lifetime-neutral
 # weakref contract only requires that ``CaptureSession`` be weakref-able, which
@@ -151,6 +180,13 @@ class CaptureSession:
     projection_facts: dict[str, Any] = field(default_factory=dict)
     activation_escrow: dict[int, ActivationEscrowPayload] = field(default_factory=dict)
     gradient_reference_escrow: dict[int, Any] = field(default_factory=dict)
+    # In-place results, by raw index, in forward registration order; the raw
+    # label map lets the live-tensor hook path, which knows only the label,
+    # find its op. Evicted with the escrow window like the copies above.
+    gradient_reference_live: dict[int, list[LiveGradientReference]] = field(default_factory=dict)
+    _gradient_reference_index_by_label: dict[str, int] = field(
+        default_factory=dict, init=False, repr=False
+    )
     activation_escrow_ram_bytes: int = 0
     activation_escrow_peak_ram_bytes: int = 0
     activation_escrow_spilled_bytes: int = 0
@@ -221,6 +257,8 @@ class CaptureSession:
         self.cleanup_stack.clear()
         self.activation_escrow.clear()
         self.gradient_reference_escrow.clear()
+        self.gradient_reference_live.clear()
+        self._gradient_reference_index_by_label.clear()
         self.activation_escrow_ram_bytes = 0
         self.activation_escrow_peak_ram_bytes = 0
         self.activation_escrow_spilled_bytes = 0
@@ -251,6 +289,7 @@ class CaptureSession:
         tensor: Any,
         *,
         retain_activation: bool = True,
+        raw_label: str | None = None,
     ) -> None:
         """Retain one selector candidate before its immutable event is appended.
 
@@ -262,6 +301,9 @@ class CaptureSession:
             Live backend tensor for the operation.
         retain_activation
             Whether this candidate still needs detached deferred retention.
+        raw_label
+            Raw label of the operation, so a later live in-place result
+            (``escrow_live_gradient_reference``) can find this candidate.
         """
 
         profile = self.plan.retention_profile
@@ -275,6 +317,8 @@ class CaptureSession:
                 self._module_exit_pending.append(raw_index)
         if profile.gradient_kind is RetentionKind.GRADIENT_REFERENCE:
             self.gradient_reference_escrow[raw_index] = tensor
+            if raw_label is not None:
+                self._gradient_reference_index_by_label[raw_label] = raw_index
             with _state.pause_logging():
                 self.gradient_reference_logical_bytes += int(
                     tensor.nelement() * tensor.element_size()
@@ -288,7 +332,28 @@ class CaptureSession:
                 while len(self.gradient_reference_escrow) > window:
                     oldest_index = next(iter(self.gradient_reference_escrow))
                     self.gradient_reference_escrow.pop(oldest_index)
+                    self.gradient_reference_live.pop(oldest_index, None)
             self._warn_for_extreme_gradient_retention()
+
+    def escrow_live_gradient_reference(
+        self, raw_label: str, reference: LiveGradientReference
+    ) -> None:
+        """Keep the live result of an in-place op for the deferred gradient install.
+
+        Parameters
+        ----------
+        raw_label
+            Raw label of the in-place op whose label the live tensor owns.
+        reference
+            The live tensor pinned at the op's autograd node.
+        """
+
+        raw_index = self._gradient_reference_index_by_label.get(raw_label)
+        if raw_index is None or raw_index not in self.gradient_reference_escrow:
+            # Not a retained candidate (no gradient-reference retention, or
+            # evicted by the escrow window): the install would skip it anyway.
+            return
+        self.gradient_reference_live.setdefault(raw_index, []).append(reference)
 
     def _matches_module_exit_selector(self, module_call_label: str) -> bool:
         """Return whether a module pass matches the selector's covering module addresses.
@@ -521,7 +586,10 @@ class CaptureSession:
     def resolve_deferred_retention(self, trace: Any, output_tensors: list[Any]) -> None:
         """Resolve final selectors, project activation winners, and install grad hooks."""
 
-        from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
+        from ..backends.torch.tensor_tracking import (
+            _add_live_gradient_reference_hook,
+            _add_tensor_backward_hook,
+        )
         from .trace import _get_op_nums_from_user_labels
 
         activation_selector = getattr(trace, "_deferred_retention_selector", None)
@@ -708,9 +776,16 @@ class CaptureSession:
         trace._installing_deferred_gradient_hooks = True
         try:
             for op in trace.layer_list:
+                if op.raw_index not in hook_nums:
+                    continue
                 tensor = self.gradient_reference_escrow.get(op.raw_index)
-                if tensor is not None and op.raw_index in hook_nums:
+                if tensor is not None:
                     _add_tensor_backward_hook(trace, tensor, op._label_raw)
+                # In-place results: the logged copy above is a graph dead end;
+                # replay the live-tensor registrations the forward deferred,
+                # in their order, so ownership lands where it would have.
+                for live in self.gradient_reference_live.get(op.raw_index, ()):
+                    _add_live_gradient_reference_hook(trace, live, op._label_raw)
         finally:
             trace.__dict__.pop("_installing_deferred_gradient_hooks", None)
         trace.__dict__.pop("_deferred_retention_selector", None)

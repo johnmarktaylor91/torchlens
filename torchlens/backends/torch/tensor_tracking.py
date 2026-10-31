@@ -7,7 +7,7 @@ tracking, and structural fingerprints used by loop detection.
 import time
 import warnings
 import weakref
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -32,6 +32,7 @@ from ._tl import (
 )
 
 if TYPE_CHECKING:
+    from ...capture.session import LiveGradientReference
     from ...data_classes.trace import Trace
 
 
@@ -280,12 +281,134 @@ def _add_tensor_backward_hook(
     should_defer_hook = getattr(
         trace, "_deferred_gradient_selector", None
     ) is not None and not getattr(trace, "_installing_deferred_gradient_hooks", False)
-    if (
-        not getattr(trace, "capture_tensor_grad_hooks", True)
-        or should_defer_hook
-        or (_grad_fn is None and not _requires_grad)
+    if not getattr(trace, "capture_tensor_grad_hooks", True) or (
+        _grad_fn is None and not _requires_grad
     ):
         return
+    if should_defer_hook:
+        # An in-place op's live result is the only tensor its gradient flows
+        # through (the logged copy is a dead end), and nothing else holds it
+        # at its current version for the deferred install: escrow it now.
+        if take_ownership and _grad_fn is not None:
+            _escrow_live_gradient_reference(trace, t, tensor_label, _grad_fn, owning_backward_only)
+        return
+    _install_tensor_grad_hook(
+        trace,
+        t,
+        tensor_label,
+        take_ownership=take_ownership,
+        owning_backward_only=owning_backward_only,
+    )
+
+
+def _escrow_live_gradient_reference(
+    trace: "Trace",
+    t: torch.Tensor,
+    tensor_label: str,
+    grad_fn: Any,
+    owning_backward_only: bool,
+) -> None:
+    """Keep an in-place op's live result for the deferred gradient install.
+
+    Parameters
+    ----------
+    trace:
+        Trace being captured under a deferred gradient selector.
+    t:
+        Live tensor taking gradient ownership of ``tensor_label``.
+    tensor_label:
+        Raw label of the in-place op.
+    grad_fn:
+        ``t.grad_fn`` right after the op.
+    owning_backward_only:
+        Whether the hook sits on model state (see ``_add_tensor_backward_hook``).
+    """
+
+    from ...capture.session import LiveGradientReference, capture_session_for
+    from .completeness_witness import internal_scalar_read
+
+    session = capture_session_for(trace)
+    if session is None:
+        return
+    with pause_logging(), internal_scalar_read():
+        output_nr = int(t.output_nr)
+    session.escrow_live_gradient_reference(
+        tensor_label,
+        LiveGradientReference(
+            tensor=t,
+            grad_fn=grad_fn,
+            output_nr=output_nr,
+            owning_backward_only=owning_backward_only,
+        ),
+    )
+
+
+def _add_live_gradient_reference_hook(
+    trace: "Trace", reference: "LiveGradientReference", tensor_label: str
+) -> None:
+    """Install the deferred gradient hook on an in-place op's live result.
+
+    The forward-time path hooks the live tensor right after the op, so the
+    hook fires with the gradient of that version. When the tensor was written
+    in place again later, its current ``grad_fn`` belongs to the later write;
+    the hook then goes on the node the op produced, which receives exactly
+    the gradient that tensor hook would have seen.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose deferred gradient hooks are being installed.
+    reference:
+        Live tensor pinned at the op's autograd node.
+    tensor_label:
+        Raw label of the in-place op.
+    """
+
+    from .completeness_witness import internal_scalar_read
+
+    with internal_scalar_read():
+        current_grad_fn = reference.tensor.grad_fn
+    pinned_node = (
+        None if current_grad_fn is reference.grad_fn else (reference.grad_fn, reference.output_nr)
+    )
+    _install_tensor_grad_hook(
+        trace,
+        reference.tensor,
+        tensor_label,
+        take_ownership=True,
+        owning_backward_only=reference.owning_backward_only,
+        pinned_node=pinned_node,
+    )
+
+
+def _install_tensor_grad_hook(
+    trace: "Trace",
+    t: torch.Tensor,
+    tensor_label: str,
+    *,
+    take_ownership: bool,
+    owning_backward_only: bool,
+    pinned_node: tuple[Any, int] | None = None,
+) -> None:
+    """Register the gradient-recording hook for ``tensor_label`` (see ``_add_tensor_backward_hook``).
+
+    Parameters
+    ----------
+    trace:
+        Trace that records the gradient.
+    t:
+        Tensor whose gradient is recorded; its id keys label ownership.
+    tensor_label:
+        Raw label the gradient is recorded under.
+    take_ownership:
+        Transfer gradient-emission ownership of ``tensor_label`` to ``t``.
+    owning_backward_only:
+        Whether the hook sits on model state.
+    pinned_node:
+        ``(grad_fn, output_nr)`` of an earlier version of ``t``; the hook then
+        receives that node's incoming gradient for the slot instead of being
+        registered on ``t``'s current version.
+    """
 
     hooked_tensors = trace.__dict__.setdefault("_tl_backward_hooked_tensor_keys", set())
     hook_key = (tensor_label, id(t))
@@ -388,9 +511,38 @@ def _add_tensor_backward_hook(
     from .completeness_witness import internal_scalar_read
 
     with pause_logging(), internal_scalar_read():
-        handle = t.register_hook(log_grad_to_model_history)
+        if pinned_node is None:
+            handle = t.register_hook(log_grad_to_model_history)
+        else:
+            node, output_nr = pinned_node
+            handle = node.register_prehook(_slot_prehook(log_grad_to_model_history, output_nr))
     if owning_backward_only:
         _OWNED_STATE_GRAD_HOOK_HANDLES.setdefault(trace, []).append(handle)
+
+
+def _slot_prehook(
+    tensor_hook: Callable[[torch.Tensor | None], None], output_nr: int
+) -> Callable[[tuple[torch.Tensor | None, ...]], None]:
+    """Adapt a tensor gradient hook to an autograd node pre-hook for one output slot.
+
+    Parameters
+    ----------
+    tensor_hook:
+        Hook taking the gradient of one tensor (``None`` when none arrived).
+    output_nr:
+        Output slot of the node the tensor occupies.
+
+    Returns
+    -------
+    Callable[[tuple[torch.Tensor | None, ...]], None]
+        Node pre-hook that passes the slot's incoming gradient to ``tensor_hook``
+        and leaves the gradients unchanged.
+    """
+
+    def prehook(grad_outputs: tuple[torch.Tensor | None, ...]) -> None:
+        tensor_hook(grad_outputs[output_nr] if output_nr < len(grad_outputs) else None)
+
+    return prehook
 
 
 def _ensure_backward_event_stream(trace: "Trace") -> Any:
