@@ -42,7 +42,7 @@ _VISUALIZATION_CASES = [
 _STREAMING_CASES = [
     ("bundle_path", "save_outs_to", Path("bundle"), "save_outs_to"),
     ("retain_in_memory", "keep_outs_in_memory", False, "keep_outs_in_memory"),
-    ("out_callback", "out_sink", torch.sigmoid, "out_sink"),
+    ("on_save", "out_sink", torch.sigmoid, "out_sink"),
 ]
 
 

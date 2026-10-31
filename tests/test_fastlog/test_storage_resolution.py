@@ -10,7 +10,7 @@ from torchlens.fastlog.options import RecordingOptions
 
 
 def test_streaming_none_is_ram_only_intent() -> None:
-    """StreamingOptions(bundle_path=None) resolves to RAM-only storage."""
+    """StorageOptions(bundle_path=None) resolves to RAM-only storage."""
 
     options = RecordingOptions(
         default_op=True, streaming=tl.options.StorageOptions(bundle_path=None)

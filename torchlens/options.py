@@ -260,7 +260,7 @@ _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
 _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "bundle_path": "bundle_path",
     "retain_in_memory": "retain_in_memory",
-    "out_callback": "on_save",
+    "on_save": "on_save",
 }
 
 
@@ -1608,7 +1608,7 @@ class StorageOptions:
 
     Examples
     --------
-    >>> opts = StreamingOptions(bundle_path="run.tlspec", retain_in_memory=False)
+    >>> opts = StorageOptions(bundle_path="run.tlspec", retain_in_memory=False)
     >>> opts.retain_in_memory
     False
     """
@@ -1726,7 +1726,7 @@ def to_disk(
 
     Returns
     -------
-    StreamingOptions
+    StorageOptions
         Storage options suitable for ``trace(..., storage=...)`` and
         ``record(..., streaming=...)``.
     """
@@ -1893,7 +1893,7 @@ def merge_streaming_options(
             flat_values=flat_values,
             group_name="streaming",
             conflict_message=(
-                "conflicting streaming options: pass either StreamingOptions or individual kwargs, "
+                "conflicting streaming options: pass either StorageOptions or individual kwargs, "
                 "not both"
             ),
         ),

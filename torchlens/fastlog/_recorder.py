@@ -60,7 +60,7 @@ def _rank_prefixed_streaming_options(
 
     Returns
     -------
-    StreamingOptions | None | MissingType
+    StorageOptions | None | MissingType
         Options with ``bundle_path`` rewritten to include ``rank_NN`` when a
         bundle path is configured.
     """
@@ -143,7 +143,7 @@ def _unwrap_ddp_for_fastlog(
 
     Returns
     -------
-    tuple[nn.Module, StreamingOptions | None | MissingType]
+    tuple[nn.Module, StorageOptions | None | MissingType]
         The model to execute and possibly rewritten streaming options.
     """
 

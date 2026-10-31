@@ -90,7 +90,7 @@ def test_append_rerun_on_callback_streaming_trace_raises() -> None:
     )
 
     assert received
-    with pytest.raises(AppendStreamingNotSupportedError, match="out_callback streaming"):
+    with pytest.raises(AppendStreamingNotSupportedError, match="on_save streaming"):
         trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
 

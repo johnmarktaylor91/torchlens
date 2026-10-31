@@ -3363,7 +3363,7 @@ def _trace_torch_model(
                 "choose either disk storage (storage=tl.to_disk(...) / "
                 "streaming.bundle_path) or streaming.on_save"
             ),
-            arguments=("bundle_path", "out_callback"),
+            arguments=("bundle_path", "on_save"),
         )
     if capture_options.structure_only:
         layers_to_save = _enforce_structure_only_entry_contract(

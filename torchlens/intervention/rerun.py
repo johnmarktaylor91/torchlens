@@ -486,7 +486,7 @@ def _streaming_append_error_message(log: Trace) -> str:
     if getattr(log, "_out_writer", None) is not None:
         details.append("bundle_path streaming")
     if getattr(log, "_out_sink", None) is not None:
-        details.append("out_callback streaming")
+        details.append("on_save streaming")
     details_text = ", ".join(details) if details else "streaming"
     return (
         f"Trace {getattr(log, 'model_class_name', None)!r} has active {details_text}; "

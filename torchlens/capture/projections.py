@@ -128,7 +128,7 @@ class _StorageBackend(Protocol):
 
 
 def _resolve_storage_intent(options: RecordingOptions) -> StorageIntent:
-    """Resolve storage destinations from StreamingOptions."""
+    """Resolve storage destinations from StorageOptions."""
 
     if options.streaming is None or options.streaming.bundle_path is None:
         return StorageIntent(in_ram=True, on_disk=False)
