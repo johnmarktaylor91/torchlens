@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -79,13 +80,25 @@ def _param(cell: Cell, *marks: pytest.MarkDecorator) -> object:
     return pytest.param(cell, id=name, marks=[*marks, pytest.mark.xdist_group(name=name)])
 
 
+#: ``TORCHLENS_BEHAVIOUR_UNIVERSE`` narrows the universe for a targeted run:
+#: ``cheap`` (the mid tier), ``sweep`` (every pair once), ``core`` (the core
+#: pairs over every other case) or ``all`` (default).
+UNIVERSE_PARTS = ("cheap", "sweep", "core")
+
+
 def _universe() -> list[object]:
+    wanted = os.environ.get("TORCHLENS_BEHAVIOUR_UNIVERSE", "all")
+    parts = set(UNIVERSE_PARTS) if wanted == "all" else {wanted}
     core = _pairs(CORE_PAIRS)
     cheap = smoke_cases()
     rest = [case for case in all_cases() if case not in cheap]
-    params = [_param(cell) for cell in _cells(cheap, core)]
-    params += [_param(cell, pytest.mark.slow) for cell in _sweep_cells()]
-    params += [_param(cell, pytest.mark.slow) for cell in _cells(rest, core)]
+    params: list[object] = []
+    if "cheap" in parts:
+        params += [_param(cell) for cell in _cells(cheap, core)]
+    if "sweep" in parts:
+        params += [_param(cell, pytest.mark.slow) for cell in _sweep_cells()]
+    if "core" in parts:
+        params += [_param(cell, pytest.mark.slow) for cell in _cells(rest, core)]
     return params
 
 

@@ -54,7 +54,11 @@ it draws; the cheap tier still finishes in under 3 minutes at `-n 4`):
 OMP_NUM_THREADS=1 TORCHLENS_SMOKE_PREFILTER=0 pytest tests/behaviour -m "not slow" -n 4 --dist loadgroup
 pytest tests/behaviour -n 8 --dist loadgroup          # everything, including slow
 pytest tests/behaviour -k "Neural_Gas-save-index"       # one cell
+TORCHLENS_BEHAVIOUR_UNIVERSE=sweep pytest tests/behaviour -n 4   # every pair once (slow)
 ```
+
+`TORCHLENS_BEHAVIOUR_UNIVERSE` is `cheap`, `sweep`, `core` or `all` (the default)
+and narrows which part of the universe is collected.
 
 Nothing here carries `smoke`: the smoke tier sits near its size ceiling
 (`SMOKE_TIER_SIZE_CEILING` in `tests/conftest.py`), and smoke admission is a
