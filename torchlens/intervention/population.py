@@ -114,9 +114,7 @@ def _iter_member_ops(member: Any) -> tuple[Any, ...]:
     insertion history).
     """
 
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
-    table = (member._layer_dict_all_keys if is_live_trace(member) else None) or {}
+    table = member._layer_dict_all_keys or {}
     by_label: dict[str, Any] = {}
     for value in table.values():
         label = getattr(value, "label", None)

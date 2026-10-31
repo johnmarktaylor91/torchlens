@@ -557,19 +557,15 @@ class _TlSpecWriter:
             JSON-ready backend runtime metadata.
         """
 
-        from .._data_classes._trace_missing_attrs import is_live_trace
-
         spec = get_backend_spec(backend_name)
         runtime_name = spec.serialization_policy.runtime_name or backend_name
-        runtime_config = source._provenance_backend_config if is_live_trace(source) else None
+        runtime_config = source._provenance_backend_config
         if not isinstance(runtime_config, dict):
             runtime_config = {}
         device_summary = getattr(source, "backend_runtime_device_summary", None)
         if not isinstance(device_summary, dict):
             device_summary = {}
-        runtime_version = (
-            source._provenance_backend_version if is_live_trace(source) else "0.0.metadata"
-        )
+        runtime_version = source._provenance_backend_version
         return {
             "name": runtime_name,
             "version": None if runtime_version is None else str(runtime_version),
@@ -624,9 +620,7 @@ class _TlSpecWriter:
             JSON-ready derived-gradient summary, or ``None`` when absent.
         """
 
-        from .._data_classes._trace_missing_attrs import is_live_trace
-
-        leaf_records = source._autograd_derived_grads if is_live_trace(source) else {}
+        leaf_records = source._autograd_derived_grads
         intermediate_records = getattr(
             getattr(source, "autograd", None), "intermediate_derived_grads", {}
         )
@@ -666,17 +660,15 @@ class _TlSpecWriter:
             JSON-ready backend fingerprint.
         """
 
-        from .._data_classes._trace_missing_attrs import is_live_trace
-
         model_signature = cls._model_signature(source, kind="trace")
-        graph_shape_hash = source._provenance_fingerprint if is_live_trace(source) else None
+        graph_shape_hash = source._provenance_fingerprint
         return {
             "backend_fingerprint": {
                 "backend": backend_name,
                 "model_signature": model_signature,
                 "graph_digest": graph_shape_hash or "metadata-only",
                 "module_identity_mode": getattr(source, "module_identity_mode", None),
-                "param_source": source._provenance_param_source if is_live_trace(source) else None,
+                "param_source": source._provenance_param_source,
             }
         }
 

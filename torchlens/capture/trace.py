@@ -30,7 +30,7 @@ import time
 import warnings
 from collections.abc import Callable, Iterator
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from torch import get_default_dtype, nn
 
@@ -674,7 +674,7 @@ def save_new_outs(
         input_args=input_args,
         input_kwargs=input_kwargs or {},
         layers_to_save="all" if resolved_layer_nums is None else "none",
-        output_device=self._options_output_device,
+        output_device=cast('Literal["same", "cpu", "cuda"]', self._options_output_device),
         activation_transform=self._options_activation_transform,
         grad_transform=self._options_grad_transform,
         save_raw_activations=self._options_save_raw_activations,

@@ -433,7 +433,8 @@ class Recorder:
                 recording = self._recording
                 inference_only = bool(
                     self._state.runtime_trace._options_inference_only
-                    if is_live_trace(self._state.runtime_trace)
+                    if self._state.runtime_trace is not None
+                    and is_live_trace(self._state.runtime_trace)
                     else False
                 )
                 if recording.is_stopped:

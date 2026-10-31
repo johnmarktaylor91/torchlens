@@ -1002,8 +1002,6 @@ def _require_effective_patch(
     named separately so the remedy is visible.
     """
 
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
     ctx = getattr(patched_log, "last_run", None)
     ctx = ctx if isinstance(ctx, dict) else {}
     started_at = ctx.get("started_at", ctx.get("timestamp"))
@@ -1011,7 +1009,7 @@ def _require_effective_patch(
     if isinstance(started_at, (int, float)):
         # Fire records are minted DURING the run, so they are filtered by the
         # run's start time; the run's end ``timestamp`` would exclude them all.
-        for layer in (patched_log._layer_list if is_live_trace(patched_log) else []) or []:
+        for layer in patched_log._layer_list or []:
             for record in getattr(layer, "edits", []) or []:
                 record_timestamp = getattr(record, "timestamp", None)
                 if isinstance(record_timestamp, (int, float)) and record_timestamp >= started_at:

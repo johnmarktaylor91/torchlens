@@ -936,7 +936,11 @@ class Recording(TraceLike):
         # no autograd graph: either backward would capture nothing.
         state = getattr(self, "_recording_state", None)
         runtime_trace = getattr(state, "runtime_trace", None)
-        if runtime_trace._options_inference_only if is_live_trace(runtime_trace) else False:
+        if (
+            runtime_trace is not None
+            and is_live_trace(runtime_trace)
+            and runtime_trace._options_inference_only
+        ):
             from .exceptions import RecorderStateError
 
             raise RecorderStateError(
