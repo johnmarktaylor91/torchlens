@@ -27,12 +27,12 @@ def test_payload_byte_totals_at_capture_and_now(tmp_path) -> None:
     try:
         totals = trace.summary().totals
         assert totals.captured_bytes == SAVED_BYTES
-        assert totals.retained_now_bytes == SAVED_BYTES  # every payload is resident
+        assert totals.retained_bytes == SAVED_BYTES  # every payload is resident
         path = tmp_path / "stripped.tlspec"
         tl.save(trace, path, include_outs=False)
     finally:
         trace.cleanup()
     loaded = tl.load(path)
     totals = loaded.summary().totals
-    assert totals.at_capture_bytes == SAVED_BYTES  # saved at capture
-    assert totals.retained_now_bytes == 0  # no payload travelled with the artifact
+    assert totals.captured_bytes == SAVED_BYTES  # saved at capture
+    assert totals.retained_bytes == 0  # no payload travelled with the artifact

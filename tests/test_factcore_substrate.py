@@ -228,10 +228,10 @@ def test_memory_scopes_at_capture_vs_retained_now(loop_trace) -> None:
     """D8: at_capture is a capture fact; retained_now describes THIS object."""
 
     memory = factcore(loop_trace).memory
-    assert memory.retained_now_bytes <= memory.at_capture_bytes
-    assert memory.at_capture_saved_ops >= memory.retained_now_present_ops
+    assert memory.retained_bytes <= memory.captured_bytes
+    assert memory.captured_saved_ops >= memory.retained_present_ops
     # Live full-save trace: everything the capture retained is still here.
-    assert memory.retained_now_bytes == memory.at_capture_bytes
+    assert memory.retained_bytes == memory.captured_bytes
 
 
 def test_factcore_grain_vocabulary_is_closed() -> None:
@@ -250,14 +250,14 @@ def test_scope_label_on_payload_stripped_artifact(tmp_path) -> None:
 
     model = _Loop().eval()
     trace = tl.trace(model, torch.randn(2, 4))
-    at_capture = factcore(trace).memory.at_capture_bytes
+    at_capture = factcore(trace).memory.captured_bytes
     assert at_capture > 0
     tl.save(trace, tmp_path / "stripped.tlspec", include_outs=False)
     loaded = tl.load(tmp_path / "stripped.tlspec")
 
     memory = factcore(loaded).memory
-    assert memory.retained_now_bytes == 0
-    assert memory.at_capture_bytes == at_capture
+    assert memory.retained_bytes == 0
+    assert memory.captured_bytes == at_capture
 
     bom = loaded.bill_of_materials()
     assert int(bom["activations"]["retained_now_memory"]) == 0

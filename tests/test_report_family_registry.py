@@ -207,7 +207,7 @@ def test_agent_json_is_the_one_machine_projection(family_trace) -> None:
     agent_json = family_trace.to_agent_json()
     assert agent_json["counts"]["layers"] == core.counts.layers
     assert agent_json["counts"]["operations"] == core.counts.tracked_tensor_rows
-    assert agent_json["counts"]["tensors_saved"] == core.memory.at_capture_saved_ops
+    assert agent_json["counts"]["tensors_saved"] == core.memory.captured_saved_ops
     assert agent_json["capture"]["model_class"] == family_trace.model_class_name
 
 

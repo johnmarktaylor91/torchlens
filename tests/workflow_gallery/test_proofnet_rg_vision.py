@@ -307,7 +307,7 @@ def test_rg20_receptive_field_geometric_matches_empirical(
             f" {verdict.status} ({verdict.message}) at {early_conv} --"
             " geometric and empirical fields disagree on a flagship surface"
         )
-        assert verdict.n_violations == 0
+        assert verdict.num_violations == 0
     finally:
         armed.cleanup()
         tl.release_model(model)

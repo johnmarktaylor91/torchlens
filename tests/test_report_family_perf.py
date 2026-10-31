@@ -168,7 +168,7 @@ def test_time_clean_step_discloses_method_and_reruns() -> None:
     model = nn.Linear(4, 4).eval()
     timing = time_clean_step(model, torch.randn(2, 4), warmup=1, repeats=3)
     assert timing.seconds > 0
-    assert timing.n_forwards_run == 4
+    assert timing.num_forward_runs == 4
     assert timing.scope == ("forward",)
     assert "uninstrumented" in timing.method
 
@@ -316,7 +316,7 @@ def test_cost_report_measures_and_discloses() -> None:
     tiers = {tier.tier: tier for tier in result.tiers}
     assert tiers["raw_forward"].ratio_vs_raw == 1.0
     assert tiers["trace"].median_seconds > 0
-    assert result.n_forwards_run >= 6
+    assert result.num_forward_runs >= 6
 
 
 def test_cost_report_refuses_unknown_tier() -> None:

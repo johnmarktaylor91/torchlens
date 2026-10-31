@@ -325,8 +325,8 @@ def test_backward_estimate_is_named_door_and_hypothetical(nograd_trace) -> None:
     estimate = backward_estimate(nograd_trace)
     assert estimate.label == "hypothetical"
     assert estimate.hypothetical_flops > 0
-    assert estimate.n_ops_multiplied > 0
-    assert estimate.grad_disabled_at_capture
+    assert estimate.num_multiplied_ops > 0
+    assert estimate.is_grad_disabled_at_capture
     assert "HYPOTHETICAL" in estimate.disclosure
     assert "requires_grad as captured" in estimate.disclosure
     # No default 1.0 multiplier: non-MAC ops are excluded and named.
