@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from . import ArtifactError
 
@@ -112,7 +113,7 @@ def _resolve_include_flags(
     19 and 22; M(weightsfree) W3).
     """
 
-    structure_only = bool(trace._options_structure_only)
+    structure_only = bool(trace._options_structure_only if is_live_trace(trace) else False)
     if structure_only and save_level == "executable_with_callables":
         # Item 22: this level's required saved-args/RNG payloads land under
         # the structure-only marker and the M-C2 load coherence gate refuses
