@@ -37,6 +37,7 @@ from .format_contract import (
     coerce_container_typed_state,
     default_fill_state,
     raise_if_manifest_below_floor,
+    raise_if_saved_by_older_major,
     read_tlspec_version,
 )
 from .format_errors import (
@@ -74,6 +75,7 @@ __all__ = [
     "above_ceiling_error",
     "below_floor_error",
     "raise_if_manifest_below_floor",
+    "raise_if_saved_by_older_major",
     "coerce_container_typed_state",
     "default_fill_state",
     "read_tlspec_version",

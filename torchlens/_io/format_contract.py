@@ -221,6 +221,60 @@ def raise_if_manifest_below_floor(raw_version: Any, path: str) -> None:
         )
 
 
+def _major_version(version: Any) -> int | None:
+    """Return the leading integer of a ``MAJOR.MINOR...`` version string, else ``None``."""
+
+    if not isinstance(version, str):
+        return None
+    head = version.strip().split(".", 1)[0]
+    return int(head) if head.isdigit() else None
+
+
+def raise_if_saved_by_older_major(saved_version: Any, path: str) -> None:
+    """Refuse an artifact that an earlier major release of torchlens saved.
+
+    A major release does not read the files an earlier major release wrote: the
+    saved field names and package paths changed between them, and no compatibility
+    reader is carried. The refusal names the saving release and the two ways out
+    (the earlier major release reads the file, or capture again with this one).
+    Artifacts without a parseable ``torchlens_version`` stamp return untouched;
+    their own typed checks own that case.
+
+    Parameters
+    ----------
+    saved_version:
+        The manifest's raw ``torchlens_version`` value.
+    path:
+        Artifact path for the structured fields.
+
+    Raises
+    ------
+    ArtifactTooOldError
+        When the saving release's major version is below the running one.
+    """
+
+    import torchlens
+
+    running = _major_version(torchlens.__version__)
+    saved = _major_version(saved_version)
+    if running is None or saved is None or saved >= running:
+        return
+    remedy = (
+        f"load it with torchlens {saved}.x (pip install 'torchlens<{running}'), or "
+        f"capture the model again with torchlens {torchlens.__version__} and save that."
+    )
+    raise ArtifactTooOldError(
+        f"This artifact was saved by torchlens {saved_version}; torchlens {running}.x "
+        f"does not read files saved by torchlens {saved}.x. Remedy: {remedy}",
+        code="artifact_version_below_floor",
+        observed=f"torchlens_version={saved_version}",
+        floor_tlspec_version=MIN_TLSPEC_VERSION,
+        floor_torchlens_version=f"{running}.0.0",
+        path=path,
+        remedy=remedy,
+    )
+
+
 _ABOVE_CEILING_REMEDY = "Upgrade torchlens to the release that wrote this artifact (or newer)."
 
 

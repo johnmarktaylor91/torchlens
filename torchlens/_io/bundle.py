@@ -51,6 +51,7 @@ from . import (
     PayloadLoadHints,
     _json,
     raise_if_manifest_below_floor,
+    raise_if_saved_by_older_major,
 )
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
 from ._canonical_pickle import dump_canonical_metadata
@@ -1433,6 +1434,10 @@ def load(
                 candidate = _json.read_bounded(merged_manifest_path)
             except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                 candidate = None
+            if isinstance(candidate, dict):
+                # One refusal for every saved format: a file an earlier major
+                # release wrote is never read (no compatibility reader is carried).
+                raise_if_saved_by_older_major(candidate.get("torchlens_version"), str(bundle_path))
             if isinstance(candidate, dict) and candidate.get("bundle_format") == "merged-directory":
                 from .._merged._artifact import load_merged
 
