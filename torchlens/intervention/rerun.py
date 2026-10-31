@@ -578,9 +578,9 @@ def _validate_append_hook_plan(
         force_shape_change = bool(entry.metadata.get("allow_shape_change", False)) or bool(
             dict(helper.kwargs).get("allow_shape_change", False)
         )
-        if force_shape_change and not bool(getattr(helper, "compatible_with_append", False)):
+        if force_shape_change and not bool(getattr(helper, "is_compatible_with_append", False)):
             raise AppendMismatchError(
-                f"helper {helper_name!r} may change out shape and is not compatible_with_append"
+                f"helper {helper_name!r} may change out shape and its is_compatible_with_append is False"
             )
 
 

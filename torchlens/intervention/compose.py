@@ -15,7 +15,7 @@ The D20 laws implemented:
   (never a forward/backward mix); no fusion in v1.
 - ONE fire, ONE final scatter, ONE FireRecord, with the ordered leaf names on
   the helper identity and per-leaf failures naming ``compose[i]``.
-- Flags AND-combine (``batch_independent``/``compatible_with_append``);
+- Flags AND-combine (``batch_independent``/``is_compatible_with_append``);
   portability is the WEAKEST leaf; a leaf failure aborts the whole fire
   (atomic -- the engine never sees a half-applied chain).
 
