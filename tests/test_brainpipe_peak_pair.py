@@ -36,7 +36,7 @@ def test_peak_pair_shape_and_backend_label() -> None:
         torch.randn(32, 64),
         capture=tl.options.CaptureOptions(inference_only=True),
     )
-    pair = log.forward_peak_memory_pair
+    pair = log.cost.forward_peak_memory_pair
     assert pair is not None
     assert set(pair) == {"live", "resident", "backend", "resident_basis"}
     assert pair["backend"] in {"cpu:maxlive+rss", "mps:allocated+rss", "cuda:allocated+reserved"}
@@ -59,7 +59,7 @@ def test_peak_pair_live_populates_under_the_tracemalloc_opt_in() -> None:
         torch.randn(32, 64),
         capture=tl.options.CaptureOptions(inference_only=True, measure_python_peak_memory=True),
     )
-    pair = log.forward_peak_memory_pair
+    pair = log.cost.forward_peak_memory_pair
     assert pair is not None
     assert pair["live"] is not None and pair["live"] > 0
 
@@ -71,12 +71,12 @@ def test_peak_pair_is_session_time_only() -> None:
     from pathlib import Path
 
     log = tl.trace(_model(), torch.randn(4, 64))
-    assert log.forward_peak_memory_pair is not None
+    assert log.cost.forward_peak_memory_pair is not None
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "trace.tlspec"
         tl.save(log, path)
         loaded = tl.load(path)
-    assert loaded.forward_peak_memory_pair is None
+    assert loaded.cost.forward_peak_memory_pair is None
 
 
 # ``serial``, not ``smoke``: the resident delta is the process RSS high-water
@@ -122,7 +122,7 @@ def test_multi_capture_resident_peak_is_non_degenerate() -> None:
             x,
             capture=tl.options.CaptureOptions(inference_only=True, measure_host_peak_memory=True),
         )
-        pair = log.forward_peak_memory_pair
+        pair = log.cost.forward_peak_memory_pair
         assert pair is not None
         readings.append((pair["resident"], pair["resident_basis"]))
     assert all(basis == "per_capture" for _, basis in readings)

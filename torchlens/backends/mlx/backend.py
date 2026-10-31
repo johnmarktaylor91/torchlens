@@ -1518,13 +1518,15 @@ class MLXBackend:
                     )
                 )
             if grad_options.intermediate_grads and tap_observer is not None:
-                trace.intermediate_derived_grads = self._records_for_intermediate_mlx_grads(
-                    trace=trace,
-                    candidates=tap_observer.candidates,
-                    value_args=value_args,
-                    kwargs=kwargs,
-                    value_fn=value_fn,
-                    grad_options=grad_options,
+                trace._autograd_intermediate_derived_grads = (
+                    self._records_for_intermediate_mlx_grads(
+                        trace=trace,
+                        candidates=tap_observer.candidates,
+                        value_args=value_args,
+                        kwargs=kwargs,
+                        value_fn=value_fn,
+                        grad_options=grad_options,
+                    )
                 )
         finally:
             if has_params:

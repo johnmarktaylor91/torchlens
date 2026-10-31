@@ -294,7 +294,7 @@ def test_mlx_derived_grads_match_value_and_grad_oracle() -> None:
     assert trace.derived_grads["inputs.0"].provenance["mechanism"] == "mlx_value_and_grad"
     assert trace.params["proj.weight"].grad is trace.derived_grads["params.proj.weight"].grad
     assert trace.params["proj.bias"].grad is trace.derived_grads["params.proj.bias"].grad
-    assert len(trace.intermediate_derived_grads) == 0
+    assert len(trace.autograd.intermediate_derived_grads) == 0
 
 
 @pytest.mark.optional
@@ -322,9 +322,9 @@ def test_mlx_intermediate_derived_grads_match_direct_reference() -> None:
     mx.eval(expected, hidden_op.derived_grad)
 
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
-    assert hidden_op.label in trace.intermediate_derived_grads
+    assert hidden_op.label in trace.autograd.intermediate_derived_grads
     np.testing.assert_allclose(np.asarray(hidden_op.derived_grad), np.asarray(expected))
-    record = trace.intermediate_derived_grads[hidden_op.label]
+    record = trace.autograd.intermediate_derived_grads[hidden_op.label]
     assert record.provenance["mechanism"] == "mlx_custom_vjp_tap_value_and_grad"
     assert record.provenance["status"] == "exact"
     assert record.provenance["oracle"] == (
@@ -361,7 +361,7 @@ def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
         if op.has_saved_activation and not op.is_input and not op.is_output
     }
     assert saved
-    assert all(label in trace.intermediate_derived_grads for label in saved), saved
+    assert all(label in trace.autograd.intermediate_derived_grads for label in saved), saved
 
     def suffix(boundary: mx.array) -> mx.array:
         """Return the scalar loss from the relu boundary onward."""
@@ -371,7 +371,7 @@ def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
     expected = mx.grad(suffix)(relu_op.out)
     mx.eval(expected, relu_op.derived_grad)
     np.testing.assert_allclose(np.asarray(relu_op.derived_grad), np.asarray(expected))
-    assert trace.intermediate_derived_grads[relu_op.label].provenance["status"] == "exact"
+    assert trace.autograd.intermediate_derived_grads[relu_op.label].provenance["status"] == "exact"
 
 
 @pytest.mark.optional
@@ -435,7 +435,7 @@ def test_mlx_intermediate_derived_grads_duplicate_signature_skip(
 
     first_multiply = next(op for op in trace.layer_list if op.func_name == "multiply")
 
-    assert first_multiply.label not in trace.intermediate_derived_grads
+    assert first_multiply.label not in trace.autograd.intermediate_derived_grads
     assert first_multiply.derived_grad is None
 
 
@@ -496,7 +496,7 @@ def test_mlx_intermediate_derived_grads_oracle_fail_skips_public_record(
     )
 
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
-    assert len(trace.intermediate_derived_grads) == 0
+    assert len(trace.autograd.intermediate_derived_grads) == 0
     assert all(op.derived_grad is None for op in trace.layer_list)
 
 
@@ -562,7 +562,7 @@ def test_mlx_derived_grads_are_not_backward_capture() -> None:
     with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
-        _ = trace.backward_passes
+        _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
         _ = trace.saved_grad_ops
     with pytest.raises(ValueError, match="trace\\.derived_grads"):

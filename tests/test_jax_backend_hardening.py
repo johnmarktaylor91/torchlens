@@ -1182,7 +1182,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     assert set(trace.params.keys()) == {"w", "b"}
     assert trace.has_backward_pass is False
     assert trace.num_backward_passes == 0
-    assert trace.num_backward_edges is None
+    assert trace.autograd.num_backward_edges is None
 
     outpath = tmp_path / "jax_graph"
     dot = trace.draw(vis_outpath=str(outpath), vis_save_only=True, vis_fileformat="dot")
@@ -1218,7 +1218,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     with pytest.raises(BackendUnsupportedError, match="backward capture.*derived_grads"):
         trace.log_backward(cast(Any, trace[trace.output_layers[0]].out))
     with pytest.raises(ValueError, match="derived_grads"):
-        _ = trace.backward_passes
+        _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="derived_grads"):
         _ = trace[0].grads
 

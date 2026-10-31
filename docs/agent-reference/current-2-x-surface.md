@@ -907,7 +907,7 @@
   selections (`selection_trace_mismatch` -- alignment is the one explicit
   door), and `align_to` + `tl.patch_from(source)` is the cross-run patching
   spelling the acceptance gallery pins.
-- EDGE SUBSTITUTION (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.edges` is the
+- EDGE SUBSTITUTION (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.graph.edges` is the
   dataflow edge family (EdgeUseRecords; intervention_ready-gated, refusal
   `edge_provenance_unavailable`); canonical occurrence address
   `(child_func_call_id, arg_kind, arg_path)`. `do(edge_selection, edit)`
@@ -1011,7 +1011,7 @@
   gets a timing prehook; ONE clock (`perf_counter`) paired at capture by a
   per-node keyed LIFO (stale entries discarded, untimed fires `(None,
   None)`, never a cross-clock pair); stamps ride the runtime `GradFnFired`
-  event only, served by live-trace-only `trace.grad_fn_fire_timings`
+  event only, served by live-trace-only `trace.autograd.grad_fn_fire_timings`
   (loaded/cleaned traces refuse `grad_fn_fire_timing_unavailable`); as of
   the tlspec v8 coordinated bump the persisted `GradFnCall` timing fields
   carry the per-fire `perf_counter` semantics, discriminated by the
@@ -1351,7 +1351,7 @@
   npz (`compatibility="net2brain"` enforces their lexicographic glob+sort naming
   contract with a name-to-stimulus-id sidecar; `allow_pickle=False`, object arrays
   refuse `npz_export_invalid`); `parse_bytes("8 GiB")` is the human-unit budget
-  reader. `Trace.forward_peak_memory_pair` is the session-time (live, resident) peak
+  reader. `Trace.cost.forward_peak_memory_pair` is the session-time (live, resident) peak
   pair with the backend named. Its CPU `resident` follows `measure_host_peak_memory`:
   under the opt-in it is scoped per capture on Linux, so multi-capture sweeps read real
   peaks; by default it is `None` with `resident_basis="not_requested"`. `tl.repgeom.rdm` gains keyword-only `metric="manhattan"`,

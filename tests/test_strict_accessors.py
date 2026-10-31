@@ -225,7 +225,7 @@ def test_grad_fns_accessor_returns_grad_fn_for_pass_label() -> None:
 
     trace = _strict_trace()
     trace[trace.output_layers[0]].out.sum().backward()
-    grad_fn = trace.grad_fns[0]
+    grad_fn = trace.autograd.grad_fns[0]
 
-    assert isinstance(trace.grad_fns[f"{grad_fn.label}:1"], GradFn)
-    assert trace.grad_fns[f"{grad_fn.label}:1"] is grad_fn
+    assert isinstance(trace.autograd.grad_fns[f"{grad_fn.label}:1"], GradFn)
+    assert trace.autograd.grad_fns[f"{grad_fn.label}:1"] is grad_fn

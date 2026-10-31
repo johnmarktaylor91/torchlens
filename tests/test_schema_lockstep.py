@@ -939,7 +939,7 @@ def _live_records(trace: Trace) -> dict[str, Any]:
         Record class name -> representative instance.
     """
 
-    grad_fn = next(record for record in trace.grad_fns if record.calls)
+    grad_fn = next(record for record in trace.autograd.grad_fns if record.calls)
     return {
         "Trace": trace,
         "Op": next(iter(trace.ops)),
@@ -950,7 +950,7 @@ def _live_records(trace: Trace) -> dict[str, Any]:
         "GradFnCall": next(iter(grad_fn.calls.values())),
         "ModuleCall": next(iter(trace.module_calls)),
         "Module": next(iter(trace.modules)),
-        "BackwardPass": next(iter(trace.backward_passes)),
+        "BackwardPass": next(iter(trace.autograd.backward_passes)),
     }
 
 
@@ -982,10 +982,10 @@ def all_live_records(trace: Trace) -> dict[str, list[Any]]:
         "ModuleCall": list(trace.module_calls),
         "Module": list(trace.modules),
     }
-    grad_fns = list(trace.grad_fns)
+    grad_fns = list(trace.autograd.grad_fns)
     families["GradFn"] = grad_fns
     families["GradFnCall"] = [call for record in grad_fns for call in record.calls.values()]
-    families["BackwardPass"] = list(trace.backward_passes)
+    families["BackwardPass"] = list(trace.autograd.backward_passes)
     return families
 
 

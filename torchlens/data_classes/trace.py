@@ -1716,7 +1716,7 @@ class Trace(
             save_raw_gradients: Whether raw grads are retained when a transform is set.
             save_mode: Tensor retention mode for saved activation and gradient payloads.
             keep_orphans: If True, orphan island ops remain in raw metadata and
-                are exposed via ``trace.orphans``.
+                are exposed via ``trace.graph.orphans``.
             save_arg_values: Whether to deep-copy each operation's input arguments.
             save_grads: Which backward gradients should be retained. ``True``
                 saves all gradients, ``False``/``None`` saves no payloads, and
@@ -2596,7 +2596,7 @@ class Trace(
         return outcome_for(self)
 
     @property
-    def model_cls(self) -> type[Any] | None:
+    def _source_cls(self) -> type[Any] | None:
         """Return the live source model class when the model is still alive.
 
         Returns

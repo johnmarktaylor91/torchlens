@@ -436,7 +436,7 @@ def _trace_projection(trace: Trace) -> dict[str, Any]:
             "saved_ops": list(trace.saved_ops.keys()),
             "params": list(trace.params.keys()),
             "modules": list(trace.modules.keys()),
-            "grad_fns": list(trace.grad_fns.keys()),
+            "grad_fns": list(trace.autograd.grad_fns.keys()),
         },
     }
 

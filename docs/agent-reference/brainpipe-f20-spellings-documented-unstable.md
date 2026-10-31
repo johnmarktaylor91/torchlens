@@ -9,7 +9,7 @@ drifted signatures refuse `extraction_plan_signature_mismatch`, non-trace engine
 refuse `extraction_engine_unsupported`), `plan.run()` (the single-pass door onto
 `extract_dataset`), `export_npz` (consolidated / per-stimulus; net2brain mode writes
 their lexicographic naming contract), and `parse_bytes`. Companion surfaces:
-`Trace.forward_peak_memory_pair` (session-time live/resident pair, backend named),
+`Trace.cost.forward_peak_memory_pair` (session-time live/resident pair, backend named),
 `tl.repgeom.rdm` keyword widening (manhattan/compute_device/row_chunk_size/
 output_device/dtype/condensed/batched), descriptive `tl.repgeom.rdm_compare`,
 `tl.stats.cka`/`CKA` `device=`/`dtype=`, geometry evolution over transformed

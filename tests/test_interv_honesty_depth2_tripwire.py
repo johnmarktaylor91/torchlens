@@ -60,7 +60,7 @@ def capture():
 
 
 def _identity_edge_fork(trace: tl.Trace) -> tl.Trace:
-    edge = next(e for e in trace.edges if e.parent_label == "relu_1_2")
+    edge = next(e for e in trace.graph.edges if e.parent_label == "relu_1_2")
     fork = trace.fork()
     fork.do(edge.__selection__(), tl.scale(1.0))
     return fork

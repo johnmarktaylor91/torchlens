@@ -263,8 +263,8 @@ def _render_one(spec: ReferenceSpec, gallery_dir: Path) -> dict[str, Any]:
             "vis_nesting_depth": spec.vis_nesting_depth,
             "output_path": str(outpath),
             "num_nodes": len(log.layer_labels),
-            "is_recurrent": bool(log.is_recurrent),
-            "has_conditional_branching": bool(log.has_conditional_branching),
+            "is_recurrent": bool(log.graph.is_recurrent),
+            "has_conditional_branching": bool(log.graph.has_conditional_branching),
             "audit": audit,
         }
     except Exception as exc:

@@ -213,10 +213,10 @@ def render_backward_graph(
         if vis_mode == "rolled":
             visible_ids = {
                 grad_fn_handle.grad_fn_object_id
-                for grad_fn_handle in self.grad_fns
+                for grad_fn_handle in self.autograd.grad_fns
                 if _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter)
             }
-            for grad_fn_handle in self.grad_fns:
+            for grad_fn_handle in self.autograd.grad_fns:
                 if grad_fn_handle.grad_fn_object_id in visible_ids:
                     _add_backward_node_to_graphviz(
                         grad_fn_handle,
@@ -226,7 +226,7 @@ def render_backward_graph(
                         inventory=inventory,
                     )
 
-            for grad_fn_handle in self.grad_fns:
+            for grad_fn_handle in self.autograd.grad_fns:
                 if grad_fn_handle.grad_fn_object_id not in visible_ids:
                     continue
                 tail_name = _backward_dot_node_name(grad_fn_handle)

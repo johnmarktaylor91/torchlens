@@ -127,8 +127,8 @@ def test_record_trace_aliases_and_ordinal_indexes_round_trip() -> None:
     module_call = trace.module_calls[0]
     param = trace.params[0]
     buffer = trace.buffers[0]
-    grad_fn = trace.grad_fns[0]
-    grad_fn_call = trace.grad_fn_calls[0]
+    grad_fn = trace.autograd.grad_fns[0]
+    grad_fn_call = trace.autograd.grad_fn_calls[0]
 
     assert op.trace is trace
     assert layer.trace is trace
@@ -140,6 +140,8 @@ def test_record_trace_aliases_and_ordinal_indexes_round_trip() -> None:
     assert grad_fn_call.trace is trace
 
     assert trace.params[param.ordinal_index] is param
-    assert trace.grad_fns[grad_fn.ordinal_index] is grad_fn
-    assert trace.grad_fn_calls[grad_fn_call.ordinal_index] is grad_fn_call
-    assert trace.num_grad_fns_with_op == sum(1 for record in trace.grad_fns if record.has_op)
+    assert trace.autograd.grad_fns[grad_fn.ordinal_index] is grad_fn
+    assert trace.autograd.grad_fn_calls[grad_fn_call.ordinal_index] is grad_fn_call
+    assert trace.num_grad_fns_with_op == sum(
+        1 for record in trace.autograd.grad_fns if record.has_op
+    )

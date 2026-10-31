@@ -944,7 +944,7 @@ def _stabilize_backward_identifiers(trace: tl.Trace) -> None:
         Trace containing one captured backward pass.
     """
 
-    grad_fns = list(trace.grad_fns)
+    grad_fns = list(trace.autograd.grad_fns)
     identifiers = {item.grad_fn_object_id: index for index, item in enumerate(grad_fns)}
     for item in grad_fns:
         old_identifier = item.grad_fn_object_id

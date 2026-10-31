@@ -3,8 +3,8 @@
 True-backward accessors must refuse typed on every backend whose registered
 capability table declares ``backward_capture=False`` instead of returning
 silently-empty results. The guarded surface is wider than the three headline
-accessors: ``Op.grads`` / ``Module.grads``, ``Trace.backward_passes``,
-``Trace.saved_grad_ops``, ``Trace.last_backward_pass``,
+accessors: ``Op.grads`` / ``Module.grads``, ``Trace.autograd.backward_passes``,
+``Trace.saved_grad_ops``, ``Trace.autograd.last_backward_pass``,
 ``Trace.num_saved_grad_ops``, ``Trace.saved_grad_module_calls``, and
 ``Trace.saved_grad_modules`` all route through this guard, so on
 ``backward_capture=False`` backends they raise where they previously returned

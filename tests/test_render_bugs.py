@@ -1254,7 +1254,7 @@ def test_downstream_intervening_inference_builds_reverse_edges_once() -> None:
 
     ``_infer_intervening_module_downstream`` built the O(E) reverse autograd
     edge map to seed the BFS, then ``_infer_intervening_module_bfs`` rebuilt
-    the identical map -- two full ``trace.grad_fns`` sweeps per intervening
+    the identical map -- two full ``trace.autograd.grad_fns`` sweeps per intervening
     grad_fn. The prebuilt map is now passed through, so the grad_fn table is
     swept exactly once.
     """
@@ -1286,7 +1286,7 @@ def test_downstream_intervening_inference_builds_reverse_edges_once() -> None:
 
     assert result is None  # no module-anchored grad_fn in the stub chain
     assert _CountingGradFns.iter_calls == 1, (
-        f"downstream inference swept trace.grad_fns {_CountingGradFns.iter_calls} "
+        f"downstream inference swept trace.autograd.grad_fns {_CountingGradFns.iter_calls} "
         "times -- the duplicate reverse-edge build is back"
     )
 

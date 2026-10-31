@@ -64,7 +64,7 @@ def compute_backward_style_inventory(
 
     visible = [
         grad_fn_handle
-        for grad_fn_handle in trace.grad_fns
+        for grad_fn_handle in trace.autograd.grad_fns
         if _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter)
     ]
     orders = [getattr(grad_fn_handle, "order", None) for grad_fn_handle in visible]

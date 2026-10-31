@@ -35,7 +35,7 @@ _ORDINAL_POSITIONS_CACHE: weakref.WeakKeyDictionary[Any, tuple[Any, dict[int, in
 
 Weak-keyed on the owning Trace and validated against the trace's backward
 projection revision, so a full ordinal sweep over N calls is O(N) instead of
-the historical O(N^2) (``list(trace.grad_fn_calls).index(self)`` rebuilt the
+the historical O(N^2) (``list(trace.autograd.grad_fn_calls).index(self)`` rebuilt the
 accessor AND ran an equality scan per access; measured exponent 2.02).
 Identity keys are sound because GradFnCall facades are identity-stable while
 referenced (the M9 weak-valued facade cache), and a stale/missing id triggers
@@ -258,7 +258,7 @@ class GradFnCall:
 
     @property
     def ordinal_index(self) -> int:
-        """Return this GradFnCall's 0-based position in ``trace.grad_fn_calls``.
+        """Return this GradFnCall's 0-based position in ``trace.autograd.grad_fn_calls``.
 
         Amortized O(1) per access through a per-trace identity-position map
         (see :data:`_ORDINAL_POSITIONS_CACHE`); a call not present in its
@@ -271,7 +271,7 @@ class GradFnCall:
         revision = getattr(trace, "_backward_projection_revision", None)
         cached = _ORDINAL_POSITIONS_CACHE.get(trace)
         if cached is None or cached[0] != revision or id(self) not in cached[1]:
-            calls = trace.grad_fn_calls  # syncs the lazy backward projection
+            calls = trace.autograd.grad_fn_calls  # syncs the lazy backward projection
             revision = getattr(trace, "_backward_projection_revision", None)
             positions = {id(call): index for index, call in enumerate(calls.values())}
             cached = (revision, positions)

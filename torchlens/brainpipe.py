@@ -500,7 +500,7 @@ def _probe_once(
                 entry["transformed_shape"] = tuple(transformed.shape)
                 entry["transformed_bytes"] = int(transformed.numel() * transformed.element_size())
         facts[label] = entry
-    pair = log.forward_peak_memory_pair
+    pair = log.cost.forward_peak_memory_pair
     log.cleanup()
     return facts, pair
 

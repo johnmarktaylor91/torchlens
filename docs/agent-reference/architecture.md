@@ -213,7 +213,7 @@ Key entry points:
   string/`tl.label` addressing; `selection_unresolvable` /
   `multipass_bare_label` on `tl.units`); single-pass bare labels stay
   accepted and `log[label].__selection__()` is the all-passes spelling.
-- Edge substitution (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.edges` is the
+- Edge substitution (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.graph.edges` is the
   dataflow edge family (EdgeUseRecords; requires an `intervention_ready`
   capture, refusal `edge_provenance_unavailable`; canonical occurrence
   address `(child_func_call_id, arg_kind, arg_path)`).
@@ -225,7 +225,7 @@ Key entry points:
   entries FAIL validation (`edge_intervention_boundary`).
 - Backward residuals (L9; DOCUMENTED-UNSTABLE): per-fire timing -- one clock
   (`perf_counter`), per-node keyed-LIFO pairing, stamps on the runtime
-  `GradFnFired` event only; live-only `trace.grad_fn_fire_timings` (loaded
+  `GradFnFired` event only; live-only `trace.autograd.grad_fn_fire_timings` (loaded
   traces refuse `grad_fn_fire_timing_unavailable`); as of the tlspec v8
   coordinated bump the persisted GradFnCall timing fields carry the per-fire
   `perf_counter` semantics, discriminated by the persisted

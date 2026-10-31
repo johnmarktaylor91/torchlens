@@ -152,8 +152,8 @@ def test_loaded_log_backward_refuses_before_mutation(tmp_path):
     live_loss = model(x.requires_grad_(True)).sum()
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
         loaded.log_backward(live_loss)
-    assert len(getattr(loaded, "backward_passes", []) or []) == 0
-    assert len(loaded.grad_fns) == 0
+    assert len(loaded.autograd.backward_passes or []) == 0
+    assert len(loaded.autograd.grad_fns) == 0
 
 
 def test_loaded_recording_backward_refuses(tmp_path):
@@ -172,4 +172,4 @@ def test_live_log_backward_still_works():
     trace = tl.trace(model, x, capture=CaptureOptions(backward_ready=True))
     loss = trace["relu_1_2"].out.sum()
     trace.log_backward(loss)
-    assert len(trace.backward_passes) == 1
+    assert len(trace.autograd.backward_passes) == 1

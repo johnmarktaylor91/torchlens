@@ -3,7 +3,7 @@
 One clock: every duration operand pair is ``time.perf_counter()`` from the
 same process, paired at capture time by the per-node keyed LIFO. Measured
 pairs live in ``GradFnFired`` event fields only (runtime DROP) and are served
-by the live-trace-only ``trace.grad_fn_fire_timings`` accessor; the persisted
+by the live-trace-only ``trace.autograd.grad_fn_fire_timings`` accessor; the persisted
 ``GradFnCall`` timing fields keep their shipped single-wall-stamp semantics
 through all of wave 2 (NOTHING NEW PERSISTS PRE-BUMP). Spellings are
 DOCUMENTED-UNSTABLE pending the naming session.
@@ -62,17 +62,17 @@ def test_timed_fire_has_positive_span_and_ordered_stamps() -> None:
         assert event.fire_started_monotonic is not None
         assert event.fire_finished_monotonic is not None
         assert event.fire_finished_monotonic > event.fire_started_monotonic
-    timings = trace.grad_fn_fire_timings
+    timings = trace.autograd.grad_fn_fire_timings
     assert timings and all(span is not None and float(span) > 0 for span in timings.values())
     assert trace.grad_fn_timing_provenance == "perf_counter"
 
 
 def test_timing_keys_align_with_grad_fn_calls() -> None:
     trace = _backward_trace()
-    timings = trace.grad_fn_fire_timings
+    timings = trace.autograd.grad_fn_fire_timings
     # Timings iterate in fire order, grad_fn_calls in discovery order; the
     # key SETS are identical 1:1.
-    assert set(timings.keys()) == {call.call_label for call in trace.grad_fn_calls}
+    assert set(timings.keys()) == {call.call_label for call in trace.autograd.grad_fn_calls}
 
 
 def test_repeat_fires_get_independent_spans_and_monotone_wall_stamps() -> None:
@@ -97,7 +97,7 @@ def test_repeat_fires_get_independent_spans_and_monotone_wall_stamps() -> None:
         assert wall == sorted(wall)
         spans = {(event.fire_started_monotonic, event.fire_finished_monotonic) for event in events}
         assert len(spans) == len(events), "repeat fires must carry independent stamp pairs"
-    timings = trace.grad_fn_fire_timings
+    timings = trace.autograd.grad_fn_fire_timings
     assert all(span is not None for span in timings.values())
 
 
@@ -193,7 +193,7 @@ def test_timing_registration_failure_degrades_to_untimed_not_coverage_gap() -> N
     for event in fired:
         assert event.fire_started_monotonic is None
         assert event.fire_finished_monotonic is None
-    timings = trace.grad_fn_fire_timings
+    timings = trace.autograd.grad_fn_fire_timings
     assert timings and all(span is None for span in timings.values())
     # An optional measurement failure must NEVER convert complete-coverage
     # nodes into coverage gaps.
@@ -234,9 +234,9 @@ def test_plain_v8_save_persists_per_fire_timing_semantics(tmp_path) -> None:
     tl.save(trace, str(path))
     loaded = tl.load(str(path))
     assert loaded.grad_fn_timing_provenance == "perf_counter"
-    live_spans = trace.grad_fn_fire_timings
+    live_spans = trace.autograd.grad_fn_fire_timings
     timed = untimed = 0
-    for call in loaded.grad_fn_calls:
+    for call in loaded.autograd.grad_fn_calls:
         span = call.backward_duration
         live_span = live_spans[f"{call.label}:{call.call_index}"]
         if span is None:
@@ -272,18 +272,18 @@ def test_live_accessor_refuses_typed_on_loaded_trace(tmp_path) -> None:
     tl.save(trace, str(path))
     loaded = tl.load(str(path))
     with pytest.raises(InvalidArgumentError) as excinfo:
-        _ = loaded.grad_fn_fire_timings
+        _ = loaded.autograd.grad_fn_fire_timings
     assert excinfo.value.fields["code"] == "grad_fn_fire_timing_unavailable"
 
 
 def test_fold_sort_key_unchanged_and_projection_count_matches() -> None:
     trace = _backward_trace()
-    assert len(trace.grad_fn_fire_timings) == len(trace.grad_fn_calls)
+    assert len(trace.autograd.grad_fn_fire_timings) == len(trace.autograd.grad_fn_calls)
     # tlspec v8: projection writes the per-fire monotonic pair; the wall
     # timestamp stays the separate event-ordering stamp and is never a
     # duration operand.
-    for call in trace.grad_fn_calls:
-        span = trace.grad_fn_fire_timings[f"{call.label}:{call.call_index}"]
+    for call in trace.autograd.grad_fn_calls:
+        span = trace.autograd.grad_fn_fire_timings[f"{call.label}:{call.call_index}"]
         if span is None:
             assert call._time_started is None and call._time_finished is None
         else:

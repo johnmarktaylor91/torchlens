@@ -72,7 +72,7 @@ documentation.
   `min_evals` default (8), 1-D parameters, and normalization layers, so its
   table can have fewer rows than `trace.params` has weights.
 - The dict route treats every tensor as a dense or conv weight by its rank; it
-  does not know about tied weights. `trace.tied_param_groups` lists ties so
+  does not know about tied weights. `trace.graph.tied_param_groups` lists ties so
   you can drop duplicates first.
 - Power-law fits on very small random matrices are not meaningful; the
   example checks structure only.

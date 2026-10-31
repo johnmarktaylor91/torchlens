@@ -289,7 +289,7 @@ def _select_backward_pass(trace: Trace, bwd: int | None) -> tuple[Any, int]:
     from .._errors import InvalidArgumentError
 
     try:
-        backward_passes = list(trace.backward_passes)
+        backward_passes = list(trace.autograd.backward_passes)
     except (ValueError, AttributeError):
         backward_passes = []
     if not backward_passes:

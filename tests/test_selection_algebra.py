@@ -10,7 +10,7 @@ lift test per stage-1 producer, the table-driven provenance-relation
 composition tables (never sampled), and the Selection ``__repr__`` stability
 pin.
 
-EDGE-kind matrix cells are stage-3 territory (``trace.edges`` lands there);
+EDGE-kind matrix cells are stage-3 territory (``trace.graph.edges`` lands there);
 the kind vocabulary and refusal cells for EDGE are pinned in
 ``test_kind_matrix_edge_cells_pinned_for_stage3``.
 """
@@ -384,7 +384,7 @@ def test_kind_matrix_edge_cells_pinned_for_stage3():
     """EDGE matrix cells are pinned as stage-3 territory: the closed kind
     vocabulary already carries EDGE, no stage-1 constructor exists, and
     ACT x EDGE / PARAM x EDGE refuse via the same closed matrix when the
-    edge-term producer lands (trace.edges, stage 3)."""
+    edge-term producer lands (trace.graph.edges, stage 3)."""
 
     from torchlens.selection import _SELECTION_KINDS
 

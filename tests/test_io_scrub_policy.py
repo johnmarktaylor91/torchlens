@@ -319,7 +319,7 @@ def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
-    _ = log.edges
+    _ = log.graph.edges
     for record in _all_record_instances(log):
         _sweep_public_accessors(record)
     tl.save(log, str(tmp_path / "after_armed_sweep.tlspec"))

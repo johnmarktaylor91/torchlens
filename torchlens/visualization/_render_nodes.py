@@ -195,7 +195,7 @@ def _visible_backward_calls_by_pass(
     """
 
     calls_by_pass: dict[int, list[tuple[GradFn, Any]]] = defaultdict(list)
-    for grad_fn_handle in trace.grad_fns:
+    for grad_fn_handle in trace.autograd.grad_fns:
         for call in grad_fn_handle.calls.values():
             if not _grad_fn_call_matches_backward_filter(call, pass_filter):
                 continue

@@ -136,7 +136,7 @@ def test_macs_and_flops_on_every_door(fixture_a, fixture_b) -> None:
         module.total_macs_forward,
         report.total_macs_forward,
         report.totals.macs_forward,
-        trace.total_macs_forward,
+        trace.cost.total_macs_forward,
     ):
         assert int(value) == A_MACS
     for value in (
@@ -146,7 +146,7 @@ def test_macs_and_flops_on_every_door(fixture_a, fixture_b) -> None:
         module.total_flops_forward,
         report.total_flops_forward,
         report.totals.flops_forward_fma2,
-        trace.total_flops_forward,
+        trace.cost.total_flops_forward,
     ):
         assert int(value) == A_FLOPS
     trace, _ = fixture_b
@@ -156,7 +156,7 @@ def test_macs_and_flops_on_every_door(fixture_a, fixture_b) -> None:
     assert int(ops["linear_1_1:1"].flops_forward) == B_FLOPS_A
     assert int(ops["linear_2_3:1"].flops_forward) == B_FLOPS_B
     # ReLU is not a multiply-accumulate, so the total is the two linears.
-    assert int(trace.total_macs_forward) == B_MACS_A + B_MACS_B
+    assert int(trace.cost.total_macs_forward) == B_MACS_A + B_MACS_B
 
 
 def test_op_pass_and_edge_counts_on_every_door(fixture_a, fixture_b) -> None:

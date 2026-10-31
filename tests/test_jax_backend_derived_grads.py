@@ -170,7 +170,7 @@ def test_jax_intermediate_derived_grads_remain_deferred_with_leaf_grads() -> Non
     )
 
     assert set(trace.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
-    assert len(trace.intermediate_derived_grads) == 0
+    assert len(trace.autograd.intermediate_derived_grads) == 0
     assert not hasattr(trace, "jax_intermediate_derived_grads")
 
 
@@ -195,12 +195,12 @@ def test_jax_intermediate_derived_grads_zero_tap_public_surface() -> None:
     expected_tanh_grad = 2.0 * tanh_op.out
 
     assert set(trace.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
-    assert len(trace.intermediate_derived_grads) > 0
-    assert tanh_op.label in trace.intermediate_derived_grads
+    assert len(trace.autograd.intermediate_derived_grads) > 0
+    assert tanh_op.label in trace.autograd.intermediate_derived_grads
     assert jnp.allclose(tanh_op.derived_grad, expected_tanh_grad)
     assert all(
         record.provenance["mechanism"] == "jax_zero_tap" and record.provenance["status"] == "exact"
-        for record in trace.intermediate_derived_grads.values()
+        for record in trace.autograd.intermediate_derived_grads.values()
     )
 
 
@@ -282,7 +282,7 @@ def test_jax_intermediate_derived_grads_follow_selective_save() -> None:
         ),
     )
 
-    assert set(trace.intermediate_derived_grads.keys()) == {
+    assert set(trace.autograd.intermediate_derived_grads.keys()) == {
         op.label for op in trace.saved_ops if op.func_name == "dot_general"
     }
     assert all(op.derived_grad is None for op in trace.layer_list if not op.has_saved_activation)
@@ -314,7 +314,7 @@ def test_jax_intermediate_derived_grads_skip_non_float_outputs() -> None:
     bool_ops = [op for op in trace.layer_list if str(op.dtype) == "bool"]
 
     assert bool_ops
-    assert all(op.label not in trace.intermediate_derived_grads for op in bool_ops)
+    assert all(op.label not in trace.autograd.intermediate_derived_grads for op in bool_ops)
 
 
 def test_jax_intermediate_derived_grads_degrade_to_leaf_grads(monkeypatch: Any) -> None:
@@ -347,7 +347,7 @@ def test_jax_intermediate_derived_grads_degrade_to_leaf_grads(monkeypatch: Any) 
     )
 
     assert set(trace.derived_grads.keys()) == {"params.b", "params.w"}
-    assert len(trace.intermediate_derived_grads) == 0
+    assert len(trace.autograd.intermediate_derived_grads) == 0
     assert trace.jax_intermediate_derived_grad_status["status"] == "degraded"
 
 
@@ -367,9 +367,9 @@ def test_intermediate_derived_grad_accessor_and_op_filter_unverified() -> None:
         provenance={"status": "unverified"},
     )
 
-    trace.intermediate_derived_grads = IntermediateDerivedGradAccessor({op.label: record})
+    trace._autograd_intermediate_derived_grads = IntermediateDerivedGradAccessor({op.label: record})
 
-    assert len(trace.intermediate_derived_grads) == 0
+    assert len(trace.autograd.intermediate_derived_grads) == 0
     assert op.derived_grad is None
 
 
@@ -457,7 +457,7 @@ def test_jax_derived_grads_are_not_backward_capture() -> None:
     with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
         trace.log_backward(cast(Any, trace[trace.output_layers[0]].out))
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
-        _ = trace.backward_passes
+        _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
         _ = trace.saved_grad_ops
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
@@ -541,7 +541,7 @@ def test_jax_private_boundary_vjp_oracle_is_capped_and_not_public() -> None:
     assert set(result.records.keys()) == {"hidden"}
     assert jnp.allclose(result.records["hidden"].grad, expected_grad)
     assert not hasattr(trace, "jax_intermediate_derived_grads")
-    assert len(trace.intermediate_derived_grads) == 0
+    assert len(trace.autograd.intermediate_derived_grads) == 0
 
     with pytest.raises(ValueError, match="capped"):
         _experimental_per_op_boundary_vjp_oracle(

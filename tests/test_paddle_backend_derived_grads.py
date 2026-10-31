@@ -151,7 +151,7 @@ def test_paddle_intermediate_grads_match_direct_oracle_and_skip_unused() -> None
         capture=tl.options.CaptureOptions(keep_orphans=True),
     )
 
-    records = trace.intermediate_derived_grads
+    records = trace.autograd.intermediate_derived_grads
     unused_label = next(op.label for op in trace.layer_list if op.func_name == "tensor.__mul__")
     relu_label = next(op.label for op in trace.layer_list if op.func_name == "functional.relu")
     sum_label = next(op.label for op in trace.layer_list if op.func_name == "tensor.sum")
@@ -183,10 +183,10 @@ def test_paddle_same_shape_relus_are_disambiguated_by_ordinal() -> None:
     relu_ops = [op for op in trace.layer_list if op.func_name == "functional.relu"]
     assert len(relu_ops) == 2
     _assert_close(
-        trace.intermediate_derived_grads[relu_ops[0].label].grad, paddle.full([2, 2], 2.0)
+        trace.autograd.intermediate_derived_grads[relu_ops[0].label].grad, paddle.full([2, 2], 2.0)
     )
     _assert_close(
-        trace.intermediate_derived_grads[relu_ops[1].label].grad, paddle.full([2, 2], 3.0)
+        trace.autograd.intermediate_derived_grads[relu_ops[1].label].grad, paddle.full([2, 2], 3.0)
     )
 
 

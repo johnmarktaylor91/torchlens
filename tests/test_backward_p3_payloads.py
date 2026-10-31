@@ -133,7 +133,9 @@ def test_log_backward_save_grads_override_widens_and_narrows_payloads() -> None:
         ]
         assert second_pass_records
         assert all(record.grad is None for record in second_pass_records)
-        assert [pass_record.save_grads_policy for pass_record in trace.backward_passes] == [
+        assert [
+            pass_record.save_grads_policy for pass_record in trace.autograd.backward_passes
+        ] == [
             "True",
             "None",
         ]
@@ -251,9 +253,9 @@ def test_backward_accessors_to_pandas_do_not_raise_on_multiple_calls() -> None:
 
     trace = _trace_with_two_backward_passes()
     try:
-        grad_fns_frame = trace.grad_fns.to_pandas()
-        grad_fn_calls_frame = trace.grad_fn_calls.to_pandas()
-        backward_passes_frame = trace.backward_passes.to_pandas()
+        grad_fns_frame = trace.autograd.grad_fns.to_pandas()
+        grad_fn_calls_frame = trace.autograd.grad_fn_calls.to_pandas()
+        backward_passes_frame = trace.autograd.backward_passes.to_pandas()
         assert not grad_fns_frame.empty
         assert not grad_fn_calls_frame.empty
         assert not backward_passes_frame.empty

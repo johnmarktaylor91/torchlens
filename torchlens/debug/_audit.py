@@ -152,7 +152,7 @@ def _has_saved_gradients(trace: Trace) -> tuple[bool, str | None]:
     """
 
     try:
-        if len(trace.backward_passes) == 0:
+        if len(trace.autograd.backward_passes) == 0:
             return False, "forward-only trace; no backward pass was captured"
         if len(trace.saved_grad_ops) == 0:
             return False, "no saved gradients; re-trace with save_grads=True and log_backward()"
@@ -366,7 +366,7 @@ def audit_trace(trace: Trace | PartialTrace) -> TraceAudit:
     if not has_gradients:
         skipped.append(("gradient_flow_audit", gradient_reason or "saved gradients unavailable"))
     else:
-        num_backward = len(trace.backward_passes)
+        num_backward = len(trace.autograd.backward_passes)
         if num_backward > 1:
             # gradient_flow_audit refuses (empty frame) without a pass selection;
             # that is a skip, not a check that ran and validated health.

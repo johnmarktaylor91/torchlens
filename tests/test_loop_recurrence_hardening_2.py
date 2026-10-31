@@ -244,7 +244,7 @@ def test_tied_distinct_modules_are_not_recurrent(direct_chain: bool) -> None:
     torch.manual_seed(0)
     traced = trace_fn(_TiedEncoderDecoder(direct_chain=direct_chain), torch.randn(1, 4))
 
-    assert traced.is_recurrent is False
+    assert traced.graph.is_recurrent is False
     linear_layers = _layers_of_type(_layer_passes(traced), "linear")
     assert len(linear_layers) == 2, linear_layers
     assert set(linear_layers.values()) == {1}, linear_layers
@@ -289,12 +289,12 @@ def test_untied_control_and_reused_module_control() -> None:
     """Untied twin stays ungrouped; ONE reused module keeps genuine recurrence."""
     torch.manual_seed(0)
     untied = trace_fn(_UntiedEncoderDecoder(), torch.randn(1, 4))
-    assert untied.is_recurrent is False
+    assert untied.graph.is_recurrent is False
     assert set(_layers_of_type(_layer_passes(untied), "linear").values()) == {1}
     assert check_metadata_invariants(untied)
 
     reused = trace_fn(_ReusedModuleLoop(3), torch.randn(1, 4))
-    assert reused.is_recurrent is True
+    assert reused.graph.is_recurrent is True
     assert _layers_of_type(_layer_passes(reused), "linear") == {"linear_1_1": 3}
     assert check_metadata_invariants(reused)
 
@@ -316,7 +316,7 @@ def test_shared_kernel_divergent_args_stay_distinct(axis: str) -> None:
     torch.manual_seed(0)
     traced = trace_fn(_SharedKernelConvs(axis), torch.randn(1, 1, 5, 5))
 
-    assert traced.is_recurrent is False
+    assert traced.graph.is_recurrent is False
     conv_layers = _layers_of_type(_layer_passes(traced), "conv2d")
     assert len(conv_layers) == 2, conv_layers
     assert set(conv_layers.values()) == {1}, conv_layers
@@ -337,7 +337,7 @@ def test_shared_kernel_same_args_loop_still_groups() -> None:
     """Control: a genuine functional weight-tied loop with uniform args groups."""
     torch.manual_seed(0)
     traced = trace_fn(_SharedKernelSameArgsLoop(), torch.randn(1, 1, 5, 5))
-    assert traced.is_recurrent is True
+    assert traced.graph.is_recurrent is True
     assert _layers_of_type(_layer_passes(traced), "conv2d") == {"conv2d_1_1": 3}
     assert check_metadata_invariants(traced)
 

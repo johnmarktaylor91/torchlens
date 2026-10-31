@@ -139,8 +139,8 @@ def test_gpt2_loaded_log_backward_refuses_before_mutation(tmp_path, gpt2_and_inp
     live_loss = model(input_ids=input_ids).logits.sum()
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
         loaded.log_backward(live_loss)
-    assert len(getattr(loaded, "backward_passes", []) or []) == 0
-    assert len(loaded.grad_fns) == 0
+    assert len(loaded.autograd.backward_passes or []) == 0
+    assert len(loaded.autograd.grad_fns) == 0
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
         loaded.recording_backward()
 

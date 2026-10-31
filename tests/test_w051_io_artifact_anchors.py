@@ -211,7 +211,7 @@ def test_genuine_edge_intervention_round_trips(tmp_path: Path) -> None:
         torch.randn(1, 1, 12, 12),
         capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
     )
-    edge = next(e for e in trace.edges if e.parent_label == "relu_1_2")
+    edge = next(e for e in trace.graph.edges if e.parent_label == "relu_1_2")
     fork = trace.fork()
     fork.do(edge.__selection__(), trace["relu_1_2"].out.clone() * 0.5)
     path = tmp_path / "genuine_edge.tlspec"

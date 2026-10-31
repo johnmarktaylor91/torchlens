@@ -561,7 +561,7 @@ def test_grad_fn_event_payloads_are_detached_snapshots() -> None:
 
     tensors = [
         tensor
-        for grad_fn in trace.grad_fns
+        for grad_fn in trace.autograd.grad_fns
         for call in grad_fn.calls.values()
         for payload in (call.grad_inputs, call.grad_outputs)
         for tensor in (payload or ())
@@ -581,7 +581,7 @@ def test_per_call_grad_policy_does_not_mutate_trace_selection() -> None:
     assert trace._grad_op_nums_to_save == selection_before
     assert all(
         call.grad_inputs is None and call.grad_outputs is None
-        for grad_fn in trace.grad_fns
+        for grad_fn in trace.autograd.grad_fns
         for call in grad_fn.calls.values()
     )
 
@@ -1000,7 +1000,7 @@ def test_grad_fn_log_back_pointer() -> None:
     assert any(layer.grad_fn is not None for layer in trace.layer_list)
     assert any(
         grad_fn_handle.op is not None and grad_fn_handle.op.grad_fn is grad_fn_handle
-        for grad_fn_handle in trace.grad_fns
+        for grad_fn_handle in trace.autograd.grad_fns
     )
 
 
@@ -1008,15 +1008,15 @@ def test_grad_fn_naming_and_indexing() -> None:
     """GradFn labels and accessor indexing mirror layer lookup patterns."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
-    first_grad_fn = trace.grad_fns[0]
+    first_grad_fn = trace.autograd.grad_fns[0]
     assert "_back_" in first_grad_fn.label
     assert first_grad_fn.label == first_grad_fn.label.lower()
-    assert trace.grad_fns[first_grad_fn.label] is first_grad_fn
-    assert trace.grad_fns[first_grad_fn.type] is first_grad_fn
+    assert trace.autograd.grad_fns[first_grad_fn.label] is first_grad_fn
+    assert trace.autograd.grad_fns[first_grad_fn.type] is first_grad_fn
     if first_grad_fn.num_calls:
-        assert trace.grad_fns[f"{first_grad_fn.label}:1"] is first_grad_fn
-        assert trace.grad_fn_calls[f"{first_grad_fn.label}:1"] is first_grad_fn.calls[0]
-    assert list(trace.grad_fns)
+        assert trace.autograd.grad_fns[f"{first_grad_fn.label}:1"] is first_grad_fn
+        assert trace.autograd.grad_fn_calls[f"{first_grad_fn.label}:1"] is first_grad_fn.calls[0]
+    assert list(trace.autograd.grad_fns)
 
 
 def test_save_grads_true_captures_all_grads() -> None:

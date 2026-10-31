@@ -1990,8 +1990,8 @@ def _refresh_backward_pass_counters(trace: Any, state: _BackwardFoldState) -> No
     ]
     trace.num_backward_passes = max(state.built_pass_indices, default=0)
     trace.has_backward_pass = bool(state.built_pass_indices)
-    trace.num_saved_grad_fn_calls = len(trace.saved_grad_fn_calls)
-    trace.num_saved_grad_fns = len(trace.saved_grad_fns)
+    trace.num_saved_grad_fn_calls = len(trace.autograd.saved_grad_fn_calls)
+    trace.num_saved_grad_fns = len(trace.autograd.saved_grad_fns)
 
 
 def _torch_dtype_from_string(dtype_name: str) -> torch.dtype | str:

@@ -62,21 +62,21 @@ def test_general_info_fields(small_input):
 def test_model_structure_non_recurrent(small_input: torch.Tensor) -> None:
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert mh.is_recurrent is False
-    assert mh.is_branching is False
+    assert mh.graph.is_recurrent is False
+    assert mh.graph.is_branching is False
     assert list(mh.recurrent_layers) == []
 
 
 def test_model_structure_branching(small_input: torch.Tensor) -> None:
     model = example_models.SimpleBranching()
     mh = trace_fn(model, small_input)
-    assert mh.is_branching is True
+    assert mh.graph.is_branching is True
 
 
 def test_model_structure_recurrent(input_2d: torch.Tensor) -> None:
     model = example_models.RecurrentParamsSimple()
     mh = trace_fn(model, input_2d)
-    assert mh.is_recurrent is True
+    assert mh.graph.is_recurrent is True
     assert len(mh.recurrent_layers) > 0
     assert all(layer.num_passes > 1 for layer in mh.recurrent_layers)
     assert [layer.layer_label for layer in mh.recurrent_layers] == [
@@ -101,7 +101,7 @@ def test_model_structure_conditional() -> None:
     model = example_models.ConditionalBranching()
     model_input = -torch.ones(6, 3, 224, 224)
     mh = trace_fn(model, model_input)
-    assert mh.has_conditional_branching is True
+    assert mh.graph.has_conditional_branching is True
 
 
 def test_layer_tracking_fields(small_input):
@@ -230,7 +230,7 @@ def test_time_fields(small_input):
     assert isinstance(mh.setup_duration, float)
     assert isinstance(mh.forward_duration, float)
     assert isinstance(mh.cleanup_duration, float)
-    assert isinstance(mh.overhead_duration, float)
+    assert isinstance(mh.cost.overhead_duration, float)
 
 
 def test_multi_input_layers():
@@ -465,9 +465,9 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
         input_args=torch.randn(2, 3),
         capture=torchlens.options.CaptureOptions(keep_orphans=True),
     )
-    orphan_labels = list(mh.orphans.keys())
+    orphan_labels = list(mh.graph.orphans.keys())
     assert orphan_labels, "probe model must produce orphans"
-    orphan_sibling = next(k for k in orphan_labels if mh.orphans[k].siblings)
+    orphan_sibling = next(k for k in orphan_labels if mh.graph.orphans[k].siblings)
 
     mainline = next(
         mh[label] for label in mh.layer_labels if not mh[label].is_input and mh[label].parents
@@ -480,7 +480,7 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
     op0 = list(mainline.ops.values())[0]
     assert orphan_sibling in op0.siblings  # op level tolerates and appends
     aggregated = mainline.siblings  # RED before the fix: uncaught lookup error
-    assert mh.orphans[orphan_sibling].layer_label in aggregated
+    assert mh.graph.orphans[orphan_sibling].layer_label in aggregated
     assert isinstance(mainline.co_parents, list)
 
     # b3 R05-N2: the 62aba742 tolerance stopped at label aggregates -- the
@@ -929,9 +929,9 @@ def test_flops_total_positive():
     model = nn.Sequential(nn.Linear(10, 20), nn.ReLU())
     x = torch.randn(4, 10)
     mh = trace_fn(model, x)
-    assert mh.total_flops_forward > 0
-    assert mh.total_flops_backward > 0
-    assert mh.total_flops == mh.total_flops_forward + mh.total_flops_backward
+    assert mh.cost.total_flops_forward > 0
+    assert mh.cost.total_flops_backward > 0
+    assert mh.cost.total_flops == mh.cost.total_flops_forward + mh.cost.total_flops_backward
 
 
 def test_flops_by_type():
@@ -939,7 +939,7 @@ def test_flops_by_type():
     model = nn.Sequential(nn.Linear(10, 20), nn.ReLU())
     x = torch.randn(4, 10)
     mh = trace_fn(model, x)
-    fbt = mh.flops_by_op_type()
+    fbt = mh.cost.flops_by_op_type()
     assert isinstance(fbt, dict)
     assert len(fbt) > 0
     for _layer_type, info in fbt.items():
@@ -958,7 +958,7 @@ def test_flops_conv_model():
     x = torch.randn(1, 3, 32, 32)
     mh = trace_fn(model, x)
     # Conv2d(3, 16, 3): 2 * (1*16*32*32) * 3 * 9 = 884736
-    assert mh.total_flops_forward > 800000
+    assert mh.cost.total_flops_forward > 800000
 
 
 def test_flops_conv_transpose_uses_input_work_basis() -> None:
@@ -1036,7 +1036,7 @@ def test_flops_resnet18_range():
     model.eval()
     x = torch.randn(1, 3, 224, 224)
     mh = trace_fn(model, x)
-    gflops = mh.total_flops_forward / 1e9
+    gflops = mh.cost.total_flops_forward / 1e9
     assert 1.0 < gflops < 5.0, f"ResNet-18 FLOPs = {gflops:.2f}G, expected ~1.8G"
 
 
@@ -1112,7 +1112,7 @@ def test_unknown_flops_survive_trace_materialization() -> None:
 
     assert operation.flops_forward is None
     assert operation.flops_backward is None
-    assert trace.total_flops_forward == 0
+    assert trace.cost.total_flops_forward == 0
 
 
 def test_rerun_refreshes_shape_derived_flops_everywhere() -> None:
@@ -1144,7 +1144,7 @@ def test_rerun_refreshes_shape_derived_flops_everywhere() -> None:
     assert refreshed.shape == (8, 8)
     assert refreshed.flops_forward == 576
     assert result.trace[refreshed.layer_label].flops_forward == 576
-    assert result.trace.total_flops_forward == sum(
+    assert result.trace.cost.total_flops_forward == sum(
         entry.flops_forward for entry in result.trace.layer_list if entry.flops_forward is not None
     )
 
@@ -1791,7 +1791,7 @@ class TestConditionalBranchDetection:
         model = example_models.ConditionalNested()
         x = torch.rand(2, 3, 32, 32)
         mh = self._log(model, x)
-        assert mh.has_conditional_branching is True
+        assert mh.graph.has_conditional_branching is True
 
     def test_multiple_branches_independent(self):
         """ConditionalMultipleBranches has 2 distinct branch starts."""
@@ -1810,7 +1810,7 @@ class TestConditionalBranchDetection:
         model = example_models.ConditionalWithModules()
         x = torch.rand(2, 5)
         mh = self._log(model, x)
-        assert mh.has_conditional_branching is True
+        assert mh.graph.has_conditional_branching is True
 
     # --- Visualization integration tests ---
 

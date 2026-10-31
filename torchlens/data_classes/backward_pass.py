@@ -269,7 +269,7 @@ class BackwardPass:
 
     @property
     def ordinal_index(self) -> int:
-        """Return this pass's 0-based position in ``trace.backward_passes``."""
+        """Return this pass's 0-based position in ``trace.autograd.backward_passes``."""
 
         return self.pass_index - 1
 

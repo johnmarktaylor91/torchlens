@@ -166,16 +166,16 @@ def _record_instances(trace: Trace, cls: type[Any]) -> Iterable[Any]:
     elif cls is Buffer:
         yield next(iter(trace.buffers))
     elif cls is GradFn:
-        yield next(iter(trace.grad_fns))
+        yield next(iter(trace.autograd.grad_fns))
     elif cls is GradFnCall:
-        grad_fn = next(record for record in trace.grad_fns if record.calls)
+        grad_fn = next(record for record in trace.autograd.grad_fns if record.calls)
         yield next(iter(grad_fn.calls.values()))
     elif cls is ModuleCall:
         yield next(iter(trace.module_calls))
     elif cls is Module:
         yield next(iter(trace.modules))
     elif cls is BackwardPass:
-        yield next(iter(trace.backward_passes))
+        yield next(iter(trace.autograd.backward_passes))
 
 
 def test_layer_field_order_includes_live_aggregate_fields() -> None:
@@ -427,8 +427,8 @@ def test_postprocess_write_audit_covers_orphan_keep_axis(
         capture=tl.options.CaptureOptions(keep_orphans=True),
     )
     try:
-        assert trace.orphans, "the island must be retained as orphans"
-        assert all(op.is_orphan for op in trace.orphans)
+        assert trace.graph.orphans, "the island must be retained as orphans"
+        assert all(op.is_orphan for op in trace.graph.orphans)
     finally:
         trace.cleanup()
 

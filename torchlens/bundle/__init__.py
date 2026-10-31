@@ -700,7 +700,7 @@ class Bundle:
             Shared grad-fn labels, ordered by the first member.
         """
 
-        return self._shared(lambda trace: trace.grad_fns.keys())
+        return self._shared(lambda trace: trace.autograd.grad_fns.keys())
 
     @_BundleStructuralProperty
     def divergent_grad_fn_labels(self) -> list[str]:
@@ -712,7 +712,7 @@ class Bundle:
             Grad-fn labels present in some but not all members.
         """
 
-        return self._divergent(lambda trace: trace.grad_fns.keys())
+        return self._divergent(lambda trace: trace.autograd.grad_fns.keys())
 
     @property
     def bundle_id(self) -> str:

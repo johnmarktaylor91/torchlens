@@ -180,7 +180,7 @@ def attach_tf_derived_grads(
     -------
     None
         ``trace.derived_grads`` and optionally
-        ``trace.intermediate_derived_grads`` are populated.
+        ``trace.autograd.intermediate_derived_grads`` are populated.
     """
 
     input_argnums = _normalize_tf_input_grad_argnums(
@@ -274,7 +274,7 @@ def attach_tf_derived_grads(
             module_tree.forward_args_by_call.update(previous_forward_args)
     trace.derived_grads = DerivedGradAccessor(records)
     if grad_options.intermediate_grads:
-        trace.intermediate_derived_grads = intermediate_accessor
+        trace._autograd_intermediate_derived_grads = intermediate_accessor
     mirror_param_derived_grads(trace, records)
 
 

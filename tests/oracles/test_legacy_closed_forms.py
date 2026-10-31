@@ -258,7 +258,7 @@ def test_input_and_output_hop_distances(graph_trace) -> None:
 def test_layer_op_count_and_parameter_uses(graph_trace) -> None:
     trace = graph_trace
     # The linear Layer runs twice; every other Layer once.
-    assert int(trace.max_layer_op_count) == 2
+    assert int(trace.graph.max_ops_per_layer) == 2
     params = {param.address: param for param in trace.param_logs}
     for address in ("fc.weight", "fc.bias"):
         assert (int(params[address].num_uses_by_ops), int(params[address].num_uses_by_layers)) == (
@@ -273,7 +273,7 @@ def test_layer_op_count_and_parameter_uses(graph_trace) -> None:
     torch.manual_seed(0)
     loop = tl.trace(Loop().eval(), torch.randn(2, 4))
     try:
-        assert int(loop.max_layer_op_count) == 3  # fc three times, one Layer
+        assert int(loop.graph.max_ops_per_layer) == 3  # fc three times, one Layer
         params = {param.address: param for param in loop.param_logs}
         assert (
             int(params["fc.weight"].num_uses_by_ops),
@@ -485,7 +485,7 @@ def test_backward_graph_counts_match_a_raw_recount(case: str, passes: int, reque
     _, trace, loss, tally = request.getfixturevalue(case)
     nodes, edges = _raw_graph(loss)
     assert int(trace.num_grad_fns) == len(nodes)
-    assert int(trace.num_backward_edges) == len(edges)
+    assert int(trace.autograd.num_backward_edges) == len(edges)
     # Every reachable node ran once per pass, by its hook.
     assert set(tally.values()) == {passes} and len(tally) == len(nodes)
     assert int(trace.num_grad_fn_calls) == sum(tally.values())
@@ -526,7 +526,7 @@ def test_grad_fn_pairing_with_a_grad_requiring_input() -> None:
         ]
         trace.backward(loss)
         assert int(trace.num_grad_fns) == len(nodes) == 7
-        assert int(trace.num_backward_edges) == len(edges) == 6
+        assert int(trace.autograd.num_backward_edges) == len(edges) == 6
         assert int(trace.num_grad_fns_with_op) == 3  # input copy, mul, add
         assert int(trace.num_grad_fns_without_op) == 4
     finally:
@@ -560,7 +560,7 @@ def test_backward_flops_follow_the_backward_that_runs(backward_ready: bool) -> N
         expected["linear_2_3:1"] = 204
         for label, flops in expected.items():
             assert int(ops[label].flops_backward) == flops, label
-        assert int(trace.total_flops_backward) == sum(expected.values())
+        assert int(trace.cost.total_flops_backward) == sum(expected.values())
     finally:
         trace.cleanup()
 
@@ -608,7 +608,7 @@ def test_backward_and_total_flops(grad_once, outer_case) -> None:
     assert int(modules["block.fc"].total_macs_forward) == 2 * 48
     assert int(modules["block"].total_macs_forward) == 2 * 48
     assert int(modules["self"].total_macs_forward) == 2 * 48 + 24
-    assert int(modules["self"].total_flops_backward) == int(trace.total_flops_backward)
+    assert int(modules["self"].total_flops_backward) == int(trace.cost.total_flops_backward)
 
 
 def test_arithmetic_intensity_by_the_read_once_write_once_model(two_linear_trace) -> None:

@@ -2022,9 +2022,9 @@ default-keep); mask-application semantics documented-unstable*
   tensors); values bind at do() time session-side; no executable-save path
   in v1.
 
-**trace.edges / edge substitution** — *unstable — no deprecation shim owed;
+**trace.graph.edges / edge substitution** — *unstable — no deprecation shim owed;
 S2/S3-gated*
-: `trace.edges` returns the dataflow edge family (one `EdgeUseRecord` per
+: `trace.graph.edges` returns the dataflow edge family (one `EdgeUseRecord` per
   parent→child occurrence; requires an `intervention_ready` capture, else
   `edge_provenance_unavailable`). The canonical occurrence address is
   `(child_func_call_id, arg_kind, arg_path)`. Edge records lift as EDGE-kind
@@ -2374,9 +2374,9 @@ shim owed*
   `size_by_rolled_varying`, `scale_requires_size_by`, `encoding_scale_invalid`,
   `stack_by_auto_underivable`, `stack_by_requires_unrolled`.
 
-**trace.grad_fn_fire_timings** — *unstable — no deprecation shim owed*
+**trace.autograd.grad_fn_fire_timings** — *unstable — no deprecation shim owed*
 : Live-trace-only per-fire backward timing spans, keyed like
-  `trace.grad_fn_calls` (`"<grad_fn_label>:<call_index>"`). Both stamps of
+  `trace.autograd.grad_fn_calls` (`"<grad_fn_label>:<call_index>"`). Both stamps of
   every span come from `time.perf_counter()`, paired at capture time by a
   per-node keyed LIFO (stale entries are discarded, never paired); untimed
   fires read `None`, never a false zero. Served from the runtime

@@ -122,7 +122,9 @@ def test_forward_record_exports_round_trip(record_export_trace: tl.Trace, tmp_pa
 def test_backward_record_exports_round_trip(record_export_trace: tl.Trace, tmp_path: Path) -> None:
     """Backward records expose the full tabular export quartet."""
 
-    grad_fn = next(record for record in record_export_trace.grad_fns if record.num_calls == 1)
+    grad_fn = next(
+        record for record in record_export_trace.autograd.grad_fns if record.num_calls == 1
+    )
     grad_fn_call = grad_fn.calls[0]
 
     assert list(grad_fn.to_pandas().columns) == GRAD_FN_LOG_FIELD_ORDER

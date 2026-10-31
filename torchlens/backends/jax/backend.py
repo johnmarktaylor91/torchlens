@@ -1718,21 +1718,23 @@ class JAXBackend:
         mirror_param_derived_grads(trace, records)
         if grad_options.intermediate_grads:
             try:
-                trace.intermediate_derived_grads = self._derive_intermediate_grads_zero_tap(
-                    trace=trace,
-                    closed_jaxpr=closed_jaxpr,
-                    args=args,
-                    static_argnums=static_argnums,
-                    captured_output=captured_output,
-                    grad_options=grad_options,
-                    fingerprint=fingerprint,
-                    jax_control_flow=jax_control_flow,
-                    jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                trace._autograd_intermediate_derived_grads = (
+                    self._derive_intermediate_grads_zero_tap(
+                        trace=trace,
+                        closed_jaxpr=closed_jaxpr,
+                        args=args,
+                        static_argnums=static_argnums,
+                        captured_output=captured_output,
+                        grad_options=grad_options,
+                        fingerprint=fingerprint,
+                        jax_control_flow=jax_control_flow,
+                        jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                    )
                 )
             except BackendUnsupportedError:
                 raise
             except Exception as exc:
-                trace.intermediate_derived_grads = IntermediateDerivedGradAccessor()
+                trace._autograd_intermediate_derived_grads = IntermediateDerivedGradAccessor()
                 trace.jax_intermediate_derived_grad_status = {
                     "status": "degraded",
                     "reason": f"producer_error:{type(exc).__name__}",

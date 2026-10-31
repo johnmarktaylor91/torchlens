@@ -241,8 +241,8 @@ def test_mlx_intermediate_derived_grads_survive_grouping() -> None:
     grouped_add = [op for op in grouped.layer_list if op.func_name == "add"]
 
     assert {op.num_passes for op in grouped_add} == {2}
-    ungrouped_labels = set(ungrouped.intermediate_derived_grads.keys())
-    grouped_labels = set(grouped.intermediate_derived_grads.keys())
+    ungrouped_labels = set(ungrouped.autograd.intermediate_derived_grads.keys())
+    grouped_labels = set(grouped.autograd.intermediate_derived_grads.keys())
     assert ungrouped_labels, "reference ungrouped trace produced no records"
     assert grouped_labels == ungrouped_labels
     assert grouped_add[0].label in grouped_labels

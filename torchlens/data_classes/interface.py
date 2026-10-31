@@ -166,7 +166,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             self.modules,
             self.params,
             self.buffers,
-            self.grad_fns,
+            self.autograd.grad_fns,
         ):
             try:
                 return accessor[ix]
@@ -181,7 +181,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             self.modules,
             self.params,
             self.buffers,
-            self.grad_fns,
+            self.autograd.grad_fns,
         ):
             try:
                 # ``ops.keys()`` lists the counted ops only; a
@@ -305,7 +305,7 @@ def _str_after_pass(self: "Trace") -> str:
     # General info
 
     s += f"\n\tRandom seed: {self.random_seed}"
-    s += f"\n\tTime elapsed: {self.capture_duration} ({self.overhead_duration} spent logging)"
+    s += f"\n\tTime elapsed: {self.capture_duration} ({self.cost.overhead_duration} spent logging)"
 
     # Overall model structure. An unverified capture (severed
     # provenance) may have missed ops, so it never claims "purely
@@ -360,19 +360,19 @@ def _str_after_pass(self: "Trace") -> str:
 def _structure_section(self: "Trace", unverified: bool) -> str:
     """The summary's Structure block (an unverified capture never claims feedforward)."""
     s = "\n\tStructure:"
-    if self.is_recurrent:
-        s += f"\n\t\t- recurrent (at most {self.max_layer_op_count} loops)"
+    if self.graph.is_recurrent:
+        s += f"\n\t\t- recurrent (at most {self.graph.max_ops_per_layer} loops)"
     elif unverified:
         s += "\n\t\t- structure unverified (capture not verified; see the header)"
     else:
         s += "\n\t\t- purely feedforward, no recurrence"
 
-    if self.is_branching:
+    if self.graph.is_branching:
         s += "\n\t\t- with branching"
     else:
         s += "\n\t\t- no branching"
 
-    if self.has_conditional_branching:
+    if self.graph.has_conditional_branching:
         s += "\n\t\t- with conditional (if-then) branching"
     else:
         s += "\n\t\t- no conditional (if-then) branching"

@@ -2376,7 +2376,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         Returns
         -------
         Any | None
-            Backend-owned gradient payload from ``trace.intermediate_derived_grads``,
+            Backend-owned gradient payload from ``trace.autograd.intermediate_derived_grads``,
             or ``None`` when this op has no exact intermediate-derived record.
         """
 
@@ -2748,7 +2748,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                 parent = ml[parent_label]
             except (KeyError, ValueError):
                 try:
-                    parent = ml.orphans[parent_label]
+                    parent = ml.graph.orphans[parent_label]
                 except KeyError:
                     continue
             for child_label in parent.children:
@@ -2758,7 +2758,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                         child = ml[child_label]
                     except (KeyError, ValueError):
                         try:
-                            child = ml.orphans[child_label]
+                            child = ml.graph.orphans[child_label]
                         except KeyError:
                             continue
                     if not child.is_output:
@@ -2783,7 +2783,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                 child = ml[child_label]
             except (KeyError, ValueError):
                 try:
-                    child = ml.orphans[child_label]
+                    child = ml.graph.orphans[child_label]
                 except KeyError:
                     continue
             for parent_label in child.parents:
@@ -2793,7 +2793,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                         parent = ml[parent_label]
                     except (KeyError, ValueError):
                         try:
-                            parent = ml.orphans[parent_label]
+                            parent = ml.graph.orphans[parent_label]
                         except KeyError:
                             continue
                     if not parent.is_output:
@@ -4264,7 +4264,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             return cast("Op", trace[label])
         except (KeyError, ValueError):
             try:
-                return cast("Op", trace.orphans[label])
+                return cast("Op", trace.graph.orphans[label])
             except KeyError:
                 return None
 
@@ -4275,7 +4275,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         -------
         list[Op]
             Child ops resolved through the owning model log; orphan-relation
-            labels resolve through ``trace.orphans`` (unresolvable skipped).
+            labels resolve through ``trace.graph.orphans`` (unresolvable skipped).
         """
         resolved = (self._resolve_relation_record(label) for label in self.children)
         return [record for record in resolved if record is not None]
@@ -4287,7 +4287,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         -------
         list[Op]
             Parent ops resolved through the owning model log; orphan-relation
-            labels resolve through ``trace.orphans`` (unresolvable skipped).
+            labels resolve through ``trace.graph.orphans`` (unresolvable skipped).
         """
         resolved = (self._resolve_relation_record(label) for label in self.parents)
         return [record for record in resolved if record is not None]

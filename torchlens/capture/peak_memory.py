@@ -2,7 +2,7 @@
 
 Split out of ``capture/trace.py`` under the R43 file-size ratchet: the
 process RSS readers, the per-capture resident high-water scoping, and the
-``Trace.forward_peak_memory_pair`` reader live here; the forward bracket in
+``Trace.cost.forward_peak_memory_pair`` reader live here; the forward bracket in
 ``capture/trace.py`` stays the only writer (through :func:`record_forward_peak`).
 
 CPU peaks are opt-in: measuring one resets the

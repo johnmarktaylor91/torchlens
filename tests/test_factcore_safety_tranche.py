@@ -181,7 +181,7 @@ def test_edge_refusal_remedy_is_runnable_spelling(loop_trace) -> None:
     """The edges refusal teaches an importable spelling (bugs 20/25)."""
 
     with pytest.raises(Exception, match=r"tl\.options\.CaptureOptions") as excinfo:
-        _ = loop_trace.edges
+        _ = loop_trace.graph.edges
     assert getattr(excinfo.value, "fields", {}).get("code") == "edge_provenance_unavailable"
 
 

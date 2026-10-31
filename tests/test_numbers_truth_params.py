@@ -110,7 +110,7 @@ def test_tie_is_named_and_per_path_total_printed() -> None:
     model = TiedLM()
     log = _capture(model, torch.tensor([[1, 2]]))
     try:
-        assert log.tied_param_groups == (("emb.weight", "head.weight"),)
+        assert log.graph.tied_param_groups == (("emb.weight", "head.weight"),)
         assert log.num_params_by_path == 80
         # The footer prints both totals and names the tie (A2).
         rebuilt = log.summary()
@@ -131,7 +131,7 @@ def test_shared_storage_views_stay_distinct_parameters() -> None:
         assert log.num_params == sum(p.numel() for p in model.parameters())
         # Two distinct parameter identities, no tie group (different objects).
         assert log.num_param_tensors == 2
-        assert log.tied_param_groups == ()
+        assert log.graph.tied_param_groups == ()
     finally:
         log.cleanup()
 

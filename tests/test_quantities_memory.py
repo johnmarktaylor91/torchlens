@@ -162,22 +162,22 @@ def test_duration_flops_and_macs_fields_are_quantity_types() -> None:
         op.flops_total,
         layer.flops_forward,
         layer.total_flops_forward,
-        trace.total_flops_forward,
-        trace.total_flops,
+        trace.cost.total_flops_forward,
+        trace.cost.total_flops,
         module.total_flops_forward,
         module.total_flops,
-        trace.flops_by_op_type()[op.layer_type]["forward"],
+        trace.cost.flops_by_op_type()[op.layer_type]["forward"],
     ]
     macs_fields = [
         op.macs_forward,
         op.macs_total,
         layer.macs_forward,
         layer.total_macs_forward,
-        trace.total_macs_forward,
-        trace.total_macs,
+        trace.cost.total_macs_forward,
+        trace.cost.total_macs,
         module.total_macs_forward,
         module.total_macs,
-        trace.macs_by_op_type()[op.layer_type]["forward"],
+        trace.cost.macs_by_kind()[op.layer_type]["forward"],
     ]
 
     assert all(isinstance(field, tl.Duration) for field in duration_fields)

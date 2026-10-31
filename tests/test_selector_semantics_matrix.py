@@ -326,7 +326,7 @@ def _probe_live_backward(make_selector: Callable[[], Any]) -> Any:
         log = _backward_trace("conv")
         grads = (torch.ones(1),)
         matched = []
-        for site in log.grad_fns:
+        for site in log.autograd.grad_fns:
             if live_backward_selector_matches(
                 selector, site, 1, grad_input=grads, grad_output=grads
             ):

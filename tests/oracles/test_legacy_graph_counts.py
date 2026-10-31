@@ -167,7 +167,7 @@ def test_op_and_layer_counts(graph_trace, mixed_trace) -> None:
     assert int(trace.num_layers) == G_LAYERS
     assert int(trace.num_compute_ops) == G_COMPUTE_OPS
     assert int(trace.num_compute_layers) == G_COMPUTE_LAYERS
-    assert int(trace.num_layer_edges) == G_LAYER_EDGES
+    assert int(trace.graph.num_layer_edges) == G_LAYER_EDGES
     # Mixed: input, double, wide linear, float, tied linear (2 passes), output.
     assert int(mixed_trace.num_tensors) == 7
     assert int(mixed_trace.num_layers) == 6
@@ -185,13 +185,13 @@ def test_buffer_counts(graph_trace, counter_trace, batchnorm_trace, looped_trace
     trace = graph_trace
     assert int(trace.num_buffer_read_ops) == int(trace.num_buffer_source_ops) == 1
     assert int(trace.num_buffer_write_ops) == int(trace.num_buffer_sink_ops) == 0
-    assert int(trace.num_buffer_edges) == 1  # scale -> mul
+    assert int(trace.graph.num_buffer_edges) == 1  # scale -> mul
     # Counter: reads of count and scale, one write of count.
     trace = counter_trace
     assert int(trace.num_buffer_read_ops) == int(trace.num_buffer_source_ops) == 2
     assert int(trace.num_buffer_write_ops) == int(trace.num_buffer_sink_ops) == 1
     # count -> add_, add_ -> written count, scale -> mul.
-    assert int(trace.num_buffer_edges) == 3
+    assert int(trace.graph.num_buffer_edges) == 3
     # Training BatchNorm1d reads running_mean, running_var and
     # num_batches_tracked, and writes all three (num_batches_tracked += 1 and
     # the two running-stat updates).
@@ -199,7 +199,7 @@ def test_buffer_counts(graph_trace, counter_trace, batchnorm_trace, looped_trace
     assert int(trace.num_buffer_read_ops) == int(trace.num_buffer_source_ops) == 3
     assert int(trace.num_buffer_write_ops) == int(trace.num_buffer_sink_ops) == 3
     # nbt -> add_, add_ -> nbt', mean -> bn, var -> bn, bn -> mean', bn -> var'.
-    assert int(trace.num_buffer_edges) == 6
+    assert int(trace.graph.num_buffer_edges) == 6
     # Looped: four buffers (count, nbt, mean, var) are each read once, from
     # their initial value; every step writes all four (12 writes), and later
     # steps consume the written versions directly.
@@ -208,7 +208,7 @@ def test_buffer_counts(graph_trace, counter_trace, batchnorm_trace, looped_trace
     assert int(trace.num_buffer_write_ops) == int(trace.num_buffer_sink_ops) == 12
     # Per step: count -> add_ -> count', nbt -> add_ -> nbt', mean -> bn,
     # var -> bn, bn -> mean', bn -> var': 8 buffer edges, 3 steps.
-    assert int(trace.num_buffer_edges) == 3 * 8
+    assert int(trace.graph.num_buffer_edges) == 3 * 8
 
 
 def test_internal_source_and_sink_counts(

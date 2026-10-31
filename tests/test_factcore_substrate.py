@@ -122,7 +122,7 @@ def test_compute_face_partition_and_coverage_totality(loop_trace) -> None:
     by_dtype_sum = sum(value for _, value in aggregation.by_dtype)
     assert by_dtype_sum == row_sum
     assert dict(aggregation.execution_modes).get("forward", 0) == row_sum
-    assert int(loop_trace.total_flops_forward) == row_sum
+    assert int(loop_trace.cost.total_flops_forward) == row_sum
 
 
 def test_compute_face_one_linear_external_oracle() -> None:

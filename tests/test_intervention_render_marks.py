@@ -386,7 +386,7 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
         # GradFn records exist once a backward pass has run.
         trace[trace.output_layers[0]].out.sum().backward()
         grad_fn = next(
-            gf for gf in trace.grad_fns if gf.grad_fn_object_id == second.grad_fn_object_id
+            gf for gf in trace.autograd.grad_fns if gf.grad_fn_object_id == second.grad_fn_object_id
         )
         trace.attach_hooks(
             tl.grad_fn_label(grad_fn.label), tl.bwd_hook(named_backward), confirm_mutation=True

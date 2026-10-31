@@ -525,7 +525,7 @@ def test_orphan_records_expose_saved_payload_when_pruned_or_retained() -> None:
         capture=tl.options.CaptureOptions(random_seed=1, keep_orphans=True),
     )
     assert retained.orphan_records
-    assert retained.orphans
+    assert retained.graph.orphans
 
 
 def test_followed_by_trace_supported_record_rejected_and_bad_shapes_error() -> None:
