@@ -222,7 +222,7 @@ def test_carry_state_loaded_sparse_refuses_typed(tmp_path) -> None:
     log = tl.trace(
         model,
         x,
-        capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True),
     )
     path = tmp_path / "carry.tlspec"
     tl.save(log, str(path), level="runnable", include_weights=True)
@@ -320,7 +320,7 @@ def test_restore_failure_loaded_sparse_still_legal(tmp_path) -> None:
     log = tl.trace(
         model,
         x,
-        capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True),
     )
     log._runnable.state_compromised = {"state_dict_name": "synthetic", "groups_restored": 0}
     with pytest.raises(StateBindingError):

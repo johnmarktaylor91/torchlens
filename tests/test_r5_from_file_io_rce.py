@@ -47,7 +47,7 @@ from torchlens.runnable import PathFaithfulness
 from torchlens.utils._callable_safety import is_pure_forward_callable
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

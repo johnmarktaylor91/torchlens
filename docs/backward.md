@@ -127,7 +127,7 @@ created. When attribution cannot be resolved deterministically, `order` is `None
 ## Intervention And Replay
 
 Backward interventions use `intervene=tl.when(<backward selector>, <grad helper>)` on `tl.trace`.
-Helpers include `tl.grad_zero`, `tl.grad_scale`, `tl.grad_clip`, `tl.grad_noise`, `tl.grad_clamp`,
+Helpers include `tl.zero_grad`, `tl.scale_grad`, `tl.clip_grad`, `tl.add_grad_noise`, `tl.clamp_grad`,
 and custom hooks.
 
 Differentiable replay creates a new trace:
@@ -188,7 +188,7 @@ accessors once the amendment is ratified.
 
 ## Executed Backward FLOPs By Node And Forward Op
 
-A captured backward records every ATen call it dispatches (`BackwardPass.dispatched_ops`), and
+A captured backward records every ATen call it dispatches (`BackwardPass.aten_ops`), and
 `tl.report.backward_status(trace)` counts them exactly for the matmul and convolution families
 (fma2, FlopCounterMode's convention). `BackwardPass.flops_attribution` charges each counted call
 to the GradFn call it ran under and to the forward op that node differentiates
@@ -265,7 +265,7 @@ Unified `.tlspec` manifests include `backward_summary`, gradient blob kinds in `
 the public policy for old bundles: legacy class remaps are accepted at load, while removed
 backward gradient configuration fields are dropped during state normalization.
 
-The per-call census (`BackwardPass.dispatched_ops`) is session-time. Saving writes each pass's
+The per-call census (`BackwardPass.aten_ops`) is session-time. Saving writes each pass's
 counted executed backward and its attribution as `BackwardPass.executed_flops_record`, so a
 loaded trace reads the same `backward_status` count, rows and unattributed bucket; artifacts
 saved before the field read the executed backward as unknown.

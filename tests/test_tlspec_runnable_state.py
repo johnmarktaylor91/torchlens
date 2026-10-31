@@ -48,7 +48,7 @@ def runnable_artifact(
         model,
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),

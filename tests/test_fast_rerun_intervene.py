@@ -246,7 +246,7 @@ def _spec(direction: torch.Tensor) -> Any:
         Intervention spec.
     """
 
-    return tl.when(tl.module(_SITE), tl.steer(direction, magnitude=_MAGNITUDE, feature_axis=-1))
+    return tl.when(tl.module(_SITE), tl.steer(direction, strength=_MAGNITUDE, dim=-1))
 
 
 def _steered_trace(model: nn.Module, direction: torch.Tensor, ids: torch.Tensor) -> Any:
@@ -589,7 +589,7 @@ def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     else:
         trace = tl.trace(model, x)
-    source_ready = trace.intervention_ready
+    source_ready = trace.is_replayable
     assert source_ready is intervention_ready
     captured = _output(trace).detach().clone()
     # The model is genuinely stochastic: an unseeded-equivalent forward differs.
@@ -600,7 +600,7 @@ def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
 
     assert trace.last_run["engine"] == "rerun"
     assert torch.equal(_output(trace), captured)
-    assert trace.intervention_ready == source_ready
+    assert trace.is_replayable == source_ready
 
 
 def test_full_sequence_output_reruns_shape_varied_exactly() -> None:
@@ -670,7 +670,7 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     trace.clear_hooks(confirm_mutation=True)
     trace.attach_hooks(
         tl.module(_SITE),
-        tl.steer(other, magnitude=_MAGNITUDE, feature_axis=-1),
+        tl.steer(other, strength=_MAGNITUDE, dim=-1),
         confirm_mutation=True,
     )
     restaged = trace.run(inputs=ids, fast=True)
@@ -710,7 +710,7 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     trace = tl.trace(model, ids, save=tl.module(_SITE) | tl.module(_HEAD))
     trace.attach_hooks(
         tl.module(_SITE),
-        tl.steer(direction, magnitude=_MAGNITUDE, feature_axis=-1),
+        tl.steer(direction, strength=_MAGNITUDE, dim=-1),
         confirm_mutation=True,
     )
     assert _SITE not in graph_fired_addresses(trace)

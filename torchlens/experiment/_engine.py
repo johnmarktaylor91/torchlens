@@ -210,7 +210,7 @@ def _candidate_spec(baseline: Trace, candidate: _Candidate, edit: Any) -> Any:
     fork of the same selection edit.
     """
 
-    from ..intervention.spec import InterventionSpec, when
+    from ..intervention.spec import Recipe, when
 
     if candidate.unit_entries is None:
         return when(candidate.execution_where, edit)
@@ -223,7 +223,7 @@ def _candidate_spec(baseline: Trace, candidate: _Candidate, edit: Any) -> Any:
         op_label = str(baseline.ops[label].label)
         masked = _derive_masked_edit(edit, entry, candidate.unit_digest, op_label)
         rules.extend(when(term, masked).rules)
-    return InterventionSpec(rules=tuple(rules))
+    return Recipe(rules=tuple(rules))
 
 
 def _unit_digest_part(entry: Any) -> Any:
@@ -372,7 +372,7 @@ def _capture_options_like(baseline: Trace) -> Any:
 
     from ..options import CaptureOptions
 
-    return CaptureOptions(intervention_ready=True)
+    return CaptureOptions(replayable=True)
 
 
 def _measure(metric: Callable[[Any], Any], member: Any, candidate_id: str) -> float:

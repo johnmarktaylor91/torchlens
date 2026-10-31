@@ -45,7 +45,7 @@ from torchlens.utils._callable_safety import (
 from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

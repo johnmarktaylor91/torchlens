@@ -64,7 +64,7 @@ WITNESSES: dict[str, tuple[dict[str, Any], dict[str, Any], Callable[[Any], Any]]
         {"structure_only": True},
         _observable_payload_retention,
     ),
-    "CaptureOptions.intervention_ready": (
+    "CaptureOptions.replayable": (
         {},
         {"intervention_ready": True},
         _observable_edges_available,

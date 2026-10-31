@@ -326,7 +326,7 @@ def runnable_execution_artifact(
         model,
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -347,7 +347,7 @@ def honesty_artifact(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]
         HonestyControlModel(),
         torch.ones(2),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -475,7 +475,7 @@ def test_loaded_sparse_fast_run_reseeds_rng_after_verify_once(tmp_path: Path) ->
         RandomExecutionModel(),
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
             random_seed=31,
@@ -504,7 +504,7 @@ def test_loaded_sparse_fast_run_refuses_training_batchnorm_state_drift(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -536,7 +536,7 @@ def test_loaded_sparse_fast_run_refuses_counter_free_functional_batchnorm_state_
         FunctionalBatchNormStateMutationModel(composed_views=composed_views),
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -562,7 +562,7 @@ def test_loaded_sparse_fast_run_keeps_eval_batchnorm_static_path(tmp_path: Path)
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -592,7 +592,7 @@ def test_loaded_sparse_fast_run_refuses_state_view_inplace_mutation(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -617,7 +617,7 @@ def test_loaded_sparse_fast_run_does_not_mutate_caller_input(tmp_path: Path) -> 
         InplaceInputModel(),
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -744,7 +744,7 @@ def test_loaded_sparse_inplace_call_does_not_corrupt_staged_activations(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -793,7 +793,7 @@ def test_loaded_sparse_setitem_runs_and_verifies_on_original_input(
     trace = tl.trace(
         model,
         inputs.clone(),
-        capture=CaptureOptions(intervention_ready=True, cache=False),
+        capture=CaptureOptions(replayable=True, cache=False),
     )
     path = tmp_path / "slice-assign.tlspec"
     trace.save(path, level="runnable")
@@ -849,7 +849,7 @@ def test_torch_rng_driven_branch_is_unverifiable_never_attested(tmp_path: Path) 
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -885,7 +885,7 @@ def test_dead_torch_rng_draw_stays_verified_and_attested(tmp_path: Path) -> None
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -918,7 +918,7 @@ def test_loaded_sparse_preserves_output_container_kind_and_literal_leaves(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -959,7 +959,7 @@ def test_loaded_sparse_preserves_torch_structseq_outputs(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -995,7 +995,7 @@ def test_loaded_sparse_verifies_container_wrapping_one_final_tensor_call(tmp_pat
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -1044,7 +1044,7 @@ def test_loaded_sparse_still_diverges_for_a_genuinely_changed_output_structure(
         TorchStructSeqOutputModel("max"),
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -1399,9 +1399,7 @@ def _save_alias_runnable(path: Path, *, aliased_capture: bool = True) -> Path:
         return tl.trace(
             _AliasInplaceModel(),
             inputs,
-            capture=CaptureOptions(
-                intervention_ready=True, capture_container_structure=True, cache=False
-            ),
+            capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
         )
 
     if aliased_capture:
@@ -1466,9 +1464,7 @@ def test_h3_readonly_aliased_inputs_fail_closed(tmp_path: Path) -> None:
         trace = tl.trace(
             _ReadOnly(),
             [z, z],
-            capture=CaptureOptions(
-                intervention_ready=True, capture_container_structure=True, cache=False
-            ),
+            capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
         )
     assert trace.capture_verified is False
     trace.save(tmp_path / "readonly.tlspec", level="runnable", include_activations=True)
@@ -1524,9 +1520,7 @@ def test_h5_batchnorm_records_mode_and_verifies(train: bool, tmp_path: Path) -> 
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     assert trace._runnable.module_training_modes == {
         "self": train,
@@ -1561,9 +1555,7 @@ def test_h5_dropout_model_in_eval_records_mode_and_verifies(tmp_path: Path) -> N
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     assert trace._runnable.module_training_modes == {
         "self": False,
@@ -1600,9 +1592,7 @@ def test_h5_mode_sensitive_op_without_declared_mode_is_unverifiable(
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     assert trace._runnable.module_training_modes is None
     with pytest.raises(RunnablePreflightError) as excinfo:
@@ -1640,9 +1630,7 @@ def test_h5_mode_insensitive_model_without_mode_still_verifies(
     trace = tl.trace(
         _Plain(),
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(tmp_path / "plain_nomode.tlspec", level="runnable", include_activations=True)
     result = tl.load(tmp_path / "plain_nomode.tlspec").run(inputs=x)

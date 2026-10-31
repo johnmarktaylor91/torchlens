@@ -22,7 +22,7 @@ from .types import Edit, HelperDirection, HelperPortability
 HELPER_REGISTRY_VERSION = "1"
 
 
-def zero_ablate(*, force_shape_change: bool = False) -> Edit:
+def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
     """Create a helper that replaces an out with zeros.
 
     Parameters
@@ -54,10 +54,10 @@ def zero_ablate(*, force_shape_change: bool = False) -> Edit:
 
     return _helper_spec(
         "zero_ablate",
-        kwargs={"force_shape_change": force_shape_change},
+        kwargs={"force_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        compatible_with_append=not allow_shape_change,
     )
 
 
@@ -72,8 +72,8 @@ MEAN_ABLATE_OVER_TOKENS = ("self",)
 def mean_ablate(
     source: Any | None = None,
     *,
-    over: str = "self",
-    force_shape_change: bool = False,
+    dim: str = "self",
+    allow_shape_change: bool = False,
 ) -> Edit:
     """Create a helper that fills each out with one scalar mean.
 
@@ -104,10 +104,10 @@ def mean_ablate(
         batch (external ``source=``), ``False`` otherwise.
     """
 
-    if not isinstance(over, str) or over not in MEAN_ABLATE_OVER_TOKENS:
+    if not isinstance(dim, str) or dim not in MEAN_ABLATE_OVER_TOKENS:
         supported = ", ".join(repr(token) for token in MEAN_ABLATE_OVER_TOKENS)
         raise InvalidArgumentError(
-            f"mean_ablate(over={over!r}) is not a supported mean policy; the "
+            f"mean_ablate(over={dim!r}) is not a supported mean policy; the "
             f"vocabulary is closed to {supported}. Axis-aware means are not "
             "implemented -- accepting the token would record a policy the hook "
             "does not compute",
@@ -117,7 +117,7 @@ def mean_ablate(
                 "source=<tensor> to fill from an external source's mean"
             ),
             argument="over",
-            received=repr(over),
+            received=repr(dim),
             supported=MEAN_ABLATE_OVER_TOKENS,
         )
 
@@ -146,10 +146,10 @@ def mean_ablate(
     return _helper_spec(
         "mean_ablate",
         args=(source,),
-        kwargs={"over": over, "force_shape_change": force_shape_change},
+        kwargs={"over": dim, "force_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=batch_independent,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=batch_independent,
+        compatible_with_append=not allow_shape_change,
     )
 
 
@@ -158,7 +158,7 @@ def scramble_elements(
     *,
     from_: Any | None = None,
     seed: int | None = None,
-    force_shape_change: bool = False,
+    allow_shape_change: bool = False,
 ) -> Edit:
     """Create a helper that fills the out with elements drawn iid from a source.
 
@@ -251,20 +251,20 @@ def scramble_elements(
     return _helper_spec(
         "scramble_elements",
         args=(source_value,),
-        kwargs={"seed": seed, "force_shape_change": force_shape_change},
+        kwargs={"seed": seed, "force_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=False,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=False,
+        compatible_with_append=not allow_shape_change,
     )
 
 
 def steer(
     direction: torch.Tensor,
-    magnitude: float = 1.0,
+    strength: float = 1.0,
     *,
     coef: float | None = None,
-    feature_axis: int | None = None,
-    force_shape_change: bool = False,
+    dim: int | None = None,
+    allow_shape_change: bool = False,
 ) -> Edit:
     """Create a helper that adds a scaled steering direction.
 
@@ -288,7 +288,7 @@ def steer(
         Built-in forward helper spec.
     """
 
-    scale_value = magnitude if coef is None else coef
+    scale_value = strength if coef is None else coef
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for steering.
@@ -302,7 +302,7 @@ def steer(
         def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Add the steering vector to the out."""
 
-            aligned = _align_direction(direction, out, feature_axis=feature_axis)
+            aligned = _align_direction(direction, out, dim=dim)
             return out + aligned.to(device=out.device, dtype=out.dtype) * scale_value
 
         return _hook
@@ -312,16 +312,16 @@ def steer(
         args=(direction,),
         kwargs={
             "magnitude": scale_value,
-            "feature_axis": feature_axis,
-            "force_shape_change": force_shape_change,
+            "feature_axis": dim,
+            "force_shape_change": allow_shape_change,
         },
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        compatible_with_append=not allow_shape_change,
     )
 
 
-def scale(factor: float, *, force_shape_change: bool = False) -> Edit:
+def scale(factor: float, *, allow_shape_change: bool = False) -> Edit:
     """Create a helper that multiplies an out by ``factor``.
 
     Parameters
@@ -356,18 +356,18 @@ def scale(factor: float, *, force_shape_change: bool = False) -> Edit:
     return _helper_spec(
         "scale",
         args=(factor,),
-        kwargs={"force_shape_change": force_shape_change},
+        kwargs={"force_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        compatible_with_append=not allow_shape_change,
     )
 
 
 def clamp(
     *,
-    min: float | None = None,
-    max: float | None = None,
-    force_shape_change: bool = False,
+    low: float | None = None,
+    high: float | None = None,
+    allow_shape_change: bool = False,
 ) -> Edit:
     """Create a helper that clamps out values.
 
@@ -386,7 +386,7 @@ def clamp(
         Built-in forward helper spec.
     """
 
-    if min is None and max is None:
+    if low is None and high is None:
         raise HookValueError("clamp requires min, max, or both")
 
     def factory() -> Callable[..., torch.Tensor]:
@@ -401,24 +401,24 @@ def clamp(
         def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Clamp the out."""
 
-            return torch.clamp(out, min=min, max=max)
+            return torch.clamp(out, min=low, max=high)
 
         return _hook
 
     return _helper_spec(
         "clamp",
-        kwargs={"min": min, "max": max, "force_shape_change": force_shape_change},
+        kwargs={"min": low, "max": high, "force_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        compatible_with_append=not allow_shape_change,
     )
 
 
-def noise(
+def add_noise(
     std: float,
     *,
     seed: int | None = None,
-    force_shape_change: bool = False,
+    allow_shape_change: bool = False,
 ) -> Edit:
     """Create a helper that adds Gaussian noise.
 
@@ -453,7 +453,7 @@ def noise(
             """Add Gaussian noise to the out."""
 
             if seed is None:
-                _enqueue_nondeterminism_note(hook, "noise")
+                _enqueue_nondeterminism_note(hook, "add_noise")
                 sample = torch.randn(out.shape, device=out.device, dtype=out.dtype)
             else:
                 # Generator is CPU-bound; sample on CPU then move to target device
@@ -469,20 +469,20 @@ def noise(
         return _hook
 
     return _helper_spec(
-        "noise",
+        "add_noise",
         args=(std,),
-        kwargs={"seed": seed, "force_shape_change": force_shape_change},
+        kwargs={"seed": seed, "force_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        compatible_with_append=not allow_shape_change,
     )
 
 
 def project_onto(
     direction: torch.Tensor,
     *,
-    feature_axis: int | None = None,
-    force_shape_change: bool = False,
+    dim: int | None = None,
+    allow_shape_change: bool = False,
 ) -> Edit:
     """Create a helper that projects outs onto a direction.
 
@@ -513,13 +513,13 @@ def project_onto(
         def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Project out onto the direction."""
 
-            aligned = _align_direction(direction, out, feature_axis=feature_axis).to(
+            aligned = _align_direction(direction, out, dim=dim).to(
                 device=out.device, dtype=out.dtype
             )
-            if feature_axis is None:
+            if dim is None:
                 reduction_dim: int | tuple[int, ...] = tuple(range(out.ndim))
             else:
-                reduction_dim = feature_axis % out.ndim
+                reduction_dim = dim % out.ndim
             denom = torch.sum(aligned * aligned, dim=reduction_dim, keepdim=True)
             if bool(torch.any(denom == 0).item()):
                 raise HookValueError("project_onto direction has zero norm")
@@ -531,18 +531,18 @@ def project_onto(
     return _helper_spec(
         "project_onto",
         args=(direction,),
-        kwargs={"feature_axis": feature_axis, "force_shape_change": force_shape_change},
+        kwargs={"feature_axis": dim, "force_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        compatible_with_append=not allow_shape_change,
     )
 
 
-def project_off(
+def project_out(
     direction: torch.Tensor,
     *,
-    feature_axis: int | None = None,
-    force_shape_change: bool = False,
+    dim: int | None = None,
+    allow_shape_change: bool = False,
 ) -> Edit:
     """Create a helper that removes the component along a direction.
 
@@ -563,8 +563,8 @@ def project_off(
 
     onto_spec = project_onto(
         direction,
-        feature_axis=feature_axis,
-        force_shape_change=force_shape_change,
+        dim=dim,
+        allow_shape_change=allow_shape_change,
     )
 
     def factory() -> Callable[..., torch.Tensor]:
@@ -586,19 +586,19 @@ def project_off(
         return _hook
 
     return _helper_spec(
-        "project_off",
+        "project_out",
         args=(direction,),
-        kwargs={"feature_axis": feature_axis, "force_shape_change": force_shape_change},
+        kwargs={"feature_axis": dim, "force_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        compatible_with_append=not allow_shape_change,
     )
 
 
 def swap_with(
     other_label: str | Any,
     *,
-    force_shape_change: bool = False,
+    allow_shape_change: bool = False,
 ) -> Edit:
     """Create a helper that swaps with another site's tensor.
 
@@ -666,10 +666,10 @@ def swap_with(
     return _helper_spec(
         "swap_with",
         args=(other_label,),
-        kwargs={"force_shape_change": force_shape_change},
+        kwargs={"force_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        compatible_with_append=not allow_shape_change,
     )
 
 
@@ -678,7 +678,7 @@ def splice_module(
     *,
     input: str = "in",
     output: str = "out",
-    force_shape_change: bool = False,
+    allow_shape_change: bool = False,
 ) -> Edit:
     """Create a helper that calls a module as a black-box forward splice.
 
@@ -734,11 +734,11 @@ def splice_module(
                 result = module(out)
             if not isinstance(result, torch.Tensor):
                 raise HookValueError("splice_module must return a torch.Tensor")
-            if not force_shape_change and result.dtype != out.dtype:
+            if not allow_shape_change and result.dtype != out.dtype:
                 raise SpliceModuleDtypeError(
                     f"splice_module returned dtype {result.dtype}; expected {out.dtype}"
                 )
-            if not force_shape_change and result.device != out.device:
+            if not allow_shape_change and result.device != out.device:
                 raise SpliceModuleDeviceError(
                     f"splice_module returned device {result.device}; expected {out.device}"
                 )
@@ -749,15 +749,15 @@ def splice_module(
     return _helper_spec(
         "splice_module",
         args=(module,),
-        kwargs={"input": input, "output": output, "force_shape_change": force_shape_change},
+        kwargs={"input": input, "output": output, "force_shape_change": allow_shape_change},
         factory=factory,
         metadata={"input": input, "output": output},
-        batch_independent=False,
+        is_batch_independent=False,
         compatible_with_append=False,
     )
 
 
-def bwd_hook(fn: Callable[..., torch.Tensor]) -> Edit:
+def hook_grad(fn: Callable[..., torch.Tensor]) -> Edit:
     """Create a live/rerun-only backward hook helper.
 
     Parameters
@@ -786,18 +786,18 @@ def bwd_hook(fn: Callable[..., torch.Tensor]) -> Edit:
         return fn
 
     return _helper_spec(
-        "bwd_hook",
+        "hook_grad",
         args=(fn,),
         kind="backward",
         factory=factory,
         metadata={"live_rerun_only": True},
         direction="backward",
-        batch_independent=False,
+        is_batch_independent=False,
         compatible_with_append=False,
     )
 
 
-def grad_zero(*, force_shape_change: bool = False) -> Edit:
+def zero_grad(*, allow_shape_change: bool = False) -> Edit:
     """Create a live/rerun-only helper that zeros a grad tensor.
 
     Parameters
@@ -828,18 +828,18 @@ def grad_zero(*, force_shape_change: bool = False) -> Edit:
         return _hook
 
     return _helper_spec(
-        "grad_zero",
+        "zero_grad",
         kind="backward",
-        kwargs={"force_shape_change": force_shape_change},
+        kwargs={"force_shape_change": allow_shape_change},
         factory=factory,
         metadata={"live_rerun_only": True},
         direction="backward",
-        batch_independent=False,
+        is_batch_independent=False,
         compatible_with_append=False,
     )
 
 
-def grad_scale(factor: float, *, force_shape_change: bool = False) -> Edit:
+def scale_grad(factor: float, *, allow_shape_change: bool = False) -> Edit:
     """Create a live/rerun-only helper that scales a grad tensor.
 
     Parameters
@@ -872,19 +872,19 @@ def grad_scale(factor: float, *, force_shape_change: bool = False) -> Edit:
         return _hook
 
     return _helper_spec(
-        "grad_scale",
+        "scale_grad",
         args=(factor,),
         kind="backward",
-        kwargs={"force_shape_change": force_shape_change},
+        kwargs={"force_shape_change": allow_shape_change},
         factory=factory,
         metadata={"live_rerun_only": True},
         direction="backward",
-        batch_independent=False,
+        is_batch_independent=False,
         compatible_with_append=False,
     )
 
 
-def grad_clip(max_norm: float, norm_type: float = 2.0) -> Edit:
+def clip_grad(max_norm: float, norm_type: float = 2.0) -> Edit:
     """Create a grad_fn_handle helper that clips each grad_input tensor norm.
 
     Parameters
@@ -932,19 +932,19 @@ def grad_clip(max_norm: float, norm_type: float = 2.0) -> Edit:
         return _hook
 
     return _helper_spec(
-        "grad_clip",
+        "clip_grad",
         args=(max_norm,),
         kwargs={"norm_type": norm_type},
         kind="backward",
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
         direction="backward",
-        batch_independent=False,
+        is_batch_independent=False,
         compatible_with_append=False,
     )
 
 
-def grad_noise(std: float, *, seed: int | None = None) -> Edit:
+def add_grad_noise(std: float, *, seed: int | None = None) -> Edit:
     """Create a grad_fn_handle helper that adds Gaussian noise to grad_input tensors.
 
     Parameters
@@ -994,19 +994,19 @@ def grad_noise(std: float, *, seed: int | None = None) -> Edit:
         return _hook
 
     return _helper_spec(
-        "grad_noise",
+        "add_grad_noise",
         args=(std,),
         kwargs={"seed": seed},
         kind="backward",
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
         direction="backward",
-        batch_independent=False,
+        is_batch_independent=False,
         compatible_with_append=False,
     )
 
 
-def grad_clamp(min: float | None = None, max: float | None = None) -> Edit:
+def clamp_grad(low: float | None = None, high: float | None = None) -> Edit:
     """Create a grad_fn_handle helper that clamps grad_input tensors elementwise.
 
     Parameters
@@ -1022,7 +1022,7 @@ def grad_clamp(min: float | None = None, max: float | None = None) -> Edit:
         Built-in backward grad_fn_handle helper spec.
     """
 
-    if min is None and max is None:
+    if low is None and high is None:
         raise HookValueError("grad_clamp requires min, max, or both")
 
     def factory() -> Callable[..., tuple[torch.Tensor | None, ...]]:
@@ -1040,19 +1040,20 @@ def grad_clamp(min: float | None = None, max: float | None = None) -> Edit:
 
             del grad_output, grad_fn_handle, call_index, run_ctx
             return tuple(
-                None if grad is None else torch.clamp(grad, min=min, max=max) for grad in grad_input
+                None if grad is None else torch.clamp(grad, min=low, max=high)
+                for grad in grad_input
             )
 
         return _hook
 
     return _helper_spec(
-        "grad_clamp",
-        kwargs={"min": min, "max": max},
+        "clamp_grad",
+        kwargs={"min": low, "max": high},
         kind="backward",
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
         direction="backward",
-        batch_independent=False,
+        is_batch_independent=False,
         compatible_with_append=False,
     )
 
@@ -1109,8 +1110,8 @@ def _helper_spec(
         portability=portability,
         factory=factory,
         metadata=tuple(sorted((metadata or {}).items())),
-        direction=direction,
-        batch_independent=batch_independent,
+        signal=direction,
+        is_batch_independent=batch_independent,
         compatible_with_append=compatible_with_append,
     )
 
@@ -1173,7 +1174,7 @@ def helper_from_serialized(
             helper_name=data.get("name", "opaque_audit"),
             portability="opaque_audit",
             metadata=(("repr", data.get("repr", "")), ("executable", False)),
-            batch_independent=bool(data.get("batch_independent", False)),
+            is_batch_independent=bool(data.get("batch_independent", False)),
             compatible_with_append=bool(data.get("compatible_with_append", False)),
         )
 
@@ -1208,7 +1209,7 @@ def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
     # portability="builtin" specs like every entry below, and their absence
     # here made a saved/pickled spec a dead artifact (R10-1: save succeeded,
     # load raised intervention_helper_unknown).
-    from ._affine_source import affine_source
+    from ._affine_source import set_affine_coordinates
     from ._subspace_spec import rebuild_subspace_edit
     from .compose import compose
     from .predicates import add, replace_with
@@ -1230,21 +1231,21 @@ def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
         "steer": steer,
         "scale": scale,
         "clamp": clamp,
-        "noise": noise,
+        "add_noise": add_noise,
         "project_onto": project_onto,
-        "project_off": project_off,
+        "project_out": project_out,
         "swap_with": swap_with,
         "splice_module": splice_module,
-        "bwd_hook": bwd_hook,
-        "grad_clamp": grad_clamp,
-        "grad_clip": grad_clip,
-        "grad_noise": grad_noise,
-        "grad_zero": grad_zero,
-        "grad_scale": grad_scale,
+        "hook_grad": hook_grad,
+        "clamp_grad": clamp_grad,
+        "clip_grad": clip_grad,
+        "add_grad_noise": add_grad_noise,
+        "zero_grad": zero_grad,
+        "scale_grad": scale_grad,
         # Projection-valued subspace edit (a learned rotation's rows travel here).
         "subspace_edit": rebuild_subspace_edit,
         # Its source verb (LoReFT's W h + b); saved only inside subspace_edit.
-        "affine_source": affine_source,
+        "affine_source": set_affine_coordinates,
     }
 
 
@@ -1429,13 +1430,13 @@ def _non_executable_builtin_placeholder(
         helper_name=name,
         portability="opaque_audit",
         kind=cast(Any, data.get("kind", "forward")),
-        direction=cast(Any, data.get("direction")),
+        signal=cast(Any, data.get("direction")),
         factory=factory,
         metadata=(
             ("repr", f"<non-executable {name} helper (audit-only argument)>"),
             ("executable", False),
         ),
-        batch_independent=bool(data.get("batch_independent", False)),
+        is_batch_independent=bool(data.get("batch_independent", False)),
         compatible_with_append=bool(data.get("compatible_with_append", False)),
     )
 
@@ -1476,7 +1477,7 @@ def _enqueue_nondeterminism_note(hook: HookContext, helper_name: str) -> None:
     # live door only the internal raw label exists (its ordinal need not match
     # the final label, so suffix-stripping would name the WRONG site); the
     # FireRecord's attachment op carries the location either way.
-    site = hook.layer_log.get("label") or hook.layer_log.get("layer_label")
+    site = hook.op.get("label") or hook.op.get("layer_label")
     if isinstance(site, str) and site and not site.endswith("_raw"):
         note = f"{helper_name} used unseeded stochastic RNG at {site}"
     else:
@@ -1629,17 +1630,17 @@ if not TYPE_CHECKING:
 
 __all__ = [
     "HELPER_REGISTRY_VERSION",
-    "bwd_hook",
+    "hook_grad",
     "clamp",
-    "grad_scale",
-    "grad_clamp",
-    "grad_clip",
-    "grad_noise",
-    "grad_zero",
+    "scale_grad",
+    "clamp_grad",
+    "clip_grad",
+    "add_grad_noise",
+    "zero_grad",
     "helper_from_serialized",
     "mean_ablate",
-    "noise",
-    "project_off",
+    "add_noise",
+    "project_out",
     "project_onto",
     "scale",
     "scramble_elements",
@@ -1851,7 +1852,7 @@ def patch_from(
             from .errors import HookValueError
 
             if source_site is None:
-                site_label, donor_op = _resolve_patch_donor_site(source, hook.layer_log)
+                site_label, donor_op = _resolve_patch_donor_site(source, hook.op)
             else:
                 site_label, donor_op = resolve_source_site(source, source_site)
             value = donor_op.out
@@ -1872,5 +1873,5 @@ def patch_from(
         kwargs=identity,
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
     )

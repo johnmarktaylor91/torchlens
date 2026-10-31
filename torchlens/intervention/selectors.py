@@ -687,7 +687,7 @@ def site(
     key: str | None = None,
     *,
     module_path: str | None = None,
-    op_type: str | None = None,
+    func: str | None = None,
     slot: int | None = None,
     ordinal: int | None = None,
 ) -> SiteSelector:
@@ -717,7 +717,7 @@ def site(
     return SiteSelector(
         key,
         module_path=module_path,
-        op_type=op_type,
+        op_type=func,
         slot=slot,
         ordinal=ordinal,
     )
@@ -1502,7 +1502,7 @@ def where(predicate: Callable[[Any], bool], *, name_hint: str | None = None) -> 
 
 
 def grad_fn(
-    type: str | type[Any] | None = None,
+    name: str | type[Any] | None = None,
     *,
     label: str | None = None,
     is_custom: bool | None = None,
@@ -1524,7 +1524,7 @@ def grad_fn(
         Immutable selector.
     """
 
-    return GradFnSelector(type, label=label, is_custom=is_custom)
+    return GradFnSelector(name, label=label, is_custom=is_custom)
 
 
 def without_op() -> InterveningSelector:

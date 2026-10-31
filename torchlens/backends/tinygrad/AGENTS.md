@@ -28,7 +28,7 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
   `transform` / `module_filter` / `activation_transform` are unsupported.
 
 ## capabilities.py
-- Registry-backed re-exports only. Per the registry: `interventions=False`,
+- Registry-backed re-exports only. Per the registry: `edits=False`,
   `intermediate_derived_grads=True`, backward capture / fastlog / rng replay /
   streaming all False, `validation_replay=True`,
   `payload_policy="array_payloads"`.

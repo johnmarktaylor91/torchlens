@@ -49,7 +49,7 @@ from torchlens.intervention.save import LazyImportRef
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

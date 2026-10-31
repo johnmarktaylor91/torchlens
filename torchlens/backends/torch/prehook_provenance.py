@@ -574,7 +574,7 @@ def bind_invocation(
                     inputs_before_pre_hooks=None,
                     inputs_after_pre_hooks=_snapshot_with_reasons(snapshot, reasons),
                     effects=(),
-                    capture_complete=False,
+                    is_capture_complete=False,
                     incomplete_reasons=reasons,
                 )
             )
@@ -610,7 +610,7 @@ def _emit_token_event(
             inputs_before_pre_hooks=before_snapshot,
             inputs_after_pre_hooks=after_snapshot if call_index is not None else None,
             effects=tuple(token.effects),
-            capture_complete=not reasons,
+            is_capture_complete=not reasons,
             incomplete_reasons=reasons,
         )
     )
@@ -631,7 +631,7 @@ def _snapshot_with_reasons(
         _kwargs=snapshot._kwargs,
         structure=snapshot.structure,
         tensor_observations=snapshot.tensor_observations,
-        capture_complete=not merged,
+        is_capture_complete=not merged,
         incomplete_reasons=merged,
         summary=snapshot.summary,
     )
@@ -712,7 +712,7 @@ def _make_pre_hook_wrapper(
                     hook=hook_info,
                     with_kwargs=with_kwargs,
                     outcome=outcome,
-                    changed=changed,
+                    has_changes=changed,
                     change_kinds=kinds,
                     changed_paths=paths,
                     before_fingerprint=_fingerprint(before),
@@ -868,11 +868,15 @@ def _compare_observations(
             kinds.add("structure")
             paths.add(path)
             continue
-        if left.object_id != right.object_id:
+        if left.python_object_id != right.python_object_id:
             kinds.add("identity")
             paths.add(path)
             continue
-        if left.version is not None and right.version is not None and left.version != right.version:
+        if (
+            left.mutation_version is not None
+            and right.mutation_version is not None
+            and left.mutation_version != right.mutation_version
+        ):
             kinds.add("in_place_tensor")
             paths.add(path)
         left_metadata = (left.shape, left.dtype, left.device, left.layout, left.requires_grad)
@@ -897,8 +901,8 @@ def _fingerprint(observation: _StateObservation) -> tuple[Any, ...]:
     tensor_bits = tuple(
         (
             state.path,
-            state.object_id,
-            state.version,
+            state.python_object_id,
+            state.mutation_version,
             state.shape,
             state.dtype,
             state.device,
@@ -923,7 +927,7 @@ def _snapshot_state(
     tensor_copies: dict[int, Any] = {}
     payload_origins: dict[int, str] = {}
     copy_failures: set[int] = set()
-    states_by_id = {state.object_id: state for state in observation.tensors}
+    states_by_id = {state.python_object_id: state for state in observation.tensors}
 
     def clone(value: Any) -> Any:
         """Clone tensors and recursively preserve supported input containers."""
@@ -962,16 +966,16 @@ def _snapshot_state(
     tensor_observations: list[TensorInputObservation] = []
     reasons = set(observation.incomplete_reasons)
     for state in observation.tensors:
-        alias_group = alias_groups.setdefault(state.object_id, len(alias_groups) + 1)
-        payload = tensor_copies.get(state.object_id)
-        if state.object_id in copy_failures:
+        alias_group = alias_groups.setdefault(state.python_object_id, len(alias_groups) + 1)
+        payload = tensor_copies.get(state.python_object_id)
+        if state.python_object_id in copy_failures:
             reasons.add("tensor_payload_copy_failed")
         tensor_observations.append(
             TensorInputObservation(
                 path=state.path,
                 source_op=state.source_op,
-                object_id=state.object_id,
-                version=state.version,
+                python_object_id=state.python_object_id,
+                mutation_version=state.mutation_version,
                 shape=state.shape,
                 dtype=state.dtype,
                 device=state.device,
@@ -980,7 +984,9 @@ def _snapshot_state(
                 payload=payload,
                 payload_status="saved" if payload is not None else "unsaved",
                 alias_group=alias_group,
-                payload_origin=payload_origins.get(state.object_id, "dedicated_pre_hook_snapshot"),
+                payload_origin=payload_origins.get(
+                    state.python_object_id, "dedicated_pre_hook_snapshot"
+                ),
             )
         )
     return ModuleInputSnapshot(
@@ -988,7 +994,7 @@ def _snapshot_state(
         _kwargs=cloned_kwargs,
         structure=observation.structure,
         tensor_observations=tuple(tensor_observations),
-        capture_complete=not reasons,
+        is_capture_complete=not reasons,
         incomplete_reasons=tuple(sorted(reasons)),
         summary=f"args={len(args)}, kwargs={len(kwargs)}, tensors={len(observation.tensors)}",
     )

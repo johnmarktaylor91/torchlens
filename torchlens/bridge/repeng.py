@@ -1,7 +1,7 @@
 """repeng converter.
 
 Turns a TorchLens :class:`~torchlens.intervention.Direction` (built by
-``torchlens.intervention.direction_from_pairs``) into a real
+``torchlens.intervention.fit_direction``) into a real
 ``repeng.ControlVector``. Nothing is recomputed here: the vector is the
 direction's own, as float32, keyed by the decoder layer ``ControlModel``
 patches, so ``set_control(vector, coeff=m)`` adds ``m * direction.vector`` to

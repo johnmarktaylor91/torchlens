@@ -49,9 +49,7 @@ def _save(model: nn.Module, x: torch.Tensor, path: Path) -> Path:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(path, level="runnable", include_weights=True)
     return path
@@ -257,9 +255,7 @@ def test_r73_fact_scopes_to_the_rooting_input_only(tmp_path: Path) -> None:
     trace = tl.trace(
         TwoInputOneRooted(),
         (a, b),
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     path = tmp_path / "two.tlspec"
     trace.save(path, level="runnable", include_weights=True)

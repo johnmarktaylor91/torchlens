@@ -513,17 +513,17 @@ def test_l6_selection_family_roundtrip(tmp_path) -> None:
     fork = _selection_fork()
     live_audit = fork.intervention_audit
     live_recipe = next(
-        record.helper.selection_recipe
-        for record in fork["relu_1_2"].ops[0].interventions
-        if record.helper is not None
+        record.edit.selection_recipe
+        for record in fork["relu_1_2"].ops[0].edits
+        if record.edit is not None
     )
     assert live_recipe["resolve_digest"]
     loaded = _plain_roundtrip(fork, tmp_path, "selection")
     assert loaded.intervention_audit == live_audit
     loaded_recipe = next(
-        record.helper.selection_recipe
-        for record in loaded["relu_1_2"].ops[0].interventions
-        if record.helper is not None
+        record.edit.selection_recipe
+        for record in loaded["relu_1_2"].ops[0].edits
+        if record.edit is not None
     )
     assert loaded_recipe == live_recipe
     gen2 = _second_generation(loaded, tmp_path, "selection")
@@ -537,15 +537,13 @@ def test_l6_edge_family_roundtrip(tmp_path) -> None:
     assert store_key in child.edge_substitutions
     live_value = child.edge_substitutions[store_key]["value"]
     live_stamps = child.edge_replacement_stamps
-    live_edge_address = next(
-        record.edge_address for record in child.interventions if record.edge_address
-    )
+    live_edge_address = next(record.edge_address for record in child.edits if record.edge_address)
     loaded = _plain_roundtrip(fork, tmp_path, "edges")
     loaded_child = loaded["conv2d_2_3"].ops[0]
     assert torch.equal(loaded_child.edge_substitutions[store_key]["value"], live_value)
     assert _persisted_eq(loaded_child.edge_replacement_stamps, live_stamps)
     assert (
-        next(record.edge_address for record in loaded_child.interventions if record.edge_address)
+        next(record.edge_address for record in loaded_child.edits if record.edge_address)
         == live_edge_address
     )
     gen2 = _second_generation(loaded, tmp_path, "edges")

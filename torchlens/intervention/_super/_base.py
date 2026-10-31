@@ -155,7 +155,7 @@ class Super(Generic[T]):
         )
 
     @classmethod
-    def from_members(cls: type[S], query: Any, members: dict[str, T]) -> S:
+    def from_members(cls: type[S], selector: Any, members: dict[str, T]) -> S:
         """Build a Super view from resolved member objects.
 
         Parameters
@@ -175,12 +175,12 @@ class Super(Generic[T]):
             getattr(
                 next(iter(members.values())),
                 "label",
-                getattr(next(iter(members.values())), "layer_label", repr(query)),
+                getattr(next(iter(members.values())), "layer_label", repr(selector)),
             )
             if members
-            else repr(query)
+            else repr(selector)
         )
-        return cls(str(first_label), members=members, query=query)
+        return cls(str(first_label), members=members, query=selector)
 
     @property
     def label(self) -> str:

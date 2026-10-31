@@ -373,7 +373,7 @@ class TFBackend:
         )
         intervention_plan = None
         if intervene is not None:
-            from .interventions import (
+            from .edits import (
                 apply_tf_module_intervention,
                 audit_tf_site_reachability,
                 normalize_tf_interventions,

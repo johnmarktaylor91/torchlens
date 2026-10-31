@@ -73,7 +73,7 @@ from torchlens.errors import RunCapabilityUnavailableError, RunnablePreflightErr
 from torchlens.options import CaptureOptions
 from torchlens.runnable import ControlWitness, ControlWitnessKind, PathFaithfulness
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:

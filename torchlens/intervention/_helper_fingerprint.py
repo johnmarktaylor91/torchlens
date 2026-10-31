@@ -1,6 +1,6 @@
 """Content fingerprints of the tensors a staged helper closes over (F9).
 
-``tl.steer``, ``tl.mean_ablate``, ``tl.project_onto``, ``tl.project_off`` and
+``tl.steer``, ``tl.mean_ablate``, ``tl.project_onto``, ``tl.project_out`` and
 ``tl.swap_with`` keep the caller's tensor by reference (no copy, so a large
 steering bank costs nothing and a loop can update a direction in place). The
 reference also means a later rerun or recipe save would silently use whatever

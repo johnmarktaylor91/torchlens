@@ -19,7 +19,7 @@ from torchlens.options import CaptureOptions
 from torchlens.runnable import LiteralAtom, LiteralAtomKind, NumericAttestationStatus
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

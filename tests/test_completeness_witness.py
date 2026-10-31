@@ -700,9 +700,7 @@ def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> No
     assert hook_owners[0]["capture_accounted"] is True
     assert hook_owners[0]["in_replacement_hook"] is True
     assert "aten.mul.Tensor" in hook_owners[0]["aten_ops"]
-    assert any(
-        op.func_name == "intervention_replacement" and op.intervention_replaced for op in trace.ops
-    )
+    assert any(op.func_name == "intervention_replacement" and op.is_edited for op in trace.ops)
 
 
 def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:

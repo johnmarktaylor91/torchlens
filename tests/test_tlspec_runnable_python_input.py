@@ -77,7 +77,7 @@ def _save_runnable(model: nn.Module, capture_inputs: list, path: Path) -> Path:
         model,
         list(capture_inputs),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -238,7 +238,7 @@ def _save_dictish(model: nn.Module, capture_input, path: Path) -> Path:
         model,
         capture_input,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -342,9 +342,7 @@ def test_extra_keyword_arg_diverges_never_verified(tmp_path: Path) -> None:
         _KwOnlyModel(),
         x,
         input_kwargs={"scale": 2},
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     path = tmp_path / "extra_kw.tlspec"
     trace.save(path, level="runnable", include_activations=True)

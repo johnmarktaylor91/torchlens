@@ -50,7 +50,7 @@ from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
 from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:

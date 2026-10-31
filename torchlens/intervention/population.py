@@ -46,7 +46,7 @@ __all__ = [
     "OneDatum",
     "PerRowDatums",
     "Reference",
-    "reference",
+    "population",
 ]
 
 
@@ -270,7 +270,7 @@ class Reference:
         return len(self.members)
 
     @property
-    def population_identity(self) -> str:
+    def identity(self) -> str:
         """Stable identity string for seed derivation and audit records.
 
         Digest-first (privacy rule D13: identity travels, payloads never);
@@ -415,7 +415,7 @@ class Reference:
 
     def mean(
         self,
-        over: Any = None,
+        dim: Any = None,
         *,
         group_by: Callable[[Any], Any] | None = None,
         matching: Any = None,
@@ -447,9 +447,9 @@ class Reference:
             """Reduce the eligible member stack to its mean."""
 
             reduced = stack.mean(dim=0)
-            if over is None:
+            if dim is None:
                 return reduced
-            axes = _resolve_over_axes(over, reduced.ndim, verb="Reference.mean")
+            axes = _resolve_over_axes(dim, reduced.ndim, verb="Reference.mean")
             if axes == "all":
                 return reduced.mean()
             return reduced.mean(dim=axes, keepdim=True)
@@ -458,7 +458,7 @@ class Reference:
 
     def std(
         self,
-        over: Any = None,
+        dim: Any = None,
         *,
         group_by: Callable[[Any], Any] | None = None,
         matching: Any = None,
@@ -476,9 +476,9 @@ class Reference:
             """Reduce the eligible member stack to its std."""
 
             reduced = stack.std(dim=0)
-            if over is None:
+            if dim is None:
                 return reduced
-            axes = _resolve_over_axes(over, reduced.ndim, verb="Reference.std")
+            axes = _resolve_over_axes(dim, reduced.ndim, verb="Reference.std")
             if axes == "all":
                 return reduced.mean()
             return reduced.mean(dim=axes, keepdim=True)
@@ -514,7 +514,7 @@ def _looks_like_trace(value: Any) -> bool:
     return hasattr(value, "layer_dict_all_keys") and hasattr(value, "ops")
 
 
-def reference(
+def population(
     source: Any,
     *,
     origin: str,
@@ -624,7 +624,7 @@ def reference(
         )
 
     if _looks_like_trace(source):
-        return reference([source], origin=origin, data=data, digest_population=digest_population)
+        return population([source], origin=origin, data=data, digest_population=digest_population)
 
     raise InvalidArgumentError(
         f"unsupported population source {type(source).__name__}; a population is "

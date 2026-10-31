@@ -403,7 +403,7 @@ def _evicted_capture(model_cls: type[nn.Module], walk: Callable[[Any], None] | N
     torch.manual_seed(0)
     model = model_cls()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     store = trace._trace_core.ops
     fork = trace.fork()
     fork.do(tl.func("linear") if model_cls is _Long else tl.func("relu"), tl.scale(2.0))
@@ -481,9 +481,7 @@ def test_one_walk_stays_cheap(model_cls: type[nn.Module], bar: int) -> None:
     """Profiler events in one walk over a fixed capture; the bar leaves about 30 % headroom."""
 
     torch.manual_seed(0)
-    trace = tl.trace(
-        model_cls(), torch.randn(2, 4), capture=CaptureOptions(intervention_ready=True)
-    )
+    trace = tl.trace(model_cls(), torch.randn(2, 4), capture=CaptureOptions(replayable=True))
     store = trace._trace_core.ops
     assert (store._columns is not None) is (model_cls is _Long), "fixture store shape"
     events = _walk_events(store)

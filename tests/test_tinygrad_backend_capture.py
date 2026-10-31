@@ -446,7 +446,7 @@ def test_tinygrad_spec_registered() -> None:
     assert spec.capabilities.backward_capture is False
     assert spec.capabilities.validation_replay is True
     assert spec.capabilities.fastlog is False
-    assert spec.capabilities.interventions is False
+    assert spec.capabilities.can_intervene is False
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.module_identity_modes == ("function_root", "object_module")
     assert spec.serialization_policy.payload_policy == "array_payloads"

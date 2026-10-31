@@ -128,7 +128,7 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         Captured log.
     """
 
-    return tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=CaptureOptions(replayable=True))
 
 
 def _first_batch_out(log: tl.Trace) -> torch.Tensor:

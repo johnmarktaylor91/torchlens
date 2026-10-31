@@ -71,7 +71,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : A capture whose forward ran under `torch.no_grad()`, so it built no autograd graph. Request it
   with `CaptureOptions(inference_only=True)`; a `tl.trace` or `tl.record` entered under
   `torch.no_grad()` or `torch.inference_mode()` implies it unless `backward_ready`, `save_grads`
-  (or `default_grad` on `tl.record`, `intervention_ready` on `tl.trace`) asks for a backward, and
+  (or `default_grad` on `tl.record`, `replayable` on `tl.trace`) asks for a backward, and
   an explicit `inference_only=False` keeps it off. The implied flag holds only when the forward
   really discarded its graph: a forward that turns grad back on (`with torch.enable_grad():`)
   and returns an output with autograd history is not inference-only, and backward stays
@@ -401,7 +401,7 @@ also a selection (`__selection__`): an EDGE selection of the pre-norm input edge
 edges enter reads `input - sum(s) + sum(s_corrupt)` over its patched edges (`corrupt` is the
 corrupted input's `ComponentGraph`); `input` and `s` are the patched forward's own values (the
 clean values when one receiver is patched), so a circuit (everything outside a kept set patched)
-is one call; the trace needs `intervention_ready=True`.
+is one call; the trace needs `replayable=True`.
 
 `edge_scores(model, inputs, *, corrupted, metric, method="eap_ig", steps=None,
 example_reduction="mean")` returns a one-backward `ReadTable` of `EDGE` rows, one per
@@ -454,7 +454,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   can select its predecessors.
 
 **Save mode**
-: The activation-retention policy: `copy` isolates the retained value, `reference` preserves the
+: The activation-retention policy: `copy` isolates the retained value, `population` preserves the
   live autograd-capable object, and `view` intentionally leaves aliasing visible.
 
 **Streaming storage**
@@ -500,7 +500,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   whatever the knob says.
 
 **Bound intervention executor** *(spelling documented-unstable)*
-: `spec.bind(model)` pairs an `InterventionSpec` with a base model as a capture-free callable.
+: `spec.bind(model)` pairs an `Recipe` with a base model as a capture-free callable.
   It runs the model with the spec's edits held live, returns the model's own output, records
   only a firing report (`.last_report`), and supports HF `generate` with the KV cache on or off.
   It is not an `nn.Module` and bindings never nest; a rule that never fires is recorded on
@@ -509,8 +509,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `torchlens.intervention.at_step(k)` on a bound call or `generate` names the k-th forward
   (step 0 is the prefill), on op-level rules and as `tl.module(address) & at_step(...)`
   boundary rules, capture-free; outside a binding or an episode capture the qualifier still
-  refuses `episode_step_selector_without_episode`. Gradient edits (`tl.grad_zero`,
-  `tl.grad_scale`, `tl.bwd_hook`, ...) refuse `bind_rule_unsupported`: the lane replaces forward
+  refuses `episode_step_selector_without_episode`. Gradient edits (`tl.zero_grad`,
+  `tl.scale_grad`, `tl.hook_grad`, ...) refuse `bind_rule_unsupported`: the lane replaces forward
   values only; edit gradients on a `backward_ready` trace and call `trace.backward(loss)`.
 
 **allow_changed_params** (`InterventionOptions`, `ReplayOptions`) *(spelling documented-unstable)*
@@ -528,17 +528,17 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   captured object. For an as-if weight edit use `fork.do(tl.params(name), edit)`. The rerun
   engine runs the live model and ignores the option.
 
-**torchlens.intervention.subspace_ablate(basis, *, mode="zero", feature_axis=-1, mean=None, seed=None)** — *documented-unstable*
+**torchlens.intervention.subspace_ablate(basis, *, mode="zero", dim=-1, mean=None, seed=None)** — *documented-unstable*
 : Edit acting on the component of a site value inside the span of a `[k, d]` basis (rows need
   not be orthonormal; a rank-deficient or non-finite basis refuses `subspace_basis_invalid`).
   With `P` the orthogonal projector onto the span: `mode="zero"` gives `x - P x` (the
-  k-dimensional `project_off`), `mode="mean"` gives `x - P x + P mean`, and `mode="resample"`
+  k-dimensional `project_out`), `mode="mean"` gives `x - P x + P mean`, and `mode="resample"`
   gives `x - P x + P x[perm]` for a seeded batch permutation (`seed=` required). Inconsistent
   mode arguments refuse `subspace_mode_invalid`; a basis over the wrong width refuses
   `subspace_basis_dim_mismatch` at fire time. Zero mode on the span of class-mean differences
   is the LEACE mean-equalizing erasure.
 
-**torchlens.intervention.affine_source(weight, *, bias=None)** — *documented-unstable*
+**torchlens.intervention.set_affine_coordinates(weight, *, bias=None)** — *documented-unstable*
 : Source verb for a subspace edit: under `do(tl.subspace(site, R.T, origin=...), affine_source(W,
   bias=b))` the new coordinates are `W x + b` of the whole site value `x`, so the site gets
   `x + Q^T (W x + b - Q x)` with `Q` the basis rows (LoReFT, `h + R (W h + b - R^T h)`). `weight` is
@@ -548,7 +548,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   saves inside the `subspace_edit` payload, `weight` and `bias` as tensor sidecars. TorchLens
   applies a LoReFT edit trained elsewhere and never fits one.
 
-**torchlens.intervention.subspace_interchange(basis, source, *, feature_axis=-1)** — *documented-unstable*
+**torchlens.intervention.subspace_interchange(basis, source, *, dim=-1)** — *documented-unstable*
 : k-dimensional basis interchange: `x - P x + P s`, with `s` the source trace's value at the
   same site (same-site donor resolution as `tl.patch_from`); applies a learned rotation the
   user trained elsewhere.
@@ -590,16 +590,16 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `"mean_diff"` is `D.mean(0)` on the activation scale; `"pca"` is the first uncentered
   principal axis of `D`, unit norm, signed toward the positives; `"logistic"` is L2 logistic
   regression (`C = 1`, no intercept) of `D / 2` against `-D / 2`, solved with torch only, unit
-  norm. Also `torchlens.intervention.direction_from_pairs`. Returns a `Direction`. Refusals use
+  norm. Also `torchlens.intervention.fit_direction`. Returns a `Direction`. Refusals use
   the `direction_*` codes of the error contract.
 
 **Direction (`torchlens.intervention.Direction`)** — *documented-unstable*
-: The frozen result of `direction_from_pairs`: `vector` (1-D, the rows' dtype), `site`,
-  `method`, `n_pairs`, `read_token_index`, `model_type` (the traced model's
+: The frozen result of `fit_direction`: `vector` (1-D, the rows' dtype), `site`,
+  `method`, `num_pairs`, `read_token_index`, `model_type` (the traced model's
   `config.model_type`, or `None`) and `provenance`, a
   `torchlens.selection_subspace.BasisProvenance` whose origin records the site, method, pair
   count, read position and a sha256 digest of the rows, and whose `sha256` is the digest of
-  the canonical float64 vector. `direction.steer(m)` is `tl.steer(vector, m, feature_axis=-1)`;
+  the canonical float64 vector. `direction.steer(m)` is `tl.steer(vector, m, dim=-1)`;
   place it with `tl.when(tl.module(direction.site), ...)`. `direction.to_steering_vectors()`,
   `direction.to_repeng()` and `direction.to_dialz()` convert it to a real
   `steering_vectors.SteeringVector`, `repeng.ControlVector` and `dialz.SteeringVector` without
@@ -826,7 +826,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Runnable artifact**
 : A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. Its source capture
-  must use `intervention_ready=True`; this flag supplies replay templates even when no intervention
+  must use `replayable=True`; this flag supplies replay templates even when no intervention
   is planned.
 
 **Readiness**
@@ -1020,17 +1020,17 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 ## Intervention helpers
 
 **Value helpers**
-: `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.noise` (Gaussian noise),
+: `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.add_noise` (Gaussian noise),
   `tl.mean_ablate` (replace with a source mean), `torchlens.intervention.scramble_elements`
   (elementwise iid scramble from a flattened source -- the honest rename of
   the removed `resample_ablate` spelling, which a saved spec may not name either: it refuses
   `intervention_helper_renamed`; for coherent donor patching use
   `tl.patch_from`), `tl.replace_with` (fixed value), `tl.swap_with` (another
   site's tensor), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
-  `tl.project_off` (keep or remove the component along a direction), and
+  `tl.project_out` (keep or remove the component along a direction), and
   `tl.splice_module` (call a module as a black-box forward splice). Availability outside
   the torch backend is narrower; see the per-backend rosters in the backends guide.
-  Tensor-carrying helpers (`tl.steer`, `tl.mean_ablate`, `tl.project_onto`, `tl.project_off`,
+  Tensor-carrying helpers (`tl.steer`, `tl.mean_ablate`, `tl.project_onto`, `tl.project_out`,
   `tl.swap_with`) keep the caller's tensor by reference. Each staged entry records a
   full-content digest of those tensors when it is staged; a rerun and `save_intervention`
   refuse `helper_tensor_changed_since_capture` once the tensor changed (in place or through
@@ -1040,8 +1040,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   keyed by the rule id the call started with (a rule id follows its tensor's content).
 
 **Backward helpers**
-: `tl.bwd_hook` builds a live/rerun-only backward hook; `tl.grad_zero`, `tl.grad_scale`,
-  `tl.grad_clamp`, `tl.grad_clip`, and `tl.grad_noise` edit gradient tensors during the
+: `tl.hook_grad` builds a live/rerun-only backward hook; `tl.zero_grad`, `tl.scale_grad`,
+  `tl.clamp_grad`, `tl.clip_grad`, and `tl.add_grad_noise` edit gradient tensors during the
   backward pass.
 
 **Replay verbs**
@@ -1149,7 +1149,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   nowhere refuses `extraction_intervention_no_fire` and one that fires elsewhere refuses
   `extraction_intervention_site_drift`. Module (`tl.module`, `tl.in_module`) and op-type
   (`tl.func`) addressed specs run; finer address classes refuse
-  `harvest_address_class_ungated`, and every helper must declare `batch_independent=True`.
+  `harvest_address_class_ungated`, and every helper must declare `is_batch_independent=True`.
   Disk mode records the counterfactual in the manifest's `tl_counterfactual_harvest_v1`
   block (policy, engine `live_hook`, address class, site keys, fire receipt digest),
   ledgers each shard's fire receipt, and puts the intervention identity in the resume
@@ -1796,7 +1796,7 @@ shim owed*
 **Graph-structural producers: tl.neighborhood / tl.between** — *unstable —
 no deprecation shim owed*
 : Select by WHERE OPS SIT IN THE EXECUTED DAG.
-  `neighborhood(of, hops=, direction=)` selects every op within N recorded
+  `neighborhood(of, hops=, signal=)` selects every op within N recorded
   dataflow hops of a seed region (`hops=0` is the seed family itself;
   `direction` is `'both' | 'upstream' | 'downstream'`).
   `between(sources, sinks)` selects the executed sub-DAG carrying influence
@@ -1847,7 +1847,7 @@ deprecation shim owed*
   `by='abs'` (default) compares `|delta|`, `by='signed'` the signed delta
   (increased/decreased). `changed(reference, within=None, above=, below=)`
   applies strict bounds (neither given defaults to `above=0.0` — bare
-  `changed(ref)` is the "every element that moved" intervention-effect
+  `has_changes(ref)` is the "every element that moved" intervention-effect
   mask); `top_changed(reference, within=None, k= | fraction=, by=,
   largest=)` globally ranks deltas with the deterministic stable tie-break
   (exactly one of `k`/`fraction`; `largest=False` selects the least-moved
@@ -1899,7 +1899,7 @@ deprecation shim owed*
   float64). Under `do()` the edit acts on the COMPONENT along the span of the
   basis rows: with `Q` the rows, on the coordinates `c = Q x`, written back as
   `x + Q^T (edit(c) - c)`; the orthogonal complement is unchanged. Coordinate
-  verbs (`zero_ablate`, `scale`, `clamp`, `noise`, `mean_ablate()`, hook
+  verbs (`zero_ablate`, `scale`, `clamp`, `add_noise`, `mean_ablate()`, hook
   callables, ...) act on `c`; value verbs (`patch_from`, the interchange;
   `replace_with`, `steer`, ...) write a value's component; other verbs refuse
   `subspace_edit_unsupported`. An orthonormal basis is used as given; any
@@ -1971,13 +1971,13 @@ default-keep); mask-application semantics documented-unstable*
 : `tl.Edit` is the public edit-object type (the old class
   spelling is removed, U00 clean break). `repr(edit)` prints the
   public spelling: a builtin edit prints as the public call that builds it
-  (`tl.grad_scale(2.0)`, default-valued keywords omitted; evaluating it
+  (`tl.scale_grad(2.0)`, default-valued keywords omitted; evaluating it
   rebuilds an equal edit), any other edit as `tl.Edit('name', kind=...,
   portability=...)`. An `Edit` is a frozen record of its identity:
   `helper_name` (also read as `name`), positional `args`, keyword `kwargs`
   (a tuple of name and value pairs), `kind`, `portability`, `metadata`
   (name and value pairs, such as `("keep_grad", True)` or the selection
-  disclosure a masked `do()` adds), `direction`, `batch_independent`,
+  disclosure a masked `do()` adds), `direction`, `is_batch_independent`,
   `compatible_with_append` (an edit that may change the output shape is
   refused on an append rerun unless this is true) and `selection_recipe`
   (the selection recipe a selection-targeted `do()` attaches; `None`
@@ -2025,7 +2025,7 @@ default-keep); mask-application semantics documented-unstable*
 **trace.edges / edge substitution** — *unstable — no deprecation shim owed;
 S2/S3-gated*
 : `trace.edges` returns the dataflow edge family (one `EdgeUseRecord` per
-  parent→child occurrence; requires an `intervention_ready` capture, else
+  parent→child occurrence; requires an `replayable` capture, else
   `edge_provenance_unavailable`). The canonical occurrence address is
   `(child_func_call_id, arg_kind, arg_path)`. Edge records lift as EDGE-kind
   selections (whole-edge granularity; `~` complements within the trace's
@@ -2104,7 +2104,7 @@ deprecation shim owed*
   registered buffer (BatchNorm running stats, a rotary cache, recurrent state)
   substitutes the buffer's INITIAL version node, the value its consumers read,
   and replays the cone through the leaf-site path (needs an
-  `intervention_ready=True` capture); in-forward writes thread the edited
+  `replayable=True` capture); in-forward writes thread the edited
   value; the live buffer is never written.
 
 **TapObserver.values(masked=True)** — *unstable — no deprecation shim owed*
@@ -2237,7 +2237,7 @@ shim owed*
   `torchlens.bridge.pyreft.LoreftArtifact`; never imports pyreft or pyvene and never fits
   anything. Apply it with `fork.do(artifact.subspace(site, positions=mask), artifact.edit)`, which
   is `tl.subspace(tl.units(site, ...), R.T, origin=..., method="loreft")` with
-  `tl.intervention.affine_source(W, bias=b)`. pyreft trains `R` in float32 (orthonormal to about
+  `tl.intervention.set_affine_coordinates(W, bias=b)`. pyreft trains `R` in float32 (orthonormal to about
   `1e-7`), so the subspace orthonormalises it once in float64 and the saved edit records
   `origin_sha256` (R as read), `basis_sha256` (rows applied), `orthonormalised=True` and
   `source_dtype="float32"`. Refuses `pyreft_artifact_invalid` (missing or malformed file) and
@@ -2255,7 +2255,7 @@ shim owed*
   `pyreft_positions_invalid`). Given the site from a trace, its shape is checked at once: a
   trailing axis that is not the artifact's width (or a feature axis that is not last) refuses
   `pyreft_site_invalid`, and a mask that does not cover the other axes refuses
-  `pyreft_positions_invalid`; a label is checked at `do()`. `edit` is the float64 `affine_source`.
+  `pyreft_positions_invalid`; a label is checked at `do()`. `edit` is the float64 `set_affine_coordinates`.
 
 **torchlens.bridge.huggingface.from_hub(repo_id, *, path_in_repo, revision, token, api)** — *unstable — no deprecation shim owed*
 : Downloads the gzipped `.tlspec` tar that `push_to_hub` uploads, checks
@@ -2415,7 +2415,7 @@ shim owed*
   artifact refuse typed `site_key_unavailable`. Accessor-level only — no
   persisted fields.
 
-**BackwardPass.dispatched_ops / DispatchedOp** — *unstable — no deprecation shim owed*
+**BackwardPass.aten_ops / DispatchedOp** — *unstable — no deprecation shim owed*
 : The ATen calls one backward pass dispatched, recorded while the pass ran
   through a capture that requested a backward (`backward_ready=True`,
   `save_grads=` or `default_grad=`). Each `DispatchedOp` is value-free:
@@ -2431,7 +2431,7 @@ shim owed*
 
 **BackwardStatus.executed_flops / executed_flops_per_pass / uncounted_ops / counting_convention** — *unstable — no deprecation shim owed*
 : `tl.report.backward_status(trace)` in the `backward_observed` state counts
-  the backward that ran over each pass's `dispatched_ops`: `executed_flops`
+  the backward that ran over each pass's `aten_ops`: `executed_flops`
   is exact for the matmul and convolution families at fma2
   (`counting_convention`, FlopCounterMode's convention), or `None` when a
   pass has no record on this object. `executed_flops_per_pass` pairs each

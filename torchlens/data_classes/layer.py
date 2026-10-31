@@ -522,7 +522,7 @@ class Layer(_SelectionOperand):
         "visualizer_path": FieldPolicy.KEEP,
         "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
-        "intervention_replaced": FieldPolicy.KEEP,
+        "is_edited": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "save_grads": FieldPolicy.KEEP,
         "transformed_grad": FieldPolicy.DROP,

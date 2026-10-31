@@ -566,7 +566,7 @@ class ModuleCall:
         return self.forward_args is not None or self.forward_kwargs is not None
 
     @property
-    def had_pre_hook_input_change(self) -> bool | None:
+    def has_pre_hook_input_change(self) -> bool | None:
         """Return whether any user pre-hook changed effective module inputs.
 
         This public name is provisional pending the TorchLens human naming
@@ -576,9 +576,9 @@ class ModuleCall:
         case an empty effects tuple cannot honestly establish ``False``.
         """
 
-        if any(effect.changed is True for effect in self.forward_pre_hook_effects):
+        if any(effect.has_changes is True for effect in self.forward_pre_hook_effects):
             return True
-        if any(effect.changed is None for effect in self.forward_pre_hook_effects):
+        if any(effect.has_changes is None for effect in self.forward_pre_hook_effects):
             return None
         if not self.forward_pre_hook_effects:
             snapshots = (self.inputs_before_pre_hooks, self.inputs_after_pre_hooks)

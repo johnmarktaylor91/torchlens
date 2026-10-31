@@ -80,7 +80,7 @@ def _apply(spec: Any) -> Any:
 
 
 _VERBS = {
-    "affine_source": lambda: tl.intervention.affine_source(_W, bias=_B),
+    "affine_source": lambda: tl.intervention.set_affine_coordinates(_W, bias=_B),
     "scale": lambda: tl.scale(2.0),
 }
 
@@ -109,7 +109,7 @@ def test_one_position_subspace_edit_saves_portable_and_reapplies_bit_identically
 def test_reloaded_masked_edit_under_another_mask_stores_the_intersection(tmp_path: Path) -> None:
     """The session scatters through both masks; the saved edit stores their intersection."""
 
-    session = _session(tl.intervention.affine_source(_W, bias=_B))
+    session = _session(tl.intervention.set_affine_coordinates(_W, bias=_B))
     staged = session.push()
     loaded = _save_load(session, tmp_path / "first.tlspec").hook_specs[0].helper
     wider = _mask(3) | _mask(4)
@@ -175,7 +175,7 @@ def _remedy_runs(error: Any, tmp_path: Path) -> None:
     """Run the refusal's spelling: re-save from the session, then load and apply."""
 
     assert "tl.io.save_intervention(fork, path, level='portable')" in error.fields["remedy"]
-    session = _session(tl.intervention.affine_source(_W, bias=_B))
+    session = _session(tl.intervention.set_affine_coordinates(_W, bias=_B))
     staged = session.push()
     assert torch.equal(
         _apply(_save_load(session, tmp_path / "resaved.tlspec"))[_SITE].out, staged[_SITE].out
@@ -194,7 +194,7 @@ def test_malformed_mask_refuses_at_load_and_the_remedy_runs(tmp_path: Path, case
 
 
 def test_tampered_mask_refuses_at_load_and_the_remedy_runs(tmp_path: Path) -> None:
-    session = _session(tl.intervention.affine_source(_W, bias=_B))
+    session = _session(tl.intervention.set_affine_coordinates(_W, bias=_B))
     path = tmp_path / "tampered.tlspec"
     tl.io.save_intervention(session, path, level="portable")
     spec_json = path / "spec.json"

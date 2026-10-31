@@ -47,7 +47,7 @@ from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

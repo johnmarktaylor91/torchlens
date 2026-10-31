@@ -176,7 +176,7 @@ def test_hook_fires_only_at_targeted_pass(recurrent):
     fired: list[str] = []
 
     def spy_hook(out: torch.Tensor, *, hook) -> torch.Tensor:
-        fired.append(str(hook.layer_log.get("label")))
+        fired.append(str(hook.op.get("label")))
         return torch.zeros_like(out)
 
     fork.do("relu_1_2:1", spy_hook)
@@ -184,9 +184,9 @@ def test_hook_fires_only_at_targeted_pass(recurrent):
     assert fired == ["relu_1_2:1"]
     assert bool((fork.layer_dict_all_keys["relu_1_2:1"].out == 0).all())
     assert not bool((fork.layer_dict_all_keys["relu_1_2:2"].out == 0).all())
-    assert fork.layer_dict_all_keys["relu_1_2:1"].interventions
-    assert not fork.layer_dict_all_keys["relu_1_2:2"].interventions
-    assert not fork.layer_dict_all_keys["relu_1_2:3"].interventions
+    assert fork.layer_dict_all_keys["relu_1_2:1"].edits
+    assert not fork.layer_dict_all_keys["relu_1_2:2"].edits
+    assert not fork.layer_dict_all_keys["relu_1_2:3"].edits
 
 
 def test_cone_of_effect_crosses_pass_boundaries(recurrent):

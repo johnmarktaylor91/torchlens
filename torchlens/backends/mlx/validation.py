@@ -557,7 +557,7 @@ def _coverage_failure_count(trace: Any, captures: tuple[MLXOpCapture, ...]) -> i
             tuple(capture.labels_raw),
             tuple(tuple(slot) for slot in capture.arg_leaf_labels),
             tuple(sorted((key, tuple(slot)) for key, slot in capture.kwarg_leaf_labels.items())),
-            tuple(capture.interventions),
+            tuple(capture.edits),
         )
         for capture in captures
     )
@@ -622,14 +622,14 @@ def validate_mlx_captures(trace: Any) -> tuple[int, int, tuple[str, ...]]:
                 failed_count += 1
                 continue
             final = list(replayed)
-            if capture.interventions:
+            if capture.edits:
                 # Genuine-intervention carve-out, scoped by the emit-time
                 # inventory fingerprint (coverage above): replay recomputes
                 # the RAW producer output, re-applies the declared hook, and
                 # the saved payload must equal hook(raw). A record whose
                 # declared interventions lack a matching applier fails
                 # closed; a plain capture never reaches this branch.
-                declared = dict(capture.interventions)
+                declared = dict(capture.edits)
                 appliers = dict(capture.appliers)
                 if set(declared) != set(appliers) or any(
                     index < 0 or index >= len(final) for index in declared

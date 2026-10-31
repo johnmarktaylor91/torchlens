@@ -16,7 +16,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention import reference, sample_from, sampling_records
+from torchlens.intervention import population, sample_from, sampling_records
 
 
 class _TwoBlock(nn.Module):
@@ -79,7 +79,7 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
 
     log = _trace()
     baseline = log["relu_1_2"].out
-    donors = reference(torch.stack([baseline + 1, baseline + 2, baseline + 3]), origin="d")
+    donors = population(torch.stack([baseline + 1, baseline + 2, baseline + 3]), origin="d")
     plan = sample_from(donors, seed=3, share_draw="per_group")
     fork = log.fork()
     fork.do(
@@ -176,8 +176,8 @@ def _fingerprint(log: tl.Trace) -> dict:
         store = op.edge_substitutions or {}
         ops[op.label] = (
             None if op.out is None else op.out.clone(),
-            tuple(repr(record) for record in op.interventions or ()),
-            bool(op.intervention_replaced),
+            tuple(repr(record) for record in op.edits or ()),
+            bool(op.is_edited),
             tuple(sorted(repr(key) for key in store)),
         )
     return {

@@ -92,7 +92,7 @@ def test_fork_do_edits_are_disclosed(model_and_x) -> None:
     """Fork-side ``do()`` (ACT and PARAM kinds) is disclosed through the same block."""
 
     model, x = model_and_x
-    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     fork = trace.fork()
     fork.do(tl.units("relu_1_2", [(0, 0)]), tl.zero_ablate())
     block = intervention_facts(fork)

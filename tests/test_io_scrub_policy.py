@@ -781,7 +781,7 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
         _NestedStr(),
         [torch.randn(3), {"mode": "fast"}],
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
             save_raw_input=raw_policy,

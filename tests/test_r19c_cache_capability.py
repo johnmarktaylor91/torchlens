@@ -106,7 +106,7 @@ def test_cache_key_distinguishes_intervention_ready(tmp_path):
         ),
     )
     assert first.capture_cache_hit is False
-    assert first.intervention_ready is False
+    assert first.is_replayable is False
 
     second = tl.trace(
         model,
@@ -115,7 +115,7 @@ def test_cache_key_distinguishes_intervention_ready(tmp_path):
     )
     # Different capability => must not reuse the intervention_ready=False trace.
     assert second.capture_cache_hit is False
-    assert second.intervention_ready is True
+    assert second.is_replayable is True
 
 
 def test_cache_key_distinguishes_save_raw_input(tmp_path):
@@ -151,7 +151,7 @@ def test_cache_hit_preserved_for_identical_capability(tmp_path):
         capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, intervention_ready=True),
     )
     assert first.capture_cache_hit is False
-    assert first.intervention_ready is True
+    assert first.is_replayable is True
 
     second = tl.trace(
         model,
@@ -159,7 +159,7 @@ def test_cache_hit_preserved_for_identical_capability(tmp_path):
         capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, intervention_ready=True),
     )
     assert second.capture_cache_hit is True
-    assert second.intervention_ready is True
+    assert second.is_replayable is True
 
 
 # ------------------------------------------------------------------------- DOC1

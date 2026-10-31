@@ -391,10 +391,10 @@ scaled = tl.trace(model, x, save=tl.func('relu'),
 
 Available helpers: `tl.zero_ablate`, `tl.mean_ablate`,
 `torchlens.intervention.scramble_elements`, `tl.steer`, `tl.scale`, `tl.clamp`,
-`tl.noise`, `tl.project_onto`, `tl.project_off`, `tl.swap_with`, `tl.splice_module`.
+`tl.add_noise`, `tl.project_onto`, `tl.project_out`, `tl.swap_with`, `tl.splice_module`.
 
 For post-hoc DAG replay and isolated experiments, capture with
-`intervention_ready=True` and use `log.fork()` + `log.push()` /
+`replayable=True` and use `log.fork()` + `log.push()` /
 `log.run(model, x)`. Live hooks during rerun require capture-time selectors
 (e.g. `tl.func(...)`, `tl.module(...)`); finalized labels resolve via
 `log.find_sites(...)`. See [docs/intervention_api.md](docs/intervention_api.md)

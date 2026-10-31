@@ -49,7 +49,7 @@ from torchlens.runnable import (
     derive_required_witness_members,
 )
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, inputs: Any) -> tl.Trace:

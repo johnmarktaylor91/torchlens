@@ -126,7 +126,7 @@ def test_do_empty_site_table_refuses():
     _, _, trace = _traced_toy()
     fork = trace.fork()
     with pytest.raises(SiteResolutionError) as excinfo:
-        fork.do(SiteTable((), query="nothing"), tl.zero_ablate())
+        fork.do(SiteTable((), selector="nothing"), tl.zero_ablate())
     assert excinfo.value.fields["code"] == "site_table_empty"
 
 

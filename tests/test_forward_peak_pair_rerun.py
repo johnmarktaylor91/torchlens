@@ -48,7 +48,7 @@ def _rerun_log(
     log = tl.trace(
         model,
         torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True, measure_host_peak_memory=True),
+        capture=CaptureOptions(replayable=True, measure_host_peak_memory=True),
     )
     assert (log.forward_peak_memory is None) == (first == 0)
     _measure(monkeypatch, rerun)

@@ -117,8 +117,8 @@ class RegionInstance:
     """
 
     index: int
-    members: tuple[str, ...]
-    exit_ops: tuple[str, ...]
+    labels: tuple[str, ...]
+    exit_labels: tuple[str, ...]
     exits: tuple[RegionEdge, ...]
     entries: tuple[RegionEdge, ...]
 
@@ -173,7 +173,7 @@ class RegionTarget:
         return self._slice.source_trace
 
     @property
-    def members(self) -> tuple[str, ...]:
+    def labels(self) -> tuple[str, ...]:
         """Pass-qualified member op labels in execution order."""
 
         return self._slice.labels
@@ -200,7 +200,7 @@ class RegionTarget:
         """Disclosure-first repr: members, instances, boundary sizes."""
 
         return (
-            f"<region {self._digest}: {len(self.members)} member op(s), "
+            f"<region {self._digest}: {len(self.labels)} member op(s), "
             f"{len(self._instances)} instance(s), "
             f"{len(self._boundary.entries)} entry / {len(self._boundary.exits)} exit "
             "edge(s); replay do() substitutes exits, interior not replayed>"
@@ -463,8 +463,8 @@ def region(slice_: Any, *, exits: Any = None) -> RegionTarget:
         instances.append(
             RegionInstance(
                 index=index,
-                members=component,
-                exit_ops=exit_ops,
+                labels=component,
+                exit_labels=exit_ops,
                 exits=component_exits,
                 entries=component_entries,
             )
@@ -520,7 +520,7 @@ def _check_effect_closure(region_target: RegionTarget) -> dict[str, Any]:
             changed = getattr(child_op, "buffer_value_changed", None)
             if changed is not False:
                 _refuse_buffer(edge.parent, getattr(child_op, "buffer_write_kind", None), changed)
-    for label in region_target.members:
+    for label in region_target.labels:
         op = graph.ops[label]
         write_kind = getattr(op, "buffer_write_kind", None)
         if write_kind is not None:
@@ -676,7 +676,7 @@ def _evaluate_instance(
     from .runtime import validate_hook_output
 
     exit_values: dict[str, torch.Tensor] = {}
-    for label in instance.exit_ops:
+    for label in instance.exit_labels:
         edge = next(e for e in instance.exits if e.parent == label)
         exit_values[label] = _consumed_value(trace, graph.ops[edge.parent], graph.ops[edge.child])
 
@@ -696,11 +696,11 @@ def _evaluate_instance(
         with pause_logging():
             result = module(*entries)
         results = list(result) if isinstance(result, (tuple, list)) else [result]
-        if len(results) != len(instance.exit_ops):
+        if len(results) != len(instance.exit_labels):
             raise RegionError(
                 f"splice_module returned {len(results)} value(s) for region "
-                f"instance {instance.index} with {len(instance.exit_ops)} exit "
-                f"op(s) ({', '.join(map(repr, instance.exit_ops))})",
+                f"instance {instance.index} with {len(instance.exit_labels)} exit "
+                f"op(s) ({', '.join(map(repr, instance.exit_labels))})",
                 code="region_splice_arity_mismatch",
                 remedy="return exactly one tensor per exit op, in exit order",
             )
@@ -708,15 +708,15 @@ def _evaluate_instance(
             name="splice_module",
             timing="post",
             direction="forward",
-            layer_log=graph.ops[instance.exit_ops[0]],
+            layer_log=graph.ops[instance.exit_labels[0]],
             run_ctx={"region": region_target.region_digest, "instance": instance.index},
         )
         return _validated_exit_values(
             instance, exit_values, results, validate_hook_output, splice_context
         )
 
-    if len(instance.exit_ops) == 1:
-        label = instance.exit_ops[0]
+    if len(instance.exit_labels) == 1:
+        label = instance.exit_labels[0]
         hook_callable, _helper, helper_name = _edit_hook(edit, label)
         context = make_hook_context(
             name=helper_name,
@@ -734,7 +734,7 @@ def _evaluate_instance(
 
     if isinstance(edit, (Edit, torch.Tensor)) or not callable(edit):
         raise RegionError(
-            f"region instance {instance.index} has {len(instance.exit_ops)} "
+            f"region instance {instance.index} has {len(instance.exit_labels)} "
             "exit ops; a per-value edit cannot coordinate a multi-exit "
             "replacement (one evaluation per pass, all exits atomic)",
             code="region_edit_multi_exit_unsupported",
@@ -746,18 +746,18 @@ def _evaluate_instance(
         name=getattr(edit, "__name__", "region_edit"),
         timing="post",
         direction="forward",
-        layer_log=graph.ops[instance.exit_ops[0]],
+        layer_log=graph.ops[instance.exit_labels[0]],
         run_ctx={"region": region_target.region_digest, "instance": instance.index},
     )
-    ordered = tuple(exit_values[label] for label in instance.exit_ops)
+    ordered = tuple(exit_values[label] for label in instance.exit_labels)
     result = edit(ordered, hook=context)
-    if not isinstance(result, (tuple, list)) or len(result) != len(instance.exit_ops):
+    if not isinstance(result, (tuple, list)) or len(result) != len(instance.exit_labels):
         raise RegionError(
             "a multi-exit region callable must return one tensor per exit op "
-            f"(expected {len(instance.exit_ops)}, got "
+            f"(expected {len(instance.exit_labels)}, got "
             f"{type(result).__name__ if not isinstance(result, (tuple, list)) else len(result)})",
             code="region_splice_arity_mismatch",
-            remedy="return a tuple of len(region.instances[i].exit_ops) tensors",
+            remedy="return a tuple of len(region.instances[i].exit_labels) tensors",
         )
     return _validated_exit_values(
         instance, exit_values, list(result), validate_hook_output, context
@@ -775,7 +775,7 @@ def _validated_exit_values(
 
     return {
         label: validate(value, exit_values[label], hook_context=context)
-        for label, value in zip(instance.exit_ops, results, strict=True)
+        for label, value in zip(instance.exit_labels, results, strict=True)
     }
 
 
@@ -871,8 +871,8 @@ def _evaluate_all_instances(
         per_instance.append(
             {
                 "instance": instance.index,
-                "members": len(instance.members),
-                "exit_ops": list(instance.exit_ops),
+                "members": len(instance.labels),
+                "exit_ops": list(instance.exit_labels),
                 "evaluations": 1,
             }
         )
@@ -1028,7 +1028,7 @@ def apply_region_do(
     trace._record_operation(
         "region_do",
         region_digest=region_target.region_digest,
-        members=list(region_target.members),
+        members=list(region_target.labels),
         entries=[
             {"parent": e.parent, "child": e.child, "nested": e.nested}
             for e in region_target.boundary.entries

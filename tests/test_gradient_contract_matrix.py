@@ -29,23 +29,23 @@ from torchlens.intervention import (
     InterventionDecision,
     _gradient_contract,
     add,
-    affine_source,
+    add_noise,
     clamp,
     compose,
     keep_grad,
     mean_ablate,
     mean_fill,
     mean_from,
-    noise,
     patch_from,
     permute_batch,
-    project_off,
+    population,
     project_onto,
-    reference,
+    project_out,
     replace_with,
     resample_rows_from,
     scale,
     scramble_elements,
+    set_affine_coordinates,
     set_direction_mean,
     splice_module,
     steer,
@@ -108,12 +108,12 @@ def _source_trace() -> Any:
 
 
 def _site_donors() -> Any:
-    return reference(torch.stack([_CONST, _CONST * 2.0, _CONST - 1.0]), origin="site donors")
+    return population(torch.stack([_CONST, _CONST * 2.0, _CONST - 1.0]), origin="site donors")
 
 
 def _row_donors() -> Any:
     rows = torch.randn(3, 3, 4, generator=torch.Generator().manual_seed(4), dtype=torch.float64)
-    return reference(rows, origin="row donors")
+    return population(rows, origin="row donors")
 
 
 def _source_value() -> torch.Tensor:
@@ -147,19 +147,19 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
     "scale": (lambda: scale(3.0), lambda out: 3.0 * out, "coord"),
     "clamp": (lambda: clamp(min=-0.3, max=0.3), lambda out: out.clamp(-0.3, 0.3), "coord"),
     # A linear tail and a sum loss make the gradient independent of the draw.
-    "noise": (lambda: noise(0.1, seed=0), lambda out: out + 0.0, "coord"),
-    "steer": (lambda: steer(_V, 2.0, feature_axis=-1), lambda out: out + 2.0 * _V, "value"),
+    "noise": (lambda: add_noise(0.1, seed=0), lambda out: out + 0.0, "coord"),
+    "steer": (lambda: steer(_V, 2.0, dim=-1), lambda out: out + 2.0 * _V, "value"),
     "add(scalar)": (lambda: add(2.0), lambda out: out + 2.0, "coord"),
     "add(tensor)": (lambda: add(_CONST), lambda out: out + _CONST, "value"),
     "replace_with": (lambda: replace_with(_CONST), _cut(lambda out: _CONST.clone()), "value"),
     "swap_with": (lambda: swap_with(_CONST), _cut(lambda out: _CONST.clone()), "value"),
     "project_onto": (
-        lambda: project_onto(_V, feature_axis=-1),
+        lambda: project_onto(_V, dim=-1),
         lambda out: (out @ _V_HAT)[..., None] * _V_HAT,
         "refused",
     ),
     "project_off": (
-        lambda: project_off(_V, feature_axis=-1),
+        lambda: project_out(_V, dim=-1),
         lambda out: out - (out @ _V_HAT)[..., None] * _V_HAT,
         "refused",
     ),
@@ -184,22 +184,22 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
     ),
     "mean_from": (lambda: mean_from(_site_donors()), _cut(torch.zeros_like), "value"),
     "mean_fill": (
-        lambda: mean_fill(over="all"),
+        lambda: mean_fill(dim="all"),
         lambda out: torch.zeros_like(out) + out.mean(),
         "coord",
     ),
     "mean_fill(ref)": (
-        lambda: mean_fill(_site_donors(), over="all"),
+        lambda: mean_fill(_site_donors(), dim="all"),
         _cut(torch.zeros_like),
         "value",
     ),
     "set_direction_mean": (
-        lambda: set_direction_mean(_V, _site_donors(), feature_axis=-1),
+        lambda: set_direction_mean(_V, _site_donors(), dim=-1),
         lambda out: out - (out @ _V_HAT)[..., None] * _V_HAT,
         "refused",
     ),
     "affine_source": (
-        lambda: affine_source(_AW, bias=_AB),
+        lambda: set_affine_coordinates(_AW, bias=_AB),
         lambda out: out @ _AW.T + _AB,
         "source",
     ),

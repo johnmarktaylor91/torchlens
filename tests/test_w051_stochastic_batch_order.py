@@ -12,7 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention import reference, sample_from, sampling_records
+from torchlens.intervention import population, sample_from, sampling_records
 from torchlens.intervention.stochastic import assign_batch_donor_groups
 
 
@@ -48,7 +48,7 @@ def test_per_firing_batch_equals_sequential_in_any_order() -> None:
 
     log = _trace()
     baseline = log["relu_1_2"].out
-    donors = reference(torch.stack([baseline + k for k in range(1, 6)]), origin="d")
+    donors = population(torch.stack([baseline + k for k in range(1, 6)]), origin="d")
     site_a = log["relu_1_2"].__selection__()
     site_b = log["relu_2_4"].__selection__()
     plan_a = sample_from(donors, seed=3)
@@ -78,7 +78,7 @@ def test_per_group_disambiguation_is_order_independent() -> None:
 
     log = _trace()
     baseline = log["relu_1_2"].out
-    donors = reference(torch.stack([baseline + k for k in range(1, 6)]), origin="d")
+    donors = population(torch.stack([baseline + k for k in range(1, 6)]), origin="d")
     site_a = log["relu_1_2"].__selection__()
     site_b = log["relu_2_4"].__selection__()
     plan_a = sample_from(donors, seed=3, share_draw="per_group")
@@ -104,7 +104,7 @@ def test_per_group_disambiguation_is_order_independent() -> None:
 def test_normalizer_keys_on_selection_content_not_position() -> None:
     """Pure-function check on the normalizer: same clauses, any order, same groups."""
 
-    donors = reference(torch.randn(4, 3), origin="d")
+    donors = population(torch.randn(4, 3), origin="d")
     plan_a = sample_from(donors, seed=1, share_draw="per_rule")
     plan_b = sample_from(donors, seed=1, share_draw="per_rule")
     site_a = tl.units("relu_1_2", [(0, 0)])

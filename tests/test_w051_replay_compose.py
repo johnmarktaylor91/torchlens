@@ -120,7 +120,7 @@ def test_same_edge_edited_twice_composes_and_keeps_both_fires(two) -> None:
     fork.do(edge.__selection__(), tl.scale(0.5))
     add = fork[_add(trace).label].ops[0]
     assert torch.allclose(add.out, 0.25 * a + b, atol=ATOL)
-    fires = [r for r in add.interventions if r.edge_address is not None]
+    fires = [r for r in add.edits if r.edge_address is not None]
     assert len(fires) == 2
     store_value = add.edge_substitutions[(edge.arg_kind, edge.arg_path)]["value"]
     assert torch.allclose(store_value, 0.25 * a, atol=ATOL)
@@ -139,5 +139,5 @@ def test_chained_param_scaling_composes_and_never_writes_the_live_param(two) -> 
     assert torch.allclose(fork[_add(trace).label].out, expected_add, atol=ATOL)
     assert torch.equal(model.fc2.weight.detach(), live_before)
     consumer = fork["linear_2_3"].ops[0]
-    assert len([r for r in consumer.interventions if r.edge_address is not None]) == 2
+    assert len([r for r in consumer.edits if r.edge_address is not None]) == 2
     assert _validate(fork, 2.0 * expected_add) is True

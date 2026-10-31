@@ -42,7 +42,7 @@ import torchlens as tl
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 4)).eval()
 direction = torch.randn(8)
-spec = tl.when(tl.module("1"), tl.steer(direction, magnitude=4.0, feature_axis=-1))
+spec = tl.when(tl.module("1"), tl.steer(direction, strength=4.0, dim=-1))
 
 # Build the binding once and reuse it for every forward.
 bound = spec.bind(model)
@@ -111,7 +111,7 @@ lm = LlamaForCausalLM(config).eval()
 ids = torch.randint(0, 128, (1, 6))
 direction = torch.randn(32)
 spec = tl.when(
-    tl.module("model.layers.0.mlp"), tl.steer(direction, magnitude=8.0, feature_axis=-1)
+    tl.module("model.layers.0.mlp"), tl.steer(direction, strength=8.0, dim=-1)
 )
 gen_kwargs = {"max_new_tokens": 5, "do_sample": False, "use_cache": True, "pad_token_id": 0}
 
@@ -163,7 +163,7 @@ torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 4)).eval()
 x = torch.randn(2, 8)
 direction = torch.randn(8)
-spec = tl.when(tl.module("1"), tl.steer(direction, magnitude=4.0, feature_axis=-1))
+spec = tl.when(tl.module("1"), tl.steer(direction, strength=4.0, dim=-1))
 
 output, recording = tl.record(
     model, x, save=tl.func("linear"), intervene=spec, return_output=True
@@ -269,7 +269,7 @@ refuse a staged intervention, refuse a change in input, or replay over the captu
 | `trace.run(inputs=x)` | A fresh verified execution of the recorded program | Refuses `run_staged_spec_unapplied` when the trace carries a staged intervention, because it would not apply it |
 | `trace.run(inputs=x, fast=True)` | A guarded static-loop refresh: the model's native forward with targeted hooks | Applies a staged module-selector intervention through the guarded fast engine and admits a growing input while the model's call structure is unchanged; any refusal raises (`PathDivergenceError` for a structural change) instead of falling back. Needs a selective `save=` on the capture (`tl.module(...)` or `tl.func(...)`); a save-everything capture refuses. Unsteered and at a fixed shape: 0.41 s on Qwen3.5-9B against 47 s for a trace |
 | `trace.run(model, x)` on an intervened trace | The guarded fast steered rerun: the native forward with the staged hooks, refreshing the saved sites | About 1.5 to 2x a plain hook per step, exact, and exact on every repeat. When a guard refuses it falls back to recapturing the whole forward with the stored intervention: still exact, at the cost of a trace, with the reason in `last_run["fast_refused"]` |
-| `trace.fork().do(site, action)` | Replays an edit over the captured graph | Same input only, by design. Needs a `CaptureOptions(intervention_ready=True)` capture (about 5 to 6x a default trace), and refuses typed (`ReplayPreconditionError`) on some decoder architectures |
+| `trace.fork().do(site, action)` | Replays an edit over the captured graph | Same input only, by design. Needs a `CaptureOptions(replayable=True)` capture (about 5 to 6x a default trace), and refuses typed (`ReplayPreconditionError`) on some decoder architectures |
 | `episode=` capture with `intervene=` | Captures a whole steered generation as one product | Exact, but diagnostic-tier cost (tens of steps, not hundreds), and `run()` refuses on the coupled product by design; see [episode capture](../reference/episode_capture.md) |
 
 For steering alone, across many inputs or through generation, [`bind`](#steering-and-patching-over-many-forwards-bind)
@@ -307,7 +307,7 @@ ids = torch.randint(0, 128, (1, 6))
 direction = torch.randn(32)
 site = tl.module("model.layers.1.mlp")
 head = tl.module("lm_head")
-spec = tl.when(site, tl.steer(direction, magnitude=4.0, feature_axis=-1))
+spec = tl.when(site, tl.steer(direction, strength=4.0, dim=-1))
 
 trace = tl.trace(model, ids, save=site | head, intervene=spec)
 bound = spec.bind(model)

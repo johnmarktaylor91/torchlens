@@ -21,17 +21,17 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import (
     compose,
-    grad_zero,
     mean_ablate,
     mean_from,
-    project_off,
+    population,
     project_onto,
-    reference,
+    project_out,
     scramble_elements,
     set_direction_mean,
     splice_module,
     subspace_ablate,
     subspace_interchange,
+    zero_grad,
 )
 from torchlens.intervention._position_edits import at_positions
 from torchlens.intervention._subspace_projection import PROJECTION_NOTE
@@ -190,7 +190,7 @@ def _site_units_mask(rows: list[int]) -> torch.Tensor:
 
 
 def _donors() -> Any:
-    return reference(torch.arange(32, dtype=torch.float64).reshape(2, 4, 4), origin="donors")
+    return population(torch.arange(32, dtype=torch.float64).reshape(2, 4, 4), origin="donors")
 
 
 def _subspace_sel(basis: torch.Tensor = _BASES["rank1"]) -> Any:
@@ -199,15 +199,15 @@ def _subspace_sel(basis: torch.Tensor = _BASES["rank1"]) -> Any:
 
 _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any, Any]]]] = {
     "project_off": (
-        lambda: (_subspace_sel(), project_off(_H[0], feature_axis=-1)),
+        lambda: (_subspace_sel(), project_out(_H[0], dim=-1)),
         lambda: (_subspace_sel(), tl.zero_ablate()),
     ),
     "project_onto": (
-        lambda: (_subspace_sel(), project_onto(_H[0], feature_axis=-1)),
-        lambda: (_SITE, project_onto(_H[0], feature_axis=-1)),
+        lambda: (_subspace_sel(), project_onto(_H[0], dim=-1)),
+        lambda: (_SITE, project_onto(_H[0], dim=-1)),
     ),
     "set_direction_mean": (
-        lambda: (_subspace_sel(), set_direction_mean(_H[0], _donors(), feature_axis=-1)),
+        lambda: (_subspace_sel(), set_direction_mean(_H[0], _donors(), dim=-1)),
         lambda: (_subspace_sel(), mean_from(_donors())),
     ),
     "subspace_ablate": (
@@ -242,8 +242,8 @@ _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any,
         lambda: (_subspace_sel(), splice_module(nn.Identity(), input="out")),
     ),
     "grad_zero": (
-        lambda: (_subspace_sel(), grad_zero()),
-        lambda: ("capture", grad_zero()),
+        lambda: (_subspace_sel(), zero_grad()),
+        lambda: ("capture", zero_grad()),
     ),
 }
 

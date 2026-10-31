@@ -18,7 +18,7 @@ import torch
 from support.hf_cache import skip_unless_hf_checkpoint_cached
 
 import torchlens as tl
-from torchlens.intervention import direction_from_pairs
+from torchlens.intervention import fit_direction
 
 repeng = pytest.importorskip("repeng")
 transformers = pytest.importorskip("transformers")
@@ -90,7 +90,7 @@ def test_converted_control_vector_reproduces_native_steer_logits(
     """``ControlModel.set_control`` gives the native steer's logits for every method."""
 
     model, ids = stack["model"], stack["ids"]
-    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], _SITE, method)
+    direction = fit_direction(stack["log_pos"], stack["log_neg"], _SITE, method)
     converted = direction.to_repeng()
     assert isinstance(converted, repeng.ControlVector)
     assert converted.model_type == "llama" and list(converted.directions) == [1]
@@ -111,7 +111,7 @@ def test_converted_control_vector_reproduces_native_steer_logits(
 def test_explicit_layer_and_model_type(stack: dict[str, Any]) -> None:
     """``layer=`` and ``model_type=`` are honoured; a site naming no layer needs ``layer=``."""
 
-    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], "model.norm")
+    direction = fit_direction(stack["log_pos"], stack["log_neg"], "model.norm")
     with pytest.raises(ValueError, match="decoder layer index"):
         direction.to_repeng()
     converted = direction.to_repeng(layer=1, model_type="custom")

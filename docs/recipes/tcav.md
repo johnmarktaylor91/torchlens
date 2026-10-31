@@ -120,7 +120,7 @@ less (here, less than a third as far).
 ```python
 # recipe-test: tool=torchlens expected=True
 def mean_margin(direction, magnitude, x):
-    spec = tl.when(tl.module(SITE), tl.steer(direction, magnitude, feature_axis=1))
+    spec = tl.when(tl.module(SITE), tl.steer(direction, magnitude, dim=1))
     with torch.no_grad():
         logits = spec.bind(model)(x)
     return (logits[:, 1] - logits[:, 0]).mean().item()

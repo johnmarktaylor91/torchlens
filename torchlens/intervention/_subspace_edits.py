@@ -118,7 +118,7 @@ def subspace_ablate(
     basis: torch.Tensor,
     *,
     mode: str = "zero",
-    feature_axis: int = -1,
+    dim: int = -1,
     mean: torch.Tensor | None = None,
     seed: int | None = None,
 ) -> Edit:
@@ -153,7 +153,7 @@ def subspace_ablate(
     """
 
     rows = _orthonormal_rows(basis, "subspace_ablate")
-    axis = _validate_feature_axis(feature_axis, "subspace_ablate")
+    axis = _validate_feature_axis(dim, "subspace_ablate")
     if mode not in _MODES:
         raise InvalidArgumentError(
             f"subspace_ablate mode= must be one of {', '.join(_MODES)}; received {mode!r}",
@@ -202,7 +202,7 @@ def subspace_ablate(
         kwargs={"mode": mode, "feature_axis": axis, "mean": mean, "seed": seed},
         factory=factory,
         portability="opaque_audit",
-        batch_independent=mode != "resample",
+        is_batch_independent=mode != "resample",
     )
 
 
@@ -210,7 +210,7 @@ def subspace_interchange(
     basis: torch.Tensor,
     source: Any,
     *,
-    feature_axis: int = -1,
+    dim: int = -1,
 ) -> Edit:
     """Create an edit writing the source trace's in-subspace component over the target's.
 
@@ -236,7 +236,7 @@ def subspace_interchange(
     """
 
     rows = _orthonormal_rows(basis, "subspace_interchange")
-    axis = _validate_feature_axis(feature_axis, "subspace_interchange")
+    axis = _validate_feature_axis(dim, "subspace_interchange")
     from .helpers import _helper_spec, patch_from
 
     donor_spec = patch_from(source)
@@ -260,5 +260,5 @@ def subspace_interchange(
         kwargs={**dict(donor_spec.kwargs), "feature_axis": axis},
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
     )

@@ -1515,7 +1515,7 @@ def _reconcile_rerun_hook_fires(
             fired.update(str(result.plan_id) for result in fire_results)
             continue
         fallback_fired.update(
-            str(record.helper_name)
+            str(record.edit_name)
             for record in (getattr(op, "interventions", None) or ())
             if getattr(record, "direction", None) == "forward"
             and getattr(record, "helper_name", None) is not None
@@ -1742,7 +1742,7 @@ def _is_gradient_edit(entry: Any) -> bool:
     """Return whether one planned hook entry edits gradients."""
 
     helper = getattr(entry, "helper_spec", None)
-    if helper is not None and (helper.kind == "backward" or helper.direction == "backward"):
+    if helper is not None and (helper.kind == "backward" or helper.signal == "backward"):
         return True
     return entry.metadata.get("direction") == "backward"
 

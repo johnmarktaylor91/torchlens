@@ -9,15 +9,15 @@ this one) and silent for training, so a caller who needs the gradient says so wi
 
 ## The rules
 
-- Verbs whose result is a function of the site value keep the graph: `scale`, `clamp`, `noise`,
-  `steer`, `add`, `project_onto`, `project_off`, `mean_ablate()` and `mean_fill(over=...)` (the
+- Verbs whose result is a function of the site value keep the graph: `scale`, `clamp`, `add_noise`,
+  `steer`, `add`, `project_onto`, `project_out`, `mean_ablate()` and `mean_fill(dim=...)` (the
   gradient flows through the mean), `scramble_elements(seed=...)` without `source=`,
   `splice_module`, `permute_batch`, `set_direction_mean` (through the orthogonal part), the
   `subspace_*` edits (through the complement), `compose` and `at_positions` of keeping verbs, and
   hook callables that compute from their input.
 - Verbs that write a value computed elsewhere cut it: `zero_ablate`, `replace_with`, `swap_with`,
   `patch_from` (the donor is detached by design), `resample_rows_from`, `mean_from`,
-  `mean_fill(ref, ...)`, and `mean_ablate` or `scramble_elements` with `source=`.
+  `mean_fill(reference, ...)`, and `mean_ablate` or `scramble_elements` with `source=`.
 - A selection door edits only the selected elements, so the rest of the site keeps the graph:
   under `do(tl.units(...))` a cutting verb still lets the gradient through the unselected
   elements, and under `do(tl.subspace(...))` through the orthogonal complement.
@@ -90,7 +90,7 @@ layer's weight a gradient, equal to the gradient of the same edit applied by han
 forward hook; `cut` means it gives none. `raises:<code>` is a typed refusal. Under
 `do(tl.subspace(...))` the verbs act on the subspace coordinates or write a value's component (see
 [subspace edits](intervention_explainers.md#subspace-edits-the-component-along-a-basis)), and the
-projection edits refuse `subspace_edit_unsupported` there. `affine_source` is a source verb: it
+projection edits refuse `subspace_edit_unsupported` there. `set_affine_coordinates` is a source verb: it
 keeps the graph under `do(tl.subspace(...))` (its new coordinates `W x + b` are a function of the
 site value) and refuses `affine_source_needs_subspace` at every other door. Every `push(differentiable=True)` cell
 reads `cut` because the replay frontier re-leafs the edited value; each of its `keep_grad` cells
@@ -103,14 +103,14 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture intervene= | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
 | capture intervene= | `scale` | reaches | reaches |
 | capture intervene= | `clamp` | reaches | reaches |
-| capture intervene= | `noise` | reaches | reaches |
+| capture intervene= | `add_noise` | reaches | reaches |
 | capture intervene= | `steer` | reaches | reaches |
 | capture intervene= | `add(scalar)` | reaches | reaches |
 | capture intervene= | `add(tensor)` | reaches | reaches |
 | capture intervene= | `replace_with` | cut | raises:edit_detached_from_graph |
 | capture intervene= | `swap_with` | cut | raises:edit_detached_from_graph |
 | capture intervene= | `project_onto` | reaches | reaches |
-| capture intervene= | `project_off` | reaches | reaches |
+| capture intervene= | `project_out` | reaches | reaches |
 | capture intervene= | `scramble_elements` | reaches | reaches |
 | capture intervene= | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
 | capture intervene= | `splice_module` | reaches | reaches |
@@ -119,12 +119,12 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture intervene= | `resample_rows_from` | cut | raises:edit_detached_from_graph |
 | capture intervene= | `mean_from` | cut | raises:edit_detached_from_graph |
 | capture intervene= | `mean_fill` | reaches | reaches |
-| capture intervene= | `mean_fill(ref)` | cut | raises:edit_detached_from_graph |
+| capture intervene= | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
 | capture intervene= | `set_direction_mean` | reaches | reaches |
 | capture intervene= | `subspace_ablate` | reaches | reaches |
 | capture intervene= | `subspace_ablate(resample)` | reaches | reaches |
 | capture intervene= | `subspace_interchange` | reaches | reaches |
-| capture intervene= | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| capture intervene= | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | capture intervene= | `compose` | reaches | reaches |
 | capture intervene= | `at_positions` | reaches | reaches |
 | capture intervene= | `hook callable` | reaches | reaches |
@@ -133,14 +133,14 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture hooks= | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
 | capture hooks= | `scale` | reaches | reaches |
 | capture hooks= | `clamp` | reaches | reaches |
-| capture hooks= | `noise` | reaches | reaches |
+| capture hooks= | `add_noise` | reaches | reaches |
 | capture hooks= | `steer` | reaches | reaches |
 | capture hooks= | `add(scalar)` | reaches | reaches |
 | capture hooks= | `add(tensor)` | reaches | reaches |
 | capture hooks= | `replace_with` | cut | raises:edit_detached_from_graph |
 | capture hooks= | `swap_with` | cut | raises:edit_detached_from_graph |
 | capture hooks= | `project_onto` | reaches | reaches |
-| capture hooks= | `project_off` | reaches | reaches |
+| capture hooks= | `project_out` | reaches | reaches |
 | capture hooks= | `scramble_elements` | reaches | reaches |
 | capture hooks= | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
 | capture hooks= | `splice_module` | reaches | reaches |
@@ -149,12 +149,12 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture hooks= | `resample_rows_from` | cut | raises:edit_detached_from_graph |
 | capture hooks= | `mean_from` | cut | raises:edit_detached_from_graph |
 | capture hooks= | `mean_fill` | reaches | reaches |
-| capture hooks= | `mean_fill(ref)` | cut | raises:edit_detached_from_graph |
+| capture hooks= | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
 | capture hooks= | `set_direction_mean` | reaches | reaches |
 | capture hooks= | `subspace_ablate` | reaches | reaches |
 | capture hooks= | `subspace_ablate(resample)` | reaches | reaches |
 | capture hooks= | `subspace_interchange` | reaches | reaches |
-| capture hooks= | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| capture hooks= | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | capture hooks= | `compose` | reaches | reaches |
 | capture hooks= | `at_positions` | reaches | reaches |
 | capture hooks= | `hook callable` | reaches | reaches |
@@ -163,14 +163,14 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture InterventionDecision | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
 | capture InterventionDecision | `scale` | reaches | reaches |
 | capture InterventionDecision | `clamp` | reaches | reaches |
-| capture InterventionDecision | `noise` | reaches | reaches |
+| capture InterventionDecision | `add_noise` | reaches | reaches |
 | capture InterventionDecision | `steer` | reaches | reaches |
 | capture InterventionDecision | `add(scalar)` | reaches | reaches |
 | capture InterventionDecision | `add(tensor)` | reaches | reaches |
 | capture InterventionDecision | `replace_with` | cut | raises:edit_detached_from_graph |
 | capture InterventionDecision | `swap_with` | cut | raises:edit_detached_from_graph |
 | capture InterventionDecision | `project_onto` | reaches | reaches |
-| capture InterventionDecision | `project_off` | reaches | reaches |
+| capture InterventionDecision | `project_out` | reaches | reaches |
 | capture InterventionDecision | `scramble_elements` | reaches | reaches |
 | capture InterventionDecision | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
 | capture InterventionDecision | `splice_module` | reaches | reaches |
@@ -179,12 +179,12 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture InterventionDecision | `resample_rows_from` | cut | raises:edit_detached_from_graph |
 | capture InterventionDecision | `mean_from` | cut | raises:edit_detached_from_graph |
 | capture InterventionDecision | `mean_fill` | reaches | reaches |
-| capture InterventionDecision | `mean_fill(ref)` | cut | raises:edit_detached_from_graph |
+| capture InterventionDecision | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
 | capture InterventionDecision | `set_direction_mean` | reaches | reaches |
 | capture InterventionDecision | `subspace_ablate` | reaches | reaches |
 | capture InterventionDecision | `subspace_ablate(resample)` | reaches | reaches |
 | capture InterventionDecision | `subspace_interchange` | reaches | reaches |
-| capture InterventionDecision | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| capture InterventionDecision | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | capture InterventionDecision | `compose` | reaches | reaches |
 | capture InterventionDecision | `at_positions` | reaches | reaches |
 | capture InterventionDecision | `hook callable` | reaches | reaches |
@@ -193,14 +193,14 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | fork.do (replay) | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
 | fork.do (replay) | `scale` | reaches | reaches |
 | fork.do (replay) | `clamp` | reaches | reaches |
-| fork.do (replay) | `noise` | reaches | reaches |
+| fork.do (replay) | `add_noise` | reaches | reaches |
 | fork.do (replay) | `steer` | reaches | reaches |
 | fork.do (replay) | `add(scalar)` | reaches | reaches |
 | fork.do (replay) | `add(tensor)` | reaches | reaches |
 | fork.do (replay) | `replace_with` | cut | raises:edit_detached_from_graph |
 | fork.do (replay) | `swap_with` | cut | raises:edit_detached_from_graph |
 | fork.do (replay) | `project_onto` | reaches | reaches |
-| fork.do (replay) | `project_off` | reaches | reaches |
+| fork.do (replay) | `project_out` | reaches | reaches |
 | fork.do (replay) | `scramble_elements` | reaches | reaches |
 | fork.do (replay) | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
 | fork.do (replay) | `splice_module` | reaches | reaches |
@@ -209,12 +209,12 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | fork.do (replay) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
 | fork.do (replay) | `mean_from` | cut | raises:edit_detached_from_graph |
 | fork.do (replay) | `mean_fill` | reaches | reaches |
-| fork.do (replay) | `mean_fill(ref)` | cut | raises:edit_detached_from_graph |
+| fork.do (replay) | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
 | fork.do (replay) | `set_direction_mean` | reaches | reaches |
 | fork.do (replay) | `subspace_ablate` | reaches | reaches |
 | fork.do (replay) | `subspace_ablate(resample)` | reaches | reaches |
 | fork.do (replay) | `subspace_interchange` | reaches | reaches |
-| fork.do (replay) | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| fork.do (replay) | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | fork.do (replay) | `compose` | reaches | reaches |
 | fork.do (replay) | `at_positions` | reaches | reaches |
 | fork.do (replay) | `hook callable` | reaches | reaches |
@@ -223,14 +223,14 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(model=, x=) (rerun) | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
 | do(model=, x=) (rerun) | `scale` | reaches | reaches |
 | do(model=, x=) (rerun) | `clamp` | reaches | reaches |
-| do(model=, x=) (rerun) | `noise` | reaches | reaches |
+| do(model=, x=) (rerun) | `add_noise` | reaches | reaches |
 | do(model=, x=) (rerun) | `steer` | reaches | reaches |
 | do(model=, x=) (rerun) | `add(scalar)` | reaches | reaches |
 | do(model=, x=) (rerun) | `add(tensor)` | reaches | reaches |
 | do(model=, x=) (rerun) | `replace_with` | cut | raises:edit_detached_from_graph |
 | do(model=, x=) (rerun) | `swap_with` | cut | raises:edit_detached_from_graph |
 | do(model=, x=) (rerun) | `project_onto` | reaches | reaches |
-| do(model=, x=) (rerun) | `project_off` | reaches | reaches |
+| do(model=, x=) (rerun) | `project_out` | reaches | reaches |
 | do(model=, x=) (rerun) | `scramble_elements` | reaches | reaches |
 | do(model=, x=) (rerun) | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
 | do(model=, x=) (rerun) | `splice_module` | reaches | reaches |
@@ -239,12 +239,12 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(model=, x=) (rerun) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
 | do(model=, x=) (rerun) | `mean_from` | cut | raises:edit_detached_from_graph |
 | do(model=, x=) (rerun) | `mean_fill` | reaches | reaches |
-| do(model=, x=) (rerun) | `mean_fill(ref)` | cut | raises:edit_detached_from_graph |
+| do(model=, x=) (rerun) | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
 | do(model=, x=) (rerun) | `set_direction_mean` | reaches | reaches |
 | do(model=, x=) (rerun) | `subspace_ablate` | reaches | reaches |
 | do(model=, x=) (rerun) | `subspace_ablate(resample)` | reaches | reaches |
 | do(model=, x=) (rerun) | `subspace_interchange` | reaches | reaches |
-| do(model=, x=) (rerun) | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| do(model=, x=) (rerun) | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | do(model=, x=) (rerun) | `compose` | reaches | reaches |
 | do(model=, x=) (rerun) | `at_positions` | reaches | reaches |
 | do(model=, x=) (rerun) | `hook callable` | reaches | reaches |
@@ -253,14 +253,14 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | attach_hooks + run | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
 | attach_hooks + run | `scale` | reaches | reaches |
 | attach_hooks + run | `clamp` | reaches | reaches |
-| attach_hooks + run | `noise` | reaches | reaches |
+| attach_hooks + run | `add_noise` | reaches | reaches |
 | attach_hooks + run | `steer` | reaches | reaches |
 | attach_hooks + run | `add(scalar)` | reaches | reaches |
 | attach_hooks + run | `add(tensor)` | reaches | reaches |
 | attach_hooks + run | `replace_with` | cut | raises:edit_detached_from_graph |
 | attach_hooks + run | `swap_with` | cut | raises:edit_detached_from_graph |
 | attach_hooks + run | `project_onto` | reaches | reaches |
-| attach_hooks + run | `project_off` | reaches | reaches |
+| attach_hooks + run | `project_out` | reaches | reaches |
 | attach_hooks + run | `scramble_elements` | reaches | reaches |
 | attach_hooks + run | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
 | attach_hooks + run | `splice_module` | reaches | reaches |
@@ -269,12 +269,12 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | attach_hooks + run | `resample_rows_from` | cut | raises:edit_detached_from_graph |
 | attach_hooks + run | `mean_from` | cut | raises:edit_detached_from_graph |
 | attach_hooks + run | `mean_fill` | reaches | reaches |
-| attach_hooks + run | `mean_fill(ref)` | cut | raises:edit_detached_from_graph |
+| attach_hooks + run | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
 | attach_hooks + run | `set_direction_mean` | reaches | reaches |
 | attach_hooks + run | `subspace_ablate` | reaches | reaches |
 | attach_hooks + run | `subspace_ablate(resample)` | reaches | reaches |
 | attach_hooks + run | `subspace_interchange` | reaches | reaches |
-| attach_hooks + run | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| attach_hooks + run | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | attach_hooks + run | `compose` | reaches | reaches |
 | attach_hooks + run | `at_positions` | reaches | reaches |
 | attach_hooks + run | `hook callable` | reaches | reaches |
@@ -283,14 +283,14 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | spec.bind(model) | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
 | spec.bind(model) | `scale` | reaches | reaches |
 | spec.bind(model) | `clamp` | reaches | reaches |
-| spec.bind(model) | `noise` | reaches | reaches |
+| spec.bind(model) | `add_noise` | reaches | reaches |
 | spec.bind(model) | `steer` | reaches | reaches |
 | spec.bind(model) | `add(scalar)` | reaches | reaches |
 | spec.bind(model) | `add(tensor)` | reaches | reaches |
 | spec.bind(model) | `replace_with` | cut | raises:edit_detached_from_graph |
 | spec.bind(model) | `swap_with` | cut | raises:edit_detached_from_graph |
 | spec.bind(model) | `project_onto` | reaches | reaches |
-| spec.bind(model) | `project_off` | reaches | reaches |
+| spec.bind(model) | `project_out` | reaches | reaches |
 | spec.bind(model) | `scramble_elements` | reaches | reaches |
 | spec.bind(model) | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
 | spec.bind(model) | `splice_module` | reaches | reaches |
@@ -299,12 +299,12 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | spec.bind(model) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
 | spec.bind(model) | `mean_from` | cut | raises:edit_detached_from_graph |
 | spec.bind(model) | `mean_fill` | reaches | reaches |
-| spec.bind(model) | `mean_fill(ref)` | cut | raises:edit_detached_from_graph |
+| spec.bind(model) | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
 | spec.bind(model) | `set_direction_mean` | reaches | reaches |
 | spec.bind(model) | `subspace_ablate` | reaches | reaches |
 | spec.bind(model) | `subspace_ablate(resample)` | reaches | reaches |
 | spec.bind(model) | `subspace_interchange` | reaches | reaches |
-| spec.bind(model) | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| spec.bind(model) | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | spec.bind(model) | `compose` | reaches | reaches |
 | spec.bind(model) | `at_positions` | reaches | reaches |
 | spec.bind(model) | `hook callable` | reaches | reaches |
@@ -313,14 +313,14 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | push(differentiable=True) | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
 | push(differentiable=True) | `scale` | cut | cut |
 | push(differentiable=True) | `clamp` | cut | cut |
-| push(differentiable=True) | `noise` | cut | cut |
+| push(differentiable=True) | `add_noise` | cut | cut |
 | push(differentiable=True) | `steer` | cut | cut |
 | push(differentiable=True) | `add(scalar)` | cut | cut |
 | push(differentiable=True) | `add(tensor)` | cut | cut |
 | push(differentiable=True) | `replace_with` | cut | raises:edit_detached_from_graph |
 | push(differentiable=True) | `swap_with` | cut | raises:edit_detached_from_graph |
 | push(differentiable=True) | `project_onto` | cut | cut |
-| push(differentiable=True) | `project_off` | cut | cut |
+| push(differentiable=True) | `project_out` | cut | cut |
 | push(differentiable=True) | `scramble_elements` | cut | cut |
 | push(differentiable=True) | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
 | push(differentiable=True) | `splice_module` | cut | cut |
@@ -329,12 +329,12 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | push(differentiable=True) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
 | push(differentiable=True) | `mean_from` | cut | raises:edit_detached_from_graph |
 | push(differentiable=True) | `mean_fill` | cut | cut |
-| push(differentiable=True) | `mean_fill(ref)` | cut | raises:edit_detached_from_graph |
+| push(differentiable=True) | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
 | push(differentiable=True) | `set_direction_mean` | cut | cut |
 | push(differentiable=True) | `subspace_ablate` | cut | cut |
 | push(differentiable=True) | `subspace_ablate(resample)` | cut | cut |
 | push(differentiable=True) | `subspace_interchange` | cut | cut |
-| push(differentiable=True) | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| push(differentiable=True) | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | push(differentiable=True) | `compose` | cut | cut |
 | push(differentiable=True) | `at_positions` | cut | cut |
 | push(differentiable=True) | `hook callable` | cut | cut |
@@ -343,14 +343,14 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(tl.units(...)) | `mean_ablate(source)` | reaches | raises:edit_detached_from_graph |
 | do(tl.units(...)) | `scale` | reaches | reaches |
 | do(tl.units(...)) | `clamp` | reaches | reaches |
-| do(tl.units(...)) | `noise` | reaches | reaches |
+| do(tl.units(...)) | `add_noise` | reaches | reaches |
 | do(tl.units(...)) | `steer` | reaches | reaches |
 | do(tl.units(...)) | `add(scalar)` | reaches | reaches |
 | do(tl.units(...)) | `add(tensor)` | reaches | reaches |
 | do(tl.units(...)) | `replace_with` | reaches | raises:edit_detached_from_graph |
 | do(tl.units(...)) | `swap_with` | reaches | raises:edit_detached_from_graph |
 | do(tl.units(...)) | `project_onto` | reaches | reaches |
-| do(tl.units(...)) | `project_off` | reaches | reaches |
+| do(tl.units(...)) | `project_out` | reaches | reaches |
 | do(tl.units(...)) | `scramble_elements` | reaches | reaches |
 | do(tl.units(...)) | `scramble_elements(source)` | reaches | raises:edit_detached_from_graph |
 | do(tl.units(...)) | `splice_module` | reaches | reaches |
@@ -359,12 +359,12 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(tl.units(...)) | `resample_rows_from` | reaches | raises:edit_detached_from_graph |
 | do(tl.units(...)) | `mean_from` | reaches | raises:edit_detached_from_graph |
 | do(tl.units(...)) | `mean_fill` | reaches | reaches |
-| do(tl.units(...)) | `mean_fill(ref)` | reaches | raises:edit_detached_from_graph |
+| do(tl.units(...)) | `mean_fill(reference)` | reaches | raises:edit_detached_from_graph |
 | do(tl.units(...)) | `set_direction_mean` | reaches | reaches |
 | do(tl.units(...)) | `subspace_ablate` | reaches | reaches |
 | do(tl.units(...)) | `subspace_ablate(resample)` | reaches | reaches |
 | do(tl.units(...)) | `subspace_interchange` | reaches | reaches |
-| do(tl.units(...)) | `affine_source` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| do(tl.units(...)) | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
 | do(tl.units(...)) | `compose` | reaches | reaches |
 | do(tl.units(...)) | `at_positions` | reaches | reaches |
 | do(tl.units(...)) | `hook callable` | reaches | reaches |
@@ -373,14 +373,14 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(tl.subspace(...)) | `mean_ablate(source)` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `scale` | reaches | reaches |
 | do(tl.subspace(...)) | `clamp` | reaches | reaches |
-| do(tl.subspace(...)) | `noise` | reaches | reaches |
+| do(tl.subspace(...)) | `add_noise` | reaches | reaches |
 | do(tl.subspace(...)) | `steer` | reaches | reaches |
 | do(tl.subspace(...)) | `add(scalar)` | reaches | reaches |
 | do(tl.subspace(...)) | `add(tensor)` | reaches | reaches |
 | do(tl.subspace(...)) | `replace_with` | reaches | raises:edit_detached_from_graph |
 | do(tl.subspace(...)) | `swap_with` | reaches | raises:edit_detached_from_graph |
 | do(tl.subspace(...)) | `project_onto` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
-| do(tl.subspace(...)) | `project_off` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
+| do(tl.subspace(...)) | `project_out` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `scramble_elements` | reaches | reaches |
 | do(tl.subspace(...)) | `scramble_elements(source)` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `splice_module` | reaches | reaches |
@@ -389,12 +389,12 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(tl.subspace(...)) | `resample_rows_from` | reaches | raises:edit_detached_from_graph |
 | do(tl.subspace(...)) | `mean_from` | reaches | raises:edit_detached_from_graph |
 | do(tl.subspace(...)) | `mean_fill` | reaches | reaches |
-| do(tl.subspace(...)) | `mean_fill(ref)` | reaches | raises:edit_detached_from_graph |
+| do(tl.subspace(...)) | `mean_fill(reference)` | reaches | raises:edit_detached_from_graph |
 | do(tl.subspace(...)) | `set_direction_mean` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `subspace_ablate` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `subspace_ablate(resample)` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `subspace_interchange` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
-| do(tl.subspace(...)) | `affine_source` | reaches | reaches |
+| do(tl.subspace(...)) | `set_affine_coordinates` | reaches | reaches |
 | do(tl.subspace(...)) | `compose` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `at_positions` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `hook callable` | reaches | reaches |

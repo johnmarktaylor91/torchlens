@@ -94,7 +94,7 @@ def test_bind_door_policy(policy: str) -> None:
         else:
             assert bound(x).shape == (2, 2)
     assert bound.last_report is not None
-    assert bound.last_report.zero_fire_rule_ids == (bound.spec.rules[0].rule_id,)
+    assert bound.last_report.zero_fire_rule_ids == (bound.recipe.rules[0].rule_id,)
     expected = ["bind_zero_fire"] if policy == "warn" else []
     assert [c for c in _codes(caught) if c.endswith("zero_fire")] == expected
 
@@ -196,7 +196,7 @@ def _gated_rerun_case() -> tuple[nn.Module, tl.Trace, dict[str, bool]]:
     """A sticky hook resolved on the source trace that stops matching on the rerun."""
 
     model = _ReluAdd()
-    trace = tl.trace(model, torch.randn(2, 3), capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, torch.randn(2, 3), capture=CaptureOptions(replayable=True))
     gate = {"active": True}
     trace.attach_hooks(
         tl.func("relu") & tl.where(lambda _op: gate["active"], name_hint="runtime_gate"),
@@ -255,7 +255,7 @@ def _fast_steered_case() -> tuple[nn.Module, tl.Trace, Callable[[int], torch.Ten
     def x_of(seed: int) -> torch.Tensor:
         return torch.randn(1, 3, _DIM, generator=torch.Generator().manual_seed(seed))
 
-    spec = tl.when(tl.module("block"), tl.steer(torch.randn(_DIM), magnitude=3.0, feature_axis=-1))
+    spec = tl.when(tl.module("block"), tl.steer(torch.randn(_DIM), strength=3.0, dim=-1))
     trace = tl.trace(model, x_of(0), save=tl.module("block") | tl.module("head"), intervene=spec)
     return model, trace, x_of
 
@@ -295,7 +295,7 @@ def test_disclose_cannot_silence_the_post_capture_predicate_refusal(same_inputs:
     torch.manual_seed(0)
     model = _Net().eval()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     label = str(trace.find_sites(tl.func("relu"))[0].layer_label)
     trace.attach_hooks(tl.where(lambda p: p.layer_label == label), tl.zero_ablate())
     run_x = x if same_inputs else x + 1.0

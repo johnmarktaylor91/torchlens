@@ -311,7 +311,7 @@ def test_a_backward_that_raises_reads_not_run_never_a_number() -> None:
             trace.log_backward(out.sum())
         (record,) = trace.backward_passes
         assert record.status != "ok"
-        assert record.dispatched_ops  # the second Linear's backward ran before the raise
+        assert record.aten_ops  # the second Linear's backward ran before the raise
         status = backward_status(trace)
         assert status.state == "backward_observed"
         assert status.executed_flops is None and status.executed_evidence == "unknown"
@@ -341,8 +341,8 @@ def test_without_the_node_resolver_the_count_reads_unknown_never_a_guess(
     try:
         trace.log_backward(trace[trace.output_layers[0]].out.sum())
         (record,) = trace.backward_passes
-        assert record.status == "ok" and record.dispatched_ops
-        assert all(op.grad_fn_call_ref is None for op in record.dispatched_ops)
+        assert record.status == "ok" and record.aten_ops
+        assert all(op.grad_fn_call_ref is None for op in record.aten_ops)
         attribution = record.flops_attribution
         assert attribution.executed_flops is None and not attribution.rows
         status = backward_status(trace)

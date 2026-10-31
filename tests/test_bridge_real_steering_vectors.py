@@ -19,7 +19,7 @@ import torch
 from support.hf_cache import skip_unless_hf_checkpoint_cached
 
 import torchlens as tl
-from torchlens.intervention import direction_from_pairs
+from torchlens.intervention import fit_direction
 
 sv = pytest.importorskip("steering_vectors")
 transformers = pytest.importorskip("transformers")
@@ -106,7 +106,7 @@ def test_mean_diff_matches_train_steering_vector(stack: dict[str, Any]) -> None:
     """The default native method is bit-identical to the package's own trainer."""
 
     direct = _direct(stack).layer_activations[1]
-    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], _SITE)
+    direction = fit_direction(stack["log_pos"], stack["log_neg"], _SITE)
     assert direction.vector.shape == direct.shape == (16,)
     assert torch.equal(direction.vector, direct)
 
@@ -115,7 +115,7 @@ def test_pca_matches_pca_aggregator(stack: dict[str, Any]) -> None:
     """Native ``pca`` agrees with the package's ``pca_aggregator`` on the same rows."""
 
     direct = _direct(stack, aggregator=sv.pca_aggregator()).layer_activations[1]
-    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], _SITE, "pca")
+    direction = fit_direction(stack["log_pos"], stack["log_neg"], _SITE, "pca")
     torch.testing.assert_close(direction.vector, direct, atol=1e-5, rtol=0)
 
 
@@ -124,7 +124,7 @@ def test_logistic_matches_logistic_aggregator(stack: dict[str, Any]) -> None:
 
     aggregator = sv.logistic_aggregator(sklearn_kwargs={"tol": 1e-12, "max_iter": 100000})
     direct = _direct(stack, aggregator=aggregator).layer_activations[1]
-    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], _SITE, "logistic")
+    direction = fit_direction(stack["log_pos"], stack["log_neg"], _SITE, "logistic")
     torch.testing.assert_close(direction.vector, direct, atol=1e-5, rtol=0)
 
 
@@ -135,7 +135,7 @@ def test_converted_vector_reproduces_native_steer_logits(
     """``SteeringVector.apply`` gives the native steer's logits for every method."""
 
     model, ids = stack["model"], _ids(stack)
-    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], _SITE, method)
+    direction = fit_direction(stack["log_pos"], stack["log_neg"], _SITE, method)
     converted = direction.to_steering_vectors()
     assert isinstance(converted, sv.SteeringVector)
     assert list(converted.layer_activations) == [1]
@@ -152,7 +152,7 @@ def test_planted_wrong_site_fails_the_exact_comparison(stack: dict[str, Any]) ->
     """Reading the wrong layer breaks the bitwise match with the package's trainer."""
 
     direct = _direct(stack).layer_activations[1]
-    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], "model.layers.0")
+    direction = fit_direction(stack["log_pos"], stack["log_neg"], "model.layers.0")
     assert direction.vector.shape == direct.shape
     assert not torch.equal(direction.vector, direct)
 
@@ -163,7 +163,7 @@ def test_layer_object_site_resolves_in_each_trace(stack: dict[str, Any]) -> None
     site = stack["log_pos"][_SITE]
     assert hasattr(site, "out") and hasattr(site, "layer_label")
     direct = _direct(stack).layer_activations[1]
-    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], site)
+    direction = fit_direction(stack["log_pos"], stack["log_neg"], site)
     assert torch.equal(direction.vector, direct)
 
 
@@ -190,7 +190,7 @@ def test_padded_unequal_prompts_match_batched_package(stack: dict[str, Any]) -> 
         direct = sv.train_steering_vector(
             stack["model"], tok, pairs, layers=[1], read_token_index=-1, batch_size=len(pairs)
         ).layer_activations[1]
-        direction = direction_from_pairs(log_pos, log_neg, _SITE)
+        direction = fit_direction(log_pos, log_neg, _SITE)
     finally:
         log_pos.cleanup()
         log_neg.cleanup()

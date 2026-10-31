@@ -147,7 +147,7 @@ def _capture_cnn(seed: int, *, intervention_ready: bool = False) -> tl.Trace:
         model,
         x,
         capture=CaptureOptions(
-            intervention_ready=intervention_ready,
+            replayable=intervention_ready,
             layers_to_save="all",
             random_seed=0,
         ),

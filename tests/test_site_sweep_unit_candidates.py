@@ -34,7 +34,7 @@ def _setup() -> tuple[nn.Module, torch.Tensor, tl.Trace, str]:
     torch.manual_seed(0)
     model = _Mlp().double().eval()
     x = torch.randn(2, 4, dtype=torch.float64)
-    baseline = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    baseline = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     label = next(op.layer_label for op in baseline.layer_list if "relu" in op.layer_label)
     return model, x, baseline, label
 

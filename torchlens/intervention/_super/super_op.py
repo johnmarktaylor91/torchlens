@@ -24,7 +24,7 @@ class SuperOp(Super["Op"], _TensorBearing):
         bundle_trace_names: list[str] | None = None,
         *,
         members: dict[str, Any] | None = None,
-        query: Any | None = None,
+        selector: Any | None = None,
     ) -> None:
         """Initialize a node view.
 
@@ -60,7 +60,7 @@ class SuperOp(Super["Op"], _TensorBearing):
         super().__init__(
             label,
             cast(dict[str, "Op"], resolved_members),
-            query=query,
+            query=selector,
             bundle_member_names=bundle_member_names,
         )
 

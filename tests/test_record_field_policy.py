@@ -251,7 +251,7 @@ def test_trace_runnable_field_order_slots_are_live_and_loaded_values_override(
         _RunnablePolicyModel().eval(),
         torch.randn(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),

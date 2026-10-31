@@ -116,9 +116,7 @@ def test_steer_generate_honours_the_decode_step(model: torch.nn.Module) -> None:
     """``steer_generate`` (sugar over bind) carries the same step qualifier."""
 
     direction = torch.ones(16)
-    spec = tl.when(
-        tl.module("transformer.h.1") & at_step(0, 3), tl.steer(direction, 2.0, feature_axis=-1)
-    )
+    spec = tl.when(tl.module("transformer.h.1") & at_step(0, 3), tl.steer(direction, 2.0, dim=-1))
     steered = steer_generate(copy.deepcopy(model), _IDS, spec, **_GENERATE)
     assert steered.report.fire_count == 2
     assert steered.report.trace is None

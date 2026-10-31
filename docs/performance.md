@@ -363,7 +363,7 @@ to keep before the first long capture:
 `tl.report.backward_status(trace)` reports the compute of the backward pass that actually
 ran, counted call by call. When a capture requested a backward (`backward_ready=True`,
 `save_grads=` or `default_grad=`), every ATen call that backward dispatches is recorded on
-its `BackwardPass.dispatched_ops`, with its shapes, its dtypes and the GradFn call it ran
+its `BackwardPass.aten_ops`, with its shapes, its dtypes and the GradFn call it ran
 under. Each call is then counted with the same convention as `torch.utils.flop_counter`: one
 multiply-add counts 2 FLOPs, and only matmul and convolution calls are counted. Any other call
 is listed by name in `uncounted_ops`; it is never counted as zero and never estimated.

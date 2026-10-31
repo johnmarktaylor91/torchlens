@@ -70,7 +70,7 @@ def test_all_144_heads_sweep_within_the_retention_ceiling() -> None:
     model = _gpt2_12x12()
     torch.manual_seed(0)
     ids = torch.randint(0, 50, (1, 8))
-    baseline = tl.trace(model, ids, capture=CaptureOptions(intervention_ready=True))
+    baseline = tl.trace(model, ids, capture=CaptureOptions(replayable=True))
     candidates = _candidates()
     per_member = _member_bytes(baseline)
     assert per_member > 0

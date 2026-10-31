@@ -59,17 +59,17 @@ def _relu_layer(log: tl.Trace):
 
 
 _FLAG_HELPERS: dict[str, Callable[[], Edit]] = {
-    "zero_ablate": lambda: tl.zero_ablate(force_shape_change=True),
-    "replace_with": lambda: tl.replace_with(torch.ones(1, 8), force_shape_change=True),
-    "scale": lambda: tl.scale(0.5, force_shape_change=True),
-    "noise": lambda: tl.noise(0.1, seed=0, force_shape_change=True),
-    "clamp": lambda: tl.clamp(min=0.0, force_shape_change=True),
-    "mean_ablate": lambda: tl.mean_ablate(force_shape_change=True),
-    "scramble_elements": lambda: tl.intervention.scramble_elements(seed=0, force_shape_change=True),
-    "add": lambda: tl.add(1.0, force_shape_change=True),
-    "splice_module": lambda: tl.splice_module(_ToDouble(), force_shape_change=True),
-    "grad_zero": lambda: tl.grad_zero(force_shape_change=True),
-    "grad_scale": lambda: tl.grad_scale(2.0, force_shape_change=True),
+    "zero_ablate": lambda: tl.zero_ablate(allow_shape_change=True),
+    "replace_with": lambda: tl.replace_with(torch.ones(1, 8), allow_shape_change=True),
+    "scale": lambda: tl.scale(0.5, allow_shape_change=True),
+    "noise": lambda: tl.add_noise(0.1, seed=0, allow_shape_change=True),
+    "clamp": lambda: tl.clamp(min=0.0, allow_shape_change=True),
+    "mean_ablate": lambda: tl.mean_ablate(allow_shape_change=True),
+    "scramble_elements": lambda: tl.intervention.scramble_elements(seed=0, allow_shape_change=True),
+    "add": lambda: tl.add(1.0, allow_shape_change=True),
+    "splice_module": lambda: tl.splice_module(_ToDouble(), allow_shape_change=True),
+    "grad_zero": lambda: tl.zero_grad(allow_shape_change=True),
+    "grad_scale": lambda: tl.scale_grad(2.0, allow_shape_change=True),
 }
 
 
@@ -106,13 +106,13 @@ def test_intervene_shape_change_applies() -> None:
         x,
         save=lambda ctx: True,
         intervene=tl.when(
-            tl.func("relu"), tl.replace_with(torch.ones(1, 8), force_shape_change=True)
+            tl.func("relu"), tl.replace_with(torch.ones(1, 8), allow_shape_change=True)
         ),
     )
     assert float(_output_out(log)) == pytest.approx(8.0)
     relu = _relu_layer(log)
     assert tuple(relu.out.shape) == (1, 8)
-    assert relu.intervention_replaced is True
+    assert relu.is_edited is True
 
 
 def test_hooks_kwarg_shape_change_applies() -> None:
@@ -124,7 +124,7 @@ def test_hooks_kwarg_shape_change_applies() -> None:
         x,
         save=lambda ctx: True,
         capture=tl.options.CaptureOptions(
-            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), force_shape_change=True)}
+            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), allow_shape_change=True)}
         ),
     )
     assert float(_output_out(log)) == pytest.approx(8.0)
@@ -144,7 +144,7 @@ def test_replay_hooks_shape_change_applies() -> None:
     )
     replayed = log.push(
         replay=tl.options.ReplayOptions(
-            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), force_shape_change=True)}
+            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), allow_shape_change=True)}
         )
     )
     assert float(_output_out(replayed)) == pytest.approx(8.0)
@@ -164,7 +164,7 @@ def test_push_replay_options_shape_change_applies() -> None:
     )
     pushed = log.push(
         replay=ReplayOptions(
-            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), force_shape_change=True)}
+            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), allow_shape_change=True)}
         )
     )
     assert float(_output_out(pushed)) == pytest.approx(8.0)
@@ -179,7 +179,7 @@ def test_splice_module_dtype_change_applies() -> None:
         model,
         x,
         save=lambda ctx: True,
-        intervene=tl.when(tl.func("relu"), tl.splice_module(_ToDouble(), force_shape_change=True)),
+        intervene=tl.when(tl.func("relu"), tl.splice_module(_ToDouble(), allow_shape_change=True)),
     )
     assert _output_out(log).dtype == torch.float64
 

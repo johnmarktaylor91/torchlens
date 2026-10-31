@@ -75,12 +75,12 @@ def _ablated(model: nn.Module) -> tl.Trace:
 
 def _steered(model: nn.Module) -> tl.Trace:
     direction = torch.randn(_DIM, generator=torch.Generator().manual_seed(3))
-    spec = tl.when(tl.module("block"), tl.steer(direction, magnitude=3.0, feature_axis=-1))
+    spec = tl.when(tl.module("block"), tl.steer(direction, strength=3.0, dim=-1))
     return tl.trace(model, _x(), save=tl.module("block") | tl.module("head"), intervene=spec)
 
 
 def _ready(model: nn.Module) -> tl.Trace:
-    return tl.trace(model, _x(), capture=CaptureOptions(intervention_ready=True))
+    return tl.trace(model, _x(), capture=CaptureOptions(replayable=True))
 
 
 def _double(out: torch.Tensor) -> torch.Tensor:
@@ -172,7 +172,7 @@ def test_plain_reruns_and_runs_stay_pristine(tmp_path: Path) -> None:
 
 def test_fork_inherits_the_reading_and_never_touches_its_parent() -> None:
     model = _model()
-    plain = tl.trace(model, _x(), capture=CaptureOptions(intervention_ready=True))
+    plain = tl.trace(model, _x(), capture=CaptureOptions(replayable=True))
     fork = plain.fork("f")
     assert fork.pristine is True and plain.pristine is True
     fork.set(tl.module("block"), _double, confirm_mutation=True)

@@ -18,7 +18,7 @@ import torch
 from support.hf_cache import skip_unless_hf_checkpoint_cached
 
 import torchlens as tl
-from torchlens.intervention import direction_from_pairs
+from torchlens.intervention import fit_direction
 
 dialz = pytest.importorskip("dialz")
 transformers = pytest.importorskip("transformers")
@@ -96,7 +96,7 @@ def test_converted_steering_vector_reproduces_native_steer_logits(
     """``SteeringModel.set_control`` gives the native steer's logits for every method."""
 
     model, ids, steering_model = stack["model"], stack["ids"], stack["steering_model"]
-    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], _SITE, method)
+    direction = fit_direction(stack["log_pos"], stack["log_neg"], _SITE, method)
     converted = direction.to_dialz()
     assert isinstance(converted, dialz.SteeringVector)
     assert converted.model_type == "llama" and list(converted.directions) == [1]
@@ -123,7 +123,7 @@ def test_native_mean_diff_matches_steering_vector_train(stack: dict[str, Any]) -
     direct = dialz.SteeringVector.train(
         stack["steering_model"], stack["dataset"], method="mean_diff", hidden_layers=[0]
     )
-    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], "model.layers.0")
+    direction = fit_direction(stack["log_pos"], stack["log_neg"], "model.layers.0")
     converted = direction.to_dialz()
     assert list(direct.directions) == list(converted.directions) == [0]
     assert converted.directions[0].dtype == direct.directions[0].dtype
@@ -138,7 +138,7 @@ def test_native_mean_diff_matches_steering_vector_train(stack: dict[str, Any]) -
 def test_explicit_layer_and_model_type(stack: dict[str, Any]) -> None:
     """``layer=`` and ``model_type=`` are honoured; a site naming no layer needs ``layer=``."""
 
-    direction = direction_from_pairs(stack["log_pos"], stack["log_neg"], "model.norm")
+    direction = fit_direction(stack["log_pos"], stack["log_neg"], "model.norm")
     with pytest.raises(ValueError, match="decoder layer index"):
         direction.to_dialz()
     converted = direction.to_dialz(layer=1, model_type="custom")

@@ -87,7 +87,7 @@ def test_last_real_token_in_a_padded_batch(mask: torch.Tensor, which: str, cols:
 
     model = _model()
     direction = torch.ones(4)
-    edit = at_positions(tl.steer(direction, 3.0, feature_axis=-1), which, mask=mask)
+    edit = at_positions(tl.steer(direction, 3.0, dim=-1), which, mask=mask)
     got = _run(model, edit)
     want = _by_hand(model, [0, 1], cols, lambda value: value + 3.0 * direction)
     torch.testing.assert_close(got, want, rtol=0.0, atol=1e-6)

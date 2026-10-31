@@ -69,7 +69,7 @@ def test_tf_zero_fire_site_warns_in_reachability_audit() -> None:
     torch-only hosts.
     """
 
-    from torchlens.backends.tf.interventions import (
+    from torchlens.backends.tf.edits import (
         TFInterventionPlan,
         TFInterventionSite,
         audit_tf_site_reachability,

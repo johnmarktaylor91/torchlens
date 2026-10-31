@@ -80,7 +80,7 @@ _ADDRESS_CLASS_RANK: dict[str, int] = {
 }
 
 
-def classify_where(where: Any) -> AddressClass:
+def classify_where(target: Any) -> AddressClass:
     """Classify a WHERE term under the address law (worst class wins).
 
     Parameters
@@ -100,14 +100,14 @@ def classify_where(where: Any) -> AddressClass:
 
     from .selectors import BaseSelector
 
-    if isinstance(where, BaseSelector):
+    if isinstance(target, BaseSelector):
         from ..ir.selector_eval import selector_contains_kind
 
-        if selector_contains_kind(where, "predicate", unwrap=True):
+        if selector_contains_kind(target, "predicate", unwrap=True):
             return "value_dependent"
         worst: AddressClass = "structural"
         for kind in _RECORDED_SELECTOR_KINDS:
-            if selector_contains_kind(where, kind, unwrap=True):
+            if selector_contains_kind(target, kind, unwrap=True):
                 worst = "recorded"
                 break
         return worst
@@ -156,7 +156,7 @@ def _canonical_repr(value: Any, *, exact: bool = False) -> str:
 
 
 @dataclass(frozen=True)
-class InterventionRule:
+class Rule:
     """One immutable WHERE/ACTION clause of an :class:`InterventionSpec`.
 
     Parameters
@@ -170,9 +170,9 @@ class InterventionRule:
         Optional signal-direction override for the action.
     """
 
-    where: Any
-    action: Any
-    direction: HelperDirection | None = None
+    target: Any
+    edit: Any
+    signal: HelperDirection | None = None
     address_class: AddressClass = field(default="value_dependent", compare=False)
     decision: InterventionDecision | None = field(default=None, compare=False, repr=False)
     where_repr: str = field(default="", compare=False, repr=False)
@@ -193,23 +193,23 @@ class InterventionRule:
             or the action is unsupported (existing predicate-door codes).
         """
 
-        if not callable(self.where):
+        if not callable(self.target):
             raise ArgumentTypeError(
                 "InterventionSpec rule WHERE term must be a callable selector or "
-                f"predicate; received {type(self.where).__name__}. Structural "
+                f"predicate; received {type(self.target).__name__}. Structural "
                 "spellings (valid in every lane): tl.func(...), tl.in_module(...), "
                 "tl.site(...). Recorded spellings: tl.label(...), Selections.",
                 code="intervention_where_invalid",
                 remedy="pass a selector or predicate callable as the WHERE term",
                 argument="where",
             )
-        decision = as_intervention_decision(self.action, direction=self.direction)
+        decision = as_intervention_decision(self.edit, direction=self.signal)
         action_tensors: list[torch.Tensor] = []
-        collect_tensors(self.action, action_tensors)
+        collect_tensors(self.edit, action_tensors)
         object.__setattr__(self, "decision", decision)
-        object.__setattr__(self, "where_repr", _canonical_repr(self.where))
+        object.__setattr__(self, "where_repr", _canonical_repr(self.target))
         object.__setattr__(self, "_action_tensors", tuple(action_tensors))
-        object.__setattr__(self, "address_class", classify_where(self.where))
+        object.__setattr__(self, "address_class", classify_where(self.target))
 
     def _identity(self, *, exact: bool = False) -> tuple[str, str]:
         """Return ``(action_repr, rule_id)`` for the action's CURRENT content.
@@ -236,9 +236,9 @@ class InterventionRule:
         memo = self._identity_memo
         if not exact and memo is not None and memo[0] == versions and None not in versions:
             return memo[1]
-        action_repr = _canonical_repr(self.action, exact=exact)
+        action_repr = _canonical_repr(self.edit, exact=exact)
         digest = hashlib.sha256(
-            f"{self.where_repr}||{action_repr}||{self.direction}".encode()
+            f"{self.where_repr}||{action_repr}||{self.signal}".encode()
         ).hexdigest()[:10]
         identity = (action_repr, f"r-{digest}")
         object.__setattr__(self, "_identity_memo", (versions, identity))
@@ -260,8 +260,8 @@ class InterventionRule:
         """Render the clause with its current rule identity."""
 
         return (
-            f"InterventionRule(where={self.where!r}, action={self.action!r}, "
-            f"direction={self.direction!r}, rule_id={self.rule_id!r}, "
+            f"InterventionRule(where={self.target!r}, action={self.edit!r}, "
+            f"direction={self.signal!r}, rule_id={self.rule_id!r}, "
             f"address_class={self.address_class!r})"
         )
 
@@ -273,7 +273,7 @@ class InterventionRule:
 
 
 @dataclass(frozen=True)
-class InterventionSpec:
+class Recipe:
     """The immutable multi-clause intervention spec (the ONE public noun).
 
     The same object is accepted unchanged by every intervention door.
@@ -284,7 +284,7 @@ class InterventionSpec:
     kill; ``tl.compose`` is the explicit spelling for chained values.
     """
 
-    rules: tuple[InterventionRule, ...] = ()
+    rules: tuple[Rule, ...] = ()
 
     def __post_init__(self) -> None:
         """Refuse duplicate rules typed at construction.
@@ -298,7 +298,7 @@ class InterventionSpec:
 
         seen: dict[str, int] = {}
         for index, rule in enumerate(self.rules):
-            if not isinstance(rule, InterventionRule):
+            if not isinstance(rule, Rule):
                 raise ArgumentTypeError(
                     "InterventionSpec rules must be InterventionRule clauses; "
                     f"clause {index} is {type(rule).__name__}",
@@ -360,7 +360,7 @@ class InterventionSpec:
             )
         return decision
 
-    def match(self, ctx: Any) -> InterventionRule | None:
+    def match(self, ctx: Any) -> Rule | None:
         """Return the single rule matching one op context, or ``None``.
 
         The rule-attributing form of :meth:`__call__` (the capture door reads
@@ -379,9 +379,9 @@ class InterventionSpec:
             ``spec_rules_overlap`` when more than one rule matches one op.
         """
 
-        matched: list[InterventionRule] = []
+        matched: list[Rule] = []
         for rule in self.rules:
-            if rule.where(ctx):
+            if rule.target(ctx):
                 matched.append(rule)
         if not matched:
             return None
@@ -418,7 +418,7 @@ class InterventionSpec:
         return None
 
     @property
-    def spec_digest(self) -> str:
+    def digest(self) -> str:
         """Content digest over the ordered rule identities, read NOW.
 
         Every read re-hashes tensor arguments (once each), so the digest
@@ -439,7 +439,7 @@ class InterventionSpec:
                 worst = rule.address_class
         return worst  # type: ignore[return-value]
 
-    def merge(self, *others: InterventionSpec) -> InterventionSpec:
+    def merge(self, *others: Recipe) -> Recipe:
         """Return the multi-clause spec joining this spec's rules and others'.
 
         Per-rule IDs are content-derived and PRESERVED by construction; a
@@ -448,7 +448,7 @@ class InterventionSpec:
 
         rules = list(self.rules)
         for index, other in enumerate(others):
-            if not isinstance(other, InterventionSpec):
+            if not isinstance(other, Recipe):
                 raise ArgumentTypeError(
                     f"merge() takes InterventionSpec operands; operand {index} "
                     f"is {type(other).__name__}",
@@ -457,9 +457,9 @@ class InterventionSpec:
                     argument="others",
                 )
             rules.extend(other.rules)
-        return InterventionSpec(rules=tuple(rules))
+        return Recipe(rules=tuple(rules))
 
-    def __and__(self, other: InterventionSpec) -> InterventionSpec:
+    def __and__(self, other: Recipe) -> Recipe:
         """``spec & spec`` sugar for :meth:`merge` (one experiment, more clauses)."""
 
         return self.merge(other)
@@ -467,7 +467,7 @@ class InterventionSpec:
     def door_pairs(self) -> list[tuple[Any, Any]]:
         """Lower the spec to ``(site, action)`` pairs for the hook-plan doors."""
 
-        return [(rule.where, rule.action) for rule in self.rules]
+        return [(rule.target, rule.edit) for rule in self.rules]
 
     def bind(self, model: Any, *, on_zero_fire: str = "warn") -> Any:
         """Bind this spec to a model as a capture-free live executor (F01).
@@ -510,7 +510,7 @@ def when(
     action: Any,
     *,
     direction: HelperDirection | None = None,
-) -> InterventionSpec:
+) -> Recipe:
     """Build a one-clause immutable :class:`InterventionSpec`.
 
     The promoted public constructor (surgery memo 3.1): the returned spec is
@@ -524,7 +524,7 @@ def when(
         Selector or predicate evaluated against each op context (the WHERE
         term; see the address law in the module docstring).
     action:
-        Helper spec (``tl.scale``, ``tl.noise``, ...), callable transform, or
+        Helper spec (``tl.scale``, ``tl.add_noise``, ...), callable transform, or
         ``InterventionDecision``.
     direction:
         Optional signal direction override.
@@ -535,10 +535,10 @@ def when(
         Immutable one-clause spec.
     """
 
-    return InterventionSpec(rules=(InterventionRule(condition, action, direction),))
+    return Recipe(rules=(Rule(condition, action, direction),))
 
 
-def refuse_unreplayable_rules(spec: InterventionSpec, *, door: str) -> None:
+def refuse_unreplayable_rules(spec: Recipe, *, door: str) -> None:
     """Preflight the whole spec on a recorded-graph door; refuse BY NAME.
 
     Surgery 3.1: no lane may silently drop a rule it cannot implement. The
@@ -577,7 +577,7 @@ def refuse_unreplayable_rules(spec: InterventionSpec, *, door: str) -> None:
     )
 
 
-def entries_from_spec(spec: InterventionSpec, *, door: str) -> list[Any]:
+def entries_from_spec(spec: Recipe, *, door: str) -> list[Any]:
     """Lower a public spec to normalized hook-plan entries for one door.
 
     Preflights the WHOLE spec first (:func:`refuse_unreplayable_rules`), so a
@@ -607,9 +607,9 @@ def entries_from_spec(spec: InterventionSpec, *, door: str) -> list[Any]:
     entries: list[Any] = []
     for rule in spec.rules:
         rule_entries = normalize_hook_plan(
-            rule.where,
-            rule.action,
-            direction=rule.direction,
+            rule.target,
+            rule.edit,
+            direction=rule.signal,
             allow_replay_only_site_targets=True,
         )
         for entry in rule_entries:
@@ -617,7 +617,7 @@ def entries_from_spec(spec: InterventionSpec, *, door: str) -> list[Any]:
             merged.update(
                 {
                     "spec_rule_id": rule.rule_id,
-                    "spec_digest": spec.spec_digest,
+                    "spec_digest": spec.digest,
                     "spec_where_repr": rule.where_repr,
                     "spec_action_repr": rule.action_repr,
                     "spec_address_class": rule.address_class,
@@ -630,8 +630,8 @@ def entries_from_spec(spec: InterventionSpec, *, door: str) -> list[Any]:
 
 __all__ = [
     "AddressClass",
-    "InterventionRule",
-    "InterventionSpec",
+    "Rule",
+    "Recipe",
     "classify_where",
     "entries_from_spec",
     "refuse_unreplayable_rules",

@@ -474,7 +474,7 @@ def test_bare_string_live_is_exact_raw_label() -> None:
     fired: list[str] = []
 
     def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
-        fired.append(str(hook.layer_log.get("layer_label")))
+        fired.append(str(hook.op.get("layer_label")))
         return out
 
     with warnings.catch_warnings():

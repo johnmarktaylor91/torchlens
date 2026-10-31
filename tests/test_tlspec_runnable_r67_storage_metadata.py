@@ -44,7 +44,7 @@ from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, x) -> tl.Trace:

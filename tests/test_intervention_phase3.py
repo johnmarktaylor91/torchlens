@@ -104,17 +104,17 @@ def test_phase3_helpers_import_and_return_specs() -> None:
         tl.zero_ablate(),
         tl.mean_ablate(),
         tl.intervention.scramble_elements(),
-        tl.steer(torch.ones(3), feature_axis=-1),
+        tl.steer(torch.ones(3), dim=-1),
         tl.scale(2.0),
         tl.clamp(min=-1.0, max=1.0),
-        tl.noise(0.1, seed=1),
-        tl.project_onto(torch.ones(3), feature_axis=-1),
-        tl.project_off(torch.ones(3), feature_axis=-1),
+        tl.add_noise(0.1, seed=1),
+        tl.project_onto(torch.ones(3), dim=-1),
+        tl.project_out(torch.ones(3), dim=-1),
         tl.swap_with(torch.ones(2, 3)),
         tl.splice_module(torch.nn.Identity()),
-        tl.bwd_hook(_good_hook),
-        tl.grad_zero(),
-        tl.grad_scale(0.5),
+        tl.hook_grad(_good_hook),
+        tl.zero_grad(),
+        tl.scale_grad(0.5),
     ]
 
     assert all(isinstance(spec, Edit) for spec in helper_specs)
@@ -134,7 +134,7 @@ def test_project_onto_uses_batch_independent_feature_axis_projection() -> None:
         ]
     )
     direction = torch.tensor([1.0, 1.0, 0.0])
-    hook = tl.project_onto(direction, feature_axis=-1)()
+    hook = tl.project_onto(direction, dim=-1)()
 
     projected = hook(out, hook=_context())
 
@@ -159,10 +159,10 @@ def test_hook_context_uses_mapping_proxy_and_frozen_fields() -> None:
 
     context = _context()
 
-    assert isinstance(context.layer_log, MappingProxyType)
-    assert context.layer_log["layer_label"] == "relu_1_1"
+    assert isinstance(context.op, MappingProxyType)
+    assert context.op["layer_label"] == "relu_1_1"
     with pytest.raises(TypeError):
-        context.layer_log["layer_label"] = "mutated"  # type: ignore[index]
+        context.op["layer_label"] = "mutated"  # type: ignore[index]
     with pytest.raises(AttributeError):
         context.name = "mutated"  # type: ignore[misc]
 
@@ -187,7 +187,7 @@ def test_helper_direction_override_contradiction_raises() -> None:
     """Backward-only helpers cannot be mounted as forward hooks."""
 
     with pytest.raises(HelperMountError, match="intrinsically 'backward'"):
-        normalize_hook_plan(tl.func("relu"), tl.grad_zero(), direction="forward")
+        normalize_hook_plan(tl.func("relu"), tl.zero_grad(), direction="forward")
 
 
 def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
@@ -291,7 +291,7 @@ def test_force_shape_change_allows_metadata_changes() -> None:
 
         return torch.ones(3, 2, dtype=torch.float64)
 
-    result = _execute_hook(shape_hook, out, _context(), force_shape_change=True)
+    result = _execute_hook(shape_hook, out, _context(), allow_shape_change=True)
 
     assert result.shape == (3, 2)
     assert result.dtype == torch.float64
@@ -304,9 +304,9 @@ def test_seeded_noise_is_deterministic_and_unseeded_records_note() -> None:
     out = torch.zeros(2, 3)
     context = _context()
 
-    seeded_a = tl.noise(1.0, seed=123)()
-    seeded_b = tl.noise(1.0, seed=123)()
-    unseeded = tl.noise(1.0)()
+    seeded_a = tl.add_noise(1.0, seed=123)()
+    seeded_b = tl.add_noise(1.0, seed=123)()
+    unseeded = tl.add_noise(1.0)()
 
     assert torch.equal(seeded_a(out, hook=context), seeded_b(out, hook=context))
     _ = unseeded(out, hook=context)
@@ -520,9 +520,9 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
 
     assert torch.equal(replacement.out, x * 2)
     assert torch.equal(sigmoid.out, torch.sigmoid(replacement.out))
-    assert replacement.intervention_replaced is True
-    assert replacement.interventions[-1].replaced is True
-    assert replacement.interventions[-1].helper_name == "splice_module"
+    assert replacement.is_edited is True
+    assert replacement.edits[-1].replaced is True
+    assert replacement.edits[-1].helper_name == "splice_module"
     assert check_metadata_invariants(log) is True
     for module_call_label, module_call in log.module_calls.items():
         assert module_call.call_parent != module_call_label

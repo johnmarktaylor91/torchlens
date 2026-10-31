@@ -84,7 +84,7 @@ def as_intervention_decision(
     )
 
 
-def add(delta: torch.Tensor | float | int, *, force_shape_change: bool = False) -> Edit:
+def add(delta: torch.Tensor | float | int, *, allow_shape_change: bool = False) -> Edit:
     """Create a helper that adds ``delta`` to an out tensor.
 
     Parameters
@@ -116,17 +116,17 @@ def add(delta: torch.Tensor | float | int, *, force_shape_change: bool = False) 
     return Edit(
         helper_name="add",
         args=(delta,),
-        kwargs=(("force_shape_change", force_shape_change),),
+        kwargs=(("force_shape_change", allow_shape_change),),
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        compatible_with_append=not allow_shape_change,
     )
 
 
 def replace_with(
     value: torch.Tensor | Callable[[], torch.Tensor],
     *,
-    force_shape_change: bool = False,
+    allow_shape_change: bool = False,
 ) -> Edit:
     """Create a helper that replaces an out with a fixed value.
 
@@ -168,10 +168,10 @@ def replace_with(
     return Edit(
         helper_name="replace_with",
         args=(value,),
-        kwargs=(("force_shape_change", force_shape_change),),
+        kwargs=(("force_shape_change", allow_shape_change),),
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not force_shape_change,
+        is_batch_independent=True,
+        compatible_with_append=not allow_shape_change,
     )
 
 

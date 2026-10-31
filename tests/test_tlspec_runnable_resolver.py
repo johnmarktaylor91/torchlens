@@ -115,7 +115,7 @@ def _descriptor() -> SparseRunDescriptor:
         ResolverModel(),
         torch.ones(1, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -343,7 +343,7 @@ def test_safe_load_survives_unresolved_key_and_run_fails_once_with_full_report(
         ResolverModel(),
         torch.ones(1, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -381,7 +381,7 @@ def test_load_defers_unsupported_callable_schema_to_structured_readiness(
         ResolverModel(),
         torch.ones(1, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),

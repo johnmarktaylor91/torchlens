@@ -11,7 +11,7 @@ that is::
     fork.do(artifact.subspace(site, positions=mask), artifact.edit)
 
 which is ``tl.subspace(tl.units(site, ...), R.T, origin=..., method="loreft")``
-with ``tl.intervention.affine_source(W, bias=b)``. :func:`read` never fits
+with ``tl.intervention.set_affine_coordinates(W, bias=b)``. :func:`read` never fits
 anything and never imports pyreft or pyvene: it reads the files with
 ``torch.load(weights_only=True)``.
 
@@ -177,11 +177,13 @@ class LoreftArtifact:
 
     @property
     def edit(self) -> Any:
-        """Return ``tl.intervention.affine_source(W, bias=b)`` in float64."""
+        """Return ``tl.intervention.set_affine_coordinates(W, bias=b)`` in float64."""
 
-        from ..intervention._affine_source import affine_source
+        from ..intervention._affine_source import set_affine_coordinates
 
-        return affine_source(self.weight.to(torch.float64), bias=self.bias.to(torch.float64))
+        return set_affine_coordinates(
+            self.weight.to(torch.float64), bias=self.bias.to(torch.float64)
+        )
 
 
 def _checked_site(site: Any, width: int, positions: torch.Tensor | None) -> str:

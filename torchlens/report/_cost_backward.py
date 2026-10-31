@@ -16,7 +16,7 @@ states:
 - ``backward_observed``: ``log_backward`` recorded backward passes --
   timing is measured where fire timings exist, and the executed backward
   compute is COUNTED over the ATen calls that backward dispatched (each
-  pass's ``BackwardPass.dispatched_ops``), exact for the matmul and
+  pass's ``BackwardPass.aten_ops``), exact for the matmul and
   convolution families at fma2 (FlopCounterMode's convention); every
   recorded op outside those families is named in ``uncounted_ops``, never
   zeroed or estimated. Each pass's count is attributed to the GradFn calls

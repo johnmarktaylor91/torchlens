@@ -1271,7 +1271,7 @@ class Trace(
         "_layers_logged": FieldPolicy.KEEP,
         "_layers_saved": FieldPolicy.KEEP,
         "keep_orphans": FieldPolicy.KEEP,
-        "intervention_ready": FieldPolicy.KEEP,
+        "is_replayable": FieldPolicy.KEEP,
         "save_arg_templates": FieldPolicy.KEEP,
         "raw_input": FieldPolicy.KEEP,
         "input_preprocessor": FieldPolicy.KEEP,
@@ -1826,7 +1826,7 @@ class Trace(
         self._layers_logged = False
         self._layers_saved = False
         self.keep_orphans = keep_orphans
-        self.intervention_ready = False
+        self.is_replayable = False
         self.save_arg_templates = False
         self.raw_input = raw_input
         self.input_preprocessor: ResolvedPreprocessing | None = None
@@ -2108,7 +2108,7 @@ class Trace(
         else:
             return _getitem_during_pass(self, ix)
 
-    def find_sites(self, query: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
+    def find_sites(self, selector: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
         """Return a table of intervention sites matching a query.
 
         Parameters
@@ -2128,9 +2128,9 @@ class Trace(
 
         from ..intervention.resolver import find_sites
 
-        return find_sites(self, query, strict=strict, max_fanout=max_fanout)
+        return find_sites(self, selector, strict=strict, max_fanout=max_fanout)
 
-    def resolve_sites(self, query: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
+    def resolve_sites(self, selector: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
         """Resolve intervention sites matching a query.
 
         Parameters
@@ -2150,7 +2150,7 @@ class Trace(
 
         from ..intervention.resolver import resolve_sites
 
-        return resolve_sites(self, query, strict=strict, max_fanout=max_fanout)
+        return resolve_sites(self, selector, strict=strict, max_fanout=max_fanout)
 
     def check_plan(self, plan: Any) -> Any:
         """Audit-only plan check (weightsfree memo D14; nnsight-scan parity).
@@ -2514,7 +2514,7 @@ class Trace(
         self.__dict__.pop("_last_encoding_state", None)
         self.__dict__.pop("_last_render_geometry", None)
 
-    def find_layers(self, query: str, *, limit: int = 10) -> list[str]:
+    def find_layers(self, selector: str, *, limit: int = 10) -> list[str]:
         """Return layer labels matching a fuzzy query.
 
         Parameters
@@ -2531,12 +2531,12 @@ class Trace(
             fuzzy matches when substring matches are insufficient.
         """
 
-        query_text = str(query).lower()
+        query_text = str(selector).lower()
         labels = list(self.layer_labels)
         substring_matches = [label for label in labels if query_text in label.lower()]
         if len(substring_matches) >= limit:
             return substring_matches[:limit]
-        fuzzy_matches = difflib.get_close_matches(str(query), labels, n=limit, cutoff=0.25)
+        fuzzy_matches = difflib.get_close_matches(str(selector), labels, n=limit, cutoff=0.25)
         result = substring_matches[:]
         for label in fuzzy_matches:
             if label not in result:

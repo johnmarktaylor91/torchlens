@@ -67,7 +67,7 @@ from .._options import (
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
-from .interventions import PaddleInterventionCapture, PaddleInterventionRuntime
+from .edits import PaddleInterventionCapture, PaddleInterventionRuntime
 from .model_prep import (
     PaddleModuleTree,
     cleanup_model_session,

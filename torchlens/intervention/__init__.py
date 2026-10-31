@@ -21,8 +21,8 @@ public surface, ``__all__``, and static types unchanged.
 
 from typing import TYPE_CHECKING, Any
 
-from ._affine_source import affine_source
-from ._directions import Direction, direction_from_pairs
+from ._affine_source import set_affine_coordinates
+from ._directions import Direction, fit_direction
 from ._gradient_contract import keep_grad
 from ._metrics import (
     METRIC_REGISTRY as METRIC_REGISTRY,
@@ -54,7 +54,7 @@ from ._topology.topology import (
 # steer wrapper (module named ``steering`` -- the ``steer`` attribute is the
 # historical helper from .helpers), and the region noun (derived
 # admissibility on the existing verbs).
-from .binding import BindReport, BoundInterventionExecutor
+from .binding import BindReport, BoundModel
 from .compose import compose
 from .errors import (
     AppendBatchDependenceError,
@@ -102,24 +102,24 @@ from .errors import (
 from .handles import HookHandle
 from .helpers import (
     _RESAMPLE_ABLATE_REDIRECT,
-    bwd_hook,
+    add_grad_noise,
+    add_noise,
     clamp,
-    grad_clamp,
-    grad_clip,
-    grad_noise,
-    grad_scale,
-    grad_zero,
+    clamp_grad,
+    clip_grad,
+    hook_grad,
     mean_ablate,
-    noise,
     patch_from,
-    project_off,
     project_onto,
+    project_out,
     scale,
+    scale_grad,
     scramble_elements,
     splice_module,
     steer,
     swap_with,
     zero_ablate,
+    zero_grad,
 )
 from .hooks import (
     HookContext,
@@ -128,7 +128,7 @@ from .hooks import (
     normalize_hook as normalize_hook,
     normalize_hook_plan,
 )
-from .population import OneDatum, PerRowDatums, Reference, reference
+from .population import OneDatum, PerRowDatums, Reference, population
 from .predicates import add, replace_with
 from .regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget, region
 from .replay import push, push_from
@@ -174,8 +174,8 @@ from .sites import SiteCollection, SiteSpec as SiteSpec, sites
 # sticky-hook recipe keeps its identity at ``.types.InterventionSpec`` --
 # internal code and persisted pickles are untouched.
 from .spec import (
-    InterventionRule,
-    InterventionSpec,
+    Recipe,
+    Rule,
     classify_where,
     refuse_unreplayable_rules,
     when,
@@ -233,7 +233,7 @@ __all__ = [
     "BaselineUndeterminedError",
     "BatchNormTrainModeWarning",
     "BindReport",
-    "BoundInterventionExecutor",
+    "BoundModel",
     "Bundle",
     "BundleMemberError",
     "BundleRelationshipError",
@@ -262,8 +262,8 @@ __all__ = [
     "HookContext",
     "HookSiteCoverageError",
     "HookValueError",
-    "InterventionRule",
-    "InterventionSpec",
+    "Rule",
+    "Recipe",
     "InterventionReadyConflictError",
     "LiveModeLabelError",
     "LiteralTensor",
@@ -303,7 +303,7 @@ __all__ = [
     "TensorSliceSpec",
     "TupleIndex",
     "Unsupported",
-    "bwd_hook",
+    "hook_grad",
     "clamp",
     "check_spec_compat",
     "classify_where",
@@ -312,23 +312,23 @@ __all__ = [
     "contains",
     "cosine_distance",
     "Direction",
-    "direction_from_pairs",
+    "fit_direction",
     "do",
     "facet",
     "func",
     "func_transform",
     "followed_by",
-    "grad_clamp",
-    "grad_clip",
+    "clamp_grad",
+    "clip_grad",
     "grad_fn",
     "grad_fn_label",
     "grad_input",
     "head",
     "label",
-    "grad_noise",
+    "add_grad_noise",
     "grad_output",
-    "grad_scale",
-    "grad_zero",
+    "scale_grad",
+    "zero_grad",
     "input_at",
     "in_backward_pass",
     "in_module",
@@ -342,16 +342,16 @@ __all__ = [
     "PerRowDatums",
     "permute_batch",
     "Reference",
-    "reference",
+    "population",
     "SamplingPlan",
     "module",
-    "noise",
+    "add_noise",
     "normalize_hook_plan",
     "NormalizedHookEntry",
     "output",
     "output_at",
     "preceded_by",
-    "project_off",
+    "project_out",
     "project_onto",
     "refuse_unreplayable_rules",
     "region",
@@ -365,7 +365,7 @@ __all__ = [
     "set_direction_mean",
     "at_positions",
     "keep_grad",
-    "affine_source",
+    "set_affine_coordinates",
     "subspace_ablate",
     "subspace_interchange",
     "relative_l1_scalar",

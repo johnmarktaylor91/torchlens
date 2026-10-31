@@ -306,7 +306,7 @@ def test_capture_container_structure_reconstructs_without_intervention_ready() -
     )
     rebuilt = trace.reconstruct_output()
 
-    assert trace.intervention_ready is False
+    assert trace.is_replayable is False
     assert isinstance(rebuilt, DemoModelOutput)
     assert torch.equal(rebuilt["logits"], torch.tensor([2.0]))
     assert torch.equal(rebuilt["past_key_values"][0][1], torch.tensor([4.0]))

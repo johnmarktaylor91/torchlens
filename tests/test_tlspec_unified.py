@@ -135,7 +135,7 @@ def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
         UnifiedTinyModel().eval(),
         torch.randn(2, 3),
         capture=CaptureOptions(
-            intervention_ready=intervention_ready,
+            replayable=intervention_ready,
             layers_to_save="all",
             random_seed=0,
         ),
@@ -602,7 +602,7 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
         UnifiedTinyModel().eval(),
         torch.randn(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.func("relu"): tl.zero_ablate()},
         ),
     )
@@ -619,7 +619,7 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
     ]
     assert records
     assert all(isinstance(record, FireRecord) for record in records)
-    assert records[0].direction == "forward"
+    assert records[0].signal == "forward"
 
 
 def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_path: Path) -> None:
@@ -631,7 +631,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
         x,
         capture=CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_clamp(0, 0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp_grad(0, 0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "trace_backward_intervention.tlspec"
 
@@ -640,10 +640,10 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
 
     assert isinstance(loaded, tl.Trace)
     refs = [
-        call.intervention_fire_ref
+        call.fire_record
         for grad_fn in loaded.grad_fn_logs.values()
         for call in grad_fn.calls._list
-        if call.intervention_fire_ref is not None
+        if call.fire_record is not None
     ]
     assert refs
     assert isinstance(refs[0], FireRecord)
@@ -1147,12 +1147,10 @@ def test_intervene_trace_round_trips_transient_dedup_state(
 
     tl.save(trace, path)
     loaded = tl.load(path)
-    replaced_ops = [op for op in loaded.layer_list if op.intervention_replaced]
+    replaced_ops = [op for op in loaded.layer_list if op.is_edited]
 
     assert replaced_ops
-    assert any(
-        record.helper_name == helper_name for op in replaced_ops for record in op.interventions
-    )
+    assert any(record.edit_name == helper_name for op in replaced_ops for record in op.edits)
 
 
 def test_unknown_backend_runtime_version_serializes_as_null() -> None:

@@ -126,7 +126,7 @@ def test_vary_partial_failure_disclosed_no_rollback() -> None:
 @pytest.mark.smoke
 def test_vary_shared_plan_keeps_one_donor_group() -> None:
     bundle = _pair()
-    population = tl.intervention.reference(
+    population = tl.intervention.population(
         [torch.randn(2, 3) for _ in range(4)],
         origin="unit-test population, seeded randn rows",
     )

@@ -54,7 +54,7 @@ def test_loaded_trace_reads_the_saved_count_and_attribution(case: str, tmp_path:
         (attribution,) = status.attributions
         assert attribution.source == "saved record" and attribution.other_trace_ops is None
         (record,) = loaded.backward_passes
-        assert record.dispatched_ops is None
+        assert record.aten_ops is None
         assert executed_flops_record_problem(record.executed_flops_record) is None
     finally:
         trace.cleanup()

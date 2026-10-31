@@ -122,15 +122,15 @@ def build_fire_record(
         func_call_id=func_call_id,
         container_path=container_path,
         engine=engine,
-        helper=helper,
+        edit=helper,
         site_label=site_label,
         timing=timing,
-        direction=direction,
-        helper_name=helper_name,
+        signal=direction,
+        edit_name=helper_name,
         seed=seed,
         determinism_note=determinism_note,
         timestamp=time.monotonic() if timestamp is None else timestamp,
-        backward_pass_index=backward_pass_index,
+        backward_pass_number=backward_pass_index,
         call_index=call_index,
         grad_kind=grad_kind,
         tuple_index=tuple_index,
@@ -409,16 +409,16 @@ def event_audit_rows(trace: Any) -> tuple[dict[str, Any], ...]:
 def rules_payload(spec: Any) -> tuple[dict[str, Any], ...]:
     """Render a public InterventionSpec's per-rule envelope payload."""
 
-    from .spec import InterventionSpec
+    from .spec import Recipe
 
-    if not isinstance(spec, InterventionSpec):
+    if not isinstance(spec, Recipe):
         return ()
     return tuple(
         {
             "rule_id": rule.rule_id,
             "where": rule.where_repr,
             "action": rule.action_repr,
-            "direction": rule.direction,
+            "direction": rule.signal,
             "address_class": rule.address_class,
             "payload_fidelity": rule.payload_fidelity,
         }

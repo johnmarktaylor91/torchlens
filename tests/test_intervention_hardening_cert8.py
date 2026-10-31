@@ -13,7 +13,7 @@ class a prior round fixed at a *different* site:
 
 * BLOCKER-2 -- helper deserialization must stay on the full value codec. Builtin
   helper callable/opaque arguments must never round-trip as raw wrapper dicts:
-  ``tl.bwd_hook(fn)`` must load cleanly at the DEFAULT save level, and an
+  ``tl.hook_grad(fn)`` must load cleanly at the DEFAULT save level, and an
   audit-level ``tl.splice_module(...)`` payload must load as an explicitly
   non-executable placeholder (raising ``NonExecutableSpecError`` at fire time)
   rather than a silently corrupted helper.
@@ -176,7 +176,7 @@ def test_bwd_hook_callable_arg_roundtrips_at_default_save_level() -> None:
     returns a callable ``LazyImportRef``.
     """
 
-    helper = tl.bwd_hook(_top_level_bwd_hook)
+    helper = tl.hook_grad(_top_level_bwd_hook)
     state = _new_state()
     serialized = _serialize_value(helper, SaveLevel.EXECUTABLE_WITH_CALLABLES, state)
     loaded = _deserialize_value(serialized, {})
@@ -208,7 +208,7 @@ def test_bwd_hook_end_to_end_save_load_default_level(tmp_path: Path) -> None:
         _IdentityRelu(),
         x,
         capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
-        intervene=tl.when(tl.func("relu"), tl.bwd_hook(_top_level_bwd_hook)),
+        intervene=tl.when(tl.func("relu"), tl.hook_grad(_top_level_bwd_hook)),
     )
     path = tmp_path / "bwd_hook.tlspec"
     # Default level == executable_with_callables.

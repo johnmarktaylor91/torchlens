@@ -40,7 +40,7 @@
   [Common Patterns](common-patterns.md), "Steering many forwards / generation".
 - Contrastive directions (DOCUMENTED-UNSTABLE):
   `tl.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff"|"pca"|"logistic", *, read_token_index=-1)`
-  returns a `torchlens.intervention.Direction` (`vector`, `site`, `method`, `n_pairs`,
+  returns a `torchlens.intervention.Direction` (`vector`, `site`, `method`, `num_pairs`,
   `model_type`, `provenance` as a `BasisProvenance`). `direction.steer(m)` is the native
   steer; `direction.to_steering_vectors()`, `direction.to_repeng()` and `direction.to_dialz()`
   return the real library objects (thin converters `tl.bridge.steering_vectors.from_direction`,
@@ -75,7 +75,7 @@
   re-enables grad (`torch.enable_grad()` inside it) and an output carries autograd history;
   an explicit `inference_only=True` is never cleared.
   A backward run through such a capture records the ATen calls it dispatched on
-  `BackwardPass.dispatched_ops` (session-time, DOCUMENTED-UNSTABLE), and
+  `BackwardPass.aten_ops` (session-time, DOCUMENTED-UNSTABLE), and
   `tl.report.backward_status(trace)` counts them: `executed_flops` is exact for the matmul
   and convolution families at fma2 (FlopCounterMode's convention), per pass in
   `executed_flops_per_pass`, with every other recorded op kind named in `uncounted_ops`.
@@ -715,7 +715,7 @@
   value-dependent branches refuse DEVICE-NEUTRALLY with the user's exact
   source line (`value_dependent_branch_unsupported`; missing meta kernels
   refuse `meta_kernel_unavailable`). Option conflicts (`raise_on_nan`,
-  `intervention_ready`, not-provably-value-free `halt=`) refuse
+  `replayable`, not-provably-value-free `halt=`) refuse
   `structure_only_option_conflict` at entry. `trace.structure_only` mirrors
   the flag (persisted as of the tlspec v8 bump with M-C2/M-C3 load-validation
   rows); `trace.discharge_against(real_trace)` corroborates or refutes the
@@ -797,7 +797,7 @@
   within=None, k=|fraction=, by=, largest=)` select by HOW VALUES DIFFER
   between two runs — the SUBJECT is the resolution trace, the REFERENCE one
   explicit Trace (pairwise, directional `subject - reference` in float64;
-  bare `changed(ref)` = the "every element that moved" intervention-effect
+  bare `has_changes(ref)` = the "every element that moved" intervention-effect
   mask; `relation="exact"`). Structures NEVER silently intersect: reference
   missing-site/unsaved/shape-drift refusals name the reference, a
   structural-site-key disagreement refuses (label coincidence across
@@ -843,7 +843,7 @@
   rotation `R` (DAS, ReFT) is applied as `tl.subspace(site, R[:k],
   origin=...)`, never fitted; load refuses `subspace_spec_invalid`,
   `subspace_spec_basis_tampered`, `subspace_spec_basis_not_orthonormal`.
-  LEARNED AFFINE SOURCE (LoReFT): `tl.intervention.affine_source(weight, *,
+  LEARNED AFFINE SOURCE (LoReFT): `tl.intervention.set_affine_coordinates(weight, *,
   bias=None)` is a source verb: under `do(tl.subspace(site, R.T, origin=...),
   affine_source(W, bias=b))` the new coordinates are `W x + b` of the whole
   site value, so the site gets `x + Q^T (W x + b - Q x)`; `weight` shaped
@@ -914,7 +914,7 @@
   replaces the value CONSUMED on the edge on the replay/push engine ONLY
   (rerun/set_only refuse `edge_intervention_engine_unsupported`; rerun-side
   design is an escalated named future) — the child re-executes from the
-  substituted input (node-level `intervention_replaced` never fires for
+  substituted input (node-level `is_edited` never fires for
   edges), the substituted value rides the tier-(ii) store
   `Op.edge_substitutions` (+ `edge_replacement_stamps`,
   `FireRecord.edge_address`; all persisted as of tlspec v8, so ordinary
@@ -1327,7 +1327,7 @@
   or elsewhere refuses (`extraction_intervention_no_fire` / `_site_drift`), disk mode writes
   the `tl_counterfactual_harvest_v1` block plus per-shard fire receipts, and the intervention
   identity rides the signature's `model_mode` value (module and op-type address classes run;
-  finer ones refuse `harvest_address_class_ungated`; helpers must be `batch_independent`).
+  finer ones refuse `harvest_address_class_ungated`; helpers must be `is_batch_independent`).
   `store_input_ids=True` stores token ids as the ordinary `input_ids` key (trimmed like the
   token-axis activations); `open_extraction(d).token_rows()` / `.token_batch(i)` return
   `TokenRows` (one row per token, with `stimulus_row` and `position`), and

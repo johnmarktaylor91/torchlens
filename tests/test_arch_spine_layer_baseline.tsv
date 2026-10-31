@@ -19,12 +19,12 @@ autoroute._builtin_input	1
 backends._finalize	6
 backends.jax.backend	16
 backends.mlx.backend	3
-backends.mlx.interventions	6
+backends.mlx.edits	6
 backends.paddle.backend	5
-backends.paddle.interventions	6
+backends.paddle.edits	6
 backends.tf.backend	5
 backends.tf.funcgraph	4
-backends.tf.interventions	5
+backends.tf.edits	5
 backends.tf.validation	2
 backends.tinygrad.backend	6
 backends.torch._ops_arguments	8

@@ -111,13 +111,13 @@ it is in this pack:
 - **Feature preconditions** (a panel silently showing nothing usually means a
   missing trace flag, not a broken renderer):
   - intervention site/cone/hook styling marks PLANNED interventions:
-    `tl.trace(..., capture=CaptureOptions(intervention_ready=True))` then
+    `tl.trace(..., capture=CaptureOptions(replayable=True))` then
     `trace.set(...)`. Live
     `intervene=` fire records do not style nodes.
   - raw-input thumbnails need `tl.trace(model, raw,
     capture=CaptureOptions(transform=fn))` (raw input
     is only stored when a transform produced the model-ready tensor).
-  - container labels/collapsed need `intervention_ready=True`;
+  - container labels/collapsed need `replayable=True`;
     `show_containers='nodes'` needs `capture_container_structure=True`;
     'cluster' currently always falls back to labels; 'collapsed' only merges
     homogeneous containers larger than `container_max_inline`.

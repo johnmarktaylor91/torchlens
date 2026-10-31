@@ -564,7 +564,7 @@ def critique_loop(lm, q, *, intervene):  # your harness; intervene maps a call n
 
 torch.manual_seed(0)
 lm, q = TinyLM().eval(), torch.tensor([[20, 21, 22]])
-steer = tl.when(tl.module("block"), tl.steer(torch.randn(16), magnitude=6.0, feature_axis=-1))
+steer = tl.when(tl.module("block"), tl.steer(torch.randn(16), strength=6.0, dim=-1))
 
 b = critique_loop(lm, q, intervene={})
 report = b.add_alternative(critique_loop(lm, q, intervene={"draft": steer}), steered=("draft",))

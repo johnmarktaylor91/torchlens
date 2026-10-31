@@ -34,7 +34,7 @@ from torchlens.intervention import (
     mean_fill,
     mean_from,
     permute_batch,
-    reference,
+    population,
     resample_rows_from,
     sample_from,
     sampling_records,
@@ -151,7 +151,7 @@ def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
     layer = next(lab for lab in log.layer_labels if lab.startswith("linear"))
     assert log[layer].num_passes == 2, "the fixture must be a real two-pass layer"
 
-    donors = reference(torch.randn(8, *log[f"{layer}:1"].out.shape), origin="donor stack")
+    donors = population(torch.randn(8, *log[f"{layer}:1"].out.shape), origin="donor stack")
     per_firing = sample_from(donors, seed=13, share_draw="per_firing")
     fork = log.fork()
     # The explicit Layer selection is the all-passes spelling (one rule, two
@@ -212,7 +212,7 @@ def test_seed_is_required_and_auto_derives_from_trace_seed() -> None:
     # No run context -> no trace seed -> typed refusal, never ambient RNG.
     edit = permute_batch(seed="auto", axis=0)
     assert edit.factory is not None
-    context = make_hook_context(name="p", layer_log={"label": "u", "pass_index": 1})
+    context = make_hook_context(name="p", op={"label": "u", "pass_index": 1})
     with pytest.raises(Exception) as excinfo:
         edit.factory()(torch.randn(3, 2), hook=context)
     assert excinfo.value.fields["code"] == "sampling_trace_seed_unavailable"
@@ -231,9 +231,9 @@ def test_mask_equivariance_law() -> None:
     expected = baseline.clone()
     expected[:, 1:3] = baseline[permutation][:, 1:3]
     assert torch.allclose(fork["relu_1_2"].out, expected)
-    fire = list(fork.ops["relu_1_2"].interventions or ())[-1]
-    assert fire.helper is not None
-    metadata = dict(fire.helper.metadata)
+    fire = list(fork.ops["relu_1_2"].edits or ())[-1]
+    assert fire.edit is not None
+    metadata = dict(fire.edit.metadata)
     assert "selection_mask_digest" in metadata
     assert metadata["selection_mask_rows_equal"] is True
     # Per-row-differing masks refuse typed, stably across seeds.
@@ -249,7 +249,7 @@ def test_resample_rows_from_per_row_coherent_draws() -> None:
     """Whole-row coherent donor sampling with replacement, agreement-aware."""
 
     log = _toy_trace()
-    rows = reference(torch.randn(3, 4), origin="row donors", data=["a", "a", "b"])
+    rows = population(torch.randn(3, 4), origin="row donors", data=["a", "a", "b"])
     fork = log.fork()
     # Class 'b' deliberately has ONE member: the D15 disclosure must fire.
     with pytest.warns(UserWarning, match="agreement class of size 1"):
@@ -272,7 +272,7 @@ def test_resample_rows_from_per_row_coherent_draws() -> None:
     expected = torch.stack([rows.members[index] for index in donor_ids], dim=0)
     assert torch.equal(fork["relu_1_2"].out, expected)
     # Geometry proof: row donors of the wrong shape refuse printing both shapes.
-    bad = reference(torch.randn(3, 7), origin="bad rows")
+    bad = population(torch.randn(3, 7), origin="bad rows")
     with pytest.raises(Exception) as excinfo:
         log.fork().do(tl.label("relu_1_2"), resample_rows_from(bad, seed=2, axis=0))
     assert excinfo.value.fields["code"] == "sampling_geometry_mismatch"
@@ -282,7 +282,7 @@ def test_singleton_agreement_class_discloses_and_strict_refuses() -> None:
     """D15: class of one -> coded warning by default, refusal under strict."""
 
     log = _toy_trace()
-    rows = reference(torch.randn(2, 4), origin="rows", data=["a", "b"])
+    rows = population(torch.randn(2, 4), origin="rows", data=["a", "b"])
     fork = log.fork()
     with pytest.warns(UserWarning, match="agreement class of size 1") as disclosed:
         fork.do(
@@ -309,29 +309,29 @@ def test_mean_fill_axis_semantics_and_derived_flag() -> None:
     log = _toy_trace()
     baseline = log["relu_1_2"].out
     fork = log.fork()
-    fork.do(tl.label("relu_1_2"), mean_fill(over="all"))
+    fork.do(tl.label("relu_1_2"), mean_fill(dim="all"))
     filled = fork["relu_1_2"].out
     assert torch.allclose(filled, torch.zeros_like(baseline) + baseline.mean())
     assert filled.unique().numel() == 1, "over='all' is the explicit global scalar"
     fork2 = log.fork()
-    fork2.do(tl.label("relu_1_2"), mean_fill(over=0))
+    fork2.do(tl.label("relu_1_2"), mean_fill(dim=0))
     axis_filled = fork2["relu_1_2"].out
     assert torch.allclose(axis_filled, torch.zeros_like(baseline) + baseline.mean(0, keepdim=True))
     assert axis_filled[0].unique().numel() > 1, "axis-aware fill varies per feature"
     # The one line pinned in both failure directions (A1b):
     with pytest.raises(Exception) as excinfo:
-        mean_fill(over="btach")
+        mean_fill(dim="btach")
     assert excinfo.value.fields["code"] == "intervention_over_invalid"
     with pytest.raises(Exception) as excinfo:
-        mean_fill(over="batch")
+        mean_fill(dim="batch")
     assert excinfo.value.fields["code"] == "axis_semantics_unknown"
     # D18: derived, never tabled. Self-sourced reads the traced batch.
-    assert mean_fill(over="all").batch_independent is False
-    donors = reference(torch.randn(4, *baseline.shape), origin="pop")
-    assert mean_fill(donors, over="all").batch_independent is True
+    assert mean_fill(dim="all").is_batch_independent is False
+    donors = population(torch.randn(4, *baseline.shape), origin="pop")
+    assert mean_fill(donors, dim="all").is_batch_independent is True
     # 'self' warns and maps to 'all' (one migration window).
     with pytest.warns(UserWarning, match="over='all'") as aliased_warnings:
-        aliased = mean_fill(over="self")
+        aliased = mean_fill(dim="self")
     assert dict(aliased.kwargs)["over"] == "all"
     assert any(
         getattr(record.message, "fields", {}).get("code") == "mean_over_self_alias"
@@ -343,7 +343,7 @@ def test_trace_backed_population_reduce_refuses() -> None:
     """D3: reductions need a tensor stack; trace members have none to reduce."""
 
     log = _toy_trace()
-    donors = reference([log], origin="one captured run")
+    donors = population([log], origin="one captured run")
     with pytest.raises(Exception) as excinfo:
         mean_from(donors)
     assert excinfo.value.fields["code"] == "population_reduce_unsupported"
@@ -354,7 +354,7 @@ def test_mean_from_evidence_set_fill() -> None:
 
     log = _toy_trace()
     baseline = log["relu_1_2"].out
-    donors = reference(torch.stack([baseline, baseline + 2.0]), origin="evidence")
+    donors = population(torch.stack([baseline, baseline + 2.0]), origin="evidence")
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), mean_from(donors))
     assert torch.allclose(fork["relu_1_2"].out, baseline + 1.0)
@@ -369,9 +369,9 @@ def test_set_direction_mean_projects_and_recenters() -> None:
 
     log = _toy_trace()
     baseline = log["relu_1_2"].out
-    donors = reference(torch.stack([baseline, baseline + 1.0]), origin="coef evidence")
+    donors = population(torch.stack([baseline, baseline + 1.0]), origin="coef evidence")
     direction = torch.randn(4)
-    edit = set_direction_mean(direction, donors, feature_axis=1)
+    edit = set_direction_mean(direction, donors, dim=1)
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), edit)
     unit = direction / direction.norm()
@@ -380,10 +380,10 @@ def test_set_direction_mean_projects_and_recenters() -> None:
     assert torch.allclose(fork["relu_1_2"].out, baseline - projection + mean_coef * unit, atol=1e-5)
     # Geometry refusals: direction rank and extent.
     with pytest.raises(Exception) as excinfo:
-        set_direction_mean(torch.randn(2, 2), donors, feature_axis=1)
+        set_direction_mean(torch.randn(2, 2), donors, dim=1)
     assert excinfo.value.fields["code"] == "direction_vector_invalid"
     with pytest.raises(Exception) as excinfo:
-        set_direction_mean(torch.randn(9), donors, feature_axis=1)
+        set_direction_mean(torch.randn(9), donors, dim=1)
     assert excinfo.value.fields["code"] == "sampling_geometry_mismatch"
 
 
@@ -392,12 +392,12 @@ def test_patch_from_plan_geometry_and_matching_laws() -> None:
 
     log = _toy_trace()
     baseline = log["relu_1_2"].out
-    wrong = reference(torch.randn(3, 9), origin="wrong shape")
+    wrong = population(torch.randn(3, 9), origin="wrong shape")
     plan = sample_from(wrong, seed=5)
     with pytest.raises(Exception) as excinfo:
         log.fork().do(tl.label("relu_1_2"), tl.patch_from(plan))
     assert excinfo.value.fields["code"] == "sampling_geometry_mismatch"
-    donors = reference(torch.stack([baseline + 1, baseline + 2]), origin="ok")
+    donors = population(torch.stack([baseline + 1, baseline + 2]), origin="ok")
     with pytest.raises(Exception) as excinfo:
         sample_from(donors, seed=5, agree_on=lambda d: d, matching=PerRowDatums(["a"] * 5))
     assert excinfo.value.fields["code"] == "population_matching_invalid"
@@ -419,10 +419,10 @@ def test_chunked_capture_refuses_batch_coherent_edits() -> None:
         fork.do(tl.label("relu_1_2"), permute_batch(seed=1, axis=0))
     assert excinfo.value.fields["code"] == "chunked_replay_batch_coupling"
     with pytest.raises(Exception) as excinfo:
-        fork.do(tl.label("relu_1_2"), mean_fill(over="all"))
+        fork.do(tl.label("relu_1_2"), mean_fill(dim="all"))
     assert excinfo.value.fields["code"] == "chunked_replay_batch_coupling"
     # Per-row edits never couple rows and stay legal on chunked captures.
-    rows = reference(torch.randn(2, 4), origin="rows")
+    rows = population(torch.randn(2, 4), origin="rows")
     fork.do(tl.label("relu_1_2"), resample_rows_from(rows, seed=1, axis=0))
 
 
@@ -432,7 +432,7 @@ def test_fire_record_carries_the_sampling_note_via_one_builder() -> None:
     log = _toy_trace()
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), permute_batch(seed=11, axis=0))
-    fire = list(fork.ops["relu_1_2"].interventions or ())[-1]
+    fire = list(fork.ops["relu_1_2"].edits or ())[-1]
     note = fire.determinism_note or ""
     assert "sampling[permute_batch]" in note
     assert "base_seed=11" in note

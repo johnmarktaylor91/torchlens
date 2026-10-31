@@ -300,7 +300,7 @@ def _region_marks(trace: Any, regions: tuple[RegionFact, ...]) -> list[SurgeryMa
     marks: list[SurgeryMark] = []
     for region_fact in regions:
         wording, _source = effect_wording("replay", region_fact.execution_effect)
-        for member in region_fact.members:
+        for member in region_fact.labels:
             marks.append(
                 _mark_for_recorded_label(
                     trace,
@@ -468,7 +468,7 @@ def splice_box_lines(facts: SurgeryFacts) -> tuple[str, ...]:
         wording, source = effect_wording("replay", region_fact.execution_effect)
         lines.append(
             f"[surgery region lane=replay] edit={region_fact.edit} "
-            f"members={len(region_fact.members)} exits={len(region_fact.exit_parents)}: "
+            f"members={len(region_fact.labels)} exits={len(region_fact.exit_parents)}: "
             f"{wording} ({source})"
         )
     return tuple(lines)

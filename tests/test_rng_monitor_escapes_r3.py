@@ -213,7 +213,7 @@ def test_random_subclass_draw_override_fail_closes_to_uncertain() -> None:
             return self.lin(x) * self.rng.random()
 
     capture = CaptureOptions(
-        intervention_ready=True,
+        replayable=True,
         capture_container_structure=True,
         cache=False,
         random_seed=7,
@@ -255,7 +255,7 @@ def test_library_rng_subclasses_do_not_over_trigger() -> None:
             return self.lin(x)
 
     capture = CaptureOptions(
-        intervention_ready=True,
+        replayable=True,
         capture_container_structure=True,
         cache=False,
         random_seed=7,

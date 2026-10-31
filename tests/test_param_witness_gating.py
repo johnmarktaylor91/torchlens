@@ -125,7 +125,7 @@ def test_armed_baseline_coalesces_onto_capture_state_clone():
 
 def test_plain_trace_cannot_pass_runnable_preflight():
     # The gate predicate invariant: descriptor.preflight.passed implies
-    # trace.intervention_ready, so "was-witnessed" and "can-claim" never diverge.
+    # trace.is_replayable, so "was-witnessed" and "can-claim" never diverge.
     from torchlens._io.runnable import build_sparse_run_descriptor
 
     model = _PlainModel()

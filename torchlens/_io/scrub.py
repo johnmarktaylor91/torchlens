@@ -1089,7 +1089,7 @@ def _scrub_value(
         if field_name not in spec:
             # A ``functools.cached_property`` read caches its value in the
             # instance ``__dict__`` under the property's own name (e.g. the
-            # public ``Trace.intervention_spec`` accessor). Those cells are
+            # public ``Trace.recipe`` accessor). Those cells are
             # DERIVED state that rebuilds on access, never portable fields,
             # and they appear only after a read -- refusing them here made a
             # read-only public property poison every later ``tl.save``

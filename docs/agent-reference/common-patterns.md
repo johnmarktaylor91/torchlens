@@ -39,7 +39,7 @@ tl.release_model(model)  # restore whole-model pickle / torch.save serializabili
 direction = torch.randn(4)               # one entry per channel of encoder's output
 steered = tl.trace(model, x, save=tl.module("encoder"),
                    intervene=tl.when(tl.module("encoder"),
-                                     tl.steer(direction, magnitude=4, feature_axis=1)))
+                                     tl.steer(direction, strength=4, dim=1)))
 steered.run(model, torch.randn(1, 3, 20, 20))  # larger input, same graph structure
 steered.last_run["engine"]              # "guarded_fast", or "rerun" after a fallback
 steered.last_run["fast_refused"]        # None, or "<code>:<stage>" naming the guard
@@ -181,7 +181,7 @@ lm = transformers.LlamaForCausalLM(  # a tiny random decoder stands in for your 
 ids = torch.tensor([[1, 5, 9, 2]])
 direction = torch.randn(32)
 site = tl.module("model.layers.1.mlp")
-spec = tl.when(site, tl.steer(direction, magnitude=4.0, feature_axis=-1))
+spec = tl.when(site, tl.steer(direction, strength=4.0, dim=-1))
 
 # Steering only: bind once, then call or generate as often as needed.
 steered = spec.bind(lm)
@@ -240,7 +240,7 @@ comments name the exports that need one.
 appliances = tl.accessors.registered_appliances()  # {name: summary}, sorted by name
 # Subspace and position edits are plain tl.Edit objects; apply them with do() or fork.do().
 basis = torch.eye(4)[:1]  # [k, d]: one direction over a 4-wide feature axis
-ablate = tl.intervention.subspace_ablate(basis, feature_axis=1)  # x - P x on the span
+ablate = tl.intervention.subspace_ablate(basis, dim=1)  # x - P x on the span
 assert isinstance(ablate, tl.Edit)
 # tl.intervention.subspace_interchange(basis, source_trace) writes the source trace's
 # in-span component over the target's instead.

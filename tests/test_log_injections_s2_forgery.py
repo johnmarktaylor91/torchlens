@@ -160,7 +160,7 @@ def test_replaced_stamp_on_injected_row_refuses(tmp_path) -> None:
     def tamper(state) -> None:
         """Forge the replacement stamp."""
 
-        _injected_rows(state)[0].intervention_replaced = True
+        _injected_rows(state)[0].is_edited = True
 
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "record_func")
 

@@ -84,11 +84,11 @@ def test_demo_1_zero_ablation_via_do():
     assert torch.equal(trace["relu_1_2"].out, baseline_relu)
 
     # FireRecords + state + last_run honest
-    records = list(fork["relu_1_2"].interventions)
+    records = list(fork["relu_1_2"].edits)
     assert records and records[-1].helper_name == "zero_ablate"
     assert records[-1].replaced is True
     assert records[-1].engine == "replay"
-    assert fork["relu_1_2"].intervention_replaced
+    assert fork["relu_1_2"].is_edited
     assert fork.state is TraceState.REPLAY_PROPAGATED
     assert isinstance(fork.last_run, dict) and fork.last_run.get("engine") == "replay"
     # audit record present (Selection-targeted disclosure)
@@ -120,7 +120,7 @@ def test_demo_2_same_run_patch_identity():
     # exact-identity output under the deterministic demo model
     assert torch.equal(patched["output_1"].out, trace["output_1"].out)
     # provenance present: FireRecords at the patched site
-    records = list(patched["relu_1_2"].interventions)
+    records = list(patched["relu_1_2"].edits)
     assert records and records[-1].helper_name == "patch_from"
     assert patched.intervention_audit[-1]["patch_source"]["source_model_class"].endswith(
         "_CanaryNet"
@@ -169,7 +169,7 @@ def test_demo_2_same_run_patch_tamper_twin():
     # captured-native presentation: values written into the record with NO
     # FireRecords, NO spec revision, NO intervention_replaced flag.
     _replay_module._commit_replay_updates(tampered, {"relu_1_2": forged}, {})
-    assert not tampered["relu_1_2"].intervention_replaced
+    assert not tampered["relu_1_2"].is_edited
 
     result = tampered.validate_forward_pass(model(x))
     assert result is False

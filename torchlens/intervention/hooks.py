@@ -103,8 +103,8 @@ class HookContext:
 
     name: str
     timing: HookTiming
-    direction: HookDirection
-    layer_log: Mapping[str, Any]
+    signal: HookDirection
+    op: Mapping[str, Any]
     ctx: dict[str, Any]
     run_ctx: dict[str, Any]
     step_index: int
@@ -128,9 +128,9 @@ def make_hook_context(
     name: str,
     timing: HookTiming = "post",
     direction: HookDirection = "forward",
-    layer_log: Any | None = None,
+    op: Any | None = None,
     ctx: dict[str, Any] | None = None,
-    run_ctx: dict[str, Any] | None = None,
+    run_context: dict[str, Any] | None = None,
     step_index: int = 0,
     trace_name: str = "",
     args: Sequence[Any] = (),
@@ -170,10 +170,10 @@ def make_hook_context(
     return HookContext(
         name=name,
         timing=timing,
-        direction=direction,
-        layer_log=MappingProxyType(_snapshot_layer_log(layer_log)),
+        signal=direction,
+        op=MappingProxyType(_snapshot_layer_log(op)),
         ctx={} if ctx is None else ctx,
-        run_ctx={} if run_ctx is None else run_ctx,
+        run_ctx={} if run_context is None else run_context,
         step_index=step_index,
         trace_name=trace_name,
         args=tuple(args),

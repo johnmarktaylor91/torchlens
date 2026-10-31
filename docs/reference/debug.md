@@ -609,7 +609,7 @@ finite loss gradient does not prove a clean backward -- so the result carries th
 transition ledger with the earliest provable birth headlined, joined to the paired
 forward op and source line. Multi-backward traces require `bwd=N` (passes never
 collapse); `clean` requires complete checkable coverage; an inf-kind first bad thing
-without a disclosed `grad_scale` carries the AMP/GradScaler hint. Requires
+without a disclosed `scale_grad` carries the AMP/GradScaler hint. Requires
 `CaptureOptions(backward_ready=True, save_grads=...)` plus a logged backward; post-hoc,
 no rerun. `result.first_bad_thing` projects into the shared `FirstBadThing` vocabulary.
 

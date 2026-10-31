@@ -29,13 +29,13 @@ from .._errors import InvalidArgumentError
 from .helpers import _helper_spec
 from .types import Edit
 
-__all__ = ["SourceCall", "affine_source", "check_source_shape", "needs_subspace"]
+__all__ = ["SourceCall", "set_affine_coordinates", "check_source_shape", "needs_subspace"]
 
-AFFINE_SOURCE_NAME = "affine_source"
+AFFINE_SOURCE_NAME = "set_affine_coordinates"
 _GUIDE = "see the subspace section of docs/intervention_explainers.md"
 _WORKING = (
     "fork.do(tl.subspace(site, rotation.T, origin=...), "
-    "tl.intervention.affine_source(weight, bias=bias))"
+    "tl.intervention.set_affine_coordinates(weight, bias=bias))"
 )
 
 
@@ -110,11 +110,11 @@ def needs_subspace(
     )
 
 
-def affine_source(weight: torch.Tensor, *, bias: torch.Tensor | None = None) -> Edit:
+def set_affine_coordinates(weight: torch.Tensor, *, bias: torch.Tensor | None = None) -> Edit:
     """Create the source verb whose new subspace coordinates are ``weight @ x + bias``.
 
     Use it under a subspace selection: ``fork.do(tl.subspace(site, R.T,
-    origin=...), tl.intervention.affine_source(W, bias=b))`` writes
+    origin=...), tl.intervention.set_affine_coordinates(W, bias=b))`` writes
     ``x + R (W x + b - R^T x)`` (LoReFT), where ``x`` is the full site value.
     The basis rows and ``weight`` must have the same shape ``[k, d]``.
 
@@ -173,7 +173,7 @@ def affine_source(weight: torch.Tensor, *, bias: torch.Tensor | None = None) -> 
         args=(weight,),
         kwargs={"bias": bias},
         factory=factory,
-        batch_independent=True,
+        is_batch_independent=True,
     )
 
 

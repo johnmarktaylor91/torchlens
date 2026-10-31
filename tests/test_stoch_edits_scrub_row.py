@@ -31,7 +31,7 @@ import torch
 
 import torchlens as tl
 from tests.real_model.r0.families import _token_ids, build_gpt2
-from torchlens.intervention import OneDatum, reference, sample_from, sampling_records
+from torchlens.intervention import OneDatum, population, sample_from, sampling_records
 
 # slow: each leg captures a real (config-built) GPT-2 subject plus six donor
 # runs, ~40-45s measured -- honestly tiered above the smoke/heavy budgets.
@@ -92,13 +92,13 @@ def test_causal_scrub_row_agreement_seed_and_audit(scrub_world: dict[str, object
     baseline_site = subject[site].out
     baseline_logits = subject.output_ops[0].out if subject.output_ops else None
 
-    population = reference(
+    donor_population = population(
         donors,
         origin="six donor runs, two prompt templates, config-built gpt2 (R0 fixture)",
         data=datums,
     )
     plan = sample_from(
-        population,
+        donor_population,
         agree_on=lambda datum: datum["template"],
         matching=OneDatum({"template": "A"}),
         seed=1234,
@@ -128,7 +128,7 @@ def test_causal_scrub_row_agreement_seed_and_audit(scrub_world: dict[str, object
         tl.label(site),
         tl.patch_from(
             sample_from(
-                population,
+                donor_population,
                 agree_on=lambda datum: datum["template"],
                 matching=OneDatum({"template": "A"}),
                 seed=1234,
@@ -164,7 +164,7 @@ def test_causal_scrub_row_agreement_seed_and_audit(scrub_world: dict[str, object
         if isinstance(row, dict) and row.get("op") == "intervention_event"
     ]
     assert len(envelopes) == 1 and envelopes[0]["status"] == "fired"
-    fires = list(fork.ops[site].interventions or ())
+    fires = list(fork.ops[site].edits or ())
     assert fires and "sampling[patch_from]" in (fires[-1].determinism_note or "")
     assert record["digest_kind"] == "address"
     assert record["population_count"] == 6
@@ -181,7 +181,7 @@ def test_recursive_post_scrub_donor_works(scrub_world: dict[str, object]) -> Non
         tl.label(site),
         tl.patch_from(
             sample_from(
-                reference(donors[:3], origin="template-A donors"),
+                population(donors[:3], origin="template-A donors"),
                 seed=7,
             )
         ),
@@ -193,6 +193,6 @@ def test_recursive_post_scrub_donor_works(scrub_world: dict[str, object]) -> Non
     with pytest.warns(Warning, match="agreement class of size 1"):
         second.do(
             tl.label(site),
-            tl.patch_from(sample_from(reference([first], origin="post-scrub donor"), seed=8)),
+            tl.patch_from(sample_from(population([first], origin="post-scrub donor"), seed=8)),
         )
     assert torch.equal(second[site].out, first[site].out)

@@ -267,7 +267,7 @@ def _probe_live(model_key: str, make_selector: Callable[[], Any]) -> Any:
     fired: list[str] = []
 
     def _probe_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
-        fired.append(str(hook.layer_log.get("layer_label")))
+        fired.append(str(hook.op.get("layer_label")))
         return out
 
     try:

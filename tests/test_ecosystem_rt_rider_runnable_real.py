@@ -59,7 +59,7 @@ def gpt2_and_inputs():
 @pytest.fixture(scope="module")
 def runnable_trace(gpt2_and_inputs):
     model, input_ids = gpt2_and_inputs
-    trace = tl.trace(model, input_ids, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, input_ids, capture=CaptureOptions(replayable=True))
     try:
         yield trace
     finally:
@@ -174,7 +174,7 @@ def test_gpt2_default_cache_config_live_run_reaches_verdict_or_typed_remedy(gpt2
     torch.manual_seed(0)
     model = build_gpt2_default_cache("eager").eval()
     assert model.config.use_cache is True
-    for options in (CaptureOptions(), CaptureOptions(intervention_ready=True)):
+    for options in (CaptureOptions(), CaptureOptions(replayable=True)):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             trace = tl.trace(model, input_ids, capture=options)

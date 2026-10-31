@@ -69,7 +69,7 @@ def test_live_unseeded_note_never_leaks_raw_labels() -> None:
     )
     notes = [
         record.determinism_note
-        for record in (log["relu_1_2"].interventions or [])
+        for record in (log["relu_1_2"].edits or [])
         if record.determinism_note
     ]
     assert notes, "unseeded scramble must disclose nondeterminism"

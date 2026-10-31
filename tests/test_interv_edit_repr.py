@@ -12,12 +12,12 @@ from torchlens.intervention.types import Edit
 @pytest.mark.parametrize(
     ("edit", "expected"),
     [
-        (tl.grad_zero(), "tl.grad_zero()"),
-        (tl.grad_scale(2.0), "tl.grad_scale(2.0)"),
-        (tl.grad_clamp(min=-1.0), "tl.grad_clamp(min=-1.0)"),
+        (tl.zero_grad(), "tl.zero_grad()"),
+        (tl.scale_grad(2.0), "tl.scale_grad(2.0)"),
+        (tl.clamp_grad(low=-1.0), "tl.clamp_grad(min=-1.0)"),
         (tl.zero_ablate(), "tl.zero_ablate()"),
         (tl.scale(0.5), "tl.scale(0.5)"),
-        (tl.noise(0.1, seed=3), "tl.noise(0.1, seed=3)"),
+        (tl.add_noise(0.1, seed=3), "tl.add_noise(0.1, seed=3)"),
         (tl.clamp(min=0.0, max=1.0), "tl.clamp(min=0.0, max=1.0)"),
     ],
 )
@@ -39,8 +39,8 @@ def test_non_root_builtin_prints_its_public_namespace() -> None:
 def test_tensor_arguments_print_by_shape_and_dtype() -> None:
     """A tensor argument prints as a readable placeholder, never its full values."""
 
-    edit = tl.project_off(torch.ones(4))
-    assert repr(edit) == "tl.project_off(<tensor shape=(4,) dtype=torch.float32>)"
+    edit = tl.project_out(torch.ones(4))
+    assert repr(edit) == "tl.project_out(<tensor shape=(4,) dtype=torch.float32>)"
 
 
 def test_session_bound_edit_prints_as_tl_edit() -> None:
@@ -53,7 +53,7 @@ def test_session_bound_edit_prints_as_tl_edit() -> None:
 def test_no_edit_repr_prints_the_internal_class_name() -> None:
     """``Edit(`` never appears in an edit's printed form."""
 
-    edits = [tl.grad_zero(), tl.bwd_hook(lambda g, *, hook: g), tl.steer(torch.zeros(3))]
+    edits = [tl.zero_grad(), tl.hook_grad(lambda g, *, hook: g), tl.steer(torch.zeros(3))]
     for edit in edits:
         assert "Edit(" not in repr(edit)
         assert repr(edit).startswith("tl.")

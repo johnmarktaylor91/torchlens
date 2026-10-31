@@ -283,7 +283,7 @@ def _firing_coordinate(hook: HookContext, share_draw: str) -> tuple[Any, ...]:
 
     if share_draw == "per_rule":
         return ()
-    layer_log = hook.layer_log or {}
+    layer_log = hook.op or {}
     pass_index = layer_log.get("pass_index")
     generation_step = hook.run_ctx.get("generation_step")
     if share_draw == "per_group":
@@ -525,10 +525,7 @@ class SamplingPlan:
     def rule_identity(self) -> str:
         """Persisted identity string entering the auto-seed derivation (DIS-4)."""
 
-        return (
-            f"sample_from|{self.population.population_identity}|"
-            f"{self.share_draw}|{self.donor_group_id}"
-        )
+        return f"sample_from|{self.population.identity}|{self.share_draw}|{self.donor_group_id}"
 
     def identity_kwargs(self) -> dict[str, Any]:
         """JSON-scalar identity facts persisted on the helper spec (D14).
@@ -542,7 +539,7 @@ class SamplingPlan:
             "seed": self.seed,
             "share_draw": self.share_draw,
             "donor_group_id": self.donor_group_id,
-            "population_identity": self.population.population_identity,
+            "population_identity": self.population.identity,
             "population_count": len(self.population),
             "population_digest_kind": self.population.digest_kind,
             "population_origin": self.population.origin,
@@ -701,7 +698,7 @@ def sample_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D1/D7/D
         share_draw=share_draw,
         strict=strict,
         donor_group_id=_mint_donor_group_id(
-            population.population_identity, validated_seed, share_draw, matching_value, agree_on
+            population.identity, validated_seed, share_draw, matching_value, agree_on
         ),
     )
 
@@ -716,7 +713,7 @@ def _resolve_trace_donor(member: Any, hook: HookContext, out: torch.Tensor) -> t
 
     from .helpers import _resolve_patch_donor_site
 
-    site_label, source_site = _resolve_patch_donor_site(member, hook.layer_log)
+    site_label, source_site = _resolve_patch_donor_site(member, hook.op)
     value = source_site.out
     if not isinstance(value, torch.Tensor):
         raise InvalidArgumentError(
@@ -790,14 +787,14 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
             base = _base_seed(
                 plan.seed,
                 rule_identity=plan.rule_identity,
-                population_identity=ref.population_identity,
+                population_identity=ref.identity,
                 hook=hook,
                 verb="patch_from(plan)",
             )
             coordinate = _firing_coordinate(hook, plan.share_draw)
             derived = _derived_seed(
                 base,
-                population_identity=ref.population_identity,
+                population_identity=ref.identity,
                 donor_group_id=plan.donor_group_id,
                 coordinate=coordinate,
                 leaf_path=_leaf_path(hook),
@@ -817,7 +814,7 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
                 "patch_from",
                 {
                     "stochastic": True,
-                    "population_identity": ref.population_identity,
+                    "population_identity": ref.identity,
                     "digest_kind": ref.digest_kind,
                     "population_count": len(ref),
                     "eligible_count": len(eligible),
@@ -845,7 +842,7 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
         kwargs={"plan": "sampling_plan", **plan.identity_kwargs()},
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
         metadata={"stochastic": True, "seeded": True},
     )
     # Session-only handle for the D8 batch normalizer (object-identity
@@ -979,8 +976,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
                     argument="axis",
                 )
             self_identity = (
-                f"self:{tuple(out.shape)!r}:{out.dtype}:"
-                f"{hook.layer_log.get('label') if hook.layer_log else None}"
+                f"self:{tuple(out.shape)!r}:{out.dtype}:{hook.op.get('label') if hook.op else None}"
             )
             base = _base_seed(
                 validated_seed,
@@ -1036,7 +1032,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
         "permute_batch",
         kwargs={"seed": validated_seed, "axis": explicit_axis},
         factory=factory,
-        batch_independent=False,
+        is_batch_independent=False,
         compatible_with_append=False,
         metadata={
             "stochastic": True,
@@ -1111,9 +1107,9 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
     # only, so cross-site draw sharing cannot arise and no batch
     # normalization entry is needed).
     donor_group_id = _mint_donor_group_id(
-        source.population_identity, validated_seed, "per_firing", matching_carrier, group_by
+        source.identity, validated_seed, "per_firing", matching_carrier, group_by
     )
-    rule_identity = f"resample_rows_from|{source.population_identity}|{donor_group_id}"
+    rule_identity = f"resample_rows_from|{source.identity}|{donor_group_id}"
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime per-row donor-sampling hook."""
@@ -1140,7 +1136,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
             base = _base_seed(
                 validated_seed,
                 rule_identity=rule_identity,
-                population_identity=source.population_identity,
+                population_identity=source.identity,
                 hook=hook,
                 verb="resample_rows_from",
             )
@@ -1159,7 +1155,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
                     )
                 derived = _derived_seed(
                     base,
-                    population_identity=source.population_identity,
+                    population_identity=source.identity,
                     donor_group_id=donor_group_id,
                     coordinate=coordinate,
                     target_row=row,
@@ -1178,7 +1174,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
                 "resample_rows_from",
                 {
                     "stochastic": True,
-                    "population_identity": source.population_identity,
+                    "population_identity": source.identity,
                     "digest_kind": source.digest_kind,
                     "population_count": len(source),
                     # The eligible CLASS size: distinct members eligible for
@@ -1217,12 +1213,12 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
             "seed": validated_seed,
             "axis": explicit_axis,
             "donor_group_id": donor_group_id,
-            "population_identity": source.population_identity,
+            "population_identity": source.identity,
             "population_count": len(source),
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=False,
+        is_batch_independent=False,
         compatible_with_append=False,
         metadata={
             "stochastic": True,
@@ -1237,7 +1233,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
 # deterministic reductions as edits (D3): mean_from / mean_fill
 # ----------------------------------------------------------------------
 def mean_from(
-    ref: Reference,
+    reference: Reference,
     *,
     group_by: Callable[[Any], Any] | None = None,
     matching: Any = None,
@@ -1252,7 +1248,7 @@ def mean_from(
     """
 
     _check_agreement_pair(group_by, matching, "mean_from")
-    fill = ref.mean(group_by=group_by, matching=matching)
+    fill = reference.mean(group_by=group_by, matching=matching)
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime evidence-mean fill hook."""
@@ -1266,9 +1262,9 @@ def mean_from(
                 "mean_from",
                 {
                     "stochastic": False,
-                    "population_identity": ref.population_identity,
-                    "digest_kind": ref.digest_kind,
-                    "population_count": len(ref),
+                    "population_identity": reference.identity,
+                    "digest_kind": reference.digest_kind,
+                    "population_count": len(reference),
                     "eligible_count": None,
                     "base_seed": None,
                     "derived_seed": None,
@@ -1290,21 +1286,21 @@ def mean_from(
     return _helper_spec(
         "mean_from",
         kwargs={
-            "population_identity": ref.population_identity,
-            "population_count": len(ref),
+            "population_identity": reference.identity,
+            "population_count": len(reference),
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
         metadata={"stochastic": False},
     )
 
 
 def mean_fill(
-    ref: Reference | None = None,
+    reference: Reference | None = None,
     *,
-    over: Any,
-    force_shape_change: bool = False,
+    dim: Any,
+    allow_shape_change: bool = False,
 ) -> Edit:
     """Create the FIXED axis-aware mean fill (the ``mean_ablate`` successor).
 
@@ -1320,17 +1316,17 @@ def mean_fill(
     DOCUMENTED-UNSTABLE spelling pending naming-session ratification.
     """
 
-    canonical_over = _resolve_over_axes(over, None, verb="mean_fill")
+    canonical_over = _resolve_over_axes(dim, None, verb="mean_fill")
     prepared_fill: torch.Tensor | None = None
-    if ref is not None:
-        if not isinstance(ref, Reference):
+    if reference is not None:
+        if not isinstance(reference, Reference):
             raise InvalidArgumentError(
-                f"mean_fill ref= takes the population noun, received {type(ref).__name__}",
+                f"mean_fill ref= takes the population noun, received {type(reference).__name__}",
                 code="population_source_invalid",
                 remedy='build the population first: reference(members, origin="...")',
                 argument="ref",
             )
-        prepared_fill = ref.mean(over if over != "self" else "all")
+        prepared_fill = reference.mean(dim if dim != "self" else "all")
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime axis-aware mean-fill hook."""
@@ -1370,29 +1366,29 @@ def mean_fill(
     # D18: derived, never tabled. An external ref provably never reads the
     # traced batch; every self-sourced reduction reads the fire-time value
     # (and no batch-axis proof source exists in v1), so it fails closed.
-    batch_independent = ref is not None
+    batch_independent = reference is not None
     over_kwarg = "all" if canonical_over == "all" else canonical_over
     return _helper_spec(
         "mean_fill",
         kwargs={
             "over": over_kwarg,
-            "force_shape_change": force_shape_change,
+            "force_shape_change": allow_shape_change,
             **(
                 {
-                    "population_identity": ref.population_identity,
-                    "population_count": len(ref),
+                    "population_identity": reference.identity,
+                    "population_count": len(reference),
                 }
-                if ref is not None
+                if reference is not None
                 else {}
             ),
         },
         factory=factory,
-        portability="builtin" if ref is None else "opaque_audit",
-        batch_independent=batch_independent,
-        compatible_with_append=not force_shape_change and batch_independent,
+        portability="builtin" if reference is None else "opaque_audit",
+        is_batch_independent=batch_independent,
+        compatible_with_append=not allow_shape_change and batch_independent,
         metadata={
             "stochastic": False,
-            **({} if ref is not None else {"batch_coherent": True}),
+            **({} if reference is not None else {"batch_coherent": True}),
         },
     )
 
@@ -1416,9 +1412,9 @@ def _direction_mean_coefficient64(
 
 def set_direction_mean(
     direction: torch.Tensor,
-    ref: Reference,
+    reference: Reference,
     *,
-    feature_axis: int,
+    dim: int,
 ) -> Edit:
     """Create the directional mean-setting edit.
 
@@ -1460,12 +1456,12 @@ def set_direction_mean(
             remedy="pass a finite, nonzero direction vector",
             argument="direction",
         )
-    explicit_axis = _require_explicit_axis(feature_axis, "set_direction_mean")
+    explicit_axis = _require_explicit_axis(dim, "set_direction_mean")
     host_direction = direction.detach().to("cpu", torch.float32)
     unit = host_direction / host_direction.norm()
     host_direction64 = direction.detach().to("cpu", torch.float64)
     unit64 = host_direction64 / host_direction64.norm()
-    members = ref._tensor_members("set_direction_mean")
+    members = reference._tensor_members("set_direction_mean")
     extent = int(unit.shape[0])
     coefs: list[torch.Tensor] = []
     axes: list[int] = []
@@ -1519,9 +1515,9 @@ def set_direction_mean(
                 "set_direction_mean",
                 {
                     "stochastic": False,
-                    "population_identity": ref.population_identity,
-                    "digest_kind": ref.digest_kind,
-                    "population_count": len(ref),
+                    "population_identity": reference.identity,
+                    "digest_kind": reference.digest_kind,
+                    "population_count": len(reference),
                     "base_seed": None,
                     "derived_seed": None,
                     "donor_group_id": None,
@@ -1549,12 +1545,12 @@ def set_direction_mean(
         kwargs={
             "feature_axis": explicit_axis,
             "direction_digest": direction_digest,
-            "population_identity": ref.population_identity,
-            "population_count": len(ref),
+            "population_identity": reference.identity,
+            "population_count": len(reference),
             "mean_coefficient": mean_coef,
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
         metadata={"stochastic": False},
     )

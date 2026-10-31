@@ -79,9 +79,9 @@ def _zero_hook(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
 
 
 _HELPERS: dict[str, tuple[Callable[[], Any], GradFn]] = {
-    "grad_zero": (tl.grad_zero, _zero),
-    "grad_scale": (lambda: tl.grad_scale(2.0), _double),
-    "bwd_hook": (lambda: tl.bwd_hook(_zero_hook), _zero),
+    "grad_zero": (tl.zero_grad, _zero),
+    "grad_scale": (lambda: tl.scale_grad(2.0), _double),
+    "bwd_hook": (lambda: tl.hook_grad(_zero_hook), _zero),
 }
 
 
@@ -207,7 +207,7 @@ def _backward_fires(trace: Any) -> int:
 
     spec = trace._intervention_spec
     records = getattr(spec, "records", ()) if spec is not None else ()
-    return sum(1 for record in records if record.direction == "backward")
+    return sum(1 for record in records if record.signal == "backward")
 
 
 def _assert_matches_oracle(got: Grads, want: Grads, clean: Grads) -> None:
@@ -304,7 +304,7 @@ def test_module_selector_grad_zero_every_spelling(
         runner=runner,
         opt_in=opt_in,
         selector=selector,
-        helper=tl.grad_zero(),
+        helper=tl.zero_grad(),
         want=tiny.oracle("module", _MLP, _zero),
     )
 
@@ -337,7 +337,7 @@ def test_grad_fn_selector_every_helper(tiny: _Fixture, door: str, helper_name: s
         door=door,
         runner="trace.backward",
         opt_in="backward_ready",
-        selector=tl.grad_fn(type=_LN_NODE),
+        selector=tl.grad_fn(name=_LN_NODE),
         helper=build(),
         want=tiny.oracle("grad_fn", _LN_NODE, fn),
     )
@@ -351,8 +351,8 @@ def test_grad_fn_selector_grad_input_family(tiny: _Fixture) -> None:
         door="intervene",
         runner="loss.backward",
         opt_in="backward_ready",
-        selector=tl.grad_fn(type=_LN_NODE),
-        helper=tl.grad_clamp(0.0, 0.0),
+        selector=tl.grad_fn(name=_LN_NODE),
+        helper=tl.clamp_grad(0.0, 0.0),
         want=tiny.oracle("grad_fn", _LN_NODE, _zero),
     )
 
@@ -367,7 +367,7 @@ def test_label_selector_post_capture_doors(tiny: _Fixture, door: str) -> None:
         runner="trace.backward",
         opt_in="backward_ready",
         selector=tl.label(tiny.ln_label),
-        helper=tl.grad_zero(),
+        helper=tl.zero_grad(),
         want=tiny.oracle("module", _LN_SINGLE, _zero),
     )
 
@@ -382,7 +382,7 @@ def test_in_module_composite_selector(tiny: _Fixture) -> None:
             model,
             tiny.ids,
             capture=tl.options.CaptureOptions(backward_ready=True),
-            intervene=tl.when(tl.in_module(_MLP) & tl.func("addmm"), tl.grad_zero()),
+            intervene=tl.when(tl.in_module(_MLP) & tl.func("addmm"), tl.zero_grad()),
         )
         got = _run_backward(trace, model, "trace.backward")
     assert _backward_fires(trace) > 0
@@ -399,7 +399,7 @@ def test_label_selector_on_capture_door_refuses_typed(tiny: _Fixture) -> None:
             tiny.fresh(),
             tiny.ids,
             capture=tl.options.CaptureOptions(backward_ready=True),
-            intervene=tl.when(tl.label(tiny.ln_label), tl.grad_zero()),
+            intervene=tl.when(tl.label(tiny.ln_label), tl.zero_grad()),
         )
         trace.backward(_loss(trace[trace.output_layers[0]].out))
 
@@ -412,7 +412,7 @@ def test_zero_match_forward_selector_gradient_edit_warns(tiny: _Fixture) -> None
             tiny.fresh(),
             tiny.ids,
             capture=tl.options.CaptureOptions(backward_ready=True),
-            intervene=tl.when(tl.in_module(_MLP) & tl.func("linear"), tl.grad_zero()),
+            intervene=tl.when(tl.in_module(_MLP) & tl.func("linear"), tl.zero_grad()),
         )
 
 
@@ -429,7 +429,7 @@ def test_rerun_refuses_gradient_edit_with_its_real_cause(tiny: _Fixture) -> None
     ):
         trace.do(
             tl.module(_MLP),
-            tl.grad_zero(),
+            tl.zero_grad(),
             model=model,
             x=tiny.ids,
             intervention=tl.options.InterventionOptions(engine="rerun", confirm_mutation=True),
@@ -508,7 +508,7 @@ class TestRealGPT2:
             runner=runner,
             opt_in="backward_ready",
             selector=tl.module(target),
-            helper=tl.grad_zero(),
+            helper=tl.zero_grad(),
             want=real.oracle("module", target, _zero),
         )
 
@@ -523,7 +523,7 @@ class TestRealGPT2:
                 model,
                 real.ids,
                 capture=tl.options.CaptureOptions(backward_ready=True),
-                intervene=tl.when(selector, tl.grad_scale(2.0)),
+                intervene=tl.when(selector, tl.scale_grad(2.0)),
             )
             got = _run_backward(trace, model, "trace.backward")
         want = _scaled_layernorm_oracle(real, ("transformer.h.3.ln_1", "transformer.h.3.ln_2"))

@@ -30,7 +30,7 @@ def _interventions() -> tl.Trace:
     log = tl.trace(
         _ReluModel(),
         x,
-        capture=CaptureOptions(intervention_ready=True, random_seed=0),
+        capture=CaptureOptions(replayable=True, random_seed=0),
     )
     log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     return log

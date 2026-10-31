@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention import compose, reference, sample_from
+from torchlens.intervention import compose, population, sample_from
 
 
 class _Toy(nn.Module):
@@ -69,13 +69,13 @@ def test_construction_refusals() -> None:
         compose(lambda out, *, hook: out)
     assert excinfo.value.fields["code"] == "compose_leaf_invalid"
     with pytest.raises(Exception) as excinfo:
-        compose(tl.scale(2.0), tl.noise(0.1))
+        compose(tl.scale(2.0), tl.add_noise(0.1))
     assert excinfo.value.fields["code"] == "compose_unseeded_stochastic"
     with pytest.raises(Exception) as excinfo:
-        compose(tl.scale(2.0, force_shape_change=True))
+        compose(tl.scale(2.0, allow_shape_change=True))
     assert excinfo.value.fields["code"] == "compose_shape_change_unsupported"
     with pytest.raises(Exception) as excinfo:
-        compose(tl.scale(2.0), tl.grad_zero())
+        compose(tl.scale(2.0), tl.zero_grad())
     assert excinfo.value.fields["code"] == "compose_kind_mismatch"
 
 
@@ -85,7 +85,7 @@ def test_one_fire_one_record_with_ordered_leaves() -> None:
     log = _toy_trace()
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), compose(tl.scale(3.0), tl.clamp(max=1.0)))
-    fires = list(fork.ops["relu_1_2"].interventions or ())
+    fires = list(fork.ops["relu_1_2"].edits or ())
     assert len(fires) == 1, "one composed fire, never one record per leaf"
     assert fires[0].helper is not None
     assert fires[0].helper.helper_name == "compose"
@@ -95,11 +95,11 @@ def test_one_fire_one_record_with_ordered_leaves() -> None:
 def test_flags_and_combine_and_seeded_stochastic_leaf_allowed() -> None:
     """Flags AND-combine; a SEEDED stochastic leaf composes (granularity mixing legal)."""
 
-    seeded = compose(tl.scale(2.0), tl.noise(0.1, seed=7))
+    seeded = compose(tl.scale(2.0), tl.add_noise(0.1, seed=7))
     assert [leaf.helper_name for leaf in seeded.args] == ["scale", "noise"]
-    assert seeded.batch_independent is True
+    assert seeded.is_batch_independent is True
     baseline_flags = compose(tl.scale(2.0), tl.mean_ablate())
-    assert baseline_flags.batch_independent is False, "mean_ablate self-mean couples the batch"
+    assert baseline_flags.is_batch_independent is False, "mean_ablate self-mean couples the batch"
 
 
 def test_matches_explicit_sequential_hooks_bytewise() -> None:
@@ -149,7 +149,7 @@ def test_compose_threads_leaf_path_into_derived_seeds() -> None:
 
     log = _toy_trace()
     baseline = log["relu_1_2"].out
-    donors = reference(torch.stack([baseline + 1, baseline + 2, baseline + 3]), origin="d")
+    donors = population(torch.stack([baseline + 1, baseline + 2, baseline + 3]), origin="d")
     plan_a = sample_from(donors, seed=5)
     plan_b = sample_from(donors, seed=5)
     fork = log.fork()

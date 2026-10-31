@@ -78,7 +78,7 @@ class Direction:
     vector: torch.Tensor
     site: str
     method: str
-    n_pairs: int
+    num_pairs: int
     read_token_index: ReadIndex
     model_type: str | None
     provenance: BasisProvenance
@@ -87,11 +87,11 @@ class Direction:
         """Return a one-line summary without the tensor values."""
 
         return (
-            f"Direction(site={self.site!r}, method={self.method!r}, n_pairs={self.n_pairs}, "
+            f"Direction(site={self.site!r}, method={self.method!r}, n_pairs={self.num_pairs}, "
             f"dim={self.vector.shape[0]}, sha256={self.provenance.sha256[:16]})"
         )
 
-    def steer(self, magnitude: float = 1.0) -> Edit:
+    def steer(self, strength: float = 1.0) -> Edit:
         """Return the edit that adds ``magnitude * vector`` on the trailing axis.
 
         Parameters
@@ -108,7 +108,7 @@ class Direction:
 
         from .helpers import steer
 
-        return steer(self.vector, magnitude, feature_axis=-1)
+        return steer(self.vector, strength, dim=-1)
 
     def to_steering_vectors(
         self, *, layer: int | None = None, layer_type: str = "decoder_block"
@@ -285,7 +285,7 @@ class Direction:
         return layer
 
 
-def direction_from_pairs(
+def fit_direction(
     pos_traces: Any,
     neg_traces: Any,
     site: Any,
@@ -369,7 +369,7 @@ def direction_from_pairs(
         vector=vector,
         site=site_name,
         method=method,
-        n_pairs=int(positive.shape[0]),
+        num_pairs=int(positive.shape[0]),
         read_token_index=read_token_index,
         model_type=_model_type(positives[0]),
         provenance=provenance,
@@ -621,4 +621,4 @@ def _model_type(trace: Any) -> str | None:
     return found if isinstance(found, str) else None
 
 
-__all__ = ["Direction", "direction_from_pairs"]
+__all__ = ["Direction", "fit_direction"]

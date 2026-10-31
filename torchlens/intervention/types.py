@@ -180,8 +180,8 @@ class Edit:
         "portability": FieldPolicy.KEEP,
         "factory": FieldPolicy.DROP,
         "metadata": FieldPolicy.KEEP,
-        "direction": FieldPolicy.KEEP,
-        "batch_independent": FieldPolicy.KEEP,
+        "signal": FieldPolicy.KEEP,
+        "is_batch_independent": FieldPolicy.KEEP,
         "compatible_with_append": FieldPolicy.KEEP,
         # L6 Query-Selection recipe family: persists as of tlspec v8 as
         # BLOB_RECURSIVE (recipe ASTs may embed unit-term masks), with the
@@ -199,8 +199,8 @@ class Edit:
         default=None, compare=False, repr=False
     )
     metadata: tuple[tuple[str, Any], ...] = ()
-    direction: HelperDirection | None = None
-    batch_independent: bool = False
+    signal: HelperDirection | None = None
+    is_batch_independent: bool = False
     compatible_with_append: bool = False
     selection_recipe: Any = field(default=None, compare=False)
 
@@ -220,7 +220,7 @@ class Edit:
         """Render the public spelling of this edit (``tl.Edit`` is its public name).
 
         A builtin helper prints as the public constructor call that builds it
-        (``tl.grad_scale(2.0)``), which is also the identity a saved spec
+        (``tl.scale_grad(2.0)``), which is also the identity a saved spec
         rebuilds from. Every other edit prints as ``tl.Edit(...)`` with its
         identity fields; the hook factory is session-side and never printed.
 
@@ -443,15 +443,15 @@ class FireRecord:
         "func_call_id": FieldPolicy.KEEP,
         "container_path": FieldPolicy.KEEP,
         "engine": FieldPolicy.KEEP,
-        "helper": FieldPolicy.KEEP,
+        "edit": FieldPolicy.KEEP,
         "site_label": FieldPolicy.KEEP,
         "timing": FieldPolicy.KEEP,
-        "direction": FieldPolicy.KEEP,
-        "helper_name": FieldPolicy.KEEP,
+        "signal": FieldPolicy.KEEP,
+        "edit_name": FieldPolicy.KEEP,
         "seed": FieldPolicy.KEEP,
         "determinism_note": FieldPolicy.KEEP,
         "timestamp": FieldPolicy.KEEP,
-        "backward_pass_index": FieldPolicy.KEEP,
+        "backward_pass_number": FieldPolicy.KEEP,
         "call_index": FieldPolicy.KEEP,
         "grad_kind": FieldPolicy.KEEP,
         "tuple_index": FieldPolicy.KEEP,
@@ -466,15 +466,15 @@ class FireRecord:
     func_call_id: int | None = None
     container_path: tuple[OutputPathComponent, ...] = ()
     engine: str | None = None
-    helper: Edit | None = None
+    edit: Edit | None = None
     site_label: str | None = None
     timing: Literal["pre", "post"] | None = None
-    direction: Literal["forward", "backward"] | None = None
-    helper_name: str | None = None
+    signal: Literal["forward", "backward"] | None = None
+    edit_name: str | None = None
     seed: int | None = None
     determinism_note: str | None = None
     timestamp: float | None = None
-    backward_pass_index: int | None = None
+    backward_pass_number: int | None = None
     call_index: int | None = None
     grad_kind: Literal["grad_input", "grad_output"] | None = None
     tuple_index: int | None = None
@@ -579,7 +579,7 @@ class HookSpec:
         return FrozenHookSpec(
             site_target=self.site_target.freeze(),
             hook=self.hook,
-            helper=self.helper,
+            helper=self.edit,
             handle=self.handle,
             metadata=tuple(sorted(self.metadata.items())),
         )
@@ -739,7 +739,7 @@ class InterventionSpec:
 
         return FrozenInterventionSpec(
             targets=tuple(target.freeze() for target in self.targets),
-            helper=self.helper,
+            helper=self.edit,
             value=self.value,
             hook=self.hook,
             target_value_specs=tuple(value_spec.freeze() for value_spec in self.target_value_specs),

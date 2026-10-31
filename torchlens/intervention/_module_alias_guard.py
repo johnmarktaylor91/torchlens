@@ -92,7 +92,7 @@ def _children(source: Any) -> list[Any]:
         NotSelector,
         PrecededBySelector,
     )
-    from .spec import InterventionSpec
+    from .spec import Recipe
 
     if source is None or isinstance(source, str):
         return []
@@ -102,8 +102,8 @@ def _children(source: Any) -> list[Any]:
         nested = (source.selector,)
     elif isinstance(source, (FollowedBySelector, PrecededBySelector)):
         nested = (source.inner,)
-    elif isinstance(source, InterventionSpec):
-        nested = tuple(rule.where for rule in source.rules)
+    elif isinstance(source, Recipe):
+        nested = tuple(rule.target for rule in source.rules)
     elif isinstance(source, (Mapping, list, tuple)):
         nested = tuple(source)
     else:

@@ -17,7 +17,7 @@ the rest.
 
 ## 1. Fit the condition direction and a threshold
 
-The condition here is "the newest token is token 7". `direction_from_pairs`
+The condition here is "the newest token is token 7". `fit_direction`
 fits it from prompts that end in that token against prompts that do not, at
 the first MLP. The threshold is the midpoint between the two groups' mean
 scores on fresh prompts.

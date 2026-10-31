@@ -25,7 +25,7 @@ Four normalized layers, one artifact:
   presence vocabulary (`observed | not_scheduled | site_absent | unsupported |
   capture_failed | budget_dropped`), the spine, the sketch, and disclosures.
   Missing is never zero: a non-observed presence may not carry payloads.
-  Gradient streams must stamp `grad_scale` (`scaled | unscaled | unknown`).
+  Gradient streams must stamp `scale_grad` (`scaled | unscaled | unknown`).
 
 Merging: integer counts merge EXACTLY (rank merge, micro-batch folds, time
 coarsening); floating fields merge with a documented stable pairwise algorithm

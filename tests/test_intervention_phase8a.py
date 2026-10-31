@@ -49,7 +49,7 @@ def _capture() -> Any:
     return tl.trace(
         ReluAdd(),
         torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
 
@@ -141,7 +141,7 @@ def test_attach_clear_and_detach_hooks_are_sticky_mutators() -> None:
     assert log._spec_revision == initial_revision + 3
     assert len(log._intervention_spec.hook_specs) == 1
 
-    assert log.detach_hooks(tl.func("relu")) is log
+    assert log.clear_edits(tl.func("relu")) is log
     assert log._spec_revision == initial_revision + 4
     assert log._intervention_spec.hook_specs == []
 
@@ -170,29 +170,29 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     """Frozen intervention-spec snapshots refresh after each public mutator."""
 
     log = _capture()
-    first_snapshot = log.intervention_spec
-    assert log.intervention_spec is first_snapshot
+    first_snapshot = log.recipe
+    assert log.recipe is first_snapshot
 
     replacement = torch.zeros(2, 3)
     log.set(tl.func("relu"), replacement, confirm_mutation=True)
-    after_set = log.intervention_spec
+    after_set = log.recipe
     assert after_set is not first_snapshot
     assert len(after_set.target_value_specs) == 1
 
     log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
-    after_attach = log.intervention_spec
+    after_attach = log.recipe
     assert after_attach is not after_set
     assert len(after_attach.hook_specs) == 1
 
-    log.detach_hooks(tl.func("relu"), confirm_mutation=True)
-    after_detach = log.intervention_spec
+    log.clear_edits(tl.func("relu"), confirm_mutation=True)
+    after_detach = log.recipe
     assert after_detach is not after_attach
     assert after_detach.hook_specs == ()
 
     log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
-    after_second_attach = log.intervention_spec
+    after_second_attach = log.recipe
     log.clear_hooks(confirm_mutation=True)
-    after_clear = log.intervention_spec
+    after_clear = log.recipe
     assert after_clear is not after_second_attach
     assert after_clear.hook_specs == ()
 
@@ -201,7 +201,7 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
         torch.ones(2, 3),
         intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
-    after_do = log.intervention_spec
+    after_do = log.recipe
     assert after_do is not after_clear
     assert len(after_do.target_value_specs) == 2
 
@@ -243,7 +243,7 @@ def test_cleanup_invalidates_cached_intervention_spec_snapshot() -> None:
         FireRecord(target_label=target, site_label=target, call_label=log[target].label)
     )
 
-    frozen_before = log.intervention_spec
+    frozen_before = log.recipe
     assert len(frozen_before.records) == 1
 
     _scrub_intervention_fields_after_removal(
@@ -252,7 +252,7 @@ def test_cleanup_invalidates_cached_intervention_spec_snapshot() -> None:
         [layer for layer in log.layer_list if layer.layer_label != target],
     )
 
-    frozen_after = log.intervention_spec
+    frozen_after = log.recipe
     assert frozen_after is not frozen_before
     assert len(log._intervention_spec.records) == 0
     assert frozen_after.records == ()
@@ -264,18 +264,18 @@ def test_detach_hooks_no_site_is_noop_unless_strict() -> None:
     log = _capture()
     initial_revision = log._spec_revision
 
-    assert log.detach_hooks() is log
+    assert log.clear_edits() is log
     assert log._spec_revision == initial_revision
 
     with pytest.raises(SpecMutationError, match="requires a site or handle"):
-        log.detach_hooks(strict=True)
+        log.clear_edits(strict=True)
 
 
 def test_rerun_advances_out_recipe_revision_after_set() -> None:
     """Successful rerun advances the out recipe revision."""
 
     x = torch.randn(2, 3)
-    log = tl.trace(ReluAdd(), x, capture=CaptureOptions(intervention_ready=True))
+    log = tl.trace(ReluAdd(), x, capture=CaptureOptions(replayable=True))
 
     log.set(tl.func("relu"), torch.zeros(2, 3), confirm_mutation=True)
     assert log._out_recipe_revision == 0

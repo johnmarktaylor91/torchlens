@@ -37,7 +37,7 @@ import torchlens as tl
 from torchlens.errors import TorchLensIOError
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 class ExtraStateBN(nn.Module):

@@ -114,7 +114,7 @@ def _capture(
     log = tl.trace(
         ReluLinear() if model is None else model,
         capture_x,
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
     return log, capture_x
 
@@ -162,14 +162,14 @@ def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
 
     parent, _ = _capture()
     relu_pass = next(layer for layer in parent.layer_list if layer.func_name == "relu")
-    parent_initial_log = list(relu_pass.interventions)
+    parent_initial_log = list(relu_pass.edits)
 
     fork = parent.fork("test")
     fork_relu_pass = next(layer for layer in fork.layer_list if layer.func_name == "relu")
     assert fork.parent_run() is parent
     assert fork.trace_label == "test"
     assert fork_relu_pass.out is relu_pass.out
-    assert fork_relu_pass.interventions is not relu_pass.interventions
+    assert fork_relu_pass.edits is not relu_pass.edits
     assert fork_relu_pass.equivalent_ops is not relu_pass.equivalent_ops
 
     with warnings.catch_warnings(record=True) as warnings_record:
@@ -178,8 +178,8 @@ def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
     assert warnings_record == []
     fork.push()
 
-    assert list(relu_pass.interventions) == parent_initial_log
-    assert len(fork_relu_pass.interventions) > len(parent_initial_log)
+    assert list(relu_pass.edits) == parent_initial_log
+    assert len(fork_relu_pass.edits) > len(parent_initial_log)
     assert len(fork._intervention_spec.target_value_specs) == 1
     assert len(parent._intervention_spec.target_value_specs) == 0
 

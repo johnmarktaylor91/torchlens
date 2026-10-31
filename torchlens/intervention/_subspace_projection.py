@@ -28,7 +28,7 @@ Each edit verb has one of four meanings here:
   ``replace_with``, ``add`` of a tensor, ``steer``, ``permute_batch``,
   ``resample_rows_from``, ``mean_from``, ``mean_fill(ref)``);
 * source verbs map the full site value ``x`` to new coordinates
-  ``[..., k]`` (``tl.intervention.affine_source(weight, bias=b)``, so
+  ``[..., k]`` (``tl.intervention.set_affine_coordinates(weight, bias=b)``, so
   ``x + Q^T (W x + b - Q x)``, the LoReFT form);
 * every other verb refuses ``subspace_edit_unsupported`` with the spelling
   that works.
@@ -196,12 +196,12 @@ def _verb_meaning(edit: Any) -> str:
     if not isinstance(edit, Edit):
         return "coordinates"
     verb = edit.helper_name
-    if edit.kind != "forward" or edit.direction == "backward":
+    if edit.kind != "forward" or edit.signal == "backward":
         raise _unsupported(
             verb,
             "backward-direction verbs edit gradients, not the forward component",
             "attach the gradient verb at capture time: tl.trace(model, x, "
-            "intervene=tl.when(tl.module(name), tl.grad_zero()))",
+            "intervene=tl.when(tl.module(name), tl.zero_grad()))",
             code="subspace_edit_unsupported",
         )
     if verb == AFFINE_SOURCE_NAME:

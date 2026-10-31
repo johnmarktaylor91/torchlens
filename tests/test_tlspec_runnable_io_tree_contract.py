@@ -57,7 +57,7 @@ def _save_runnable(
         capture_inputs,
         input_kwargs=input_kwargs or {},
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -267,7 +267,7 @@ def test_live_mixed_positional_keyword_inputs_bind_and_diverge() -> None:
         [x],
         input_kwargs={"add": True},
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),

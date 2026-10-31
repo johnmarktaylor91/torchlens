@@ -214,7 +214,7 @@ def resolver_coverage_report() -> dict[str, Any]:
             model,
             inputs,
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
             ),
@@ -299,7 +299,7 @@ def classics_resolver_coverage_report(
                 model,
                 inputs,
                 capture=CaptureOptions(
-                    intervention_ready=True,
+                    replayable=True,
                     capture_container_structure=True,
                     cache=False,
                 ),

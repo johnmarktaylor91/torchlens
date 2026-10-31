@@ -18,7 +18,7 @@ from torchlens.options import CaptureOptions
 from torchlens.runnable import PathFaithfulness, ReadinessStatus, RunnableErrorCode
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

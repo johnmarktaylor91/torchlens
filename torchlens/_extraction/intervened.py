@@ -97,7 +97,7 @@ class InterventionPlan:
             "policy": "intervened",
             "engine": INTERVENTION_ENGINE,
             "address_class": self.address_class,
-            "spec_digest": self.spec_digest,
+            "spec_digest": self.digest,
             "rules": [dict(rule) for rule in self.rules],
         }
 
@@ -123,7 +123,7 @@ def _rule_address_class(rule: Any) -> str:
     from ..ir.selector_eval import selector_contains_kind
 
     for kind, address_class in _STRUCTURAL_KIND_CLASSES:
-        if selector_contains_kind(rule.where, kind, unwrap=True):
+        if selector_contains_kind(rule.target, kind, unwrap=True):
             return address_class
     return "selection"
 
@@ -144,7 +144,7 @@ def _rule_helper(rule: Any) -> Any:
 
     from ..intervention.types import Edit, InterventionDecision
 
-    action = rule.action
+    action = rule.edit
     if isinstance(action, InterventionDecision):
         action = action.hook
     return action if isinstance(action, Edit) else None
@@ -165,7 +165,7 @@ def _refuse_batch_dependent(rule: Any) -> None:
     """
 
     helper = _rule_helper(rule)
-    if helper is not None and bool(helper.batch_independent):
+    if helper is not None and bool(helper.is_batch_independent):
         return
     name = helper.helper_name if helper is not None else rule.action_repr
     raise InvalidArgumentError(
@@ -207,9 +207,9 @@ def coerce_intervention(intervene: Any) -> InterventionPlan | None:
 
     if intervene is None:
         return None
-    from ..intervention.spec import InterventionSpec
+    from ..intervention.spec import Recipe
 
-    if not isinstance(intervene, InterventionSpec) or not intervene.rules:
+    if not isinstance(intervene, Recipe) or not intervene.rules:
         raise InvalidArgumentError(
             f"extract_dataset(intervene=) takes a non-empty InterventionSpec; "
             f"got {type(intervene).__name__}. The spec carries the rule "
@@ -236,14 +236,14 @@ def coerce_intervention(intervene: Any) -> InterventionPlan | None:
             "rule_id": str(rule.rule_id),
             "where": str(rule.where_repr),
             "action": str(rule.action_repr),
-            "direction": str(rule.direction),
+            "direction": str(rule.signal),
         }
         for rule in intervene.rules
     )
     return InterventionPlan(
         spec=intervene,
         address_class=address_class,
-        spec_digest=str(intervene.spec_digest),
+        spec_digest=str(intervene.digest),
         rules=rules,
     )
 
@@ -373,7 +373,7 @@ def _receipt_digest(plan: InterventionPlan, sites: list[str], fire_counts: list[
 
     payload = json.dumps(
         {
-            "spec_digest": plan.spec_digest,
+            "spec_digest": plan.digest,
             "site_keys": list(sites),
             "fire_counts": [int(count) for count in fire_counts],
         },

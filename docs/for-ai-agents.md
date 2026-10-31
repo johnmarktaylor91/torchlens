@@ -71,8 +71,8 @@ table is a selection, not the full list — read `torchlens.__all__` for that):
 | Data objects | `Trace`, `Layer`, `Op`, `Quantity`, `Bytes`, `Duration`, `Flops`, `Macs` |
 | Site discovery | `label`, `func`, `func_transform`, `module`, `contains`, `where`, `in_module`, `head`, `output`, `grad_fn`, `facet` |
 | Predicate composition | `followed_by`, `preceded_by`, `without_op`, `when` (the former `intervening` alias is removed) |
-| Activation helpers | `zero_ablate`, `mean_ablate`, `torchlens.intervention.scramble_elements` (elementwise iid scramble), `replace_with`, `swap_with`, `steer`, `scale`, `clamp`, `noise`, `project_onto`, `project_off`, `splice_module` |
-| Backward helpers | `bwd_hook`, `grad_zero`, `grad_scale`, `grad_clamp`, `grad_noise`, `grad_clip` |
+| Activation helpers | `zero_ablate`, `mean_ablate`, `torchlens.intervention.scramble_elements` (elementwise iid scramble), `replace_with`, `swap_with`, `steer`, `scale`, `clamp`, `add_noise`, `project_onto`, `project_out`, `splice_module` |
+| Backward helpers | `hook_grad`, `zero_grad`, `scale_grad`, `clamp_grad`, `add_grad_noise`, `clip_grad` |
 | Extraction and validation | `pluck`, `extract`, `extract_dataset`, `validate` (the former `peek` and `batched_extract` aliases are removed); disk-mode `extract_dataset` writes a self-describing manifest, resumes with `resume=True`, and loads back via `torchlens.dataset_extraction.load_extraction` (DOCUMENTED-UNSTABLE spellings) |
 | Subpackages | `facets`, `fastlog` |
 
@@ -140,7 +140,7 @@ import torchlens as tl
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 direction = torch.ones(4)
 
-bound = tl.when(tl.module("1"), tl.steer(direction, magnitude=2.0, feature_axis=-1)).bind(model)
+bound = tl.when(tl.module("1"), tl.steer(direction, strength=2.0, dim=-1)).bind(model)
 outputs = [bound(torch.randn(2, 4)) for _ in range(3)]
 
 assert outputs[0].shape == (2, 2)
@@ -191,7 +191,7 @@ assert relu_site.grad is not None
 For forward-only analysis where backward will never be run, use
 `tl.trace(..., inference_only=True)` or `CaptureOptions(inference_only=True)` to capture under
 `torch.no_grad()`. Do not combine it with `backward_ready=True`, `save_grads=...`, or
-`intervention_ready=True`.
+`replayable=True`.
 
 Draw after capture:
 

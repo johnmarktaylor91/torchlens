@@ -104,13 +104,13 @@ def test_fire_record_and_store_land_on_the_addressed_pass(loop) -> None:
     hit = fork["relu_1_2:1"].ops[0]
     assert list(hit.edge_substitutions) == [(edge.arg_kind, edge.arg_path)]
     assert hit.edge_replacement_stamps[(edge.arg_kind, edge.arg_path)]["verdict"] is True
-    fires = [r for r in hit.interventions if r.edge_address is not None]
+    fires = [r for r in hit.edits if r.edge_address is not None]
     assert [r.edge_address for r in fires] == [address]
     assert fires[0].call_label == "relu_1_2:1"
     for other in (2, 3):
         op = fork[f"relu_1_2:{other}"].ops[0]
         assert not (op.edge_substitutions or {})
-        assert not [r for r in op.interventions if r.edge_address is not None]
+        assert not [r for r in op.edits if r.edge_address is not None]
 
 
 def test_audit_row_describes_the_real_effect(loop) -> None:

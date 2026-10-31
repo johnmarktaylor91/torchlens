@@ -190,7 +190,7 @@ def test_intervention_ready_records_unique_container_paths_for_multi_output_op()
     log = tl.trace(
         SplitModel(),
         torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
     split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
@@ -232,7 +232,7 @@ def test_replay_templates_classify_parent_literals_and_literal_tensors() -> None
     log = tl.trace(
         LinearShift(),
         torch.randn(4, 3),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
     templates = [layer.args_template for layer in log.layer_list if layer.args_template is not None]
@@ -268,7 +268,7 @@ def test_internal_edge_uses_extend_parent_arg_locs_without_replacing_them() -> N
     log = tl.trace(
         AddRelus(),
         torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
     edge_layers = [layer for layer in log.layer_list if layer._edge_uses]

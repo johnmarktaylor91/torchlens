@@ -1193,7 +1193,7 @@ def _apply_replay_hooks(
             entry.normalized_callable,
             current,
             context,
-            force_shape_change=bool(entry.metadata.get("force_shape_change", False)),
+            allow_shape_change=bool(entry.metadata.get("force_shape_change", False)),
         )
         records.append(
             _replay_fire_record(
@@ -1308,8 +1308,8 @@ def _commit_replay_updates(
                 "transformed_out_dtype": site.transformed_out_dtype,
                 "memory": site.activation_memory,
                 "transformed_activation_memory": site.transformed_activation_memory,
-                "interventions": list(site.interventions),
-                "intervention_replaced": site.intervention_replaced,
+                "interventions": list(site.edits),
+                "intervention_replaced": site.is_edited,
             }
             _apply_out_update(site, tensor)
             new_records = list(pending_records.get(label, ()))
@@ -1320,7 +1320,7 @@ def _commit_replay_updates(
                 # two records, never three). Live-door records (capture
                 # facts), edge records (tier-(ii) corroboration), and
                 # records on sites this push did not fire at survive.
-                old_records = list(site.interventions or ())
+                old_records = list(site.edits or ())
                 surviving = [
                     record
                     for record in old_records
@@ -1330,9 +1330,7 @@ def _commit_replay_updates(
                 # component (a user-injected tensor mints no FireRecord);
                 # preserve exactly that component across the replacement.
                 record_replaced_before = any(record.replaced for record in old_records)
-                nonrecord_component = bool(site.intervention_replaced) and (
-                    not record_replaced_before
-                )
+                nonrecord_component = bool(site.is_edited) and (not record_replaced_before)
                 site._internal_set("interventions", surviving + new_records)
                 site._internal_set(
                     "intervention_replaced",

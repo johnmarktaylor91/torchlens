@@ -49,7 +49,7 @@ def test_unknown_over_token_refuses_typed(token: str) -> None:
     """A1b: any token outside the closed vocabulary refuses at construction."""
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.mean_ablate(over=token)
+        tl.mean_ablate(dim=token)
     assert excinfo.value.fields["code"] == "intervention_over_invalid"
     assert repr(token) in str(excinfo.value)
     # The refusal teaches the supported spellings.
@@ -63,7 +63,7 @@ def test_non_string_over_refuses_typed(token: object) -> None:
     audit-only-label defect again. Refuse until the axis-aware family ships."""
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.mean_ablate(over=token)  # type: ignore[arg-type]
+        tl.mean_ablate(dim=token)  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "intervention_over_invalid"
 
 
@@ -72,23 +72,23 @@ def test_typo_can_never_flip_batch_independent_open() -> None:
     gate can never see ``batch_independent=True`` from a typo."""
 
     with pytest.raises(InvalidArgumentError):
-        tl.mean_ablate(over="btach")
+        tl.mean_ablate(dim="btach")
     # The only constructible spellings derive fail-closed flags:
-    assert tl.mean_ablate().batch_independent is False
-    assert tl.mean_ablate(over="self").batch_independent is False
+    assert tl.mean_ablate().is_batch_independent is False
+    assert tl.mean_ablate(dim="self").is_batch_independent is False
 
 
 def test_tensor_source_derives_batch_independent_true() -> None:
     """A1c: an external tensor source never reads the traced batch."""
 
     spec = tl.mean_ablate(source=torch.ones(8))
-    assert spec.batch_independent is True
+    assert spec.is_batch_independent is True
 
 
 def test_self_mean_derives_batch_independent_false() -> None:
     """A1c inverse: the self-mean couples batch rows."""
 
-    assert tl.mean_ablate().batch_independent is False
+    assert tl.mean_ablate().is_batch_independent is False
 
 
 def test_append_refuses_self_mean_and_permits_tensor_source() -> None:
