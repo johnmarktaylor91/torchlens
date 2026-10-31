@@ -444,7 +444,7 @@ def test_resume_complete_class_callable_digest_mismatch_refuses(tmp_path: Path) 
         ["relu"],
         batch_size=2,
         output_dir=tmp_path,
-        transform=scale_two,
+        output_transform=scale_two,
         progress=False,
     )
     _interrupt_after(tmp_path, 1)
@@ -455,7 +455,7 @@ def test_resume_complete_class_callable_digest_mismatch_refuses(tmp_path: Path) 
             ["relu"],
             batch_size=2,
             output_dir=tmp_path,
-            transform=scale_three,
+            output_transform=scale_three,
             progress=False,
             resume=True,
         )

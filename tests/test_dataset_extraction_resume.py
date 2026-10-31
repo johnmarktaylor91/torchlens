@@ -413,7 +413,7 @@ def test_manifest_is_self_describing(tmp_path: Path) -> None:
         batch_size=3,
         output_dir=tmp_path,
         progress=False,
-        transform=lambda tensor: tensor.mean(dim=1),
+        output_transform=lambda tensor: tensor.mean(dim=1),
         stimulus_ids=ids,
     )
     manifest = json.loads((tmp_path / MANIFEST_FILENAME).read_text(encoding="utf-8"))

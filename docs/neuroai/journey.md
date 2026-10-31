@@ -77,8 +77,8 @@ raises a typed error whose remedy shows a working spelling. Recurrent sites
 are pass-qualified (`"cell:2"` is pass 2 of a reused module) -- pass indices
 are first-class, never collapsed.
 
-Two transform slots exist and they are not the same: `tl.trace(transform=)`
-preprocesses INPUTS; `tl.extract_dataset(transform=)` post-processes OUTPUT
+Two transform slots exist and they are not the same: `CaptureOptions(input_transform=)`
+preprocesses INPUTS; `tl.extract_dataset(output_transform=)` post-processes OUTPUT
 activations before storage. For input preprocessing at extraction scale, use
 `input_transform=` (below).
 

@@ -34,7 +34,7 @@ Two things to watch when carrying habits over:
   On `tl.extract_dataset`, `transform=` transforms OUTPUTS before storage
   (thingsvision's `apply_transforms` habit). For input preprocessing in
   `extract_dataset`, use `input_transform=` -- carrying the trace habit into
-  `extract_dataset(transform=...)` would silently z-score your FEATURES
+  `extract_dataset(output_transform=...)` would silently z-score your FEATURES
   instead of your PIXELS.
 
 ## thingsvision and TorchLens cannot share one environment

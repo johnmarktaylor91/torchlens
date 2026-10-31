@@ -173,7 +173,7 @@ def test_resume_with_a_comprehension_transform_completes(tmp_path: Path) -> None
             batch_size=5,
             output_dir=tmp_path,
             progress=False,
-            transform=transform,
+            output_transform=transform,
         )
     # A fresh compilation stands in for the second process.
     extract_dataset(
@@ -183,7 +183,7 @@ def test_resume_with_a_comprehension_transform_completes(tmp_path: Path) -> None
         batch_size=5,
         output_dir=tmp_path,
         progress=False,
-        transform=_compile(_NESTED_SOURCES["listcomp"]),
+        output_transform=_compile(_NESTED_SOURCES["listcomp"]),
         resume=True,
     )
     assert json.loads((tmp_path / "manifest.json").read_text())["status"] == "complete"
@@ -207,7 +207,7 @@ def test_v1_callable_record_refuses_as_incomparable_not_as_behavior_change(
             batch_size=5,
             output_dir=tmp_path,
             progress=False,
-            transform=transform,
+            output_transform=transform,
         )
     manifest_path = tmp_path / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
@@ -226,7 +226,7 @@ def test_v1_callable_record_refuses_as_incomparable_not_as_behavior_change(
             batch_size=5,
             output_dir=tmp_path,
             progress=False,
-            transform=transform,
+            output_transform=transform,
             resume=True,
         )
     fields = excinfo.value.fields

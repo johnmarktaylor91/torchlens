@@ -496,7 +496,7 @@ def test_selector_transform_mapping_refuses() -> None:
             _model(),
             torch.randn(4, 3),
             tl.func("relu"),
-            transform={"a": torch.abs},
+            output_transform={"a": torch.abs},
             progress=False,
         )
     assert _code(excinfo) == "extraction_selector_transform_mapping_unsupported"

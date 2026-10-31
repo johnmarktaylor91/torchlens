@@ -141,10 +141,10 @@ def transform_role(transform: Any) -> str:
     return SUMMARY_ROLE if role == SUMMARY_ROLE else "standard"
 
 
-def is_summary_transform(transform: Any) -> bool:
-    """Return whether ``transform`` declares the summary role."""
+def is_summary_transform(output_transform: Any) -> bool:
+    """Return whether ``output_transform`` declares the summary role."""
 
-    return transform_role(transform) == SUMMARY_ROLE
+    return transform_role(output_transform) == SUMMARY_ROLE
 
 
 def ensure_summary_output_owns_storage(output: Any, live: Any) -> Any:
