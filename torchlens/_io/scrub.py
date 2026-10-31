@@ -1557,6 +1557,13 @@ def _scrub_field(
     )
 
 
+#: Stored Trace option behind each raw-value save policy (tlspec v11 group keys).
+_RAW_SAVE_POLICY_ATTR = {
+    "raw_input": "_options_save_raw_input",
+    "raw_output": "_options_save_transformed_output",
+}
+
+
 def _scrub_raw_value_for_save(
     owner: Trace,
     field_name: str,
@@ -1592,7 +1599,8 @@ def _scrub_raw_value_for_save(
     """
 
     policy_name = f"save_{field_name}"
-    policy = getattr(owner, policy_name, "small")
+    stored_policy_attr = _RAW_SAVE_POLICY_ATTR.get(field_name, policy_name)
+    policy = getattr(owner, stored_policy_attr, "small")
     if policy is False:
         return None
     if policy is True:

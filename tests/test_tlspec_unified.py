@@ -1159,8 +1159,8 @@ def test_unknown_backend_runtime_version_serializes_as_null() -> None:
     """Unknown backend runtime versions remain JSON null instead of the string ``None``."""
 
     source = SimpleNamespace(
-        backend_runtime_version=None,
-        backend_runtime_config={},
+        _provenance_backend_version=None,
+        _provenance_backend_config={},
         backend_runtime_device_summary={},
     )
 
