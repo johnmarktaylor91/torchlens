@@ -1494,7 +1494,7 @@ shims, by declared contract. Each carries the same tag at its definition.
 **ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.rdm_compare_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
 : A TorchLens score with a descriptive uncertainty interval beside it:
   `score` (the unchanged estimator on all stimuli), `low` and `high` (a
-  percentile bootstrap over stimuli), `confidence`, `n_resamples`, `n_valid`
+  percentile bootstrap over stimuli), `confidence`, `n_resamples`, `num_valid_resamples`
   (resamples with a finite score), `seed`, `basis` (how the interval was
   made, in words) and `similarity_repository_id` (the measure variant `score`
   computes: the linear CKA identifier from `cka_interval`, `None` from

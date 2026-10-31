@@ -30,7 +30,7 @@ from torchlens._merged import (  # noqa: E402
 )
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
-    has_vetted_snapshot,
+    is_vetted_build,
 )
 
 # Every test in this module calls real `lifecycle.arm()` (via `_capture()`) to
@@ -46,9 +46,9 @@ pytestmark = [
         reason="torch.distributed gloo unavailable",
     ),
     pytest.mark.skipif(
-        not has_vetted_snapshot(),
+        not is_vetted_build(),
         reason="merge-ranks live captures require a census-vetted torch build "
-        "(torchlens.distributed.has_vetted_snapshot() is False here)",
+        "(torchlens.distributed.is_vetted_build() is False here)",
     ),
 ]
 from torchlens._merged._artifact import canonical_json_bytes  # noqa: E402

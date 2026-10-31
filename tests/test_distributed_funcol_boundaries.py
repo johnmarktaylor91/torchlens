@@ -23,7 +23,7 @@ from torchlens.backends.torch.funcol import (  # noqa: E402
     FUNCOL_BOUNDARY_SCHEMA,
     active_funcol_session,
 )
-from torchlens.distributed import _lifecycle as lifecycle, has_vetted_snapshot  # noqa: E402
+from torchlens.distributed import _lifecycle as lifecycle, is_vetted_build  # noqa: E402
 from torchlens.errors._base import CompatibilityError  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
@@ -32,16 +32,16 @@ pytestmark = pytest.mark.skipif(
 )
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
-# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# census-vetted torch build exists (torchlens.distributed.is_vetted_build());
 # on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
 # Applied to the classes/tests that call a real arm(); test_unarmed_capture_
 # is_status_quo_for_funcol and test_dead_session_kernel_executes_real_wait_
 # and_skips_bookkeeping deliberately exercise the UNARMED/no-session path and
 # must keep running everywhere.
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 

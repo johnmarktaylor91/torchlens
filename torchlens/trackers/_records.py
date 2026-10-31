@@ -245,7 +245,7 @@ class TagGrammar:
         return assert_tag_safe(f"{self._root('torchlens')}/check/{check_name}", site=check_name)
 
 
-def spine_scalars(spine: SpineResult) -> dict[str, float]:
+def running_stats_scalars(running_stats: SpineResult) -> dict[str, float]:
     """Derive the portable scalar statistics from one spine record.
 
     ``std`` comes from the stable Chan moments (``m2 / count_finite``);
@@ -253,20 +253,20 @@ def spine_scalars(spine: SpineResult) -> dict[str, float]:
     finite population) are simply omitted -- missing is never zero (D6).
     """
 
-    out: dict[str, float] = {"count": float(spine.count_finite)}
-    if spine.count_finite > 0:
-        total = float(spine.count_total)
-        out["zero_fraction"] = spine.count_zero / total if total else 0.0
-        if spine.mean is not None:
-            out["mean"] = spine.mean
-        if spine.m2 is not None and spine.count_finite > 1:
-            out["std"] = math.sqrt(max(spine.m2, 0.0) / spine.count_finite)
-        if spine.sum_squares is not None:
-            out["norm"] = math.sqrt(max(spine.sum_squares, 0.0))
-        if spine.finite_min is not None:
-            out["min"] = spine.finite_min
-        if spine.finite_max is not None:
-            out["max"] = spine.finite_max
+    out: dict[str, float] = {"count": float(running_stats.count_finite)}
+    if running_stats.count_finite > 0:
+        total = float(running_stats.count_total)
+        out["zero_fraction"] = running_stats.count_zero / total if total else 0.0
+        if running_stats.mean is not None:
+            out["mean"] = running_stats.mean
+        if running_stats.m2 is not None and running_stats.count_finite > 1:
+            out["std"] = math.sqrt(max(running_stats.m2, 0.0) / running_stats.count_finite)
+        if running_stats.sum_squares is not None:
+            out["norm"] = math.sqrt(max(running_stats.sum_squares, 0.0))
+        if running_stats.finite_min is not None:
+            out["min"] = running_stats.finite_min
+        if running_stats.finite_max is not None:
+            out["max"] = running_stats.finite_max
     return out
 
 
@@ -343,7 +343,7 @@ def emission_from_block(
         site = sites.get(observation.site_id)
         leaf = site.display_label if site is not None else observation.site_id
         family = STREAM_FAMILIES[observation.stream]
-        for statistic, value in spine_scalars(observation.spine).items():
+        for statistic, value in running_stats_scalars(observation.spine).items():
             scalars.append(ScalarPoint(grammar.data(family, statistic, leaf), step, value))
         nonfinite = nonfinite_scalars(observation.spine)
         if any(nonfinite.values()):
@@ -460,5 +460,5 @@ __all__ = [
     "emission_from_block",
     "histogram_points",
     "nonfinite_scalars",
-    "spine_scalars",
+    "running_stats_scalars",
 ]

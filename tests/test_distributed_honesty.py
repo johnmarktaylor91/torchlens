@@ -47,7 +47,7 @@ from torchlens.backends.torch._ops_interventions import (
     _pop_tensor_live_fire_results,
     _set_tensor_live_fire_results,
 )
-from torchlens.distributed import has_vetted_snapshot
+from torchlens.distributed import is_vetted_build
 
 DISTRIBUTED_ROW_KEYS = ("dtensor", "device_mesh", "tensor_parallel", "pipeline_parallel")
 
@@ -925,7 +925,7 @@ def test_real_dense_model_still_captures_with_distributed_initialized(
     model = TinyModel()
     x = torch.randn(2, 4)
     assert detect_distributed_state(model, x) == ()
-    if has_vetted_snapshot():
+    if is_vetted_build():
         trace = tl.trace(model, x)
     else:
         with pytest.warns(UserWarning, match="uncaptured_collective_op"):

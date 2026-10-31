@@ -33,7 +33,7 @@ from torchlens.backends.torch.wrappers import (
     get_orig_torch_funcs,
     is_decorated_function,
 )
-from torchlens.distributed import has_vetted_snapshot
+from torchlens.distributed import is_vetted_build
 
 # Strong refs to superseded wrapper generations. Wrapper objects minted before a
 # forced regeneration stay reachable for the whole session (other test modules'
@@ -142,9 +142,9 @@ def test_partial_first_time_decoration_completes_on_retry(monkeypatch) -> None:
 
 
 @pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here); on an unvetted "
+    "(torchlens.distributed.is_vetted_build() is False here); on an unvetted "
     "torch, _arm's recognizer derivation refuses typed before reaching the second "
     "install family this test provokes (F1 ruling, Lead, 2026-10-01).",
 )

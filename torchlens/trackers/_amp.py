@@ -124,11 +124,11 @@ def unscale_stage(scaler: Any, optimizer: Any) -> str:
     return _STAGE_TO_TRUTH.get(str(name), "unknown") if name is not None else "unknown"
 
 
-def corrected_gradient_block(block: CommittedBlock, scale: float) -> tuple[CommittedBlock, int]:
+def corrected_grad_block(block: CommittedBlock, scale: float) -> tuple[CommittedBlock, int]:
     """Return ``block`` with every SCALED gradient observation corrected.
 
     Observations stamped ``grad_scale="scaled"`` on gradient streams get the
-    closed-form correction (:func:`correct_spine` / :func:`correct_histogram`)
+    closed-form correction (:func:`correct_running_stats` / :func:`correct_histogram`)
     and are re-stamped ``"unscaled"``; everything else is returned as is.
     The second element counts the corrected observations so the emitter can
     disclose the derivation (evidence ``unscaled_derived``) on the run-health
@@ -145,7 +145,7 @@ def corrected_gradient_block(block: CommittedBlock, scale: float) -> tuple[Commi
         ):
             observation = replace(
                 observation,
-                spine=correct_spine(observation.spine, scale),
+                spine=correct_running_stats(observation.spine, scale),
                 sketch=(
                     correct_histogram(observation.sketch, scale)
                     if observation.sketch is not None
@@ -166,7 +166,7 @@ def _divide(value: float | None, factor: float) -> float | None:
     return None if value is None else value / factor
 
 
-def correct_spine(spine: SpineResult, scale: float) -> SpineResult:
+def correct_running_stats(running_stats: SpineResult, scale: float) -> SpineResult:
     """Apply the closed-form unscale correction to one spine record.
 
     Counts (total/finite/zero/negative/nonfinite) are invariant under a
@@ -191,15 +191,15 @@ def correct_spine(spine: SpineResult, scale: float) -> SpineResult:
         )
     square = scale * scale
     return replace(
-        spine,
-        finite_min=_divide(spine.finite_min, scale),
-        finite_max=_divide(spine.finite_max, scale),
-        finite_absmax=_divide(spine.finite_absmax, scale),
-        sum=_divide(spine.sum, scale),
-        sum_squares=_divide(spine.sum_squares, square),
-        sum_abs=_divide(spine.sum_abs, scale),
-        mean=_divide(spine.mean, scale),
-        m2=_divide(spine.m2, square),
+        running_stats,
+        finite_min=_divide(running_stats.finite_min, scale),
+        finite_max=_divide(running_stats.finite_max, scale),
+        finite_absmax=_divide(running_stats.finite_absmax, scale),
+        sum=_divide(running_stats.sum, scale),
+        sum_squares=_divide(running_stats.sum_squares, square),
+        sum_abs=_divide(running_stats.sum_abs, scale),
+        mean=_divide(running_stats.mean, scale),
+        m2=_divide(running_stats.m2, square),
     )
 
 
@@ -272,8 +272,8 @@ def correct_histogram(sketch: HistogramResult, scale: float) -> HistogramResult:
 __all__ = [
     "SCALE_EVIDENCE",
     "correct_histogram",
-    "correct_spine",
-    "corrected_gradient_block",
+    "correct_running_stats",
+    "corrected_grad_block",
     "observed_grad_scale",
     "unscale_stage",
 ]

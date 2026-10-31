@@ -616,7 +616,7 @@ class _BoxTerm:
 
 @dataclass(frozen=True)
 class _GradientTerm:
-    """AST leaf lifting a ``GradientReceptiveField`` region into a Selection."""
+    """AST leaf lifting a ``GradReceptiveField`` region into a Selection."""
 
     gradient_rf: Any
 
@@ -1623,7 +1623,7 @@ def _selection_from_box(box: Any) -> Selection:
 
 
 def _selection_from_gradient(gradient_rf: Any) -> Selection:
-    """Lift a GradientReceptiveField as an exact empirical ACT term."""
+    """Lift a GradReceptiveField as an exact empirical ACT term."""
 
     return Selection(_GradientTerm(gradient_rf=gradient_rf), kind="ACT")
 

@@ -22,7 +22,7 @@ from ._errors import (
     ReceptiveFieldUnavailableError,
 )
 from ._path import require_path, resolve_graph_point
-from ._types import GradientReceptiveField, GridLayout, ReceptiveFieldDirection
+from ._types import GradReceptiveField, GridLayout, ReceptiveFieldDirection
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -81,7 +81,7 @@ class _ProbeSnapshot:
     active_index: object
 
 
-class _GradientReceptiveFieldResult(GradientReceptiveField):
+class _GradientReceptiveFieldResult(GradReceptiveField):
     """Gradient result with deterministic influence-set convenience methods."""
 
     def indices(self) -> tuple[torch.Tensor, ...]:
@@ -660,7 +660,7 @@ def _build_result(
     atol: float,
     rtol: float,
     unit_shape: tuple[int, ...],
-) -> GradientReceptiveField:
+) -> GradReceptiveField:
     """Build the immutable empirical RF result for one full input gradient.
 
     Parameters
@@ -684,7 +684,7 @@ def _build_result(
 
     Returns
     -------
-    GradientReceptiveField
+    GradReceptiveField
         Full empirical influence-set result.
     """
 
@@ -734,7 +734,7 @@ def gradient_for_unit(
     atol: float = 0.0,
     rtol: float = 0.0,
     retain_graph: bool = False,
-) -> GradientReceptiveField | Mapping[str, GradientReceptiveField]:
+) -> GradReceptiveField | Mapping[str, GradReceptiveField]:
     """Probe exactly one target output element against a selected source.
 
     Parameters
@@ -756,7 +756,7 @@ def gradient_for_unit(
 
     Returns
     -------
-    GradientReceptiveField or Mapping[str, GradientReceptiveField]
+    GradReceptiveField or Mapping[str, GradReceptiveField]
         One result for an explicit input, otherwise an insertion-ordered mapping.
 
     Raises
@@ -870,7 +870,7 @@ def gradient_for_unit(
             allow_unused=True,
         )
 
-    results: dict[str, GradientReceptiveField] = {}
+    results: dict[str, GradReceptiveField] = {}
     for (role, input_op, descriptor), grad in zip(selected, grads):
         state = solution.states.get((target.label, role))
         if grad is None and descriptor is not None:

@@ -11,7 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._capture_state_helpers import reset_compiled_model_unwrap_warning_state
-from torchlens.distributed import has_vetted_snapshot
+from torchlens.distributed import is_vetted_build
 
 
 class ViewModel(nn.Module):
@@ -140,7 +140,7 @@ def test_ddp_wrapped_slow_keeps_local_module_grad(tmp_path: Path) -> None:
         ddp_model = torch.nn.parallel.DistributedDataParallel(nn.Linear(4, 2))
         x = torch.randn(3, 4, requires_grad=True)
         capture = tl.options.CaptureOptions(backward_ready=True, random_seed=0)
-        if has_vetted_snapshot():
+        if is_vetted_build():
             trace = tl.trace(ddp_model, x, capture=capture)
         else:
             with pytest.warns(UserWarning, match="uncaptured_collective_op"):

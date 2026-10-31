@@ -16,7 +16,7 @@ from torchlens.receptive_field import _rules, node_spec
 from torchlens.receptive_field._errors import AmbiguousInputError, ReceptiveFieldError
 from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleResult
 from torchlens.receptive_field._types import (
-    GradientReceptiveField,
+    GradReceptiveField,
     GridLayout,
     ReceptiveField,
     ReceptiveFieldAlignment,
@@ -104,7 +104,7 @@ class _View:
     """Minimal T6-compatible view used to exercise the standalone adapter."""
 
     def __init__(
-        self, descriptor: ReceptiveField, gradient_result: GradientReceptiveField | None = None
+        self, descriptor: ReceptiveField, gradient_result: GradReceptiveField | None = None
     ) -> None:
         """Store one descriptor, box, and optional empirical result."""
 
@@ -120,7 +120,7 @@ class _View:
 
     def gradient(
         self, unit: Sequence[int], *, input: Any | None = None, retain_graph: bool = False
-    ) -> GradientReceptiveField:
+    ) -> GradReceptiveField:
         """Return the configured empirical result."""
 
         _ = unit, input, retain_graph
@@ -128,13 +128,13 @@ class _View:
         return self._gradient
 
 
-def _gradient(descriptor: ReceptiveField) -> GradientReceptiveField:
+def _gradient(descriptor: ReceptiveField) -> GradReceptiveField:
     """Create a nonuniform full-input gradient payload."""
 
     values = torch.arange(int(torch.tensor(descriptor.input_shape).prod())).reshape(
         descriptor.input_shape
     )
-    return GradientReceptiveField(
+    return GradReceptiveField(
         op_label="target",
         io_role=descriptor.io_role,
         unit=(0,) * len(descriptor.input_shape),

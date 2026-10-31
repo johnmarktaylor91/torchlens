@@ -53,7 +53,7 @@ from .._observability._collector import StepTruth
 from .._observability._kernels import spine_result_from_vector, spine_vector
 from .._observability._schema import validate_step_order
 from .._utils.env_flags import closed_bool_env
-from ._amp import correct_spine, corrected_gradient_block, observed_grad_scale, unscale_stage
+from ._amp import correct_running_stats, corrected_grad_block, observed_grad_scale, unscale_stage
 from ._errors import SinkProtocolError, TrackersError, WatchConfigError, WatchRuntimeError
 from ._op_grain import (
     OpGrainCollector,
@@ -69,7 +69,7 @@ from ._records import (
     TextPoint,
     build_manifest,
     emission_from_block,
-    spine_scalars,
+    running_stats_scalars,
 )
 
 __tl_layer__ = "L8"
@@ -371,7 +371,7 @@ class WatchSession:
         truth = block.block
         if truth.unscaled != "no" or truth.scale is None or truth.scale <= 0.0:
             return (block, 0)
-        return corrected_gradient_block(block, float(truth.scale))
+        return corrected_grad_block(block, float(truth.scale))
 
     def _drain_events(self, block: CommittedBlock) -> None:
         """Serialize check findings from the shared event stream (chassis).
@@ -858,8 +858,8 @@ class WatchSession:
                         continue
                     spine = spine_result_from_vector(spine_vector(tensor).cpu(), "float64")
                     if family == "gradients" and derive_scale is not None:
-                        spine = correct_spine(spine, float(derive_scale))
-                    for statistic, value in spine_scalars(spine).items():
+                        spine = correct_running_stats(spine, float(derive_scale))
+                    for statistic, value in running_stats_scalars(spine).items():
                         scalars.append(
                             ScalarPoint(self.grammar.data(family, statistic, leaf), last, value)
                         )

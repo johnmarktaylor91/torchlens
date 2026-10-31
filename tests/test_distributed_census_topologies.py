@@ -49,7 +49,7 @@ from tests.support.census_harness import (  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
     _recognizer as recognizer_mod,
-    has_vetted_snapshot,
+    is_vetted_build,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -58,16 +58,16 @@ pytestmark = pytest.mark.skipif(
 )
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
-# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# census-vetted torch build exists (torchlens.distributed.is_vetted_build());
 # on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
 # Applied to the classes/tests that arm (directly or through a shared
 # helper) before exercising their row; TestRowGreenGate, TestDualChannelBareLeg,
 # and the handful of other tests named below never arm and must keep running
 # everywhere.
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 

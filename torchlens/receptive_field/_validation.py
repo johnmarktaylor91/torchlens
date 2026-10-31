@@ -33,7 +33,7 @@ from ._gradient_forward import _select_targets, projective_gradient_for_unit
 from ._path import resolve_graph_point
 from ._query import _shared_query_scope, _windowed_axes_in_unit_order, box_for_unit
 from ._types import (
-    GradientReceptiveField,
+    GradReceptiveField,
     ReceptiveField,
     ReceptiveFieldAlignment,
     ReceptiveFieldBox,
@@ -265,7 +265,7 @@ def _allowed_bounds(
 
 
 def _role_violations(
-    gradient: GradientReceptiveField,
+    gradient: GradReceptiveField,
     descriptor: ReceptiveField,
     box: ReceptiveFieldBox,
     complete_unit: tuple[int, ...],
@@ -631,7 +631,7 @@ def _validation_result(
     unit: tuple[int, ...],
     descriptors: Mapping[str, ReceptiveField],
     geometric: dict[str, ReceptiveFieldBox],
-    gradients: Mapping[str, GradientReceptiveField],
+    gradients: Mapping[str, GradReceptiveField],
     gradient_error: str | None,
     direction: ReceptiveFieldDirection,
     adjoint_violations: tuple[ReceptiveFieldViolation, ...] = (),
@@ -861,7 +861,7 @@ def _check_for_unit(
                 )
             )
     gradient_error: str | None = None
-    gradients: Mapping[str, GradientReceptiveField]
+    gradients: Mapping[str, GradReceptiveField]
     try:
         if normalized_direction is ReceptiveFieldDirection.RECEPTIVE:
             probed = gradient_for_unit(
@@ -882,7 +882,7 @@ def _check_for_unit(
                 rtol=0.0,
                 retain_graph=retain_graph,
             )
-        if isinstance(probed, GradientReceptiveField):
+        if isinstance(probed, GradReceptiveField):
             gradients = MappingProxyType({probed.io_role: probed})
         else:
             gradients = probed

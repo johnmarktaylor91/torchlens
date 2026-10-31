@@ -173,7 +173,7 @@ class TestCorrectedBlock:
             opt.step()
         session.close()
         block = session.collector.ring.blocks[-1]
-        corrected, count = trk.corrected_gradient_block(block, 4.0)
+        corrected, count = trk.corrected_grad_block(block, 4.0)
         assert count == sum(1 for o in block.observations if o.stream == "param_grad")
         for before, after in zip(block.observations, corrected.observations, strict=True):
             if before.stream == "param_grad":

@@ -124,7 +124,7 @@ silently selecting a representative; use the trace table to enumerate boundary o
 
 `tl.receptive_field` is lazy and deliberately outside `tl.__all__`. Its result vocabulary is
 `GridLayout`, `ReceptiveField`, `ReceptiveFieldAxis`, `ReceptiveFieldBox`,
-`ReceptiveFieldBoxAxis`, `GradientReceptiveField`, `ReceptiveFieldProfile`,
+`ReceptiveFieldBoxAxis`, `GradReceptiveField`, `ReceptiveFieldProfile`,
 `ReceptiveFieldValidation`, `ReceptiveFieldValidationStatus`, `ReceptiveFieldViolation`,
 `ReceptiveFieldStatus`, `ReceptiveFieldAlignment`, and `ReceptiveFieldDirection`. The query
 view type is `ReceptiveFieldView`.

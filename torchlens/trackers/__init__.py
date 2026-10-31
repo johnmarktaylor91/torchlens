@@ -35,8 +35,8 @@ from __future__ import annotations
 from ._amp import (
     SCALE_EVIDENCE,
     correct_histogram,
-    correct_spine,
-    corrected_gradient_block,
+    correct_running_stats,
+    corrected_grad_block,
     observed_grad_scale,
     unscale_stage,
 )
@@ -79,7 +79,7 @@ from ._records import (
     build_manifest,
     emission_from_block,
     histogram_points,
-    spine_scalars,
+    running_stats_scalars,
 )
 from ._sinks import JSONL_FORMAT, JSONLSink, MemorySink
 from ._tensorboard import TensorBoardSink, detect_relays
@@ -138,8 +138,8 @@ __all__ = [
     "build_graph_ir",
     "build_manifest",
     "correct_histogram",
-    "correct_spine",
-    "corrected_gradient_block",
+    "correct_running_stats",
+    "corrected_grad_block",
     "derived_cadence",
     "detect_relays",
     "emission_from_block",
@@ -148,7 +148,7 @@ __all__ = [
     "node_name_for",
     "observed_grad_scale",
     "require_capabilities",
-    "spine_scalars",
+    "running_stats_scalars",
     "unscale_stage",
     "watch",
 ]

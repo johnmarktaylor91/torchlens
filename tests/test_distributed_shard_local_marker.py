@@ -29,7 +29,7 @@ pytestmark = pytest.mark.skipif(
 import torchlens as tl  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
-    has_vetted_snapshot,
+    is_vetted_build,
 )
 from torchlens.distributed._dtensor import (  # noqa: E402
     RANK_LOCAL_SHARD,
@@ -38,14 +38,14 @@ from torchlens.distributed._dtensor import (  # noqa: E402
 )
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
-# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# census-vetted torch build exists (torchlens.distributed.is_vetted_build());
 # on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
 # Only the two TestMergeScopeMarkerKey tests that build a real armed rank
 # core need this; the rest of the module never arms.
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 

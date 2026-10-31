@@ -176,7 +176,7 @@ def test_lazy_namespace_and_public_surface_work_end_to_end() -> None:
         "node_spec",
         "ReceptiveField",
         "ReceptiveFieldBox",
-        "GradientReceptiveField",
+        "GradReceptiveField",
         "ReceptiveFieldView",
         "ReceptiveFieldValidation",
         "ReceptiveFieldProfile",

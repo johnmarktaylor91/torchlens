@@ -1090,7 +1090,7 @@ torchlens._debug._gradients:_validate_options:InvalidArgumentError::1	CONTRACTED
 torchlens._debug._gradients:_validate_options:KeywordConflictError::1	CONTRACTED	grad_scale_conflict	new F23 gradient_flow_audit fix-pack site contracted in its own change: typed teaching refusal with contract-doc row (lane F23)
 torchlens.transformer._errors:refuse:TvizError::1	CONTRACTED	tv_*	F07 tviz chokepoint: every call site passes a stable tv_* code + non-empty remedy (error_refusal_contract rows); lockstep-scanned literals at the call sites
 torchlens._io._save_gates:_save_bundle_via_container_door:InvalidArgumentError::1	CONTRACTED	bundle_save_option_unsupported	new tl.save(bundle) container-door delegation refusal contracted in its own change (foldB D9, lane A-BUNDLE-OUTCOME): coded, remedy, contract-doc row
-torchlens.trackers._amp:correct_spine:TrackersError::1	CONTRACTED	tracker_scale_invalid	coded + contract row; user-reachable via AMP correction with a foreign scale
+torchlens.trackers._amp:correct_running_stats:TrackersError::1	CONTRACTED	tracker_scale_invalid	coded + contract row; user-reachable via AMP correction with a foreign scale
 torchlens.trackers._amp:correct_histogram:TrackersError::1	CONTRACTED	tracker_scale_invalid	coded + contract row; non-power-of-two scale has no exact bin shift (rebinning banned)
 torchlens.trackers._callbacks:HFTrainerWatchCallback.__init__:WatchConfigError::1	CONTRACTED	tracker_sink_unavailable	coded + contract row; transformers absent at callback construction
 torchlens.trackers._callbacks:LightningWatchCallback.__init__:WatchConfigError::1	CONTRACTED	tracker_sink_unavailable	coded + contract row; lightning absent at callback construction

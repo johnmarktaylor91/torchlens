@@ -65,7 +65,7 @@ def test_walk_double_backprop_gradient_graph() -> None:
     y = (w @ w).sum()
     (gradient,) = torch.autograd.grad(y, w, create_graph=True)
     sketch = walk_grad_fn(gradient.sum())
-    assert sketch.n_nodes > 3
+    assert sketch.num_nodes > 3
     assert any(node.kind == "leaf" for node in sketch.nodes)
 
 

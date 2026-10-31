@@ -67,7 +67,7 @@ class ScoreInterval:
     high: float
     confidence: float
     n_resamples: int
-    n_valid: int
+    num_valid_resamples: int
     seed: int
     basis: str = STIMULUS_BOOTSTRAP_BASIS
     similarity_repository_id: str | None = None
@@ -94,7 +94,7 @@ class ScoreInterval:
             "width": self.width,
             "confidence": self.confidence,
             "n_resamples": self.n_resamples,
-            "n_valid": self.n_valid,
+            "n_valid": self.num_valid_resamples,
             "seed": self.seed,
             "basis": self.basis,
             "similarity_repository_id": self.similarity_repository_id,
@@ -186,7 +186,7 @@ def bootstrap_interval(
         high=high,
         confidence=float(settings.confidence),
         n_resamples=int(settings.n_resamples),
-        n_valid=int(finite.size),
+        num_valid_resamples=int(finite.size),
         seed=int(settings.seed),
         similarity_repository_id=similarity_repository_id,
     )

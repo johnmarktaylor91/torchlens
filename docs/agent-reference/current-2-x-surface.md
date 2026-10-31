@@ -760,7 +760,7 @@
   `__xor__`; `-` never un-touches, `~` is touched-site mask complement (never
   predicate negation: `~lift(s) != lift(~s)`). Every region-shaped producer
   implements `__selection__` (BaseSelector, ReceptiveFieldBox,
-  GradientReceptiveField, FacetSpec, Op, Layer) and carries the operator
+  GradReceptiveField, FacetSpec, Op, Layer) and carries the operator
   mixin, so `u1.receptive_field.at(p) | u2.receptive_field.at(q)` IS a
   Selection; `selector OP selector` keeps shipped CompositeSelector semantics
   and `selector - selector` desugars to `and(a, not(b))`. Masks are exact AS

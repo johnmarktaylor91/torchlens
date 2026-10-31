@@ -14,7 +14,7 @@ tier:
   the merge engine runs over it.
 * Typed refusal vocabulary: ``ambiguous_group_lifetime``,
   ``group_lifetime_evidence_conflict``, ``uncaptured_collective_op``.
-* :func:`has_vetted_snapshot` -- the read-only capability probe for whether
+* :func:`is_vetted_build` -- the read-only capability probe for whether
   this torch build's collective dispatcher matches a censused row in
   :data:`torchlens.distributed._recognizer.VETTED_NAMESPACE_SNAPSHOTS`. Never
   raises; use it to know in advance whether :func:`arm` can succeed, without
@@ -50,7 +50,7 @@ from ._recognizer import (
     UNCAPTURED_COLLECTIVE_OP,
     CollectiveRecognizer as CollectiveRecognizer,
     UncapturedCollectiveOpError,
-    has_vetted_snapshot,
+    is_vetted_build,
 )
 
 __all__ = [
@@ -65,7 +65,7 @@ __all__ = [
     "arm",
     "audit_membership_lineages",
     "disarm",
-    "has_vetted_snapshot",
+    "is_vetted_build",
     "is_armed",
     "membership_digest_for_ranks",
 ]

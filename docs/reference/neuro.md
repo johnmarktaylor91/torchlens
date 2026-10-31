@@ -204,7 +204,7 @@ feature bank).
 seed=0, confidence=0.95)` and `tl.repgeom.cka_interval(a, b, ...)` return a
 `ScoreInterval`: the unchanged point score (exactly `rdm_compare`; linear CKA
 as `tl.stats.cka` computes it) with a percentile bootstrap interval over
-stimuli beside it, plus the settings that made it (`n_resamples`, `n_valid`,
+stimuli beside it, plus the settings that made it (`n_resamples`, `num_valid_resamples`,
 `seed`, `confidence`, `basis`). RDM resamples drop the entries that pair a
 stimulus with a copy of itself; CKA resamples reindex the stimulus Gram
 matrices, so each resample costs O(n^2) whatever the feature count. The same

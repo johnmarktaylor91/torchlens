@@ -26,19 +26,19 @@ pytestmark = pytest.mark.skipif(
     reason="torch.distributed gloo unavailable",
 )
 
-from torchlens.distributed import _lifecycle as lifecycle, has_vetted_snapshot  # noqa: E402
+from torchlens.distributed import _lifecycle as lifecycle, is_vetted_build  # noqa: E402
 from torchlens.distributed._lifecycle import AmbiguousGroupLifetimeError  # noqa: E402
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
-# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# census-vetted torch build exists (torchlens.distributed.is_vetted_build());
 # on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
 # Only the two classes below call a real arm() expecting success;
 # TestAutoArmProbeDisclosure exercises the lazy auto-arm probe-failure path,
 # which is unrelated to vetting and must keep running everywhere.
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 

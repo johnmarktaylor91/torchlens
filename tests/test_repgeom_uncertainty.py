@@ -258,4 +258,4 @@ def test_constant_resamples_are_counted_out() -> None:
     rows = np.random.default_rng(seed).integers(0, 3, (40, 3))
     n_constant = sum(len(set(row)) == 1 for row in rows)
     result = cka_interval(x, y, n_resamples=40, seed=seed)
-    assert result.n_valid <= 40 - n_constant
+    assert result.num_valid_resamples <= 40 - n_constant

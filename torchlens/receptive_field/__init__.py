@@ -27,7 +27,7 @@ from ._rules import (
     rules as _registered_rules,
 )
 from ._types import (
-    GradientReceptiveField,
+    GradReceptiveField,
     GridLayout,
     ReceptiveField,
     ReceptiveFieldAlignment,
@@ -220,7 +220,7 @@ def _empirical_adjoint_checks(
                 else:
                     # A single source selects a single field, never the role mapping.
                     receptive_probe = cast(
-                        GradientReceptiveField,
+                        GradReceptiveField,
                         gradient_for_unit(
                             target,
                             target_unit,
@@ -245,8 +245,8 @@ def _empirical_adjoint_checks(
                     )
                 )
                 continue
-            if not isinstance(projective, GradientReceptiveField) or not isinstance(
-                receptive_probe, GradientReceptiveField
+            if not isinstance(projective, GradReceptiveField) or not isinstance(
+                receptive_probe, GradReceptiveField
             ):
                 checks.append(
                     EmpiricalAdjointCheck(
@@ -395,7 +395,7 @@ __all__ = [
     "AmbiguousPassError",
     "BackendUnsupportedError",
     "EmpiricalAdjointCheck",
-    "GradientReceptiveField",
+    "GradReceptiveField",
     "GridLayout",
     "ReceptiveField",
     "ReceptiveFieldAlignment",

@@ -16,7 +16,7 @@ from ._errors import (
     ReceptiveFieldError,
 )
 from ._types import (
-    GradientReceptiveField,
+    GradReceptiveField,
     ReceptiveField,
     ReceptiveFieldBox,
     ReceptiveFieldDirection,
@@ -279,7 +279,7 @@ def _view_gradient(
     direction: ReceptiveFieldDirection,
     *,
     retain_graph: bool = False,
-) -> GradientReceptiveField:
+) -> GradReceptiveField:
     """Obtain and disambiguate one empirical gradient result."""
 
     assert unit is not None
@@ -293,11 +293,11 @@ def _view_gradient(
         if len(result) != 1:
             raise AmbiguousInputError("Select one reachable input before rendering a gradient.")
         return next(iter(result.values()))
-    return cast(GradientReceptiveField, result)
+    return cast(GradReceptiveField, result)
 
 
 def _spatial_axes(
-    descriptor: ReceptiveField, gradient: GradientReceptiveField | None
+    descriptor: ReceptiveField, gradient: GradReceptiveField | None
 ) -> tuple[int, ...]:
     """Return layout-derived spatial axes, falling back to a gradient mask only."""
 
@@ -389,7 +389,7 @@ def _tensor_image(
 
 
 def _gradient_image(
-    result: GradientReceptiveField,
+    result: GradReceptiveField,
     axes: tuple[int, ...],
     slice_spec: tuple[int, int] | None,
     size: tuple[int, int],

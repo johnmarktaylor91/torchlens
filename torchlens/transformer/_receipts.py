@@ -233,7 +233,7 @@ def _joint_line(receipts: list[CausalReceipt], joint_effect: float | None) -> st
             "heads together "
             "and pass joint_effect= (or carry it on the single receipt)",
         )
-    n_heads = sum(receipt.measured_n for receipt in receipts)
+    n_heads = sum(receipt.num_measured_heads for receipt in receipts)
     cell_sum = sum(receipt.cell_sum for receipt in receipts)
     wording = JOINT_EFFECT_WORDING if receipts[0].kv_groups is None else KV_JOINT_EFFECT_WORDING
     return wording.format(n=n_heads, joint=joint_effect, cell_sum=cell_sum)
@@ -279,7 +279,7 @@ def _receipt_disclosures(receipts: list[CausalReceipt], joint_effect: float | No
     """Assemble the grid figure's full honesty footer."""
 
     first = receipts[0]
-    measured = sum(receipt.measured_n for receipt in receipts)
+    measured = sum(receipt.num_measured_heads for receipt in receipts)
     total = sum(len(receipt.heads) for receipt in receipts)
     lines = [
         f"intervention: {first.intervention}; metric: {first.metric}",

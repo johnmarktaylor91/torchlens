@@ -24,7 +24,7 @@ from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
     _recognizer as recognizer_mod,
     audit_membership_lineages,
-    has_vetted_snapshot,
+    is_vetted_build,
     membership_digest_for_ranks,
 )
 from torchlens.distributed._recognizer import derive_collective_recognizer  # noqa: E402
@@ -64,9 +64,9 @@ M2 = membership_digest_for_ranks([0, 1, 2, 3])
 # TestCollectiveRecognizer.test_derivation_refuses_typed_when_not_vetted and
 # tests/test_distributed_boundary_gloo.py::TestUnvettedTorchRefusesArming).
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 
@@ -327,7 +327,7 @@ class TestCollectiveRecognizer:
         assert recognizer.classify("aten::mm") is None
 
     @pytest.mark.skipif(
-        has_vetted_snapshot(),
+        is_vetted_build(),
         reason="the unvetted-torch refusal is only observable without a census match",
     )
     def test_derivation_refuses_typed_when_not_vetted(self):
@@ -337,7 +337,7 @@ class TestCollectiveRecognizer:
         # arming an uncensused dispatcher. This is the correct product
         # behavior, proven here against the REAL (untampered) runtime census,
         # not a synthetic mismatch.
-        assert not has_vetted_snapshot()
+        assert not is_vetted_build()
         with pytest.raises(UncapturedCollectiveOpError) as excinfo:
             derive_collective_recognizer()
         assert excinfo.value.fields["kind"] == "uncaptured_collective_op"

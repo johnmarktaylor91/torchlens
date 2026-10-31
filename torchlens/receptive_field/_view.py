@@ -14,7 +14,7 @@ from ._errors import (
     ReceptiveFieldUnavailableError,
 )
 from ._types import (
-    GradientReceptiveField,
+    GradReceptiveField,
     GridLayout,
     ReceptiveField,
     ReceptiveFieldAxis,
@@ -404,7 +404,7 @@ class ReceptiveFieldView:
         atol: float = 0.0,
         rtol: float = 0.0,
         retain_graph: bool = False,
-    ) -> GradientReceptiveField | Mapping[str, GradientReceptiveField]:
+    ) -> GradReceptiveField | Mapping[str, GradReceptiveField]:
         """Probe empirical influence for one complete output-element index.
 
         Parameters
@@ -428,7 +428,7 @@ class ReceptiveFieldView:
 
         Returns
         -------
-        GradientReceptiveField or Mapping[str, GradientReceptiveField]
+        GradReceptiveField or Mapping[str, GradReceptiveField]
             One selected result, or the mapping over all reachable inputs.
         """
 
@@ -443,7 +443,7 @@ class ReceptiveFieldView:
                 "._gradient_forward", "projective_gradient_for_unit", "projective gradient support"
             )
             return cast(
-                GradientReceptiveField | Mapping[str, GradientReceptiveField],
+                GradReceptiveField | Mapping[str, GradReceptiveField],
                 projective_gradient(
                     self._op, unit, target=target, atol=atol, rtol=rtol, retain_graph=retain_graph
                 ),
@@ -456,7 +456,7 @@ class ReceptiveFieldView:
             source = target
         if source is not None:
             return cast(
-                GradientReceptiveField | Mapping[str, GradientReceptiveField],
+                GradReceptiveField | Mapping[str, GradReceptiveField],
                 cast(Any, gradient_for_unit)(
                     self._op,
                     unit,

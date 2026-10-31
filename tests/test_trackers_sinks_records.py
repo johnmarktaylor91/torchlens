@@ -104,7 +104,7 @@ class TestSpineScalars:
         """mean/std/norm/min/max/count agree with direct torch reductions."""
 
         values = torch.randn(128, dtype=torch.float64)
-        scalars = trk.spine_scalars(_spine_of(values))
+        scalars = trk.running_stats_scalars(_spine_of(values))
         assert scalars["count"] == 128.0
         assert math.isclose(scalars["mean"], values.mean().item(), rel_tol=1e-9)
         assert math.isclose(scalars["norm"], values.norm().item(), rel_tol=1e-9)
@@ -121,7 +121,7 @@ class TestSpineScalars:
 
         values = torch.tensor([1.0, float("nan"), float("inf"), -2.0])
         spine = _spine_of(values)
-        scalars = trk.spine_scalars(spine)
+        scalars = trk.running_stats_scalars(spine)
         assert scalars["count"] == 2.0
         assert scalars["max"] == 1.0
         nonfinite = trk._records.nonfinite_scalars(spine)
@@ -161,7 +161,7 @@ class TestAmpCorrection:
 
         grads = torch.randn(256, dtype=torch.float64)
         scale = 65536.0  # a real GradScaler power-of-two scale
-        corrected = trk.correct_spine(_spine_of(grads * scale), scale)
+        corrected = trk.correct_running_stats(_spine_of(grads * scale), scale)
         oracle = _spine_of(grads)
         assert corrected.mean == oracle.mean
         assert corrected.finite_min == oracle.finite_min
@@ -212,7 +212,7 @@ class TestAmpCorrection:
         grad = next(model.parameters()).grad
         assert grad is not None
         scaled_spine = _spine_of(grad.detach().to(torch.float64))
-        corrected = trk.correct_spine(scaled_spine, scale)
+        corrected = trk.correct_running_stats(scaled_spine, scale)
         # The unscale_ oracle: let the scaler unscale in place, re-reduce.
         optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
         scaler.unscale_(optimizer)

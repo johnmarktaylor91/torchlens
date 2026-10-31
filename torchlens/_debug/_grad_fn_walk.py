@@ -97,7 +97,7 @@ class GradFnSketch:
     truncated: bool
 
     @property
-    def n_nodes(self) -> int:
+    def num_nodes(self) -> int:
         """Number of walked nodes."""
 
         return len(self.nodes)
@@ -282,7 +282,7 @@ def _sketch_digraph(sketch: GradFnSketch) -> graphviz.Digraph:
 
     legend = _STRUCTURE_ONLY_LEGEND
     if sketch.truncated:
-        legend += f"\\nWALK TRUNCATED at {sketch.n_nodes} nodes -- graph is incomplete"
+        legend += f"\\nWALK TRUNCATED at {sketch.num_nodes} nodes -- graph is incomplete"
     dot = graphviz.Digraph(
         graph_attr={
             "label": legend,

@@ -285,7 +285,7 @@ class GqaInfo:
             "pass the model config's real num_attention_heads / num_key_value_heads",
         )
 
-    def group_of(self, query_head: int) -> int:
+    def group(self, query_head: int) -> int:
         """Return the KV group index a query head reads from."""
 
         return query_head // (self.n_query_heads // self.n_kv_heads)
@@ -293,7 +293,7 @@ class GqaInfo:
     def header(self, query_head: int) -> str:
         """Return the rendered KV-group header line for one query head."""
 
-        return self.group_header(self.group_of(query_head))
+        return self.group_header(self.group(query_head))
 
     def query_heads(self, group: int) -> tuple[int, ...]:
         """Return the query heads that read KV group ``group`` (zero-based)."""
@@ -1042,7 +1042,7 @@ class CausalReceipt:
         return tuple(self.kv_groups.group_header(group) for group in self.heads)
 
     @property
-    def measured_n(self) -> int:
+    def num_measured_heads(self) -> int:
         """Return how many displayed heads carry a measured effect."""
 
         return sum(1 for effect in self.effects if effect is not None)
