@@ -782,7 +782,7 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
 
     assert isinstance(loaded, tl.Trace)
     assert loaded.has_backward_pass is True
-    assert loaded.autograd.backward_passes.for_pass(1).pass_index == 1
+    assert loaded.autograd.backward_passes.for_pass(1).pass_number == 1
     assert manifest["backward_summary"]["has_backward_pass"] is True
     assert manifest["backward_summary"]["num_backward_passes"] == log.num_backward_passes
     assert manifest["backward_summary"]["num_grad_fns"] == len(log.autograd.grad_fns)

@@ -342,7 +342,7 @@ class TraceSlice(_SelectionOperand):
         sites = tuple(
             (
                 getattr(self._graph.ops[label], "layer_label", None) or label,
-                getattr(self._graph.ops[label], "pass_index", 1) or 1,
+                getattr(self._graph.ops[label], "pass_number", 1) or 1,
             )
             for label in self._labels
         )

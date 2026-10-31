@@ -550,7 +550,7 @@ def _module_stack_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[Modul
                 address=str(module_address),
                 module_type="",
                 module_id=0,
-                pass_index=int(module_pass),
+                pass_number=int(module_pass),
             )
         )
     return tuple(frames)
@@ -859,7 +859,7 @@ def _build_trace_predicate_context(
         module_stack=_module_stack_frames_from_fields(fields_dict),
         history=history,
         op_counts=dict(trace._raw_graph_ws.raw_layer_type_counter),
-        pass_index=int(fields_dict.get("pass_index", 0)),
+        pass_index=int(fields_dict.get("pass_number", 0)),
         event_index=int(fields_dict["raw_index"]),
         step_index=fields_dict.get("step_index"),
         capture_start_time=float(getattr(trace, "capture_start_time", time.time())),

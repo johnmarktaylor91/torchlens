@@ -92,7 +92,7 @@ def _cache_trace_predicate_context(
     contexts[
         _trace_predicate_context_key(
             ctx.raw_label or ctx.label,
-            ctx.pass_index,
+            ctx.pass_number,
             container_path,
         )
     ] = ctx
@@ -109,7 +109,7 @@ def _pop_trace_predicate_context(
         return None
     key = _trace_predicate_context_key(
         str(fields_dict["_label_raw"]),
-        int(fields_dict.get("pass_index", 0)),
+        int(fields_dict.get("pass_number", 0)),
         tuple(fields_dict.get("container_path", ())),
     )
     return contexts.pop(key, None)
@@ -167,7 +167,7 @@ def _evaluate_trace_save_predicate(
     decisions[
         (
             raw_label,
-            int(fields_dict.get("pass_index", 0)),
+            int(fields_dict.get("pass_number", 0)),
             tuple(fields_dict.get("container_path", ())),
         )
     ] = spec

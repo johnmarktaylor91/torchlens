@@ -51,7 +51,7 @@ def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
     """
 
     return [
-        (frame.address, frame.pass_index)
+        (frame.address, frame.pass_number)
         for frame in _mstack.snapshot(self._module_capture_ws.exhaustive_module_stack)
     ]
 
@@ -147,7 +147,7 @@ def log_source_tensor_predicate(
             "tensor": t,
             "address": module_frame.address if module_frame else None,
             "module_type": module_frame.module_type if module_frame else None,
-            "module_pass_number": module_frame.pass_index if module_frame else None,
+            "module_pass_number": module_frame.pass_number if module_frame else None,
         },
         module_stack=state.module_stack,
         history=tuple(state.history),
@@ -333,7 +333,7 @@ def log_source_tensor_exhaustive(
         "short_layer_label": None,
         "type": layer_type,
         "type_index": type_index,
-        "pass_index": 1,
+        "pass_number": 1,
         "num_passes": 1,
         "lookup_keys": [],
         # Saved tensor info:

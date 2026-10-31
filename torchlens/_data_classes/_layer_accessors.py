@@ -81,7 +81,7 @@ class OpAccessor(Accessor["Op"]):
         is the 0-based position while this write is the 1-based pass index,
         so ``ops[1] = op`` is read back as ``ops[0]``. The write basis is
         load-bearing for the finalization callers
-        (``layer_log.ops[op_log.pass_index] = op_log``); flipping it to the
+        (``layer_log.ops[op_log.pass_number] = op_log``); flipping it to the
         read basis is a coordinated change across those callers.
         """
 

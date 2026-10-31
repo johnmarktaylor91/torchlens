@@ -98,7 +98,7 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
             sample_id=state.sample_id,
             address=consumer_frame.address if consumer_frame else None,
             module_type=consumer_frame.module_type if consumer_frame else None,
-            module_pass_number=consumer_frame.pass_index if consumer_frame else None,
+            module_pass_number=consumer_frame.pass_number if consumer_frame else None,
         )
         spec = CaptureSpec(save_out=False, save_metadata=False)
         ram_payload = None

@@ -657,7 +657,7 @@ def _consider_op(
             address=getattr(module_frame, "address", None) if module_frame else None,
             module_type=getattr(module_frame, "module_type", None) if module_frame else None,
             module_pass_number=(
-                getattr(module_frame, "pass_index", None) if module_frame else None
+                getattr(module_frame, "pass_number", None) if module_frame else None
             ),
         )
         try:
@@ -691,7 +691,7 @@ def _consider_op(
                 "layer_type": layer_type,
                 "func_name": func_name,
                 "site_key": site_key,
-                "pass_index": max(session.root_passes, 1),
+                "pass_number": max(session.root_passes, 1),
             },
             ctx=session.rule_scratch[session.rule_ids[id(rule)]],
             run_context=session.run_ctx,
@@ -839,7 +839,7 @@ class _ArmedRuntime:
                         address=address,
                         module_type=module_type,
                         module_id=module_id,
-                        pass_index=session.module_pass_counts[address],
+                        pass_number=session.module_pass_counts[address],
                     )
                 )
 
@@ -917,7 +917,7 @@ def _make_boundary_hook(
                 op={
                     "label": f"{address}:{pass_index}",
                     "module_address": address,
-                    "pass_index": pass_index,
+                    "pass_number": pass_index,
                 },
                 ctx=session.rule_scratch[session.rule_ids[id(plan.rule)]],
                 run_context=session.run_ctx,

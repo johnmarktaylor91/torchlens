@@ -1212,7 +1212,7 @@ def _record_module_entry_metadata(
         module_call_label_str
     ] = code_context
     call_stack = [
-        f"{frame.address}:{frame.pass_index}"
+        f"{frame.address}:{frame.pass_number}"
         for frame in trace._module_capture_ws.exhaustive_module_stack[:-1]
     ]
     trace._module_capture_ws.module_build_data.setdefault("module_call_stacks", {})[
@@ -1664,7 +1664,7 @@ def _ensure_module_output_tensor_logged(
             "short_layer_label": None,
             "type": layer_type,
             "type_index": type_index,
-            "pass_index": 1,
+            "pass_number": 1,
             "num_passes": 1,
             "lookup_keys": [],
             "out": None,
@@ -2195,7 +2195,7 @@ def _record_predicate_module_boundary_outputs(
         if ctx.kind == "op" and ctx.raw_label is not None
     }
     existing = {
-        (record.ctx.raw_label, record.ctx.pass_index)
+        (record.ctx.raw_label, record.ctx.pass_number)
         for record in state.recording.records
         if record.ctx.raw_label is not None
     }
@@ -2242,7 +2242,7 @@ def _record_predicate_module_boundary_outputs(
         trace._tl_save_selector_fire_count = (
             int(getattr(trace, "_tl_save_selector_fire_count", 0)) + 1
         )
-        key = (boundary_ctx.raw_label, boundary_ctx.pass_index)
+        key = (boundary_ctx.raw_label, boundary_ctx.pass_number)
         if key in existing:
             continue
         existing.add(key)
@@ -2356,15 +2356,15 @@ def module_forward_decorator(
             frame = _mstack.push_frame(trace, state.module_stack, module)
             from .prehook_provenance import bind_invocation
 
-            bind_invocation(trace, module, frame.address, frame.pass_index, (args, kwargs))
+            bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
             state.event_index += 1
             enter_ctx = _build_record_context(
                 kind="module_enter",
                 op_log_or_op_data={
-                    "label": f"{frame.address}:enter:{frame.pass_index}",
+                    "label": f"{frame.address}:enter:{frame.pass_number}",
                     "address": frame.address,
                     "module_type": frame.module_type,
-                    "module_pass_number": frame.pass_index,
+                    "module_pass_number": frame.pass_number,
                 },
                 module_stack=state.module_stack,
                 history=tuple(state.history),
@@ -2432,7 +2432,7 @@ def module_forward_decorator(
                 out = _apply_module_boundary_live_hooks(
                     out,
                     module_address=frame.address,
-                    module_call_index=frame.pass_index,
+                    module_call_index=frame.pass_number,
                     module_type=frame.module_type,
                     call_args=args,
                     call_kwargs=dict(kwargs),
@@ -2442,7 +2442,7 @@ def module_forward_decorator(
                     state,
                     out,
                     module_address=frame.address,
-                    module_call_index=frame.pass_index,
+                    module_call_index=frame.pass_number,
                 )
                 return out
             finally:
@@ -2451,10 +2451,10 @@ def module_forward_decorator(
                 exit_ctx = _build_record_context(
                     kind="module_exit",
                     op_log_or_op_data={
-                        "label": f"{frame.address}:exit:{frame.pass_index}",
+                        "label": f"{frame.address}:exit:{frame.pass_number}",
                         "address": frame.address,
                         "module_type": frame.module_type,
-                        "module_pass_number": frame.pass_index,
+                        "module_pass_number": frame.pass_number,
                     },
                     module_stack=state.module_stack,
                     history=tuple(state.history),
@@ -2518,7 +2518,7 @@ def module_forward_decorator(
         frame = _mstack.push_frame(trace, trace._module_capture_ws.exhaustive_module_stack, module)
         from .prehook_provenance import bind_invocation
 
-        bind_invocation(trace, module, frame.address, frame.pass_index, (args, kwargs))
+        bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
         try:
             input_tensor_labels, input_tensor_labels_at_entry = _record_module_entry_metadata(
                 trace, module, args, kwargs
@@ -2545,7 +2545,7 @@ def module_forward_decorator(
                 out = _apply_module_boundary_live_hooks(
                     out,
                     module_address=frame.address,
-                    module_call_index=frame.pass_index,
+                    module_call_index=frame.pass_number,
                     module_type=_module_type(module),
                     call_args=args,
                     call_kwargs=dict(kwargs),
@@ -2581,17 +2581,17 @@ def module_forward_decorator(
                 exit_ctx = _build_record_context(
                     kind="module_exit",
                     op_log_or_op_data={
-                        "label": f"{frame.address}:exit:{frame.pass_index}",
+                        "label": f"{frame.address}:exit:{frame.pass_number}",
                         "address": frame.address,
                         "module_type": _module_type(module),
-                        "module_pass_number": frame.pass_index,
+                        "module_pass_number": frame.pass_number,
                         # tl.module evaluates capture-time subjects through
                         # output_of_module_calls, so a module-boundary halt
                         # (incl. compiled stop_after= module addresses) can only
                         # fire if this exit ctx names its own module call; the
                         # exhaustive path previously left it empty and every
                         # tl.module halt silently ran the full forward.
-                        "output_of_module_calls": (f"{frame.address}:{frame.pass_index}",),
+                        "output_of_module_calls": (f"{frame.address}:{frame.pass_number}",),
                     },
                     module_stack=[],
                     history=(),

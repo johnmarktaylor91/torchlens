@@ -1949,7 +1949,7 @@ def _build_backward_pass_records(
             else _order_attribution_coverage(grad_fn_calls, grad_fn_logs)
         )
         pass_record = BackwardPass(
-            pass_index=pass_index,
+            pass_number=pass_index,
             trigger=start.trigger if start is not None else "implicit",
             implicit=start.implicit if start is not None else True,
             outer_context=start.outer_context if start is not None else None,

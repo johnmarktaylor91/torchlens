@@ -232,7 +232,7 @@ def _execute_hook(
             InjectionAnchor(
                 host_label=str(site_get("label") or site_get("raw_label") or "unknown"),
                 host_site_key=site_get("site_key"),
-                host_pass=int(site_get("pass_index") or 1),
+                host_pass=int(site_get("pass_number") or 1),
                 spec_rule_id=rule_id,
                 firing_index=next_firing_index(injection_trace, rule_id),
             ),

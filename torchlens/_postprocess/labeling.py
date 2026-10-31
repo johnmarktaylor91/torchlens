@@ -63,7 +63,7 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
     layer_total_counter = 1  # Sequential counter for non-input/buffer/output layers.
     for tensor_log_entry in self:
         layer_type = tensor_log_entry.layer_type
-        pass_index = tensor_log_entry.pass_index
+        pass_index = tensor_log_entry.pass_number
         if pass_index == 1:
             # First pass: assign new type_num and total_num.
             type_index = layer_type_counter[layer_type]

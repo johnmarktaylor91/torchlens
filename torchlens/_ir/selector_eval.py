@@ -906,9 +906,9 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
             frame_address = frame.get("address")
         if frame_address is None:
             continue
-        frame_pass = getattr(frame, "pass_index", None)
+        frame_pass = getattr(frame, "pass_number", None)
         if frame_pass is None and isinstance(frame, dict):
-            frame_pass = frame.get("pass_index")
+            frame_pass = frame.get("pass_number")
         candidates.append(str(frame_address))
         if frame_pass is not None:
             candidates.append(f"{frame_address}:{frame_pass}")
@@ -1265,7 +1265,7 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
         if kind == "backward_pass":
             ctx_pass = getattr(subject, "backward_pass_index", None)
             if ctx_pass is None:
-                ctx_pass = getattr(subject, "pass_index", None)
+                ctx_pass = getattr(subject, "pass_number", None)
             return ctx_pass == value
         if kind in _CAPTURE_SILENT_FALSE_KINDS:
             return False

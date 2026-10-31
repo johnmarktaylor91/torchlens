@@ -6807,8 +6807,8 @@ def test_corruption_graph_ordering_pass_qualified_back_edge() -> None:
     try:
         linear_passes = [op for op in log.layer_list if op.func_name == "linear"]
         tanh_passes = [op for op in log.layer_list if op.func_name == "tanh"]
-        assert [op.pass_index for op in linear_passes] == [1, 2, 3]
-        assert [op.pass_index for op in tanh_passes] == [1, 2, 3]
+        assert [op.pass_number for op in linear_passes] == [1, 2, 3]
+        assert [op.pass_number for op in tanh_passes] == [1, 2, 3]
         back_edge_parent = linear_passes[2]
         back_edge_child = tanh_passes[0]
         assert back_edge_parent.label.endswith(":3")

@@ -138,7 +138,7 @@ def _value_predicate(baseline: Any, label: str) -> Any:
     def predicate(p: Any) -> bool:
         if getattr(p, "layer_label", None) != layer_label:
             return False
-        if str(getattr(p, "pass_index", None)) != pass_index:
+        if str(getattr(p, "pass_number", None)) != pass_index:
             return False
         out = getattr(p, "out", None)
         return isinstance(out, torch.Tensor) and torch.equal(out, reference)

@@ -1224,7 +1224,7 @@ class PaddleBackend:
             kind="op",
             label=reserved.label,
             raw_label=reserved.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=reserved.raw_index,
             step_index=None,
             layer_type=reserved.layer_type,

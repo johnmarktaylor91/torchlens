@@ -64,13 +64,13 @@ def test_phantom_extra_pass_fails_the_bfs_census_alone() -> None:
 
     log, outputs = _looped_trace()
     victim = next(
-        op for op in log.layer_list if op.num_passes > 1 and op.pass_index == op.num_passes
+        op for op in log.layer_list if op.num_passes > 1 and op.pass_number == op.num_passes
     )
     phantom = copy.copy(victim)
     phantom_label = f"{victim.layer_label}:{victim.num_passes + 1}"
     phantom._internal_set("label", phantom_label)
     phantom._internal_set("short_label", phantom_label)
-    phantom._internal_set("pass_index", victim.num_passes + 1)
+    phantom._internal_set("pass_number", victim.num_passes + 1)
     # Unreachable on purpose: no seed lists it, no real op names it as parent.
     log.layer_list.append(phantom)
 

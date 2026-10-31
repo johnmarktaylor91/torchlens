@@ -192,7 +192,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 **Layer**
 : The user-facing grouping of Ops that run one place in a module's code. Running that place
   again (a loop, a recursion, a comprehension) is another pass, addressed with a one-based
-  suffix such as `linear_1:2`; `op.pass_index` is the pass and `num_passes` the count. A module
+  suffix such as `linear_1:2`; `op.pass_number` is the pass and `num_passes` the count. A module
   object called again is another module call (`m:1`, `m:2`), a separate concept: each op inside it
   runs once per module call, so its passes match the module's calls. Two different places are two layers even with the same weights, so a
   loop written out by hand is N layers. The exact rule (scope, call site, operation, output slot)

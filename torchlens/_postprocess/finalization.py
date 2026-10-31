@@ -538,8 +538,8 @@ def _merge_layer_log_conditional_fields(
         layer_log.conditional_branch_stack_ops[stack_signature] = []
 
     signature_ops = layer_log.conditional_branch_stack_ops[stack_signature]
-    if pass_log.pass_index not in signature_ops:
-        signature_ops.append(pass_log.pass_index)
+    if pass_log.pass_number not in signature_ops:
+        signature_ops.append(pass_log.pass_number)
         signature_ops.sort()
 
     for conditional_id, branch_children in pass_log.conditional_arm_children.items():
@@ -1252,7 +1252,7 @@ def _build_layer_logs(self: "Trace") -> None:
             if pass_log.is_atomic_module:
                 layer_log.is_atomic_module = True
 
-        layer_log.ops[pass_log.pass_index] = pass_log
+        layer_log.ops[pass_log.pass_number] = pass_log
         layer_log.call_labels.append(pass_log.label)
         _merge_layer_log_conditional_fields(layer_log, pass_log)
 

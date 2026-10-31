@@ -964,9 +964,9 @@ class RecordingProjector:
             for record in projected_records:
                 index = len(records)
                 records.append(record)
-                by_pass.setdefault(record.ctx.pass_index, []).append(index)
+                by_pass.setdefault(record.ctx.pass_number, []).append(index)
                 for label_key in _distinct_label_index_keys(record.ctx.label, record.ctx.raw_label):
-                    by_label.setdefault(label_key, []).append((record.ctx.pass_index, index))
+                    by_label.setdefault(label_key, []).append((record.ctx.pass_number, index))
                 if record.ctx.address is not None:
                     by_address.setdefault(record.ctx.address, []).append(index)
         last_facts = captured_cores[-1].projection_facts if captured_cores else {}

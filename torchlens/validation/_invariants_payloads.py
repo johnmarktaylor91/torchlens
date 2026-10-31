@@ -308,12 +308,12 @@ def _check_op_log_fields(ml: Trace) -> None:
                 )
 
         # Pass numbering
-        if lpl.pass_index < 1:
-            raise MetadataInvariantError(name, f"Layer {label}: pass_index={lpl.pass_index} < 1")
-        if lpl.num_passes < lpl.pass_index:
+        if lpl.pass_number < 1:
+            raise MetadataInvariantError(name, f"Layer {label}: pass_index={lpl.pass_number} < 1")
+        if lpl.num_passes < lpl.pass_number:
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: num_passes={lpl.num_passes} < pass_index={lpl.pass_index}",
+                f"Layer {label}: num_passes={lpl.num_passes} < pass_index={lpl.pass_number}",
             )
 
         # A GENUINE raw-forward-hook output replacement is legitimately

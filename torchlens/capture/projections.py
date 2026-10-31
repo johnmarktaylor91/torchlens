@@ -395,7 +395,7 @@ def _normalize_module_stack(
                 address=str(frame.get("address", "")),
                 module_type=str(frame.get("module_type", "")),
                 module_id=int(frame.get("module_id", 0)),
-                pass_index=int(frame.get("pass_index", 0)),
+                pass_number=int(frame.get("pass_index", 0)),
             )
         )
     return tuple(frames)
@@ -462,7 +462,7 @@ def _build_record_context(
         kind=kind,
         label=str(label),
         raw_label=raw_label,
-        pass_index=pass_index,
+        pass_number=pass_index,
         event_index=event_index,
         step_index=step_index,
         layer_type=layer_type,
@@ -502,7 +502,7 @@ def _module_frames_from_record_context(ctx: RecordContext) -> tuple[ModuleFrame,
             address=_module_frame_address(frame),
             address_normalized=None,
             module_type=frame.module_type,
-            call_index=frame.pass_index,
+            call_index=frame.pass_number,
             fx_qualpath=None,
             entry_argnames=(),
         )
@@ -778,7 +778,7 @@ def _record_from_record_context(
         raw_index=ctx.raw_index or ctx.event_index,
         type_index=ctx.type_index or 0,
         step_index=ctx.step_index or 0,
-        pass_index=ctx.pass_index,
+        pass_index=ctx.pass_number,
         parents=tuple(
             ParentEdge(parent_label_raw=parent, arg_position=None, edge_use="unknown")
             for parent in ctx.parent_labels
@@ -1514,7 +1514,7 @@ def _maybe_add_grad_fn_metadata_record(
         grad_kind="grad_output",
         has_forward_op=False,
         has_op=False,
-        pass_index=event.pass_index,
+        pass_number=event.pass_index,
         order=getattr(pass_record, "order", None),
         event_index=ordinal,
     )
@@ -1556,7 +1556,7 @@ def _grad_record_context_from_op_grad_event(
                 module_stack=tuple(getattr(fastlog_ctx, "module_stack", ()) or ()),
                 has_forward_op=True,
                 has_op=True,
-                pass_index=event.pass_index,
+                pass_number=event.pass_index,
                 order=getattr(pass_record, "order", None),
                 event_index=ordinal,
                 shape=event.shape,
@@ -1573,7 +1573,7 @@ def _grad_record_context_from_op_grad_event(
             grad_kind="grad_output",
             has_forward_op=False,
             has_op=False,
-            pass_index=event.pass_index,
+            pass_number=event.pass_index,
             order=getattr(pass_record, "order", None),
             event_index=ordinal,
             shape=event.shape,
@@ -1593,7 +1593,7 @@ def _grad_record_context_from_op_grad_event(
         module_stack=tuple(getattr(op, "module_stack", ()) or ()),
         has_forward_op=True,
         has_op=True,
-        pass_index=event.pass_index,
+        pass_number=event.pass_index,
         order=getattr(pass_record, "order", None),
         event_index=ordinal,
         shape=event.shape,

@@ -1529,7 +1529,7 @@ def _not_saved_by_user_justification(
         return None
     decision_key = (
         str(raw_label),
-        int(getattr(layer, "pass_index", 0)),
+        int(getattr(layer, "pass_number", 0)),
         tuple(getattr(layer, "container_path", ())),
     )
     predicate_decision = predicate_decisions.get(decision_key)

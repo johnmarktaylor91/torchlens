@@ -311,7 +311,7 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
     # No crash on a recurrent model.
     preview_fastlog(
         log,
-        predicate=lambda ctx: getattr(ctx, "pass_index", None) == 1,
+        predicate=lambda ctx: getattr(ctx, "pass_number", None) == 1,
         vis_save_only=True,
         path=str(tmp_path / "preview"),
     )
@@ -319,7 +319,7 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
     preview = _build_preview_nodes(log, lambda ctx: ctx.event_index == 3)
     relu_keys = sorted(k for k in preview if "relu" in k and ":" in k)
     assert relu_keys == ["relu_1_1:1", "relu_1_1:2", "relu_1_1:3"]
-    assert [preview[k].ctx.pass_index for k in relu_keys] == [0, 1, 2]
+    assert [preview[k].ctx.pass_number for k in relu_keys] == [0, 1, 2]
     # The event_index==3 predicate keeps ONLY the second recurrent call.
     ops = list(log.layer_logs["relu_1_1"].ops.values())
     callback = _make_node_spec_fn(

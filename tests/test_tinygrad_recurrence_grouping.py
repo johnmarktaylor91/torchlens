@@ -76,7 +76,7 @@ def test_tinygrad_repeated_block_groups_into_passes() -> None:
     assert mul_ops, "no grouped multi-pass ops found for the repeated body"
     assert where_ops
     assert {op.num_passes for op in where_ops} == {2}
-    assert [op.pass_index for op in where_ops] == [1, 2]
+    assert [op.pass_number for op in where_ops] == [1, 2]
     assert {op.layer_label for op in where_ops} == {where_ops[0].layer_label}
     assert list(where_ops[0].recurrent_ops) == [op.label for op in where_ops]
     assert trace.layer_num_calls[where_ops[0].layer_label] == 2

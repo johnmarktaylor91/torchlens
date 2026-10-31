@@ -226,7 +226,7 @@ def _check_conditional_branch_stack_monotonicity(
     for parent_op in ml.layer_list:
         for child_label in parent_op.children:
             child_layer = ml[child_label]
-            if parent_op.pass_index != child_layer.pass_index:
+            if parent_op.pass_number != child_layer.pass_number:
                 continue
             if parent_op.conditional_branch_stack == child_layer.conditional_branch_stack:
                 continue

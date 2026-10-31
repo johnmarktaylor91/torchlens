@@ -38,7 +38,7 @@ def test_dynamic_graph_records_1000_ops_with_varying_event_counts() -> None:
         for index in range(1000):
             recorder(torch.full((1, 4), float(index)))
     recording = recorder.recording
-    op_counts = Counter(record.ctx.pass_index for record in recording if record.ctx.kind == "op")
+    op_counts = Counter(record.ctx.pass_number for record in recording if record.ctx.kind == "op")
 
     assert recording.num_ops == 1000
     assert set(op_counts.values()) == {3, 5, 7}

@@ -348,7 +348,7 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
             return torch.relu(self.linear(x))
 
     def _halt_second_pass(ctx: object) -> bool:
-        return ctx.kind == "op" and ctx.func_name == "relu" and ctx.pass_index >= 2
+        return ctx.kind == "op" and ctx.func_name == "relu" and ctx.pass_number >= 2
 
     x = torch.ones(1, 3)
     with Recorder(

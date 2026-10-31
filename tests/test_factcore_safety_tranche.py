@@ -133,7 +133,7 @@ def test_op_accessor_iteration_yields_ops(loop_trace) -> None:
     members = list(layer.ops)
     assert len(members) == 3
     assert all(type(member).__name__ == "Op" for member in members)
-    assert [member.pass_index for member in members] == [1, 2, 3]
+    assert [member.pass_number for member in members] == [1, 2, 3]
 
 
 @pytest.mark.smoke

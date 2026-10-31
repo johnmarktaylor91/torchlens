@@ -164,7 +164,7 @@ def test_dangling_parent_refuses(source_bundle: Path, tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("attr", "value"),
-    [("pass_index", -1), ("pass_index", 0), ("num_passes", 0), ("pass_index", "1")],
+    [("pass_number", -1), ("pass_number", 0), ("num_passes", 0), ("pass_number", "1")],
 )
 def test_pass_stamp_out_of_range_refuses(
     source_bundle: Path, tmp_path: Path, attr: str, value: Any

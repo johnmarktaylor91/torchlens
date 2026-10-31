@@ -559,7 +559,7 @@ def test_multi_site_value_type(log):
     resolved = (tl.func("relu") | tl.func("conv2d")).__selection__().resolve(log)
     keys = [entry.key for entry in resolved]
     execution_order = {
-        (op.layer_label, op.pass_index): index for index, op in enumerate(log.layer_list)
+        (op.layer_label, op.pass_number): index for index, op in enumerate(log.layer_list)
     }
     steps = [execution_order[key] for key in keys]
     assert steps == sorted(steps), "resolved ACT entries must read in execution order"

@@ -105,7 +105,7 @@ def _op_record_from_log(
         raw_index=fields_dict["raw_index"],
         type_index=fields_dict["type_index"],
         step_index=fields_dict["step_index"] or 0,
-        pass_index=fields_dict["pass_index"],
+        pass_index=fields_dict["pass_number"],
         parents=_parent_edges_from_fields(fields_dict),
         output=_exhaustive_output_ref(fields_dict, tensor_ref, transformed_ref),
         is_bottom_level=True,

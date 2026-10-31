@@ -86,7 +86,7 @@ def _layers(trace: Any, func_name: str) -> list[list[Any]]:
     for op in trace.layer_list:
         if str(op.func_name) == func_name and not (op.is_input or op.is_output):
             by_layer.setdefault(op.layer_label, []).append(op)
-    return [sorted(ops, key=lambda op: op.pass_index) for ops in by_layer.values()]
+    return [sorted(ops, key=lambda op: op.pass_number) for ops in by_layer.values()]
 
 
 def _module_calls(trace: Any, func_name: str) -> list[str]:
@@ -1055,7 +1055,7 @@ def test_row60_block_called_twice_with_inner_loop() -> None:
     trace = _capture(lambda: BlockTwice(block=InnerLoopBlock(lin=_lin())), _x())
     assert _layer_shape(trace) == _expect("linear:4 tanh:4 __mul__:1")
     (tanh_ops,) = _layers(trace, "tanh")
-    assert [op.pass_index for op in tanh_ops] == [1, 2, 3, 4]
+    assert [op.pass_number for op in tanh_ops] == [1, 2, 3, 4]
     calls = [str(op.modules[-1]) for op in tanh_ops]
     assert calls == ["block:1", "block:1", "block:2", "block:2"]
 
@@ -1163,7 +1163,7 @@ def test_row65_two_standalone_traces_number_their_own_passes() -> None:
         assert _layer_shape(trace) == _expect("tanh:3 __mul__:3")
         for func_name in ("tanh", "__mul__"):
             (ops,) = _layers(trace, func_name)
-            assert [op.pass_index for op in ops] == [1, 2, 3]
+            assert [op.pass_number for op in ops] == [1, 2, 3]
 
 
 class MapAndSum(nn.Module):

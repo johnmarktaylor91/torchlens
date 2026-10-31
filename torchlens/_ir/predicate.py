@@ -112,7 +112,7 @@ class ModuleStackFrame:
     address: str
     module_type: str
     module_id: int
-    pass_index: int
+    pass_number: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,7 +212,7 @@ class RecordContext:
     kind: EventKind | str
     label: str
     raw_label: str | None
-    pass_index: int
+    pass_number: int
     event_index: int
     step_index: int | None
     layer_type: str | None
@@ -269,7 +269,7 @@ class RecordContext:
         shape = "?" if self.shape is None else "(" + ",".join(str(d) for d in self.shape) + ")"
         return (
             f"RecordContext(kind={kind!s}, label={self.label!r}, "
-            f"pass={self.pass_index}, event={self.event_index}, shape={shape}, "
+            f"pass={self.pass_number}, event={self.event_index}, shape={shape}, "
             f"recent_events={len(self.recent_events)}, recent_ops={len(self.recent_ops)})"
         )
 

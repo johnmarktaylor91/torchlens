@@ -195,7 +195,7 @@ def test_cone_of_effect_crosses_pass_boundaries(recurrent):
     _model, _x, trace = recurrent
     origin = trace.layer_dict_all_keys["relu_1_2:1"]
     cone_keys = {
-        f"{site.layer_label}:{site.pass_index}" for site in cone_of_effect(trace, [origin])
+        f"{site.layer_label}:{site.pass_number}" for site in cone_of_effect(trace, [origin])
     }
     assert cone_keys == {
         "relu_1_2:1",

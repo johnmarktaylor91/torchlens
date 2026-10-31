@@ -531,7 +531,7 @@ def apply_tf_module_intervention(
             {
                 "address": item.address,
                 "module_type": item.module_type,
-                "pass_index": item.call_index,
+                "pass_number": item.call_index,
             }
             for item in module_stack
         ),

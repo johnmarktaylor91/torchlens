@@ -196,7 +196,7 @@ def _pass_string(entry: Any) -> str | None:
     num_passes = int(getattr(entry, "num_passes", 1) or 1)
     if num_passes <= 1:
         return None
-    return f"{int(getattr(entry, 'pass_index', 1) or 1)}/{num_passes}"
+    return f"{int(getattr(entry, 'pass_number', 1) or 1)}/{num_passes}"
 
 
 def _bytes_string(value: Any) -> str | None:

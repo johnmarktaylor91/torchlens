@@ -51,7 +51,7 @@ CELL_SOURCES: dict[str, str] = {
     "short_layer_label": "DEFAULT",
     "type": "CORE",
     "type_index": "CORE",
-    "pass_index": "CORE",
+    "pass_number": "CORE",
     "num_passes": "DEFAULT",
     "lookup_keys": "DEFAULT",
     # ---- output / payload ----------------------------------------------------
@@ -359,7 +359,7 @@ def scatter_record_to_cells(record: OpRecord, extras: IngestExtras, owning_trace
         "short_layer_label": None,
         "type": core.layer_type,
         "type_index": core.type_index,
-        "pass_index": core.pass_index,
+        "pass_number": core.pass_index,
         "num_passes": 1,
         "lookup_keys": [],
         "has_saved_activation": output.has_saved_activation,

@@ -334,7 +334,7 @@ class TestConvenienceAliases:
         for layer_log in recurrent_log.layer_logs.values():
             for op in layer_log.ops.values():
                 assert ":" not in op.layer_label
-                assert op.label == f"{op.layer_label}:{op.pass_index}"
+                assert op.label == f"{op.layer_label}:{op.pass_number}"
 
     def test_params_accessor(self, recurrent_log):
         for layer_log in recurrent_log.layer_logs.values():

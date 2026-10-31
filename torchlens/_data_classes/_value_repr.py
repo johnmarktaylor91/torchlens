@@ -150,7 +150,7 @@ def _op_position(op: Any) -> str | None:
 def _pass_token(op: Any) -> str:
     """Pass tag ``k/n`` (``(pass 1/1)`` on single-pass ops stays explicit)."""
 
-    return f"{getattr(op, 'pass_index', 1)}/{getattr(op, 'num_passes', 1)}"
+    return f"{getattr(op, 'pass_number', 1)}/{getattr(op, 'num_passes', 1)}"
 
 
 def op_repr_line(op: Any) -> str:

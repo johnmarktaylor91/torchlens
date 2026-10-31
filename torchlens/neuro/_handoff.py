@@ -526,7 +526,7 @@ def _trace_site_payload(record: Any, key: str, requested: str, verb: str) -> Sit
         _raise_unsaved_activation(key, verb=verb)
     matrix, per_stimulus_shape = _shape_payload(cast(torch.Tensor, out))
     num_passes = int(getattr(record, "num_passes", 1))
-    pass_index = getattr(record, "pass_index", None)
+    pass_index = getattr(record, "pass_number", None)
     return SitePayload(
         key=key,
         requested=requested,

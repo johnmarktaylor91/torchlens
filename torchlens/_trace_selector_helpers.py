@@ -349,9 +349,9 @@ def _label_save_candidates(ctx: RecordContext) -> set[str]:
             # through the deferred post-postprocess resolution instead, so
             # no raw-index "prediction" of final ordinals happens here.
             candidates.add(f"{ctx.layer_type}_{ctx.type_index}")
-            indexed_candidate = f"{ctx.layer_type}_{ctx.type_index}_{ctx.pass_index}"
+            indexed_candidate = f"{ctx.layer_type}_{ctx.type_index}_{ctx.pass_number}"
             candidates.add(indexed_candidate)
-            candidates.add(f"{indexed_candidate}:{ctx.pass_index}")
+            candidates.add(f"{indexed_candidate}:{ctx.pass_number}")
     if ctx.func_name is not None:
         candidates.add(ctx.func_name)
         candidates.add(_normalize_func_name(ctx.func_name))
@@ -421,7 +421,7 @@ def _make_layers_to_save_predicate(layers_to_save: object) -> PredicateFn:
             except ValueError:
                 requested_base = requested_string
             else:
-                if ctx.pass_index != requested_pass_index:
+                if ctx.pass_number != requested_pass_index:
                     return False
 
         if requested_base == "":

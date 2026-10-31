@@ -1025,7 +1025,7 @@ def test_rolled_loop_multi_evaluation_refuses_arbitrary_pass_value() -> None:
     # queryable on the ops themselves.
     bool_ops = [layer for layer in trace.layer_list if layer.func_name == "__lt__"]
     assert len({op.layer_label for op in bool_ops}) == 1
-    assert {op.pass_index: op.bool_value for op in bool_ops} == {1: True, 2: False}
+    assert {op.pass_number: op.bool_value for op in bool_ops} == {1: True, 2: False}
 
     _assert_no_false_fired(trace, {"relu", "mul", "sum", "__lt__", "add"}, set())
     _assert_bool_value_never_contradicts_fired(trace)
@@ -1049,7 +1049,7 @@ def test_single_witness_rolled_bool_resolves_exact_pass_value() -> None:
 
     bool_ops = [layer for layer in trace.layer_list if layer.func_name == "__lt__"]
     assert len({op.layer_label for op in bool_ops}) == 1, "loop no longer rolls; fix the model"
-    assert {op.pass_index: op.bool_value for op in bool_ops} == {1: True, 2: False}
+    assert {op.pass_number: op.bool_value for op in bool_ops} == {1: True, 2: False}
 
     _assert_no_false_fired(trace, {"relu", "mul", "sum", "__lt__"}, {"sigmoid"})
     _assert_bool_value_never_contradicts_fired(trace)

@@ -784,7 +784,9 @@ class CaptureSession:
             recording_state = object.__getattribute__(recording, "_recording_state")
             pass_index = getattr(recording_state, "pass_index", None)
             if pass_index is not None:
-                records = tuple(record for record in records if record.ctx.pass_index == pass_index)
+                records = tuple(
+                    record for record in records if record.ctx.pass_number == pass_index
+                )
         self.projection_facts.update(
             {
                 "capture_events": (

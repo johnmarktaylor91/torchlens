@@ -252,8 +252,8 @@ class TraceLike:
 
         ctx = getattr(activation, "ctx", None)
         if ctx is not None:
-            return getattr(ctx, "pass_index", None)
-        return getattr(activation, "pass_index", None)
+            return getattr(ctx, "pass_number", None)
+        return getattr(activation, "pass_number", None)
 
     def _activation_address(self, activation: Any) -> str | None:
         """Return the module or buffer address for one projection-specific activation.

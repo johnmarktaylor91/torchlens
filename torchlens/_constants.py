@@ -363,7 +363,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "short_layer_label",
     "type",
     "type_index",
-    "pass_index",
+    "pass_number",
     "num_passes",
     "lookup_keys",
     # Saved tensor info
@@ -990,7 +990,7 @@ GRAD_FN_LOG_FIELD_ORDER = [
 ]
 
 BACKWARD_PASS_FIELD_ORDER = [
-    "pass_index",
+    "pass_number",
     "trigger",
     "implicit",
     "outer_context",

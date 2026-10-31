@@ -180,7 +180,7 @@ def check_lockstep_license(trace: Trace) -> None:
         )
     previous = 0
     for op in ops:
-        pass_index = int(getattr(op, "pass_index", 1) or 1)
+        pass_index = int(getattr(op, "pass_number", 1) or 1)
         if pass_index < previous:
             raise _encoding_error(
                 "stack_by auto-annotation is underivable: the multi-pass "
@@ -208,7 +208,7 @@ def _stack_value_for_node(state: EncodingState, node: Any) -> Any:
             # Single-pass stem/head ops stay un-annotated so they do not
             # all pin to column 1 (that is how classic diagrams draw stems).
             return None
-        return int(getattr(node, "pass_index", 1) or 1)
+        return int(getattr(node, "pass_number", 1) or 1)
     if spec.source_kind == "callable":
         try:
             value = spec.source(node)

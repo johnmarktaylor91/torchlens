@@ -220,7 +220,7 @@ def _apply_live_hooks_to_outputs_legacy(
         site_fields["type_index"] = reserved.type_index
         site_fields["_label_raw"] = raw_label
         site_fields["_layer_label_raw"] = raw_label
-        site_fields["pass_index"] = 1
+        site_fields["pass_number"] = 1
         site_fields["step_index"] = None
         site_fields["container_path"] = container_path
         site_fields["is_inplace"] = record_is_inplace
@@ -328,7 +328,7 @@ def _apply_predicate_mode_interventions_to_outputs(
             sample_id=state.sample_id,
             address=module_frame.address if module_frame else None,
             module_type=module_frame.module_type if module_frame else None,
-            module_pass_number=module_frame.pass_index if module_frame else None,
+            module_pass_number=module_frame.pass_number if module_frame else None,
             is_transform=func_name in TRANSFORM_FUNC_NAMES,
             transform_kind=func_name if func_name in TRANSFORM_FUNC_NAMES else None,
         )

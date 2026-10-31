@@ -90,8 +90,8 @@ def test_paddle_repeated_block_groups_into_passes() -> None:
     relu_ops = [op for op in trace.layer_list if op.func_name == "functional.relu"]
 
     assert trace.recurrence_detection is True
-    assert [op.pass_index for op in linear_ops] == [1, 2]
-    assert [op.pass_index for op in relu_ops] == [1, 2]
+    assert [op.pass_number for op in linear_ops] == [1, 2]
+    assert [op.pass_number for op in relu_ops] == [1, 2]
     assert {op.layer_label for op in linear_ops} == {linear_ops[0].layer_label}
     assert {op.layer_label for op in relu_ops} == {relu_ops[0].layer_label}
     assert all(op.num_passes == 2 for op in (*linear_ops, *relu_ops))
@@ -126,7 +126,7 @@ def test_paddle_module_reuse_groups_module_anchored_passes() -> None:
     trace = tl.trace(_ReusedCell(), paddle.ones([2, 4], dtype="float32"), backend="paddle")
     linear_ops = [op for op in trace.layer_list if op.func_name == "functional.linear"]
 
-    assert [op.pass_index for op in linear_ops] == [1, 2, 3]
+    assert [op.pass_number for op in linear_ops] == [1, 2, 3]
     assert {op.num_passes for op in linear_ops} == {3}
     assert len({op.layer_label for op in linear_ops}) == 1
 

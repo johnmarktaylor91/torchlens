@@ -412,7 +412,7 @@ def _check_op_label_resolution(ml: Trace) -> None:
     ops = ml.ops
     for entry in ml.layer_list:
         layer_label = getattr(entry, "layer_label", None)
-        pass_index = getattr(entry, "pass_index", None)
+        pass_index = getattr(entry, "pass_number", None)
         num_passes = getattr(entry, "num_passes", None)
         labels = [entry.label]
         label_raw = entry._label_raw
@@ -512,7 +512,7 @@ def _check_graph_topology(ml: Trace) -> None:
 
         aliases = {fallback}
         layer_label = getattr(entry, "layer_label", None)
-        pass_index = getattr(entry, "pass_index", None)
+        pass_index = getattr(entry, "pass_number", None)
         num_passes = getattr(entry, "num_passes", None)
         single_pass = not isinstance(num_passes, int) or num_passes <= 1
         if isinstance(layer_label, str):

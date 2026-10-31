@@ -132,7 +132,7 @@ def finalize_single_pass_trace(
         layer_created = layer_log is None
         if layer_log is None:
             layer_log = Layer(op_log)
-        layer_log.ops[op_log.pass_index] = op_log
+        layer_log.ops[op_log.pass_number] = op_log
         layer_log.call_labels.append(op_log.label)
         if op_log.num_passes != 1:
             layer_log.num_passes = op_log.num_passes
@@ -614,7 +614,7 @@ def _finalize_single_op(
     op_log.layer_label = layer_label
     op_log.short_layer_label = layer_label
     op_log.lookup_keys = [label, pass_label]
-    op_log.pass_index = pass_index
+    op_log.pass_number = pass_index
     op_log.num_passes = num_passes
     if assignment is not None:
         op_log.equivalence_class = assignment.equivalence_key

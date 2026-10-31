@@ -132,7 +132,7 @@ _DOCUMENTED_SURFACE = [
     "parent_param_ops",
     "parent_params",
     "parents",
-    "pass_index",
+    "pass_number",
     "raw_index",
     "recurrent_ops",
     "root_ancestors",

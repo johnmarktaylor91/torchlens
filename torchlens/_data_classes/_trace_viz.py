@@ -402,7 +402,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             pass_entries = [self[label]]
         frames = [
             {
-                "pass": int(getattr(entry, "pass_index", index + 1) or index + 1),
+                "pass": int(getattr(entry, "pass_number", index + 1) or index + 1),
                 "label": str(getattr(entry, "layer_label", base_label)),
                 "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
                 "memory": str(getattr(entry, "activation_memory", "")),

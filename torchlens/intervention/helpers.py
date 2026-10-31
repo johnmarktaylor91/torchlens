@@ -1764,7 +1764,7 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
     context = layer_log if layer_log else {}
     qualified = context.get("label")
     bare = context.get("layer_label")
-    pass_index = context.get("pass_index")
+    pass_index = context.get("pass_number")
 
     site_label: Any = None
     if isinstance(qualified, str) and ":" in qualified:

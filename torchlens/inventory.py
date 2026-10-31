@@ -91,7 +91,7 @@ class SiteRow:
         Output shape tuple (``None`` on the no-input rung).
     dtype:
         Output dtype string (``None`` on the no-input rung).
-    pass_index:
+    pass_number:
         1-based pass for recurrent sites (``None`` on the no-input rung).
     num_passes:
         Total passes of the owning layer (``None`` on the no-input rung).
@@ -108,7 +108,7 @@ class SiteRow:
     origin: str | None
     shape: tuple[int, ...] | None
     dtype: str | None
-    pass_index: int | None
+    pass_number: int | None
     num_passes: int | None
     training: bool | None
 
@@ -124,7 +124,7 @@ class SiteRow:
             "origin": self.origin,
             "shape": list(self.shape) if self.shape is not None else None,
             "dtype": self.dtype,
-            "pass_index": self.pass_index,
+            "pass_number": self.pass_number,
             "num_passes": self.num_passes,
             "training": self.training,
         }
@@ -263,7 +263,7 @@ def _module_rung(model: nn.Module) -> SiteInventory:
             origin=None,
             shape=None,
             dtype=None,
-            pass_index=None,
+            pass_number=None,
             num_passes=None,
             training=bool(module.training),
         )
@@ -363,7 +363,7 @@ def sites_of_trace(trace: Any) -> SiteInventory:
                 origin="module_output" if address else "function",
                 shape=tuple(int(d) for d in shape) if shape is not None else None,
                 dtype=str(getattr(layer, "dtype", None)),
-                pass_index=int(getattr(layer, "pass_index", 1) or 1),
+                pass_number=int(getattr(layer, "pass_number", 1) or 1),
                 num_passes=int(getattr(layer, "num_passes", 1) or 1),
                 training=(
                     bool(module_record.training)

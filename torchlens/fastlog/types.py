@@ -267,7 +267,7 @@ class ActivationRecord:
             dtype = str(payload.dtype).replace("torch.", "")
             descriptor = f"{dtype}[{','.join(str(d) for d in payload.shape)}]"
         return (
-            f"ActivationRecord(label={self.ctx.label!r}, pass={self.ctx.pass_index}, "
+            f"ActivationRecord(label={self.ctx.label!r}, pass={self.ctx.pass_number}, "
             f"payload={descriptor}, stored={'+'.join(stores) if stores else 'none'})"
         )
 
@@ -304,7 +304,7 @@ class GradRecordContext:
     module_stack: tuple[Any, ...] = ()
     has_forward_op: bool = False
     has_op: bool = False
-    pass_index: int | None = None
+    pass_number: int | None = None
     order: int | None = None
     event_index: int | None = None
     shape: tuple[int, ...] | None = None
@@ -435,7 +435,7 @@ _RAW_METADATA_FIELDS = (
     "kind",
     "label",
     "raw_label",
-    "pass_index",
+    "pass_number",
     "event_index",
     "step_index",
     "layer_type",
@@ -746,9 +746,9 @@ class Recording(TraceLike):
                     continue
                 index = len(records)
                 records.append(record)
-                self.by_pass.setdefault(record.ctx.pass_index, []).append(index)
+                self.by_pass.setdefault(record.ctx.pass_number, []).append(index)
                 for label_key in _distinct_label_index_keys(record.ctx.label, record.ctx.raw_label):
-                    self.by_label.setdefault(label_key, []).append((record.ctx.pass_index, index))
+                    self.by_label.setdefault(label_key, []).append((record.ctx.pass_number, index))
                 if record.ctx.address is not None:
                     self.by_address.setdefault(record.ctx.address, []).append(index)
         object.__setattr__(self, "_records_built", True)
@@ -824,11 +824,13 @@ class Recording(TraceLike):
                 ),
             )
         self._ensure_records()
-        retained_keys = {(record.ctx.pass_index, record.ctx.event_index) for record in self.records}
+        retained_keys = {
+            (record.ctx.pass_number, record.ctx.event_index) for record in self.records
+        }
         rows: list[dict[str, Any]] = []
         for ctx in self.lazy_trace.contexts:
             row = {name: getattr(ctx, name) for name in _RAW_METADATA_FIELDS}
-            row["retained"] = (ctx.pass_index, ctx.event_index) in retained_keys
+            row["retained"] = (ctx.pass_number, ctx.event_index) in retained_keys
             rows.append(row)
         return tuple(rows)
 
@@ -855,8 +857,8 @@ class Recording(TraceLike):
 
         index = len(self.grad_records)
         self.grad_records.append(record)
-        if record.ctx.pass_index is not None:
-            self.grad_by_pass.setdefault(record.ctx.pass_index, []).append(index)
+        if record.ctx.pass_number is not None:
+            self.grad_by_pass.setdefault(record.ctx.pass_number, []).append(index)
         if record.ctx.layer_label is not None:
             self.grad_by_label.setdefault(record.ctx.layer_label, []).append(index)
         self.grad_by_label.setdefault(record.ctx.label, []).append(index)
@@ -1008,7 +1010,7 @@ class Recording(TraceLike):
             {
                 "kind": record.ctx.kind,
                 "label": record.ctx.label,
-                "pass_index": record.ctx.pass_index,
+                "pass_number": record.ctx.pass_number,
                 "event_index": record.ctx.event_index,
                 "save_out": record.spec.save_out,
                 "save_metadata": record.spec.save_metadata,

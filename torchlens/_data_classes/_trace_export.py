@@ -337,7 +337,7 @@ class TraceExportMixin(_TraceMixinBase):
             "type_index": int,
             "step_index": int,
             "num_passes": int,
-            "pass_index": int,
+            "pass_number": int,
             "is_inplace": bool,
             "is_input": bool,
             "is_output": bool,

@@ -206,7 +206,7 @@ def test_cross_pass_child_repoint_is_caught_inside_a_recurrence_group() -> None:
     check_metadata_invariants(trace)
     record = None
     for candidate in trace.layer_list:
-        if candidate.layer_label == "linear_1_1" and candidate.pass_index == 2:
+        if candidate.layer_label == "linear_1_1" and candidate.pass_number == 2:
             record = candidate
             break
     assert record is not None

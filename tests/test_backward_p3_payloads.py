@@ -261,7 +261,7 @@ def test_backward_accessors_to_pandas_do_not_raise_on_multiple_calls() -> None:
         assert not backward_passes_frame.empty
         assert "backward_duration" in grad_fns_frame.columns
         assert "total_backward_duration" in grad_fns_frame.columns
-        assert backward_passes_frame["pass_index"].tolist() == [1, 2]
+        assert backward_passes_frame["pass_number"].tolist() == [1, 2]
     finally:
         trace.cleanup()
 

@@ -47,14 +47,14 @@ def _site_index(log: Any) -> tuple[dict[str, Any], str]:
     if ops and all(key is not None for key in keys):
         index: dict[str, Any] = {}
         for op, key in zip(ops, keys, strict=True):
-            index[f"{key}|{int(getattr(op, 'pass_index', 1) or 1)}"] = op
+            index[f"{key}|{int(getattr(op, 'pass_number', 1) or 1)}"] = op
         return index, "site_key"
     index = {}
     for op in ops:
         shape = getattr(op, "shape", None)
         address = str(getattr(op, "layer_label", "unknown"))
         index[
-            f"{address}|{int(getattr(op, 'pass_index', 1) or 1)}|{tuple(shape) if shape else None}"
+            f"{address}|{int(getattr(op, 'pass_number', 1) or 1)}|{tuple(shape) if shape else None}"
         ] = op
     return index, "legacy_address_shape"
 

@@ -116,7 +116,7 @@ def test_permute_batch_gradients_route_to_permuted_sources() -> None:
     run_ctx: dict[str, object] = {}
     context = make_hook_context(
         name="permute_batch",
-        op={"label": "unit", "pass_index": 1},
+        op={"label": "unit", "pass_number": 1},
         run_context=run_ctx,
     )
     out = hook_fn(x, hook=context)
@@ -206,7 +206,7 @@ def test_seed_is_required_and_auto_derives_from_trace_seed() -> None:
     # No run context -> no trace seed -> typed refusal, never ambient RNG.
     edit = permute_batch(seed="auto", axis=0)
     assert edit.factory is not None
-    context = make_hook_context(name="p", op={"label": "u", "pass_index": 1})
+    context = make_hook_context(name="p", op={"label": "u", "pass_number": 1})
     with pytest.raises(Exception) as excinfo:
         edit.factory()(torch.randn(3, 2), hook=context)
     assert excinfo.value.fields["code"] == "sampling_trace_seed_unavailable"

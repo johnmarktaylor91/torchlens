@@ -60,7 +60,7 @@ _LAYER_LOG_CONTEXT_FIELDS = (
     # (recurrence-grouped) layer the bare layer_label alone cannot tell a
     # hook WHICH pass it is firing at.
     "label",
-    "pass_index",
+    "pass_number",
     # L1 structural site key (where minted): the derived-seed law's logical
     # firing coordinate prefers it over the display label (F02, edits memo D6).
     "site_key",

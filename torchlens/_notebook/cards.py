@@ -193,7 +193,7 @@ def _identity_zone(op: Any, root: CopyRoot) -> tuple[CardNode, ...]:
     """Op identity: label, pass, function, module, site key, access key."""
 
     label = str(getattr(op, "label", "?"))
-    pass_index = getattr(op, "pass_index", None)
+    pass_index = getattr(op, "pass_number", None)
     num_passes = getattr(op, "num_passes", None)
     identity = f"{getattr(op, 'func_name', '?')}"
     if pass_index is not None and num_passes is not None and num_passes > 1:

@@ -524,7 +524,7 @@ def _check_multipass_coverage(
         num_passes = int(getattr(child_op, "num_passes", 1) or 1)
         if num_passes > 1:
             covered.setdefault(child_op.layer_label, set()).add(
-                int(getattr(child_op, "pass_index", 0) or 0)
+                int(getattr(child_op, "pass_number", 0) or 0)
             )
             total_passes[child_op.layer_label] = num_passes
     for bare_label, seen in covered.items():

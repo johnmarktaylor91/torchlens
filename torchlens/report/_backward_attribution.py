@@ -347,7 +347,7 @@ def attribute_census(
         The pass's recorded ``DispatchedOp`` calls, in run order.
     """
 
-    pass_index = int(backward_pass.pass_index)
+    pass_index = int(backward_pass.pass_number)
     grad_fn_logs = getattr(trace, "grad_fn_logs", {}) or {}
     builds_graph = _pass_builds_graph(backward_pass)
     checkpoint = _checkpoint_evidence(trace)

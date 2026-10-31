@@ -1658,7 +1658,7 @@ def _assert_pass_record_calls_owned(trace, pass_record) -> None:
     assert pass_record.grad_fn_calls
     for call in pass_record.grad_fn_calls:
         assert id(call) in owned_call_ids
-        assert call.backward_pass_index == pass_record.pass_index
+        assert call.backward_pass_index == pass_record.pass_number
 
 
 def test_restored_trace_with_prior_backward_extends_pass_numbering() -> None:

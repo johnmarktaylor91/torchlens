@@ -538,7 +538,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
         if group_key not in groups_seen:
             pass_indices = []
             for member_label, member in members:
-                pass_indices.append(member.pass_index)
+                pass_indices.append(member.pass_number)
             expected = set(range(1, len(slo) + 1))
             actual = set(pass_indices)
             if actual != expected:

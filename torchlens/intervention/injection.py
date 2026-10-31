@@ -482,7 +482,9 @@ def injected_ops(trace: Any) -> tuple[InjectedOp, ...]:
                 provenance=dataclasses.replace(
                     record.provenance,
                     host_site_key=getattr(host, "site_key", None),
-                    host_pass=int(getattr(host, "pass_index", None) or record.provenance.host_pass),
+                    host_pass=int(
+                        getattr(host, "pass_number", None) or record.provenance.host_pass
+                    ),
                 ),
             )
         )

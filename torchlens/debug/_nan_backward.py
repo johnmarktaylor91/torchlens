@@ -312,12 +312,12 @@ def _select_backward_pass(trace: Trace, bwd: int | None) -> tuple[Any, int]:
                 code="bwd_selector_required",
                 remedy="pass bwd=1..N",
             )
-        bwd = int(backward_passes[0].pass_index)
-    selected = next((bp for bp in backward_passes if int(bp.pass_index) == int(bwd)), None)
+        bwd = int(backward_passes[0].pass_number)
+    selected = next((bp for bp in backward_passes if int(bp.pass_number) == int(bwd)), None)
     if selected is None:
         raise InvalidArgumentError(
             f"backward pass {bwd} was not captured "
-            f"(captured: {[int(bp.pass_index) for bp in backward_passes]})",
+            f"(captured: {[int(bp.pass_number) for bp in backward_passes]})",
             code="bwd_selector_unknown",
             remedy="pass one of the captured pass indexes",
         )

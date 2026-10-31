@@ -494,7 +494,7 @@ def _topology_layer(**overrides: Any) -> SimpleNamespace:
     """Return a minimally-valid graph_topology layer fake, overridden per test."""
 
     base = {
-        "pass_index": 1,
+        "pass_number": 1,
         "num_passes": 1,
         "parents": [],
         "children": [],
@@ -596,7 +596,7 @@ def test_layer_pass_layer_log_xrefs_fires_on_pass_index_mismatch() -> None:
     op = SimpleNamespace(pass_index=2, layer_label="relu_1")
     layer = SimpleNamespace(layer_label="relu_1", num_passes=1, ops={1: op})
     fake_trace = SimpleNamespace(layer_logs={"relu_1": layer})
-    with pytest.raises(MetadataInvariantError, match=r"pass key=1 but Op.pass_index=2"):
+    with pytest.raises(MetadataInvariantError, match=r"pass key=1 but Op.pass_number=2"):
         _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
 
 

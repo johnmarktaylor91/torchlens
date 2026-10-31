@@ -1399,7 +1399,7 @@ class JAXBackend:
             kind="op",
             label=reserved.label,
             raw_label=reserved.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=reserved.raw_index,
             step_index=None,
             layer_type=reserved.layer_type,
@@ -2061,7 +2061,7 @@ class JAXBackend:
                 layer_log = Layer(op_log)
                 trace.layer_logs[op_log.layer_label] = layer_log
             layer_log.num_passes = op_log.num_passes
-            layer_log.ops[op_log.pass_index] = op_log
+            layer_log.ops[op_log.pass_number] = op_log
             layer_log.call_labels.append(op_log.label)
             layer_log.dtype_ref = op_log.dtype_ref
             layer_log.device_ref = op_log.device_ref

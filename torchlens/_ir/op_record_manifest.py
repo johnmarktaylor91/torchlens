@@ -170,7 +170,7 @@ CELL_SOURCE_MANIFEST: dict[str, str] = {
     'parent_param_ops': 'JOIN:param_logs',
     'parent_params': 'JOIN:param_logs',
     'parents': 'CORE',
-    'pass_index': 'CORE',
+    'pass_number': 'CORE',
     'raw_index': 'CORE',
     'recurrent_ops': 'DEFAULT',
     'resolver_status': 'DERIVED:init',

@@ -25,7 +25,7 @@ def _minimal_context(**updates: Any) -> RecordContext:
         "kind": "op",
         "label": "mlx_add_1_1_raw",
         "raw_label": "mlx_add_1_1_raw",
-        "pass_index": 1,
+        "pass_number": 1,
         "event_index": 1,
         "step_index": 1,
         "layer_type": "add",

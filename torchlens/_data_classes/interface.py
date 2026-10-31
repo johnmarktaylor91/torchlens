@@ -394,7 +394,7 @@ def _bounded_layer_roster(self: "Trace") -> list[str]:
             num_buffer_rows += 1
             continue
         layer_barcode = layer_entry.layer_label
-        pass_index = layer_entry.pass_index
+        pass_index = layer_entry.pass_number
         num_passes = layer_entry.num_passes
         if num_passes > 1:
             # One pass/op vocabulary (A10): a multi-pass row is "pass k/N",

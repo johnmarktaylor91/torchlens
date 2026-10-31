@@ -276,8 +276,8 @@ def test_reanchored_rows_refuse_at_load(tmp_path) -> None:
             row.injection_provenance["host_site_key"] = tanh.site_key
             row.injection_provenance["host_pass"] = 7
             row.injection_provenance["spec_rule_id"] = "r-forged"
-            envelope["host_label"] = f"{tanh.layer_label}:{tanh.pass_index}"
-            row.layer_label = f"{tanh.layer_label}:{tanh.pass_index}{suffix}"
+            envelope["host_label"] = f"{tanh.layer_label}:{tanh.pass_number}"
+            row.layer_label = f"{tanh.layer_label}:{tanh.pass_number}{suffix}"
 
     with pytest.raises(Exception) as excinfo:
         _save_tamper_load(tmp_path, logged, reanchor)
@@ -532,7 +532,7 @@ def test_module_boundary_injected_ops_anchor_and_round_trip(tmp_path) -> None:
     for record in records:
         assert record.host_label == host.label
         assert record.provenance.host_site_key == host.site_key
-        assert record.provenance.host_pass == host.pass_index
+        assert record.provenance.host_pass == host.pass_number
     path = tmp_path / "module_boundary.tlspec"
     logged.save(str(path))
     loaded = tl.load(str(path))

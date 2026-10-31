@@ -67,9 +67,9 @@ def test_backward_passes_and_grad_fn_calls_are_event_projections() -> None:
     try:
         assert trace.num_backward_passes == 2
         backward_passes = trace.autograd.backward_passes
-        assert [backward_pass.pass_index for backward_pass in backward_passes] == [1, 2]
+        assert [backward_pass.pass_number for backward_pass in backward_passes] == [1, 2]
         assert backward_passes[0] is backward_passes.for_pass(1)
-        assert trace.autograd.last_backward_pass.pass_index == 2
+        assert trace.autograd.last_backward_pass.pass_number == 2
         assert backward_passes.for_pass(2).trigger == "backward"
 
         reused_grad_fn = next(

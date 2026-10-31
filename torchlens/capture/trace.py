@@ -466,7 +466,7 @@ def _run_predicate_forward_with_root_frame(
         address="",
         module_type=type(model).__name__,
         module_id=id(model),
-        pass_index=1,
+        pass_number=1,
     )
     skipped_spec = CaptureSpec(save_out=False, save_metadata=False)
     backend.push_existing_module_frame(trace, state.module_stack, root_frame)
@@ -477,7 +477,7 @@ def _run_predicate_forward_with_root_frame(
             "label": "root:enter:1",
             "address": "",
             "module_type": type(model).__name__,
-            "module_pass_number": root_frame.pass_index,
+            "module_pass_number": root_frame.pass_number,
         },
         module_stack=state.module_stack,
         history=tuple(state.history),
@@ -531,7 +531,7 @@ def _run_predicate_forward_with_root_frame(
                 "label": "root:exit:1",
                 "address": "",
                 "module_type": type(model).__name__,
-                "module_pass_number": root_frame.pass_index,
+                "module_pass_number": root_frame.pass_number,
             },
             module_stack=state.module_stack,
             history=tuple(state.history),

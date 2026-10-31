@@ -483,7 +483,7 @@ def compute_selected_node_lines(
                 # (``pass_index``). The old ``call_index`` default read 1 for every
                 # pass because Ops carry no ``call_index`` -- a field literally
                 # named "pass" that always says 1 is silent wrongness.
-                rows.append(str(get_multipass_attr(layer_log, "pass_index", 1, multipass=1)))
+                rows.append(str(get_multipass_attr(layer_log, "pass_number", 1, multipass=1)))
             else:
                 rows.append(str(get_multipass_attr(layer_log, "num_passes", 1)))
         elif field_name == "flops":

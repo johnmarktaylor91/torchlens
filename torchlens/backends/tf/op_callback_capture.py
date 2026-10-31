@@ -576,7 +576,7 @@ class TFEagerCaptureSession:
             {
                 "address": frame.address,
                 "module_type": frame.module_type,
-                "pass_index": frame.call_index,
+                "pass_number": frame.call_index,
             }
             for frame in self.module_stack
         )
@@ -584,7 +584,7 @@ class TFEagerCaptureSession:
             kind="op",
             label=label.label,
             raw_label=label.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=label.raw_index,
             step_index=label.raw_index,
             layer_type=label.layer_type,

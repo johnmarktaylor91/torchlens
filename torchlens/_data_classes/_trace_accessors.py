@@ -124,7 +124,7 @@ def _boundary_listing_passes(
         if isinstance(entry, Op):
             yield [entry]
             continue
-        passes = sorted(entry.ops.values(), key=lambda op: op.pass_index)
+        passes = sorted(entry.ops.values(), key=lambda op: op.pass_number)
         if listings[label] == len(passes):
             yield [passes[taken[label]]]
             taken[label] += 1

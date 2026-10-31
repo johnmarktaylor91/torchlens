@@ -85,8 +85,8 @@ def test_mlx_repeated_block_groups_into_passes() -> None:
     relu_ops = [op for op in trace.layer_list if op.func_name == "maximum"]
 
     assert trace.recurrence_detection is True
-    assert [op.pass_index for op in matmul_ops] == [1, 2]
-    assert [op.pass_index for op in relu_ops] == [1, 2]
+    assert [op.pass_number for op in matmul_ops] == [1, 2]
+    assert [op.pass_number for op in relu_ops] == [1, 2]
     assert {op.layer_label for op in matmul_ops} == {matmul_ops[0].layer_label}
     assert all(op.num_passes == 2 for op in (*matmul_ops, *relu_ops))
     assert list(matmul_ops[0].recurrent_ops) == [op.label for op in matmul_ops]
@@ -100,7 +100,7 @@ def test_mlx_module_reuse_groups_and_validates() -> None:
     trace = tl.trace(_ReusedCell(), mx.ones((2, 4)), backend="mlx")
     linear_ops = [op for op in trace.layer_list if op.func_name == "linear"]
 
-    assert [op.pass_index for op in linear_ops] == [1, 2, 3]
+    assert [op.pass_number for op in linear_ops] == [1, 2, 3]
     assert {op.num_passes for op in linear_ops} == {3}
     assert len({op.layer_label for op in linear_ops}) == 1
     assert MLXBackend().validate_trace(trace) is True

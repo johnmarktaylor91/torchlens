@@ -668,5 +668,5 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
         for pass_index, member_label in enumerate(members_sorted, start=1):
             member = self[member_label]
             member.recurrent_ops = members_sorted
-            member.pass_index = pass_index
+            member.pass_number = pass_index
             member.num_passes = len(members_sorted)

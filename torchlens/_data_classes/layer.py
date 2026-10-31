@@ -1337,7 +1337,7 @@ class Layer(_SelectionOperand):
         int
             Pass number from the only pass.
         """
-        return cast(int, self._single_pass_or_error("pass_index"))
+        return cast(int, self._single_pass_or_error("pass_number"))
 
     @property
     def lookup_keys(self) -> list[str]:

@@ -234,8 +234,8 @@ def test_deep_recurrence_pass_addressing_at_the_extremes(deep_capture) -> None:
     log = deep_capture
     first = log[f"linear_1_1:{1}"]
     last = log[f"linear_1_1:{N_PASSES}"]
-    assert first.pass_index == 1
-    assert last.pass_index == N_PASSES
+    assert first.pass_number == 1
+    assert last.pass_number == N_PASSES
     assert first.num_passes == N_PASSES
     assert last.num_passes == N_PASSES
 

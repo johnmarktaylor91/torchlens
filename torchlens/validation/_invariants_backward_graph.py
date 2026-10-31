@@ -398,10 +398,10 @@ def _check_backward_pass_record_consistency(
     """
 
     for pass_index, backward_pass in getattr(trace, "backward_pass_logs", {}).items():
-        if backward_pass.pass_index != pass_index:
+        if backward_pass.pass_number != pass_index:
             raise MetadataInvariantError(
                 name,
-                f"BackwardPass stored index {backward_pass.pass_index!r} under {pass_index!r}",
+                f"BackwardPass stored index {backward_pass.pass_number!r} under {pass_index!r}",
             )
         for call in backward_pass.grad_fn_calls:
             if call.backward_pass_index != pass_index:

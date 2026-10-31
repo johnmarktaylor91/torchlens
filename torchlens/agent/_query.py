@@ -344,7 +344,7 @@ def _leaf_condition(op: str, value: Any) -> str:
             "for e in op.module_call_stack)"
         ),
         "dtype": f"str(op.dtype) == {value!r}",
-        "pass_index": f"int(op.pass_index or 1) == {value!r}",
+        "pass_index": f"int(op.pass_number or 1) == {value!r}",
         "saved": f"bool(op.has_saved_activation) is {value!r}",
         "payload_state": {
             "present": ("getattr(op, 'out_ref', None) is None and bool(op.has_saved_activation)"),

@@ -314,7 +314,7 @@ def _build_ir_instances() -> dict[str, object]:
         kind="op",
         label="linear_1_1",
         raw_label="linear_1_1_raw",
-        pass_index=1,
+        pass_number=1,
         event_index=1,
         step_index=1,
         layer_type="linear",

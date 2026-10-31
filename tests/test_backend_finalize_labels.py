@@ -103,7 +103,7 @@ def test_torch_bare_label_artifact_is_last_pass() -> None:
         record = log.layer_dict_all_keys[key]
         if key != record.layer_label:
             continue  # raw/address spellings, not the bare layer label
-        assert record.pass_index == record.num_passes, (
+        assert record.pass_number == record.num_passes, (
             f"torch bare-label artifact for {key!r} no longer resolves to the last pass"
         )
 

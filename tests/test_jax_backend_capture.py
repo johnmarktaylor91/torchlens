@@ -836,8 +836,8 @@ def test_jax_repeated_op_block_groups_into_passes() -> None:
     add_ops = [op for op in trace.layer_list if op.func_name == "add"]
     mul_ops = [op for op in trace.layer_list if op.func_name == "mul"]
 
-    assert [op.pass_index for op in add_ops] == [1, 2]
-    assert [op.pass_index for op in mul_ops] == [1, 2]
+    assert [op.pass_number for op in add_ops] == [1, 2]
+    assert [op.pass_number for op in mul_ops] == [1, 2]
     assert {op.layer_label for op in add_ops} == {add_ops[0].layer_label}
     assert {op.layer_label for op in mul_ops} == {mul_ops[0].layer_label}
     assert all(op.num_passes == 2 for op in (*add_ops, *mul_ops))
@@ -1446,7 +1446,7 @@ def test_jax_capture_index_map_survives_recurrent_relabeling() -> None:
     )
     assert all(index in capture_to_label for index in outvar_to_capture.values())
     assert all(key.startswith(f"{index}:") for key, index in outvar_to_capture.items())
-    assert [trace[label].pass_index for label in body_add_labels] == [1, 2, 3]
+    assert [trace[label].pass_number for label in body_add_labels] == [1, 2, 3]
     assert len({trace[label].layer_label for label in body_add_labels}) == 1
 
 
@@ -1524,7 +1524,7 @@ def test_jax_trace_unrolls_scan_and_groups_body_iterations() -> None:
     assert len(scan_stacks) == 1
     assert len(body_muls) == 4
     assert {op.layer_label for op in body_muls} == {body_muls[0].layer_label}
-    assert [op.pass_index for op in body_muls] == [1, 2, 3, 4]
+    assert [op.pass_number for op in body_muls] == [1, 2, 3, 4]
     assert {op.num_passes for op in body_muls} == {4}
     assert trace.validate_forward_pass([]) is True
 

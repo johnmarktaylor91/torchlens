@@ -275,7 +275,7 @@ def test_label_fields(small_input):
     entry = mh[0]
     assert isinstance(entry.layer_label, str)
     assert isinstance(entry.layer_type, str)
-    assert isinstance(entry.pass_index, int)
+    assert isinstance(entry.pass_number, int)
     assert isinstance(entry.lookup_keys, list)
     assert len(entry.lookup_keys) > 0
 
@@ -539,7 +539,7 @@ def test_recurrent_pass_indexbers(input_2d):
     model = example_models.RecurrentParamsSimple()
     mh = trace_fn(model, input_2d)
     found_multi_pass = any(
-        op.pass_index > 1 for layer in mh.layer_logs.values() for op in layer.ops.values()
+        op.pass_number > 1 for layer in mh.layer_logs.values() for op in layer.ops.values()
     )
     assert found_multi_pass, "Recurrent model should have layers with pass_index > 1"
 

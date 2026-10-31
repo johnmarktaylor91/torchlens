@@ -373,7 +373,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
         "payload_state": _payload_state(op),
         "label": str(getattr(op, "label", getattr(op, "layer_label", "unknown"))),
         "layer_label": str(getattr(op, "layer_label", "unknown")),
-        "pass_index": int(getattr(op, "pass_index", 1) or 1),
+        "pass_index": int(getattr(op, "pass_number", 1) or 1),
         "num_passes": int(getattr(op, "num_passes", 1) or 1),
         "func_name": str(getattr(op, "func_name", "unknown")),
         "shape": _json_shape(getattr(op, "shape", None)),

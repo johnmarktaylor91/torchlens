@@ -67,7 +67,7 @@ def _module_stack_from_layer(op_log: Any) -> tuple[ModuleStackFrame, ...]:
                 address=str(address),
                 module_type=module_type,
                 module_id=0,
-                pass_index=index,
+                pass_number=index,
             )
         )
     return tuple(frames)
@@ -119,7 +119,7 @@ def _context_from_layer(
             "input_output_address": getattr(op_log, "io_role", None),
             "address": module_frame.address if module_frame else None,
             "module_type": module_frame.module_type if module_frame else None,
-            "module_pass_number": module_frame.pass_index if module_frame else None,
+            "module_pass_number": module_frame.pass_number if module_frame else None,
         },
         module_stack=module_stack,
         history=history,
@@ -127,8 +127,8 @@ def _context_from_layer(
         # H5: derive the 0-based recurrent pass from the op's real 1-based
         # pass_index. The old ``call_index`` field does not exist on Ops, so every
         # recurrent pass defaulted to pass_index 0 -- silently breaking
-        # pass-dependent predicates (e.g. ``ctx.pass_index == 1``).
-        pass_index=max(int(get_multipass_attr(op_log, "pass_index", 1, multipass=1)) - 1, 0),
+        # pass-dependent predicates (e.g. ``ctx.pass_number == 1``).
+        pass_index=max(int(get_multipass_attr(op_log, "pass_number", 1, multipass=1)) - 1, 0),
         event_index=event_index,
         step_index=int(getattr(op_log, "step_index", event_index)),
         time_since_pass_start=0.0,
