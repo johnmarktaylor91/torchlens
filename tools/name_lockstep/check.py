@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from name_lockstep import attribution, spelling
+from name_lockstep.codecontext import CodeContext
 from name_lockstep.diff import SurfaceDiff
 
 DEFAULT_GLOSSARY = ("docs/reference/glossary.md",)
@@ -100,6 +101,9 @@ class Corpus:
     _imports: dict[tuple[str, str], dict[str, str]] = dataclasses.field(
         default_factory=dict, repr=False, compare=False
     )
+    _code: dict[tuple[str, str], CodeContext] = dataclasses.field(
+        default_factory=dict, repr=False, compare=False
+    )
 
     def imports(self, place: str, path: str) -> dict[str, str]:
         """Return the import bindings of one file, computed once.
@@ -121,6 +125,27 @@ class Corpus:
             text = dict(self.files[place])[path]
             self._imports[(place, path)] = attribution.imports(text)
         return self._imports[(place, path)]
+
+    def code_context(self, place: str, path: str) -> CodeContext:
+        """Return a file's string-literal spans and keyword callees, computed once.
+
+        Parameters
+        ----------
+        place
+            Place label.
+        path
+            The file's label within the place.
+
+        Returns
+        -------
+        CodeContext
+            Empty for prose files (Markdown, the glossaries).
+        """
+
+        if (place, path) not in self._code:
+            text = dict(self.files[place])[path]
+            self._code[(place, path)] = CodeContext.of(path, text)
+        return self._code[(place, path)]
 
     @classmethod
     def read(cls, root: Path, glossaries: Iterable[Path], snippets: bool = False) -> Corpus:
@@ -242,6 +267,8 @@ def _stale(
                     lines = lines if lines is not None else text.splitlines()
                     bound = corpus.imports(place, path)
                     if _explained(row, lines, line, start, end, claims, bound):
+                        continue
+                    if corpus.code_context(place, path).explains(row, line, start):
                         continue
                 found.append((place, f"{path}:{line}"))
     return sorted(set(found))
