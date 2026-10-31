@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import functools
 import importlib
-from pathlib import Path
+import sys
 
-REPO = Path(__file__).resolve().parent.parent
-PACKAGE_ROOT = REPO / "torchlens"
+from _harness import PACKAGE_ROOT, REPO_ROOT, run_checks
+
+REPO = REPO_ROOT
 
 #: The frozen census (memo 6.2 dispositions + 6.3 doors + item 15). The
 #: third column names the evidence: a module/callable for MET, the open
@@ -92,7 +93,7 @@ def _package_source() -> str:
     )
 
 
-def test_census_prints_the_disposition_table() -> None:
+def check_census_prints_the_disposition_table() -> None:
     lines = [
         f"{seam}: {status} -- {evidence}"
         for seam, (status, evidence) in sorted(SEAM_DISPOSITIONS.items())
@@ -105,7 +106,7 @@ def test_census_prints_the_disposition_table() -> None:
     assert counts["MET"] >= 10, "MET rows vanished -- a door was deleted without a census flip"
 
 
-def test_met_doors_are_importable_through_their_public_spellings() -> None:
+def check_met_doors_are_importable_through_their_public_spellings() -> None:
     """Every MET row's door exists; a deleted door must flip its row."""
 
     probes: dict[str, tuple[str, str]] = {
@@ -130,7 +131,7 @@ def test_met_doors_are_importable_through_their_public_spellings() -> None:
     assert failures == [], f"MET census rows whose doors are gone: {failures}"
 
 
-def test_open_row_term_resolvers_trigger() -> None:
+def check_open_row_term_resolvers_trigger() -> None:
     """Armed flip trigger: the resolver list is still a bare append target."""
 
     from torchlens import _selection as selection
@@ -143,7 +144,7 @@ def test_open_row_term_resolvers_trigger() -> None:
     )
 
 
-def test_open_row_facet_settlement_triggers() -> None:
+def check_open_row_facet_settlement_triggers() -> None:
     """Armed flip triggers for the two facet-settlement OPEN rows."""
 
     module_source = (PACKAGE_ROOT / "_data_classes/module.py").read_text()
@@ -159,7 +160,7 @@ def test_open_row_facet_settlement_triggers() -> None:
     )
 
 
-def test_open_row_read_policy_and_edit_spec_doors_absent() -> None:
+def check_open_row_read_policy_and_edit_spec_doors_absent() -> None:
     """Armed flip triggers: landing either door must flip its census row."""
 
     source = _package_source()
@@ -169,3 +170,22 @@ def test_open_row_read_policy_and_edit_spec_doors_absent() -> None:
     assert "def register_edit_spec_provider" not in source, (
         "an edit-spec provider door landed -- flip SEAM_DISPOSITIONS['edit_spec_providers']"
     )
+
+
+CHECKS = (
+    check_census_prints_the_disposition_table,
+    check_met_doors_are_importable_through_their_public_spellings,
+    check_open_row_term_resolvers_trigger,
+    check_open_row_facet_settlement_triggers,
+    check_open_row_read_policy_and_edit_spec_doors_absent,
+)
+
+
+def main() -> int:
+    """Run every arch_tail_seam_census check and return the exit status."""
+
+    return run_checks("arch_tail_seam_census", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
