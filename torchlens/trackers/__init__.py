@@ -32,6 +32,7 @@ own receivers -- TorchLens owns the engine, they own the sink.
 
 from __future__ import annotations
 
+from ..observability._artifact import HistoryReader
 from ._amp import (
     SCALE_EVIDENCE,
     correct_histogram,
@@ -115,6 +116,7 @@ __all__ = [
     "GraphNodeIR",
     "HFTrainerWatchCallback",
     "HistogramPoint",
+    "HistoryReader",
     "JSONLSink",
     "LightningWatchCallback",
     "MLflowSink",

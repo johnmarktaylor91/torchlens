@@ -44,7 +44,7 @@ and the CircuitsVis bridge without re-derivation:
 | `TokenMetrics` | per-token loss / per-context entropy strips |
 | `ScoreDecomposition` | the BertViz neuron-view data (term-complete) |
 | `CausalReceipt` / `Annotation` | measured-effect attachment (closed 4-kind grammar) |
-| `Artifact` | every save's result: paths + every rendered disclosure line |
+| `SavedFigure` | every save's result: paths + every rendered disclosure line |
 
 Attention semantics are fixed and printed: canonical
 `[query_head, destination_query, source_key]` layout, "rows attend from

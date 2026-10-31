@@ -186,7 +186,7 @@ class TestPredictionPictures:
 
         table = tviz.prediction_table(_predictions())
         artifact = tviz.render_prediction_table(table, tmp_path / "table.pdf")
-        assert artifact.pages_total == 1
+        assert artifact.num_pages == 1
         assert artifact.paths[0].exists()
 
 

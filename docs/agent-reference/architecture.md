@@ -110,7 +110,7 @@ Key entry points:
 - Transformer pictures (`torchlens.tviz`; every spelling DOCUMENTED-UNSTABLE
   pending the naming session): typed session-only display records
   (`AttentionView`/`TokenScores`/`PredictionTrajectory`/`PredictionTable`/
-  `TokenMetrics`/`ScoreDecomposition`/`CausalReceipt`/`Annotation`/`Artifact`)
+  `TokenMetrics`/`ScoreDecomposition`/`CausalReceipt`/`Annotation`/`SavedFigure`)
   under matplotlib renderers resolved at CALL time (`tv_matplotlib_missing`
   prints the `torchlens[viz]` install command; zero-dependency SVG/HTML token
   emitters keep bare installs alive). Attention views read the semantic

@@ -1150,7 +1150,7 @@ class SavedFigure:
     paths:
         Written files in page order (pagination never silently drops;
         every page is listed).
-    format:
+    file_format:
         ``"png"`` / ``"svg"`` / ``"pdf"`` / ``"html"``.
     title:
         Figure title as rendered.
@@ -1163,7 +1163,7 @@ class SavedFigure:
     svg_fonttype:
         The matplotlib ``svg.fonttype`` used (``"path"`` default; ``"none"``
         is the editing opt-in), recorded per the memo's manifest rule.
-    pages_total:
+    num_pages:
         Total page count (equals ``len(paths)`` for file output).
     """
 

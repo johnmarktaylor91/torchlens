@@ -23,7 +23,6 @@ here is DOCUMENTED-UNSTABLE pending naming-session ratification.
 from __future__ import annotations
 
 from ..ir.summary_role import SummaryTransform, is_summary_transform, summary
-from ._artifact import HistoryReader
 from ._chassis import EventStream, ObserverEvent
 from ._collector import HistoryCollector, StepTruth, WatchPlan, WatchSettings
 from ._errors import (
@@ -146,7 +145,6 @@ __all__ = [
     "HistogramResult",
     "HistoryArtifactError",
     "HistoryCollector",
-    "HistoryReader",
     "HistorySchemaError",
     "HistoryView",
     "FacetSplitter",

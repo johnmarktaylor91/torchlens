@@ -132,7 +132,7 @@ def test_pagination_drops_nothing(tmp_path: Path) -> None:
         layer="blk.0.attn",
     )
     artifact = tviz.render_attention(wide, tmp_path / "wide.png")
-    assert artifact.pages_total == 2
+    assert artifact.num_pages == 2
     assert len(artifact.paths) == 2
     assert all(path.exists() for path in artifact.paths)
 
@@ -148,7 +148,7 @@ def test_atlas_overview_plus_detail_pages(view: tviz.AttentionView, tmp_path: Pa
         layer="blk.1.attn",
     )
     artifact = tviz.render_attention_atlas([view, second], tmp_path / "atlas.svg")
-    assert artifact.pages_total == 3
+    assert artifact.num_pages == 3
     assert all("<image" not in path.read_text() for path in artifact.paths)
     assert any("detail pages follow" in line for line in artifact.disclosure_lines)
 

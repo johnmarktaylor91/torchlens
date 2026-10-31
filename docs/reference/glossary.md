@@ -2574,7 +2574,7 @@ deprecation shim owed*
   row reproduces the model's own output scores. `title=` prefixes the
   figure title with a subject such as the model's name. Lenses
   wider than 48 positions refuse `tv_record_invalid` until `positions=`
-  names the columns; nothing is cropped silently. Returns an `Artifact`.
+  names the columns; nothing is cropped silently. Returns a `SavedFigure`.
 
 **kv-group receipts (torchlens.tviz)** — *unstable — no deprecation shim owed*
 : `tviz.receipt_from_patch_grid(grid, ..., kv_groups=tviz.GqaInfo(...))`

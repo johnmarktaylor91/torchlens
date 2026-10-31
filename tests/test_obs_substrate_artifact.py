@@ -12,7 +12,6 @@ import torch
 from torchlens.observability import (
     Histogram,
     HistoryArtifactError,
-    HistoryReader,
     ObservationRecord,
     RunRecord,
     SiteRecord,
@@ -20,6 +19,7 @@ from torchlens.observability import (
     StepBlockRecord,
 )
 from torchlens.observability._artifact import CommittedBlock, HistoryWriter, RamRing, coarsen_pair
+from torchlens.trackers import HistoryReader
 
 
 def _run(run_id: str = "run-a", segment_id: str = "seg-a") -> RunRecord:

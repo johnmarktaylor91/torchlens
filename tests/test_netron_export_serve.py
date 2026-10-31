@@ -44,7 +44,7 @@ def _serve_roundtrip(log: Any, tmp_path: Path, **kwargs: Any) -> tuple[bytes, by
 
     webbrowser.open = _capture
     try:
-        path = tl.export.netron(log, tmp_path / "served.json", open=True, **kwargs)
+        path = tl.export.netron(log, tmp_path / "served.json", serve=True, **kwargs)
         assert opened, "the one-liner opens exactly one browser tab"
         with urllib.request.urlopen(opened[0].rstrip("/") + "/data/served.json") as reply:
             served = reply.read()
@@ -96,7 +96,7 @@ def test_missing_netron_package_refuses_teaching(
     monkeypatch.setattr(builtins, "__import__", _no_netron)
     log = tl.trace(nn.Sequential(nn.ReLU()), torch.randn(1, 2))
     with pytest.raises(tl.errors.ConfigurationError) as excinfo:
-        tl.export.netron(log, tmp_path / "x.json", open=True)
+        tl.export.netron(log, tmp_path / "x.json", serve=True)
     assert excinfo.value.fields["code"] == "netron_serve_unavailable"
     assert "torchlens[netron]" in str(excinfo.value)
     assert (tmp_path / "x.json").exists(), "the FILE lands before the serve refusal"
