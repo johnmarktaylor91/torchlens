@@ -36,7 +36,7 @@ from torchlens.attribution._core import (
     _target_repr,
     _temporarily_eval,
 )
-from torchlens.intervention import mean_ablate, zero_ablate
+from torchlens.intervention.helpers import mean_ablate, zero_ablate
 from torchlens.selection import ResolvedSelection, Selection
 
 # Deterministic per-engine pass budgets (attrib memo D9), sized by the

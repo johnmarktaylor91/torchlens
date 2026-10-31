@@ -1180,8 +1180,8 @@ def _apply_replay_hooks(
             name=_hook_name(entry),
             timing="post",
             direction="forward",
-            layer_log=site,
-            run_ctx=run_ctx,
+            op=site,
+            run_context=run_ctx,
             args=(current,),
             kwargs={},
         )
@@ -1193,7 +1193,7 @@ def _apply_replay_hooks(
             entry.normalized_callable,
             current,
             context,
-            force_shape_change=bool(entry.metadata.get("force_shape_change", False)),
+            allow_shape_change=bool(entry.metadata.get("allow_shape_change", False)),
         )
         records.append(
             _replay_fire_record(

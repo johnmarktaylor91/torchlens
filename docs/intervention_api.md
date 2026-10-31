@@ -93,17 +93,16 @@ Forward helpers return `Edit` objects that can be passed to `set`,
 
 | Helper | Signature | Portability |
 | --- | --- | --- |
-| `tl.zero_ablate` | `zero_ablate(*, force_shape_change=False)` | Portable built-in; append-compatible unless shape changes are forced. |
-| `tl.mean_ablate` | `mean_ablate(source=None, *, over="self", force_shape_change=False)` | Portable for supported tensor/self sources; batch-dependent policies can block append. |
-| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, force_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
-| `tl.steer` | `steer(direction, magnitude=1.0, *, coef=None, feature_axis=None, force_shape_change=False)` | Portable when `direction` is serializable tensor data. |
-| `tl.scale` | `scale(factor, *, force_shape_change=False)` | Portable built-in and append-compatible. |
-| `tl.clamp` | `clamp(*, min=None, max=None, force_shape_change=False)` | Portable built-in and append-compatible. |
-| `tl.noise` | `noise(std, *, seed=None, force_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
-| `tl.project_onto` | `project_onto(direction, *, feature_axis=None, force_shape_change=False)` | Portable when `direction` is tensor data. |
-| `tl.project_off` | `project_off(direction, *, feature_axis=None, force_shape_change=False)` | Portable when `direction` is tensor data. |
-| `tl.swap_with` | `swap_with(other_label, *, force_shape_change=False)` | Tensor and Op-like (`.out`) sources work in memory; **string labels are not supported and raise `HookValueError` immediately** -- no execution path resolves a bare label to another site's tensor today. |
-| `tl.splice_module` | `splice_module(module, *, input="in", output="out", force_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
+| `tl.zero_ablate` | `zero_ablate(*, allow_shape_change=False)` | Portable built-in; append-compatible unless shape changes are forced. |
+| `tl.mean_ablate` | `mean_ablate(source=None, *, dim="self", allow_shape_change=False)` | Portable for supported tensor/self sources; batch-dependent policies can block append. |
+| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, allow_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
+| `tl.steer` | `steer(direction, strength=1.0, *, coef=None, dim=None, allow_shape_change=False)` | Portable when `direction` is serializable tensor data. |
+| `tl.scale` | `scale(factor, *, allow_shape_change=False)` | Portable built-in and append-compatible. |
+| `tl.clamp` | `clamp(*, low=None, high=None, allow_shape_change=False)` | Portable built-in and append-compatible. |
+| `tl.add_noise` | `add_noise(std, *, seed=None, allow_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
+| `tl.project_onto` | `project_onto(direction, *, dim=None, allow_shape_change=False)` | Portable when `direction` is tensor data. |
+| `tl.project_out` | `project_out(direction, *, dim=None, allow_shape_change=False)` | Portable when `direction` is tensor data. |
+| `tl.splice_module` | `splice_module(module, *, input="in", output="out", allow_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
 
 The packaged SAE splice experiment, `torchlens.bridge.sae.splice(...)`
 (documented-unstable), composes `splice_module` with fork + push: it swaps a
@@ -120,9 +119,9 @@ Backward helpers are Tier-1 live/rerun-only helpers.
 
 | Helper | Signature | Portability |
 | --- | --- | --- |
-| `tl.bwd_hook` | `bwd_hook(fn)` | Live/rerun-only; not portable. |
-| `tl.grad_zero` | `grad_zero(*, force_shape_change=False)` | Live/rerun-only; not portable. |
-| `tl.grad_scale` | `grad_scale(factor, *, force_shape_change=False)` | Live/rerun-only; not portable. |
+| `tl.hook_grad` | `hook_grad(fn)` | Live/rerun-only; not portable. |
+| `tl.zero_grad` | `zero_grad(*, allow_shape_change=False)` | Live/rerun-only; not portable. |
+| `tl.scale_grad` | `scale_grad(factor, *, allow_shape_change=False)` | Live/rerun-only; not portable. |
 
 Hook callables receive one positional tensor and a required keyword-only
 `hook` context. For forward hooks the positional tensor is the activation; for
@@ -209,7 +208,7 @@ For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
 | --- | --- |
 | `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
 | `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
-| `log.do(...)` / `tl.do(log, ...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
+| `log.do(...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
 | `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
 | `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
@@ -318,4 +317,4 @@ operands they actually read.
 
 | TransformerLens pattern | TorchLens pattern |
 | --- | --- |
-| `act_patch` attribution patching | Attach a `tl.bwd_hook(...)` gradient observer at the site, then `log.run(model, x)` under the active spec and score from the captured gradients/outs. |
+| `act_patch` attribution patching | Attach a `tl.hook_grad(...)` gradient observer at the site, then `log.run(model, x)` under the active spec and score from the captured gradients/outs. |

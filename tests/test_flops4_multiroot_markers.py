@@ -204,7 +204,7 @@ def _census_refs(
 
     record = trace.backward_passes[pass_index - 1]
     refs = set()
-    for op in record.dispatched_ops:
+    for op in record.aten_ops:
         ref = op.grad_fn_call_ref
         grad_fn = None if ref is None else trace.grad_fn_logs.get(ref[0])
         if grad_fn is not None and (grad_fn.has_op or not own_ops_only):

@@ -13,6 +13,8 @@ import torch
 import torch.nn.modules.module as torch_module
 from torch import nn
 
+from torchlens.ir.events import PreHookProvenanceEvent
+
 from ... import _state
 from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.module import HookInfo
@@ -22,7 +24,6 @@ from ...data_classes.prehook import (
     TensorInputObservation,
     TypedInputPath,
 )
-from ...ir import PreHookProvenanceEvent
 from ._tl import get_tensor_label
 
 if TYPE_CHECKING:

@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._debug_report import FoundReport, rows_of
-from ._first_bad import FirstBadThing, amp_scaled_gradients_hint
+from ._first_bad import FirstBadThing, amp_scaled_grads_hint
 
 if TYPE_CHECKING:
     from torchlens.data_classes.trace import Trace
@@ -551,7 +551,7 @@ def bisect_nan_backward(
             None,
         )
         if first_bad_kind == "inf":
-            amp_hint = amp_scaled_gradients_hint(all_nonfinite=True)
+            amp_hint = amp_scaled_grads_hint(all_nonfinite=True)
 
     message = _compose_message(walk, verdict_scope=verdict_scope, bwd=bwd, amp_hint=amp_hint)
 

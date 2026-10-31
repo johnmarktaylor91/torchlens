@@ -271,7 +271,7 @@ def test_paddle_unknown_helper_refuses_typed() -> None:
             _mlp,
             _inputs(),
             backend="paddle",
-            intervene=tl.when(tl.func("functional.relu"), tl.noise(0.1)),
+            intervene=tl.when(tl.func("functional.relu"), tl.add_noise(0.1)),
         )
 
 

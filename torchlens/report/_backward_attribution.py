@@ -1,7 +1,7 @@
 """Executed-backward FLOPs attributed to the node and forward op that did the work.
 
 A captured backward records every ATen call it dispatched
-(``BackwardPass.dispatched_ops``), each tagged with the GradFn call it ran
+(``BackwardPass.aten_ops``), each tagged with the GradFn call it ran
 under. This module charges every counted call to that GradFn call and to the
 forward op the node differentiates (``GradFn.op_label``). A call that ran
 under no recorded node (the engine's seed gradient, nodes outside the walk)

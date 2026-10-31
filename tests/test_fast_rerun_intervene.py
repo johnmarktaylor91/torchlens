@@ -246,7 +246,7 @@ def _spec(direction: torch.Tensor) -> Any:
         Intervention spec.
     """
 
-    return tl.when(tl.module(_SITE), tl.steer(direction, magnitude=_MAGNITUDE, feature_axis=-1))
+    return tl.when(tl.module(_SITE), tl.steer(direction, strength=_MAGNITUDE, dim=-1))
 
 
 def _steered_trace(model: nn.Module, direction: torch.Tensor, ids: torch.Tensor) -> Any:
@@ -670,7 +670,7 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     trace.clear_hooks(confirm_mutation=True)
     trace.attach_hooks(
         tl.module(_SITE),
-        tl.steer(other, magnitude=_MAGNITUDE, feature_axis=-1),
+        tl.steer(other, strength=_MAGNITUDE, dim=-1),
         confirm_mutation=True,
     )
     restaged = trace.run(inputs=ids, fast=True)
@@ -710,7 +710,7 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     trace = tl.trace(model, ids, save=tl.module(_SITE) | tl.module(_HEAD))
     trace.attach_hooks(
         tl.module(_SITE),
-        tl.steer(direction, magnitude=_MAGNITUDE, feature_axis=-1),
+        tl.steer(direction, strength=_MAGNITUDE, dim=-1),
         confirm_mutation=True,
     )
     assert _SITE not in graph_fired_addresses(trace)

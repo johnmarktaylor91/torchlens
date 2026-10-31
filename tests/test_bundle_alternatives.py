@@ -20,7 +20,6 @@ import torch
 import torchlens as tl
 from torchlens.bundle import AlternativeReport, Bundle, TokenDivergence
 from torchlens.errors.episode import BundleRelationError
-from torchlens.intervention import at_positions
 
 
 class _TinyCausalLM(torch.nn.Module):
@@ -42,7 +41,7 @@ class _TinyCausalLM(torch.nn.Module):
 torch.manual_seed(0)
 _LM = _TinyCausalLM().eval()
 _Q = torch.tensor([[20, 21, 22]])
-_STEER = tl.when(tl.module("block"), tl.steer(torch.randn(16), magnitude=6.0, feature_axis=-1))
+_STEER = tl.when(tl.module("block"), tl.steer(torch.randn(16), strength=6.0, dim=-1))
 
 
 def _generate(model: Any, ids: torch.Tensor, seed: int) -> torch.Tensor:
@@ -164,8 +163,8 @@ def test_unchanged_call_that_diverged_refuses_and_adds_nothing() -> None:
 
 
 def _position_steer() -> Any:
-    edit = at_positions(
-        tl.steer(torch.randn(16), magnitude=6.0, feature_axis=-1), "last", assume_no_padding=True
+    edit = tl.positions(
+        tl.steer(torch.randn(16), strength=6.0, dim=-1), "last", assume_no_padding=True
     )
     return tl.when(tl.module("block"), edit)
 

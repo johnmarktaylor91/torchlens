@@ -70,14 +70,14 @@ def test_swap_with_string_label_raises_immediately() -> None:
     """
 
     with pytest.raises(HookValueError, match="not implemented"):
-        tl.swap_with("linear_1_1")
+        tl.intervention.helpers.swap_with("linear_1_1")
 
 
 def test_swap_with_string_label_error_names_alternatives() -> None:
     """The error message must point at the supported tensor / Op-like forms."""
 
     with pytest.raises(HookValueError) as excinfo:
-        tl.swap_with("some_layer")
+        tl.intervention.helpers.swap_with("some_layer")
 
     message = str(excinfo.value)
     assert "torch.Tensor" in message
@@ -102,7 +102,7 @@ def test_swap_with_tensor_form_still_works_in_real_intervention() -> None:
         model,
         x,
         save=tl.func("linear"),
-        intervene=tl.when(tl.in_module("b"), tl.swap_with(replacement)),
+        intervene=tl.when(tl.in_module("b"), tl.intervention.helpers.swap_with(replacement)),
     )
 
     result = swapped["linear_2_2"].out
@@ -119,7 +119,9 @@ def test_swap_with_tensor_form_still_works_in_real_intervention() -> None:
         model,
         x,
         save=tl.func("linear"),
-        intervene=tl.when(tl.in_module("b"), tl.swap_with(baseline["linear_1_1"])),
+        intervene=tl.when(
+            tl.in_module("b"), tl.intervention.helpers.swap_with(baseline["linear_1_1"])
+        ),
     )
     assert torch.allclose(op_swapped["linear_2_2"].out, first_layer_out)
 

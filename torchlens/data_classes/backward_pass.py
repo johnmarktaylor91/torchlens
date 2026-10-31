@@ -152,7 +152,7 @@ class BackwardPass:
         """The persisted form of this pass's census attribution, if it has one."""
 
         trace = self.source_trace
-        ops = self.dispatched_ops
+        ops = self.aten_ops
         if trace is None or ops is None:
             return None
         from ..report._backward_attribution import attribute_census, executed_flops_record
@@ -229,7 +229,7 @@ class BackwardPass:
         return self.source_trace
 
     @property
-    def dispatched_ops(self) -> tuple[Any, ...] | None:
+    def aten_ops(self) -> tuple[Any, ...] | None:
         """The ATen calls this backward pass dispatched (DOCUMENTED-UNSTABLE).
 
         One value-free ``DispatchedOp`` per call (operator, shapes, dtypes,
@@ -257,7 +257,7 @@ class BackwardPass:
         its count (a loaded trace reads the saved record).
         """
         trace = self.source_trace
-        ops = self.dispatched_ops
+        ops = self.aten_ops
         from ..report._backward_attribution import attribute_census, attribution_from_record
 
         if trace is not None and ops is not None:

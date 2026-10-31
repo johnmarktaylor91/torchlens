@@ -422,7 +422,7 @@ def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -
 
         fork = trace.fork()
         try:
-            fork.do(target, tl.mean_ablate(over="self"))
+            fork.do(target, tl.mean_ablate(dim="self"))
             edited = None
             for op in fork.output_ops:
                 if getattr(op.out, "dim", lambda: 0)() == 3:
@@ -436,7 +436,7 @@ def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -
 
         for bad_token in ("position", "positon", "batch"):
             with pytest.raises(Exception) as excinfo:
-                tl.mean_ablate(over=bad_token)
+                tl.mean_ablate(dim=bad_token)
             message = str(excinfo.value)
             assert "over" in message and "self" in message, (
                 f"over={bad_token!r} refused without teaching the closed"

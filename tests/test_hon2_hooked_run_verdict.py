@@ -52,7 +52,7 @@ def _x(seed: int) -> torch.Tensor:
 
 
 def _steered(model: nn.Module, direction: torch.Tensor) -> tl.Trace:
-    spec = tl.when(tl.module("block"), tl.steer(direction, magnitude=3.0, feature_axis=-1))
+    spec = tl.when(tl.module("block"), tl.steer(direction, strength=3.0, dim=-1))
     return tl.trace(model, _x(0), save=tl.module("block") | tl.module("head"), intervene=spec)
 
 

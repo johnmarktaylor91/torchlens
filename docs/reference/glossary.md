@@ -483,13 +483,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   bound executor that applies a spec to live calls. A synchronous generator or iterator returned
   by a bound call (for example `bound.generate(...)`) stays steered for every step, and its report
   settles on `last_report` when the iteration is exhausted, closed or raises; an async lazy output
-  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`, as does a lazy
-  `generate` output under `torchlens.intervention.steer_generate`, whose report must settle
-  before it returns.
+  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`.
 
 **Zero-fire policy (`on_zero_fire`)** *(spelling documented-unstable)*
-: One knob on every intervention door: `spec.bind`, `torchlens.intervention.steer_generate`,
-  `tl.trace(intervene=)` and `Trace.run`. An intervention that fires at zero sites is always
+: One knob on every intervention door: `spec.bind`, `tl.trace(intervene=)` and `Trace.run`. An intervention that fires at zero sites is always
   recorded on the door's own record (the bind report's `zero_fire_rule_ids`, the capture's
   `annotations["unmatched_capture_selectors"]` and intervention audit, the rerun's
   `last_run["hooks_unfired"]`). The knob then decides the same way everywhere: `"warn"`
@@ -500,18 +497,42 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   whatever the knob says.
 
 **Bound intervention executor** *(spelling documented-unstable)*
-: `spec.bind(model)` pairs an `InterventionSpec` with a base model as a capture-free callable.
+: `spec.bind(model)` pairs a `tl.Recipe` with a base model as a capture-free callable and
+  returns a `tl.intervention.BoundModel`; its read-only `BoundModel.recipe` is the bound
+  `tl.Recipe` and `BoundModel.model` the base model.
   It runs the model with the spec's edits held live, returns the model's own output, records
   only a firing report (`.last_report`), and supports HF `generate` with the KV cache on or off.
   It is not an `nn.Module` and bindings never nest; a rule that never fires is recorded on
-  `.last_report` and settles by `on_zero_fire` (see **Zero-fire policy**). `torchlens.intervention.steer_generate` is one-call sugar for
-  `spec.bind(model).generate(...)`. Decode steps: the binding counts root forwards, so
+  `.last_report` and settles by `on_zero_fire` (see **Zero-fire policy**). Decode steps: the binding counts root forwards, so
   `torchlens.intervention.at_step(k)` on a bound call or `generate` names the k-th forward
   (step 0 is the prefill), on op-level rules and as `tl.module(address) & at_step(...)`
   boundary rules, capture-free; outside a binding or an episode capture the qualifier still
-  refuses `episode_step_selector_without_episode`. Gradient edits (`tl.grad_zero`,
-  `tl.grad_scale`, `tl.bwd_hook`, ...) refuse `bind_rule_unsupported`: the lane replaces forward
+  refuses `episode_step_selector_without_episode`. Gradient edits (`tl.zero_grad`,
+  `tl.scale_grad`, `tl.hook_grad`, ...) refuse `bind_rule_unsupported`: the lane replaces forward
   values only; edit gradients on a `backward_ready` trace and call `trace.backward(loss)`.
+
+**Recipe and Rule** *(spelling documented-unstable)*
+: `tl.Recipe` is the immutable multi-clause intervention spec that `tl.when(...)` builds and every
+  intervention door accepts. `Recipe.rules` is the tuple of its clauses, each a
+  `tl.intervention.Rule` with `target` (the selector or predicate), `edit` (the helper or
+  callable) and `direction` (`"forward"`, `"backward"`, `"both"` or `None`). `Recipe.merge(*others)`
+  (also `recipe_a & recipe_b`) returns one `tl.Recipe` joining the clauses; a duplicate clause
+  refuses `spec_rules_duplicate`.
+
+**Trace.recipe and Trace.clear_edits**
+: `Trace.recipe` is a frozen snapshot of the trace's current intervention recipe.
+  `Trace.clear_edits(site=None, handle=None, *, strict=False, confirm_mutation=False)` removes the
+  sticky edits attached with `attach_hooks` by site or by handle, marks the recipe stale and
+  returns the trace; with `strict=True` it refuses a call that names neither or matches nothing.
+
+**Region instances** *(spellings documented-unstable)*
+: A region edit's admissible region is partitioned into pass instances. `RegionTarget.labels`
+  lists the region's pass-qualified member op labels in execution order; each `RegionInstance`
+  carries `RegionInstance.labels` (that instance's member labels) and
+  `RegionInstance.exit_labels` (its exit op labels, in the order the replacement function must
+  return its tensors; the `labels=` and `exit_labels=` constructor fields). A replacement
+  returning several exits returns a tuple of
+  `len(exit_labels)` tensors.
 
 **allow_changed_params** (`InterventionOptions`, `ReplayOptions`) *(spelling documented-unstable)*
 : A replay template holds the live `nn.Parameter` each call consumed, and capture records its
@@ -528,18 +549,18 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   captured object. For an as-if weight edit use `fork.do(tl.params(name), edit)`. The rerun
   engine runs the live model and ignores the option.
 
-**torchlens.intervention.subspace_ablate(basis, *, mode="zero", feature_axis=-1, mean=None, seed=None)** — *documented-unstable*
+**torchlens.intervention.subspace_ablate(basis, *, mode="zero", dim=-1, mean=None, seed=None)** — *documented-unstable*
 : Edit acting on the component of a site value inside the span of a `[k, d]` basis (rows need
   not be orthonormal; a rank-deficient or non-finite basis refuses `subspace_basis_invalid`).
   With `P` the orthogonal projector onto the span: `mode="zero"` gives `x - P x` (the
-  k-dimensional `project_off`), `mode="mean"` gives `x - P x + P mean`, and `mode="resample"`
+  k-dimensional `project_out`), `mode="mean"` gives `x - P x + P mean`, and `mode="resample"`
   gives `x - P x + P x[perm]` for a seeded batch permutation (`seed=` required). Inconsistent
   mode arguments refuse `subspace_mode_invalid`; a basis over the wrong width refuses
   `subspace_basis_dim_mismatch` at fire time. Zero mode on the span of class-mean differences
   is the LEACE mean-equalizing erasure.
 
-**torchlens.intervention.affine_source(weight, *, bias=None)** — *documented-unstable*
-: Source verb for a subspace edit: under `do(tl.subspace(site, R.T, origin=...), affine_source(W,
+**torchlens.intervention.set_affine_coordinates(weight, *, bias=None)** — *documented-unstable*
+: Source verb for a subspace edit: under `do(tl.subspace(site, R.T, origin=...), set_affine_coordinates(W,
   bias=b))` the new coordinates are `W x + b` of the whole site value `x`, so the site gets
   `x + Q^T (W x + b - Q x)` with `Q` the basis rows (LoReFT, `h + R (W h + b - R^T h)`). `weight` is
   a finite real `[k, d]` tensor shaped like the basis rows, `bias` `None` or a finite real `[k]`
@@ -548,7 +569,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   saves inside the `subspace_edit` payload, `weight` and `bias` as tensor sidecars. TorchLens
   applies a LoReFT edit trained elsewhere and never fits one.
 
-**torchlens.intervention.subspace_interchange(basis, source, *, feature_axis=-1)** — *documented-unstable*
+**torchlens.intervention.subspace_interchange(basis, source, *, dim=-1)** — *documented-unstable*
 : k-dimensional basis interchange: `x - P x + P s`, with `s` the source trace's value at the
   same site (same-site donor resolution as `tl.patch_from`); applies a learned rotation the
   user trained elsewhere.
@@ -572,7 +593,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (`edit_detached_from_graph` at fire time when the written values carry no graph). `False`, the
   default, checks nothing. MLX refuses `keep_grad=True`.
 
-**torchlens.intervention.at_positions(edit, positions, *, mask=None, assume_no_padding=False, axis=1)** — *documented-unstable*
+**torchlens.positions(edit, positions, *, mask=None, assume_no_padding=False, axis=1)** — *documented-unstable*
 : Restricts a same-shape edit to chosen token positions of a `(batch, tokens, ...)` site value
   (token-position editing): `positions` is an int, a list of ints, a slice, a per-row
   `(batch,)` index tensor, or `"first"` / `"last"`, the first or last REAL token of each row
@@ -581,7 +602,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   value refuses `transform_mask_incompatible`). Unsupported spellings refuse
   `position_edit_invalid`; positions past the sequence refuse `position_edit_out_of_range`.
 
-**tl.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff", *, read_token_index=-1)** — *documented-unstable*
+**tl.intervention.fit_direction(pos_traces, neg_traces, site, method="mean_diff", *, read_token_index=-1)** — *documented-unstable*
 : Builds one contrastive steering direction from saved activations. `pos_traces` and
   `neg_traces` are a trace or a sequence of traces with one prompt per batch row; row `i` of the
   negatives pairs with row `i` of the positives. One token per prompt is read at `site`
@@ -590,16 +611,16 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `"mean_diff"` is `D.mean(0)` on the activation scale; `"pca"` is the first uncentered
   principal axis of `D`, unit norm, signed toward the positives; `"logistic"` is L2 logistic
   regression (`C = 1`, no intercept) of `D / 2` against `-D / 2`, solved with torch only, unit
-  norm. Also `torchlens.intervention.direction_from_pairs`. Returns a `Direction`. Refusals use
+  norm. Also `torchlens.intervention.fit_direction`. Returns a `Direction`. Refusals use
   the `direction_*` codes of the error contract.
 
 **Direction (`torchlens.intervention.Direction`)** — *documented-unstable*
-: The frozen result of `direction_from_pairs`: `vector` (1-D, the rows' dtype), `site`,
-  `method`, `n_pairs`, `read_token_index`, `model_type` (the traced model's
+: The frozen result of `fit_direction`: `vector` (1-D, the rows' dtype), `site`,
+  `method`, `num_pairs`, `read_token_index`, `model_type` (the traced model's
   `config.model_type`, or `None`) and `provenance`, a
   `torchlens.selection_subspace.BasisProvenance` whose origin records the site, method, pair
   count, read position and a sha256 digest of the rows, and whose `sha256` is the digest of
-  the canonical float64 vector. `direction.steer(m)` is `tl.steer(vector, m, feature_axis=-1)`;
+  the canonical float64 vector. `direction.steer(m)` is `tl.steer(vector, m, dim=-1)`;
   place it with `tl.when(tl.module(direction.site), ...)`. `direction.to_steering_vectors()`,
   `direction.to_repeng()` and `direction.to_dialz()` convert it to a real
   `steering_vectors.SteeringVector`, `repeng.ControlVector` and `dialz.SteeringVector` without
@@ -1020,18 +1041,21 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 ## Intervention helpers
 
 **Value helpers**
-: `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.noise` (Gaussian noise),
+: `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.add_noise` (Gaussian noise),
   `tl.mean_ablate` (replace with a source mean), `torchlens.intervention.scramble_elements`
   (elementwise iid scramble from a flattened source -- the honest rename of
   the removed `resample_ablate` spelling, which a saved spec may not name either: it refuses
   `intervention_helper_renamed`; for coherent donor patching use
-  `tl.patch_from`), `tl.replace_with` (fixed value), `tl.swap_with` (another
-  site's tensor), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
-  `tl.project_off` (keep or remove the component along a direction), and
+  `tl.patch_from`), `tl.replace_with` (fixed value), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
+  `tl.project_out` (keep or remove the component along a direction), and
   `tl.splice_module` (call a module as a black-box forward splice). Availability outside
   the torch backend is narrower; see the per-backend rosters in the backends guide.
-  Tensor-carrying helpers (`tl.steer`, `tl.mean_ablate`, `tl.project_onto`, `tl.project_off`,
-  `tl.swap_with`) keep the caller's tensor by reference. Each staged entry records a
+  The value helpers take the keyword-only `allow_shape_change=` (default `False`), which
+  allows the edit to change the site's output shape; by default the edit must preserve it. `tl.steer`
+  also takes `strength=` (its second argument, default `1.0`), the multiplier applied to the
+  steering direction.
+  Tensor-carrying helpers (`tl.steer`, `tl.mean_ablate`, `tl.project_onto`, `tl.project_out`)
+  keep the caller's tensor by reference. Each staged entry records a
   full-content digest of those tensors when it is staged; a rerun and `save_intervention`
   refuse `helper_tensor_changed_since_capture` once the tensor changed (in place or through
   `.data`). Re-stage the edit to use the new value. A bound executor (`spec.bind(model)`) reads
@@ -1040,14 +1064,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   keyed by the rule id the call started with (a rule id follows its tensor's content).
 
 **Backward helpers**
-: `tl.bwd_hook` builds a live/rerun-only backward hook; `tl.grad_zero`, `tl.grad_scale`,
-  `tl.grad_clamp`, `tl.grad_clip`, and `tl.grad_noise` edit gradient tensors during the
-  backward pass.
+: `tl.hook_grad` builds a live/rerun-only backward hook; `tl.zero_grad`, `tl.scale_grad`,
+  `tl.clamp_grad`, `tl.clip_grad`, and `tl.add_grad_noise` edit gradient tensors during the
+  backward pass. `tl.zero_grad` and `tl.scale_grad` also take `allow_shape_change=`, with the
+  same meaning as on the value helpers.
 
 **Replay verbs**
-: `tl.do` applies a one-shot intervention to a captured log; `tl.push` pushes an edit
-  downstream through the recorded graph (DAG replay) and `tl.push_from` pushes from a
-  pre-mutated site; `tl.run` performs a full-forward run with the log's active
+: `Trace.do` applies a one-shot intervention to a captured log; `Trace.push` pushes an edit
+  downstream through the recorded graph (DAG replay) and `Trace.push_from` pushes from a
+  pre-mutated site; `Trace.run` performs a full-forward run with the log's active
   intervention spec; `tl.sweep` captures one intervened trace per swept replacement
   value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) The replay engine operates on pass-qualified op labels
   (`label:pass`): cone traversal, the replay overlay, hook targets, and commits are
@@ -1059,7 +1084,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   Engines treat the trace's staged spec as read-only: a rerun (plain, append, or
   chunked), a failed or interrupted rerun, and a fork leave it exactly as staged.
   A capture-time `intervene=` predicate that is not lowered to module hooks stages
-  one entry per fired op on its final label; `tl.run` re-arms the trace's retained
+  one entry per fired op on its final label; `Trace.run` re-arms the trace's retained
   predicate through the capture door instead, and refuses
   `rerun_predicate_restage_mismatch` (trace unchanged) when the predicate fires at
   different ops than the staged entries name, or at the same ops with changed rule content
@@ -1358,6 +1383,20 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   pass-qualified Ops; `tl.ReentrantTraceError` when a trace is started while another
   trace is active.
 
+**Report disclosure helpers** *(spellings documented-unstable)*
+: `tl.report.amp_scaled_grads_hint(*, all_nonfinite=False)` returns the shared text that names a
+  possible `torch.amp.GradScaler` loss scale behind large or non-finite gradients and the
+  `grad_scale=` remedy; it edits no rows or verdicts. `tl.report.flops_vs_dispatch(model,
+  input_args=None, input_kwargs=None, *, sdpa_backend=None, **trace_kwargs)` runs the detached
+  two-way FLOP cross-check on one model and input and returns a `FlopsCrossCheck` holding both
+  totals, the per-overload native ledger and the coverage notes.
+
+**Output-difference metrics**
+: `tl.stats.cosine_distance(a, b)` is `1 - cosine_similarity` of the two flattened tensors;
+  `tl.stats.relative_l2(a, b)` is `norm(a - b) / max(norm(a), eps)`; `tl.stats.relative_l1(a, b)`
+  is `|a - b| / max(|a|, eps)`, the scalar fallback. Each returns a 0-d tensor; `relative_l1` and
+  `relative_l2` are anchored on `a`, and mismatched element counts refuse typed.
+
 ## Distributed capture and cross-rank merging
 
 **Distributed arming**
@@ -1429,7 +1468,7 @@ shims, by declared contract. Each carries the same tag at its definition.
 : Make (or stop making) an SAE's latents the facet family `name` at `site`.
   `tl.facet(name).latent(k)` then addresses latent `k` at the doors a
   `tl.head` selector serves (`Trace.set`, `attach_hooks`, `Trace.do`,
-  `fork().do`, `tl.do`; and, as a bare selector, `trace[selector]` and
+  `fork().do`; and, as a bare selector, `trace[selector]` and
   `trace.resolve_sites(selector)`, which return the `Facet` whose `.value` is
   the read, and `tl.trace(save=selector)`, which keeps the ops that read
   needs), and `trace[site].facets[name]` (every latent),
@@ -1899,7 +1938,7 @@ deprecation shim owed*
   float64). Under `do()` the edit acts on the COMPONENT along the span of the
   basis rows: with `Q` the rows, on the coordinates `c = Q x`, written back as
   `x + Q^T (edit(c) - c)`; the orthogonal complement is unchanged. Coordinate
-  verbs (`zero_ablate`, `scale`, `clamp`, `noise`, `mean_ablate()`, hook
+  verbs (`zero_ablate`, `scale`, `clamp`, `add_noise`, `mean_ablate()`, hook
   callables, ...) act on `c`; value verbs (`patch_from`, the interchange;
   `replace_with`, `steer`, ...) write a value's component; other verbs refuse
   `subspace_edit_unsupported`. An orthonormal basis is used as given; any
@@ -1971,7 +2010,7 @@ default-keep); mask-application semantics documented-unstable*
 : `tl.Edit` is the public edit-object type (the old class
   spelling is removed, U00 clean break). `repr(edit)` prints the
   public spelling: a builtin edit prints as the public call that builds it
-  (`tl.grad_scale(2.0)`, default-valued keywords omitted; evaluating it
+  (`tl.scale_grad(2.0)`, default-valued keywords omitted; evaluating it
   rebuilds an equal edit), any other edit as `tl.Edit('name', kind=...,
   portability=...)`. An `Edit` is a frozen record of its identity:
   `helper_name` (also read as `name`), positional `args`, keyword `kwargs`
@@ -2237,7 +2276,7 @@ shim owed*
   `torchlens.bridge.pyreft.LoreftArtifact`; never imports pyreft or pyvene and never fits
   anything. Apply it with `fork.do(artifact.subspace(site, positions=mask), artifact.edit)`, which
   is `tl.subspace(tl.units(site, ...), R.T, origin=..., method="loreft")` with
-  `tl.intervention.affine_source(W, bias=b)`. pyreft trains `R` in float32 (orthonormal to about
+  `tl.intervention.set_affine_coordinates(W, bias=b)`. pyreft trains `R` in float32 (orthonormal to about
   `1e-7`), so the subspace orthonormalises it once in float64 and the saved edit records
   `origin_sha256` (R as read), `basis_sha256` (rows applied), `orthonormalised=True` and
   `source_dtype="float32"`. Refuses `pyreft_artifact_invalid` (missing or malformed file) and
@@ -2255,7 +2294,7 @@ shim owed*
   `pyreft_positions_invalid`). Given the site from a trace, its shape is checked at once: a
   trailing axis that is not the artifact's width (or a feature axis that is not last) refuses
   `pyreft_site_invalid`, and a mask that does not cover the other axes refuses
-  `pyreft_positions_invalid`; a label is checked at `do()`. `edit` is the float64 `affine_source`.
+  `pyreft_positions_invalid`; a label is checked at `do()`. `edit` is the float64 `set_affine_coordinates`.
 
 **torchlens.bridge.huggingface.from_hub(repo_id, *, path_in_repo, revision, token, api)** — *unstable — no deprecation shim owed*
 : Downloads the gzipped `.tlspec` tar that `push_to_hub` uploads, checks
@@ -2415,7 +2454,7 @@ shim owed*
   artifact refuse typed `site_key_unavailable`. Accessor-level only — no
   persisted fields.
 
-**BackwardPass.dispatched_ops / DispatchedOp** — *unstable — no deprecation shim owed*
+**BackwardPass.aten_ops / DispatchedOp** — *unstable — no deprecation shim owed*
 : The ATen calls one backward pass dispatched, recorded while the pass ran
   through a capture that requested a backward (`backward_ready=True`,
   `save_grads=` or `default_grad=`). Each `DispatchedOp` is value-free:
@@ -2431,7 +2470,7 @@ shim owed*
 
 **BackwardStatus.executed_flops / executed_flops_per_pass / uncounted_ops / counting_convention** — *unstable — no deprecation shim owed*
 : `tl.report.backward_status(trace)` in the `backward_observed` state counts
-  the backward that ran over each pass's `dispatched_ops`: `executed_flops`
+  the backward that ran over each pass's `aten_ops`: `executed_flops`
   is exact for the matmul and convolution families at fma2
   (`counting_convention`, FlopCounterMode's convention), or `None` when a
   pass has no record on this object. `executed_flops_per_pass` pairs each

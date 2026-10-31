@@ -114,7 +114,7 @@ def predicate_needs_live_site_keys(*predicates: Any) -> bool:
             continue
         rules = getattr(predicate, "rules", None)
         candidates = (
-            [rule.where for rule in rules]
+            [rule.target for rule in rules]
             if rules is not None and not callable(rules)
             else [predicate]
         )

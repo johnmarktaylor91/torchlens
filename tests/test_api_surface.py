@@ -27,10 +27,6 @@ TARGET_ALL = [
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "load",
-    "do",
-    "push",
-    "push_from",
-    "run",
     "bundle",
     "pluck",
     "extract",
@@ -82,25 +78,23 @@ TARGET_ALL = [
     "mean_ablate",
     "merge_ranks",
     "merge_report",
-    "noise",
-    "project_off",
+    "add_noise",
+    "project_out",
     "project_onto",
     "replace_with",
     "scale",
     "splice_module",
     "span",
     "steer",
-    "direction_from_pairs",
     "sweep",
-    "swap_with",
     "zero_ablate",
     "when",
-    "bwd_hook",
-    "grad_clip",
-    "grad_noise",
-    "grad_clamp",
-    "grad_scale",
-    "grad_zero",
+    "hook_grad",
+    "clip_grad",
+    "add_grad_noise",
+    "clamp_grad",
+    "scale_grad",
+    "zero_grad",
     "tap",
     "Selection",
     "ResolvedSelection",
@@ -109,6 +103,8 @@ TARGET_ALL = [
     "random_selection",
     "Edit",
     "patch_from",
+    "Recipe",
+    "positions",
     "top_k",
     "top_fraction",
     "threshold",
@@ -214,7 +210,9 @@ def test_all_matches_frozen_target_ledger() -> None:
     producer wave adds `subspace` (direction/subspace support selection with
     mandatory basis provenance, DOCUMENTED-UNSTABLE) on top of that. The
     completeness work F39 unhide promotes the shipped streaming-stats
-    surface `stats` and `aggregate` (conflict-ledger row 8) = 116.
+    surface `stats` and `aggregate` (conflict-ledger row 8) = 116. The
+    interventions rename removes `do`, `push`, `push_from`, `run`, `swap_with`
+    and `direction_from_pairs` and adds `Recipe` and `positions` = 112.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """

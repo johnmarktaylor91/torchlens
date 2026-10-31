@@ -599,7 +599,6 @@ docs-md	docs/agent-reference/current-2-x-surface.md	100
 docs-md	docs/agent-reference/current-2-x-surface.md	106
 docs-md	docs/agent-reference/current-2-x-surface.md	11
 docs-md	docs/agent-reference/current-2-x-surface.md	11,
-docs-md	docs/agent-reference/current-2-x-surface.md	116
 docs-md	docs/agent-reference/current-2-x-surface.md	12
 docs-md	docs/agent-reference/current-2-x-surface.md	124
 docs-md	docs/agent-reference/current-2-x-surface.md	14
@@ -674,7 +673,6 @@ docs-md	docs/agent-reference/known-gotchas.md	256
 docs-md	docs/agent-reference/known-gotchas.md	260
 docs-md	docs/agent-reference/known-gotchas.md	4096
 docs-md	docs/agent-reference/package/architecture-overview.md	0..20
-docs-md	docs/agent-reference/package/architecture-overview.md	116
 docs-md	docs/agent-reference/package/architecture-overview.md	1_2
 docs-md	docs/agent-reference/package/architecture-overview.md	26
 docs-md	docs/agent-reference/package/files-in-this-directory.md	16
@@ -685,7 +683,6 @@ docs-md	docs/agent-reference/package/key-concepts.md	2.18
 docs-md	docs/agent-reference/package/key-concepts.md	37
 docs-md	docs/agent-reference/package/key-concepts.md	562
 docs-md	docs/agent-reference/package/newer-2-x-subsystems.md	20
-docs-md	docs/agent-reference/package/public-surface.md	116
 docs-md	docs/agent-reference/package/public-surface.md	2.16
 docs-md	docs/agent-reference/package/public-surface.md	37
 docs-md	docs/agent-reference/package/public-surface.md	39
@@ -693,14 +690,12 @@ docs-md	docs/agent-reference/package/public-surface.md	42
 docs-md	docs/agent-reference/package/subpackages.md	10
 docs-md	docs/agent-reference/package/subpackages.md	11
 docs-md	docs/agent-reference/package/subpackages.md	11,
-docs-md	docs/agent-reference/package/subpackages.md	116
 docs-md	docs/agent-reference/package/subpackages.md	12
 docs-md	docs/agent-reference/package/subpackages.md	16,
 docs-md	docs/agent-reference/package/subpackages.md	20
 docs-md	docs/agent-reference/package/subpackages.md	2026
 docs-md	docs/agent-reference/package/subpackages.md	512
 docs-md	docs/agent-reference/package/subpackages.md	86
-docs-md	docs/agent-reference/package/top-level-modules.md	116
 docs-md	docs/backends.md	0.13,
 docs-md	docs/backends.md	0.13.0
 docs-md	docs/backends.md	0.14
@@ -751,7 +746,6 @@ docs-md	docs/conditional_attribution.md	3.10
 docs-md	docs/conditional_attribution.md	3.11
 docs-md	docs/facets.md	1.0
 docs-md	docs/for-ai-agents.md	10
-docs-md	docs/for-ai-agents.md	116
 docs-md	docs/for-ai-agents.md	12
 docs-md	docs/for-ai-agents.md	120
 docs-md	docs/for-ai-agents.md	15
@@ -918,7 +912,6 @@ docs-md	docs/migration/lovely_stats_line.md	26
 docs-md	docs/migration/lovely_stats_line.md	50
 docs-md	docs/migration/scoped_detached_patching.md	16
 docs-md	docs/migration/scoped_detached_patching.md	27
-docs-md	docs/migration/v2.0_api_changes.md	116
 docs-md	docs/migration/v2.0_api_changes.md	2.0
 docs-md	docs/migration/v2.0_api_changes.md	2026
 docs-md	docs/migration/v2.0_api_changes.md	42
@@ -2415,16 +2408,13 @@ package-docstrings	torchlens/_runnable_path_faithfulness.py	53
 package-docstrings	torchlens/_runnable_providers.py	2_4
 package-docstrings	torchlens/_runnable_providers.py	35
 package-docstrings	torchlens/_runnable_providers.py	39
-package-docstrings	torchlens/_runnable_state.py	10
 package-docstrings	torchlens/_runnable_retention.py	105
-package-docstrings	torchlens/_runnable_state.py	12
 package-docstrings	torchlens/_runnable_retention.py	160
 package-docstrings	torchlens/_runnable_state.py	256
 package-docstrings	torchlens/_runnable_state.py	2_2
 package-docstrings	torchlens/_runnable_state.py	2_3
 package-docstrings	torchlens/_runnable_state.py	35
 package-docstrings	torchlens/_runnable_state.py	37
-package-docstrings	torchlens/_runnable_retention.py	40
 package-docstrings	torchlens/_runnable_state.py	4096
 package-docstrings	torchlens/_runnable_state.py	5.2
 package-docstrings	torchlens/_runnable_state.py	5.4
@@ -4227,8 +4217,6 @@ package-docstrings	torchlens/stats/_stats_render.py	14
 package-docstrings	torchlens/stats/_stats_render.py	22
 package-docstrings	torchlens/stats/_stats_render.py	4.1
 package-docstrings	torchlens/stats/_stats_render.py	803
-package-docstrings	torchlens/stats/_per_unit.py	0.55
-package-docstrings	torchlens/stats/_per_unit.py	50
 package-docstrings	torchlens/stats/_streaming.py	18
 package-docstrings	torchlens/stats/_streaming.py	20
 package-docstrings	torchlens/stats/_streaming.py	20,

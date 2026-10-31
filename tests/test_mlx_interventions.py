@@ -196,7 +196,7 @@ def test_mlx_backward_direction_intervene_refuses_typed() -> None:
             _TwoLayerMLP(),
             _input(),
             backend="mlx",
-            intervene=tl.when(tl.func("relu"), tl.grad_zero()),
+            intervene=tl.when(tl.func("relu"), tl.zero_grad()),
         )
 
 

@@ -128,7 +128,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         )
 
     @cached_property
-    def intervention_spec(self: "Trace") -> FrozenInterventionSpec:
+    def recipe(self: "Trace") -> FrozenInterventionSpec:
         """Return an immutable snapshot of this log's intervention recipe.
 
         Returns
@@ -339,7 +339,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         from ..intervention.handles import HookHandle
         from ..intervention.hooks import normalize_hook_plan
         from ..intervention.spec import (
-            InterventionSpec as PublicInterventionSpec,
+            Recipe as PublicInterventionSpec,
             entries_from_spec,
         )
 
@@ -474,7 +474,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         """
 
         for handle_id in self._last_hook_handle_ids:
-            self.detach_hooks(handle=handle_id, confirm_mutation=True)
+            self.clear_edits(handle=handle_id, confirm_mutation=True)
         self._last_hook_handle_ids = ()
 
     def __enter__(self: "Trace") -> "Trace":
@@ -503,7 +503,7 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         self.remove()
 
-    def detach_hooks(
+    def clear_edits(
         self: "Trace",
         site: Any = None,
         handle: Any = None,
@@ -537,7 +537,7 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         if site is None and handle is None:
             if strict:
-                raise SpecMutationError("detach_hooks requires a site or handle in strict mode.")
+                raise SpecMutationError("clear_edits requires a site or handle in strict mode.")
             return self
 
         target_spec = None
@@ -555,7 +555,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 handle=handle_value,
             )
         if removed == 0 and strict:
-            raise SpecMutationError("detach_hooks did not match any sticky hooks.")
+            raise SpecMutationError("clear_edits did not match any sticky hooks.")
         if removed > 0:
             self._mark_intervention_spec_mutated()
         self._record_operation(
@@ -790,7 +790,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             # next push would silently re-fire them (contamination). Detach
             # exactly the hooks THIS call attached, then re-raise.
             for handle_id in attached_handles:
-                self.detach_hooks(handle=handle_id, confirm_mutation=True)
+                self.clear_edits(handle=handle_id, confirm_mutation=True)
             self._record_do_intervention_event(txn, status="error", error=repr(exc))
             raise
         self._record_do_intervention_event(txn, status=None)
@@ -832,7 +832,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             rules_payload,
             site_keys_for_labels,
         )
-        from ..intervention.spec import InterventionSpec as PublicInterventionSpec, _canonical_repr
+        from ..intervention.spec import Recipe as PublicInterventionSpec, _canonical_repr
 
         hooks_or_site = txn.hooks_or_site
         value_or_hook = txn.value_or_hook
@@ -1065,7 +1065,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             attached (for the caller's failure cleanup).
         """
 
-        from ..intervention.spec import InterventionSpec as PublicInterventionSpec
+        from ..intervention.spec import Recipe as PublicInterventionSpec
         from ..selection import ResolvedSelection, Selection
 
         if isinstance(hooks_or_site, PublicInterventionSpec):
@@ -1354,7 +1354,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                     self.push(replay=ReplayOptions(strict=strict))
         except BaseException:
             for handle_id in attached:
-                self.detach_hooks(handle=handle_id, confirm_mutation=True)
+                self.clear_edits(handle=handle_id, confirm_mutation=True)
             restore_replay_state(self, journal)
             raise
         return "selection_replayed", tuple(attached)
@@ -1478,7 +1478,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 attached.extend(handle.handle_ids)
         except BaseException:
             for handle_id in attached:
-                self.detach_hooks(handle=handle_id, confirm_mutation=True)
+                self.clear_edits(handle=handle_id, confirm_mutation=True)
             raise
         # These sticky hooks are the do() plan's edit-then-scatter residue of
         # an edit applied NOW (the caller propagates and appends the audit
@@ -1632,8 +1632,8 @@ class TraceInterventionMixin(_TraceMixinBase):
                 name=helper_name,
                 timing="post",
                 direction="forward",
-                layer_log=op,
-                run_ctx={},
+                op=op,
+                run_context={},
                 args=(saved,),
                 kwargs={},
             )
@@ -1836,7 +1836,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         """
 
         self._spec_revision += 1
-        self.__dict__.pop("intervention_spec", None)
+        self.__dict__.pop("recipe", None)
         self.__dict__.pop("_frozen_intervention_spec", None)
         self.__dict__.pop("_cached_frozen_intervention_spec", None)
         self.state = TraceState.SPEC_STALE

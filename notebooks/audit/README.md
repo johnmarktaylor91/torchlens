@@ -46,7 +46,7 @@ setup cell pins `sys.path` to the repo root and asserts on `torchlens.__file__`)
 Notable fixes verified since the June 2026 pass (dropped from GAP cells, kept in the
 matrix notes): `Quantity` reprs now carry units; `Recording.n_records` counting;
 `Bundle`/`Facet`/`MissingGradient` reprs; `project_onto` batch handling (explicit
-`feature_axis`); public `op.container`; `export` in `tl.__all__`.
+`dim`); public `op.container`; `export` in `tl.__all__`.
 
 ## Coverage matrix
 

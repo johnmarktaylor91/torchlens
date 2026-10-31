@@ -123,7 +123,7 @@ def _rule_address_class(rule: Any) -> str:
     from ..ir.selector_eval import selector_contains_kind
 
     for kind, address_class in _STRUCTURAL_KIND_CLASSES:
-        if selector_contains_kind(rule.where, kind, unwrap=True):
+        if selector_contains_kind(rule.target, kind, unwrap=True):
             return address_class
     return "selection"
 
@@ -144,7 +144,7 @@ def _rule_helper(rule: Any) -> Any:
 
     from ..intervention.types import Edit, InterventionDecision
 
-    action = rule.action
+    action = rule.edit
     if isinstance(action, InterventionDecision):
         action = action.hook
     return action if isinstance(action, Edit) else None
@@ -207,9 +207,9 @@ def coerce_intervention(intervene: Any) -> InterventionPlan | None:
 
     if intervene is None:
         return None
-    from ..intervention.spec import InterventionSpec
+    from ..intervention.spec import Recipe
 
-    if not isinstance(intervene, InterventionSpec) or not intervene.rules:
+    if not isinstance(intervene, Recipe) or not intervene.rules:
         raise InvalidArgumentError(
             f"extract_dataset(intervene=) takes a non-empty InterventionSpec; "
             f"got {type(intervene).__name__}. The spec carries the rule "
@@ -243,7 +243,7 @@ def coerce_intervention(intervene: Any) -> InterventionPlan | None:
     return InterventionPlan(
         spec=intervene,
         address_class=address_class,
-        spec_digest=str(intervene.spec_digest),
+        spec_digest=str(intervene.digest),
         rules=rules,
     )
 

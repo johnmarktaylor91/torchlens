@@ -15,7 +15,7 @@ from ..bundle import Bundle
 from ..errors import TorchLensWarning
 from .hooks import HookContext
 from .selectors import BaseSelector, func, label
-from .spec import InterventionSpec, when
+from .spec import Recipe, when
 from .types import Edit
 
 if TYPE_CHECKING:
@@ -106,7 +106,7 @@ def sweep(
     from typing import cast as _cast
 
     early_values = list(_cast("_EarlyIterable[Any]", values))
-    spec_count = sum(isinstance(value, InterventionSpec) for value in early_values)
+    spec_count = sum(isinstance(value, Recipe) for value in early_values)
     if spec_count:
         if spec_count != len(early_values):
             raise InvalidArgumentError(
@@ -209,7 +209,7 @@ def sweep(
 def _sweep_over_specs(
     model: nn.Module,
     x: Any,
-    specs: list[InterventionSpec],
+    specs: list[Recipe],
     *,
     names: Sequence[str] | None,
     include_baseline: bool = False,
@@ -260,7 +260,7 @@ def _sweep_over_specs(
         baseline,
         traces,
         params={
-            "spec_digests": [spec.spec_digest for spec in specs],
+            "spec_digests": [spec.digest for spec in specs],
             "include_baseline": include_baseline,
         },
     )

@@ -36,7 +36,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _LAZY_MODULE_CASES = (
     ("fastlog", "record"),
-    ("intervention", "func"),
+    ("intervention", "site"),
     ("user_funcs", "trace"),
     ("data_classes", "Buffer"),
     # r7 R81: the documented tl.autoroute.output spelling used to resolve
@@ -397,8 +397,11 @@ assert collisions == {
     "errors": [], "examples": [],
     "experimental": ["dagua", "node_styles"], "export": [],
     # T48 reconcile: intervention's __all__ gained the compose child module
-    # (F02 stochastic-edit family) alongside sites.
-    "fastlog": ["dry_run", "recover"], "intervention": ["compose", "sites"],
+    # (F02 stochastic-edit family). The 2.x rename removed sites and renamed
+    # reference to population, the name of its defining child module (the
+    # function is bound over the submodule attribute at package import, as
+    # compose is).
+    "fastlog": ["dry_run", "recover"], "intervention": ["compose", "population"],
     "hash": [], "io": [], "ir": [], "merged": [], "observers": [], "options": [],
     "partial": [], "quantities": [], "report": [], "repgeom": [],
     "receptive_field": ["rules"], "stats": [],

@@ -220,7 +220,7 @@ class Edit:
         """Render the public spelling of this edit (``tl.Edit`` is its public name).
 
         A builtin helper prints as the public constructor call that builds it
-        (``tl.grad_scale(2.0)``), which is also the identity a saved spec
+        (``tl.scale_grad(2.0)``), which is also the identity a saved spec
         rebuilds from. Every other edit prints as ``tl.Edit(...)`` with its
         identity fields; the hook factory is session-side and never printed.
 

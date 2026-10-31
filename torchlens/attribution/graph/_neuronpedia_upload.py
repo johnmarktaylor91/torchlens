@@ -346,7 +346,7 @@ def _vector_values(vector: Any) -> list[float]:
     if not isinstance(vector, torch.Tensor) or vector.dim() != 1 or vector.numel() == 0:
         raise _upload_refusal(
             "The direction's vector is not a non-empty 1-D tensor. Remedy: upload a "
-            "Direction fitted by tl.intervention.direction_from_pairs(...).",
+            "Direction fitted by tl.intervention.fit_direction(...).",
             code="neuronpedia_upload_argument_invalid",
         )
     if vector.numel() > _MAX_VECTOR_LENGTH:
@@ -360,7 +360,7 @@ def _vector_values(vector: Any) -> list[float]:
     if not all(math.isfinite(v) for v in values):
         raise _upload_refusal(
             "The vector holds NaN or infinite values, which JSON cannot carry. Remedy: refit "
-            "the direction on finite rows, tl.intervention.direction_from_pairs(...).",
+            "the direction on finite rows, tl.intervention.fit_direction(...).",
             code="neuronpedia_upload_argument_invalid",
         )
     return values

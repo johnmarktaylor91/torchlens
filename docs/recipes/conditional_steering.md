@@ -17,7 +17,7 @@ the rest.
 
 ## 1. Fit the condition direction and a threshold
 
-The condition here is "the newest token is token 7". `direction_from_pairs`
+The condition here is "the newest token is token 7". `fit_direction`
 fits it from prompts that end in that token against prompts that do not, at
 the first MLP. The threshold is the midpoint between the two groups' mean
 scores on fresh prompts.
@@ -29,7 +29,7 @@ import torch.nn.functional as F
 import transformers
 
 import torchlens as tl
-from torchlens.intervention import direction_from_pairs, steer_generate
+from torchlens.intervention import fit_direction, steer_generate
 
 torch.manual_seed(0)
 config = transformers.LlamaConfig(
@@ -57,7 +57,7 @@ def prompts(n, triggered, seed):
 capture = tl.options.CaptureOptions(layers_to_save="all")
 pos = tl.trace(model, prompts(8, True, 1), capture=capture)
 neg = tl.trace(model, prompts(8, False, 2), capture=capture)
-condition = direction_from_pairs(pos, neg, CONDITION_SITE, method="pca")
+condition = fit_direction(pos, neg, CONDITION_SITE, method="pca")
 
 
 def score(activation):

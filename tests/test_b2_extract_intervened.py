@@ -108,7 +108,7 @@ def test_intervened_disk_artifact_records_the_counterfactual(tmp_path: Path) -> 
     assert harvest.target_site_keys
     assert str(harvest.receipt_digest).startswith("sha256:")
     run_record = manifest["run"]["intervention"]
-    assert run_record["spec_digest"] == spec.spec_digest
+    assert run_record["spec_digest"] == spec.digest
     assert run_record["target_site_keys"] == list(harvest.target_site_keys)
     assert manifest["signature"]["model_mode"]["intervention"]["policy"] == "intervened"
     rows = read_trusted_rows(tmp_path)

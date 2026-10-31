@@ -208,8 +208,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     """``do`` dispatches to replay, rerun, set-only, and top-level alias paths."""
 
     replay_log, _ = _capture()
-    replay_result = tl.do(
-        replay_log,
+    replay_result = replay_log.do(
         {tl.func("relu"): _zero_hook},
         intervention=InterventionOptions(confirm_mutation=True),
     )

@@ -101,7 +101,6 @@ from ._render import (
     render_waterfall,
 )
 from ._schema import (
-    GRAD_SCALE_PROVENANCE,
     HISTORY_SCHEMA_VERSION,
     OPTIMIZER_STATUS,
     PHASES,
@@ -126,7 +125,6 @@ __all__ = [
     "DEFAULT_DESCRIPTOR",
     "EMITTED_CATEGORIES",
     "NEVER_EMITTED_CATEGORIES",
-    "GRAD_SCALE_PROVENANCE",
     "HISTORY_SCHEMA_VERSION",
     "MIN_PUBLISHABLE_REPEATS",
     "OPTIMIZER_STATUS",

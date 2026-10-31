@@ -745,7 +745,7 @@ class SiteTable:
     """Result of resolving a selector; ordered, indexable, dataframe-convertible."""
 
     _sites: tuple[Site, ...]
-    query: Any | None = None
+    selector: Any | None = None
 
     def __len__(self) -> int:
         """Return the number of resolved sites.
@@ -784,7 +784,7 @@ class SiteTable:
         """
 
         if isinstance(idx, slice):
-            return SiteTable(self._sites[idx], query=self.query)
+            return SiteTable(self._sites[idx], selector=self.selector)
         return self._sites[idx]
 
     def __repr__(self) -> str:
@@ -821,7 +821,9 @@ class SiteTable:
             Filtered table in original execution order.
         """
 
-        return SiteTable(tuple(site for site in self._sites if predicate(site)), query=self.query)
+        return SiteTable(
+            tuple(site for site in self._sites if predicate(site)), selector=self.selector
+        )
 
     def first(self) -> Site:
         """Return the first resolved site.
@@ -960,7 +962,7 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
 
 def resolve_sites(
     trace: Trace,
-    query: SelectorInput,
+    selector: SelectorInput,
     *,
     strict: bool = False,
     max_fanout: int = 8,
@@ -971,7 +973,7 @@ def resolve_sites(
     ----------
     log:
         Model log whose captured layer-pass records should be searched.
-    query:
+    selector:
         Selector, target spec, frozen target spec, or non-strict bare string.
     strict:
         Whether to reject non-portable query forms.
@@ -995,16 +997,16 @@ def resolve_sites(
         raise SiteResolutionError("max_fanout=None is not supported; pass an explicit integer.")
     if max_fanout < 1:
         raise SiteAmbiguityError("max_fanout must be at least 1.")
-    if strict and isinstance(query, str):
+    if strict and isinstance(selector, str):
         raise SiteResolutionError(
             "Bare strings are non-portable in strict mode; use tl.label(...), "
             "tl.func(...), or another typed selector."
         )
 
-    selector = _normalize_query(query)
+    selector = _normalize_query(selector)
     matched: tuple[Any, ...]
     if isinstance(selector, FacetSelector):
-        matched = _resolve_facet_sites(trace, selector, query)
+        matched = _resolve_facet_sites(trace, selector, selector)
     else:
         _guard_episode_step_query(trace, selector)
         refuse_trace_alias_spellings(trace, selector)
@@ -1016,21 +1018,21 @@ def resolve_sites(
         matched = indexed
         if not matched:
             raise SiteResolutionError(
-                f"selector {query!r} matched 0 sites. Use log.find_sites(...) to discover labels."
+                f"selector {selector!r} matched 0 sites. Use log.find_sites(...) to discover labels."
             )
         _refuse_bare_multipass_label(selector, matched)
     if len(matched) > max_fanout:
         raise SiteAmbiguityError(
-            f"site {query!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
+            f"site {selector!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
             "Pass a larger max_fanout explicitly or use a narrower selector."
         )
     if len(matched) > 1:
         warnings.warn(
-            _multi_match_message(query, matched),
+            _multi_match_message(selector, matched),
             MultiMatchWarning,
             stacklevel=2,
         )
-    return SiteTable(matched, query=query)
+    return SiteTable(matched, selector=selector)
 
 
 def _resolve_facet_sites(
@@ -1254,7 +1256,7 @@ def find_sites(
             f"site {query!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
             "Pass a larger max_fanout explicitly or use a narrower selector."
         )
-    return SiteTable(matched, query=query)
+    return SiteTable(matched, selector=query)
 
 
 def _guard_episode_step_query(log: Trace, selector: Any) -> None:

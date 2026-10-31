@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 import torch
 
 from ..errors.episode import BundleRelationError
-from ..intervention._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
+from ..intervention._metrics import is_scalar_like, relative_l1, resolve_metric
 from ..intervention._super.super_logs import (
     SuperBufferAccessor,
     SuperGradFnAccessor,
@@ -1836,7 +1836,7 @@ class Bundle:
                 if name == baseline_name or not isinstance(out, torch.Tensor):
                     continue
                 val = (
-                    relative_l1_scalar(base, out)
+                    relative_l1(base, out)
                     if is_scalar_like(base) and is_scalar_like(out)
                     else metric_fn(base, out)
                 )
@@ -1943,11 +1943,11 @@ class Bundle:
 
         left_log = self._members[left_name]
         right_log = self._members[right_name]
-        # Match every other caller of relative_l1_scalar in this subsystem
+        # Match every other caller of relative_l1 in this subsystem
         # (_diff_row/_diff_matrix/most_changed/_distance_value): the scalar
         # fallback fires ONLY when both operands are scalar-like; multi-element
         # activations route through a real vector metric. Without this guard
-        # relative_l1_scalar silently truncates each site to its first element.
+        # relative_l1 silently truncates each site to its first element.
         metric_fn = resolve_metric("cosine")
         rows: list[tuple[str, float]] = []
         aligned = aligned_site_labels(self._ensure_supergraph(), left_name)
@@ -1966,7 +1966,7 @@ class Bundle:
             ):
                 continue
             value = (
-                relative_l1_scalar(left_out, right_out)
+                relative_l1(left_out, right_out)
                 if is_scalar_like(left_out) and is_scalar_like(right_out)
                 else metric_fn(left_out, right_out)
             )

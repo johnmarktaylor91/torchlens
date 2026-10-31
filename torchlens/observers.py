@@ -114,9 +114,9 @@ class TapObserver:
                 span_names=span_names,
                 timestamp=time.monotonic(),
                 direction="forward",
-                _raw_site_label=_hook_layer_label(hook.layer_log),
+                _raw_site_label=_hook_layer_label(hook.op),
                 _trace_ref=_active_trace_ref(),
-                selection_mask=self._selection_mask_for(hook.layer_log, value),
+                selection_mask=self._selection_mask_for(hook.op, value),
             )
         )
         return out

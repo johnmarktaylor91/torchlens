@@ -32,7 +32,7 @@ __tl_layer__ = "L5"
 def _fired_label(hook_ctx: Any, fallback: str) -> str:
     """Read the fired site's label from the public hook context."""
 
-    layer_log = getattr(hook_ctx, "layer_log", None)
+    layer_log = getattr(hook_ctx, "op", None)
     if isinstance(layer_log, Mapping):
         for key in ("layer_label", "label", "layer_label_w_pass"):
             value = layer_log.get(key)

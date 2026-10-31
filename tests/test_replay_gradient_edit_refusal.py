@@ -1,6 +1,6 @@
 """A gradient edit on a replay fork refuses with a typed code, and its remedy runs.
 
-Replay recomputes forward values only, so ``fork.do(site, tl.grad_zero())`` (and every
+Replay recomputes forward values only, so ``fork.do(site, tl.zero_grad())`` (and every
 other backward verb) has no gradient to edit there. The refusal names the verb and the
 site, changes nothing, and points at the live door that does edit gradients.
 """
@@ -37,12 +37,12 @@ def _identity(g: torch.Tensor, *, hook: Any) -> torch.Tensor:
 
 
 _VERBS: dict[str, Callable[[], Any]] = {
-    "grad_zero": lambda: tl.grad_zero(),
-    "grad_scale": lambda: tl.grad_scale(0.5),
-    "grad_clip": lambda: tl.grad_clip(1.0),
-    "grad_noise": lambda: tl.grad_noise(0.1, seed=0),
-    "grad_clamp": lambda: tl.grad_clamp(-1.0, 1.0),
-    "bwd_hook": lambda: tl.bwd_hook(_identity),
+    "zero_grad": lambda: tl.zero_grad(),
+    "scale_grad": lambda: tl.scale_grad(0.5),
+    "clip_grad": lambda: tl.clip_grad(1.0),
+    "add_grad_noise": lambda: tl.add_grad_noise(0.1, seed=0),
+    "clamp_grad": lambda: tl.clamp_grad(-1.0, 1.0),
+    "hook_grad": lambda: tl.hook_grad(_identity),
 }
 
 _X = torch.randn(2, 4, generator=torch.Generator().manual_seed(3))
@@ -79,14 +79,14 @@ def test_fork_do_gradient_edit_refuses_and_the_remedy_runs(verb: str) -> None:
     )
     trace.backward(trace[trace.output_layers[0]].out.sum())
     assert model.l1.weight.grad is not None
-    if verb == "grad_zero":
+    if verb == "zero_grad":
         assert torch.count_nonzero(model.l1.weight.grad) == 0
 
 
 def test_push_replay_hooks_gradient_edit_refuses() -> None:
     """The other forward-only door, ``push(replay=ReplayOptions(hooks=...))``, refuses alike."""
 
-    replay = tl.options.ReplayOptions(hooks={tl.label("linear_1_1"): tl.grad_zero()})
+    replay = tl.options.ReplayOptions(hooks={tl.label("linear_1_1"): tl.zero_grad()})
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ready(_Net()).push(replay=replay)
     assert excinfo.value.fields["code"] == "replay_gradient_edit_unsupported"

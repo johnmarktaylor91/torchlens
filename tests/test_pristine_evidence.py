@@ -75,7 +75,7 @@ def _ablated(model: nn.Module) -> tl.Trace:
 
 def _steered(model: nn.Module) -> tl.Trace:
     direction = torch.randn(_DIM, generator=torch.Generator().manual_seed(3))
-    spec = tl.when(tl.module("block"), tl.steer(direction, magnitude=3.0, feature_axis=-1))
+    spec = tl.when(tl.module("block"), tl.steer(direction, strength=3.0, dim=-1))
     return tl.trace(model, _x(), save=tl.module("block") | tl.module("head"), intervene=spec)
 
 

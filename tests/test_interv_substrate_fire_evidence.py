@@ -137,7 +137,7 @@ def test_two_edit_misfire_names_the_unfired_rule() -> None:
 
     model = _TinyModel()
     firing = tl.when(tl.func("relu"), tl.scale(0.0))
-    misfiring = tl.when(tl.func("softmax"), tl.noise(std=0.5))  # no softmax in the model
+    misfiring = tl.when(tl.func("softmax"), tl.add_noise(std=0.5))  # no softmax in the model
     spec = firing.merge(misfiring)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -157,7 +157,7 @@ def test_replay_door_zero_site_rule_refuses_with_error_evidence() -> None:
     model = _TinyModel()
     fork = _ready_trace(model).fork()
     spec = tl.when(tl.func("relu"), tl.scale(0.0)).merge(
-        tl.when(tl.func("softmax"), tl.noise(std=0.5))
+        tl.when(tl.func("softmax"), tl.add_noise(std=0.5))
     )
     from torchlens.intervention.errors import SiteResolutionError
 
@@ -177,10 +177,10 @@ def test_noise_std_distinguishes_audit_rows() -> None:
     log = _ready_trace(model)
     torch.manual_seed(1)
     low = log.fork()
-    low.do(tl.when(tl.func("relu"), tl.noise(std=0.1)))
+    low.do(tl.when(tl.func("relu"), tl.add_noise(std=0.1)))
     torch.manual_seed(1)
     high = log.fork()
-    high.do(tl.when(tl.func("relu"), tl.noise(std=0.9)))
+    high.do(tl.when(tl.func("relu"), tl.add_noise(std=0.9)))
     low_row = low.intervention_audit[-1]
     high_row = high.intervention_audit[-1]
     assert low_row != high_row, "audit rows byte-identical across differing noise std"

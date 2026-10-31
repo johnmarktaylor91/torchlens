@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..debug._first_bad import amp_scaled_grads_hint
+from ..debug._flops_vs_dispatch import flops_vs_dispatch
 from ._compute_truth import ComputeAggregation, ComputeRow, RatioFact, compute_aggregation
 from ._cost_backward import (
     BACKWARD_STATES,
@@ -164,6 +166,7 @@ __all__ = [
     "SummaryRow",
     "SummaryTotals",
     "TraceProfile",
+    "amp_scaled_grads_hint",
     "attributed_kernel_utilization",
     "backward_estimate",
     "backward_status",
@@ -179,6 +182,7 @@ __all__ = [
     "explain",
     "factcore",
     "flops_report",
+    "flops_vs_dispatch",
     "grad_enabled_at_capture",
     "health_facts",
     "instrumented_rate",

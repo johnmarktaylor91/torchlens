@@ -178,7 +178,7 @@ _REFUSALS: dict[str, str] = {
         "tools own it. CAUTION: rsatoolbox's mahalanobis with no noise "
         "argument SILENTLY returns scaled euclidean (measured, 0.1.5 and "
         "0.3.2). The legitimate model-side recipe: a genuinely stochastic "
-        "model under tl.noise / trace.do has real repeats "
+        "model under tl.add_noise / trace.do has real repeats "
         "(Khaligh-Razavi 2014's noise-matching step)"
     ),
     "mahalanobis": (
@@ -186,7 +186,7 @@ _REFUSALS: dict[str, str] = {
         "distance/noise tools own it. CAUTION: rsatoolbox's mahalanobis "
         "with no noise argument SILENTLY returns scaled euclidean "
         "(measured, 0.1.5 and 0.3.2). For a stochastic model under "
-        "tl.noise / trace.do, real repeats exist and the recipe applies"
+        "tl.add_noise / trace.do, real repeats exist and the recipe applies"
     ),
     "searchlight": (
         "searchlight needs brain-volume neighborhoods (rsatoolbox plus "

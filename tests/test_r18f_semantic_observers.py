@@ -198,7 +198,7 @@ def test_backward_record_span_direction_enforced() -> None:
     torch.manual_seed(12)
     model = _LinearRelu()
     x = torch.randn(2, 3)
-    tap = tl.tap(tl.grad_fn(type="relu"), direction="backward")
+    tap = tl.tap(tl.grad_fn(name="relu"), direction="backward")
 
     with tl.span("fwd_only", direction="forward"), tl.span("bwd_ok", direction="backward"):
         trace = tl.trace(

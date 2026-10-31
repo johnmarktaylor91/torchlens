@@ -133,9 +133,9 @@ def test_distance_value_scalar_vs_vector_routes_to_vector_metric() -> None:
         _distance_value(scalar, vector, "cosine")
     except ValueError as exc:
         # Symmetric guard routed to cosine (the vector metric). The OLD asymmetric
-        # guard would have called ``relative_l1_scalar`` and raised its message.
+        # guard would have called ``relative_l1`` and raised its message.
         assert "cosine_distance" in str(exc)
-        assert "relative_l1_scalar" not in str(exc)
+        assert "relative_l1" not in str(exc)
     else:  # pragma: no cover - failure path
         raise AssertionError("expected a vector-metric ValueError for scalar-vs-vector")
 
@@ -143,7 +143,7 @@ def test_distance_value_scalar_vs_vector_routes_to_vector_metric() -> None:
 def test_distance_value_both_scalar_uses_scalar_fallback() -> None:
     """MAJOR: genuinely scalar-like operands still use the scalar fallback."""
 
-    # 0-d ref vs 1-element vector: both scalar-like -> relative_l1_scalar, no crash,
+    # 0-d ref vs 1-element vector: both scalar-like -> relative_l1, no crash,
     # no truncation. |3 - 5| / |3| == 2/3.
     value = _distance_value(torch.tensor(3.0), torch.tensor([5.0]), "cosine")
     assert isinstance(value, float)

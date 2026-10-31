@@ -84,7 +84,7 @@ def test_steer_intervene_predicate_save_intervention_round_trips(tmp_path: Path)
     trace = tl.trace(
         model,
         x,
-        intervene=tl.when(tl.func("linear"), tl.steer(direction, feature_axis=1)),
+        intervene=tl.when(tl.func("linear"), tl.steer(direction, dim=1)),
     )
 
     spec_path = tmp_path / "steer_intervention.tlspec"
@@ -115,7 +115,7 @@ def test_steer_intervene_multiple_firing_sites_do_not_compound(tmp_path: Path) -
     trace = tl.trace(
         model,
         x,
-        intervene=tl.when(tl.func("linear"), tl.steer(direction, feature_axis=1)),
+        intervene=tl.when(tl.func("linear"), tl.steer(direction, dim=1)),
     )
 
     spec = trace._intervention_spec

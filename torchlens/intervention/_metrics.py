@@ -5,7 +5,7 @@ a scalar tensor in the [0, ~] range -- larger means more dissimilar. The
 `METRIC_REGISTRY` and `resolve_metric` helper let callers pass either a string
 name or a callable.
 
-The fallback ``relative_l1_scalar`` is used implicitly by SuperOp.diff when the
+The fallback ``relative_l1`` is used implicitly by SuperOp.diff when the
 inputs are 0-d (scalar) tensors -- cosine and pearson are meaningless on a single
 value.
 """
@@ -136,7 +136,7 @@ def pearson_correlation_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tens
     return cast(torch.Tensor, 1.0 - r)
 
 
-def relative_l1_scalar(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+def relative_l1(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """Return ``|a - b| / max(|a|, eps)`` as a 0-d tensor.
 
     Used as the implicit fallback for scalar (0-d or 1-element) outputs because
@@ -153,10 +153,10 @@ def relative_l1_scalar(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     # matching the numel guards on cosine_distance/relative_l2/pearson.
     if fa.numel() != fb.numel():
         raise InvalidArgumentError(
-            "relative_l1_scalar received operands with different element counts",
+            "relative_l1 received operands with different element counts",
             code="metric_shape_mismatch",
             remedy="pass scalar-like operands with equal element counts",
-            metric="relative_l1_scalar",
+            metric="relative_l1",
             element_counts=(fa.numel(), fb.numel()),
         )
     if fa.numel() == 0:

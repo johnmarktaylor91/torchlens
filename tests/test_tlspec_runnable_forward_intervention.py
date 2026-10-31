@@ -131,7 +131,7 @@ def test_backward_grad_intervention_still_verifies(tmp_path: Path) -> None:
     trace = _capture(
         _AblationModel().eval(),
         value,
-        intervene=tl.when(tl.func("relu"), tl.grad_scale(2.0)),
+        intervene=tl.when(tl.func("relu"), tl.scale_grad(2.0)),
     )
     path = tmp_path / "grad.tlspec"
     trace.save(path, level="runnable", include_weights=True, include_activations=True)

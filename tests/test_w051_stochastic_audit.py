@@ -7,7 +7,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention import PerRowDatums, reference, resample_rows_from, sampling_records
+from torchlens.intervention import population, resample_rows_from
+from torchlens.intervention.population import PerRowDatums
+from torchlens.intervention.stochastic import sampling_records
 
 
 class _OneBlock(nn.Module):
@@ -33,7 +35,7 @@ def test_eligible_count_is_the_eligible_class_size() -> None:
 
     log = _trace()
     row = log["relu_1_2"].out[0]
-    pool = reference(torch.stack([row + k for k in range(7)]), origin="rows")
+    pool = population(torch.stack([row + k for k in range(7)]), origin="rows")
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), resample_rows_from(pool, seed=1, axis=0))
     record = sampling_records(fork)[-1]
@@ -50,7 +52,7 @@ def test_eligible_count_under_agreement_is_the_union_of_row_classes() -> None:
 
     log = _trace()
     row = log["relu_1_2"].out[0]
-    pool = reference(
+    pool = population(
         torch.stack([row + k for k in range(6)]),
         origin="rows",
         data=["A", "A", "A", "B", "B", "C"],

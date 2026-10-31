@@ -28,7 +28,7 @@ Each edit verb has one of four meanings here:
   ``replace_with``, ``add`` of a tensor, ``steer``, ``permute_batch``,
   ``resample_rows_from``, ``mean_from``, ``mean_fill(ref)``);
 * source verbs map the full site value ``x`` to new coordinates
-  ``[..., k]`` (``tl.intervention.affine_source(weight, bias=b)``, so
+  ``[..., k]`` (``tl.intervention.set_affine_coordinates(weight, bias=b)``, so
   ``x + Q^T (W x + b - Q x)``, the LoReFT form);
 * every other verb refuses ``subspace_edit_unsupported`` with the spelling
   that works.
@@ -86,7 +86,7 @@ _ORTHONORMALISED_NOTE = " [basis orthonormalised: coordinates are along the Gram
 _ORTHONORMAL_TOL = 1e-10
 _GUIDE = "see the subspace section of docs/intervention_explainers.md"
 
-_COORDINATE_VERBS = frozenset({"zero_ablate", "scale", "clamp", "noise"})
+_COORDINATE_VERBS = frozenset({"zero_ablate", "scale", "clamp", "add_noise"})
 _VALUE_VERBS = frozenset(
     {
         "patch_from",
@@ -99,7 +99,7 @@ _VALUE_VERBS = frozenset(
     }
 )
 _NESTED_PROJECTIONS = frozenset(
-    {"project_onto", "project_off", "set_direction_mean", "subspace_ablate", "subspace_interchange"}
+    {"project_onto", "project_out", "set_direction_mean", "subspace_ablate", "subspace_interchange"}
 )
 
 
@@ -201,7 +201,7 @@ def _verb_meaning(edit: Any) -> str:
             verb,
             "backward-direction verbs edit gradients, not the forward component",
             "attach the gradient verb at capture time: tl.trace(model, x, "
-            "intervene=tl.when(tl.module(name), tl.grad_zero()))",
+            "intervene=tl.when(tl.module(name), tl.zero_grad()))",
             code="subspace_edit_unsupported",
         )
     if verb == AFFINE_SOURCE_NAME:

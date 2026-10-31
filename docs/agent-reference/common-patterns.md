@@ -39,7 +39,7 @@ tl.release_model(model)  # restore whole-model pickle / torch.save serializabili
 direction = torch.randn(4)               # one entry per channel of encoder's output
 steered = tl.trace(model, x, save=tl.module("encoder"),
                    intervene=tl.when(tl.module("encoder"),
-                                     tl.steer(direction, magnitude=4, feature_axis=1)))
+                                     tl.steer(direction, strength=4, dim=1)))
 steered.run(model, torch.randn(1, 3, 20, 20))  # larger input, same graph structure
 steered.last_run["engine"]              # "guarded_fast", or "rerun" after a fallback
 steered.last_run["fast_refused"]        # None, or "<code>:<stage>" naming the guard
@@ -140,8 +140,7 @@ prompts), pick the path by what you need back. Build the spec once; every path t
 
 - Steering only: `spec.bind(model)`. A capture-free executor that runs at about the cost of
   a plain forward hook. Call it like the model, or call `.generate(...)` on it (KV cache on or
-  off); `.last_report` counts the firings. `torchlens.intervention.steer_generate` is one-call
-  sugar for `spec.bind(model).generate(...)`. A binding selects ops structurally
+  off); `.last_report` counts the firings. A binding selects ops structurally
   (`tl.func("relu") & tl.in_module("1")`, `tl.module("1")`); it refuses final or short labels such
   as `tl.label("relu_1_2")` when bound, because labels are assigned after a capture.
 - Steering plus activations as evidence: `tl.record(model, x, save=..., intervene=spec,
@@ -181,7 +180,7 @@ lm = transformers.LlamaForCausalLM(  # a tiny random decoder stands in for your 
 ids = torch.tensor([[1, 5, 9, 2]])
 direction = torch.randn(32)
 site = tl.module("model.layers.1.mlp")
-spec = tl.when(site, tl.steer(direction, magnitude=4.0, feature_axis=-1))
+spec = tl.when(site, tl.steer(direction, strength=4.0, dim=-1))
 
 # Steering only: bind once, then call or generate as often as needed.
 steered = spec.bind(lm)
@@ -240,11 +239,11 @@ comments name the exports that need one.
 appliances = tl.accessors.registered_appliances()  # {name: summary}, sorted by name
 # Subspace and position edits are plain tl.Edit objects; apply them with do() or fork.do().
 basis = torch.eye(4)[:1]  # [k, d]: one direction over a 4-wide feature axis
-ablate = tl.intervention.subspace_ablate(basis, feature_axis=1)  # x - P x on the span
+ablate = tl.intervention.subspace_ablate(basis, dim=1)  # x - P x on the span
 assert isinstance(ablate, tl.Edit)
 # tl.intervention.subspace_interchange(basis, source_trace) writes the source trace's
 # in-span component over the target's instead.
-first_token = tl.intervention.at_positions(tl.scale(0.0), [0])  # token axis 1 by default
+first_token = tl.positions(tl.scale(0.0), [0])  # token axis 1 by default
 assert isinstance(first_token, tl.Edit)
 # Namespaces are imported, not root attributes: import torchlens.mechinterp first.
 import torchlens.mechinterp

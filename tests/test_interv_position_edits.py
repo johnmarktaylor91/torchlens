@@ -1,7 +1,7 @@
 """Token-position editing, phase 2 (U42.1): edit chosen positions, padding-aware.
 
 Each row edits the middle layer's ``(batch, tokens, hidden)`` output through
-``torchlens.intervention.at_positions`` and compares the model output with the
+``torchlens.positions`` and compares the model output with the
 same edit written by hand on the same positions.
 """
 
@@ -15,7 +15,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention import at_positions
 from torchlens.intervention.errors import HookValueError
 from torchlens.transforms._errors import TransformContractError
 
@@ -70,7 +69,7 @@ def test_physical_positions_match_by_hand(positions: Any, rows: list[int], cols:
     """Int, list, slice and per-row positions edit exactly those tokens."""
 
     model = _model()
-    got = _run(model, at_positions(tl.zero_ablate(), positions))
+    got = _run(model, tl.positions(tl.zero_ablate(), positions))
     torch.testing.assert_close(got, _by_hand(model, rows, cols, _zero), rtol=0.0, atol=1e-6)
 
 
@@ -87,7 +86,7 @@ def test_last_real_token_in_a_padded_batch(mask: torch.Tensor, which: str, cols:
 
     model = _model()
     direction = torch.ones(4)
-    edit = at_positions(tl.steer(direction, 3.0, feature_axis=-1), which, mask=mask)
+    edit = tl.positions(tl.steer(direction, 3.0, dim=-1), which, mask=mask)
     got = _run(model, edit)
     want = _by_hand(model, [0, 1], cols, lambda value: value + 3.0 * direction)
     torch.testing.assert_close(got, want, rtol=0.0, atol=1e-6)
@@ -97,7 +96,7 @@ def test_capture_free_bind_edits_the_last_real_token() -> None:
     """The same position edit runs on the capture-free bind lane."""
 
     model = _model()
-    edit = at_positions(tl.zero_ablate(), "last", mask=_RIGHT_MASK)
+    edit = tl.positions(tl.zero_ablate(), "last", mask=_RIGHT_MASK)
     bound = tl.when(tl.module("1"), edit).bind(model)
     with torch.no_grad():
         got = bound(_IDS)
@@ -109,7 +108,7 @@ def test_assume_no_padding_licenses_physical_last() -> None:
     """Without a mask, the recorded no-padding assertion makes ``"last"`` physical."""
 
     model = _model()
-    got = _run(model, at_positions(tl.zero_ablate(), "last", assume_no_padding=True))
+    got = _run(model, tl.positions(tl.zero_ablate(), "last", assume_no_padding=True))
     torch.testing.assert_close(got, _by_hand(model, [0, 1], [4, 4], _zero), rtol=0.0, atol=1e-6)
 
 
@@ -117,7 +116,7 @@ def test_last_without_mask_refuses_typed() -> None:
     """``"last"`` with neither a mask nor the assertion refuses (the pooling mask policy)."""
 
     with pytest.raises(TransformContractError) as info:
-        _run(_model(), at_positions(tl.zero_ablate(), "last"))
+        _run(_model(), tl.positions(tl.zero_ablate(), "last"))
     assert info.value.fields["code"] == "transform_mask_missing"
 
 
@@ -125,7 +124,7 @@ def test_mask_contradicting_the_site_refuses_typed() -> None:
     """A mask whose shape does not describe the site value refuses."""
 
     with pytest.raises(TransformContractError) as info:
-        _run(_model(), at_positions(tl.zero_ablate(), "last", mask=torch.ones(2, 3)))
+        _run(_model(), tl.positions(tl.zero_ablate(), "last", mask=torch.ones(2, 3)))
     assert info.value.fields["code"] == "transform_mask_incompatible"
 
 
@@ -134,7 +133,7 @@ def test_invalid_positions_refuse_at_construction(positions: Any) -> None:
     """Unsupported position spellings refuse when the edit is built."""
 
     with pytest.raises(InvalidArgumentError) as info:
-        at_positions(tl.zero_ablate(), positions)
+        tl.positions(tl.zero_ablate(), positions)
     assert info.value.fields["code"] == "position_edit_invalid"
 
 
@@ -142,7 +141,7 @@ def test_out_of_range_position_refuses_typed() -> None:
     """A position past the sequence end refuses at fire time."""
 
     with pytest.raises(HookValueError) as info:
-        _run(_model(), at_positions(tl.zero_ablate(), 7))
+        _run(_model(), tl.positions(tl.zero_ablate(), 7))
     assert info.value.fields["code"] == "position_edit_out_of_range"
 
 
@@ -156,5 +155,5 @@ def test_shape_changing_edit_refuses_typed() -> None:
         return out[..., :2]
 
     with pytest.raises(HookValueError) as info:
-        _run(_model(), at_positions(_narrow, [0]))
+        _run(_model(), tl.positions(_narrow, [0]))
     assert info.value.fields["code"] == "position_edit_shape_mismatch"

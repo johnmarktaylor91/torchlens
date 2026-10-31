@@ -1,11 +1,11 @@
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 116 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 112 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
   about 1.0 to 1.2x a plain forward hook and exact, also through HF `generate()` with the KV
-  cache (`bound.generate(...)`, or `torchlens.intervention.steer_generate(model, ids, spec, ...)`).
+  cache (`bound.generate(...)`).
   `tl.record(..., intervene=spec, return_output=True)` is the lighter evidence path (about
   1 ms per op against about 3 ms for `tl.trace` on the tested CPU decoders). A pure
   `tl.module(...)` save selector (or a `|` union of them, or one intersected with any selector by
@@ -15,6 +15,19 @@
   spec takes the guarded fast rerun (about 2x a plain hook per generation step, exact, including
   a stock HF forward that returns its KV cache; `last_run["fast_refused"]` names a fallback's
   reason).
+- Intervention nouns (spellings DOCUMENTED-UNSTABLE): `tl.Recipe` is the immutable multi-clause
+  spec (`tl.when(...)` builds one; `Recipe.merge` or `&` joins them); each clause in
+  `Recipe.rules` is a `tl.intervention.Rule` (`target`, `edit`, `direction`);
+  `spec.bind(model)` returns a `tl.intervention.BoundModel`, whose `.recipe` is the bound spec.
+  `tl.intervention.population(source, *, origin, ...)` builds the provenance-stamped donor
+  population (`origin=` is required).
+- Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. Gradient helpers:
+  `tl.hook_grad` (live or rerun backward hook), `tl.zero_grad`, `tl.scale_grad`, `tl.clamp_grad`,
+  `tl.clip_grad` and `tl.add_grad_noise` edit gradients during the backward pass.
+- Report and statistics additions: `tl.report.amp_scaled_grads_hint` returns the GradScaler
+  loss-scale disclosure text; `tl.report.flops_vs_dispatch` runs the two-way FLOP cross-check;
+  `tl.stats.cosine_distance`, `tl.stats.relative_l1` and `tl.stats.relative_l2` are the 0-d
+  output-difference metrics (relative metrics anchored on the first argument).
 - Relation accessors on FINISHED traces return IMMUTABLE views (authorized public type
   break, decided 2026-08-12): label sequences (`op.parents`, `op.children`, `op.modules`,
   `op.module_call_stack`, conditional child lists, `Layer.parents`/`Layer.children`, ...)
@@ -39,8 +52,8 @@
   fast engine, about 1.5x a plain hook, with the trace's saved sites refreshed. Recipe:
   [Common Patterns](common-patterns.md), "Steering many forwards / generation".
 - Contrastive directions (DOCUMENTED-UNSTABLE):
-  `tl.direction_from_pairs(pos_traces, neg_traces, site, method="mean_diff"|"pca"|"logistic", *, read_token_index=-1)`
-  returns a `torchlens.intervention.Direction` (`vector`, `site`, `method`, `n_pairs`,
+  `tl.intervention.fit_direction(pos_traces, neg_traces, site, method="mean_diff"|"pca"|"logistic", *, read_token_index=-1)`
+  returns a `torchlens.intervention.Direction` (`vector`, `site`, `method`, `num_pairs`,
   `model_type`, `provenance` as a `BasisProvenance`). `direction.steer(m)` is the native
   steer; `direction.to_steering_vectors()`, `direction.to_repeng()` and `direction.to_dialz()`
   return the real library objects (thin converters `tl.bridge.steering_vectors.from_direction`,
@@ -75,7 +88,7 @@
   re-enables grad (`torch.enable_grad()` inside it) and an output carries autograd history;
   an explicit `inference_only=True` is never cleared.
   A backward run through such a capture records the ATen calls it dispatched on
-  `BackwardPass.dispatched_ops` (session-time, DOCUMENTED-UNSTABLE), and
+  `BackwardPass.aten_ops` (session-time, DOCUMENTED-UNSTABLE), and
   `tl.report.backward_status(trace)` counts them: `executed_flops` is exact for the matmul
   and convolution families at fma2 (FlopCounterMode's convention), per pass in
   `executed_flops_per_pass`, with every other recorded op kind named in `uncounted_ops`.
@@ -843,9 +856,9 @@
   rotation `R` (DAS, ReFT) is applied as `tl.subspace(site, R[:k],
   origin=...)`, never fitted; load refuses `subspace_spec_invalid`,
   `subspace_spec_basis_tampered`, `subspace_spec_basis_not_orthonormal`.
-  LEARNED AFFINE SOURCE (LoReFT): `tl.intervention.affine_source(weight, *,
+  LEARNED AFFINE SOURCE (LoReFT): `tl.intervention.set_affine_coordinates(weight, *,
   bias=None)` is a source verb: under `do(tl.subspace(site, R.T, origin=...),
-  affine_source(W, bias=b))` the new coordinates are `W x + b` of the whole
+  set_affine_coordinates(W, bias=b))` the new coordinates are `W x + b` of the whole
   site value, so the site gets `x + Q^T (W x + b - Q x)`; `weight` shaped
   like the basis rows, else `affine_source_invalid`; outside a subspace it
   refuses `affine_source_needs_subspace`. A `within=tl.units(site, mask)`
@@ -1281,7 +1294,7 @@
   nodes; spliced outputs are identical with it off. `bridge.sae.register(name, sae, site=)`
   / `unregister(name)` (DOCUMENTED-UNSTABLE) make an SAE's latents the facet family `name`:
   `tl.facet(name).latent(k)` (or a list) is edited at the doors `tl.head` serves
-  (`Trace.set`, `attach_hooks`, `Trace.do`, `fork().do`, `tl.do`) as
+  (`Trace.set`, `attach_hooks`, `Trace.do`, `fork().do`) as
   `site + decode(z') - decode(z)` (the reconstruction error stays), and
   `trace[site].facets["name[k]"]` reads the encoder activation; a string site must be one
   op of a single-pass layer (`sae_latent_site_ambiguous`), a selector site fans out. A bare

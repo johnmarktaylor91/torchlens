@@ -333,7 +333,7 @@ def _target_scorer(request: _AuditRequest, trace: Any, layer: str) -> Callable[[
 def _edit_factory(request: _AuditRequest, site: Tensor) -> tuple[str, Callable[[], Any]]:
     """Return the ablation's name and a factory of its edit for ``Trace.do``."""
 
-    from torchlens.intervention import zero_ablate
+    from torchlens.intervention.helpers import zero_ablate
     from torchlens.intervention.predicates import replace_with
 
     ablation = request.ablation

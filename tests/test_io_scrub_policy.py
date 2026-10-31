@@ -350,7 +350,7 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "add_node_overlay": "mutates the overlay table consumed by draw",
     "attach_hooks": "mutates the live model's hook registry",
     "clear_hooks": "mutates the live model's hook registry",
-    "detach_hooks": "mutates the live model's hook registry",
+    "clear_edits": "mutates the live model's hook registry",
     "disarm_triggers": "mutates armed trigger state",
     "backward": "autograd execution; writes gradient state",
     "log_backward": "autograd execution; writes gradient state",

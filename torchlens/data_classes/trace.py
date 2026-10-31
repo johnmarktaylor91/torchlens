@@ -2108,12 +2108,12 @@ class Trace(
         else:
             return _getitem_during_pass(self, ix)
 
-    def find_sites(self, query: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
+    def find_sites(self, selector: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
         """Return a table of intervention sites matching a query.
 
         Parameters
         ----------
-        query:
+        selector:
             Selector, target spec, frozen target spec, or non-strict bare string.
         strict:
             Whether to reject non-portable query forms.
@@ -2128,14 +2128,14 @@ class Trace(
 
         from ..intervention.resolver import find_sites
 
-        return find_sites(self, query, strict=strict, max_fanout=max_fanout)
+        return find_sites(self, selector, strict=strict, max_fanout=max_fanout)
 
-    def resolve_sites(self, query: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
+    def resolve_sites(self, selector: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
         """Resolve intervention sites matching a query.
 
         Parameters
         ----------
-        query:
+        selector:
             Selector, target spec, frozen target spec, or non-strict bare string.
         strict:
             Whether to reject non-portable query forms.
@@ -2150,7 +2150,7 @@ class Trace(
 
         from ..intervention.resolver import resolve_sites
 
-        return resolve_sites(self, query, strict=strict, max_fanout=max_fanout)
+        return resolve_sites(self, selector, strict=strict, max_fanout=max_fanout)
 
     def check_plan(self, plan: Any) -> Any:
         """Audit-only plan check (weightsfree memo D14; nnsight-scan parity).
@@ -2514,12 +2514,12 @@ class Trace(
         self.__dict__.pop("_last_encoding_state", None)
         self.__dict__.pop("_last_render_geometry", None)
 
-    def find_layers(self, query: str, *, limit: int = 10) -> list[str]:
+    def find_layers(self, selector: str, *, limit: int = 10) -> list[str]:
         """Return layer labels matching a fuzzy query.
 
         Parameters
         ----------
-        query:
+        selector:
             Layer-label substring or approximate layer name.
         limit:
             Maximum number of labels to return.
@@ -2531,12 +2531,12 @@ class Trace(
             fuzzy matches when substring matches are insufficient.
         """
 
-        query_text = str(query).lower()
+        query_text = str(selector).lower()
         labels = list(self.layer_labels)
         substring_matches = [label for label in labels if query_text in label.lower()]
         if len(substring_matches) >= limit:
             return substring_matches[:limit]
-        fuzzy_matches = difflib.get_close_matches(str(query), labels, n=limit, cutoff=0.25)
+        fuzzy_matches = difflib.get_close_matches(str(selector), labels, n=limit, cutoff=0.25)
         result = substring_matches[:]
         for label in fuzzy_matches:
             if label not in result:

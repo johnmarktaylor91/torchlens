@@ -62,14 +62,14 @@ def test_edit_text_rule() -> None:
 
     assert short_edit_text(tl.zero_ablate()) == "zero_ablate"
     assert short_edit_text(tl.scale(0.5)) == "scale(0.5)"
-    assert short_edit_text(tl.clamp(min=0, max=1)) == "clamp(min=0, max=1)"
-    assert short_edit_text(tl.noise(0.1)) == "noise(0.1)"
+    assert short_edit_text(tl.clamp(low=0, high=1)) == "clamp(low=0, high=1)"
+    assert short_edit_text(tl.add_noise(0.1)) == "add_noise(0.1)"
     assert short_edit_text(tl.steer(torch.ones(3))) == "steer(v)"
     # A label argument is written in (built directly: swap_with refuses a bare label at run time).
     assert short_edit_text(Edit("swap_with", args=("relu_2_1",))) == "swap_with(relu_2_1)"
-    assert short_edit_text(tl.bwd_hook(named_fn)) == "bwd_hook(named_fn)"
-    assert short_edit_text(tl.bwd_hook(lambda g, *, hook: g)) == "bwd_hook(fn)"
-    assert short_edit_text(tl.grad_zero()) == "grad_zero"
+    assert short_edit_text(tl.hook_grad(named_fn)) == "hook_grad(named_fn)"
+    assert short_edit_text(tl.hook_grad(lambda g, *, hook: g)) == "hook_grad(fn)"
+    assert short_edit_text(tl.zero_grad()) == "zero_grad"
 
 
 def test_node_rows_cap_at_three_then_more() -> None:
@@ -128,8 +128,8 @@ def test_header_edit_line_forms() -> None:
     four = [
         _fired_site("a_1_1", tl.zero_ablate()),
         _fired_site("b_1_1", tl.scale(0.5)),
-        _fired_site("c_1_1", tl.noise(0.1)),
-        _fired_site("d_1_1", tl.grad_zero()),
+        _fired_site("c_1_1", tl.add_noise(0.1)),
+        _fired_site("d_1_1", tl.zero_grad()),
     ]
     assert header_edit_line(trace, four, PURPLE) == "4 edits (marked)"
 
@@ -389,12 +389,12 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
             gf for gf in trace.grad_fns if gf.grad_fn_object_id == second.grad_fn_object_id
         )
         trace.attach_hooks(
-            tl.grad_fn_label(grad_fn.label), tl.bwd_hook(named_backward), confirm_mutation=True
+            tl.grad_fn_label(grad_fn.label), tl.hook_grad(named_backward), confirm_mutation=True
         )
         sites = intervention_sites_for_log(trace)
         assert [site.label for site in sites] == [second.label]
         marks = edit_marks_by_site(trace, sites)
-        assert [mark.short for mark in marks[second.label]] == ["bwd_hook(named_backward)"]
+        assert [mark.short for mark in marks[second.label]] == ["hook_grad(named_backward)"]
         dot = trace.draw(
             vis_save_only=True,
             vis_fileformat="dot",
@@ -405,7 +405,7 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
         trace.cleanup()
     edited = [line for line in dot.splitlines() if "tl_edited" in line]
     assert len(edited) == 1
-    assert "bwd_hook(named_backward)" in edited[0]
+    assert "hook_grad(named_backward)" in edited[0]
 
 
 def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:

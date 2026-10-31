@@ -86,7 +86,7 @@ def _direction() -> torch.Tensor:
 _EDITS: tuple[tuple[str, Callable[[], Any], Callable[[torch.Tensor], torch.Tensor]], ...] = (
     (
         "steer",
-        lambda: tl.steer(_direction(), 2.0, feature_axis=-1),
+        lambda: tl.steer(_direction(), 2.0, dim=-1),
         lambda h: h + _direction().reshape(1, 1, _HIDDEN).to(h.dtype) * 2.0,
     ),
     ("add", lambda: tl.add(1.0), lambda h: h + 1.0),

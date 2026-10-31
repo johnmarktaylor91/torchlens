@@ -42,7 +42,7 @@ import torchlens as tl
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 4)).eval()
 direction = torch.randn(8)
-spec = tl.when(tl.module("1"), tl.steer(direction, magnitude=4.0, feature_axis=-1))
+spec = tl.when(tl.module("1"), tl.steer(direction, strength=4.0, dim=-1))
 
 # Build the binding once and reuse it for every forward.
 bound = spec.bind(model)
@@ -111,7 +111,7 @@ lm = LlamaForCausalLM(config).eval()
 ids = torch.randint(0, 128, (1, 6))
 direction = torch.randn(32)
 spec = tl.when(
-    tl.module("model.layers.0.mlp"), tl.steer(direction, magnitude=8.0, feature_axis=-1)
+    tl.module("model.layers.0.mlp"), tl.steer(direction, strength=8.0, dim=-1)
 )
 gen_kwargs = {"max_new_tokens": 5, "do_sample": False, "use_cache": True, "pad_token_id": 0}
 
@@ -163,7 +163,7 @@ torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 4)).eval()
 x = torch.randn(2, 8)
 direction = torch.randn(8)
-spec = tl.when(tl.module("1"), tl.steer(direction, magnitude=4.0, feature_axis=-1))
+spec = tl.when(tl.module("1"), tl.steer(direction, strength=4.0, dim=-1))
 
 output, recording = tl.record(
     model, x, save=tl.func("linear"), intervene=spec, return_output=True
@@ -307,7 +307,7 @@ ids = torch.randint(0, 128, (1, 6))
 direction = torch.randn(32)
 site = tl.module("model.layers.1.mlp")
 head = tl.module("lm_head")
-spec = tl.when(site, tl.steer(direction, magnitude=4.0, feature_axis=-1))
+spec = tl.when(site, tl.steer(direction, strength=4.0, dim=-1))
 
 trace = tl.trace(model, ids, save=site | head, intervene=spec)
 bound = spec.bind(model)

@@ -806,7 +806,7 @@ reauthoring (see the threat-model subsection of
 ``docs/reference/runnable_tlspec_contract.md``).
 """
 
-VERDICT_STEERING_WITNESS_FAMILIES: Final[frozenset[str]] = frozenset(
+_VERDICT_STEERING_WITNESS_FAMILIES: Final[frozenset[str]] = frozenset(
     family for family, spec in WITNESS_FAMILY_REGISTRY.items() if spec.witness_kind is not None
 )
 """The 11 witness-carrying registry families (claim-only rows excluded)."""
@@ -1780,7 +1780,6 @@ __all__ = [
     "DivergencePolicy",
     "FamilySpec",
     "ReplayWitnessStructure",
-    "VERDICT_STEERING_WITNESS_FAMILIES",
     "WITNESS_FAMILY_REGISTRY",
     "WITNESS_FAMILY_REGISTRY_VERSION",
     "WITNESS_GAP_REGISTRY",

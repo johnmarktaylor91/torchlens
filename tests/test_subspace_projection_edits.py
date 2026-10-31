@@ -18,23 +18,18 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import mean_ablate, project_onto, project_out, splice_module, zero_grad
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import (
     compose,
-    grad_zero,
-    mean_ablate,
-    mean_from,
-    project_off,
-    project_onto,
-    reference,
+    population,
     scramble_elements,
     set_direction_mean,
-    splice_module,
     subspace_ablate,
     subspace_interchange,
 )
-from torchlens.intervention._position_edits import at_positions
 from torchlens.intervention._subspace_projection import PROJECTION_NOTE
+from torchlens.intervention.stochastic import mean_from
 
 _H = 0.5 * torch.tensor(
     [[1, 1, 1, 1], [1, -1, 1, -1], [1, 1, -1, -1], [1, -1, -1, 1]], dtype=torch.float64
@@ -120,7 +115,7 @@ def test_non_orthonormal_basis_is_orthonormalised_keeping_sign() -> None:
 
     log = _trace()
     fork = log.fork()
-    fork.do(tl.subspace(_SITE, 4.0 * _H[0], origin="scaled row"), tl.clamp(max=0.0))
+    fork.do(tl.subspace(_SITE, 4.0 * _H[0], origin="scaled row"), tl.clamp(high=0.0))
     component, complement = _split(fork[_SITE].out, 1)
     base_component, base_complement = _split(_COORDS @ _H, 1)
     torch.testing.assert_close(complement, base_complement, rtol=0.0, atol=1e-12)
@@ -190,7 +185,7 @@ def _site_units_mask(rows: list[int]) -> torch.Tensor:
 
 
 def _donors() -> Any:
-    return reference(torch.arange(32, dtype=torch.float64).reshape(2, 4, 4), origin="donors")
+    return population(torch.arange(32, dtype=torch.float64).reshape(2, 4, 4), origin="donors")
 
 
 def _subspace_sel(basis: torch.Tensor = _BASES["rank1"]) -> Any:
@@ -199,15 +194,15 @@ def _subspace_sel(basis: torch.Tensor = _BASES["rank1"]) -> Any:
 
 _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any, Any]]]] = {
     "project_off": (
-        lambda: (_subspace_sel(), project_off(_H[0], feature_axis=-1)),
+        lambda: (_subspace_sel(), project_out(_H[0], dim=-1)),
         lambda: (_subspace_sel(), tl.zero_ablate()),
     ),
     "project_onto": (
-        lambda: (_subspace_sel(), project_onto(_H[0], feature_axis=-1)),
-        lambda: (_SITE, project_onto(_H[0], feature_axis=-1)),
+        lambda: (_subspace_sel(), project_onto(_H[0], dim=-1)),
+        lambda: (_SITE, project_onto(_H[0], dim=-1)),
     ),
     "set_direction_mean": (
-        lambda: (_subspace_sel(), set_direction_mean(_H[0], _donors(), feature_axis=-1)),
+        lambda: (_subspace_sel(), set_direction_mean(_H[0], _donors(), dim=-1)),
         lambda: (_subspace_sel(), mean_from(_donors())),
     ),
     "subspace_ablate": (
@@ -223,7 +218,7 @@ _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any,
         lambda: (_subspace_sel(), tl.scale(6.0)),
     ),
     "at_positions": (
-        lambda: (_subspace_sel(), at_positions(tl.zero_ablate(), [0])),
+        lambda: (_subspace_sel(), tl.positions(tl.zero_ablate(), [0])),
         lambda: (
             tl.subspace(tl.units(_SITE, _site_units_mask([0])), _H[:1], origin="rows"),
             tl.zero_ablate(),
@@ -242,8 +237,8 @@ _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any,
         lambda: (_subspace_sel(), splice_module(nn.Identity(), input="out")),
     ),
     "grad_zero": (
-        lambda: (_subspace_sel(), grad_zero()),
-        lambda: ("capture", grad_zero()),
+        lambda: (_subspace_sel(), zero_grad()),
+        lambda: ("capture", zero_grad()),
     ),
 }
 

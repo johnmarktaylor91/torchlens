@@ -593,7 +593,7 @@ class SiteSelector(BaseSelector):
                 "component (module_path=, op_type=, slot=, ordinal=)",
                 code="site_selector_empty",
                 remedy="pass op.site_key, or components such as "
-                "tl.site(module_path='encoder.0', op_type='linear')",
+                "tl.site(module_path='encoder.0', func='linear')",
                 argument="key",
             )
         if key is not None:
@@ -687,7 +687,7 @@ def site(
     key: str | None = None,
     *,
     module_path: str | None = None,
-    op_type: str | None = None,
+    func: str | None = None,
     slot: int | None = None,
     ordinal: int | None = None,
 ) -> SiteSelector:
@@ -700,7 +700,7 @@ def site(
     module_path:
         Module-site match: the full ``/``-joined site axis or any one
         module address on it.
-    op_type:
+    func:
         TorchLens layer type (``"linear"``, ``"relu"``, ...).
     slot:
         Multi-output slot index (``None`` = single-output ops).
@@ -717,7 +717,7 @@ def site(
     return SiteSelector(
         key,
         module_path=module_path,
-        op_type=op_type,
+        op_type=func,
         slot=slot,
         ordinal=ordinal,
     )
@@ -1339,12 +1339,12 @@ def func_transform(kind: str | None = None) -> FuncTransformSelector:
     return FuncTransformSelector(kind)
 
 
-def followed_by(inner: SelectorLike) -> FollowedBySelector:
+def followed_by(selector: SelectorLike, /) -> FollowedBySelector:
     """Create a retroactive successor selector.
 
     Parameters
     ----------
-    inner:
+    selector:
         Predicate that must match a later successor op.
 
     Returns
@@ -1353,15 +1353,15 @@ def followed_by(inner: SelectorLike) -> FollowedBySelector:
         Selector interpreted by capture-time save predicates.
     """
 
-    return FollowedBySelector(inner)
+    return FollowedBySelector(selector)
 
 
-def preceded_by(inner: SelectorLike) -> PrecededBySelector:
+def preceded_by(selector: SelectorLike, /) -> PrecededBySelector:
     """Create a lookback predecessor selector.
 
     Parameters
     ----------
-    inner:
+    selector:
         Predicate that must match a retained predecessor op.
 
     Returns
@@ -1370,7 +1370,7 @@ def preceded_by(inner: SelectorLike) -> PrecededBySelector:
         Selector matching current ops with a retained predecessor.
     """
 
-    return PrecededBySelector(inner)
+    return PrecededBySelector(selector)
 
 
 def output(target: int | str) -> OutputSelector:
@@ -1502,7 +1502,7 @@ def where(predicate: Callable[[Any], bool], *, name_hint: str | None = None) -> 
 
 
 def grad_fn(
-    type: str | type[Any] | None = None,
+    name: str | type[Any] | None = None,
     *,
     label: str | None = None,
     is_custom: bool | None = None,
@@ -1511,7 +1511,7 @@ def grad_fn(
 
     Parameters
     ----------
-    type:
+    name:
         Autograd class name or normalized grad_fn type to match.
     label:
         Substring to match against the grad_fn label.
@@ -1524,7 +1524,7 @@ def grad_fn(
         Immutable selector.
     """
 
-    return GradFnSelector(type, label=label, is_custom=is_custom)
+    return GradFnSelector(name, label=label, is_custom=is_custom)
 
 
 def without_op() -> InterveningSelector:

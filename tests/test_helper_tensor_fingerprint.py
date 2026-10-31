@@ -62,7 +62,7 @@ def _truth(model: nn.Module, x: torch.Tensor, direction: torch.Tensor) -> torch.
 def _steer(direction: torch.Tensor) -> Any:
     """Return an additive steer along ``direction``."""
 
-    return tl.steer(direction, magnitude=1.0, feature_axis=-1)
+    return tl.steer(direction, strength=1.0, dim=-1)
 
 
 def _staged_trace(model: nn.Module, x: torch.Tensor, direction: torch.Tensor, door: str) -> Any:

@@ -175,7 +175,7 @@ does not.) `label_drift_only` rows are disclosure, not incompatibility: the
 checker confirmed every saved structural target on the new capture. Confirm
 the drift and reuse the recipe on the edited capture.
 
-Had your selector been broader -- say a type-wide `site(op_type="linear")` --
+Had your selector been broader -- say a type-wide `site(func="linear")` --
 the diff would instead show `+ new` lines naming the adapter's own linear,
 because the recipe now matches a site it never saw at save time. That is the
 same honesty in the other direction: confirm before you reuse.
@@ -188,7 +188,7 @@ recipe.
 
 ```python
 inner_rule = tl.when(
-    tl.intervention.site(module_path="transformer.h.1.mlp.c_proj", op_type="addmm"),
+    tl.intervention.site(module_path="transformer.h.1.mlp.c_proj", func="addmm"),
     tl.zero_ablate(),
 )
 original_log.attach_hooks(inner_rule, confirm_mutation=True)
@@ -259,13 +259,13 @@ the same capture it was saved from comes back `EXACT`.
 print(
     edited_log.find_sites(
         tl.intervention.site(
-            module_path="transformer.h.1.inner.mlp.c_proj", op_type="addmm"
+            module_path="transformer.h.1.inner.mlp.c_proj", func="addmm"
         )
     )
 )
 recipe_v2 = tl.when(
     tl.intervention.site(
-        module_path="transformer.h.1.inner.mlp.c_proj", op_type="addmm"
+        module_path="transformer.h.1.inner.mlp.c_proj", func="addmm"
     ),
     tl.zero_ablate(),
 )

@@ -176,7 +176,7 @@ def test_hook_fires_only_at_targeted_pass(recurrent):
     fired: list[str] = []
 
     def spy_hook(out: torch.Tensor, *, hook) -> torch.Tensor:
-        fired.append(str(hook.layer_log.get("label")))
+        fired.append(str(hook.op.get("label")))
         return torch.zeros_like(out)
 
     fork.do("relu_1_2:1", spy_hook)

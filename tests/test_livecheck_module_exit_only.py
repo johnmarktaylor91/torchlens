@@ -32,7 +32,7 @@ from torchlens.backends.torch import _ops_interventions, ops as torch_ops
 from torchlens.intervention import runtime as intervention_runtime
 from torchlens.intervention.hooks import NormalizedHookEntry
 from torchlens.intervention.selectors import CompositeSelector
-from torchlens.intervention.spec import InterventionSpec
+from torchlens.intervention.spec import Recipe
 from torchlens.utils._torch_compat import TorchCapabilityWarning
 
 _MAGNITUDE = 2.0
@@ -97,7 +97,7 @@ def _direction() -> torch.Tensor:
 def _steer() -> Any:
     """Return the steering helper used across the tests."""
 
-    return tl.steer(_direction(), magnitude=_MAGNITUDE, feature_axis=-1)
+    return tl.steer(_direction(), strength=_MAGNITUDE, dim=-1)
 
 
 # spec name -> (spec factory, whether the per-op check is skipped, whether the spec fires).
@@ -362,7 +362,7 @@ def test_module_exit_only_selector_classification(selector: Any, exit_only: bool
             True,
             id="module_and_func_rule",
         ),
-        pytest.param(InterventionSpec(rules=()), True, id="empty_rules"),
+        pytest.param(Recipe(rules=()), True, id="empty_rules"),
         pytest.param(lambda ctx: None, True, id="opaque_callable"),
     ],
 )

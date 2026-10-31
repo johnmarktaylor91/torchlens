@@ -84,7 +84,7 @@ def _normalize_values(assignments: dict[str, Any]) -> dict[str, Any]:
     one reused SamplingPlan object yields one donor group across members.
     """
 
-    from ..intervention.spec import InterventionSpec, when
+    from ..intervention.spec import Recipe, when
     from ..intervention.stochastic import assign_batch_donor_groups
 
     pair_names = [
@@ -95,7 +95,7 @@ def _normalize_values(assignments: dict[str, Any]) -> dict[str, Any]:
     for name, (selection, edit) in zip(pair_names, normalized_pairs, strict=True):
         lowered[name] = when(selection, edit)
     for name, value in lowered.items():
-        if value is None or isinstance(value, InterventionSpec):
+        if value is None or isinstance(value, Recipe):
             continue
         raise BundleExperimentError(
             f"vary() value for member {name!r} must be an InterventionSpec, a "
@@ -143,10 +143,10 @@ def _apply_member_specs(
                 # canonical v9 EVENT audit row (hash-chained).
                 append_event_audit_row(member, events[-1])
             outcomes[name] = "completed"
-            spec_digests[name] = value.spec_digest
+            spec_digests[name] = value.digest
         except Exception as exc:  # noqa: BLE001 - disclosed partial outcome
             outcomes[name] = "failed"
-            spec_digests[name] = getattr(value, "spec_digest", None)
+            spec_digests[name] = getattr(value, "digest", None)
             failure = (name, exc)
             break
     return outcomes, spec_digests, failure

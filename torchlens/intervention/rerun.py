@@ -575,8 +575,8 @@ def _validate_append_hook_plan(
             raise AppendBatchDependenceError(
                 f"helper {helper_name!r} is not batch-independent; append is unsafe"
             )
-        force_shape_change = bool(entry.metadata.get("force_shape_change", False)) or bool(
-            dict(helper.kwargs).get("force_shape_change", False)
+        force_shape_change = bool(entry.metadata.get("allow_shape_change", False)) or bool(
+            dict(helper.kwargs).get("allow_shape_change", False)
         )
         if force_shape_change and not bool(getattr(helper, "compatible_with_append", False)):
             raise AppendMismatchError(

@@ -24,7 +24,7 @@ class SuperOp(Super["Op"], _TensorBearing):
         bundle_trace_names: list[str] | None = None,
         *,
         members: dict[str, Any] | None = None,
-        query: Any | None = None,
+        selector: Any | None = None,
     ) -> None:
         """Initialize a node view.
 
@@ -38,7 +38,7 @@ class SuperOp(Super["Op"], _TensorBearing):
             Optional legacy trace-name order.
         members:
             Dict keyed by bundle member name.
-        query:
+        selector:
             Original site query.
         """
 
@@ -60,7 +60,7 @@ class SuperOp(Super["Op"], _TensorBearing):
         super().__init__(
             label,
             cast(dict[str, "Op"], resolved_members),
-            query=query,
+            selector=selector,
             bundle_member_names=bundle_member_names,
         )
 
@@ -113,7 +113,7 @@ class SuperAtenOp(Super["AtenOp"]):
         super().__init__(
             label,
             resolved_members,
-            query=decomposition_slot,
+            selector=decomposition_slot,
             bundle_member_names=resolved_names,
         )
         self.decomposition_slot = decomposition_slot

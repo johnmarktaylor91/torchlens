@@ -79,7 +79,7 @@ _MAX_HEADER_EDITS = 3
 #: Longest string argument written in; longer ones are cut with an ellipsis.
 _MAX_LITERAL_CHARS = 16
 #: Keyword arguments that never appear in the edit text.
-_SILENT_KWARGS = frozenset({"force_shape_change"})
+_SILENT_KWARGS = frozenset({"allow_shape_change"})
 #: Hook names the value-replacement door gives its generated hooks.
 _SET_HOOK_MARKERS = ("_set_value_hook", "_value_hook")
 

@@ -91,8 +91,8 @@ def test_note_keeps_public_labels_and_drops_internal_ones() -> None:
 
     public = make_hook_context(
         name="scramble_elements",
-        layer_log={"layer_label": "relu_1_2", "label": "relu_1_2:1"},
-        run_ctx={},
+        op={"layer_label": "relu_1_2", "label": "relu_1_2:1"},
+        run_context={},
     )
     _enqueue_nondeterminism_note(public, "scramble_elements")
     assert public.run_ctx["ledger_notes"] == [
@@ -101,8 +101,8 @@ def test_note_keeps_public_labels_and_drops_internal_ones() -> None:
 
     raw_only = make_hook_context(
         name="scramble_elements",
-        layer_log={"layer_label": "relu_1_3_raw", "label": "relu_1_3_raw"},
-        run_ctx={},
+        op={"layer_label": "relu_1_3_raw", "label": "relu_1_3_raw"},
+        run_context={},
     )
     _enqueue_nondeterminism_note(raw_only, "scramble_elements")
     assert raw_only.run_ctx["ledger_notes"] == ["scramble_elements used unseeded stochastic RNG"]
