@@ -3,7 +3,7 @@
 # tools/packaging/generate_constraints.py turns this file into
 # tools/packaging/constraints/<set>.txt (sorted, no timestamps) and into the CI
 # matrix of the `packaging` leg in .github/workflows/pr.yml; `--check` exits 1
-# when a generated file is stale. tests/packaging/ installs the built wheel and
+# when a generated file is stale. tests/packaging_install/ installs the built wheel and
 # sdist into a fresh venv per set under that set's constraints and probes it.
 #
 # Every extra declared in pyproject.toml must appear in a set or in `aliases`;
