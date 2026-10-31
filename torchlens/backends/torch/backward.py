@@ -65,6 +65,7 @@ from ._fire_timing import (
     _pop_matching_fire_start,
     _register_fire_timing_prehook,
 )
+from ._grad_fn_source import _grad_fn_is_custom, _grad_fn_source_metadata
 from ._gradfn_markers import (
     _drain_gradfn_markers,
     _enter_internal_gradfn_bracket,
@@ -342,6 +343,40 @@ def _active_forward_op_count_at_trigger() -> int | None:
     if active_state is None:
         return None
     return max(0, int(active_state.step_index) - 1)
+
+
+def _register_slot_gradient_prehook(
+    grad_fn_handle: Any,
+    output_nr: int,
+    tensor_hook: Callable[[torch.Tensor | None], None],
+) -> Any:
+    """Register a tensor gradient hook as a node pre-hook on one output slot.
+
+    A tensor hook registered after the tensor was written in place again
+    receives the newer version's gradient; a pre-hook on the node that produced
+    the earlier version receives that version's gradient instead.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        Autograd node that produced the tensor version.
+    output_nr:
+        Output slot of that node the tensor version occupies.
+    tensor_hook:
+        Hook taking the gradient of one tensor (``None`` when none arrived).
+
+    Returns
+    -------
+    Any
+        Removable handle of the registered pre-hook.
+    """
+
+    def prehook(grad_outputs: tuple[torch.Tensor | None, ...]) -> None:
+        """Pass the slot's incoming gradient to the tensor hook, unchanged."""
+
+        tensor_hook(grad_outputs[output_nr] if output_nr < len(grad_outputs) else None)
+
+    return grad_fn_handle.register_prehook(prehook)
 
 
 def _register_forward_grad_fn(trace: Any, grad_fn_handle: Any, _raw_label: str | None) -> None:
@@ -686,109 +721,6 @@ def _root_tensor_step_index(trace: Any, root: torch.Tensor) -> int | None:
     if final_match is not None:
         return int(final_match.group(1))
     return None
-
-
-def _grad_fn_is_custom(grad_fn_handle: Any) -> bool:
-    """Return whether a grad_fn_handle appears to come from user/custom autograd code.
-
-    Parameters
-    ----------
-    grad_fn_handle:
-        Autograd function object.
-
-    Returns
-    -------
-    bool
-        True when the type's module path is outside PyTorch's built-in autograd
-        and nn namespaces.
-    """
-    class_module = type(grad_fn_handle).__module__
-    if class_module == "torch.autograd.function":
-        return True
-    builtin_prefixes = ("torch.autograd", "torch.nn", "torch", "builtins")
-    return not class_module.startswith(builtin_prefixes)
-
-
-def _safe_source_file_and_line(obj: Any) -> tuple[str | None, int | None]:
-    """Return source file and first line for an object when introspection works.
-
-    Parameters
-    ----------
-    obj:
-        Object to inspect.
-
-    Returns
-    -------
-    tuple[str | None, int | None]
-        Source file and line, or ``(None, None)`` when unavailable.
-    """
-
-    try:
-        source_file = inspect.getsourcefile(obj) or inspect.getfile(obj)
-        source_line = inspect.getsourcelines(obj)[1]
-    except (OSError, TypeError):
-        return None, None
-    return source_file, source_line
-
-
-def _safe_signature(obj: Any) -> str | None:
-    """Return an inspect signature string when available.
-
-    Parameters
-    ----------
-    obj:
-        Callable object to inspect.
-
-    Returns
-    -------
-    str | None
-        Signature string, or ``None`` when unavailable.
-    """
-
-    try:
-        return str(inspect.signature(obj))
-    except (TypeError, ValueError):
-        return None
-
-
-def _grad_fn_source_metadata(grad_fn_cls: type[Any]) -> dict[str, Any]:
-    """Return best-effort source metadata for a grad-fn class.
-
-    Parameters
-    ----------
-    grad_fn_cls:
-        Runtime class of the autograd grad-fn object.
-
-    Returns
-    -------
-    dict[str, Any]
-        Keyword arguments accepted by ``GradFn`` for source metadata fields.
-    """
-
-    class_source_file, class_source_line = _safe_source_file_and_line(grad_fn_cls)
-    init_method = getattr(grad_fn_cls, "__init__", None)
-    forward_method = getattr(grad_fn_cls, "forward", None)
-    backward_method = getattr(grad_fn_cls, "backward", None)
-    init_source_file, init_source_line = _safe_source_file_and_line(init_method)
-    forward_source_file, forward_source_line = _safe_source_file_and_line(forward_method)
-    backward_source_file, backward_source_line = _safe_source_file_and_line(backward_method)
-    return {
-        "class_source_file": class_source_file,
-        "class_source_line": class_source_line,
-        "class_docstring": grad_fn_cls.__doc__,
-        "init_source_file": init_source_file,
-        "init_source_line": init_source_line,
-        "init_signature": _safe_signature(init_method),
-        "init_docstring": getattr(init_method, "__doc__", None),
-        "forward_source_file": forward_source_file,
-        "forward_source_line": forward_source_line,
-        "forward_signature": _safe_signature(forward_method),
-        "forward_docstring": getattr(forward_method, "__doc__", None),
-        "backward_source_file": backward_source_file,
-        "backward_source_line": backward_source_line,
-        "backward_signature": _safe_signature(backward_method),
-        "backward_docstring": getattr(backward_method, "__doc__", None),
-    }
 
 
 def _iter_next_grad_fns(grad_fn_handle: Any) -> Iterator[Any]:
