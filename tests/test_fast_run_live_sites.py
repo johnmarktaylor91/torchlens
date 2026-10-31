@@ -94,3 +94,20 @@ def test_fast_run_nested_same_name_call_returning_an_inner_leaf_is_one_event() -
     """The outer call's tensor is a leaf of the inner tuple: one captured op, one event."""
 
     _fast_matches_full(UnpackedPool(), torch.arange(16.0).view(2, 2, 4))
+
+
+class SetItemSite(nn.Module):
+    """A ``__setitem__`` on an activation: Python returns ``None`` for it."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Mutate one row in place and keep computing from the receiver."""
+
+        y = x * 2
+        y[0] = 1
+        return y + 1
+
+
+def test_fast_run_setitem_site_collects_the_mutated_receiver() -> None:
+    """Capture records the receiver as the setter's output; the fast run sees the same."""
+
+    _fast_matches_full(SetItemSite(), torch.arange(6.0).view(2, 3))
