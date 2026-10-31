@@ -111,7 +111,7 @@ validation, and core data-class names for the current 2.x surface.
 | `torchlens/checks/` | Training sanity checks (`audit_params`, gradient-flow audit) | Parameter and gradient health |
 | `torchlens/conformance/` | Capture conformance packs C0-C2 | Third-party conformance testing |
 | `torchlens/differential.py` | The guarded cross-capture delta projection | Comparing two captures |
-| `torchlens/_ecosystem/` | Compat window, `tl.migrate`, provider discovery | Version support and migration |
+| `torchlens/_ecosystem/` | Provider discovery | Entry-point providers |
 | `torchlens/experiment/` | Multi-run experiments: lineage, sweeps, site sweeps, ledger | Experiment provenance |
 | `torchlens/features.py`, `torchlens/inventory.py` | Feature-matrix shaping; site inventory | "What can I extract?" |
 | `torchlens/mechinterp/` | Mech-interp kit validated against TransformerLens oracles | Residual decomposition, DLA, head patching |
