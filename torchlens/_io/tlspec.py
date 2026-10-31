@@ -559,13 +559,13 @@ class _TlSpecWriter:
 
         spec = get_backend_spec(backend_name)
         runtime_name = spec.serialization_policy.runtime_name or backend_name
-        runtime_config = getattr(source, "backend_runtime_config", None)
+        runtime_config = getattr(source, "_provenance_backend_config", None)
         if not isinstance(runtime_config, dict):
             runtime_config = {}
         device_summary = getattr(source, "backend_runtime_device_summary", None)
         if not isinstance(device_summary, dict):
             device_summary = {}
-        runtime_version = getattr(source, "backend_runtime_version", "0.0.metadata")
+        runtime_version = getattr(source, "_provenance_backend_version", "0.0.metadata")
         return {
             "name": runtime_name,
             "version": None if runtime_version is None else str(runtime_version),
@@ -895,7 +895,7 @@ class _TlSpecWriter:
         """
 
         grad_kinds = {"grad", "transformed_grad", "grad_fn_grad"}
-        backend_name = str(getattr(source, "backend", "torch"))
+        backend_name = str(getattr(source, "_provenance_backend", "torch"))
         saved_grad_records = 0
         if backend_name == "torch":
             saved_grad_records = _safe_len(getattr(source, "saved_grad_ops", None))

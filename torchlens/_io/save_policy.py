@@ -29,7 +29,7 @@ def _refuse_incoherent_structure_only_write(scrubbed_state: dict[str, Any]) -> N
     ``_io/forgery_validation.py`` stays strict and unchanged.
     """
 
-    if scrubbed_state.get("structure_only") is not True:
+    if scrubbed_state.get("_options_structure_only") is not True:
         return
     from .forgery_validation import _OP_VALUE_PAYLOAD_FIELDS
 

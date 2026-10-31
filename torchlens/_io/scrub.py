@@ -570,7 +570,7 @@ def detach_conditional_trace_backrefs(value: Any) -> None:
 
     if not isinstance(value, MutableMapping):
         return
-    accessor = value.get("conditionals")
+    accessor = value.get("_graph_conditionals")
     if not isinstance(accessor, ConditionalAccessor):
         return
     detached: list[Conditional] = []
@@ -583,7 +583,7 @@ def detach_conditional_trace_backrefs(value: Any) -> None:
         conditional_copy = copy.copy(conditional)
         conditional_copy.arms = detached_arms
         detached.append(conditional_copy)
-    value["conditionals"] = ConditionalAccessor(detached)
+    value["_graph_conditionals"] = ConditionalAccessor(detached)
 
 
 def _mapping_key_payload_reason(key: Any, options: _ScrubOptions) -> str | None:
@@ -1245,7 +1245,7 @@ def _scrub_value(
     # metadata (docstrings + absolute source files) as the Trace. Dispatch on the
     # field signature rather than the class so any source-metadata owner is
     # covered without an ``_io`` -> ``data_classes`` import cycle.
-    elif "class_docstring" in scrubbed_state:
+    elif "_source_class_docstring" in scrubbed_state:
         _apply_source_metadata_policy(scrubbed_state, options)
     # ``ConditionalEvent`` records (in ``conditional_records``) carry the absolute
     # path of the user's forward-defining module in ``source_file``. Dispatch on the
