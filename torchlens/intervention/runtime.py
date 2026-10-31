@@ -184,7 +184,7 @@ def _execute_hook(
     out:
         Current out tensor at the hook site.
     hook_context:
-        Metadata snapshot passed as the keyword-only ``hook`` argument.
+        Metadata snapshot passed as the keyword-only ``ctx`` argument.
     allow_shape_change:
         Escape hatch allowing dtype, device, and shape changes.
 
@@ -202,12 +202,12 @@ def _execute_hook(
     """
 
     try:
-        inspect.signature(hook_callable).bind(out, hook=hook_context)
+        inspect.signature(hook_callable).bind(out, ctx=hook_context)
     except TypeError as exc:
         _refuse_gradient_edit_on_forward(hook_callable, hook_context)
         raise HookSignatureError(
             f"hook {hook_context.name!r} could not be called at "
-            f"{_site_name(hook_context)} with signature (out, *, hook)"
+            f"{_site_name(hook_context)} with signature (out, *, ctx)"
         ) from exc
     injection_trace = getattr(_state, "_active_trace", None)
     _injection_armed = injection_trace is not None and (
@@ -238,10 +238,10 @@ def _execute_hook(
             ),
         )
         with HOOK_REENTRANCY_GUARD, pause_logging(), recorder:
-            result = hook_callable(out, hook=hook_context)
+            result = hook_callable(out, ctx=hook_context)
     else:
         with HOOK_REENTRANCY_GUARD, pause_logging():
-            result = hook_callable(out, hook=hook_context)
+            result = hook_callable(out, ctx=hook_context)
     return validate_hook_output(
         result,
         out,
@@ -274,7 +274,7 @@ def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookConte
         callback and the context is a forward one; otherwise returns.
     """
 
-    if hook_context.direction != "forward":
+    if hook_context.signal != "forward":
         return
     try:
         parameters = inspect.signature(hook_callable).parameters
@@ -508,7 +508,7 @@ def _apply_live_hooks(
         hook_context = make_hook_context(
             name=_hook_display_name(normalized_entry),
             timing="post",
-            direction="forward",
+            signal="forward",
             op=site,
             run_context=_live_run_ctx(),
             args=hook_args or (current_out,),
@@ -1043,7 +1043,7 @@ def _selector_uses_only_provisional_fields(selector: Any) -> bool:
 
 
 def _helper_routes_inputs(helper: Any | None) -> bool:
-    """Return whether a helper consumes call inputs from ``hook.args``.
+    """Return whether a helper consumes call inputs from ``ctx.args``.
 
     Parameters
     ----------

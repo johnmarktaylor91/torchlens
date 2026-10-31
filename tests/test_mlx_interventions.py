@@ -106,10 +106,10 @@ def test_mlx_scale_and_callable_transform_apply() -> None:
     assert np.allclose(relu_scaled, relu_baseline * 0.5, atol=1e-5)
     assert MLXBackend().validate_trace(scaled) is True
 
-    def _negate(out: mx.array, *, hook: object) -> mx.array:
+    def _negate(out: mx.array, *, ctx: object) -> mx.array:
         """Return the negated activation."""
 
-        del hook
+        del ctx
         return out * -1.0
 
     negated = tl.trace(model, x, backend="mlx", intervene=tl.when(tl.func("relu"), _negate))
@@ -215,10 +215,10 @@ def test_mlx_unsupported_helper_refuses_typed() -> None:
 def test_mlx_shape_changing_hook_refuses_typed() -> None:
     """A fired hook that changes shape refuses instead of mis-broadcasting."""
 
-    def _grow(out: mx.array, *, hook: object) -> mx.array:
+    def _grow(out: mx.array, *, ctx: object) -> mx.array:
         """Return a wrong-shape replacement."""
 
-        del hook
+        del ctx
         return mx.zeros((7, 7))
 
     with pytest.raises(BackendUnsupportedError, match="shape"):

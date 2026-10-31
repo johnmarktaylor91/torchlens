@@ -270,13 +270,13 @@ def apply_edge_substitution_do(
             context = hooks_module.make_hook_context(
                 name=helper_name,
                 timing="post",
-                direction="forward",
+                signal="forward",
                 op=child_op,
                 run_context={},
                 args=(consumed,),
                 kwargs={},
             )
-            substituted = hook_callable(consumed, hook=context)
+            substituted = hook_callable(consumed, ctx=context)
             substituted = _validate_edited(substituted, consumed, record.child_label)
 
             new_out = _reexecute_child_with_substitution(

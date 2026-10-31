@@ -165,7 +165,7 @@ class _MetaReturn(torch.nn.Module):
         return torch.empty_like(x, device="meta")
 
 
-def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return zeros matching the input out.
 
     Parameters
@@ -181,7 +181,7 @@ def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
         Zero out.
     """
 
-    del hook
+    del ctx
     return torch.zeros_like(out)
 
 
@@ -482,7 +482,7 @@ def test_helper_axis_ambiguity_uses_catalog_error() -> None:
     hook = tl.steer(torch.ones(3))()
 
     with pytest.raises(terrors.AmbiguousAxisError, match="dim"):
-        hook(torch.ones(2, 3), hook=None)
+        hook(torch.ones(2, 3), ctx=None)
 
 
 def test_bundle_member_error_raised_for_missing_bundle_site() -> None:

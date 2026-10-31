@@ -831,7 +831,7 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
     assert trace._saved_grad_labels
     assert any(param_log._grad_records for param_log in trace.param_logs.values())
 
-    def _identity_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def _identity_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         return out
 
     fork = trace.push(
@@ -871,7 +871,7 @@ def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
     param_log._derived_grad_payload = torch.ones(1)
     assert param_log.has_grad is True  # positive control: the seed arms the channel
 
-    def _identity_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def _identity_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         return out
 
     fork = trace.push(

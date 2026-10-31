@@ -254,7 +254,7 @@ def test_posthoc_or_short_circuits_where_predicate(conv_trace: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _noop_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _noop_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     return out
 
 
@@ -475,8 +475,8 @@ def test_bare_string_live_is_exact_raw_label() -> None:
 
     fired: list[str] = []
 
-    def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
-        fired.append(str(hook.op.get("layer_label")))
+    def _hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
+        fired.append(str(ctx.op.get("layer_label")))
         return out
 
     with warnings.catch_warnings():

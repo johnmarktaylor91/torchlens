@@ -53,7 +53,7 @@ def test_session_bound_edit_prints_as_tl_edit() -> None:
 def test_no_edit_repr_prints_the_internal_class_name() -> None:
     """``Edit(`` never appears in an edit's printed form."""
 
-    edits = [tl.zero_grad(), tl.hook_grad(lambda g, *, hook: g), tl.steer(torch.zeros(3))]
+    edits = [tl.zero_grad(), tl.hook_grad(lambda g, *, ctx: g), tl.steer(torch.zeros(3))]
     for edit in edits:
         assert "Edit(" not in repr(edit)
         assert repr(edit).startswith("tl.")

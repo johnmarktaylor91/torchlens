@@ -36,7 +36,7 @@ def _log() -> tl.Trace:
     )
 
 
-def _bad_hook(out: torch.Tensor, *, hook) -> torch.Tensor:
+def _bad_hook(out: torch.Tensor, *, ctx) -> torch.Tensor:
     raise RuntimeError("boom")
 
 

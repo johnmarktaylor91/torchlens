@@ -316,7 +316,7 @@ def _resolve_callable_applier(hook: Callable[..., Any]) -> MLXHookApplier:
     Parameters
     ----------
     hook:
-        User callable with the standard ``fn(out, *, hook)`` hook signature.
+        User callable with the standard ``fn(out, *, ctx)`` hook signature.
 
     Returns
     -------
@@ -333,9 +333,9 @@ def _resolve_callable_applier(hook: Callable[..., Any]) -> MLXHookApplier:
         context = make_hook_context(
             name=identity,
             timing="post",
-            direction="forward",
+            signal="forward",
         )
-        return normalized(out, hook=context)
+        return normalized(out, ctx=context)
 
     return MLXHookApplier(identity, _apply)
 

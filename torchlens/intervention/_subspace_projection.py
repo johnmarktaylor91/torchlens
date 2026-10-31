@@ -126,7 +126,7 @@ _NESTED_WHY = (
 _GENERIC_REFUSAL = (
     "the verb is not one of the coordinate or value verbs listed for subspace edits",
     "pass a hook callable, which receives the coordinates: "
-    "fork.do(tl.subspace(site, basis, origin=...), lambda c, *, hook: c * 0)",
+    "fork.do(tl.subspace(site, basis, origin=...), lambda c, *, ctx: c * 0)",
 )
 # verb -> (why it has no coordinate meaning, working spelling); ``{verb}`` is filled in.
 _REFUSALS: dict[str, tuple[str, str]] = {
@@ -427,20 +427,20 @@ class SubspaceProjection:
 
             inner = inner_factory()
 
-            def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+            def _hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
                 """Edit the in-span component of ``out``; keep its complement."""
 
                 axis = dim % out.ndim
                 coords = _move_coords(out, rows, axis)
                 if meaning == "coordinates":
-                    edited = _checked(inner(coords, hook=hook), coords, verb, "coordinates")
+                    edited = _checked(inner(coords, ctx=ctx), coords, verb, "coordinates")
                     delta = edited - coords
                 elif meaning == "source":
-                    source = inner(torch.movedim(out, axis, -1), hook=SourceCall(hook))
+                    source = inner(torch.movedim(out, axis, -1), ctx=SourceCall(ctx))
                     moved = torch.movedim(source, -1, axis)
                     delta = _checked(moved, coords, verb, "coordinates") - coords
                 else:
-                    value = _checked(inner(out, hook=hook), out, verb, "site value")
+                    value = _checked(inner(out, ctx=ctx), out, verb, "site value")
                     delta = _move_coords(value, rows, axis) - coords
                 return out + _span_vector(delta, rows, axis)
 

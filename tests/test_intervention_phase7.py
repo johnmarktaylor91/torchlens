@@ -88,7 +88,7 @@ class InplaceVersionModel(torch.nn.Module):
         return y * 2
 
 
-def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return a zeroed out.
 
     Parameters
@@ -104,7 +104,7 @@ def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
         Zeroed out.
     """
 
-    del hook
+    del ctx
     return out * 0
 
 
@@ -226,10 +226,10 @@ def test_rerun_colliding_hook_identifiers_do_not_hide_misses() -> None:
         _reconcile_rerun_hook_fires,
     )
 
-    def same_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def same_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Shared callable planned under two different targets."""
 
-        del hook
+        del ctx
         return out
 
     entries = [
@@ -661,7 +661,7 @@ def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:
         _reconcile_rerun_hook_fires,
     )
 
-    def shared_callable(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def shared_callable(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """One callable shared by two differently-targeted entries."""
 
         return out

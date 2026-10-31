@@ -282,7 +282,7 @@ def test_grad_fn_hook_inplace_mutation_records_replaced() -> None:
         grad_input[0].mul_(0)
         return None
 
-    mutate_in_place.direction = "backward"
+    mutate_in_place.signal = "backward"
     _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), mutate_in_place)
     hook = _make_grad_fn_hook(trace_stub, 1)
 
@@ -318,7 +318,7 @@ def test_grad_fn_hook_data_alias_mutation_records_replaced() -> None:
         grad_input[0].data.mul_(0)
         return None
 
-    mutate_via_data_alias.direction = "backward"
+    mutate_via_data_alias.signal = "backward"
     _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), mutate_via_data_alias)
     hook = _make_grad_fn_hook(trace_stub, 1)
 
@@ -557,7 +557,7 @@ def test_backward_in_place_none_return_helper_records_gradient_effect() -> None:
             grad_input[0].mul_(0)
         return None
 
-    zero_in_place.direction = "backward"  # type: ignore[attr-defined]
+    zero_in_place.signal = "backward"  # type: ignore[attr-defined]
     x = torch.ones(2, 3, requires_grad=True)
     trace = tl.trace(
         _EncoderModel(),
@@ -875,7 +875,7 @@ def test_backward_intervention_replacement_registers_higher_order_terminal() -> 
         del grad_output, grad_fn_handle, call_index, run_ctx
         return tuple(None if grad is None else grad * 2 for grad in grad_input)
 
-    scale_grad.direction = "backward"  # type: ignore[attr-defined]
+    scale_grad.signal = "backward"  # type: ignore[attr-defined]
     x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(
         _PowModel(),
@@ -1019,10 +1019,10 @@ def test_bwd_hook_fires_and_can_replace_gradient(selector: Any) -> None:
 
     calls: list[torch.Tensor] = []
 
-    def _zero_hook(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def _zero_hook(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Record and zero a tensor gradient."""
 
-        del hook
+        del ctx
         calls.append(grad.detach().clone())
         return torch.zeros_like(grad)
 
@@ -1127,7 +1127,7 @@ class _GuidedCNN(nn.Module):
 def _guided_backprop_via_torchlens(model: nn.Module, x: torch.Tensor, target: int) -> torch.Tensor:
     """Return the guided-backprop input gradient using the one-off recipe."""
 
-    guided = tl.when(tl.func("relu"), tl.hook_grad(lambda g, *, hook: g.clamp(min=0)))
+    guided = tl.when(tl.func("relu"), tl.hook_grad(lambda g, *, ctx: g.clamp(min=0)))
     trace = tl.trace(
         model,
         x.clone().requires_grad_(True),

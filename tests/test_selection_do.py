@@ -127,16 +127,16 @@ def test_apply_refusal_axes(log):
     selection = tl.units("relu_1_2", [(0, 0, 1, 1)])
     out_shape = log["relu_1_2"].out.shape
 
-    def bad_shape(out, *, hook):
+    def bad_shape(out, *, ctx):
         return torch.zeros(3, 5)
 
-    def bad_broadcast(out, *, hook):
+    def bad_broadcast(out, *, ctx):
         return torch.zeros(out_shape[-1])  # broadcastable to the site shape
 
-    def bad_dtype(out, *, hook):
+    def bad_dtype(out, *, ctx):
         return torch.zeros(tuple(out.shape), dtype=torch.float64)
 
-    def non_tensor(out, *, hook):
+    def non_tensor(out, *, ctx):
         return "junk"
 
     for hook_fn, reason in (

@@ -227,7 +227,7 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
         lambda out: torch.where(_UNITS, 3.0 * out, out),
         "refused",
     ),
-    "hook callable": (lambda: lambda out, *, hook: out * 2.0, lambda out: out * 2.0, "coord"),
+    "hook callable": (lambda: lambda out, *, ctx: out * 2.0, lambda out: out * 2.0, "coord"),
 }
 
 

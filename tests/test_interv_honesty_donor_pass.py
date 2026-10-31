@@ -85,7 +85,7 @@ def test_bare_multipass_donor_lookup_refuses_instead_of_guessing() -> None:
         run_context={},
     )
     with pytest.raises(HookValueError) as excinfo:
-        hook_callable(base["relu_1_2:1"].out, hook=context)
+        hook_callable(base["relu_1_2:1"].out, ctx=context)
     message = str(excinfo.value)
     assert "multi-pass" in message
     assert "'relu_1_2:1'" in message

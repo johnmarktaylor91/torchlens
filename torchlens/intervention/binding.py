@@ -340,7 +340,7 @@ def _rule_plan_problem(rule: Any) -> tuple[str, str] | None:
             "carries no executable hook payload; the capture-free lane can only "
             "run value-replacing actions",
             "use a value-replacing action (tl.scale, tl.add_noise, tl.replace_with, "
-            "or a callable taking (out, *, hook))",
+            "or a callable taking (out, *, ctx))",
         )
     hook = decision.hook
     edits_gradients = decision.direction in ("backward", "both") or (
@@ -683,7 +683,7 @@ def _consider_op(
         hook_ctx = make_hook_context(
             name=plan.display_name,
             timing="post",
-            direction="forward",
+            signal="forward",
             op={
                 "label": raw_label,
                 "layer_type": layer_type,
@@ -911,7 +911,7 @@ def _make_boundary_hook(
             hook_ctx = make_hook_context(
                 name=plan.display_name,
                 timing="post",
-                direction="forward",
+                signal="forward",
                 op={
                     "label": f"{address}:{pass_index}",
                     "module_address": address,

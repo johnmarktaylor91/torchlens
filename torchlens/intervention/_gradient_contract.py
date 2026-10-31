@@ -46,12 +46,12 @@ _FIXED_REMEDY = (
 )
 
 
-def _site_label(hook: Any) -> str:
+def _site_label(ctx: Any) -> str:
     """Return the user's label for the firing site."""
 
-    layer_log = getattr(hook, "op", None) or {}
+    layer_log = getattr(ctx, "op", None) or {}
     label = layer_log.get("layer_label") or layer_log.get("label")
-    return str(label or getattr(hook, "name", None) or "<site>")
+    return str(label or getattr(ctx, "name", None) or "<site>")
 
 
 def _refusal(
@@ -82,12 +82,12 @@ def _detached_remedy(verb: str) -> str:
     return _FIXED_REMEDY
 
 
-def _check(out: Any, result: Any, hook: Any, verb: str) -> None:
+def _check(out: Any, result: Any, ctx: Any, verb: str) -> None:
     """Raise when ``result`` carries no graph although the caller asked for one."""
 
     if not isinstance(out, torch.Tensor) or not isinstance(result, torch.Tensor):
         return
-    where = (verb, _site_label(hook))
+    where = (verb, _site_label(ctx))
     if not torch.is_grad_enabled():
         raise _refusal(
             where,
@@ -116,7 +116,7 @@ def _check(out: Any, result: Any, hook: Any, verb: str) -> None:
             _detached_remedy(verb),
             code="edit_detached_from_graph",
         )
-    if bool(getattr(hook, "run_ctx", {}).get("differentiable", False)):
+    if bool(getattr(ctx, "run_ctx", {}).get("differentiable", False)):
         _disclose_replay_frontier(where)
 
 
@@ -151,11 +151,11 @@ def _checked_factory(factory: Callable[[], Any], verb: str) -> Callable[[], Any]
 
         inner = factory()
 
-        def _hook(out: Any, *, hook: Any) -> Any:
+        def _hook(out: Any, *, ctx: Any) -> Any:
             """Run the edit, then refuse a result that dropped the graph."""
 
-            result = inner(out, hook=hook)
-            _check(out, result, hook, verb)
+            result = inner(out, ctx=ctx)
+            _check(out, result, ctx, verb)
             return result
 
         return _hook
@@ -170,7 +170,7 @@ def keep_grad(edit: Any) -> Any:
     ----------
     edit:
         A forward ``Edit`` (``tl.scale(2.0)``, ``tl.patch_from(source)``, ...)
-        or a hook callable ``fn(out, *, hook)``.
+        or a hook callable ``fn(out, *, ctx)``.
 
     Returns
     -------
@@ -213,11 +213,11 @@ def keep_grad(edit: Any) -> Any:
         hook_fn = edit
         verb = getattr(edit, "__name__", "hook callable")
 
-        def _checked_callable(out: Any, *, hook: Any) -> Any:
+        def _checked_callable(out: Any, *, ctx: Any) -> Any:
             """Run the user's hook, then refuse a result that dropped the graph."""
 
-            result = hook_fn(out, hook=hook)
-            _check(out, result, hook, verb)
+            result = hook_fn(out, ctx=ctx)
+            _check(out, result, ctx, verb)
             return result
 
         _checked_callable._torchlens_keep_grad = True  # type: ignore[attr-defined]

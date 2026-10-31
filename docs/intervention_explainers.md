@@ -125,7 +125,7 @@ rows, the edit acts on the coordinates `c = Q x` (one per row) and the site gets
 - Coordinate verbs act on `c`: `tl.zero_ablate()`, `tl.scale(...)`, `tl.clamp(...)`,
   `tl.add_noise(...)`, `tl.mean_ablate(dim=...)` without `source=`,
   `scramble_elements(seed=...)` without `source=`, `tl.add(scalar)`,
-  `splice_module(module, input_route="out")`, and any hook callable `fn(c, *, hook)`, which receives
+  `splice_module(module, input_route="out")`, and any hook callable `fn(c, *, ctx)`, which receives
   the coordinates with the bound axis resized to `k`.
 - Value verbs compute a value in activation space and write its component: `tl.patch_from(source)`
   is the interchange (the component becomes the source run's), and likewise `swap_with`,

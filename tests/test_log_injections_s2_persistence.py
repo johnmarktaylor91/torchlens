@@ -47,7 +47,7 @@ class _Chain(nn.Module):
         return self.fc3(torch.tanh(self.fc2(torch.relu(self.fc1(x)))))
 
 
-def _sae_like(out: torch.Tensor, *, hook) -> torch.Tensor:
+def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
     """SAE-style injected computation (5 recordable torch calls)."""
 
     z = torch.relu(out @ torch.eye(out.shape[-1]))
@@ -257,7 +257,7 @@ def test_include_outs_false_persists_identity_only(chain, tmp_path) -> None:
 def test_nondeterministic_injected_callable_never_reads_diverged(chain) -> None:
     """RNG-consuming injected calls disclose unattested, not diverged."""
 
-    def noisy(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def noisy(out: torch.Tensor, *, ctx) -> torch.Tensor:
         """Inject one dropout call (fresh RNG per replay)."""
 
         return torch.dropout(out, 0.5, True)
@@ -272,7 +272,7 @@ def test_nondeterministic_injected_callable_never_reads_diverged(chain) -> None:
 def test_multi_output_slots_round_trip_and_attest(chain, tmp_path) -> None:
     """A multi-output injected call keeps per-slot records through the codec."""
 
-    def chunky(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def chunky(out: torch.Tensor, *, ctx) -> torch.Tensor:
         """Inject one chunk call with two tensor outputs."""
 
         first, second = torch.chunk(out, 2, dim=0)

@@ -119,7 +119,7 @@ def test_why_opaque_payload_fidelity_names_fact_not_content() -> None:
     base = _ready().fork()
     child = base.fork()
 
-    def user_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def user_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         return out * 3.0
 
     child.do("relu_1_2", user_hook)

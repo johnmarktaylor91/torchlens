@@ -142,7 +142,7 @@ def _masked_factory(inner_factory: Any, mask: _Mask, site_label: str) -> Any:
 
         inner = inner_factory()
 
-        def _masked_hook(out: Any, *, hook: Any) -> Any:
+        def _masked_hook(out: Any, *, ctx: Any) -> Any:
             """Run the inner edit, then scatter only masked elements into ``out``."""
 
             if not isinstance(out, torch.Tensor):
@@ -159,7 +159,7 @@ def _masked_factory(inner_factory: Any, mask: _Mask, site_label: str) -> Any:
                     f"match the selection's recorded index space {mask.shape!r}.",
                     site=site_label,
                 )
-            edited = inner(out, hook=hook)
+            edited = inner(out, ctx=ctx)
             edited = _validate_edited(edited, out, site_label)
             dense = mask._dense_ro().to(out.device)
             # EDIT-THEN-SCATTER on a fresh tensor; stored capture truth is
@@ -236,10 +236,10 @@ def _derive_masked_edit(edit: Any, entry: Site, digest: str, site_label: str) ->
         def _plain_factory() -> Any:
             """Adapt a bare hook callable to the masked-factory protocol."""
 
-            def _adapter(out: Any, *, hook: Any) -> Any:
+            def _adapter(out: Any, *, ctx: Any) -> Any:
                 """Forward to the user's hook callable unchanged."""
 
-                return edit(out, hook=hook)
+                return edit(out, ctx=ctx)
 
             return _adapter
 

@@ -57,7 +57,7 @@ def as_intervention_decision(
         resolved_direction = direction or action.direction or action.kind
         return InterventionDecision(action="add_hook", hook=action, direction=resolved_direction)
     if callable(action):
-        callable_direction = direction or getattr(action, "direction", "forward")
+        callable_direction = direction or getattr(action, "signal", "forward")
         if callable_direction not in {"forward", "backward", "both"}:
             # TypeError lineage since the 2.16 intervention era: the live
             # capture-path callers catch TypeError to convert a bad predicate
@@ -103,10 +103,10 @@ def add(delta: torch.Tensor | float | int, *, allow_shape_change: bool = False) 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for additive intervention."""
 
-        def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
             """Add the configured delta to the out."""
 
-            del hook
+            del ctx
             if isinstance(delta, torch.Tensor):
                 return out + delta.to(device=out.device, dtype=out.dtype)
             return out + cast(float | int, delta)
@@ -146,10 +146,10 @@ def replace_with(
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for fixed replacement."""
 
-        def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
             """Return the configured replacement tensor."""
 
-            del hook
+            del ctx
             replacement = value() if callable(value) else value
             converted = replacement.to(device=out.device, dtype=out.dtype)
             if converted is replacement:

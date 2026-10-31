@@ -223,10 +223,10 @@ def patch_head(  # noqa: PLR0913 -- the memo-normative D11 signature
         real_site_label = str(o_param.used_by_ops[0])
         real_op = corrupted_log.ops[real_site_label]
 
-        def _add_delta(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        def _add_delta(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
             """Add the lowered delta at the real post-projection op."""
 
-            del hook
+            del ctx
             return out + delta.reshape(out.shape).to(out.dtype)
 
         live_selector = FuncSelector(str(real_op.func_name)) & InModuleSelector(

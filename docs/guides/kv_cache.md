@@ -60,7 +60,7 @@ def decode_after(prefill):
 # TorchLens: the edit is bound for the prefill call only.
 spec = tl.when(
     tl.module("model.layers.0.self_attn.v_proj"),
-    lambda values, *, hook: blank_position_1(values),
+    lambda values, *, ctx: blank_position_1(values),
 )
 edited = decode_after(spec.bind(lm))
 

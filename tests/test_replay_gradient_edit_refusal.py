@@ -32,7 +32,7 @@ class _Net(nn.Module):
         return self.l2(self.l1(x))
 
 
-def _identity(g: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _identity(g: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     return g
 
 

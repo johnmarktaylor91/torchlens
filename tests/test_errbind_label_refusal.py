@@ -21,7 +21,7 @@ from torchlens.intervention.binding import bind_spec_to_model
 from torchlens.intervention.errors import BindingPreflightError, BindingRuntimeError
 
 
-def _double(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+def _double(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
     """Double the edited op's output."""
 
     return out * 2.0

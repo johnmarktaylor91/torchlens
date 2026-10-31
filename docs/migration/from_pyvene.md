@@ -278,7 +278,7 @@ target = torch.ones(8, 1)
 vector = nn.Parameter(torch.zeros(4))
 
 
-def add_vector(activation, *, hook):
+def add_vector(activation, *, ctx):
     return activation + vector
 
 

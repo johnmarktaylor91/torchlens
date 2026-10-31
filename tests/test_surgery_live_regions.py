@@ -293,7 +293,7 @@ def test_region_multi_exit_atomic_once_per_instance() -> None:
 
     calls = {"n": 0}
 
-    def _region_edit(outs: tuple, *, hook) -> tuple:
+    def _region_edit(outs: tuple, *, ctx) -> tuple:
         """Zero both exits from ONE coordinated evaluation."""
 
         calls["n"] += 1
@@ -320,7 +320,7 @@ def test_region_stochastic_once_per_pass() -> None:
     fork = tl.trace(model, x, capture=_CAPTURE).fork()
     draws: list[torch.Tensor] = []
 
-    def _stochastic(outs: tuple, *, hook) -> tuple:
+    def _stochastic(outs: tuple, *, ctx) -> tuple:
         """One draw per evaluation, applied to every exit."""
 
         draw = torch.randn(())
@@ -359,7 +359,7 @@ def test_region_container_consumed_exit_extends() -> None:
     assert all(edge.child == "cat_1_7:1" for edge in target.boundary.exits)
     assert any(edge.nested for edge in target.boundary.exits), "cat consumes inside a list"
 
-    def _halves(outs: tuple, *, hook) -> tuple:
+    def _halves(outs: tuple, *, ctx) -> tuple:
         """Replace both exits with constant halves."""
 
         return tuple(torch.full_like(out, 0.5) for out in outs)
@@ -401,7 +401,7 @@ def test_region_disconnected_members_evaluate_per_instance() -> None:
     assert len(target.instances) == 2
     calls = {"n": 0}
 
-    def _edit(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def _edit(out: torch.Tensor, *, ctx) -> torch.Tensor:
         """Count evaluations; zero the exit."""
 
         calls["n"] += 1
@@ -519,7 +519,7 @@ def test_region_gpt2_block_module_aligned() -> None:
         len(i.exit_labels) == 1 for i in target.instances
     ) else fork.do(
         target,
-        lambda outs, *, hook: tuple(torch.zeros_like(out) for out in outs),
+        lambda outs, *, ctx: tuple(torch.zeros_like(out) for out in outs),
     )
     (fact,) = _region_fact_rows(fork)
     assert fact["execution_effect"] == "exits_substituted_interior_not_replayed"
@@ -579,7 +579,7 @@ def test_region_resnet50_block_module_aligned() -> None:
     edit = (
         tl.scale(0.0)
         if all(len(i.exit_labels) == 1 for i in target.instances)
-        else (lambda outs, *, hook: tuple(torch.zeros_like(out) for out in outs))
+        else (lambda outs, *, ctx: tuple(torch.zeros_like(out) for out in outs))
     )
     fork.do(target, edit)
     (fact,) = _region_fact_rows(fork)

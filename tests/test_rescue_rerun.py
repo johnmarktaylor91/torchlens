@@ -741,7 +741,7 @@ def test_intervened_capture_never_reruns_user_callables(raw_cos: Any) -> None:
 
     calls = {"intervene": 0}
 
-    def counting_transform(value: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def counting_transform(value: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         calls["intervene"] += 1
         return value * 0.5
 

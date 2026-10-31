@@ -339,8 +339,8 @@ def _tf_callable_hook(hook: Callable[..., Any]) -> Callable[[Any], Any]:
         parameter_names = set(inspect.signature(hook).parameters)
     except (TypeError, ValueError):
         parameter_names = set()
-    if "hook" in parameter_names:
-        return lambda out: hook(out, hook=None)
+    if "ctx" in parameter_names:
+        return lambda out: hook(out, ctx=None)
     return hook
 
 
