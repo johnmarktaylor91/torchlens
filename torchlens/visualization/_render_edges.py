@@ -1472,7 +1472,11 @@ def _rolled_edge_pass_scopes(
     that runs in a later pass's parent has its own, different scope.
     """
 
-    child_ops = {op.label: op for op in child.ops.values()}
+    # ``Op.children`` holds lookup labels: the bare layer label for a single-pass
+    # layer, the pass-qualified op label otherwise.
+    child_ops = {
+        (op.layer_label if op.num_passes == 1 else op.label): op for op in child.ops.values()
+    }
     scopes: list[str] = []
     for parent_op in parent.ops.values():
         for child_label in parent_op.children:
