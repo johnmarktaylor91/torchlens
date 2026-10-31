@@ -47,7 +47,7 @@ streams are never advanced, and the model is never moved). Dtype and value
 recipes are fail-closed static facts: an unambiguous embedding entry
 permits vocab-bounded integer ids, an unambiguous float entry permits
 uniform `[0, 1)` values, and ambiguity refuses with a teach naming
-`torchlens.quickstart.InputSpec(shape, dtype=..., low=..., high=...)` as
+`torchlens.types.InputSpec(shape, dtype=..., low=..., high=...)` as
 the override. TorchLens never discovers dtypes by running failed forwards.
 
 **Rung 3 (nothing).** Shape inference probes the model (bounded, disclosed
@@ -55,7 +55,7 @@ in a probe diary) and the surface consumes the exact verified capture --
 the cost is "N probes + 1 verified capture", never a second capture after
 verification. When inference cannot help, the refusal teaches the exact
 next command, in order: pass the real call; pass `input_size=` (including
-the mapping form); call `torchlens.debug.infer_input_shape` directly with
+the mapping form); call `torchlens.debug.guess_input_shape` directly with
 hints. For Hugging Face models the refusal says the better answer first: a
 real prompt string.
 
@@ -71,7 +71,7 @@ same-shaped inputs with different values may take different control-flow
 paths (measured: detection models differ by several ops between two random
 inputs). Every synthesized-input trace therefore carries a persistent
 provenance record -- origin, shapes, dtypes, recipe, seed, strategy, probe
-diary -- that survives `tl.save`/`tl.load`, so a synthesized trace can never
+diary -- that survives `Trace.save`/`tl.load`, so a synthesized trace can never
 masquerade as a real one after a handoff.
 
 Two guardrails follow from the record:
@@ -105,7 +105,7 @@ renders through the existing renderer with `collapse="auto"` as its default.
 This facade is the only place auto-collapse is a default: `Trace.draw()`
 keeps `collapse="none"`.
 
-The result is detached (`RenderResult`): it owns the DOT source, the
+The result is detached (`Drawing`): it owns the DOT source, the
 rendered bytes or written path, the input provenance, and `save(path)`
 re-renders without retaining the capture. In notebooks it displays inline
 and writes nothing; in a plain script a bare call writes a collision-safe

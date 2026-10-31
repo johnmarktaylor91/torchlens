@@ -169,7 +169,7 @@ def test_compare_fingerprint_mismatch_is_loud(clean: Path, tmp_path: Path) -> No
         save=tl.func("relu"),
     )
     other_path = tmp_path / "other.tlspec"
-    tl.save(other, str(other_path))
+    other.save(str(other_path))
     envelope = call_tool("torchlens_compare", {"reference": str(clean), "subject": str(other_path)})
     data = envelope["data"]
     assert data["fingerprint_match"] is False

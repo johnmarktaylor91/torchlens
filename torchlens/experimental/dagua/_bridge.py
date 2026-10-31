@@ -12,8 +12,8 @@ from typing import Any
 
 import torch
 
-from ...utils._multipass_access import get_multipass_attr
-from ...utils.display import human_readable_size
+from ..._utils._multipass_access import get_multipass_attr
+from ..._utils.display import human_readable_size
 from ...visualization.node_spec import (
     INTERVENTION_CONE_COLOR,
     INTERVENTION_SITE_COLOR,
@@ -224,7 +224,7 @@ def build_torchlens_caption(trace: Any) -> str:
         )
     return (
         f"{getattr(trace, 'model_class_name', 'TorchLens model')}\n"
-        f"{getattr(trace, 'num_tensors', 0)} tensors total "
+        f"{len(trace)} tensors total "
         f"({human_readable_size(getattr(trace, 'total_activation_memory', 0) or 0)})\n"
         f"{params_line}"
     )
@@ -758,7 +758,7 @@ def trace_to_dagua_graph(
     trace: Any,
     vis_mode: str = "unrolled",
     vis_call_depth: int = 1000,
-    show_buffer_layers: bool = False,
+    show_buffers: bool = False,
     direction: str = "bottomup",
     include_grad_edges: bool | None = None,
 ) -> Any:
@@ -767,7 +767,7 @@ def trace_to_dagua_graph(
 
     g = dagua.DaguaGraph(direction=_to_dagua_direction(direction))
     entries = _entries_for_mode(trace, vis_mode)
-    if not show_buffer_layers:
+    if not show_buffers:
         entries = [e for e in entries if not getattr(e, "is_buffer", False)]
     entries_by_label = {getattr(e, "layer_label"): e for e in entries}
     site_labels, cone_labels = intervention_site_and_cone_labels(trace, show_cone=True)
@@ -905,12 +905,12 @@ def render_trace_with_dagua(
     trace: Any,
     vis_mode: str = "unrolled",
     vis_call_depth: int = 1000,
-    vis_outpath: str = "graph.gv",
+    path: str = "graph.gv",
     vis_save_only: bool = False,
-    vis_fileformat: str = "pdf",
-    vis_buffers: bool = False,
+    file_format: str = "pdf",
+    show_buffers: bool = False,
     vis_direction: str = "bottomup",
-    vis_theme: str = "torchlens",
+    theme: str = "torchlens",
 ) -> Any:
     """Render a TorchLens Trace with Dagua."""
     import dagua
@@ -919,11 +919,11 @@ def render_trace_with_dagua(
         trace,
         vis_mode=vis_mode,
         vis_call_depth=vis_call_depth,
-        show_buffer_layers=vis_buffers,
+        show_buffers=show_buffers,
         direction=vis_direction,
     )
-    graph._theme = dagua.get_theme(vis_theme)
-    output = _resolve_container_path(vis_outpath, vis_fileformat)
+    graph._theme = dagua.get_theme(theme)
+    output = _resolve_container_path(path, file_format)
     config = _torchlens_layout_config(graph.num_nodes, graph.direction)
     dagua.draw(
         graph,

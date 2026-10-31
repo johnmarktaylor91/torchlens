@@ -1,4 +1,4 @@
-"""Anti-recurrence test for cert10 ``tl.swap_with`` string-label honesty fix.
+"""Anti-recurrence test for cert10 ``swap_with`` string-label honesty fix.
 
 ``tl.swap_with(<string label>)`` was publicly documented as working (README,
 docs/for-ai-agents.md, docs/intervention_api.md) but was dead code: the only
@@ -18,7 +18,7 @@ trace/hook ever fires -- and the docs were corrected to stop claiming the
 string form works.
 
 This test locks in:
-1. ``tl.swap_with("<label>")`` raises immediately, with a message that names
+1. ``swap_with("<label>")`` raises immediately, with a message that names
    the unsupported form and points at the supported alternatives.
 2. The tensor and Op-like forms still work end-to-end in a real
    intervention (the only forms that were ever functional).
@@ -70,14 +70,14 @@ def test_swap_with_string_label_raises_immediately() -> None:
     """
 
     with pytest.raises(HookValueError, match="not implemented"):
-        tl.swap_with("linear_1_1")
+        tl.intervention.helpers.swap_with("linear_1_1")
 
 
 def test_swap_with_string_label_error_names_alternatives() -> None:
     """The error message must point at the supported tensor / Op-like forms."""
 
     with pytest.raises(HookValueError) as excinfo:
-        tl.swap_with("some_layer")
+        tl.intervention.helpers.swap_with("some_layer")
 
     message = str(excinfo.value)
     assert "torch.Tensor" in message
@@ -102,7 +102,7 @@ def test_swap_with_tensor_form_still_works_in_real_intervention() -> None:
         model,
         x,
         save=tl.func("linear"),
-        intervene=tl.when(tl.in_module("b"), tl.swap_with(replacement)),
+        intervene=tl.when(tl.in_module("b"), tl.intervention.helpers.swap_with(replacement)),
     )
 
     result = swapped["linear_2_2"].out
@@ -119,7 +119,9 @@ def test_swap_with_tensor_form_still_works_in_real_intervention() -> None:
         model,
         x,
         save=tl.func("linear"),
-        intervene=tl.when(tl.in_module("b"), tl.swap_with(baseline["linear_1_1"])),
+        intervene=tl.when(
+            tl.in_module("b"), tl.intervention.helpers.swap_with(baseline["linear_1_1"])
+        ),
     )
     assert torch.allclose(op_swapped["linear_2_2"].out, first_layer_out)
 

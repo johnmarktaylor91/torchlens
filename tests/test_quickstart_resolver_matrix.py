@@ -16,13 +16,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.quickstart import (
-    RenderResult,
+from torchlens._quickstart import (
+    Drawing,
     provenance_to_record,
     resolve_inputs,
-    state_dict_hash,
     trace_input_provenance,
 )
+from torchlens._quickstart._primitive import state_dict_hash
 from torchlens.user_funcs import render
 
 
@@ -143,16 +143,16 @@ class TestRenderFacade:
                 _cnn().eval(),
                 input_size=SIZE,
                 file=str(tmp_path / "g.svg"),
-                vis_theme="torchlens",
+                path=str(tmp_path / "other"),
             )
         assert excinfo.value.fields["code"] == "render_kwarg_collision"
 
     @pytest.mark.smoke
     def test_result_is_detached_and_resaves_without_the_trace(self, tmp_path) -> None:
-        """RenderResult.save() re-renders from the stored DOT source."""
+        """Drawing.save() re-renders from the stored DOT source."""
 
         result = render(_cnn().eval(), input_size=SIZE, file=str(tmp_path / "g.svg"))
-        assert isinstance(result, RenderResult)
+        assert isinstance(result, Drawing)
         assert result.trace is None  # detached by default
         saved = result.save(tmp_path / "again.pdf")
         assert saved.exists() and saved.stat().st_size > 0

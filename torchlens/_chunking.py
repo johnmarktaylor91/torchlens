@@ -9,7 +9,7 @@ from typing import Any
 
 import torch
 
-from .intervention.errors import BatchChunkInputAmbiguityError, ChunkedForwardConfigError
+from .intervention.errors import AmbiguousBatchInputError, ChunkedForwardConfigError
 
 ChunkPath = tuple[Any, ...]
 
@@ -102,7 +102,7 @@ def plan_chunks(
 
     Raises
     ------
-    BatchChunkInputAmbiguityError
+    AmbiguousBatchInputError
         If auto mode finds multiple batched tensor leaves.
     ChunkedForwardConfigError
         If no splittable tensor is found, or explicit paths are invalid.
@@ -125,7 +125,7 @@ def plan_chunks(
                 f"{format_chunk_path(path)} shape={tuple(tensor.shape)}"
                 for path, tensor in tensor_leaves
             )
-            raise BatchChunkInputAmbiguityError(
+            raise AmbiguousBatchInputError(
                 "chunk_size found multiple ndim>0 tensor leaves; pass chunk_paths=[...] "
                 f"to select batched inputs explicitly. Candidates: {details}."
             )

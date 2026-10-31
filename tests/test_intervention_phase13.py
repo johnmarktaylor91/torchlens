@@ -111,7 +111,7 @@ def test_list_logs_returns_tuple_snapshot() -> None:
     """The process registry exposes an immutable tuple snapshot."""
 
     log = _capture()
-    logs = tl.io.list_logs()
+    logs = tl.io.list_traces()
 
     assert isinstance(logs, tuple)
     assert log in logs
@@ -166,7 +166,7 @@ def test_bundle_default_names_derive_from_log_names_with_collision_suffix() -> N
     log1 = _capture(name="same")
     log2 = _capture(name="same")
 
-    bundle = tl.bundle([log1, log2])
+    bundle = tl.Bundle([log1, log2])
 
     assert bundle.names == ["same", "same_2"]
     assert log1.trace_label == "same"
@@ -179,7 +179,7 @@ def test_loaded_log_preserves_name_without_incrementing_counter(tmp_path: Path) 
     tl.io.reset_naming_counter()
     log = _capture(name="saved_name")
     path = tmp_path / "saved.tl"
-    tl.save(log, path, overwrite=True)
+    log.save(path, overwrite=True)
 
     loaded = tl.load(path)
     fresh = _capture()

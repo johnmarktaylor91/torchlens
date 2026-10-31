@@ -53,7 +53,7 @@ def test_finalize_failure_reason_is_redacted(tmp_path, monkeypatch) -> None:
             _TinyModel(),
             torch.randn(1, 4),
             save=tl.func("relu"),
-            streaming=tl.options.StreamingOptions(bundle_path=bundle),
+            streaming=tl.options.StorageOptions(bundle_path=bundle),
         )
 
     reasons = _reason_files(tmp_path)
@@ -67,7 +67,7 @@ def test_finalize_failure_reason_is_redacted(tmp_path, monkeypatch) -> None:
 def test_index_append_failure_reason_is_redacted(tmp_path, monkeypatch) -> None:
     bundle = tmp_path / "bundle"
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     real_append = storage_disk.DiskStorageBackend._append_index_line
 
@@ -81,12 +81,12 @@ def test_index_append_failure_reason_is_redacted(tmp_path, monkeypatch) -> None:
             self.index_path = original_index_path
 
     monkeypatch.setattr(storage_disk.DiskStorageBackend, "_append_index_line", leaky_open_append)
-    with pytest.raises((TorchLensIOError, OSError)):
+    with pytest.raises((ArtifactError, OSError)):
         tl.record(
             _TinyModel(),
             torch.randn(1, 4),
             save=tl.func("relu"),
-            streaming=tl.options.StreamingOptions(bundle_path=bundle),
+            streaming=tl.options.StorageOptions(bundle_path=bundle),
         )
 
     reasons = _reason_files(tmp_path)

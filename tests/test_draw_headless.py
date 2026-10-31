@@ -57,7 +57,7 @@ def test_view_rendered_file_silent_in_notebook(
     monkeypatch.setattr(_render_utils.sys, "platform", "linux")
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
-    monkeypatch.setattr("torchlens.utils.display.in_notebook", lambda: True)
+    monkeypatch.setattr("torchlens._utils.display.in_notebook", lambda: True)
 
     def fail_if_opened(*_: object, **__: object) -> None:
         """Fail the test if the platform viewer would have been launched."""
@@ -91,7 +91,7 @@ def test_missing_graphviz_binary_refuses_typed(
     log = tl.trace(nn.Linear(3, 2), torch.ones(1, 3))
     monkeypatch.setenv("PATH", "/nonexistent")
     with pytest.raises(GraphvizRenderError, match="apt install graphviz"):
-        log.draw(vis_save_only=True, vis_outpath=str(tmp_path / "modelgraph"))
+        log.draw(vis_save_only=True, path=str(tmp_path / "modelgraph"))
 
 
 def test_vis_mode_refuses_typed_on_forward_draw(tmp_path: Path) -> None:
@@ -105,5 +105,5 @@ def test_vis_mode_refuses_typed_on_forward_draw(tmp_path: Path) -> None:
 
     log = tl.trace(nn.Linear(3, 2), torch.ones(1, 3))
     with pytest.raises(InvalidArgumentError, match="rolled") as exc_info:
-        log.draw(vis_mode="bogus", vis_save_only=True, vis_outpath=str(tmp_path / "modelgraph"))
+        log.draw(vis_mode="bogus", vis_save_only=True, path=str(tmp_path / "modelgraph"))
     assert exc_info.value.fields["code"] == "visualization_mode_invalid"

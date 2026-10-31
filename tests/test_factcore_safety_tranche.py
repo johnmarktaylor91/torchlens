@@ -120,7 +120,7 @@ def test_bundle_repr_baseline_none_is_unquoted() -> None:
 
     model = _TinyMLP().eval()
     x = torch.randn(2, 8)
-    bundle = tl.bundle({"clean": tl.trace(model, x), "other": tl.trace(model, x)})
+    bundle = tl.Bundle({"clean": tl.trace(model, x), "other": tl.trace(model, x)})
     text = repr(bundle)
     assert "baseline=None" in text
     assert "baseline='None'" not in text
@@ -181,7 +181,7 @@ def test_edge_refusal_remedy_is_runnable_spelling(loop_trace) -> None:
     """The edges refusal teaches an importable spelling (bugs 20/25)."""
 
     with pytest.raises(Exception, match=r"tl\.options\.CaptureOptions") as excinfo:
-        _ = loop_trace.edges
+        _ = loop_trace.graph.edges
     assert getattr(excinfo.value, "fields", {}).get("code") == "edge_provenance_unavailable"
 
 

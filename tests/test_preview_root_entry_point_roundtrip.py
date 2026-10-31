@@ -26,7 +26,7 @@ def _roundtrip(trace: Any, tmp_path: Path) -> Any:
     """Save one trace, reload it, and check the reload is a distinct equal trace."""
 
     path = tmp_path / "trace.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(str(path))
     assert loaded is not trace
     assert list(loaded.layer_labels) == list(trace.layer_labels)

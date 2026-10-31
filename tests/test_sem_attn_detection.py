@@ -73,7 +73,7 @@ def test_value_beats_equal_tier_absence():
     missing: dict = {}
     menu: dict = {}
     tiers = {"foo": (2, 0)}
-    recipe = SimpleNamespace(public=SimpleNamespace(recipe_name="unit_recipe"))
+    recipe = SimpleNamespace(public=SimpleNamespace(name="unit_recipe"))
     reason = facets_mod.AbsenceReason(status="structurally_absent", detail="claimed absent")
     facets_mod._merge_missing(
         "foo",

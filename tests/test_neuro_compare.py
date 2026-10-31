@@ -9,7 +9,7 @@ Pins:
   leave-one-out refits.
 - Activations are read once: the model is never re-run.
 - A target equal to a site's own activations scores 1.0 under RSA and CKA.
-- ``n_resamples`` adds seeded ScoreIntervals; ``disagreement()`` and
+- ``num_resamples`` adds seeded ScoreIntervals; ``disagreement()`` and
   ``table()`` read the same scores; invalid settings refuse.
 """
 
@@ -30,7 +30,7 @@ from torchlens.neuro._compare import (
     loo_errors,
     ridge_folds,
 )
-from torchlens.repgeom import MetricDisagreement, ScoreInterval, rdm, rdm_compare
+from torchlens.repgeom import MetricDisagreement, ScoreInterval, compare_rdms, rdm
 from torchlens.stats import cka
 
 
@@ -76,7 +76,7 @@ def test_each_analysis_equals_its_standalone_computation() -> None:
     site = rng.normal(size=(20, 7))
     target = site[:, :3] @ rng.normal(size=(3, 4)) + rng.normal(size=(20, 4))
     result = tl.neuro.compare({"s": site}, target, analyses=("rsa", "ridge", "cka"))
-    assert result.scores["rsa"]["s"] == rdm_compare(
+    assert result.scores["rsa"]["s"] == compare_rdms(
         rdm(site, "correlation"), rdm(target, "correlation"), method="spearman"
     )
     assert result.scores["cka"]["s"] == pytest.approx(cka(site, target), abs=1e-12)
@@ -146,8 +146,8 @@ def test_resamples_add_seeded_intervals_and_disagreement_reads_them() -> None:
     rng = np.random.default_rng(6)
     source = {"a": rng.normal(size=(16, 5)), "b": rng.normal(size=(16, 5))}
     target = source["a"] + 0.3 * rng.normal(size=(16, 5))
-    first = tl.neuro.compare(source, target, n_resamples=50, seed=9)
-    again = tl.neuro.compare(source, target, n_resamples=50, seed=9)
+    first = tl.neuro.compare(source, target, num_resamples=50, seed=9)
+    again = tl.neuro.compare(source, target, num_resamples=50, seed=9)
     assert first.intervals == again.intervals
     for name in ANALYSES:
         for site in ("a", "b"):
@@ -159,7 +159,7 @@ def test_resamples_add_seeded_intervals_and_disagreement_reads_them() -> None:
     assert report.metrics == ANALYSES and report.intervals
     assert "[" in first.table()
     data = first.to_dict()
-    assert data["intervals"]["rsa"]["a"]["n_resamples"] == 50
+    assert data["intervals"]["rsa"]["a"]["num_resamples"] == 50
 
 
 def test_table_lists_every_site_and_analysis() -> None:
@@ -182,7 +182,7 @@ def test_invalid_settings_refuse() -> None:
     with pytest.raises(ValueError, match="ridge_alphas"):
         tl.neuro.compare(source, target, ridge_alphas=(0.0,))
     with pytest.raises(ValueError, match="n_folds"):
-        tl.neuro.compare(source, target, n_folds=1)
+        tl.neuro.compare(source, target, num_folds=1)
     with pytest.raises(ValueError, match="same stimuli"):
         tl.neuro.compare({"s": rng.normal(size=(11, 3))}, target)
     with pytest.raises(ValueError, match="not keys"):

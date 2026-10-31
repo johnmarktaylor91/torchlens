@@ -7,7 +7,7 @@ BLOCKER -- ``_record_predicate_intervention_spec``
 helpers ``tl.steer``, ``mean_ablate``, ``scramble_elements``, ``project_onto``/
 ``project_off``, ``swap_with`` -- that ``repr()`` call reprs the dataclass's tensor
 field, which routes through TorchLens's own intercepted ``Tensor.__repr__``. The
-interception itself (``print_override`` in ``torchlens/utils/tensor_utils.py``)
+interception itself (``print_override`` in ``torchlens/_utils/tensor_utils.py``)
 had a second, deeper bug: it paused logging only around the ``.cpu()`` conversion
 and called ``.detach()`` *after* the ``pause_logging()`` block exited. Since
 ``detach`` is an ordinary decorated torch method (not in ``funcs_not_to_log`` or
@@ -84,7 +84,7 @@ def test_steer_intervene_predicate_save_intervention_round_trips(tmp_path: Path)
     trace = tl.trace(
         model,
         x,
-        intervene=tl.when(tl.func("linear"), tl.steer(direction, feature_axis=1)),
+        intervene=tl.when(tl.func("linear"), tl.steer(direction, dim=1)),
     )
 
     spec_path = tmp_path / "steer_intervention.tlspec"
@@ -115,7 +115,7 @@ def test_steer_intervene_multiple_firing_sites_do_not_compound(tmp_path: Path) -
     trace = tl.trace(
         model,
         x,
-        intervene=tl.when(tl.func("linear"), tl.steer(direction, feature_axis=1)),
+        intervene=tl.when(tl.func("linear"), tl.steer(direction, dim=1)),
     )
 
     spec = trace._intervention_spec

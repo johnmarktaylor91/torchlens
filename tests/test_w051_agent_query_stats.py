@@ -73,7 +73,7 @@ def test_reduction_out_of_range_is_a_row_status_never_a_batch_failure(tmp_path: 
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     path = tmp_path / "scalar.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     envelope = call_tool(
         "torchlens_payload_stats", {"path": str(path), "reduction": {"retain_dim": 0}}
     )

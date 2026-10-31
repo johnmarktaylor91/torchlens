@@ -14,10 +14,12 @@ from pathlib import Path
 import pytest
 import torch
 
-import torchlens.tviz as tviz
+import torchlens
+import torchlens.errors
+import torchlens.transformer as tviz
 from torchlens.mechinterp import PatchGrid
 
-GQA = tviz.GqaInfo(n_query_heads=8, n_kv_heads=2)
+GQA = tviz.GqaInfo(num_query_heads=8, n_kv_heads=2)
 
 
 def _grid(n_heads: int) -> PatchGrid:
@@ -67,7 +69,7 @@ def test_receipt_names_the_query_heads_of_each_group() -> None:
 def test_query_head_grid_refuses_the_kv_grouping() -> None:
     """A grid over all eight query heads is not a kv-site grid."""
 
-    with pytest.raises(tviz.TvizError) as caught:
+    with pytest.raises(torchlens.errors.RenderError) as caught:
         tviz.receipt_from_patch_grid(
             _grid(8),
             layer="blk.0.attn",
@@ -83,7 +85,7 @@ def test_grid_figure_discloses_the_sharing(tmp_path: Path) -> None:
     """The rendered grid states the unit, the sharing and the group labels."""
 
     rows = [_kv_receipt("blk.0.attn"), _kv_receipt("blk.1.attn")]
-    artifact = tviz.render_receipt_grid(
+    artifact = torchlens.viz.ablation_grid(
         rows, tmp_path / "kv.svg", joint_effect=-0.2, svg_fonttype="none"
     )
     lines = "\n".join(artifact.disclosure_lines)
@@ -114,7 +116,7 @@ def test_query_head_receipts_render_as_before(tmp_path: Path) -> None:
         joint_effect=0.1,
     )
     assert receipt.unit == "head" and receipt.sharing_lines() == ()
-    artifact = tviz.render_receipt_grid(receipt, tmp_path / "q.svg", svg_fonttype="none")
+    artifact = torchlens.viz.ablation_grid(receipt, tmp_path / "q.svg", svg_fonttype="none")
     lines = "\n".join(artifact.disclosure_lines)
     assert "kv" not in lines
     assert "measured 4 heads together" not in lines
@@ -128,8 +130,8 @@ def test_mixed_units_refuse(tmp_path: Path) -> None:
     heads = tviz.receipt_from_patch_grid(
         _grid(2), layer="blk.1.attn", negative_control=0.0, positive_control=3.0
     )
-    with pytest.raises(tviz.TvizError) as caught:
-        tviz.render_receipt_grid([_kv_receipt(), heads], tmp_path / "m.png", joint_effect=0.0)
+    with pytest.raises(torchlens.errors.RenderError) as caught:
+        torchlens.viz.ablation_grid([_kv_receipt(), heads], tmp_path / "m.png", joint_effect=0.0)
     assert caught.value.fields["code"] == "tv_receipt_invalid"
     assert not (tmp_path / "m.png").exists()
 
@@ -137,7 +139,7 @@ def test_mixed_units_refuse(tmp_path: Path) -> None:
 def test_kv_receipt_cannot_annotate_query_head_panels() -> None:
     """A group's effect never lands on a single query head's panel header."""
 
-    with pytest.raises(tviz.TvizError) as caught:
+    with pytest.raises(torchlens.errors.RenderError) as caught:
         tviz.Annotation.from_receipt(_kv_receipt())
     assert caught.value.fields["code"] == "tv_annotation_invalid"
     assert "render_receipt_grid" in str(caught.value)

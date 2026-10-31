@@ -12,7 +12,7 @@ from model import build_model, make_input
 import torchlens as tl
 from torchlens.agent import call_tool
 
-tl.save(tl.trace(build_model(), make_input(), save="all"), "run.tlspec")
+tl.trace(build_model(), make_input(), save="all").save("run.tlspec")
 manifest = call_tool("torchlens_overview", {"path": "run.tlspec", "mode": "manifest"})
 
 labels: list[str] = []

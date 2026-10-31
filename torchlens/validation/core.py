@@ -27,8 +27,8 @@ from typing import (
 
 import torch
 
-from ..data_classes.op import Op
-from ..ir.container import (
+from .._data_classes.op import Op
+from .._ir.container import (
     DataclassField,
     DictKey,
     HFKey,
@@ -36,13 +36,13 @@ from ..ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
-from ..ir.events import is_control_edge_use
+from .._ir.events import is_control_edge_use
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
-from ..utils.collections import assign_to_sequence_or_dict
-from ..utils.tensor_utils import (
+from .._utils.collections import assign_to_sequence_or_dict
+from .._utils.tensor_utils import (
     _ACCUMULATING_REPLAY_ULP_HEADROOM,
     derive_float_tolerances,
     fp8_safe_comparison_pair,
@@ -84,7 +84,7 @@ from .exemptions import (
     posthoc_perturb_check,
     uninitialized_by_design_applies,
 )
-from .status import ValidationReplayStatus
+from .status import ValidationStatus
 
 ValidationDecisionKind = Literal[
     "validated", "failed", "unverified", "exempted", "edge_intervention_boundary"
@@ -274,7 +274,7 @@ class ValidationDecisionRecorder:
             )
         )
 
-    def as_status(self, *, backend: str = "torch") -> ValidationReplayStatus:
+    def as_status(self, *, backend: str = "torch") -> ValidationStatus:
         """Build a trace-level replay status from collected decisions.
 
         Parameters
@@ -284,16 +284,16 @@ class ValidationDecisionRecorder:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Aggregate replay-validation status.
         """
 
-        return ValidationReplayStatus.from_replay_counts(
+        return ValidationStatus.from_replay_counts(
             backend=backend,
             source="live",
-            replayed_node_count=self.replay_validated_node_count(),
-            unverified_node_count=self.node_count("unverified"),
-            failed_node_count=self.node_count("failed"),
+            num_replayed_ops=self.replay_validated_node_count(),
+            num_unverified_ops=self.node_count("unverified"),
+            num_failed_ops=self.node_count("failed"),
             unverified_reason_counts=self.reason_counts("unverified"),
             exempted_reason_counts=self.reason_counts("exempted"),
             decisions=tuple(item.as_dict() for item in self.decisions),
@@ -645,7 +645,7 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the log was loaded from a portable bundle without resolved
         ``func`` callables on computational nodes.
     """
@@ -659,9 +659,9 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
         and getattr(layer, "func_name", "none") not in {"none", "input", "output", "buffer"}
     ]
     if unresolved:
-        from .._io import TorchLensIOError
+        from .._io import ArtifactError
 
-        raise TorchLensIOError(
+        raise ArtifactError(
             "validate_forward_pass requires resolved func callables; portable bundles "
             "drop them when functions cannot be represented. This bundle has unresolved "
             f"computational functions, e.g. {unresolved[:3]!r}."
@@ -809,7 +809,7 @@ def validate_saved_outs(
     ground_truth_output_tensors: list[torch.Tensor],
     verbose: bool = False,
     validate_metadata: bool = True,
-) -> ValidationReplayStatus:
+) -> ValidationStatus:
     """Run the full validation pipeline on a completed Trace.
 
     The BFS traversal starts from two kinds of seed layers:
@@ -836,11 +836,11 @@ def validate_saved_outs(
 
     Returns
     -------
-    ValidationReplayStatus
+    ValidationStatus
         Aggregate replay-validation status. Fully validated pass/fail results
         remain bool-compatible through callers that unwrap completed statuses.
     """
-    from ..runnable import refuse_collective_boundary_trace, refuse_poisoned_trace
+    from .._runnable import refuse_collective_boundary_trace, refuse_poisoned_trace
 
     refuse_poisoned_trace(self, "validation")
     # A collective boundary cannot be replayed single-device: re-issuing it
@@ -896,7 +896,7 @@ def validate_saved_outs(
         record_validation_failure(
             self,
             ValidationFailure(
-                check=CHECK_COMPLETENESS,
+                check_name=CHECK_COMPLETENESS,
                 message=message,
                 extra={
                     "dispatch_op_count": dispatch_count,
@@ -950,7 +950,7 @@ def validate_saved_outs(
         record_validation_diagnostic(
             self,
             ValidationDiagnostic(
-                check="completeness_census_unverified",
+                check_name="completeness_census_unverified",
                 message=(
                     "The aten dispatch census did not run for this validation "
                     f"({dispatch_count_result.reason}); completeness is backstopped "
@@ -973,7 +973,7 @@ def validate_saved_outs(
             record_validation_failure(
                 self,
                 ValidationFailure(
-                    check=CHECK_OUTPUT_MISSING,
+                    check_name=CHECK_OUTPUT_MISSING,
                     message=message,
                     extra={
                         "logged_output_count": len(self.output_layers),
@@ -1002,7 +1002,7 @@ def validate_saved_outs(
                 record_validation_failure(
                     self,
                     ValidationFailure(
-                        check=CHECK_OUTPUT_MISSING,
+                        check_name=CHECK_OUTPUT_MISSING,
                         op_label=output_layer_label,
                         message=f"output layer #{i} has no saved out",
                     ),
@@ -1109,7 +1109,7 @@ def validate_saved_outs(
         record_validation_failure(
             self,
             ValidationFailure(
-                check=CHECK_COMPLETENESS,
+                check_name=CHECK_COMPLETENESS,
                 message=(
                     f"BFS reached {len(validated_op_labels)}/{len(expected_ops)} ops; "
                     f"{len(unreached)} unreached (e.g. {sorted(unreached)[:3]})"
@@ -1147,7 +1147,7 @@ def validate_saved_outs(
             record_validation_failure(
                 self,
                 ValidationFailure(
-                    check=CHECK_METADATA_INVARIANT,
+                    check_name=CHECK_METADATA_INVARIANT,
                     message=f"{type(invariant_error).__name__}: {invariant_error}",
                 ),
             )
@@ -1275,7 +1275,7 @@ def validate_parents_of_saved_layer(
         record_validation_failure(
             self,
             ValidationFailure(
-                check=CHECK_ARG_LOGGING,
+                check_name=CHECK_ARG_LOGGING,
                 op_label=layer_to_validate_parents_for_label,
                 func_name=getattr(layer_to_validate_parents_for, "func_name", None),
                 message="parent not logged as an argument, or logged an extra time",
@@ -1853,7 +1853,7 @@ def _raise_if_replay_arg_version_data_incomplete(self: "Trace", target_layer: Op
         "Cannot validate saved layer "
         f"{target_layer.label}: this trace does not have complete saved argument "
         "values or child-version snapshots for replay validation. "
-        "Use tl.trace(..., capture=tl.options.CaptureOptions(save_arg_values=True)) "
+        "Use tl.trace(..., capture=tl.options.CaptureOptions(save_args=True)) "
         "for replay validation."
     )
 
@@ -2336,7 +2336,7 @@ def _check_unattributed_arg_slots(
         record_validation_failure(
             self,
             ValidationFailure(
-                check=CHECK_ARG_LOGGING,
+                check_name=CHECK_ARG_LOGGING,
                 op_label=getattr(target_layer, "label", target_layer.layer_label),
                 func_name=str(getattr(target_layer, "func_name", "")) or None,
                 message=(
@@ -2460,7 +2460,7 @@ def _check_unattributed_arg_slots(
                 record_validation_failure(
                     self,
                     ValidationFailure(
-                        check=CHECK_ARG_LOGGING,
+                        check_name=CHECK_ARG_LOGGING,
                         op_label=getattr(target_layer, "label", target_layer.layer_label),
                         func_name=func_name or None,
                         message=(
@@ -3194,7 +3194,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             record_validation_failure(
                 self,
                 ValidationFailure(
-                    check=CHECK_REPLAY,
+                    check_name=CHECK_REPLAY,
                     op_label=layer_to_validate_parents_for_label,
                     func_name=getattr(layer, "func_name", None),
                     message="replay re-execution raised an exception (run verbose for traceback)",
@@ -3340,7 +3340,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         record_validation_failure(
             self,
             ValidationFailure(
-                check=CHECK_PERTURBATION,
+                check_name=CHECK_PERTURBATION,
                 op_label=layer_to_validate_parents_for_label,
                 func_name=getattr(layer, "func_name", None),
                 message=(

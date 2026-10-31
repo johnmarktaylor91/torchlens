@@ -44,13 +44,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR, NodeSpec, NodeSpecFn
-from ..utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .theme_registry import GRAPHVIZ_DRAW_SURFACE, LensPreset, register_lens
 
 if TYPE_CHECKING:
-    from ..data_classes.layer import Layer
-    from ..data_classes.trace import Trace
+    from .._data_classes.layer import Layer
+    from .._data_classes.trace import Trace
 
 __all__ = [
     "CREDIT_ROWS",
@@ -633,7 +633,7 @@ def render_surgery(trace: Trace, **user_kwargs: Any) -> Any:
 
     result = draw_with_lens(trace, "surgery", **user_kwargs)
     if not user_kwargs.get("return_graph", False):
-        outpath = user_kwargs.get("vis_outpath")
+        outpath = user_kwargs.get("path")
         if outpath is None:
             # A bare draw chose a collision-safe name: the census
             # rides beside the file that was actually written.

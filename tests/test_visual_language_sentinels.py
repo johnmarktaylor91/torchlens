@@ -53,7 +53,7 @@ def test_row_one_is_drawn_once_per_skin_and_the_rest_once() -> None:
     assert len(ids) == len(SKINS) + len(active)
     skinned = sentinel_slides()[: len(SKINS)]
     for slide, skin in zip(skinned, SKINS, strict=True):
-        assert {p.kwargs["vis_theme"] for p in slide.panels} == {skin}
+        assert {p.kwargs["theme"] for p in slide.panels} == {skin}
 
 
 _ACTIVE = [

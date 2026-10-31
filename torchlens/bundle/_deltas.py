@@ -16,11 +16,11 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
-from ..intervention._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
+from ..intervention._metrics import is_scalar_like, relative_l1, resolve_metric
 from ..intervention.errors import BundleMemberError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from . import Bundle
 
 
@@ -85,7 +85,7 @@ def _distance_value(
 
     metric_fn = resolve_metric(metric)
     value = (
-        relative_l1_scalar(reference, candidate)
+        relative_l1(reference, candidate)
         if is_scalar_like(reference) and is_scalar_like(candidate)
         else metric_fn(reference, candidate)
     )
@@ -148,7 +148,7 @@ def _bundle_delta_map(
 
     Raises
     ------
-    BundleRelationshipError
+    BundleComparisonError
         The comparison gate's stable codes (``bundle_gate_ordering_topology``,
         ``bundle_gate_model_axis_unmet``, ``bundle_gate_input_values_differ``,
         ``bundle_gate_input_identity_unproven``) for any (baseline, member)
@@ -506,7 +506,7 @@ def _bundle_show_diff(
     >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     >>> ablated = trace.fork("ablated")
     >>> ablated.do(tl.module("layer1.0.relu"), tl.zero_ablate())
-    >>> bundle = tl.bundle({"clean": trace, "ablated": ablated}, baseline="clean")
+    >>> bundle = tl.Bundle({"clean": trace, "ablated": ablated}, baseline="clean")
     >>> bundle.show_diff(vis_outpath="bundle_diff_clean_vs_zero_relu")
 
     Parameters

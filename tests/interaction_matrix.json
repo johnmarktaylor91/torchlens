@@ -42,8 +42,7 @@
    ],
    "options": [
     "SaveOptions",
-    "StreamingOptions",
-    "to_disk"
+    "StorageOptions"
    ]
   },
   "backward": {
@@ -55,12 +54,12 @@
    "options": []
   },
   "episode": {
-   "summary": "Multi-step episode capture (episode=EpisodeSpec)",
+   "summary": "Multi-step episode capture (episode=EpisodeOptions)",
    "trace_kwargs": [
     "episode"
    ],
    "options": [
-    "EpisodeSpec"
+    "EpisodeOptions"
    ]
   },
   "backend": {
@@ -75,17 +74,17 @@
    "summary": "Capture-time reporting: profile, echo, grouping",
    "trace_kwargs": [
     "profile",
-    "echo",
+    "narrate",
     "grouping"
    ],
    "options": [
-    "EchoOptions"
+    "NarrationOptions"
    ]
   },
   "recipes": {
    "summary": "Recipes applied at capture (recipes=)",
    "trace_kwargs": [
-    "recipes"
+    "facets"
    ],
    "options": []
   },
@@ -126,7 +125,9 @@
   "record": {
    "summary": "Sparse recording path (tl.record, Recording.to_trace)",
    "trace_kwargs": [],
-   "options": []
+   "options": [
+    "RecordingOptions"
+   ]
   },
   "extract": {
    "summary": "Feature extraction path (tl.extract)",
@@ -151,7 +152,9 @@
   "export": {
    "summary": "Tabular and array exports (to_pandas, xarray)",
    "trace_kwargs": [],
-   "options": []
+   "options": [
+    "HtmlReportOptions"
+   ]
   }
  },
  "plain_trace_kwargs": [
@@ -163,7 +166,6 @@
  ],
  "plain_options": [
   "OptionReceiptEntry",
-  "option_receipt",
   "suppress_mutate_warnings"
  ],
  "cells": [
@@ -293,7 +295,7 @@
    "evidence": "docs/reference/error_refusal_contract.md",
    "code": "echo_backend_unsupported",
    "confidence": "high",
-   "note": "echo= is torch only; profile=True is also unsupported on previews (tests/test_snoop_refusals.py::test_echo_on_non_torch_backend_refuses_typed)."
+   "note": "narrate= is torch only; profile=True is also unsupported on previews (tests/test_snoop_refusals.py::test_echo_on_non_torch_backend_refuses_typed)."
   },
   {
    "a": "backend",
@@ -495,7 +497,7 @@
    "evidence": "docs/reference/error_refusal_contract.md",
    "code": "model_door_binding_refused",
    "confidence": "medium",
-   "note": "episode= is a tl.trace option; tl.trace refuses a bound executor and prints the canonical spelling (base_model plus intervene=binding.spec)."
+   "note": "episode= is a tl.trace option; tl.trace refuses a bound executor and prints the canonical spelling (base_model plus intervene=binding.recipe)."
   },
   {
    "a": "bind",
@@ -733,7 +735,7 @@
    "status": "asymmetry",
    "asymmetry": "A13",
    "confidence": "high",
-   "note": "tl.save(bundle) accepts only level and overwrite; per-trace payload options refuse bundle_save_option_unsupported."
+   "note": "bundle.save(path) accepts only level and overwrite; per-trace payload options refuse bundle_save_option_unsupported."
   },
   {
    "a": "bundle",
@@ -1145,7 +1147,7 @@
    "evidence": "docs/reference/error_refusal_contract.md",
    "code": "extraction_engine_unsupported",
    "confidence": "medium",
-   "note": "brainpipe extraction_plan refuses a non-trace engine because fastlog records a strict subset of sites."
+   "note": "brainpipe plan_extraction refuses a non-trace engine because fastlog records a strict subset of sites."
   },
   {
    "a": "extract",
@@ -1175,7 +1177,7 @@
    "status": "composes",
    "evidence": "tests/test_b2_extract_intervened.py::test_intervened_disk_artifact_records_the_counterfactual",
    "confidence": "high",
-   "note": "Disk mode is extract_dataset(output_dir=); disk-only options without output_dir refuse extraction_disk_only_option."
+   "note": "Disk mode is extract_dataset(path=); disk-only options without path refuse extraction_disk_only_option."
   },
   {
    "a": "extract",
@@ -1908,7 +1910,7 @@
     "bundle",
     "storage"
    ],
-   "summary": "tl.save on a Trace accepts per-trace payload options and streaming storage; tl.save on a Bundle accepts only level and overwrite and refuses the rest (bundle_save_option_unsupported).",
+   "summary": "Trace.save on a Trace accepts per-trace payload options and streaming storage; Trace.save on a Bundle accepts only level and overwrite and refuses the rest (bundle_save_option_unsupported).",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
    "ruling": "pending"
@@ -2232,7 +2234,7 @@
   {
    "id": "A46",
    "pair": [],
-   "summary": "Every options class is passed through a slot named after its group (`capture=`, `save=`, `replay=`, `streaming=`, `visualization=`) except `EchoOptions`, which `EchoSession` takes as `options=`; and `RecordingOptions` and `ReportOptions` are public option classes that `tl.options` does not export.",
+   "summary": "Every options class is passed through a slot named after its group (`capture=`, `save=`, `replay=`, `streaming=`, `visualization=`) except `EchoOptions`, which `EchoSession` takes as `options=`; and `RecordingOptions` and `HtmlReportOptions` are public option classes that `tl.options` does not export.",
    "evidence": "surface inventory option heuristics",
    "recommendation": "close",
    "ruling": "pending"

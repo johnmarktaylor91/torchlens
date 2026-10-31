@@ -24,8 +24,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.postprocess as pp
-from torchlens.postprocess import ast_branches
+import torchlens._postprocess as pp
+from torchlens._postprocess import ast_branches
 
 # Markers are per-test, not module-level: every case here is smoke-fast EXCEPT the
 # `-O` gate proof, which spawns a fresh interpreter that pays a full cold torchlens
@@ -70,7 +70,7 @@ def test_successful_postprocess_releases_the_hot_tier() -> None:
     tl.trace(
         _Conditional().eval(),
         torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(save_code_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
     )
     assert _hot_tier_files() == []
 
@@ -94,7 +94,7 @@ def test_failed_postprocess_still_releases_the_hot_tier(monkeypatch) -> None:
         tl.trace(
             _Conditional().eval(),
             torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(save_code_context=True),
+            capture=tl.options.CaptureOptions(save_source_context=True),
         )
     assert _hot_tier_files() == []
 
@@ -113,7 +113,7 @@ def test_repeated_postprocess_failures_do_not_accumulate_hot_tiers(monkeypatch) 
             tl.trace(
                 _Conditional().eval(),
                 torch.ones(1, 3),
-                capture=tl.options.CaptureOptions(save_code_context=True),
+                capture=tl.options.CaptureOptions(save_source_context=True),
             )
     assert _hot_tier_files() == []
 
@@ -148,7 +148,7 @@ def test_released_hot_tier_still_answers_lazy_source_queries() -> None:
     trace = tl.trace(
         _Conditional().eval(),
         torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(save_code_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
     )
     assert _hot_tier_files() == []
     # Exercise the lazy re-parse path on every op that has one.
@@ -214,7 +214,7 @@ def test_the_window_open_sits_inside_the_try(monkeypatch) -> None:
 
     import inspect
 
-    from torchlens.postprocess import _executor
+    from torchlens._postprocess import _executor
 
     source = inspect.getsource(_executor.run_pipeline)
     body = source.split("for spec in STEP_REGISTRY:", 1)[1]
@@ -232,7 +232,7 @@ def test_audited_capture_still_runs_clean_end_to_end(monkeypatch) -> None:
     trace = tl.trace(
         _Conditional().eval(),
         torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(save_code_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
     )
     assert trace.num_ops > 0
     assert _audit_registry_sizes() == before
@@ -264,7 +264,7 @@ def test_arming_the_audit_under_dash_O_is_a_hard_error_not_a_silent_no_op() -> N
     program = (
         "import os;"
         "os.environ['TORCHLENS_POSTPROCESS_ASSERTIONS']='1';"
-        "import torchlens.postprocess as pp;"
+        "import torchlens._postprocess as pp;"
         "pp._postprocess_assertions_enabled()"
     )
     result = subprocess.run(

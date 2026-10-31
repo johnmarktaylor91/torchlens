@@ -29,10 +29,11 @@ import transformers.models.llama.modeling_llama as llama_modeling  # noqa: E402
 from transformers import LlamaConfig, LlamaForCausalLM  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+import torchlens.errors
 import torchlens.mechinterp as mi  # noqa: E402
-import torchlens.tviz as tviz  # noqa: E402
+import torchlens.transformer as tviz  # noqa: E402
+from torchlens.errors import MechInterpError  # noqa: E402
 from torchlens.errors._base import TorchLensWarning  # noqa: E402
-from torchlens.mechinterp import MechInterpError  # noqa: E402
 from torchlens.mechinterp._kv_heads import _patch_query_heads_once  # noqa: E402
 from torchlens.semantic.patching import _trace_kwargs  # noqa: E402
 
@@ -148,14 +149,14 @@ def value_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
 def group_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
     """The ordinary value-site grid, whose head axis counts KV groups."""
 
-    return mi.grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer", "head"))
+    return mi.patch_grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer", "head"))
 
 
 @pytest.fixture(scope="module")
 def joint_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
     """Whole-layer value patches: every query head of a layer at once."""
 
-    return mi.grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer",))
+    return mi.patch_grid(model, CLEAN, CORRUPTED, logit_diff, sites="v", axes=("layer",))
 
 
 @pytest.mark.heavy
@@ -304,7 +305,7 @@ def test_interceptor_receipt_discloses_effect_source_and_annotates(
     assert receipt.effect_source == (
         "expanded value copy read by one query head (op-level interceptor)"
     )
-    artifact = tviz.render_receipt_grid(receipt, tmp_path / "query_heads.png")
+    artifact = tl.viz.ablation_grid(receipt, tmp_path / "query_heads.png")
     assert (
         "pattern source: captured; effect source: expanded value copy read by one query "
         "head (op-level interceptor)"
@@ -313,13 +314,13 @@ def test_interceptor_receipt_discloses_effect_source_and_annotates(
     assert annotation.heads == (0, 1, 2, 3)
     assert annotation.values == receipt.effects
 
-    with pytest.raises(tviz.TvizError) as excinfo:
+    with pytest.raises(torchlens.errors.RenderError) as excinfo:
         tviz.receipt_from_patch_grid(
             value_grid,
             layer=LAYERS[0],
             negative_control=0.0,
             positive_control=clean - corrupted,
-            kv_groups=tviz.GqaInfo(n_query_heads=4, n_kv_heads=2),
+            kv_groups=tviz.GqaInfo(num_query_heads=4, n_kv_heads=2),
         )
     assert excinfo.value.fields["code"] == "tv_receipt_invalid"
 
@@ -332,7 +333,7 @@ def test_real_gqa_value_grid_builds_a_kv_group_receipt(
 
     log = tl.trace(model, CLEAN, **_trace_kwargs(None))
     facets = log.modules[LAYERS[0]].facets
-    gqa = tviz.GqaInfo(n_query_heads=facets.get("n_q_heads"), n_kv_heads=facets.get("n_kv_heads"))
+    gqa = tviz.GqaInfo(num_query_heads=facets.get("n_q_heads"), n_kv_heads=facets.get("n_kv_heads"))
     log.cleanup()
     joint = joint_grid
     receipt = tviz.receipt_from_patch_grid(
@@ -354,5 +355,5 @@ def test_real_gqa_value_grid_builds_a_kv_group_receipt(
         "kv group 1 of 2, shared by query heads 0-1",
         "kv group 2 of 2, shared by query heads 2-3",
     )
-    artifact = tviz.render_receipt_grid(receipt, tmp_path / "kv_groups.png")
+    artifact = tl.viz.ablation_grid(receipt, tmp_path / "kv_groups.png")
     assert any("no cell is a per-query-head effect" in line for line in artifact.disclosure_lines)

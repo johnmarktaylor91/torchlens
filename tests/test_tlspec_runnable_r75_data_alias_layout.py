@@ -5,7 +5,7 @@ on unlabeled receivers: the C-level ``.data`` getter destroyed labels and ``_bas
 ``(x * 2).data.is_contiguous(channels_last)`` recorded nothing and a channels-last twin
 replayed the captured arm as a false VERIFIED. The r75 origin/storage ladder below remains
 the defense-in-depth attribution path. TorchLens now additionally captures the getter's real
-``aten.detach`` dispatch as the canonical replayable ``Tensor.detach`` op, preserving direct
+``aten.detach`` dispatch as the canonical intervention_ready ``Tensor.detach`` op, preserving direct
 graph ancestry for ordinary captures without admitting the unsafe descriptor itself.
 
 The r75 closure makes the layout-trio fall-through FAIL-CLOSED BY CONSTRUCTION -- no rung
@@ -38,8 +38,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
@@ -226,7 +226,7 @@ def test_r75_data_alias_spellings_ceiling_on_changed_layout(
 
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
@@ -250,7 +250,7 @@ def test_r75_data_alias_spellings_stay_verified_on_same_layout(
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r75_detach_control_still_ceiled(tmp_path: Path) -> None:
@@ -261,7 +261,7 @@ def test_r75_detach_control_still_ceiled(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 def test_r75_layout_oblivious_model_still_never_triggers(tmp_path: Path) -> None:
@@ -272,7 +272,7 @@ def test_r75_layout_oblivious_model_still_never_triggers(tmp_path: Path) -> None
 
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r75_state_data_rooted_read_stays_residual_three(tmp_path: Path) -> None:
@@ -288,7 +288,7 @@ def test_r75_state_data_rooted_read_stays_residual_three(tmp_path: Path) -> None
 
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r75_unresolvable_receiver_fails_closed(tmp_path: Path) -> None:
@@ -305,7 +305,7 @@ def test_r75_unresolvable_receiver_fails_closed(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
@@ -322,7 +322,7 @@ def test_r75_direct_alias_consumption_is_replayable(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r75_storage_identity_rung_resolves_when_ledger_missing(tmp_path: Path) -> None:
@@ -370,4 +370,4 @@ def test_r75_storage_identity_rung_resolves_when_ledger_missing(tmp_path: Path) 
 
     twin = tl.load(path).run(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert twin.report.poisoned
+    assert twin.report.is_poisoned

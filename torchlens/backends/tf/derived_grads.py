@@ -19,14 +19,14 @@ from typing import Any
 
 import numpy as np
 
-from ...data_classes.derived_grad import (
+from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
 )
-from ...data_classes.trace import Trace
-from ...ir.refs import DtypeRef
+from ..._data_classes.trace import Trace
+from ..._ir.refs import DtypeRef
 from .._finalize import mirror_param_derived_grads, stable_callable_name as _callable_identity
 from .._validation_shared import float_replay_tolerances
 from ..registry import BackendUnsupportedError
@@ -180,7 +180,7 @@ def attach_tf_derived_grads(
     -------
     None
         ``trace.derived_grads`` and optionally
-        ``trace.intermediate_derived_grads`` are populated.
+        ``trace.autograd.intermediate_derived_grads`` are populated.
     """
 
     input_argnums = _normalize_tf_input_grad_argnums(
@@ -274,7 +274,9 @@ def attach_tf_derived_grads(
             module_tree.forward_args_by_call.update(previous_forward_args)
     trace.derived_grads = DerivedGradAccessor(records)
     if grad_options.intermediate_grads:
-        trace.intermediate_derived_grads = intermediate_accessor
+        from ..._data_classes._trace_stats import set_intermediate_derived_grads
+
+        set_intermediate_derived_grads(trace, intermediate_accessor)
     mirror_param_derived_grads(trace, records)
 
 

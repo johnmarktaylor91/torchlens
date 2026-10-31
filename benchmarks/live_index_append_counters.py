@@ -65,9 +65,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import torchlens as tl  # noqa: E402
+from torchlens._ir.live_index import LiveIndex  # noqa: E402
 from torchlens.fastlog import Recorder  # noqa: E402
 from torchlens.fastlog._recorder import Recorder as _RecorderImpl  # noqa: E402
-from torchlens.ir.live_index import LiveIndex  # noqa: E402
 
 PROMPT = torch.tensor([[454, 137, 139, 386]])
 SITE_OPS = ("transformer.h.0.mlp.dropout", "transformer.h.1.mlp.dropout", "transformer.ln_f")
@@ -380,7 +380,7 @@ def _run_recorder(model: nn.Module, n: int) -> Any:
 def _run_failed_partial() -> Any:
     with Recorder(_Chain(), save=_save_ops, on_forward_error="return_partial") as recorder:
         for _ in range(3):
-            recorder.log(torch.ones(4))
+            recorder(torch.ones(4))
         return recorder.recording
 
 
@@ -398,9 +398,9 @@ def _workload(case: str, model: nn.Module | None) -> tuple[Callable[[], Any], Ca
 
     if case.startswith("recorder-"):
         n = int(case.split("-")[1])
-        return (lambda: _run_recorder(model, n)), (lambda recording: recording.n_passes)
+        return (lambda: _run_recorder(model, n)), (lambda recording: recording.num_passes)
     if case == "failed-partial":
-        return _run_failed_partial, (lambda recording: recording.n_passes)
+        return _run_failed_partial, (lambda recording: recording.num_passes)
     n = int(case.rsplit("-", 1)[1])
     passes = synthetic_stream(n, rewire_every=10 if "rewired" in case else 0)
     return (lambda: _run_synthetic(passes, None)), (lambda _: 2 * n)

@@ -16,7 +16,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.notebook.cardtree import (
+from torchlens._notebook.cardtree import (
     CARD_CSS_VERSION,
     Card,
     CardCollection,
@@ -139,7 +139,7 @@ def test_partial_trace_repr_html_is_failure_first() -> None:
 
     with pytest.raises(RuntimeError) as excinfo:
         tl.trace(Exploding(), torch.randn(2, 4))
-    partial = tl.partial.from_failed_capture(excinfo.value)
+    partial = tl._partial.from_failed_capture(excinfo.value)
     html = partial._repr_html_()
     assert "FAILED CAPTURE" in html
     assert "PartialTrace" in html

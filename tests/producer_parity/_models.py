@@ -101,7 +101,7 @@ def _reference_trace(model: nn.Module, x: Any) -> Any:
 def _save_arg_values_trace(model: nn.Module, x: Any) -> Any:
     # The save_arg_values-only capture the DoR names as a parity case
     # (templates facet gate: saved_args without intervention_ready).
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
 
 
 def _predicate_trace(model: nn.Module, x: Any) -> Any:
@@ -159,7 +159,7 @@ class ManualEdgeModel(nn.Module):
         a = self.fc1(x)
         b = self.fc2(x)
         # Public amendment channel: graph_edge_insertion family.
-        tl.register_tensor_connection(a, b)
+        tl.observers.register_tensor_connection(a, b)
         return a + b
 
 

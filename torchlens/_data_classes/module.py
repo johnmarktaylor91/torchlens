@@ -1,0 +1,2767 @@
+"""Structured per-module metadata: ModuleCall, Module, ModuleAccessor.
+
+Three-level hierarchy:
+
+* **ModuleCall** -- one invocation of one module (lightweight container).
+  Stores ``ops`` as pass-qualified labels (e.g. ``"conv2d_1_1:1"``),
+  pointing to individual Op entries.
+
+* **Module** -- aggregate metadata for one ``nn.Module`` across all its
+  invocations.  Stores ``layer_labels`` as no-pass labels (e.g.
+  ``"conv2d_1_1"``), pointing to aggregate Layer entries.
+  For single-pass modules, per-pass fields are delegated to ``ops[0]``
+  via ``_single_pass_or_error()``.
+
+* **ModuleAccessor** -- dict-like accessor returned by ``trace.modules``.
+  Supports lookup by module address, alias (shared modules), pass label,
+  or ordinal index.
+
+Module vs ModuleCall label convention:
+  - Module.layer_labels stores **no-pass** labels -> Layer
+  - ModuleCall.ops stores **pass-qualified** labels -> Op
+This matches each accessor's natural granularity.
+"""
+
+import weakref
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Optional,
+    TextIO,
+    cast,
+)
+
+import torch
+
+from .._constants import LAYER_LOG_FIELD_ORDER, MODULE_LOG_FIELD_ORDER, MODULE_PASS_LOG_FIELD_ORDER
+from .._errors import AmbiguousOpLookupError, InvalidArgumentError, RecordBindingError
+from .._io import (
+    TLSPEC_VERSION,
+    FieldPolicy,
+    coerce_container_typed_state,
+    default_fill_state,
+    read_tlspec_version,
+)
+from .._quantities import Bytes, Duration, Flops, Macs
+from ._accessor_base import Accessor
+from ._call_tree import (
+    _edge_counts_for_scope,
+    _print_call_tree_from_root,
+    _resolve_call_ops,
+    _sum_call_ops_field,
+)
+from ._runtime_handles import runtime_handle_from_trace
+from .attribute_write import AttributeWrite
+from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+from .layer import _layer_log_to_row
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+    from .._ir.container import ContainerSpec
+    from ..receptive_field._view import ReceptiveFieldView
+    from .buffer import BufferAccessor
+    from .func_call_location import FuncCallLocation
+    from .op import Op
+    from .param import ParamAccessor
+    from .prehook import ModuleInputSnapshot, PreHookEffect
+    from .trace import Trace
+
+
+# Module fields deliberately omitted from ``ModuleAccessor.to_pandas()`` columns.
+# Every field in ``MODULE_LOG_FIELD_ORDER`` must either appear as a dataframe
+# column or be listed here -- ``tests/test_to_pandas_field_coverage.py``
+# enforces this so new Module fields can never silently fail to reach the
+# module table again (same regression class as TO-PANDAS-NEW-FIELDS).
+_TO_PANDAS_EXCLUDED_MODULE_FIELDS: frozenset[str] = frozenset(
+    {
+        # Non-instantiable / live class object (not a scalar table cell):
+        "cls",
+        # Live rich accessors and object references, not scalar table cells:
+        "ops",  # ModuleCallAccessor -- use trace.module_calls for per-pass rows
+        "layers",  # list[Layer] -- use trace.layers.to_pandas() for per-layer rows
+        "params",  # ParamAccessor -- use trace.params.to_pandas()
+        "recursive_params",  # ParamAccessor -- same as params
+        "call_parent_module",  # Module reference -- call_parent already carries the label
+        "call_children_modules",  # list[Module] -- call_children already carries the labels
+        "output_structure",  # ContainerSpec -- structural, not a flat scalar
+        "forward_args_template",  # arbitrary structural template, not a flat scalar
+        "forward_kwargs_template",  # arbitrary structural template, not a flat scalar
+        # Hook lists (callables/handles, not scalar table cells):
+        "forward_pre_hooks",
+        "forward_hooks",
+        "backward_pre_hooks",
+        "backward_hooks",
+        "full_backward_pre_hooks",
+        "full_backward_hooks",
+        # Arbitrary user-selected payload (parallel to Op.annotations exclusion):
+        "custom_attributes",
+        "attribute_writes",
+    }
+)
+
+
+# Per-call fields that ``Module`` resolves via ``_single_pass_or_error``: they
+# describe ONE forward pass and deliberately raise ``AttributeError`` on a
+# multi-call Module (directing the user to a specific ``module.ops[i]`` pass).
+# The field-order-driven table cannot let that raise, so it reports them as None
+# for multi-call Modules -- mirroring ``Module.output_structure``, which already
+# returns None for multi-call Modules. The ``total_*`` sibling columns carry the
+# multi-call aggregate, so no information is lost.
+_MULTI_CALL_PER_PASS_MODULE_FIELDS: frozenset[str] = frozenset(
+    {
+        "forward_args_summary",
+        "forward_kwargs_summary",
+        "forward_duration",
+        "func_calls_duration",
+    }
+)
+
+
+def _module_log_to_row(module_log: "Module") -> dict[str, Any]:
+    """Convert a Module into one DataFrame row.
+
+    Parameters
+    ----------
+    module_log:
+        Module metadata entry to export.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Mapping from canonical field name to exported value, excluding the
+        fields in ``_TO_PANDAS_EXCLUDED_MODULE_FIELDS``. Per-pass fields
+        (``_MULTI_CALL_PER_PASS_MODULE_FIELDS``) are reported as ``None`` for
+        multi-call Modules so the table never drops a column nor raises.
+    """
+
+    multi_call = module_log.num_calls > 1
+    row: dict[str, Any] = {}
+    for field_name in MODULE_LOG_FIELD_ORDER:
+        if field_name in _TO_PANDAS_EXCLUDED_MODULE_FIELDS:
+            continue
+        if multi_call and field_name in _MULTI_CALL_PER_PASS_MODULE_FIELDS:
+            row[field_name] = None
+            continue
+        row[field_name] = getattr(module_log, field_name)
+    return row
+
+
+class ModuleCallAccessor(Accessor["ModuleCall"]):
+    """Scoped dict-like accessor for ModuleCall entries owned by a Module."""
+
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+        "_source_ref": FieldPolicy.WEAKREF_STRIP,
+    }
+
+    def __init__(self, calls: dict[int, "ModuleCall"] | None = None) -> None:
+        """Initialize the accessor.
+
+        Parameters
+        ----------
+        calls:
+            Mapping from 1-based call index to ModuleCall.
+        """
+
+        calls = calls or {}
+        super().__init__(calls, item_list=[call for _, call in sorted(calls.items())])
+
+    def __getitem__(self, key: int | str) -> "ModuleCall":
+        """Return a ModuleCall by 0-based position or call label."""
+
+        if isinstance(key, int):
+            return self._list[key]
+        resolved = self._resolve_substring(key)
+        if resolved is not None:
+            return resolved
+        raise KeyError(f"Module call '{key}' not found in scoped calls.")
+
+    def __setitem__(self, key: int, value: "ModuleCall") -> None:
+        """Set a ModuleCall by 1-based call index."""
+
+        previous = self._dict.get(key)
+        self._dict[key] = value
+        self._list = [call for _, call in sorted(self._dict.items())]
+        from ._trace_accessors import _invalidate_trace_module_call_accessor_cache
+
+        traces = {
+            trace
+            for call in (previous, value)
+            if call is not None and (trace := call._source_trace) is not None
+        }
+        for trace in traces:
+            _invalidate_trace_module_call_accessor_cache(trace)
+
+    def __contains__(self, key: object) -> bool:
+        """Return whether key resolves to a ModuleCall."""
+
+        if isinstance(key, int):
+            return -len(self._list) <= key < len(self._list)
+        if isinstance(key, str):
+            try:
+                self[key]
+            except (KeyError, ValueError):
+                return False
+            return True
+        return False
+
+    # This scoped accessor intentionally iterates call-index keys, unlike the generic
+    # Trace-level accessors that iterate log values.
+    def __iter__(self) -> Iterator[int]:  # type: ignore[override]
+        """Iterate call-index keys."""
+
+        return iter(self._dict)
+
+    def get(self, key: int, default: "ModuleCall | None" = None) -> "ModuleCall | None":
+        """Return a ModuleCall by call index, or default."""
+
+        return self._dict.get(key, default)
+
+    def _resolve_substring(self, key: str) -> "ModuleCall | None":
+        """Resolve a ModuleCall by exact call label or unique parent address."""
+        if len(self._dict) == 1:
+            only_call = next(iter(self._dict.values()))
+            if key == only_call.address:
+                return only_call
+        for call in self._dict.values():
+            if key == call.call_label:
+                return call
+        parent_matches = [call for call in self._dict.values() if key == call.address]
+        if len(parent_matches) > 1:
+            raise AmbiguousOpLookupError(
+                f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
+                f"position or a call-qualified label like '{key}:1'."
+            )
+        return None
+
+
+@dataclass
+class HookInfo:
+    """Metadata for one PyTorch module hook."""
+
+    name: str = ""
+    qualname: str = ""
+    source_location: "FuncCallLocation | None" = None
+
+
+def _module_call_log_to_row(module_call_log: "ModuleCall") -> dict[str, Any]:
+    """Convert a ModuleCall into one DataFrame row.
+
+    Parameters
+    ----------
+    module_call_log:
+        Module-pass metadata entry to export.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Mapping from canonical field name to exported value.
+    """
+    row = {field: getattr(module_call_log, field) for field in MODULE_PASS_LOG_FIELD_ORDER}
+    row["output_ops"] = list(module_call_log.output_ops)
+    row["output_structure"] = (
+        repr(module_call_log.output_structure)
+        if module_call_log.output_structure is not None
+        else None
+    )
+    return row
+
+
+# Typed container defaults for every non-Optional container field ModuleCall
+# stores directly. Same defect class as
+# `Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS`/`Trace._MODEL_LOG_CONTAINER_DEFAULTS`:
+# without this, `coerce_container_typed_state` cannot repair a
+# present-but-wrong-typed legacy value, and an absent field crashes instead of
+# restoring an empty typed container. Plain builtin types are used
+# deliberately.
+_MODULE_CALL_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "all_addresses": [],
+    "ops": [],
+    "input_ops": [],
+    "input_layers": [],
+    "output_ops": [],
+    "output_layers": [],
+    "output_paths": (),
+    "forward_arg_names": [],
+    "code_context": [],
+    "module_call_stack": [],
+    "call_children": [],
+    "forward_pre_hook_effects": (),
+}
+
+
+@dataclass(init=False)
+class ModuleCall:
+    """Per-(module, call_index) data for one invocation of a module.
+
+    Lightweight container holding the list of layers computed during
+    this particular invocation, the captured forward arguments, and
+    the call-graph edges (parent/children in the module invocation tree).
+
+    ``ops`` stores **pass-qualified** labels (e.g. ``"conv2d_1_1:1"``)
+    that resolve to individual Op entries.
+    """
+
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "address": FieldPolicy.KEEP,
+        "all_addresses": FieldPolicy.KEEP,
+        "class_name": FieldPolicy.KEEP,
+        "class_qualname": FieldPolicy.KEEP,
+        "cls": FieldPolicy.DROP,
+        "call_index": FieldPolicy.KEEP,
+        "call_label": FieldPolicy.KEEP,
+        "ordinal_index": FieldPolicy.KEEP,
+        "ops": FieldPolicy.KEEP,
+        "input_ops": FieldPolicy.KEEP,
+        "input_layers": FieldPolicy.KEEP,
+        "output_ops": FieldPolicy.KEEP,
+        "output_layers": FieldPolicy.KEEP,
+        "output_structure": FieldPolicy.KEEP,
+        "output_paths": FieldPolicy.KEEP,
+        "forward_args": FieldPolicy.BLOB_RECURSIVE,
+        "forward_kwargs": FieldPolicy.BLOB_RECURSIVE,
+        "inputs_before_pre_hooks": FieldPolicy.KEEP,
+        "inputs_after_pre_hooks": FieldPolicy.KEEP,
+        "forward_pre_hook_effects": FieldPolicy.KEEP,
+        "forward_arg_names": FieldPolicy.KEEP,
+        "num_forward_args_total": FieldPolicy.KEEP,
+        "num_forward_pos_args": FieldPolicy.KEEP,
+        "num_forward_kwargs": FieldPolicy.KEEP,
+        "forward_args_summary": FieldPolicy.KEEP,
+        "forward_kwargs_summary": FieldPolicy.KEEP,
+        "forward_args_template": FieldPolicy.DROP,
+        "forward_kwargs_template": FieldPolicy.DROP,
+        "_forward_args_template": FieldPolicy.DROP,
+        "_forward_kwargs_template": FieldPolicy.DROP,
+        "forward_duration": FieldPolicy.KEEP,
+        "code_context": FieldPolicy.KEEP,
+        "module_call_stack": FieldPolicy.KEEP,
+        "call_parent": FieldPolicy.KEEP,
+        "call_children": FieldPolicy.KEEP,
+        "_source_trace_strong": FieldPolicy.DROP,
+        "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
+        # Lazily-populated facet-view cache: a public ``.facets`` read poked
+        # it into ``__dict__``, so an undeclared row made a read-only accessor
+        # poison every later ``Trace.save``. DROP like Op's slot of the same name.
+        "_facets_cache": FieldPolicy.DROP,
+    }
+    FIELD_POLICY = build_record_field_policy_table(
+        MODULE_PASS_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="module_call"
+    )
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+
+    address: str
+    all_addresses: list[str]
+    cls: type[Any] | None
+    class_name: str
+    class_qualname: str
+    call_index: int
+    call_label: str
+    ordinal_index: int
+    ops: list[str]
+    input_ops: list[str]
+    input_layers: list[str]
+    output_ops: list[str]
+    output_layers: list[str]
+    output_structure: "ContainerSpec | None"
+    output_paths: tuple[tuple[Any, ...], ...]
+    forward_args: tuple[Any, ...] | None
+    forward_kwargs: dict[str, Any] | None
+    inputs_before_pre_hooks: "ModuleInputSnapshot | None"
+    inputs_after_pre_hooks: "ModuleInputSnapshot | None"
+    forward_pre_hook_effects: tuple["PreHookEffect", ...]
+    forward_arg_names: list[str]
+    num_forward_args_total: int
+    num_forward_pos_args: int
+    num_forward_kwargs: int
+    forward_args_summary: str
+    forward_kwargs_summary: str
+    forward_duration: Duration
+    code_context: list["FuncCallLocation"]
+    module_call_stack: list[str]
+    call_parent: str | None
+    call_children: list[str]
+
+    def __init__(
+        self,
+        address: str,
+        call_index: int,
+        call_label: str,
+        ops: list[str],
+        input_layers: list[str],
+        output_layers: list[str],
+        output_ops: list[str] | None = None,
+        output_structure: "ContainerSpec | None" = None,
+        output_paths: tuple[tuple[Any, ...], ...] | None = None,
+        forward_args: tuple[Any, ...] | None = None,
+        forward_kwargs: dict[str, Any] | None = None,
+        inputs_before_pre_hooks: "ModuleInputSnapshot | None" = None,
+        inputs_after_pre_hooks: "ModuleInputSnapshot | None" = None,
+        forward_pre_hook_effects: tuple["PreHookEffect", ...] | None = None,
+        forward_args_template: Any = None,
+        forward_kwargs_template: Any = None,
+        forward_arg_names: list[str] | None = None,
+        forward_duration: float = 0.0,
+        code_context: list["FuncCallLocation"] | None = None,
+        module_call_stack: list[str] | None = None,
+        call_parent: str | None = None,
+        call_children: list[str] | None = None,
+        all_addresses: list[str] | None = None,
+        cls: type[Any] | None = None,
+        class_name: str = "",
+        class_qualname: str = "",
+        ordinal_index: int = 0,
+        _source_trace: "Trace | None" = None,
+    ) -> None:
+        """Initialize metadata for one module forward call.
+
+        Parameters
+        ----------
+        address:
+            Module address in the owning model.
+        call_index:
+            Zero-based invocation index for this module address.
+        call_label:
+            Pass-qualified module call label.
+        ops:
+            Operation labels executed inside this module call.
+        input_layers:
+            Input layer labels for this call.
+        output_layers:
+            Output layer labels for this call.
+        output_ops:
+            Output operation labels for this call.
+        output_structure:
+            Container structure describing module outputs.
+        output_paths:
+            Container paths for tensor outputs.
+        forward_args:
+            Positional arguments observed at module entry.
+        forward_kwargs:
+            Keyword arguments observed at module entry.
+        inputs_before_pre_hooks:
+            Provisional public field containing inputs as passed to ``Module.__call__``.
+        inputs_after_pre_hooks:
+            Provisional public field containing the logical state after user pre-hooks.
+        forward_pre_hook_effects:
+            Provisional public field containing one effect per executed user pre-hook.
+        forward_args_template:
+            Serializable template for positional arguments.
+        forward_kwargs_template:
+            Serializable template for keyword arguments.
+        forward_arg_names:
+            Argument names resolved for the module forward signature.
+        forward_duration:
+            Runtime duration of the module call in seconds.
+        code_context:
+            Source locations associated with the module call.
+        module_call_stack:
+            Module call stack active for this call.
+        call_parent:
+            Parent module call label, if any.
+        call_children:
+            Child module call labels.
+        all_addresses:
+            All model addresses that reference this same module object.
+        cls:
+            Live module class when available.
+        class_name:
+            Module class name.
+        class_qualname:
+            Qualified module class name.
+        ordinal_index:
+            Position of this module call in execution order.
+        _source_trace:
+            Owning trace used for live accessors.
+        """
+
+        self.address = address
+        self.all_addresses = all_addresses if all_addresses is not None else [address]
+        self.cls = cls
+        self.class_name = class_name
+        self.class_qualname = class_qualname
+        self.call_index = call_index
+        self.call_label = call_label  # e.g. "features.0:1"
+        self.ordinal_index = ordinal_index
+        self.ops = ops  # pass-qualified Op labels
+        self.input_layers = input_layers
+        self.output_layers = output_layers
+        self.input_ops = list(input_layers)
+        self.output_ops = output_ops if output_ops is not None else list(output_layers)
+        self.output_structure = output_structure
+        self.output_paths = output_paths if output_paths is not None else ()
+        self.forward_args = forward_args
+        self.forward_kwargs = forward_kwargs
+        self.inputs_before_pre_hooks = inputs_before_pre_hooks
+        self.inputs_after_pre_hooks = inputs_after_pre_hooks
+        self.forward_pre_hook_effects = (
+            forward_pre_hook_effects if forward_pre_hook_effects is not None else ()
+        )
+        self.forward_arg_names = forward_arg_names if forward_arg_names is not None else []
+        self.num_forward_pos_args = len(forward_args) if forward_args is not None else 0
+        self.num_forward_kwargs = len(forward_kwargs) if forward_kwargs is not None else 0
+        self.num_forward_args_total = self.num_forward_pos_args + self.num_forward_kwargs
+        self.forward_args_summary = ""
+        self.forward_kwargs_summary = ""
+        self.forward_args_template = forward_args_template
+        self.forward_kwargs_template = forward_kwargs_template
+        self.forward_duration = Duration(forward_duration)
+        self.code_context = code_context if code_context is not None else []
+        self.module_call_stack = module_call_stack if module_call_stack is not None else []
+        self.call_parent = call_parent
+        self.call_children = call_children if call_children is not None else []
+        self._source_trace_ref = weakref.ref(_source_trace) if _source_trace is not None else None
+
+    @property
+    def module(self) -> "Module":
+        """Return the Module record invoked by this call."""
+
+        trace = self._source_trace
+        if trace is None:
+            raise RecordBindingError(
+                "ModuleCall not bound to a Trace",
+                code="record_not_bound",
+                remedy="keep the owning Trace alive and read records through it",
+            )
+        return cast("Module", trace.modules[self.address])
+
+    @property
+    def num_layers(self) -> int:
+        """Number of distinct Layers among this call's Ops (``num_ops`` counts each pass)."""
+        return len({str(op_label).rsplit(":", 1)[0] for op_label in self.ops})
+
+    @property
+    def num_ops(self) -> int:
+        """Number of Ops in this module call."""
+
+        return len(self.ops)
+
+    @property
+    def name(self) -> str:
+        """Return the final segment of the primary module-call address.
+
+        Returns
+        -------
+        str
+            Module name within its parent module.
+        """
+
+        return "" if self.address == "self" else self.address.rsplit(".", 1)[-1]
+
+    @property
+    def has_multiple_addresses(self) -> bool:
+        """Whether this module appears at multiple addresses."""
+        return len(self.all_addresses) > 1
+
+    @property
+    def has_saved_forward_args(self) -> bool:
+        """Whether forward arguments were captured for this module call."""
+
+        return self.forward_args is not None or self.forward_kwargs is not None
+
+    @property
+    def had_pre_hook_input_change(self) -> bool | None:
+        """Return whether any user pre-hook changed effective module inputs.
+
+        This public name is provisional pending the TorchLens human naming
+        session. ``None`` means either an executed transition lacked enough
+        evidence to claim that no change occurred, or pre-hook attribution was
+        incomplete after a detected private-registry bypass. In the latter
+        case an empty effects tuple cannot honestly establish ``False``.
+        """
+
+        if any(effect.changed is True for effect in self.forward_pre_hook_effects):
+            return True
+        if any(effect.changed is None for effect in self.forward_pre_hook_effects):
+            return None
+        if not self.forward_pre_hook_effects:
+            snapshots = (self.inputs_before_pre_hooks, self.inputs_after_pre_hooks)
+            if any(
+                snapshot is not None
+                and "registration_interposition_bypassed" in snapshot.incomplete_reasons
+                for snapshot in snapshots
+            ):
+                return None
+        return False
+
+    @property
+    def forward_args_template(self) -> Any:
+        """Structural template for positional forward arguments at this call."""
+
+        return self.__dict__.get("_forward_args_template")
+
+    @forward_args_template.setter
+    def forward_args_template(self, value: Any) -> None:
+        """Set the structural template for positional forward arguments."""
+
+        self.__dict__["_forward_args_template"] = value
+
+    @property
+    def forward_kwargs_template(self) -> Any:
+        """Structural template for keyword forward arguments at this call."""
+
+        return self.__dict__.get("_forward_kwargs_template")
+
+    @forward_kwargs_template.setter
+    def forward_kwargs_template(self, value: Any) -> None:
+        """Set the structural template for keyword forward arguments."""
+
+        self.__dict__["_forward_kwargs_template"] = value
+
+    @property
+    def num_param_tensors(self) -> int:
+        """Number of parameter tensors owned by the called Module."""
+
+        return len(self.module.params)
+
+    @property
+    def num_param_tensors_trainable(self) -> int:
+        """Number of trainable parameter tensors owned by the called Module."""
+
+        return self.module.num_param_tensors_trainable
+
+    @property
+    def num_param_tensors_frozen(self) -> int:
+        """Number of frozen parameter tensors owned by the called Module."""
+
+        return self.module.num_param_tensors_frozen
+
+    @property
+    def has_trainable_params(self) -> bool:
+        """Whether the called Module owns trainable parameters."""
+
+        return self.module.has_trainable_params
+
+    @property
+    def has_frozen_params(self) -> bool:
+        """Whether the called Module owns frozen parameters."""
+
+        return self.module.has_frozen_params
+
+    @property
+    def func_calls_duration(self) -> Duration:
+        """Inclusive duration of torch function calls inside this ModuleCall."""
+
+        trace = self._source_trace
+        if trace is None:
+            return Duration(0)
+        return Duration(
+            sum(
+                getattr(op, "func_duration", 0.0) or 0.0
+                for label in self.ops
+                for op in _resolve_call_ops(trace, label)
+            )
+        )
+
+    @property
+    def backward_duration(self) -> Duration | None:
+        """Backward duration for this module call, if backward timing is available."""
+
+        return None
+
+    @property
+    def num_internal_edges(self) -> int:
+        """Edges whose parent and child Ops are both inside this ModuleCall."""
+
+        return _edge_counts_for_scope(self._source_trace, self.ops)[0]
+
+    @property
+    def num_input_edges(self) -> int:
+        """Edges whose child Op is inside this ModuleCall and parent Op is outside."""
+
+        return _edge_counts_for_scope(self._source_trace, self.ops)[1]
+
+    @property
+    def num_output_edges(self) -> int:
+        """Edges whose parent Op is inside this ModuleCall and child Op is outside."""
+
+        return _edge_counts_for_scope(self._source_trace, self.ops)[2]
+
+    @property
+    def num_edges(self) -> int:
+        """Total edge footprint for this ModuleCall."""
+
+        return self.num_internal_edges + self.num_input_edges + self.num_output_edges
+
+    def _ops_by_output_role(self, *, output: bool) -> list["Op"]:
+        """Return Op records inside this call, filtered by output boundary role."""
+
+        trace = self._source_trace
+        if trace is None:
+            return []
+        output_labels = set(self.output_ops)
+        result: list[Op] = []
+        for label in self.ops:
+            if (label in output_labels) is not output:
+                continue
+            result.extend(_resolve_call_ops(trace, label))
+        return result
+
+    def _sum_op_memory(self, field_name: str, *, output: bool) -> Bytes:
+        """Sum an Op memory field for output or non-output Ops in this call."""
+
+        return Bytes(
+            sum(
+                int(getattr(op, field_name, 0) or 0)
+                for op in self._ops_by_output_role(output=output)
+            )
+        )
+
+    @property
+    def output_activation_memory(self) -> Bytes:
+        """Activation bytes for Ops whose outputs form this call's return value."""
+
+        return self._sum_op_memory("activation_memory", output=True)
+
+    @property
+    def internal_activation_memory(self) -> Bytes:
+        """Activation bytes for non-output Ops executed inside this call."""
+
+        return self._sum_op_memory("activation_memory", output=False)
+
+    @property
+    def output_gradient_memory(self) -> Bytes:
+        """Gradient bytes for Ops whose outputs form this call's return value."""
+
+        return self._sum_op_memory("gradient_memory", output=True)
+
+    @property
+    def internal_gradient_memory(self) -> Bytes:
+        """Gradient bytes for non-output Ops executed inside this call."""
+
+        return self._sum_op_memory("gradient_memory", output=False)
+
+    @property
+    def autograd_memory(self) -> Bytes:
+        """Sum of the per-op bytes the captured forward's autograd saved inside this call."""
+
+        trace = self._source_trace
+        if trace is None:
+            return Bytes(0)
+        return Bytes(
+            sum(
+                int(getattr(op, "autograd_memory", 0) or 0)
+                for label in self.ops
+                for op in _resolve_call_ops(trace, label)
+            )
+        )
+
+    @property
+    def param_memory(self) -> Bytes:
+        """Own-address parameter bytes of the Module invoked by this call."""
+
+        return self.module.param_memory
+
+    @property
+    def internal_param_memory(self) -> Bytes:
+        """Address-recursive sum of ``param_memory`` under the invoked Module's subtree."""
+
+        return self.module.internal_param_memory
+
+    @property
+    def parent_label(self) -> str | None:
+        """Parent ModuleCall label in the dynamic call tree (glossary stored-form name)."""
+
+        return cast("str | None", self.call_parent)
+
+    @property
+    def call_children_labels(self) -> list[str]:
+        """Child ModuleCall labels in the dynamic call tree (glossary stored-form name)."""
+
+        return list(self.call_children)
+
+    @property
+    def num_descendant_calls(self) -> int:
+        """Number of nested ModuleCalls under this call, recursively."""
+
+        trace = self._source_trace
+        if trace is None:
+            return 0
+        return sum(
+            1 + trace.module_calls[child_label].num_descendant_calls
+            for child_label in self.call_children
+        )
+
+    @property
+    def max_descendant_depth(self) -> int:
+        """Deepest nested ModuleCall depth beneath this call."""
+
+        trace = self._source_trace
+        if trace is None or not self.call_children:
+            return 0
+        return 1 + max(
+            trace.module_calls[child_label].max_descendant_depth
+            for child_label in self.call_children
+        )
+
+    def walk_descendants(self, include_self: bool = True) -> Iterator["ModuleCall"]:
+        """Yield this ModuleCall and all descendant calls in depth-first order.
+
+        Parameters
+        ----------
+        include_self:
+            Whether to yield this call before its descendants.
+
+        Yields
+        ------
+        ModuleCall
+            ModuleCall records in call-tree order.
+
+        Raises
+        ------
+        RuntimeError
+            If this ModuleCall is not bound to an owning Trace.
+        """
+
+        if include_self:
+            yield self
+        trace = self._source_trace
+        if trace is None:
+            raise RecordBindingError(
+                "ModuleCall not bound to a Trace",
+                code="record_not_bound",
+                remedy="keep the owning Trace alive and read records through it",
+            )
+        for child_label in self.call_children:
+            child = trace.module_calls[child_label]
+            yield from child.walk_descendants(include_self=True)
+
+    @property
+    def call_tree(self) -> "ModuleCall":
+        """Return this ModuleCall as the root of its nested call tree.
+
+        Returns
+        -------
+        ModuleCall
+            This call, whose ``call_children`` labels link to child
+            ``ModuleCall`` nodes in the owning Trace.
+        """
+
+        return self
+
+    def show_call_tree(
+        self,
+        max_depth: int | None = None,
+        include_atomic: bool = True,
+        show_call_index: bool = True,
+        file: TextIO | None = None,
+    ) -> None:
+        """Print this ModuleCall subtree as an ASCII tree.
+
+        Parameters
+        ----------
+        max_depth:
+            Maximum descendant depth to print, or ``None`` for no limit.
+        include_atomic:
+            Whether to include atomic module leaves.
+        show_call_index:
+            Whether to include the ``:N`` call suffix in labels.
+        file:
+            Optional output stream. ``None`` prints to stdout.
+        """
+
+        _print_call_tree_from_root(
+            self,
+            max_depth=max_depth,
+            include_atomic=include_atomic,
+            show_call_index=show_call_index,
+            file=file,
+        )
+
+    @property
+    def _source_trace(self) -> "Trace | None":
+        """Owning Trace, if still alive."""
+
+        strong_ref = self.__dict__.get("_source_trace_strong")
+        if strong_ref is not None:
+            return cast("Trace", strong_ref)
+        ref = self.__dict__.get("_source_trace_ref")
+        if ref is None:
+            return None
+        return cast("Trace | None", ref())
+
+    @_source_trace.setter
+    def _source_trace(self, value: "Trace | None") -> None:
+        """Store the owning Trace for live module-call lookups."""
+
+        self.__dict__["_source_trace_strong"] = value
+        self._source_trace_ref = weakref.ref(value) if value is not None else None
+
+    @property
+    def trace(self) -> "Trace | None":
+        """Alias for the owning Trace."""
+
+        return self._source_trace
+
+    def _output_values(self, field_name: str) -> list[Any]:
+        """Return one field from all output layers."""
+
+        trace = self._source_trace
+        if trace is None:
+            return []
+        return [getattr(trace.ops[op_label], field_name) for op_label in self.output_ops]
+
+    def _single_output_value(self, field_name: str) -> Any:
+        """Return one output field, requiring exactly one output."""
+
+        values = self._output_values(field_name)
+        if len(values) != 1:
+            from ..intervention.errors import MultiOutputModuleError
+
+            raise MultiOutputModuleError(
+                f"ModuleCall '{self.call_label}' has {len(values)} outputs; "
+                "use .outs[i] or resolve .output_ops[i]."
+            )
+        return values[0]
+
+    @property
+    def outs(self) -> list[Any]:
+        """Saved output tensors for this module call."""
+
+        return self._output_values("out")
+
+    @property
+    def receptive_field(self) -> "ReceptiveFieldView":
+        """Return the receptive field of this call's only output operation.
+
+        Raises
+        ------
+        MultiOutputModuleError
+            If this call has zero or multiple output operations.
+        """
+
+        if len(self.output_ops) != 1:
+            from ..intervention.errors import MultiOutputModuleError
+
+            candidates = ", ".join(
+                f"module_call.output_ops[{index}]={label!r}"
+                for index, label in enumerate(self.output_ops)
+            )
+            raise MultiOutputModuleError(
+                f"ModuleCall {self.call_label!r} has {len(self.output_ops)} output ops; "
+                f"select one candidate explicitly: {candidates or 'none'}."
+            )
+        trace = self._source_trace
+        if trace is None:
+            raise RecordBindingError(
+                "ModuleCall not bound to a Trace",
+                code="record_not_bound",
+                remedy="keep the owning Trace alive and read records through it",
+            )
+        return trace.ops[self.output_ops[0]].receptive_field
+
+    @property
+    def projective_field(self) -> "ReceptiveFieldView":
+        """Return the projective field of this call's only output operation."""
+
+        if len(self.output_ops) != 1:
+            from ..intervention.errors import MultiOutputModuleError
+
+            raise MultiOutputModuleError(
+                f"ModuleCall {self.call_label!r} has {len(self.output_ops)} output ops."
+            )
+        trace = self._source_trace
+        if trace is None:
+            raise RecordBindingError(
+                "ModuleCall not bound to a Trace",
+                code="record_not_bound",
+                remedy="keep the owning Trace alive and read records through it",
+            )
+        return trace.ops[self.output_ops[0]].projective_field
+
+    @property
+    def facets(self) -> Any:
+        """Return the lazy semantic facet view for this module call."""
+
+        cache = self.__dict__.get("_facets_cache")
+        if cache is None:
+            from ..semantic.facets import FacetView
+
+            cache = FacetView(self)
+            self.__dict__["_facets_cache"] = cache
+        return cache
+
+    @facets.deleter
+    def facets(self) -> None:
+        """Drop the cached semantic facet view for this module call."""
+
+        self.__dict__.pop("_facets_cache", None)
+
+    @property
+    def out(self) -> Any:
+        """Saved output tensor for a single-output module call."""
+
+        return self._single_output_value("out")
+
+    @property
+    def out_shapes(self) -> list[Any]:
+        """Output shapes for this module call."""
+
+        return self._output_values("shape")
+
+    @property
+    def out_shape(self) -> Any:
+        """Output shape for a single-output module call."""
+
+        return self._single_output_value("shape")
+
+    @property
+    def out_dtypes(self) -> list[Any]:
+        """Output dtypes for this module call."""
+
+        return self._output_values("dtype")
+
+    @property
+    def out_dtype(self) -> Any:
+        """Output dtype for a single-output module call."""
+
+        return self._single_output_value("dtype")
+
+    @property
+    def grads(self) -> list[Any]:
+        """Saved output gradients for this module call."""
+
+        return self._output_values("grad")
+
+    @property
+    def grad(self) -> Any:
+        """Saved output gradient for a single-output module call."""
+
+        return self._single_output_value("grad")
+
+    def __repr__(self) -> str:
+        """One line: address:pass, class, op span (F10). Never raises."""
+
+        from .._utils.fail_open import fail_open
+        from ._value_repr import module_call_repr_line
+
+        return fail_open(
+            lambda: module_call_repr_line(self),
+            lambda _error: (
+                f"<ModuleCall {getattr(self, 'call_label', '<unbound>')}: repr degraded>"
+            ),
+        )
+
+    def __str__(self) -> str:
+        """Bounded ModuleCall card: <=3 output cores then the exact count."""
+
+        from .._utils.fail_open import fail_open
+        from ._value_repr import module_call_card
+
+        return fail_open(lambda: module_call_card(self), lambda _error: self.__repr__())
+
+    def __len__(self) -> int:
+        """Return the number of layers in this pass."""
+        return self.num_layers
+
+    def to_pandas(self) -> "pd.DataFrame":
+        """Export this module pass as a one-row pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            Single-row DataFrame ordered by ``MODULE_PASS_LOG_FIELD_ORDER``.
+        """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
+        row = _module_call_log_to_row(self)
+        return pd.DataFrame([row], columns=MODULE_PASS_LOG_FIELD_ORDER)
+
+    def __tl_state_items__(self) -> Any:
+        """Yield live state pairs from the backing row (M8 facade hook)."""
+
+        from .._trace_core.record_rows import record_state_items
+
+        return record_state_items(self)
+
+    def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
+        """Install a state mapping through the cell descriptors (M8 hook)."""
+
+        from .._trace_core.record_rows import record_state_restore
+
+        record_state_restore(self, mapping)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return pickle state annotated with the current I/O format version."""
+        from ._state_adapter import state_items
+
+        state = dict(state_items(self))
+        state.pop("_source_trace_strong", None)
+        state.pop("_source_trace_ref", None)
+        state.pop("_facets_cache", None)
+        state["tlspec_version"] = TLSPEC_VERSION
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore pickle state with version-aware default filling."""
+        read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
+        if "address" not in state and "module_address" in state:
+            state["address"] = state.pop("module_address")
+        if "call_index" not in state and "pass_num" in state:
+            state["call_index"] = state.pop("pass_num")
+        if "call_label" not in state and "pass_label" in state:
+            state["call_label"] = state.pop("pass_label")
+        if "all_addresses" not in state and "all_module_addresses" in state:
+            state["all_addresses"] = state.pop("all_module_addresses")
+        if "ops" not in state and "layers" in state:
+            state["ops"] = state.pop("layers")
+        if "input_ops" not in state:
+            state["input_ops"] = list(state.get("input_layers", []))
+        if "output_ops" not in state:
+            if "output_labels" in state:
+                state["output_ops"] = state.pop("output_labels")
+            else:
+                state["output_ops"] = list(state.get("output_layers", []))
+        if "forward_args_template" in state:
+            state["_forward_args_template"] = state.pop("forward_args_template")
+        if "forward_kwargs_template" in state:
+            state["_forward_kwargs_template"] = state.pop("forward_kwargs_template")
+        module_call_setstate_defaults: dict[str, Any] = {
+            **_MODULE_CALL_CONTAINER_DEFAULTS,
+            "all_addresses": [state["address"]],
+            "cls": None,
+            "class_name": "",
+            "class_qualname": "",
+            "ordinal_index": 0,
+            "forward_arg_names": [],
+            "num_forward_args_total": 0,
+            "num_forward_pos_args": 0,
+            "num_forward_kwargs": 0,
+            "forward_args_summary": "",
+            "forward_kwargs_summary": "",
+            "_forward_args_template": None,
+            "_forward_kwargs_template": None,
+            "forward_duration": 0.0,
+            "code_context": [],
+            "module_call_stack": [],
+            "_source_trace_ref": None,
+            "output_structure": None,
+            "output_paths": (),
+            "inputs_before_pre_hooks": None,
+            "inputs_after_pre_hooks": None,
+            "forward_pre_hook_effects": (),
+        }
+        default_fill_state(state, defaults=module_call_setstate_defaults)
+        # Repair present-but-wrong-typed container fields from legacy states.
+        # `default_fill_state` only fills absent keys; this closes the same
+        # gap `Trace`/`Op` already close for their own fields.
+        coerce_container_typed_state(state, module_call_setstate_defaults)
+        state["forward_duration"] = Duration(state.get("forward_duration") or 0.0)
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
+        from .._trace_core.record_rows import record_state_restore
+
+        record_state_restore(self, state)
+
+
+# Typed container defaults for every non-Optional container field Module
+# stores directly. Same defect class as
+# `Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS`/`Trace._MODEL_LOG_CONTAINER_DEFAULTS`:
+# without this, `coerce_container_typed_state` cannot repair a
+# present-but-wrong-typed legacy value, and an absent field crashes instead of
+# restoring an empty typed container. Plain builtin types are used
+# deliberately. `ops`/`params`/`recursive_params` are custom accessor classes
+# (not plain containers) and are handled separately, below.
+_MODULE_CONTAINER_DEFAULTS: dict[str, Any] = {
+    "all_addresses": [],
+    "address_children": [],
+    "call_children": [],
+    "call_labels": [],
+    "layer_labels": [],
+    "input_ops": [],
+    "input_layers": [],
+    "output_ops": [],
+    "output_layers": [],
+    "buffer_layers": [],
+    "forward_pre_hooks": [],
+    "forward_hooks": [],
+    "backward_pre_hooks": [],
+    "backward_hooks": [],
+    "full_backward_pre_hooks": [],
+    "full_backward_hooks": [],
+    "custom_attributes": {},
+    "custom_methods": [],
+}
+
+
+@dataclass(init=False)
+class Module:
+    """Aggregate metadata for one nn.Module across all its invocations.
+
+    The primary user-facing class for module inspection.  Provides both
+    static metadata (source file, class name, hierarchy) and dynamic
+    data (layers computed, parameter usage, pass-level detail).
+
+    ``layer_labels`` stores **no-pass** labels (e.g. ``"conv2d_1_1"``),
+    pointing to aggregate Layer entries.  For per-pass detail, access
+    ``self.ops[call_index].ops`` which stores pass-qualified labels.
+
+    For single-pass modules, per-pass fields (``input_layers``,
+    ``output_layers``, ``forward_args``, ``forward_kwargs``) are accessible
+    directly via ``_single_pass_or_error()`` delegation to ``ops[0]``.
+    """
+
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "address": FieldPolicy.KEEP,
+        "all_addresses": FieldPolicy.KEEP,
+        "cls": FieldPolicy.DROP,
+        "class_name": FieldPolicy.KEEP,
+        "class_qualname": FieldPolicy.KEEP,
+        "class_source_file": FieldPolicy.KEEP,
+        "class_source_line": FieldPolicy.KEEP,
+        "init_source_file": FieldPolicy.KEEP,
+        "init_source_line": FieldPolicy.KEEP,
+        "forward_source_file": FieldPolicy.KEEP,
+        "forward_source_line": FieldPolicy.KEEP,
+        "class_docstring": FieldPolicy.KEEP,
+        "init_signature": FieldPolicy.KEEP,
+        "init_docstring": FieldPolicy.KEEP,
+        "forward_signature": FieldPolicy.KEEP,
+        "forward_docstring": FieldPolicy.KEEP,
+        "address_parent": FieldPolicy.KEEP,
+        "address_children": FieldPolicy.KEEP,
+        "address_depth": FieldPolicy.KEEP,
+        "call_parent": FieldPolicy.KEEP,
+        "call_children": FieldPolicy.KEEP,
+        "call_depth": FieldPolicy.KEEP,
+        "num_calls": FieldPolicy.KEEP,
+        "ops": FieldPolicy.KEEP,
+        "call_labels": FieldPolicy.KEEP,
+        "layer_labels": FieldPolicy.KEEP,
+        "input_ops": FieldPolicy.KEEP,
+        "input_layers": FieldPolicy.KEEP,
+        "output_ops": FieldPolicy.KEEP,
+        "output_layers": FieldPolicy.KEEP,
+        "output_structure": FieldPolicy.KEEP,
+        "params": FieldPolicy.KEEP,
+        "num_params": FieldPolicy.KEEP,
+        "num_params_trainable": FieldPolicy.KEEP,
+        "num_params_frozen": FieldPolicy.KEEP,
+        "param_memory": FieldPolicy.KEEP,
+        "buffer_layers": FieldPolicy.KEEP,
+        "_buffer_accessor": FieldPolicy.DROP,
+        "training": FieldPolicy.KEEP,
+        "forward_pre_hooks": FieldPolicy.KEEP,
+        "forward_hooks": FieldPolicy.KEEP,
+        "backward_pre_hooks": FieldPolicy.KEEP,
+        "backward_hooks": FieldPolicy.KEEP,
+        "full_backward_pre_hooks": FieldPolicy.KEEP,
+        "full_backward_hooks": FieldPolicy.KEEP,
+        "custom_attributes": FieldPolicy.BLOB_RECURSIVE,
+        "custom_methods": FieldPolicy.KEEP,
+        # Session-time record of the forward's plain-attribute writes (arbitrary
+        # user objects): never persisted; a loaded trace reads None.
+        "attribute_writes": FieldPolicy.DROP,
+        "_attribute_writes": FieldPolicy.DROP,
+        "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
+        # Lazily-populated facet-view cache: a public ``.facets`` read poked
+        # it into ``__dict__``, so an undeclared row made a read-only accessor
+        # poison every later ``Trace.save``. DROP like Op's slot of the same name.
+        "_facets_cache": FieldPolicy.DROP,
+    }
+    FIELD_POLICY = build_record_field_policy_table(
+        MODULE_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="module"
+    )
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+
+    address: str
+    all_addresses: list[str]
+    cls: type[Any] | None
+    class_name: str
+    class_qualname: str
+    class_source_file: str | None
+    class_source_line: int | None
+    init_source_file: str | None
+    init_source_line: int | None
+    forward_source_file: str | None
+    forward_source_line: int | None
+    class_docstring: str | None
+    init_signature: str | None
+    init_docstring: str | None
+    forward_signature: str | None
+    forward_docstring: str | None
+    address_parent: str | None
+    address_children: list[str]
+    address_depth: int
+    call_parent: str | None
+    call_children: list[str]
+    call_depth: int
+    num_calls: int
+    ops: ModuleCallAccessor
+    call_labels: list[str]
+    layer_labels: list[str]
+    input_ops: list[str]
+    input_layers: list[str]
+    output_ops: list[str]
+    output_layers: list[str]
+    params: "ParamAccessor"
+    num_params: int
+    num_params_trainable: int
+    num_params_frozen: int
+    buffer_layers: list[str]
+    training: bool
+    forward_pre_hooks: list[HookInfo]
+    forward_hooks: list[HookInfo]
+    backward_pre_hooks: list[HookInfo]
+    backward_hooks: list[HookInfo]
+    full_backward_pre_hooks: list[HookInfo]
+    full_backward_hooks: list[HookInfo]
+    custom_attributes: dict[str, Any]
+    custom_methods: list[str]
+
+    def __init__(
+        self,
+        # Identity
+        address: str,
+        all_addresses: list[str] | None = None,
+        name: str = "",
+        cls: type[Any] | None = None,
+        class_name: str = "",
+        class_qualname: str = "",
+        # Source info
+        class_source_file: str | None = None,
+        class_source_line: int | None = None,
+        init_source_file: str | None = None,
+        init_source_line: int | None = None,
+        forward_source_file: str | None = None,
+        forward_source_line: int | None = None,
+        class_docstring: str | None = None,
+        init_signature: str | None = None,
+        init_docstring: str | None = None,
+        forward_signature: str | None = None,
+        forward_docstring: str | None = None,
+        # Hierarchy — address-based (static)
+        address_parent: str | None = None,
+        address_children: list[str] | None = None,
+        address_depth: int = 0,
+        # Hierarchy — call-based (dynamic)
+        call_parent: str | None = None,
+        call_children: list[str] | None = None,
+        call_depth: int = 0,
+        # Pass info
+        num_calls: int = 1,
+        ops: dict[int, "ModuleCall"] | None = None,
+        call_labels: list[str] | None = None,
+        # Layers (aggregate)
+        layer_labels: list[str] | None = None,
+        # Parameters
+        params: Optional["ParamAccessor"] = None,
+        num_params: int = 0,
+        num_params_trainable: int = 0,
+        num_params_frozen: int = 0,
+        param_memory: int = 0,
+        # Buffers
+        buffer_layers: list[str] | None = None,
+        # Module state
+        training: bool = True,
+        forward_pre_hooks: list[HookInfo] | None = None,
+        forward_hooks: list[HookInfo] | None = None,
+        backward_pre_hooks: list[HookInfo] | None = None,
+        backward_hooks: list[HookInfo] | None = None,
+        full_backward_pre_hooks: list[HookInfo] | None = None,
+        full_backward_hooks: list[HookInfo] | None = None,
+        custom_attributes: dict[str, Any] | None = None,
+        custom_methods: list[str] | None = None,
+        # Back-reference
+        _source_trace: "Trace | None" = None,
+    ) -> None:
+        """Initialize persistent metadata for a model module address.
+
+        Parameters
+        ----------
+        address:
+            Canonical module address.
+        all_addresses:
+            All model addresses that reference the same module object.
+        name:
+            Local module name.
+        cls:
+            Live module class when available.
+        class_name:
+            Module class name.
+        class_qualname:
+            Qualified module class name.
+        class_source_file:
+            Source file containing the module class.
+        class_source_line:
+            Source line for the module class.
+        init_source_file:
+            Source file containing ``__init__``.
+        init_source_line:
+            Source line for ``__init__``.
+        forward_source_file:
+            Source file containing ``forward``.
+        forward_source_line:
+            Source line for ``forward``.
+        class_docstring:
+            Module class docstring.
+        init_signature:
+            Signature for ``__init__`` when available.
+        init_docstring:
+            Docstring for ``__init__`` when available.
+        forward_signature:
+            Signature for ``forward`` when available.
+        forward_docstring:
+            Docstring for ``forward`` when available.
+        address_parent:
+            Static parent module address.
+        address_children:
+            Static child module addresses.
+        address_depth:
+            Static nesting depth in the module tree.
+        call_parent:
+            Dynamic parent module-call label.
+        call_children:
+            Dynamic child module-call labels.
+        call_depth:
+            Dynamic call-stack depth.
+        num_calls:
+            Number of observed forward calls.
+        ops:
+            Per-call module call logs.
+        call_labels:
+            Pass-qualified module call labels.
+        layer_labels:
+            Aggregate layer labels owned by this module.
+        params:
+            Parameters owned by this module.
+        num_params:
+            Total parameter count.
+        num_params_trainable:
+            Trainable parameter count.
+        num_params_frozen:
+            Frozen parameter count.
+        param_memory:
+            Parameter memory in bytes.
+        buffer_layers:
+            Buffer layer labels owned by this module.
+        training:
+            Training/eval mode captured from the live module.
+        forward_pre_hooks:
+            Registered forward pre-hooks.
+        forward_hooks:
+            Registered forward hooks.
+        backward_pre_hooks:
+            Registered backward pre-hooks.
+        backward_hooks:
+            Registered backward hooks.
+        full_backward_pre_hooks:
+            Registered full backward pre-hooks.
+        full_backward_hooks:
+            Registered full backward hooks.
+        custom_attributes:
+            User attributes selected for module metadata.
+        custom_methods:
+            User method names selected for module metadata.
+        _source_trace:
+            Owning trace used for live accessors.
+        """
+
+        self.address = address
+        self.all_addresses = all_addresses if all_addresses is not None else [address]
+        self.cls = cls
+        self.class_name = class_name
+        self.class_qualname = class_qualname
+
+        self.class_source_file = class_source_file
+        self.class_source_line = class_source_line
+        self.init_source_file = init_source_file
+        self.init_source_line = init_source_line
+        self.forward_source_file = forward_source_file
+        self.forward_source_line = forward_source_line
+        self.class_docstring = class_docstring
+        self.init_signature = init_signature
+        self.init_docstring = init_docstring
+        self.forward_signature = forward_signature
+        self.forward_docstring = forward_docstring
+
+        self.address_parent = address_parent
+        self.address_children = address_children if address_children is not None else []
+        self.address_depth = address_depth
+
+        self.call_parent = call_parent
+        self.call_children = call_children if call_children is not None else []
+        self.call_depth = call_depth
+
+        self.num_calls = num_calls
+        self.ops = ModuleCallAccessor(ops)
+        self.call_labels = call_labels if call_labels is not None else []
+
+        # layer_labels stores NO-PASS labels (e.g. "conv2d_1_1") -> Layer.
+        # Contrast with ModuleCall.ops which stores pass-qualified labels.
+        self.layer_labels = layer_labels if layer_labels is not None else []
+        self.input_ops: list[str] = []
+        self.input_layers: list[str] = []
+        self.output_ops: list[str] = []
+        self.output_layers: list[str] = []
+        self._sync_boundary_fields_from_calls()
+
+        from .param import ParamAccessor
+
+        self.params = params if params is not None else ParamAccessor({})
+        self.num_params = num_params
+        self.num_params_trainable = num_params_trainable
+        self.num_params_frozen = num_params_frozen
+        self.buffer_layers = buffer_layers if buffer_layers is not None else []
+        self._buffer_accessor: Any = None  # populated by _build_module_logs
+
+        self.training = training
+        self.forward_pre_hooks = forward_pre_hooks if forward_pre_hooks is not None else []
+        self.forward_hooks = forward_hooks if forward_hooks is not None else []
+        self.backward_pre_hooks = backward_pre_hooks if backward_pre_hooks is not None else []
+        self.backward_hooks = backward_hooks if backward_hooks is not None else []
+        self.full_backward_pre_hooks = (
+            full_backward_pre_hooks if full_backward_pre_hooks is not None else []
+        )
+        self.full_backward_hooks = full_backward_hooks if full_backward_hooks is not None else []
+        self.custom_attributes = custom_attributes if custom_attributes is not None else {}
+        self.custom_methods = custom_methods if custom_methods is not None else []
+
+        # Store as weakref to break circular reference (Trace -> _module_logs -> Module -> Trace).
+        self._source_trace_ref = weakref.ref(_source_trace) if _source_trace is not None else None
+
+    def _sync_boundary_fields_from_calls(self) -> None:
+        """Populate aggregate boundary fields from this Module's calls.
+
+        Returns
+        -------
+        None
+            Boundary lists are updated in first-seen call order.
+        """
+
+        input_ops: list[str] = []
+        input_layers: list[str] = []
+        output_ops: list[str] = []
+        output_layers: list[str] = []
+        for call in self.ops.values():
+            for label in call.input_ops:
+                if label not in input_ops:
+                    input_ops.append(label)
+            for label in call.input_layers:
+                if label not in input_layers:
+                    input_layers.append(label)
+            for label in call.output_ops:
+                if label not in output_ops:
+                    output_ops.append(label)
+            for label in call.output_layers:
+                if label not in output_layers:
+                    output_layers.append(label)
+        self.input_ops = input_ops
+        self.input_layers = input_layers
+        self.output_ops = output_ops
+        self.output_layers = output_layers
+
+    @property
+    def attribute_writes(self) -> Mapping[str, AttributeWrite] | None:
+        """Plain attributes this module's forward wrote: ``{name: AttributeWrite}``, read-only.
+
+        A default capture puts every plain attribute back after the forward, so a
+        stashed value is read here (``attribute_writes["last_weights"].value``);
+        ``carry_state=True`` records the same rows. The record keeps what the
+        forward bound alive as long as the trace; in-place changes are copied
+        (rules and residuals: :class:`AttributeWrite`). ``{}`` when nothing was
+        written; ``None`` without a record (a loaded trace, a lazy module, a
+        non-torch backend): session-time only, never persisted.
+        """
+
+        writes = self.__dict__.get("_attribute_writes")
+        return None if writes is None else MappingProxyType(writes)
+
+    @property
+    def name(self) -> str:
+        """Return the final segment of the primary module address.
+
+        Returns
+        -------
+        str
+            Module name within its parent module.
+        """
+
+        return "" if self.address == "self" else self.address.rsplit(".", 1)[-1]
+
+    @property
+    def has_multiple_addresses(self) -> bool:
+        """Whether this module appears at multiple addresses."""
+        return len(self.all_addresses) > 1
+
+    @property
+    def num_layers(self) -> int:
+        """Number of unique layers in this module."""
+        return len(self.layer_labels)
+
+    @property
+    def layers(self) -> list[Any]:
+        """Layer records belonging to this Module."""
+
+        trace = self._source_trace
+        if trace is None:
+            return list(self.layer_labels)
+        return [trace.layers[label] for label in self.layer_labels]
+
+    def _op_labels(self) -> list[str]:
+        """Pass-qualified Op labels belonging to this Module across all calls."""
+
+        labels: list[str] = []
+        seen: set[str] = set()
+        for call in self.ops.values():
+            for label in call.ops:
+                if label not in seen:
+                    seen.add(label)
+                    labels.append(label)
+        return labels
+
+    @property
+    def num_internal_edges(self) -> int:
+        """Edges whose parent and child Ops are both inside this Module."""
+
+        return _edge_counts_for_scope(self._source_trace, self._op_labels())[0]
+
+    @property
+    def num_input_edges(self) -> int:
+        """Edges whose child Op is inside this Module and parent Op is outside."""
+
+        return _edge_counts_for_scope(self._source_trace, self._op_labels())[1]
+
+    @property
+    def num_output_edges(self) -> int:
+        """Edges whose parent Op is inside this Module and child Op is outside."""
+
+        return _edge_counts_for_scope(self._source_trace, self._op_labels())[2]
+
+    @property
+    def num_edges(self) -> int:
+        """Total edge footprint for this Module."""
+
+        return self.num_internal_edges + self.num_input_edges + self.num_output_edges
+
+    @property
+    def collapse_score(self) -> float:
+        """Smart-collapse priority: hidden ops over the trace's largest (``module_collapse_order``).
+
+        Returns
+        -------
+        float
+            Hidden ops (subtree distinct ops minus one) over the largest module's,
+            rounded to 6 places; ``0.0`` when the renderer never collapses it.
+        """
+
+        from ..visualization.auto_collapse import module_collapse_score
+
+        return module_collapse_score(self)
+
+    @property
+    def call_parent_module(self) -> "Module | None":
+        """Parent Module in the dynamic call tree, if any."""
+
+        if self.call_parent is None or self._source_trace is None:
+            return None
+        return cast("Module", self._source_trace.modules[self.call_parent])
+
+    @property
+    def call_children_modules(self) -> list["Module"]:
+        """Child Modules in the dynamic call tree."""
+
+        trace = self._source_trace
+        if trace is None:
+            return []
+        return [cast("Module", trace.modules[address]) for address in self.call_children]
+
+    def _recursive_modules_depth_first(self) -> list["Module"]:
+        """Return this Module and address descendants in stable depth-first order."""
+
+        trace = self._source_trace
+        if trace is None:
+            return [self]
+
+        modules: list[Module] = []
+
+        def visit(module: Module) -> None:
+            """Append one module and recursively visit address-sorted children."""
+
+            modules.append(module)
+            for child_address in sorted(module.address_children):
+                if child_address in trace.modules:
+                    visit(cast("Module", trace.modules[child_address]))
+
+        visit(self)
+        return modules
+
+    @property
+    def recursive_params(self) -> "ParamAccessor":
+        """Parameters owned by this Module address and all address descendants."""
+
+        from .param import ParamAccessor
+
+        trace = self._source_trace
+        if trace is None:
+            return self.params
+
+        module_addresses = [module.address for module in self._recursive_modules_depth_first()]
+        recursive_param_dict: dict[str, Any] = {}
+        for module_address in module_addresses:
+            for param in trace.param_logs:
+                if (
+                    param.module_address == module_address
+                    and param.address not in recursive_param_dict
+                ):
+                    recursive_param_dict[param.address] = param
+        # A never-called descendant has no Module record; its params are still in the subtree.
+        for param in trace.param_logs:
+            if self.address == "self" or str(param.module_address).startswith(f"{self.address}."):
+                recursive_param_dict.setdefault(param.address, param)
+        return ParamAccessor(recursive_param_dict)
+
+    @property
+    def recursive_param_addresses(self) -> list[str]:
+        """Parameter addresses in the same order as ``recursive_params``."""
+
+        return list(self.recursive_params.keys())
+
+    @property
+    def num_recursive_params(self) -> int:
+        """Number of address-recursive parameter records."""
+
+        return len(self.recursive_params)
+
+    @property
+    def num_recursive_params_trainable(self) -> int:
+        """Number of trainable address-recursive parameter records."""
+
+        return sum(1 for param in self.recursive_params if param.is_trainable)
+
+    @property
+    def num_recursive_params_frozen(self) -> int:
+        """Number of frozen address-recursive parameter records."""
+
+        return sum(1 for param in self.recursive_params if not param.is_trainable)
+
+    @property
+    def num_recursive_param_tensors(self) -> int:
+        """Number of tensors across address-recursive parameter records."""
+
+        return sum(int(getattr(param, "num_tensors", 1) or 1) for param in self.recursive_params)
+
+    @property
+    def num_recursive_param_tensors_trainable(self) -> int:
+        """Number of trainable tensors across address-recursive parameters."""
+
+        return sum(
+            int(getattr(param, "num_tensors", 1) or 1)
+            for param in self.recursive_params
+            if param.is_trainable
+        )
+
+    @property
+    def num_recursive_param_tensors_frozen(self) -> int:
+        """Number of frozen tensors across address-recursive parameters."""
+
+        return sum(
+            int(getattr(param, "num_tensors", 1) or 1)
+            for param in self.recursive_params
+            if not param.is_trainable
+        )
+
+    @property
+    def param_memory(self) -> Bytes:
+        """Own-address parameter bytes for this Module (call-invariant).
+
+        Glossary: bare ``param_memory`` is own-address; use
+        ``internal_param_memory`` for the address-recursive sum.
+        The root Module (``self``) encompasses every parameter of the model.
+        """
+
+        return Bytes(sum(int(param.param_memory or 0) for param in self.params))
+
+    @property
+    def internal_param_memory(self) -> Bytes:
+        """Address-recursive sum of ``param_memory`` under this Module's subtree.
+
+        Shares its computation path with the ``recursive_params`` accessor.
+        """
+
+        return Bytes(sum(int(param.param_memory or 0) for param in self.recursive_params))
+
+    @property
+    def has_forward_hooks(self) -> bool:
+        """Whether any forward hook registry is nonempty."""
+
+        return bool(self.forward_pre_hooks or self.forward_hooks)
+
+    @property
+    def has_backward_hooks(self) -> bool:
+        """Whether any backward hook registry is nonempty."""
+
+        return bool(
+            self.backward_pre_hooks
+            or self.backward_hooks
+            or self.full_backward_pre_hooks
+            or self.full_backward_hooks
+        )
+
+    @property
+    def _source_trace(self) -> "Trace | None":
+        """Back-reference to the owning Trace (stored as weakref)."""
+        ref = self.__dict__.get("_source_trace_ref")
+        if ref is None:
+            return None
+        return cast("Trace | None", ref())
+
+    @_source_trace.setter
+    def _source_trace(self, value: "Trace | None") -> None:
+        """Store the owning Trace weak reference for live module lookups."""
+
+        self._source_trace_ref = weakref.ref(value) if value is not None else None
+
+    @property
+    def trace(self) -> "Trace | None":
+        """Alias for the owning Trace."""
+
+        return self._source_trace
+
+    @property
+    def handle(self) -> torch.nn.Module | None:
+        """Return the live ``nn.Module`` from the source model when reachable.
+
+        Returns
+        -------
+        torch.nn.Module | None
+            Live module object, or ``None`` when the source model/address is
+            unavailable. This computed runtime handle is not portable.
+        """
+
+        def resolve_module(model: torch.nn.Module) -> torch.nn.Module | None:
+            """Resolve this module address against a live model.
+
+            Parameters
+            ----------
+            model:
+                Live source model.
+
+            Returns
+            -------
+            torch.nn.Module | None
+                Resolved module object.
+            """
+
+            if self.address in {"", "self"}:
+                return model
+            return model.get_submodule(self.address)
+
+        return runtime_handle_from_trace(self._source_trace, resolve_module)
+
+    def __tl_state_items__(self) -> Any:
+        """Yield live state pairs from the backing row (M8 facade hook)."""
+
+        from .._trace_core.record_rows import record_state_items
+
+        return record_state_items(self)
+
+    def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
+        """Install a state mapping through the cell descriptors (M8 hook)."""
+
+        from .._trace_core.record_rows import record_state_restore
+
+        record_state_restore(self, mapping)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return pickle state with weakrefs stripped."""
+        from ._state_adapter import state_items
+
+        state = dict(state_items(self))
+        state["_source_trace_ref"] = None
+        state["_buffer_accessor"] = None
+        state.pop("_facets_cache", None)
+        state.pop("_attribute_writes", None)  # session-time; arbitrary user objects
+        state["tlspec_version"] = TLSPEC_VERSION
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore pickle state without touching disk."""
+        read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
+        # Session-time record: a state carrying one (forged or foreign) never surfaces it.
+        state.pop("_attribute_writes", None)
+        state.pop("attribute_writes", None)
+        module_setstate_defaults: dict[str, Any] = {
+            **_MODULE_CONTAINER_DEFAULTS,
+            "_buffer_accessor": None,
+            "_source_trace_ref": None,
+            "class_source_file": None,
+            "class_source_line": None,
+            "init_source_file": None,
+            "init_source_line": None,
+            "forward_source_file": None,
+            "forward_source_line": None,
+            "training": True,
+        }
+        default_fill_state(state, defaults=module_setstate_defaults)
+        # Repair present-but-wrong-typed container fields from legacy states.
+        # `default_fill_state` only fills absent keys; this closes the same
+        # gap `Trace`/`Op` already close for their own fields. `ops`/`params`/
+        # `recursive_params` are accessor classes handled separately below,
+        # not plain containers, so they are intentionally absent from
+        # `_MODULE_CONTAINER_DEFAULTS`.
+        coerce_container_typed_state(state, module_setstate_defaults)
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
+        from .._trace_core.record_rows import record_state_restore
+
+        record_state_restore(self, state)
+        if not isinstance(self.ops, ModuleCallAccessor):
+            self.ops = ModuleCallAccessor(self.ops)
+        if not self.input_ops and not self.input_layers and not self.output_ops:
+            self._sync_boundary_fields_from_calls()
+
+    # --- Per-call delegating properties ---
+    # Mirror the Layer delegation pattern: single-pass modules transparently
+    # expose per-pass fields; multi-pass modules raise with guidance.
+
+    @property
+    def facets(self) -> Any:
+        """Return the lazy semantic facet view for this Module."""
+
+        self._single_call_or_error()
+        cache = self.__dict__.get("_facets_cache")
+        if cache is None:
+            from ..semantic.facets import FacetView
+
+            cache = FacetView(self)
+            self.__dict__["_facets_cache"] = cache
+        return cache
+
+    @facets.deleter
+    def facets(self) -> None:
+        """Drop the cached semantic facet view for this Module."""
+
+        self.__dict__.pop("_facets_cache", None)
+
+    def _single_pass_or_error(self, field_name: str) -> Any:
+        """Return a field from the single pass, or raise if the module has multiple ops.
+
+        For modules invoked once, transparently delegates to ops[0].
+        For multi-pass modules, raises AttributeError directing the user to
+        access the field on a specific pass.
+        """
+        if self.num_calls > 1:
+            raise AttributeError(
+                f"Module '{self.address}' has {self.num_calls} ops. "
+                f"Access '{field_name}' on a specific pass: "
+                f"module.ops[0].{field_name}, module.ops[1].{field_name}, etc."
+            )
+        if len(self.ops) == 0:
+            return None
+        return getattr(self.ops[0], field_name)
+
+    @property
+    def output_structure(self) -> "ContainerSpec | None":
+        """Return the single call's structured output shape when unambiguous.
+
+        Returns
+        -------
+        ContainerSpec | None
+            Output container specification for single-call modules. Multi-call
+            aggregate modules return ``None`` to avoid inventing an additional
+            call-index container dimension.
+        """
+
+        if len(self.ops._dict) != 1:
+            return None
+        return next(iter(self.ops._dict.values())).output_structure
+
+    @property
+    def forward_args(self) -> tuple[Any, ...] | None:
+        """Return captured forward positional arguments for one module pass.
+
+        Returns
+        -------
+        tuple[Any, ...] | None
+            Captured positional arguments, or ``None`` when unavailable.
+        """
+        return cast("tuple[Any, ...] | None", self._single_pass_or_error("forward_args"))
+
+    @property
+    def forward_kwargs(self) -> dict[str, Any] | None:
+        """Return captured forward keyword arguments for one module pass.
+
+        Returns
+        -------
+        dict[str, Any] | None
+            Captured keyword arguments, or ``None`` when unavailable.
+        """
+        return cast("dict[str, Any] | None", self._single_pass_or_error("forward_kwargs"))
+
+    @property
+    def forward_args_summary(self) -> str:
+        """Human-readable forward positional arguments for a single-call Module."""
+
+        return cast(str, self._single_pass_or_error("forward_args_summary"))
+
+    @property
+    def forward_kwargs_summary(self) -> str:
+        """Human-readable forward keyword arguments for a single-call Module."""
+
+        return cast(str, self._single_pass_or_error("forward_kwargs_summary"))
+
+    @property
+    def forward_args_template(self) -> Any:
+        """Representative structural template for positional forward arguments."""
+
+        if len(self.ops) == 0:
+            return None
+        return next(iter(self.ops.values())).forward_args_template
+
+    @property
+    def forward_kwargs_template(self) -> Any:
+        """Representative structural template for keyword forward arguments."""
+
+        if len(self.ops) == 0:
+            return None
+        return next(iter(self.ops.values())).forward_kwargs_template
+
+    @property
+    def forward_duration(self) -> Duration:
+        """Wall-clock duration for this Module's single forward call."""
+
+        return cast(Duration, self._single_pass_or_error("forward_duration"))
+
+    @property
+    def total_forward_duration(self) -> Duration:
+        """Sum of wall-clock forward durations across all calls."""
+
+        return Duration(sum(call.forward_duration for call in self.ops.values()))
+
+    @property
+    def backward_duration(self) -> Duration | None:
+        """Backward duration for this module, if backward timing is available."""
+
+        return None
+
+    @property
+    def total_backward_duration(self) -> Duration | None:
+        """Total backward duration across calls, if backward timing is available."""
+
+        return None
+
+    @property
+    def func_calls_duration(self) -> Duration:
+        """Inclusive torch function duration for this Module's single call."""
+
+        return cast(Duration, self._single_pass_or_error("func_calls_duration"))
+
+    @property
+    def total_func_calls_duration(self) -> Duration:
+        """Sum of inclusive torch function durations across all calls."""
+
+        return Duration(sum(call.func_calls_duration for call in self.ops.values()))
+
+    @property
+    def total_output_activation_memory(self) -> Bytes:
+        """Sum of output activation bytes across this Module's calls."""
+
+        return Bytes(sum(int(call.output_activation_memory) for call in self.ops.values()))
+
+    @property
+    def total_internal_activation_memory(self) -> Bytes:
+        """Sum of internal activation bytes across this Module's calls."""
+
+        return Bytes(sum(int(call.internal_activation_memory) for call in self.ops.values()))
+
+    @property
+    def total_output_gradient_memory(self) -> Bytes:
+        """Sum of output gradient bytes across this Module's calls."""
+
+        return Bytes(sum(int(call.output_gradient_memory) for call in self.ops.values()))
+
+    @property
+    def total_internal_gradient_memory(self) -> Bytes:
+        """Sum of internal gradient bytes across this Module's calls."""
+
+        return Bytes(sum(int(call.internal_gradient_memory) for call in self.ops.values()))
+
+    @property
+    def total_autograd_memory(self) -> Bytes:
+        """Sum of autograd-saved bytes across this Module's calls."""
+
+        return Bytes(sum(int(call.autograd_memory) for call in self.ops.values()))
+
+    @property
+    def num_descendant_calls(self) -> int:
+        """Total nested ModuleCalls beneath all calls of this Module."""
+
+        return sum(call.num_descendant_calls for call in self.ops.values())
+
+    @property
+    def max_descendant_depth(self) -> int:
+        """Deepest nested ModuleCall depth beneath this Module."""
+
+        if len(self.ops) == 0:
+            return 0
+        return max(call.max_descendant_depth for call in self.ops.values())
+
+    def walk_descendants(self) -> Iterator["ModuleCall"]:
+        """Yield every ModuleCall nested beneath any call of this Module.
+
+        Yields
+        ------
+        ModuleCall
+            Descendant ModuleCall records in depth-first order. This Module's
+            own calls are not included.
+        """
+
+        for call in self.calls.values():
+            yield from call.walk_descendants(include_self=False)
+
+    @property
+    def call_tree(self) -> "ModuleCall | None":
+        """Return this Module's single ModuleCall as a nested call-tree root.
+
+        Returns
+        -------
+        ModuleCall | None
+            Sole call for this Module, or ``None`` if the Module was never
+            called.
+
+        Raises
+        ------
+        AttributeError
+            If this Module was invoked multiple times; select a specific call
+            from ``module.calls`` or ``module.ops`` in that case.
+        """
+
+        return cast("ModuleCall | None", self._single_pass_or_error("call_tree"))
+
+    def show_call_tree(
+        self,
+        max_depth: int | None = None,
+        include_atomic: bool = True,
+        show_call_index: bool = True,
+        file: TextIO | None = None,
+    ) -> None:
+        """Print this Module's call subtrees as ASCII trees.
+
+        Parameters
+        ----------
+        max_depth:
+            Maximum descendant depth to print for each call, or ``None`` for no
+            limit.
+        include_atomic:
+            Whether to include atomic module leaves.
+        show_call_index:
+            Whether to include the ``:N`` call suffix in labels.
+        file:
+            Optional output stream. ``None`` prints to stdout.
+        """
+
+        calls = list(self.calls.values())
+        for index, call in enumerate(calls):
+            if index > 0:
+                print(file=file)
+            _print_call_tree_from_root(
+                call,
+                max_depth=max_depth,
+                include_atomic=include_atomic,
+                show_call_index=show_call_index,
+                file=file,
+            )
+
+    @property
+    def num_param_tensors(self) -> int:
+        """Number of parameter tensors owned by this Module (the root owns all)."""
+
+        return len(self.params)
+
+    @property
+    def num_param_tensors_trainable(self) -> int:
+        """Number of trainable parameter tensors owned by this Module (the root owns all)."""
+
+        return sum(1 for param in self.params if param.is_trainable)
+
+    @property
+    def num_param_tensors_frozen(self) -> int:
+        """Number of frozen parameter tensors owned by this Module (the root owns all)."""
+
+        return sum(1 for param in self.params if not param.is_trainable)
+
+    @property
+    def has_trainable_params(self) -> bool:
+        """Whether this Module owns at least one trainable parameter."""
+
+        return self.num_params_trainable > 0
+
+    @property
+    def has_frozen_params(self) -> bool:
+        """Whether this Module owns at least one frozen parameter."""
+
+        return self.num_params_frozen > 0
+
+    @property
+    def class_source_location(self) -> str | None:
+        """Combined class source location as ``file:line``."""
+
+        if self.class_source_file is None or self.class_source_line is None:
+            return None
+        return f"{self.class_source_file}:{self.class_source_line}"
+
+    @property
+    def init_source_location(self) -> str | None:
+        """Combined ``__init__`` source location as ``file:line``."""
+
+        if self.init_source_file is None or self.init_source_line is None:
+            return None
+        return f"{self.init_source_file}:{self.init_source_line}"
+
+    @property
+    def forward_source_location(self) -> str | None:
+        """Combined ``forward`` source location as ``file:line``."""
+
+        if self.forward_source_file is None or self.forward_source_line is None:
+            return None
+        return f"{self.forward_source_file}:{self.forward_source_line}"
+
+    def _single_call_or_error(self) -> ModuleCall:
+        """Return the only ModuleCall or raise for multi-call modules."""
+
+        if self.num_calls != 1 or len(self.ops) != 1:
+            raise InvalidArgumentError(
+                f"Module '{self.address}' has {self.num_calls} calls; use module.calls[N]",
+                code="module_call_ambiguous",
+                remedy="access one call via module.calls[N]",
+                address=self.address,
+                num_calls=self.num_calls,
+            )
+        return self.ops[0]
+
+    @property
+    def receptive_field(self) -> "ReceptiveFieldView":
+        """Return the only call's receptive field or reject call ambiguity.
+
+        Raises
+        ------
+        AmbiguousCallError
+            If this module has zero or multiple executed calls.
+        """
+
+        if self.num_calls != 1 or len(self.calls) != 1:
+            from ..receptive_field._errors import AmbiguousCallError
+
+            calls = ", ".join(f"module.calls[{index}]" for index in self.calls.keys())
+            raise AmbiguousCallError(
+                f"Module {self.address!r} has {self.num_calls} calls: {calls}."
+            )
+        return self.calls[0].receptive_field
+
+    @property
+    def projective_field(self) -> "ReceptiveFieldView":
+        """Return the only call's projective field or reject call ambiguity."""
+
+        if self.num_calls != 1 or len(self.calls) != 1:
+            from ..receptive_field._errors import AmbiguousCallError
+
+            calls = ", ".join(f"module.calls[{index}]" for index in self.calls.keys())
+            raise AmbiguousCallError(
+                f"Module {self.address!r} has {self.num_calls} calls: {calls}."
+            )
+        return self.calls[0].projective_field
+
+    @property
+    def calls(self) -> ModuleCallAccessor:
+        """Scoped module-call collection."""
+
+        return self.ops
+
+    @property
+    def outs(self) -> list[Any]:
+        """Saved output tensors for a single-call module."""
+
+        return self._single_call_or_error().outs
+
+    @property
+    def out(self) -> Any:
+        """Saved output tensor for a single-call, single-output module."""
+
+        return self._single_call_or_error().out
+
+    @property
+    def out_shapes(self) -> list[Any]:
+        """Output shapes for a single-call module."""
+
+        return self._single_call_or_error().out_shapes
+
+    @property
+    def out_shape(self) -> Any:
+        """Output shape for a single-call, single-output module."""
+
+        return self._single_call_or_error().out_shape
+
+    @property
+    def grads(self) -> list[Any]:
+        """Saved output gradients for a single-call module."""
+
+        return self._single_call_or_error().grads
+
+    @property
+    def grad(self) -> Any:
+        """Saved output gradient for a single-call, single-output module."""
+
+        return self._single_call_or_error().grad
+
+    @property
+    def buffers(self) -> "BufferAccessor":
+        """Scoped BufferAccessor for buffers belonging to this module."""
+        if self._buffer_accessor is not None:
+            return cast("BufferAccessor", self._buffer_accessor)
+        # Build on first access from the source Trace
+        from .buffer import BufferAccessor
+
+        if self._source_trace is None or self._source_trace._buffer_accessor is None:
+            self._buffer_accessor = BufferAccessor({})
+            return cast("BufferAccessor", self._buffer_accessor)
+        parent_accessor = self._source_trace._buffer_accessor
+        scoped = {
+            addr: bl
+            for addr, bl in parent_accessor._dict.items()
+            if self.address in {"", "self"}
+            or addr == self.address
+            or addr.startswith(f"{self.address}.")
+        }
+        self._buffer_accessor = BufferAccessor(scoped, source_trace=self._source_trace)
+        return cast("BufferAccessor", self._buffer_accessor)
+
+    @property
+    def total_flops_forward(self) -> Flops:
+        """Sum of forward FLOPs across every Op this Module's calls ran."""
+        return Flops(_sum_call_ops_field(self._source_trace, self.ops.values(), "flops_forward"))
+
+    @property
+    def total_flops_backward(self) -> Flops:
+        """Sum of backward FLOPs across every Op this Module's calls ran."""
+        return Flops(_sum_call_ops_field(self._source_trace, self.ops.values(), "flops_backward"))
+
+    @property
+    def total_flops(self) -> Flops:
+        """Sum of forward and backward FLOPs for this Module."""
+        return Flops(self.total_flops_forward + self.total_flops_backward)
+
+    @property
+    def total_macs_forward(self) -> Macs:
+        """TRUE forward MACs across every Op this Module's calls ran (known splits only).
+
+        Derived from each op's two-term compute record, never ``flops // 2``.
+        Ops with an unknown MAC split are excluded (trace-level
+        disclosure: ``Trace.macs_unknown_split_ops``).
+        """
+
+        return Macs(_sum_call_ops_field(self._source_trace, self.ops.values(), "macs_forward"))
+
+    @property
+    def total_macs_backward(self) -> Macs | None:
+        """Backward MACs are not derivable and always ``None`` (estimates only)."""
+
+        return None
+
+    @property
+    def total_macs(self) -> Macs | None:
+        """Total MACs are not derivable and always ``None`` (see total_macs_backward)."""
+
+        return None
+
+    def __repr__(self) -> str:
+        """One line: address/class/calls/ops/params/mode (F10). Never raises."""
+
+        from .._utils.fail_open import fail_open
+        from ._value_repr import module_repr_line
+
+        return fail_open(
+            lambda: module_repr_line(self),
+            lambda _error: f"<Module {getattr(self, 'address', '<unbound>')}: repr degraded>",
+        )
+
+    def __str__(self) -> str:
+        """Bounded Module card with tie/alias disclosure (F10).
+
+        The output core prints only when exactly one saved output site is
+        in scope; plural output sites are named explicitly (matrix rule:
+        never an ambiguous single core over many sites).
+        """
+
+        from .._utils.fail_open import fail_open
+        from ._value_repr import module_card
+
+        return fail_open(lambda: module_card(self), lambda _error: self.__repr__())
+
+    def __len__(self) -> int:
+        """Return the total number of layers across all ops of this module."""
+        return len(self.layer_labels)
+
+    def __getitem__(self, ix: int | str) -> Any:
+        """Return the Op at position ix within this module's layer list.
+
+        Supports int indexing and string label lookup (#120).
+        """
+        if self._source_trace is None:
+            raise RecordBindingError(
+                "No source Trace reference; cannot index into layers",
+                code="record_not_bound",
+                remedy="keep the owning Trace alive and index layers through it",
+            )
+        if isinstance(ix, str):
+            # String label lookup within this module's layers
+            if ix in self.layer_labels:
+                return self._source_trace[ix]
+            # Try substring match within module layers
+            matches = [lbl for lbl in self.layer_labels if ix in lbl]
+            if len(matches) == 1:
+                return self._source_trace[matches[0]]
+            elif len(matches) > 1:
+                raise AmbiguousOpLookupError(
+                    f"Ambiguous lookup: '{ix}' matches {len(matches)} layers in module "
+                    f"'{self.address}': {', '.join(matches[:5])}",
+                    key=str(ix),
+                    address=self.address,
+                )
+            raise KeyError(f"'{ix}' not found in module '{self.address}' layers")
+        return self._source_trace[self.layer_labels[ix]]
+
+    def __iter__(self) -> Iterator[Any]:
+        """Iterate over Op entries for all layers in this module."""
+        if self._source_trace is None:
+            return iter(self.layer_labels)
+        return iter(self._source_trace[label] for label in self.layer_labels)
+
+    def draw(self, **kwargs: Any) -> str:
+        """Render this module's focused graph.
+
+        Parameters
+        ----------
+        **kwargs:
+            Keyword arguments forwarded to ``Trace.draw``.
+
+        Returns
+        -------
+        str
+            Graphviz DOT source string.
+
+        Raises
+        ------
+        RuntimeError
+            If this Module is not bound to a Trace.
+        """
+
+        trace: Trace | None = self._source_trace
+        if trace is None:
+            raise RecordBindingError(
+                "Module not bound to a Trace",
+                code="record_not_bound",
+                remedy="keep the owning Trace alive and read records through it",
+            )
+        return cast(str, trace.draw(module=self, **kwargs))
+
+    def to_pandas(self) -> "pd.DataFrame":
+        """Export this module's layers as a pandas DataFrame.
+
+        Builds each row the same way as ``Layer.to_pandas()``
+        (``LAYER_LOG_FIELD_ORDER``) so every populated Layer field is
+        exported -- this used to hand-roll a 6-field subset that silently
+        dropped the rest. ``num_ops`` is kept as a trailing convenience
+        column (a derived ``len(layer.ops)`` count, not a stored field, so
+        it isn't part of ``LAYER_LOG_FIELD_ORDER`` itself). Per-pass fields
+        (e.g. ``transformed_out``/``transformed_grad``) are reported as
+        ``None`` for multi-pass (recurrent) layers instead of raising.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per layer belonging to this module, ordered by
+            ``LAYER_LOG_FIELD_ORDER`` plus a trailing ``num_ops`` column.
+        """
+        if self._source_trace is None:
+            raise RecordBindingError(
+                "No source Trace reference; cannot build DataFrame",
+                code="record_not_bound",
+                remedy="keep the owning Trace alive and export through it",
+            )
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
+        columns = [*LAYER_LOG_FIELD_ORDER, "num_ops"]
+        if not self.layer_labels:
+            return pd.DataFrame(columns=columns)
+        rows = []
+        for label in self.layer_labels:
+            entry = self._source_trace[label]
+            row = _layer_log_to_row(entry)
+            row["num_ops"] = len(entry.ops) if hasattr(entry, "ops") else 1
+            rows.append(row)
+        return pd.DataFrame(rows, columns=columns)
+
+
+class ModuleAccessor(Accessor["Module"]):
+    """Dict-like accessor for Module objects.
+
+    Supports indexing by:
+    * **module address** (str) -- e.g. ``"features.0"``, ``"self"``.
+    * **alias** (str) -- for shared modules (same nn.Module registered at
+      multiple addresses), any alias resolves to the same Module.
+    * **pass label** (str) -- e.g. ``"features.0:2"`` returns a ModuleCall.
+    * **ordinal index** (int) -- position in address order.
+
+    Available as ``trace.modules``.
+    """
+
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+        "_pass_dict": FieldPolicy.KEEP,
+        "_alias_dict": FieldPolicy.KEEP,
+    }
+
+    def __init__(
+        self,
+        module_dict: dict[str, "Module"],
+        module_list: list["Module"] | None = None,
+        pass_dict: dict[str, "ModuleCall"] | None = None,
+    ) -> None:
+        """Initialize a module accessor with address, alias, and pass indexes.
+
+        Parameters
+        ----------
+        module_dict:
+            Mapping from canonical module addresses to ``Module`` logs.
+        module_list:
+            Ordered module logs; defaults to the mapping values.
+        pass_dict:
+            Mapping from pass-qualified call labels to ``ModuleCall`` logs.
+        """
+
+        super().__init__(module_dict, item_list=module_list)
+        self._pass_dict = pass_dict if pass_dict is not None else {}  # pass label -> ModuleCall
+        # Alias map: for shared modules (same nn.Module at multiple addresses),
+        # every non-primary address also resolves to the same Module.
+        self._alias_dict: dict[str, Module] = {}
+        for ml in self._dict.values():
+            for alias in ml.all_addresses:
+                if alias not in self._dict:
+                    self._alias_dict[alias] = ml
+
+    def __getitem__(self, key: int | str) -> "Module":
+        """Return a Module by module-specific lookup rules."""
+        if key == "":
+            key = "self"
+        if isinstance(key, str) and key in self._alias_dict:
+            return self._alias_dict[key]
+        if isinstance(key, str) and key in self._pass_dict:
+            key = self._pass_dict[key].address
+        return super().__getitem__(key)
+
+    def __contains__(self, key: object) -> bool:
+        """Return True if key is a known module address, alias, or pass label."""
+        if key == "":
+            key = "self"
+        return super().__contains__(key) or key in self._alias_dict or key in self._pass_dict
+
+    def __dir__(self) -> list[str]:
+        """Return Python attributes plus module addresses for tab completion.
+
+        Returns
+        -------
+        list[str]
+            Attribute names and valid module addresses.
+        """
+
+        keys = set(self._dict.keys()) | set(self._alias_dict.keys()) | set(self._pass_dict.keys())
+        return sorted(set(super().__dir__()) | keys)
+
+    def _ipython_key_completions_(self) -> list[str]:
+        """Return module addresses for IPython ``obj[...]`` completion.
+
+        Returns
+        -------
+        list[str]
+            Valid module addresses and pass labels.
+        """
+
+        return (
+            list(self._dict.keys()) + list(self._alias_dict.keys()) + list(self._pass_dict.keys())
+        )
+
+    def _composition_note(self) -> str | None:
+        """Composition breakdown: total calls across modules (F10)."""
+
+        calls = sum(getattr(ml, "num_calls", 0) or 0 for ml in self._list)
+        if calls <= len(self._list):
+            return None
+        return f"{calls} calls"
+
+    def to_pandas(self) -> "pd.DataFrame":
+        """Export module metadata as a pandas DataFrame.
+
+        Driven by ``MODULE_LOG_FIELD_ORDER`` minus the documented, genuinely
+        non-tabular exclusions in ``_TO_PANDAS_EXCLUDED_MODULE_FIELDS`` --
+        this used to hand-roll a 7-field subset that silently dropped the
+        rest of ``MODULE_LOG_FIELD_ORDER``.
+
+        Returns
+        -------
+        pd.DataFrame
+            One row per module in address order.
+        """
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
+        columns = [
+            field_name
+            for field_name in MODULE_LOG_FIELD_ORDER
+            if field_name not in _TO_PANDAS_EXCLUDED_MODULE_FIELDS
+        ]
+        rows = [_module_log_to_row(ml) for ml in self._list]
+        return pd.DataFrame(rows, columns=columns)
+
+    def summary(self) -> str:
+        """Return a compact text table of all modules.
+
+        Returns
+        -------
+        str
+            Summary table with module address, class, depth, params, layers, and ops.
+        """
+        if len(self) == 0:
+            return "No modules."
+        lines = [
+            f"{'Address':<40} {'Class':<20} {'Depth':>5} {'Params':>10} {'Layers':>7} {'Passes':>7}"
+        ]
+        lines.append("-" * 92)
+        for ml in self._list:
+            lines.append(
+                f"{ml.address:<40} {ml.class_name:<20} "
+                f"{ml.call_depth:>5} {ml.num_params:>10} "
+                f"{len(ml.layer_labels):>7} {ml.num_calls:>7}"
+            )
+        return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# The M8 facades: declared stored fields become row-cell descriptors; the
+# instance dict keeps the store binding, user extras, and the handful of
+# names whose access paths hardcode ``__dict__`` (the template/source-trace/
+# facets slots poked directly by their properties).
+# ---------------------------------------------------------------------------
+
+_MODULE_CALL_STORED_FIELDS: tuple[str, ...] = (
+    "address",
+    "all_addresses",
+    "cls",
+    "class_name",
+    "class_qualname",
+    "call_index",
+    "call_label",
+    "ordinal_index",
+    "ops",
+    "input_layers",
+    "output_layers",
+    "input_ops",
+    "output_ops",
+    "output_structure",
+    "output_paths",
+    "forward_args",
+    "forward_kwargs",
+    "inputs_before_pre_hooks",
+    "inputs_after_pre_hooks",
+    "forward_pre_hook_effects",
+    "forward_arg_names",
+    "num_forward_pos_args",
+    "num_forward_kwargs",
+    "num_forward_args_total",
+    "forward_args_summary",
+    "forward_kwargs_summary",
+    "forward_duration",
+    "code_context",
+    "module_call_stack",
+    "call_parent",
+    "call_children",
+)
+
+_MODULE_STORED_FIELDS: tuple[str, ...] = (
+    "address",
+    "all_addresses",
+    "cls",
+    "class_name",
+    "class_qualname",
+    "class_source_file",
+    "class_source_line",
+    "init_source_file",
+    "init_source_line",
+    "forward_source_file",
+    "forward_source_line",
+    "class_docstring",
+    "init_signature",
+    "init_docstring",
+    "forward_signature",
+    "forward_docstring",
+    "address_parent",
+    "address_children",
+    "address_depth",
+    "call_parent",
+    "call_children",
+    "call_depth",
+    "num_calls",
+    "ops",
+    "call_labels",
+    "layer_labels",
+    "input_ops",
+    "input_layers",
+    "output_ops",
+    "output_layers",
+    "params",
+    "num_params",
+    "num_params_trainable",
+    "num_params_frozen",
+    "buffer_layers",
+    "_buffer_accessor",
+    "training",
+    "forward_pre_hooks",
+    "forward_hooks",
+    "backward_pre_hooks",
+    "backward_hooks",
+    "full_backward_pre_hooks",
+    "full_backward_hooks",
+    "custom_attributes",
+    "custom_methods",
+)
+
+
+def _install_module_facades() -> None:
+    """Install the ModuleCall/Module row-cell descriptors (import-time)."""
+
+    from .._trace_core.record_rows import install_record_facade
+
+    install_record_facade(ModuleCall, _MODULE_CALL_STORED_FIELDS)
+    install_record_facade(Module, _MODULE_STORED_FIELDS)
+
+
+_install_module_facades()
+
+
+def set_attribute_writes(record: Module, writes: dict[str, AttributeWrite]) -> None:
+    """Attach a capture's attribute-write record to one ``Module`` (internal)."""
+
+    record.__dict__["_attribute_writes"] = dict(writes)

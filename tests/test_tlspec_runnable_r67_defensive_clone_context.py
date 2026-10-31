@@ -35,9 +35,9 @@ from torchlens import (
     _runnable_input_metadata,
     _runnable_state,
 )
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness, StateSource
 from torchlens.errors import PathDivergenceError, RunPreconditionError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness, StateSource
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 

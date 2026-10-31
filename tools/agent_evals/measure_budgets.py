@@ -72,7 +72,7 @@ def measure_entry(entry: Any, workdir: Path) -> dict[str, Any]:
     start = time.monotonic()
     trace = tl.trace(model, inputs, save="all")
     path = workdir / f"{entry.id}.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     record: dict[str, Any] = {"entry": entry.id, "num_ops": trace.num_ops}
     manifest, _ = read_manifest(path)
     total_bytes, blob_count = declared_bytes_and_count(manifest)
@@ -88,7 +88,7 @@ def measure_entry(entry: Any, workdir: Path) -> dict[str, Any]:
         record[f"{label}_tokens"] = _tokens(_handler_envelope(tool, request))
         served = call_tool(tool, request)
         record[f"{label}_served_truncated"] = served.get("truncation") is not None
-    record["explain_unbudgeted_tokens"] = _budgets.estimate_tokens(str(tl.report.explain(trace)))
+    record["explain_unbudgeted_tokens"] = _budgets.estimate_tokens(str(trace.explain()))
     for label, tool, args, key in ROW_CALLS:
         envelope = _handler_envelope(tool, {"path": str(path), **args})
         rows = (envelope.get("data") or {}).get(key) or []

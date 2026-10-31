@@ -17,8 +17,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.postprocess.loop_detection import _apply_recurrence_assignments
-from torchlens.postprocess.loop_grouping_adapter import RecurrenceAssignment
+from torchlens._postprocess.loop_detection import _apply_recurrence_assignments
+from torchlens._postprocess.loop_grouping_adapter import RecurrenceAssignment
 
 STEPS = 6
 DIM = 8

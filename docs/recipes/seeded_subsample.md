@@ -30,7 +30,7 @@ tl.extract_dataset(
     stimuli[torch.as_tensor(chosen)],
     ["1"],  # the ReLU output
     batch_size=4,
-    output_dir="subsample",
+    path="subsample",
     stimulus_ids=[image_ids[i] for i in chosen],  # original ids, not 0..11
     progress=False,
 )
@@ -43,9 +43,8 @@ rows line up with the original dataset by name:
 
 ```python
 # recipe-test: tool=torchlens expected=True
-from torchlens.dataset_extraction import load_extraction
 
-loaded = load_extraction("subsample")
+loaded = tl.load("subsample")
 (key,) = loaded.activations
 prefix = model[:2]  # conv + ReLU, the extracted site
 with torch.no_grad():
@@ -55,7 +54,7 @@ RESULT = torch.allclose(loaded.activations[key], direct)
 
 ## Limits
 
-- `stimulus_ids=` needs disk mode (`output_dir=`); in-memory extraction
+- `stimulus_ids=` needs disk mode (`path=`); in-memory extraction
   refuses it with `extraction_stimulus_ids_in_memory_unsupported`.
 - The manifest records the identifiers, not your sampling seed. If a reader
   needs to redraw the same subsample, store the seed beside the artifact.

@@ -132,9 +132,9 @@ def test_rank_engine_renders_moduledict_double_quote_key(tmp_path: Path) -> None
     outpath = tmp_path / "moduledict_double_quote_rank"
     try:
         dot = trace.draw(
-            vis_outpath=str(outpath),
+            path=str(outpath),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             vis_node_placement="rank",
             order_siblings=False,
         )

@@ -15,7 +15,7 @@ Binding laws carried here:
   survives cleanup and GC (pin: build report; del trace; to_dict() works).
 - ``SummaryReport`` subclasses ``str``. From ``summary()`` the text IS the
   canonical byte-stable ASCII contract (memo 3.9). A report assembled from
-  caller text (``build_summary_report``) carries no rebuilt payload, and
+  caller text (``summary``) carries no rebuilt payload, and
   the rebuilt-only result methods refuse it typed.
 
 Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 from ._summary_charset import degrade
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: The five-value evidence enum (summary item 10 / costreport D2). Orthogonal
 #: to applicability; a mixed aggregate never upgrades past its weakest member.
@@ -84,8 +84,8 @@ class SummaryTotals:
     params_frozen: int | None
     flops_forward_fma2: int
     macs_forward: int
-    at_capture_bytes: int
-    retained_now_bytes: int
+    captured_bytes: int
+    retained_bytes: int
     compute_coverage: dict[str, int]
     params_bytes: int | None = None
     params_effective: int | None = None
@@ -100,8 +100,8 @@ class CaptureFacts:
     backend: str | None
     model_class_name: str | None
     outcome_status: str | None
-    capture_verified: bool | None
-    structure_only: bool
+    is_verified: bool | None
+    is_structure_only: bool
     health_verdict: str
     capture_fingerprint: str
     advisories: int
@@ -408,7 +408,7 @@ def _summary_rows(trace: Trace) -> tuple[SummaryRow, ...]:
     return tuple(rows)
 
 
-def build_summary_report(trace: Trace, text: str) -> SummaryReport:
+def summary(trace: Trace, text: str) -> SummaryReport:
     """Attach the detached typed data to one rendered summary text.
 
     The builder split (data / format / render): the DATA stage reads
@@ -443,15 +443,15 @@ def build_summary_data(
         params_frozen=core.params.frozen,
         flops_forward_fma2=int(core.compute.partition_total),
         macs_forward=int(core.compute.macs_total),
-        at_capture_bytes=core.memory.at_capture_bytes,
-        retained_now_bytes=core.memory.retained_now_bytes,
+        captured_bytes=core.memory.captured_bytes,
+        retained_bytes=core.memory.retained_bytes,
         compute_coverage={
             "known": core.compute.coverage.known,
             "zero_by_rule": core.compute.coverage.zero_by_rule,
             "not_applicable": core.compute.coverage.not_applicable,
             "unknown": core.compute.coverage.unknown,
         },
-        params_bytes=core.params.bytes,
+        params_bytes=core.params.nbytes,
         params_effective=(
             core.params.total - pruned.masked
             if pruned is not None and pruned.masked is not None and core.params.total is not None
@@ -465,8 +465,8 @@ def build_summary_data(
         backend=getattr(trace, "backend", None),
         model_class_name=getattr(trace, "model_class_name", None),
         outcome_status=getattr(getattr(outcome, "status", None), "value", None),
-        capture_verified=getattr(trace, "capture_verified", None),
-        structure_only=bool(getattr(trace, "structure_only", False)),
+        is_verified=getattr(trace, "capture_verified", None),
+        is_structure_only=bool(getattr(trace, "structure_only", False)),
         health_verdict=facts.verdict,
         capture_fingerprint=core.capture_fingerprint,
         advisories=len(

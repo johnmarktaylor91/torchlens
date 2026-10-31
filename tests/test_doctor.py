@@ -9,16 +9,16 @@ from packaging.requirements import Requirement
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._utils import _DOCTOR_EXCLUDED_EXTRAS
+from torchlens._utils._torch_compat import get_torch_capability_snapshot
 from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
 from torchlens.backends.torch.wrappers import wrap_torch
-from torchlens.utils import _DOCTOR_EXCLUDED_EXTRAS
-from torchlens.utils._torch_compat import get_torch_capability_snapshot
 
 
 def test_doctor_returns_sane_report() -> None:
     """Doctor returns structured checks and a printable report."""
 
-    report = tl.utils.doctor()
+    report = tl.report.doctor()
     assert report.checks
     names = {check.name for check in report.checks}
     assert {
@@ -47,11 +47,11 @@ def test_doctor_surfaces_every_runtime_capability() -> None:
     accessor spelling, so no capability can go silently invisible.
     """
 
-    report = tl.utils.doctor()
+    report = tl.report.doctor()
     row = next(check for check in report.checks if check.name == "runtime capabilities")
     expected = set(get_torch_capability_snapshot()) | set(get_tf_capability_snapshot())
 
-    snapshot = tl.utils.capability_snapshot()
+    snapshot = tl._utils.capability_snapshot()
     assert set(snapshot) == expected
     assert report.capability_snapshot() == snapshot
 
@@ -60,7 +60,7 @@ def test_doctor_surfaces_every_runtime_capability() -> None:
     assert row.detail.split(";")[0] == f"{present}/{len(snapshot)} capabilities present"
     for name in absent:
         assert name in row.detail
-    assert "tl.utils.capability_snapshot()" in row.detail
+    assert "tl._utils.capability_snapshot()" in row.detail
 
 
 def test_doctor_warns_on_stale_torch_wrapper_binding(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -70,7 +70,7 @@ def test_doctor_warns_on_stale_torch_wrapper_binding(monkeypatch: pytest.MonkeyP
     original_relu = _state._decorated_to_orig[id(__import__("torch").relu)]
     monkeypatch.setattr("torch.relu", original_relu)
 
-    report = tl.utils.doctor()
+    report = tl.report.doctor()
     row = next(check for check in report.checks if check.name == "torch wrapper bindings")
 
     assert row.status == "WARN"
@@ -91,9 +91,9 @@ def test_declared_extra_probes_track_packaging_metadata() -> None:
         requirement = Requirement(requirement_line)
         if requirement.marker is None:
             continue
-        requirement_extras.update(tl.utils._extras_from_requirement_marker(requirement))
+        requirement_extras.update(tl._utils._extras_from_requirement_marker(requirement))
 
-    probes = tl.utils._declared_extra_probes()
+    probes = tl._utils._declared_extra_probes()
 
     assert set(probes) == expected
     assert requirement_extras <= set(probes)
@@ -111,7 +111,7 @@ def test_capability_row_optional_absences_do_not_warn(monkeypatch: pytest.Monkey
     trains users to ignore the row.
     """
 
-    from torchlens.utils import _probe_torch_capabilities, _torch_compat as tc
+    from torchlens._utils import _probe_torch_capabilities, _torch_compat as tc
 
     for flag in ("HAS_CODE_POSITIONS", "HAS_CODE_QUALNAME", "HAS_NAMED_TENSOR_API"):
         monkeypatch.setattr(tc, flag, False)
@@ -134,7 +134,7 @@ def test_capability_row_pre_graphsafe_generator_flags_stay_pass(
     instead of a permanent unactionable WARN.
     """
 
-    from torchlens.utils import _probe_torch_capabilities, _torch_compat as tc
+    from torchlens._utils import _probe_torch_capabilities, _torch_compat as tc
 
     for flag in (
         "HAS_GENERATOR_CLONE_STATE",
@@ -151,7 +151,7 @@ def test_capability_row_pre_graphsafe_generator_flags_stay_pass(
 def test_capability_row_genuine_degradation_still_warns(monkeypatch: pytest.MonkeyPatch) -> None:
     """A genuine degradation (non-optional flag False) still drives WARN."""
 
-    from torchlens.utils import _probe_torch_capabilities, _torch_compat as tc
+    from torchlens._utils import _probe_torch_capabilities, _torch_compat as tc
 
     monkeypatch.setattr(tc, "HAS_VARIABLE_FUNCTIONS", False)
     row = _probe_torch_capabilities()
@@ -184,7 +184,7 @@ def test_probe_graphviz_routes_through_the_bounded_group_killing_runner(monkeypa
 
     import subprocess
 
-    from torchlens.utils import _probe_graphviz, _subprocess as sp
+    from torchlens._utils import _probe_graphviz, _subprocess as sp
 
     calls = {}
 
@@ -212,7 +212,7 @@ def test_bounded_subprocess_children_are_armed_to_die_with_the_parent():
     import signal
     import sys
 
-    from torchlens.utils import _subprocess as sp
+    from torchlens._utils import _subprocess as sp
 
     if sp._PRCTL is None:
         pytest.skip("no glibc prctl on this host")

@@ -103,7 +103,7 @@ def test_backward_pass_root_ids_persist_as_dense_ordinals(tmp_path) -> None:
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
     bundle = tmp_path / "backward.tlspec"
-    tl.save(trace, str(bundle))
+    trace.save(str(bundle))
     loaded = tl.load(str(bundle))
 
     backward_passes = list(loaded.backward_pass_logs.values())

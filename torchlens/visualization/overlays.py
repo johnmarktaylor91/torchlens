@@ -10,10 +10,10 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
+from .._utils._multipass_access import get_multipass_attr
+from .._utils.display import format_flops, human_readable_size
 from ..capture.flops import append_attention_note
 from ..errors._base import TorchLensWarning
-from ..utils._multipass_access import get_multipass_attr
-from ..utils.display import format_flops, human_readable_size
 
 OverlayScores = Mapping[str, Any]
 
@@ -34,23 +34,23 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
     """Lower a Selection-shaped overlay source to per-site SELECTED COUNTS.
 
     The element-mask law (leverage D-4): a consumer of a Selection-shaped
-    source reads element masks / ``selected_count``, never family membership
+    source reads element masks / ``num_selected``, never family membership
     — painting whole sites for a sparse element selection is the measured
     2.7x overpaint. Touched sites with zero selected elements stay in the
     mapping as an honest ``0``.
     """
 
-    from ..selection import ResolvedSelection, Selection
+    from .._selection import Selection, Selector
 
-    if isinstance(overlay, Selection):
+    if isinstance(overlay, Selector):
         overlay = overlay.resolve(trace)
-    elif not isinstance(overlay, ResolvedSelection):
+    elif not isinstance(overlay, Selection):
         selection_hook = getattr(overlay, "__selection__", None)
         if selection_hook is None:
             return overlay
         overlay = selection_hook().resolve(trace)
     if overlay._trace is not trace:
-        from ..selection import SelectionError
+        from torchlens._selection import SelectionError
 
         raise SelectionError(
             "the node_overlay selection is resolved against a DIFFERENT "
@@ -59,7 +59,7 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
         )
     scores: dict[str, int] = {}
     for entry in overlay:
-        layer_label = entry.site_key[0]
+        layer_label = entry.key[0]
         scores[layer_label] = scores.get(layer_label, 0) + int(entry._mask._dense_ro().sum())
     return scores
 

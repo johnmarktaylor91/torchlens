@@ -12,7 +12,7 @@ class TraceState(Enum):
 
     ``PRISTINE`` is only the machine's start value: an assignment can set it
     and a func-targeted ``intervene=`` capture keeps it. Whether anything ever
-    intervened on a trace is the derived ``Trace.pristine`` reading.
+    intervened on a trace is the derived ``Trace.is_pristine`` reading.
     """
 
     PRISTINE = "pristine"

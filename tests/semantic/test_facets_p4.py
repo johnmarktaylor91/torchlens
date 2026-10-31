@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import FacetSpec
+from torchlens.facets import FacetSpec
 
 
 class HeadResult(nn.Module):
@@ -87,8 +87,8 @@ def patchable_attention(module: Any) -> dict[str, Any]:
     result_op = trace.ops[result_module.calls[0].output_ops[0]]
     output_op = trace.ops[module.calls[0].output_ops[0]]
     return {
-        "result": FacetSpec.from_home(result_op, recipe_id="patchable_attention"),
-        "attn_out": FacetSpec.from_home(output_op, recipe_id="patchable_attention"),
+        "result": FacetSpec.from_home(result_op, function_id="patchable_attention"),
+        "attn_out": FacetSpec.from_home(output_op, function_id="patchable_attention"),
         "n_heads": 2,
         "head": module.facets.head,
     }
@@ -98,7 +98,7 @@ def patchable_mlp(module: Any) -> dict[str, Any]:
     """Expose writable MLP output facets for the toy module."""
 
     output_op = module.trace.ops[module.calls[0].output_ops[0]]
-    spec = FacetSpec.from_home(output_op, recipe_id="patchable_mlp")
+    spec = FacetSpec.from_home(output_op, function_id="patchable_mlp")
     return {"output": spec, "up_out": spec}
 
 
@@ -169,12 +169,12 @@ def test_activation_patch_head_cell_matches_manual_patch() -> None:
     clean_log = tl.trace(
         model,
         clean,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     corrupted_log = tl.trace(
         model,
         corrupted,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     clean_head = clean_log.modules["block.attn"].facets.head(0).result.detach().clone()
 

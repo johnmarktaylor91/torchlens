@@ -51,7 +51,7 @@ def child_output_spec(module: Any, child_name: str, recipe_id: str) -> FacetSpec
             "was not saved",
             f"save=... including {getattr(op, 'label', child_name)!r}",
         )
-    return FacetSpec.from_home(op, home_kind="op", recipe_id=recipe_id)
+    return FacetSpec.from_home(op, home_kind="op", function_id=recipe_id)
 
 
 def first_input(module: Any) -> Any | AbsenceReason:
@@ -68,7 +68,7 @@ def first_input(module: Any) -> Any | AbsenceReason:
     if input_ops:
         return needs_capture(
             "module input value was not captured",
-            "save_arg_values=True or save=... including the module input",
+            "save_args=True or save=... including the module input",
         )
     return structural("module call has no positional inputs")
 
@@ -79,11 +79,11 @@ def first_input_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
     Falls back to resolving the input through the op graph -- the same fallback
     ``module_input_op_spec`` already implements -- when ``call.forward_args`` is
     empty/``None``. Finalization ("GC-11",
-    ``torchlens/postprocess/finalization.py``) unconditionally nulls
+    ``torchlens/_postprocess/finalization.py``) unconditionally nulls
     ``forward_args``/``forward_kwargs`` for every ``module_identity_mode`` except
     ``pytree_module``/``object_module`` -- i.e. for the standard/default
     ``torch_module`` mode used by ordinary ``nn.Module`` tracing -- regardless of
-    whether ``save_arg_values=True`` was passed. Without this fallback the
+    whether ``save_args=True`` was passed. Without this fallback the
     "input"/"indices" facet was reported as never captured even when the value
     was fully captured, saved, and trivially readable one line away via
     ``call.input_ops[0]``.
@@ -91,7 +91,7 @@ def first_input_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
 
     value = first_input(module)
     if not isinstance(value, AbsenceReason):
-        return FacetSpec.from_home(value, home_kind="module_input", recipe_id=recipe_id)
+        return FacetSpec.from_home(value, home_kind="module_input", function_id=recipe_id)
     op_spec = module_input_op_spec(module, recipe_id)
     if not isinstance(op_spec, AbsenceReason):
         return op_spec
@@ -132,7 +132,7 @@ def module_input_op_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReas
             f"module input op {getattr(op, 'label', '<unknown>')!r} was not saved",
             f"save=... including {getattr(op, 'label', 'the module input')!r}",
         )
-    return FacetSpec.from_home(op, home_kind="op", recipe_id=recipe_id)
+    return FacetSpec.from_home(op, home_kind="op", function_id=recipe_id)
 
 
 def projection_input_spec(
@@ -195,7 +195,7 @@ def module_output_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason
             f"module output op {getattr(op, 'label', '<unknown>')!r} was not saved",
             f"save=... including {getattr(op, 'label', 'the module output')!r}",
         )
-    return FacetSpec.from_home(op, home_kind="op", recipe_id=recipe_id)
+    return FacetSpec.from_home(op, home_kind="op", function_id=recipe_id)
 
 
 def _primary_output_label(module: Any, call: Any) -> str | None:
@@ -214,7 +214,7 @@ def _primary_output_label(module: Any, call: Any) -> str | None:
     paths = tuple(getattr(call, "output_paths", ()) or ())
     if not paths:
         return None
-    from ...data_classes._module_role_hints import multi_output_role_from_path
+    from ..._data_classes._module_role_hints import multi_output_role_from_path
 
     primary_role = multi_output_role_from_path(paths[0], 0)
     if primary_role is None:
@@ -244,14 +244,14 @@ def parameter_spec(module: Any, name: str, recipe_id: str) -> FacetSpec | Absenc
     try:
         for param in params:
             if getattr(param, "name", None) == name:
-                return FacetSpec.from_home(param, home_kind="parameter", recipe_id=recipe_id)
+                return FacetSpec.from_home(param, home_kind="parameter", function_id=recipe_id)
     except TypeError:
         return structural(f"parameter {name!r} is absent")
     cls = getattr(module, "cls", None)
     parameter = getattr(cls, name, None)
     if parameter is None:
         return structural(f"parameter {name!r} is absent")
-    return FacetSpec.from_home(parameter, home_kind="parameter", recipe_id=recipe_id)
+    return FacetSpec.from_home(parameter, home_kind="parameter", function_id=recipe_id)
 
 
 def add_if_present(result: dict[str, Any], name: str, value: Any) -> None:
@@ -396,7 +396,7 @@ def activation_gelu(value: Any) -> Any | AbsenceReason:
     if isinstance(value, AbsenceReason):
         return value
     if isinstance(value, FacetSpec):
-        return FacetSpec.computed(lambda: F.gelu(Facet(value).value), recipe_id=value.recipe_id)
+        return FacetSpec.computed(lambda: F.gelu(Facet(value).value), function_id=value.function_id)
     if isinstance(value, torch.Tensor):
         return F.gelu(value)
     return structural("GELU activation operand is not tensor-like")
@@ -408,7 +408,7 @@ def activation_silu(value: Any) -> Any | AbsenceReason:
     if isinstance(value, AbsenceReason):
         return value
     if isinstance(value, FacetSpec):
-        return FacetSpec.computed(lambda: F.silu(Facet(value).value), recipe_id=value.recipe_id)
+        return FacetSpec.computed(lambda: F.silu(Facet(value).value), function_id=value.function_id)
     if isinstance(value, torch.Tensor):
         return F.silu(value)
     return structural("SiLU activation operand is not tensor-like")
@@ -424,7 +424,7 @@ def computed_product(left: Any, right: Any, recipe_id: str) -> FacetSpec | Absen
     if isinstance(left, FacetSpec) and isinstance(right, FacetSpec):
         return FacetSpec.computed(
             lambda: Facet(left).value * Facet(right).value,
-            recipe_id=recipe_id,
+            function_id=recipe_id,
         )
     return structural("computed product operands are not both facet specs")
 
@@ -451,7 +451,7 @@ def fused_sdpa_facet(module: Any, facet: ReconstructionFacet, recipe_id: str) ->
     if isinstance(value, MissingFacet):
         return needs_capture(
             value.reason,
-            "reconstruction_ready=True or save_arg_values=True including SDPA arguments",
+            "reconstruction_ready=True or save_args=True including SDPA arguments",
         )
     return value
 
@@ -467,12 +467,12 @@ def fused_sdpa_pattern(module: Any) -> Any:
         f"attention pattern not captured: model uses a fused attention kernel "
         f"(SDPA/FlashAttention) at {label}. "
         f"{value.detail} To READ pattern/scores/z, re-run with reconstruction_ready=True "
-        "(or save_arg_values=True). To EDIT the pattern, capture a model that runs eager / "
+        "(or save_args=True). To EDIT the pattern, capture a model that runs eager / "
         "unfused attention so it is a real, editable op -- e.g. load HF models with "
         "attn_implementation='eager' (AutoModel.from_pretrained(..., attn_implementation='eager')). "
         "The reconstructed pattern is read-only by design: editing it would silently change the "
         "attention kernel, so capture eager for a consistent baseline.",
-        "reconstruction_ready=True or save_arg_values=True including SDPA arguments",
+        "reconstruction_ready=True or save_args=True including SDPA arguments",
     )
 
 
@@ -485,7 +485,7 @@ def structural(detail: str) -> AbsenceReason:
 def needs_capture(detail: str, save_hint: str) -> AbsenceReason:
     """Return a needs-capture absence reason."""
 
-    return AbsenceReason(status="needs_capture", detail=detail, save_hint=save_hint)
+    return AbsenceReason(status="needs_capture", detail=detail, remedy=save_hint)
 
 
 def op_output_readable(op: Any) -> bool:

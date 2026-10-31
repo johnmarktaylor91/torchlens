@@ -63,7 +63,7 @@ def test_to_agent_json_is_json_serializable_and_self_describing() -> None:
     assert "purpose" in guide and "navigation" in guide and "next_steps" in guide
     # The guide points back at the live human surface, never a parallel API.
     assert "trace[<layer_label>].out" in guide["payloads"]
-    assert guide["next_steps"]["plain_language_report"] == "tl.report.explain(trace)"
+    assert guide["next_steps"]["plain_language_report"] == "trace.explain()"
 
 
 def test_to_agent_json_carries_capture_honesty_facts() -> None:

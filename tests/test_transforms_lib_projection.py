@@ -16,20 +16,19 @@ from pathlib import Path
 import pytest
 import torch
 
-from torchlens.stats import PCA, FittedArtifactError, FittedPCA, load_fitted, save_fitted
+from torchlens.errors import FittedArtifactError, TransformContractError
+from torchlens.stats import PCA, FittedPCA, load_fitted, save_fitted
 from torchlens.transforms import (
     TensorSpec,
-    TransformContractError,
     chain,
     pca_apply,
-    pipeline_from_record,
-    pipeline_record,
     project,
     srp,
     srp_dims_for,
     srp_fidelity_probe,
 )
 from torchlens.transforms._helpers import _condensed_corr_rdm, _condensed_l2_rdm, spearman
+from torchlens.transforms._pipeline import pipeline_from_record, pipeline_record
 from torchlens.transforms._projection import _BASIS_STORE, _reset_projection_store
 
 
@@ -76,7 +75,11 @@ def test_srp_dims_for_matches_the_dense_jl_formula() -> None:
 def test_srp_dims_for_validates_inputs() -> None:
     """Row count and eps domains refuse typed."""
 
-    for kwargs in ({"n_samples": 1}, {"n_samples": 10, "eps": 0.0}, {"n_samples": 10, "eps": 1.0}):
+    for kwargs in (
+        {"num_samples": 1},
+        {"num_samples": 10, "eps": 0.0},
+        {"num_samples": 10, "eps": 1.0},
+    ):
         with pytest.raises(TransformContractError) as excinfo:
             srp_dims_for(**kwargs)  # type: ignore[arg-type]
         assert excinfo.value.fields["code"] == "transform_params_invalid"
@@ -105,7 +108,7 @@ def test_probe_reports_scoped_rows_and_is_deterministic() -> None:
     pilot = torch.randn(12, 300, generator=generator)
     first = srp_fidelity_probe(pilot, n_components=(16, 64), seed=7)
     second = srp_fidelity_probe(pilot, n_components=(16, 64), seed=7)
-    assert first.to_record() == second.to_record()
+    assert first.to_dict() == second.to_dict()
     assert first.corpus == "user_pilot_batch"
     assert first.distance_claim == "empirical_only"
     assert first.n_rows == 12 and first.input_extent == 300
@@ -115,7 +118,7 @@ def test_probe_reports_scoped_rows_and_is_deterministic() -> None:
         assert -1.0 <= row["corr_rdm_spearman"] <= 1.0
     text = str(first)
     assert "scoped to THIS batch" in text and "empirical_only" in text
-    assert first.canonical_json().startswith('{"algorithm_version"')
+    assert first.to_json().startswith('{"algorithm_version"')
 
 
 @pytest.mark.smoke
@@ -145,7 +148,7 @@ def test_pca_result_carries_the_fitted_payload_facts() -> None:
     fitted, x = _fit()
     estimator = PCA(5)
     estimator.update(x)
-    result = estimator.result()
+    result = estimator.compute()
     assert set(result) == {
         "components",
         "explained_variance",
@@ -194,7 +197,7 @@ def test_fitted_sidecar_round_trips_and_digest_checks(tmp_path: Path) -> None:
     assert torch.equal(loaded.components, fitted.components)
     assert torch.equal(loaded.mean, fitted.mean)
     assert loaded.fit_scope == "test fit"
-    assert loaded.n_samples == 60 and loaded.n_features == 20
+    assert loaded.num_samples == 60 and loaded.num_features == 20
     raw = bytearray(path.read_bytes())
     raw[-3] ^= 0xFF
     path.write_bytes(bytes(raw))
@@ -301,8 +304,8 @@ def test_project_params_and_payload_validation() -> None:
         components=fitted.components + 1.0,
         mean=fitted.mean,
         explained_variance=fitted.explained_variance,
-        n_samples=fitted.n_samples,
-        n_features=fitted.n_features,
+        num_samples=fitted.num_samples,
+        num_features=fitted.num_features,
         fit_scope=fitted.fit_scope,
         digest=fitted.digest,
     )

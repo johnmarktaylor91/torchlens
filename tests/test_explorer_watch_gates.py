@@ -21,19 +21,18 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.observability import (
+from torchlens._observability import (
     Histogram,
     HistoryCollector,
-    HistoryView,
     ObservationRecord,
-    Spine,
+    RunningStats,
     StepTruth,
     merge_observations,
-    render_contact_sheet,
-    render_fan,
 )
-from torchlens.observability._errors import HistorySchemaError
-from torchlens.observability._op_tier import OpTierCollector
+from torchlens._observability._errors import HistorySchemaError
+from torchlens._observability._op_tier import OpTierCollector
+from torchlens.trackers import HistoryView
+from torchlens.viz import contact_sheet, quantile_fan
 
 
 class _NaNInjector(torch.nn.Module):
@@ -105,7 +104,7 @@ class TestNumbersRightAndObservationInert:
             if p.observation.spine is not None and p.observation.spine.count_nan > 0
         ]
         assert nan_steps == [2], "NaN lands at exactly its (site, step) coordinate"
-        assert "nonfinite" in render_fan(view, injector_site)
+        assert "nonfinite" in quantile_fan(view, injector_site)
         # Observation is inert: no other site saw a NaN at step 2 upstream.
         upstream = next(s for s, r in view.sites.items() if r.module_path == "0")
         assert all(p.observation.spine.count_nan == 0 for p in view.series(upstream))
@@ -137,7 +136,7 @@ class TestResumeSegments:
         segments = {b.block.segment_id for b in view.blocks}
         assert len(segments) == 2
         site = next(iter(view.sites))
-        assert "segment" in render_fan(view, site)
+        assert "segment" in quantile_fan(view, site)
 
 
 class TestReusedModuleTruth:
@@ -210,7 +209,7 @@ class TestCrossSiteRollupRefused:
 
     def test_merge_across_sites_refuses(self) -> None:
         def observed(site: str) -> ObservationRecord:
-            spine = Spine()
+            spine = RunningStats()
             spine.update(torch.randn(8))
             sketch = Histogram()
             sketch.update(torch.randn(8))
@@ -263,7 +262,7 @@ class TestResnet18Row:
             assert name_w == name_c
             assert torch.equal(buf_w, buf_c), f"observer perturbed {name_w}"
         view = HistoryView.from_collector(collector)
-        sheet = render_contact_sheet(view)
+        sheet = contact_sheet(view)
         assert "of" in sheet and sheet.startswith("<svg")
 
 
@@ -280,7 +279,7 @@ class TestGpt2CpuLeg:
         model.train()
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
         ids = torch.randint(0, 50257, (1, 16))
-        from torchlens.observability import WatchSettings
+        from torchlens._observability import WatchSettings
 
         collector = HistoryCollector(
             model,
@@ -302,7 +301,7 @@ class TestGpt2CpuLeg:
             collector.detach()
         view = HistoryView.from_collector(collector)
         assert len(view.blocks) == 4
-        sheet = render_contact_sheet(view)
+        sheet = contact_sheet(view)
         assert "nonfinite_first_drift_v1" in sheet
         block_sites = [s for s, r in view.sites.items() if r.module_path == "transformer.h.0"]
         assert block_sites
@@ -328,7 +327,7 @@ class TestCudaGateRows:
     )
     def test_module_tier_overhead_gates(self, sketch_cadence: int | None, threshold: float) -> None:
         transformers = pytest.importorskip("transformers")
-        from torchlens.observability import WatchSettings, measure_ab, measure_noise_band
+        from torchlens._observability import WatchSettings, measure_ab, measure_noise_band
 
         torch.manual_seed(0)
         device = "cuda"

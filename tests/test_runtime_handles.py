@@ -73,7 +73,7 @@ def _first_grad_fn_with_handle(trace: tl.Trace) -> Any:
         GradFn record with a retained live autograd object.
     """
 
-    for grad_fn in trace.grad_fns:
+    for grad_fn in trace.autograd.grad_fns:
         handle = grad_fn.handle
         if handle is not None:
             return grad_fn
@@ -110,7 +110,7 @@ def test_runtime_handles_return_none_after_source_release_without_raising() -> N
     assert buffer.handle is not None
     assert module.handle is not None
 
-    param.release_param_ref()
+    param._release_param_ref()
     del model
     gc.collect()
 
@@ -140,7 +140,7 @@ def test_portable_round_trip_runtime_handles_are_none(tmp_path: Path) -> None:
     _model, trace = _make_trace()
     path = tmp_path / "runtime_handles.tlspec"
 
-    tl.save(trace, path, level="portable")
+    trace.save(path, level="portable")
     loaded = tl.load(path)
 
     assert loaded.params["linear.weight"].handle is None
@@ -148,7 +148,7 @@ def test_portable_round_trip_runtime_handles_are_none(tmp_path: Path) -> None:
     assert loaded.modules["linear"].handle is None
     assert loaded.modules["self"].handle is None
     assert _first_grad_fn_with_handle(trace).handle is not None
-    assert all(grad_fn.handle is None for grad_fn in loaded.grad_fns)
+    assert all(grad_fn.handle is None for grad_fn in loaded.autograd.grad_fns)
 
 
 def test_param_handle_does_not_cache_after_release() -> None:
@@ -157,7 +157,7 @@ def test_param_handle_does_not_cache_after_release() -> None:
     model, trace = _make_trace()
     param = trace.params["linear.weight"]
 
-    param.release_param_ref()
+    param._release_param_ref()
     assert param._param_ref is None
     assert param.handle is model.get_parameter("linear.weight")
     assert param._param_ref is None

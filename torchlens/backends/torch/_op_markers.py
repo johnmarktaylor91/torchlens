@@ -141,7 +141,7 @@ def _no_active_session() -> Any:
     return None
 
 
-#: Cached ``torchlens.observability._session.active_session`` (resolved on
+#: Cached ``torchlens._observability._session.active_session`` (resolved on
 #: first wrapped call so the hot path pays one global read, not an import).
 _active_session_fn: Callable[[], Any] | None = None
 
@@ -158,7 +158,7 @@ def resolve_active_session_fn() -> Callable[[], Any]:
     Returns
     -------
     Callable[[], Any]
-        ``active_session`` from ``torchlens.observability._session``, or a
+        ``active_session`` from ``torchlens._observability._session``, or a
         reader that always returns ``None`` on a torn install.
     """
 
@@ -166,7 +166,7 @@ def resolve_active_session_fn() -> Callable[[], Any]:
     session_fn: Callable[[], Any] | None = _active_session_fn
     if session_fn is None:
         try:
-            from ...observability._session import active_session
+            from ..._observability._session import active_session
         except ImportError:  # pragma: no cover - torn install without the substrate
             session_fn = _no_active_session
         else:
@@ -183,7 +183,7 @@ def _push_op_markers(trace: Any, func_name: str, func_call_id: int) -> tuple[boo
     - NVTX (``emit_nvtx=True``): Nsight-visual range with an
       identity-carrying name.
     - ``torch.profiler.record_function`` (an active
-      ``torchlens.observability.session``): the FLIP-1 op-altitude join
+      ``torchlens._observability.session``): the FLIP-1 op-altitude join
       marker whose name is the exact ``func_call_id`` key.
 
     Parameters

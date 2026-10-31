@@ -2,7 +2,7 @@
 
 The autoroute detector branch of :func:`torchlens.trace` forwards the public
 keyword bundle into detectors (which re-enter ``tl.trace`` through bridge
-helpers such as ``bridge.hf.trace_text``). Any ``trace()`` parameter missing
+helpers such as ``bridge.transformers.trace_text``). Any ``trace()`` parameter missing
 from that bundle is SILENTLY DROPPED on autoroute dispatch — the worst API
 failure mode: the user configured something and nothing complained. Found
 live 2026-08-19: ``tl.trace(hf_model, "text", structure_only=True)`` returned
@@ -28,7 +28,7 @@ from _source_corpus import PACKAGE_ROOT, package_ast
 from torch import nn
 
 import torchlens as tl
-from torchlens import autoroute
+from torchlens import _autoroute as autoroute
 
 #: trace() parameters legitimately absent from the autoroute bundle. Every
 #: entry names the guard that makes the omission safe; widening this set

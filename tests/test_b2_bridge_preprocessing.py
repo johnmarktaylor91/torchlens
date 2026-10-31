@@ -20,6 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._data_classes._preprocessing_provenance as provenance
 from torchlens import preprocessing as tlp
 from torchlens._errors import InvalidArgumentError
 
@@ -46,7 +47,7 @@ class _TinyImageNet(nn.Module):
 def _trace_with(transform: Any, model: nn.Module | None = None) -> Any:
     model = model or _TinyImageNet().eval()
     image = torch.rand(1, 3, 256, 256)
-    return tl.trace(model, image, capture=tl.options.CaptureOptions(transform=transform))
+    return tl.trace(model, image, capture=tl.options.CaptureOptions(input_transform=transform))
 
 
 def _codes(caught: list[warnings.WarningMessage]) -> list[str]:
@@ -56,14 +57,14 @@ def _codes(caught: list[warnings.WarningMessage]) -> list[str]:
 def test_attached_torchvision_weights_are_discovered() -> None:
     model = torchvision.models.resnet18(weights=None)
     modules_before = [name for name, _ in model.named_modules()]
-    assert tlp.resolve(model=model).record.source == "unknown"
+    assert tlp.resolve(model=model).preprocessing.source == "unknown"
 
     assert tlp.attach_authority(model, _V1) is model
 
     resolution = tlp.resolve(model=model)
-    assert resolution.record.source == "torchvision_weights"
-    assert resolution.record.config["resolution_method"] == "model_metadata"
-    assert resolution.status == tlp.STATUS_AUTHORITATIVE
+    assert resolution.preprocessing.source == "torchvision_weights"
+    assert resolution.preprocessing.config["resolution_method"] == "model_metadata"
+    assert resolution.status == provenance.STATUS_AUTHORITATIVE
     assert resolution.declared is not None and resolution.declared.resize_size == 256
     # Attaching records metadata only: the module tree is unchanged.
     assert [name for name, _ in model.named_modules()] == modules_before
@@ -78,10 +79,10 @@ def test_attach_refuses_an_opaque_callable() -> None:
 def test_explicit_transform_that_is_an_authority_stamps_its_own_record() -> None:
     trace = _trace_with(_V1.transforms())
     record = trace.input_preprocessor
-    expected = tlp.resolve(_V1.transforms()).record
+    expected = tlp.resolve(_V1.transforms()).preprocessing
     assert record.source == "torchvision_preset" == expected.source
     assert record.config == expected.config
-    assert tlp.status_of(record) == tlp.STATUS_AUTHORITATIVE
+    assert provenance.status_of(record) == provenance.STATUS_AUTHORITATIVE
 
 
 def test_unrecognized_transform_still_stamps_user_transform() -> None:
@@ -90,7 +91,7 @@ def test_unrecognized_transform_still_stamps_user_transform() -> None:
 
     record = _trace_with(halve).input_preprocessor
     assert record.source == "user_transform"
-    assert tlp.status_of(record) == tlp.STATUS_UNKNOWN
+    assert provenance.status_of(record) == provenance.STATUS_UNKNOWN
 
 
 def test_open_clip_model_resolves_its_own_preprocess_cfg() -> None:
@@ -100,9 +101,9 @@ def test_open_clip_model_resolves_its_own_preprocess_cfg() -> None:
 
     resolution = tlp.resolve(model=model)
 
-    assert resolution.record.source == "open_clip_preprocess_cfg"
-    assert resolution.record.config["resolution_method"] == "model_metadata"
-    assert resolution.status == tlp.STATUS_AUTHORITATIVE
+    assert resolution.preprocessing.source == "open_clip_preprocess_cfg"
+    assert resolution.preprocessing.config["resolution_method"] == "model_metadata"
+    assert resolution.status == provenance.STATUS_AUTHORITATIVE
     declared = resolution.declared
     assert declared is not None
     assert declared.mean == pytest.approx(tuple(config["mean"]))
@@ -151,7 +152,7 @@ def test_check_card_on_an_opaque_record_is_unknown_not_a_match() -> None:
 
 
 def test_check_card_without_a_card_refuses() -> None:
-    record = tlp.resolve(_V1).record
+    record = tlp.resolve(_V1).preprocessing
     with pytest.raises(InvalidArgumentError) as info:
         tlp.check_card(record)
     assert info.value.fields["code"] == "preprocessing_card_unresolved"

@@ -174,7 +174,7 @@ def test_source_less_argument_to_a_recorded_op_still_fails(build: type[nn.Module
     assert not _validate(build(), torch.randn(3, 4))
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == "source_provenance", failure
+    assert failure.check_name == "source_provenance", failure
     assert failure.extra["reasons"] == ["unattributed_tensor_args"], failure
 
 
@@ -332,7 +332,7 @@ def test_receiver_write_no_logged_op_recorded_fails_validation() -> None:
     assert not _validate(model, torch.randn(3, 4))
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == "source_provenance", failure
+    assert failure.check_name == "source_provenance", failure
     assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 
@@ -355,7 +355,7 @@ def test_unrecordable_mutating_operator_fails_validation(op_name: str) -> None:
     failure = last_validation_failure()
     assert failure is not None
     if op_name == "write_into":  # the foreach packet fails bfs_completeness first
-        assert failure.check == "source_provenance", failure
+        assert failure.check_name == "source_provenance", failure
         assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 
@@ -375,7 +375,7 @@ def test_unreadable_schema_none_return_fails_closed(monkeypatch: pytest.MonkeyPa
     assert not _validate(model, torch.randn(3, 4))
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == "source_provenance", failure
+    assert failure.check_name == "source_provenance", failure
     assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 
@@ -457,7 +457,7 @@ def test_write_no_return_aliases_fails_validation(op_name: str) -> None:
     assert not _validate(model, torch.randn(3, 4))
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == "source_provenance", failure
+    assert failure.check_name == "source_provenance", failure
     assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 

@@ -194,7 +194,7 @@ class BackendMismatchError(BackendRegistryError):
     default_remedy = "select the backend that owns the supplied model and tensor inputs"
 
 
-class BackendAmbiguityError(BackendRegistryError):
+class AmbiguousBackendError(BackendRegistryError):
     """Raised when backend auto-resolution has multiple equal-priority matches."""
 
     code = "backend_ambiguity"
@@ -241,7 +241,7 @@ GATED_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         "fastlog",
         "interventions",
         "rng_replay",
-        "streaming",
+        "has_streaming",
         "structure_only_capture",
     }
 )
@@ -257,7 +257,7 @@ class BackendCapabilities:
     ----------
     backward_capture:
         Whether true backward graph capture is supported.
-    validation_replay:
+    has_validation_replay:
         Whether the backend can perform replay validation.
     fastlog:
         Whether sparse ``tl.record`` capture is supported.
@@ -267,7 +267,7 @@ class BackendCapabilities:
         Whether operation-level RNG replay is supported.
     payload_materialization:
         Whether loaded payloads can materialize as runtime arrays.
-    streaming:
+    has_streaming:
         Whether streaming save is supported.
     structure_only_capture:
         Whether structure-only capture (``structure_only=True``) is
@@ -296,12 +296,12 @@ class BackendCapabilities:
     """
 
     backward_capture: bool
-    validation_replay: bool
+    has_validation_replay: bool
     fastlog: bool
     interventions: bool
     rng_replay: bool
     payload_materialization: bool
-    streaming: bool
+    has_streaming: bool
     structure_only_capture: bool = False
     intermediate_derived_grads: bool = False
     input_container_structure: Literal["none", "paths_only", "full_spec"] = "none"
@@ -396,7 +396,7 @@ _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES: tuple[str, ...] = (
     "build_record_context",
     "cleanup_failed_forward_session",
     "cleanup_forward_memory",
-    "cleanup_halted_forward_session",
+    "cleanup_stopped_forward_session",
     "cleanup_model_session",
     "copy_replacement_metadata",
     "detect_backend_semantics",
@@ -690,5 +690,5 @@ def resolve_backend_spec(
     winners = [spec for spec in matches if spec.priority == max_priority]
     if len(winners) > 1:
         names = ", ".join(sorted(str(spec.name) for spec in winners))
-        raise BackendAmbiguityError(f"backend=None is ambiguous for: {names}.")
+        raise AmbiguousBackendError(f"backend=None is ambiguous for: {names}.")
     return winners[0]

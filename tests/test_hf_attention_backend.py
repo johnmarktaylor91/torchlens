@@ -29,7 +29,7 @@ AttentionMaskInterface = pytest.importorskip("transformers.masking_utils").Atten
 
 from tests.real_model.r0.families import FAMILY_BY_NAME, VOCAB  # noqa: E402
 from torchlens._errors import InvalidArgumentError, MissingDependencyError  # noqa: E402
-from torchlens.bridge import hf as tl_hf  # noqa: E402
+from torchlens.bridge import transformers as tl_hf  # noqa: E402
 from torchlens.bridge.hf_attention import (  # noqa: E402
     BACKEND_KEY,
     _CallFacts,

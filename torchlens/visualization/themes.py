@@ -152,7 +152,7 @@ class VisualizationTheme:
         def __getattr__(self, name: str) -> Any:
             """Name the replacement for a removed public member, else fail as usual."""
 
-            from ..utils.facade import refuse_removed_member
+            from .._utils.facade import refuse_removed_member
 
             refuse_removed_member("VisualizationTheme", name, _REMOVED_THEME_MEMBERS)
             return object.__getattribute__(self, name)

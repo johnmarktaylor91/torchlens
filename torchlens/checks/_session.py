@@ -39,8 +39,8 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._observability._chassis import EventStream, ObserverEvent
 from ..errors._base import TorchLensWarning
-from ..observability._chassis import EventStream, ObserverEvent
 from ._adapters import OptimizerFacts, optimizer_facts
 from ._constants import WATCHDOG_FACTOR
 from ._errors import CheckConfigError, CheckLifecycleError, CheckViolationError
@@ -417,7 +417,7 @@ class ChecksSession:
             action=validate_action(action),
         )
 
-    def register_nonfinite_gradient_check(self, *, action: str = "raise") -> None:
+    def register_nonfinite_grad_check(self, *, action: str = "raise") -> None:
         """Register the live parameter-gradient nonfinite check (memo D6).
 
         Site-conditional by construction: at S-A nonfinite gradients are
@@ -696,7 +696,7 @@ class ChecksSession:
         self._disclosures["optimizers"] = [
             {
                 "kind": facts.kind,
-                "known_adapter": facts.known,
+                "known_adapter": facts.is_known,
                 "decoupled_decay": facts.decoupled_decay,
                 "band_reason": facts.band_reason,
             }
@@ -744,11 +744,11 @@ class ChecksSession:
         if name in self._fired_this_backward:
             self._close_backward()
         if not self._fired_this_backward:
-            self._scale_ledger.read()
+            self._scale_ledger.observe_backward()
             scaler = self._scaler
             self._pending_scale = (
                 float(scaler.get_scale())
-                if self._scale_ledger.enabled and scaler is not None
+                if self._scale_ledger.is_enabled and scaler is not None
                 else None
             )
             if self._watchdog.on_backward():
@@ -798,13 +798,13 @@ class ChecksSession:
                 verdict = "vanishing"
             if verdict is None:
                 continue
-            if verdict == "nonfinite" and self._scale_ledger.enabled:
+            if verdict == "nonfinite" and self._scale_ledger.is_enabled:
                 # The mechanism working (memo D6): collected into the ledger,
                 # never raised, never a finding flood.
                 continue
             self._record(
                 CheckFinding(
-                    check="grad_magnitude",
+                    check_name="grad_magnitude",
                     code="grad_magnitude_flagged",
                     severity="warning",
                     action=self._magnitude.action,
@@ -814,7 +814,7 @@ class ChecksSession:
                         f"(thresholds: vanishing {self._magnitude.vanishing_threshold:g}, "
                         f"exploding {self._magnitude.exploding_threshold:g})."
                     ),
-                    names=(name,),
+                    param_names=(name,),
                     backward_id=self.backward_id,
                     step_provenance=self._provenance(),
                     global_step=self._global_step(),
@@ -836,7 +836,7 @@ class ChecksSession:
 
         snapshot = self._watchdog.snapshot()
         finding = CheckFinding(
-            check="scale_collapse_watchdog",
+            check_name="scale_collapse_watchdog",
             code="check_no_accepted_steps",
             severity="warning",
             action="warn",
@@ -928,7 +928,7 @@ class ChecksSession:
         attribution = "exact" if len(culprits) == 1 else "smeared"
         clip_evidence = self._clip_norm is not None
         finding = CheckFinding(
-            check="param_grad_nonfinite",
+            check_name="param_grad_nonfinite",
             code="param_grad_nonfinite",
             severity="critical",
             action=self._nonfinite_grad.action,
@@ -949,7 +949,7 @@ class ChecksSession:
                     else "Attribution is exact: one parameter carries the nonfinite."
                 )
             ),
-            names=tuple(culprits),
+            param_names=tuple(culprits),
             backward_id=self.backward_id,
             accepted_step_id=self.accepted_step_id,
             global_step=self._global_step(),
@@ -975,7 +975,7 @@ class ChecksSession:
                 finding.message + " Remedy: " + finding.remedy,
                 code="param_grad_nonfinite",
                 finding=finding.to_dict(),
-                names=list(finding.names),
+                names=list(finding.param_names),
                 accepted_step_id=self.accepted_step_id,
                 backward_id=self.backward_id,
                 report=self.report().to_dict(),
@@ -1001,7 +1001,7 @@ class ChecksSession:
         if self._paused:
             return
         self.accepted_step_id += 1
-        self._scale_ledger.accepted()
+        self._scale_ledger.observe_accepted_step()
         self._watchdog.on_accepted()
         # The free disconnection report (site matrix S-B row): p.grad is None
         # at an accepted step is host-side evidence, catching the
@@ -1089,7 +1089,7 @@ class ChecksSession:
         ]
         self._record(
             CheckFinding(
-                check="params_changed_fact",
+                check_name="params_changed_fact",
                 code="params_changed_fact",
                 severity="info",
                 action="collect",
@@ -1101,7 +1101,7 @@ class ChecksSession:
                     "decay a dead parameter still changes every step, so this "
                     "fact CORROBORATES and never detects."
                 ),
-                names=tuple(unchanged[:_NAME_SAMPLE]),
+                param_names=tuple(unchanged[:_NAME_SAMPLE]),
                 accepted_step_id=self.accepted_step_id,
                 global_step=self._global_step(),
                 step_provenance=self._provenance(),
@@ -1118,7 +1118,7 @@ class ChecksSession:
         if self._change is None or not self._optimizers:
             return
         facts: OptimizerFacts = optimizer_facts(self._optimizers[0])
-        if not facts.known:
+        if not facts.is_known:
             self._unavailable.setdefault("param_movement_decay_band", facts.band_reason or "")
             return
         if not facts.decoupled_decay:
@@ -1218,7 +1218,7 @@ class ChecksSession:
         if obs.out_of_band:
             code = "update_ratio_out_of_band"
         finding = CheckFinding(
-            check="update_ratio",
+            check_name="update_ratio",
             code=code,
             severity="warning" if obs.out_of_band else "info",
             action=check.action,
@@ -1234,7 +1234,7 @@ class ChecksSession:
                 )
                 + "."
             ),
-            names=(name,),
+            param_names=(name,),
             accepted_step_id=self.accepted_step_id,
             global_step=self._global_step(),
             step_provenance=self._provenance(),
@@ -1291,7 +1291,7 @@ class ChecksSession:
             canonical, aliases = aliases_by_name[name]
             all_names = tuple(dict.fromkeys((name, canonical, *aliases)))
             finding = CheckFinding(
-                check="frozen_param_changed",
+                check_name="frozen_param_changed",
                 code="frozen_param_changed",
                 severity="critical",
                 action=self._frozen.action,
@@ -1301,7 +1301,7 @@ class ChecksSession:
                     + (f"; max abs delta {delta_absmax:.6g}" if delta_absmax else "")
                     + f"). Every alias of the moved tensor: {list(all_names)}."
                 ),
-                names=all_names,
+                param_names=all_names,
                 accepted_step_id=self.accepted_step_id,
                 global_step=self._global_step(),
                 step_provenance=self._provenance(),
@@ -1378,12 +1378,12 @@ class ChecksSession:
             entries.extend((name, "buffer", buffer) for name, buffer in self._model.named_buffers())
         rows = scan_named_tensors(entries)
         self._checks_run.append(f"scheduled_scan@{self.accepted_step_id}")
-        corrupt = [row for row in rows if row.audited and row.n_nonfinite]
+        corrupt = [row for row in rows if row.is_audited and row.num_nonfinite]
         if not corrupt:
             return
         names = tuple(row.name for row in corrupt)
         finding = CheckFinding(
-            check="param_nonfinite",
+            check_name="param_nonfinite",
             code="param_value_nonfinite",
             severity="critical",
             action=self._nonfinite_param.action,
@@ -1393,7 +1393,7 @@ class ChecksSession:
                 "checkpoint taken now is worthless; every later step is wasted "
                 "compute."
             ),
-            names=names,
+            param_names=names,
             accepted_step_id=self.accepted_step_id,
             global_step=self._global_step(),
             step_provenance=self._provenance(),
@@ -1448,7 +1448,7 @@ class ChecksSession:
             ObserverEvent(
                 key="checks/watchdog",
                 kind="verdict",
-                verdict="tripped" if snapshot.tripped else "armed",
+                verdict="tripped" if snapshot.is_tripped else "armed",
                 backward_id=self.backward_id,
                 global_step=self._global_step(),
                 axis_provenance=self._axis_provenance(),
@@ -1466,7 +1466,7 @@ class ChecksSession:
             "axis_provenance": provenance,
         }
         ledger = self._scale_ledger.snapshot()
-        if ledger.scaler_present:
+        if ledger.has_scaler:
             self.events.publish(
                 ObserverEvent(
                     key="checks/scale",
@@ -1588,7 +1588,7 @@ class ChecksSession:
 
         return self._final_report
 
-    def profile(self) -> dict[str, Any]:
+    def overhead(self) -> dict[str, Any]:
         """Run the measured scan on demand (memo D20/D21).
 
         Cost numbers are DATA at named shapes on this machine state --

@@ -32,7 +32,7 @@ from typing import Any
 import torch
 
 from ... import _state
-from ...utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
+from ..._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from ._function_boundary import BoundarySpec, close_boundary_call, open_boundary_call
 
 SCRIPT_FUNCTION_FUNC_NAME = "jitscript"

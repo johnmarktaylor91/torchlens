@@ -95,6 +95,12 @@ class RaisingGradTrace:
     """Minimal non-torch-like object for backend gate coverage."""
 
     @property
+    def autograd(self) -> RaisingGradTrace:
+        """Serve ``trace.autograd.backward_passes`` from the stand-in itself."""
+
+        return self
+
+    @property
     def backward_passes(self) -> Any:
         """Raise like non-torch trace backward accessors."""
 
@@ -194,9 +200,9 @@ def test_gradient_flow_audit_empty_torch_only_and_defaults() -> None:
         TinyMlp(), torch.randn(2, 4), capture=tl.options.CaptureOptions(save_grads=True)
     )
 
-    no_backward = tl.debug.gradient_flow_audit(trace).to_pandas()
-    non_torch = tl.debug.gradient_flow_audit(RaisingGradTrace()).to_pandas()  # type: ignore[arg-type]
-    params = signature(tl.debug.gradient_flow_audit).parameters
+    no_backward = tl.debug.grad_health(trace).to_pandas()
+    non_torch = tl.debug.grad_health(RaisingGradTrace()).to_pandas()  # type: ignore[arg-type]
+    params = signature(tl.debug.grad_health).parameters
 
     assert "re-trace backward_ready=True" in no_backward.attrs["message"]
     assert non_torch.attrs["message"] == "torch-only"
@@ -213,7 +219,7 @@ def test_gradient_flow_audit_reports_saved_gradients() -> None:
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
 
-    frame = tl.debug.gradient_flow_audit(trace).to_pandas()
+    frame = tl.debug.grad_health(trace).to_pandas()
 
     assert len(frame) > 0
     assert frame.attrs["bwd"] == 1

@@ -29,6 +29,8 @@ from typing import Any, cast
 import torch
 from torch import nn
 
+from torchlens.transforms._errors import TransformContractError
+
 from .._data_substrate import (
     ArtifactWriter,
     stimulus_ids_digest,
@@ -39,7 +41,6 @@ from .._extraction_provenance import apply_input_transform
 from ..errors._base import TorchLensWarning
 from ..transforms import (
     TransformContext,
-    TransformContractError,
     TransformPipeline,
 )
 from .context import BatchContext, _run_post_store_hooks, validate_row_counts
@@ -129,7 +130,7 @@ class _RunPlan:
     acknowledge_v1_prefix:
         The explicit in-progress-v1 resume acknowledgment (extract D16).
     transform_raw:
-        The caller's original ``transform=`` value (classified for the
+        The caller's original ``output_transform=`` value (classified for the
         callable-identity block when chains hold opaque steps).
     input_transform:
         The coerced B5 INPUT-transform callable (or ``None``), applied to
@@ -337,7 +338,7 @@ def _collate_to_envelope(
         envelope = BatchEnvelope(
             args=(raw,),
             kwargs={},
-            row_count=int(raw.shape[0]),
+            num_rows=int(raw.shape[0]),
             mask=None,
             disclosure={"kind": "tensor_slice"},
         )
@@ -403,7 +404,7 @@ def _refuse_unbindable_default_positionals(
             "pass collate= returning the model input for a batch of items: "
             "a single Tensor, a Mapping of forward kwargs, or a "
             "torchlens.dataset_extraction.BatchEnvelope(args=..., "
-            "kwargs=..., row_count=...)"
+            "kwargs=..., num_rows=...)"
         ),
         batch_index=batch_index,
         n_positional=n_positional,
@@ -895,7 +896,7 @@ def _apply_site_pipeline(
 
     Raises
     ------
-    torchlens.transforms.TransformContractError
+    torchlens.errors.TransformContractError
         ``transform_output_invalid`` when a step returns a non-tensor;
         ``transform_row_axis_violated`` when the stimulus axis changed.
     """
@@ -1156,7 +1157,7 @@ def _validate_against_plan(
 
     Raises
     ------
-    torchlens.transforms.TransformContractError
+    torchlens.errors.TransformContractError
         ``transform_plan_violated`` naming the key, the plan, and the
         observation; the shard is refused BEFORE publication.
     """
@@ -1515,7 +1516,7 @@ def _batch_iterable(plan: _RunPlan, remaining: Any) -> Iterable[Any]:
     if isinstance(remaining, torch.Tensor):
         total = (remaining.shape[0] + plan.batch_size - 1) // plan.batch_size
     if plan.progress:
-        from ..utils.display import progress_bar
+        from .._utils.display import progress_bar
 
         batches = progress_bar(batches, total=total, desc="torchlens.extract", enabled=True)
     return batches
@@ -1572,14 +1573,14 @@ def _process_one_batch(
     )
     batch_outputs, layer_views = _capture_outputs(plan, envelope, run_state, batch_index)
     ids_slice = (
-        tuple(plan.stimulus_ids[row_start : row_start + envelope.row_count])
+        tuple(plan.stimulus_ids[row_start : row_start + envelope.num_rows])
         if plan.stimulus_ids is not None
         else None
     )
     context = BatchContext(
         batch_index=batch_index,
         row_start=row_start,
-        row_count=envelope.row_count,
+        row_count=envelope.num_rows,
         stimulus_ids=ids_slice,
         mask=envelope.mask,
         row_extents=(

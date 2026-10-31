@@ -117,9 +117,9 @@ def test_rank_render_ir_semantic_golden(tmp_path: Path) -> None:
     trace = tl.trace(_ModuleDictQuoteKeyModel(), torch.randn(2, 3))
     try:
         source = trace.draw(
-            vis_outpath=str(tmp_path / "rank_semantics"),
+            path=str(tmp_path / "rank_semantics"),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             vis_node_placement="rank",
             order_siblings=False,
         )

@@ -1,4 +1,4 @@
-"""FIX-H regression rows for ``torchlens.viz.render_heatmap`` (tviz memo D8).
+"""FIX-H regression rows for ``torchlens.viz.heatmap`` (tviz memo D8).
 
 The shipped renderer had two independent honesty defects (OPUS M2-M5):
 bilinear interpolation on discrete cells, and a label-omission marker
@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
-from torchlens.viz import render_heatmap
+from torchlens.viz import heatmap
 from torchlens.viz.node_plots import _axis_selection_with_marker
 
 
@@ -104,7 +104,7 @@ def test_nearest_neighbor_no_interpolated_colors() -> None:
     """A 2x2 grid upscales to exactly its 4 cell colors -- no blends."""
 
     data = np.array([[0.0, 1.0], [1.0, 0.0]])
-    image = render_heatmap(data, width=64, height=64, cmap="gray")
+    image = heatmap(data, width=64, height=64, cmap="gray")
     colors = {tuple(pixel) for pixel in np.asarray(image).reshape(-1, 3)}
     assert colors == {(0, 0, 0), (255, 255, 255)}, (
         f"interpolated colors appeared between discrete cells: {sorted(colors)[:5]}"
@@ -115,7 +115,7 @@ def test_nearest_neighbor_with_axis_labels() -> None:
     """The axis-decorated path also scales cells without interpolation."""
 
     data = np.array([[0.0, 1.0], [1.0, 0.0]])
-    image = render_heatmap(
+    image = heatmap(
         data, width=96, height=96, cmap="gray", row_labels=["a", "b"], col_labels=["c", "d"]
     )
     # Interior plot pixels are pure cell colors, axis chrome, or the border;
@@ -138,7 +138,7 @@ def test_separate_row_and_col_labels() -> None:
     """Rectangular data takes distinct query/key label sets per axis."""
 
     data = np.zeros((2, 5))
-    image = render_heatmap(
+    image = heatmap(
         data,
         width=200,
         height=120,
@@ -152,7 +152,7 @@ def test_row_col_labels_override_axis_labels() -> None:
     """Per-axis labels take precedence over the both-axes convenience."""
 
     data = np.zeros((3, 3))
-    image = render_heatmap(
+    image = heatmap(
         data,
         width=160,
         height=160,
@@ -167,5 +167,5 @@ def test_label_count_mismatch_is_not_silent_growth() -> None:
     """Labels shorter than the axis simply stop; no invented labels."""
 
     data = np.zeros((4, 4))
-    image = render_heatmap(data, width=160, height=160, row_labels=["only-one"])
+    image = heatmap(data, width=160, height=160, row_labels=["only-one"])
     assert image.size == (160, 160)

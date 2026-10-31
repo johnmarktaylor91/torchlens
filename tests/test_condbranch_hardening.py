@@ -31,8 +31,8 @@ import torch
 import torch.nn as nn
 
 from torchlens import trace as trace_fn
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import Trace
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
@@ -929,7 +929,7 @@ def test_col_offset_map_covers_method_call_cache_regions() -> None:
 
     import dis
 
-    from torchlens.utils.introspection import _build_col_offset_map
+    from torchlens._utils.introspection import _build_col_offset_map
 
     def probe(x: torch.Tensor) -> torch.Tensor:
         """Exercise method calls, attribute loads, and binary ops."""

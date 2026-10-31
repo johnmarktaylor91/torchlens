@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 import torch
 
-from .._errors import PostTraceParamUnavailable
+from .._errors import ParamReleasedError
 from .facets import FacetCapabilityFlags, FacetSpec, MissingFacet
 
 ReconstructionFacet = Literal["scores", "pattern", "z", "result"]
@@ -91,8 +91,8 @@ def sdpa_reconstruction_spec(
         )
     spec = FacetSpec.computed(
         lambda: _reconstruct_checked(module, sdpa_op, facet),
-        recipe_id=recipe_id,
-        recipe_version="p3",
+        function_id=recipe_id,
+        function_version="p3",
     )
     return _as_reconstructed_spec(spec)
 
@@ -161,8 +161,8 @@ def _as_reconstructed_spec(spec: FacetSpec) -> FacetSpec:
         ),
         value_version=spec.value_version,
         conflict_alias_group=spec.conflict_alias_group,
-        recipe_id=spec.recipe_id,
-        recipe_version=spec.recipe_version,
+        function_id=spec.function_id,
+        function_version=spec.function_version,
         home=spec.home,
     )
 
@@ -204,7 +204,7 @@ def _missing_sdpa_prerequisite(op: Any) -> str | None:
     """
 
     if getattr(op, "saved_args", None) is None or getattr(op, "saved_kwargs", None) is None:
-        return "save_arg_values=True or reconstruction_ready=True"
+        return "save_args=True or reconstruction_ready=True"
     args = list(getattr(op, "saved_args", ()) or ())
     if len(args) < 3 or not all(isinstance(value, torch.Tensor) for value in args[:3]):
         return "saved SDPA Q/K/V tensor args"
@@ -458,7 +458,7 @@ def _allclose_sdpa(
     reconstruction error model (``torchlens.semantic.tolerances``): same
     ULP-headroom relative term and denormal floor, plus an elementwise
     ``magnitude``-scaled term supplied by each call site. The replay table in
-    ``torchlens.utils.tensor_utils`` is deliberately untouched.
+    ``torchlens._utils.tensor_utils`` is deliberately untouched.
 
     Parameters
     ----------
@@ -641,7 +641,7 @@ def _parameter_tensor(module: Any, name: str) -> torch.Tensor | None:
                 continue
             try:
                 value = getattr(param, "value", None)
-            except PostTraceParamUnavailable:
+            except ParamReleasedError:
                 value = getattr(param, "_param_ref", None)
             if value is None:
                 value = getattr(param, "_param_ref", None)

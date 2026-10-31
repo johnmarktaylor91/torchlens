@@ -171,7 +171,7 @@ class TestExporterUnification:
         writer, client, run = _Writer(), _Client(), _Run()
         tl.export.tensorboard(export_trace, writer, step=1)
         mlflow_result = tl.export.mlflow(export_trace, client=client)
-        aim_result = tl.export.aim(export_trace, run=run)
+        aim_result = tl.export.aim(export_trace, to=run)
         wandb_result = tl.export.wandb(export_trace)
 
         summary_keys = set(client.metrics)

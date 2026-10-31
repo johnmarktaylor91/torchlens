@@ -44,7 +44,7 @@ trace = tl.trace(
     model,
     x,
     save=tl.func("relu"),
-    capture=CaptureOptions(save_code_context=False),
+    capture=CaptureOptions(save_source_context=False),
 )
 relu_site = trace.find_sites(tl.func("relu")).first()
 relu_activation = relu_site.out
@@ -81,27 +81,27 @@ When a fastlog forward raises, the default remains `on_forward_error="raise"`. O
 `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
 `on_forward_error="return_partial"` to return a failed partial `Recording` (`return_output=True`
 returns `(None, partial)`). Failed partials set `status="partial_error"`, `failed=True`,
-string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields. user-op
+string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields. user-op
 failures exclude the failing call; TL-side capture failures may include a skipped/partial
 current-call event. Failed partials cannot be converted with `Recording.to_trace()` or used with
-`Recording.log_backward()`. `MemoryError` is swallowed like any other forward exception under
+`Recording.backward()`. `MemoryError` is swallowed like any other forward exception under
 `"return_partial"`/`"attach_partial"`, and materializing the partial allocates *more* memory
 inside an already-exhausted heap — under genuine memory pressure keep the default
 `on_forward_error="raise"`. Full `tl.trace(...)` failures expose `exc.partial_log`, recoverable
-with `tl.partial.from_failed_capture(exc)`.
+with `tl._partial.from_failed_capture(exc)`.
 
 ## Speed knobs
 
 | Knob | Faster setting | Tradeoff |
 | --- | --- | --- |
 | Payload selection | `save=tl.func(...)` or `save=tl.in_module(...)` | Unsaved activations cannot be read later. |
-| Source text | `capture=CaptureOptions(save_code_context=False)` | File/line identity remains, but source text is not loaded. |
+| Source text | `capture=CaptureOptions(save_source_context=False)` | File/line identity remains, but source text is not loaded. |
 | Window payloads | `lookback_payload_policy="metadata_only"` | `tl.followed_by(...)` can select metadata without retaining raw tensors. |
 | Retroactive payloads | `lookback_payload_policy="detached_raw"` | Enables payload recovery for recent matched ops at bounded memory cost. |
 | Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure. Blob writes overlap capture on a bounded async pipeline by default; `max_pending_bytes` (256 MiB default) caps the RAM pending writes may hold, and a disk slower than capture blocks the forward instead of accumulating memory. `async_writes=False` restores synchronous per-blob writes. |
 | Gradients | `capture=CaptureOptions(save_grads=False)` (the default) unless needed | Backward-ready captures preserve more state and hooks. |
 | Forward-only autograd | `inference_only=True`, or capture inside `torch.no_grad()` | Runs forward capture under `torch.no_grad()`; incompatible with backward capture. A capture entered under `torch.no_grad()` or `torch.inference_mode()` implies it unless a backward option is given. |
-| Recording gradient hooks | omit `backward_ready` / `save_grads` on `tl.record` | `tl.record` installs gradient hooks (1 to 5% of a record on CPU transformers, measured 2026-10-11) only when a backward is requested; `Recording.log_backward()` refuses otherwise. |
+| Recording gradient hooks | omit `backward_ready` / `save_grads` on `tl.record` | `tl.record` installs gradient hooks (1 to 5% of a record on CPU transformers, measured 2026-10-11) only when a backward is requested; `Recording.backward()` refuses otherwise. |
 | Forward chunking | `chunk_size=N` | Reduces forward-pass peak memory for single-batch tensor inputs; final saved activations are still accumulated in memory. |
 | Recurrence detection | `capture=CaptureOptions(recurrence_detection=False)` | Measured 39-42% of capture time off models with thousands of repeated ops (hand-rolled top-level loops, unrolled decodes). Repeated ops stay separate layers instead of rolling into one multi-pass layer, so a 6-iteration loop yields `relu_1_2 ... relu_6_7` (each `num_passes=1`) instead of one `relu_1_2` with `num_passes=6`. `is_recurrent` and `max_layer_op_count` are still reported. It is a TIME knob only: retained activation bytes are unchanged. |
 | Visualization | Call `trace.draw()` after capture, not during hot loops | Rendering is separate from activation collection. |
@@ -170,7 +170,7 @@ census result.
 The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
 it does not correlate by clock time. A captured Python call may own several ordered aten operations,
 recorded in `trace.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper whose
-`func_call_id` emits no logged op, produce a `TorchLensCaptureGapWarning`, set
+`func_call_id` emits no logged op, produce a `CaptureGapWarning`, set
 `trace.completeness_witness_verified=False`, and append structured rows to
 `trace.completeness_diagnostics`. Work under `pause_logging()` is outside the census. The documented
 torch.func/functorch transform boundary runs its interior under that paused scope, and fused or opaque
@@ -268,10 +268,10 @@ materializes it. Disk-backed chunk accumulation is a future item.
 For activation extraction without a `Trace`, use `tl.extract_dataset(...)` (the old
 former `tl.batched_extract` alias is removed); that path returns
 tensors or `.pt` files rather than accumulated graph metadata. `chunk_size=` covers the remaining
-"dataloader wrapper" case for stacked multi-pass trace capture. Disk mode (`output_dir=`) writes
+"dataloader wrapper" case for stacked multi-pass trace capture. Disk mode (`path=`) writes
 atomic shards plus a self-describing `manifest.json` (site identity, stimulus provenance, axis
 semantics, dtypes); an interrupted long extraction continues from its last completed shard with
-`resume=True`, and `torchlens.dataset_extraction.load_extraction(...)` reads the artifact back
+`resume=True`, and `torchlens.load(path)` reads the artifact back
 with its metadata (both spellings DOCUMENTED-UNSTABLE).
 
 ## Windowed and disk-backed capture
@@ -353,9 +353,9 @@ to keep before the first long capture:
   saved activations in host memory.
 - For a logit-lens sweep over many positions, `torchlens.semantic.logit_lens_predictions`
   projects one layer at a time and keeps only top-k summaries.
-- For many forwards or generation, a bound spec or `steer_generate` saves nothing at all; editing
+- For many forwards or generation, a bound spec (and its `generate`) saves nothing at all; editing
   the cached past of a long prompt is the [KV-cache recipe](guides/kv_cache.md).
-- For a dataset of long sequences, `tl.extract_dataset(..., output_dir=...)` writes the named
+- For a dataset of long sequences, `tl.extract_dataset(..., path=...)` writes the named
   layers to disk batch by batch.
 
 ## Counting the backward that ran
@@ -363,7 +363,7 @@ to keep before the first long capture:
 `tl.report.backward_status(trace)` reports the compute of the backward pass that actually
 ran, counted call by call. When a capture requested a backward (`backward_ready=True`,
 `save_grads=` or `default_grad=`), every ATen call that backward dispatches is recorded on
-its `BackwardPass.dispatched_ops`, with its shapes, its dtypes and the GradFn call it ran
+its `BackwardPass.aten_ops`, with its shapes, its dtypes and the GradFn call it ran
 under. Each call is then counted with the same convention as `torch.utils.flop_counter`: one
 multiply-add counts 2 FLOPs, and only matmul and convolution calls are counted. Any other call
 is listed by name in `uncounted_ops`; it is never counted as zero and never estimated.
@@ -388,7 +388,7 @@ status = tl.report.backward_status(trace)
 # it needs a gradient, so no input-gradient matmul is dispatched.
 assert status.executed_flops == 2 * 2 * 32 * 4
 print(status.status_line)
-print(status.uncounted_ops)  # the bias-gradient sums and other calls, named, not zeroed
+print(status.uncounted_op_counts)  # the bias-gradient sums and other calls, named, not zeroed
 
 from torch.nn.attention import SDPBackend, sdpa_kernel
 

@@ -11,7 +11,7 @@ import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError  # noqa: E402
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
 
 @pytest.mark.optional
@@ -58,7 +58,7 @@ def test_mlx_preview_rejects_random_seed() -> None:
             lambda x: x + 1,
             mx.array([1.0]),
             backend="mlx",
-            capture=tl.options.CaptureOptions(random_seed=123),
+            capture=tl.options.CaptureOptions(seed=123),
         )
 
 

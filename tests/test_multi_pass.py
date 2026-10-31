@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 
 import torchlens as tl
-import torchlens.utils as utils
+import torchlens._utils as utils
 
 
 def test_trace_streaming_on_iterable_inputs() -> None:

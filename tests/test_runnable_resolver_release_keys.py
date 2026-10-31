@@ -14,18 +14,18 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import runnable_coherence, runnable_load
 from torchlens._io.runnable import build_sparse_run_descriptor, preflight_sparse_run_descriptor
-from torchlens.errors import RunnablePreflightError
-from torchlens.intervention.resolver import function_registry_key_from_callable
-from torchlens.intervention.types import FunctionRegistryKey
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     PathFaithfulness,
     ResolverStatus,
     RunnableErrorCode,
     SparseRunDescriptor,
 )
-from torchlens.utils._callable_safety import is_pure_forward_callable
-from torchlens.utils.display import identity
+from torchlens._utils._callable_safety import is_pure_forward_callable
+from torchlens._utils.display import identity
+from torchlens.errors import RunnablePreflightError
+from torchlens.intervention.resolver import function_registry_key_from_callable
+from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.options import CaptureOptions
 
 _FFT_NAMES = (
     "fft",
@@ -43,7 +43,7 @@ _FFT_NAMES = (
 )
 _LEGACY_CTOR_KEY = FunctionRegistryKey("torch.Tensor", "__new__", "method")
 _BOUNDARY_IDENTITY_KEY = FunctionRegistryKey(
-    "custom", "identity", "function", import_path="torchlens.utils.display:identity"
+    "custom", "identity", "function", import_path="torchlens._utils.display:identity"
 )
 
 
@@ -116,7 +116,7 @@ def _loaded_run_matches_live(model: nn.Module, inputs: torch.Tensor, tmp_path: P
     """Save, load and run a runnable artifact, and compare it with the live model."""
 
     path = tmp_path / "model.tlspec"
-    tl.save(_capture(model, inputs), path, level="runnable", include_weights=True)
+    _capture(model, inputs).save(path, level="runnable", include_weights=True)
     result = tl.load(path).run(inputs=inputs, seed=0)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     torch.testing.assert_close(result.output, model(inputs))
@@ -294,8 +294,8 @@ def test_identity_boundary_op_resolves_exactly() -> None:
     assert _BOUNDARY_IDENTITY_KEY in keys
     record = _records_by_qualname(descriptor)["identity"]
     assert record.status is ResolverStatus.RESOLVED_EXACT
-    assert record.resolved_qualname == "torchlens.utils.display.identity"
-    assert record.provenance == "torchlens_synthetic:torchlens.utils.display.identity"
+    assert record.resolved_qualname == "torchlens._utils.display.identity"
+    assert record.provenance == "torchlens_synthetic:torchlens._utils.display.identity"
 
 
 def test_identity_model_loaded_run_is_verified(tmp_path: Path) -> None:
@@ -310,16 +310,16 @@ def test_identity_model_loaded_run_is_verified(tmp_path: Path) -> None:
     "key",
     (
         FunctionRegistryKey(
-            "custom", "identity", "function", import_path="torchlens.utils:identity"
+            "custom", "identity", "function", import_path="torchlens._utils:identity"
         ),
         FunctionRegistryKey(
             "custom",
             "int_list_to_compact_str",
             "function",
-            import_path="torchlens.utils.display:int_list_to_compact_str",
+            import_path="torchlens._utils.display:int_list_to_compact_str",
         ),
         FunctionRegistryKey(
-            "custom", "identity", "method", import_path="torchlens.utils.display:identity"
+            "custom", "identity", "method", import_path="torchlens._utils.display:identity"
         ),
         FunctionRegistryKey(
             "custom", "identity", "function", import_path="attacker_payload:identity"
@@ -349,7 +349,7 @@ def test_synthetic_rung_admits_only_the_exact_identity_key(
     def guarded_import_module(name: str, package: str | None = None) -> Any:
         """Fail if readiness imports an artifact-selected module."""
 
-        if name.startswith(("attacker_payload", "torchlens.utils")):
+        if name.startswith(("attacker_payload", "torchlens._utils")):
             raise AssertionError(f"artifact-selected import of {name!r}")
         return original_import_module(name, package)
 
@@ -394,7 +394,7 @@ def test_legacy_tensor_constructor_save_refuses_typed(tmp_path: Path) -> None:
     labels = _legacy_ctor_labels(trace)
     assert len(labels) == 3
     with pytest.raises(RunnablePreflightError) as excinfo:
-        tl.save(trace, tmp_path / "legacy.tlspec", level="runnable")
+        trace.save(tmp_path / "legacy.tlspec", level="runnable")
     refused = {
         label
         for diagnostic in excinfo.value.fields["diagnostics"]

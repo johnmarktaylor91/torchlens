@@ -12,7 +12,7 @@ is never silent (FORCED-SILENTLY is banned as a steady state).
 The ``_explicit_fields`` / ``_field_is_explicit`` readers over
 ``_specified_fields`` live here because the receipt is built on them, and the
 frozen-group construction kit (``_resolve_option_value`` /
-``_set_frozen_fields``) plus :class:`EchoOptions` (lane F28) complete the set;
+``_set_frozen_fields``) plus :class:`NarrationOptions` (lane F28) complete the set;
 ``options.py`` imports them back (one-directional -- this module never
 imports ``options``).
 """
@@ -125,15 +125,15 @@ _ECHO_FIELDS: Final[tuple[str, ...]] = (
 
 
 @dataclass(frozen=True, init=False)
-class EchoOptions:
-    """Grouped live-narration options for ``echo=`` (lane F28, snoop memo D1).
+class NarrationOptions:
+    """Grouped live-narration options for ``narrate=`` (lane F28, snoop memo D1).
 
-    ``echo=`` on ``tl.trace``, ``tl.record``, and ``fastlog.Recorder``
+    ``narrate=`` on ``tl.trace``, ``tl.record``, and ``fastlog.Recorder``
     narrates capture events -- one line per event -- through one read-only
     observer slot. Narration and retention are fully independent: "narrate
     everything, keep nothing" is legal and is the fast path. All spellings
     are DOCUMENTED-UNSTABLE pending the naming sprint. The public spelling
-    stays ``tl.options.EchoOptions``; the class lives beside the frozen-group
+    stays ``tl.options.NarrationOptions``; the class lives beside the frozen-group
     kit it is built on.
 
     Parameters
@@ -171,7 +171,7 @@ class EchoOptions:
 
     Examples
     --------
-    >>> opts = EchoOptions(select=True, stats="off", tail_on_error=20)
+    >>> opts = NarrationOptions(select=True, stats="off", tail_on_error=20)
     >>> opts.stats
     'off'
     """
@@ -229,7 +229,7 @@ class EchoOptions:
         cls,
         values: Mapping[str, Any],
         specified_fields: frozenset[str],
-    ) -> EchoOptions:
+    ) -> NarrationOptions:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)

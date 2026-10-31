@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.postprocess import (
+from torchlens._postprocess import (
     LEGACY_STEP_RANK,
     PINNED_ORDER_PAIRS,
     POSTPROCESS_STEP_CONTRACTS,
@@ -25,7 +25,7 @@ from torchlens.postprocess import (
     _executor,
     execution_order,
 )
-from torchlens.postprocess._contracts import (
+from torchlens._postprocess._contracts import (
     CAPTURE_BASELINE_COLUMNS,
     iter_corpus_violations,
 )
@@ -515,7 +515,7 @@ def test_noop_writer_cannot_discharge_reads() -> None:
 
     from test_postprocess_enforcement import PINNED_NOOP_WRITERS
 
-    from torchlens.postprocess import PostprocessStepContract
+    from torchlens._postprocess import PostprocessStepContract
 
     original = POSTPROCESS_STEP_CONTRACTS["3"]
     unblessed = PostprocessStepContract(
@@ -621,7 +621,7 @@ def test_guard2_ledger_holds_on_default_capture(
 
     from test_postprocess_enforcement import PINNED_NOOP_WRITERS
 
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
 
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_ASSERTIONS", "1")
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_WRITE_AUDIT", "record")
@@ -860,7 +860,7 @@ def test_all_edges_rank_ascending() -> None:
 def test_classifier_non_vacuity_synthetic_finding(monkeypatch: pytest.MonkeyPatch) -> None:
     """A read of a non-baseline/no-writer/non-probe column IS a finding."""
 
-    from torchlens.postprocess import PostprocessStepContract
+    from torchlens._postprocess import PostprocessStepContract
 
     original = POSTPROCESS_STEP_CONTRACTS["10"]
     assert "_facets_cache" not in CAPTURE_BASELINE_COLUMNS
@@ -887,7 +887,7 @@ def test_classifier_non_vacuity_synthetic_finding(monkeypatch: pytest.MonkeyPatc
 def test_token_read_before_write_check_fires(monkeypatch: pytest.MonkeyPatch) -> None:
     """7.1-5: an r:token with no earlier writer and no baseline is refused."""
 
-    from torchlens.postprocess import PostprocessStepContract, tokens
+    from torchlens._postprocess import PostprocessStepContract, tokens
 
     original = POSTPROCESS_STEP_CONTRACTS["2"]
     broken = PostprocessStepContract(
@@ -910,14 +910,14 @@ def test_token_read_before_write_check_fires(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.requires_assertions
 def test_clone_scope_tags_step1_reads(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Op.copy's whole-schema loop lands as category (d), not findings.
+    """Op._copy_with_shallow_fields's whole-schema loop lands as category (d), not findings.
 
     Step 1 clones the output node; naive recording would report ~180
     category-(c) reads. The row-clone scope routes them into the clone
     channel, and legality rides the step's 'creates' row effect.
     """
 
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
 
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_ASSERTIONS", "1")
     monkeypatch.setenv("TORCHLENS_POSTPROCESS_READ_AUDIT", "record")
@@ -956,8 +956,8 @@ def test_read_enforcement_trips_on_undeclared_read(
 ) -> None:
     """An undeclared read on a covered axis fails the day it is introduced."""
 
-    import torchlens.postprocess as pp
-    from torchlens.postprocess import PostprocessStepContract
+    import torchlens._postprocess as pp
+    from torchlens._postprocess import PostprocessStepContract
 
     original = POSTPROCESS_STEP_CONTRACTS["2"]
     real_step2 = pp._find_output_ancestors
@@ -984,12 +984,12 @@ def test_read_enforcement_trips_on_undeclared_read(
 
 
 def test_row_clone_scope_free_when_unarmed() -> None:
-    """Op.copy works outside any audit (pickle/fork/preview paths)."""
+    """The Op clone works outside any audit (pickle/fork/preview paths)."""
 
     trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
     try:
         op = trace.layer_list[0]
-        copied = op.copy()
+        copied = op._copy_with_shallow_fields(frozenset())
         assert copied is not op
         from torchlens._trace_core.op_store import (
             _AUDIT_CLONE_READS,
@@ -1015,7 +1015,7 @@ def test_executor_seam_patched_step_executes_and_audits(
     references would silently break every monkeypatch seam.
     """
 
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
 
     calls: list[str] = []
     real_step2 = pp._find_output_ancestors
@@ -1044,7 +1044,7 @@ def test_executor_should_run_called_exactly_once(
     evicted (design §5.4).
     """
 
-    from torchlens.postprocess import _executor as ex
+    from torchlens._postprocess import _executor as ex
 
     counts: dict[str, int] = {}
     seen_order: list[str] = []
@@ -1079,7 +1079,7 @@ def test_executor_failing_step_propagates_and_cleans_windows(
     step left the store class-swapped with a live collector.
     """
 
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
     from torchlens._trace_core.op_store import (
         _AUDIT_COLLECTORS,
         _AUDIT_FINGERPRINTS,

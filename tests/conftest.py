@@ -24,7 +24,7 @@ import torch
 from support import r1_venue  # noqa: F401
 
 from torchlens import _state
-from torchlens.data_classes._trace_viz import TraceVisualizationMixin
+from torchlens._data_classes._trace_viz import TraceVisualizationMixin
 
 # Output directories are assigned under pytest's private basetemp in
 # ``pytest_configure`` before test modules import these constants.
@@ -50,10 +50,10 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     ("torchlens.backends.torch._opaque_call_advisory", "_WARNED_CODES", set()),
     ("torchlens.backends.torch.legacy_ctors", "_WARNED_FOREIGN_NEW", set()),
     ("torchlens.backends.torch.ops", "_UNSUPPORTED_OUTPUT_CONTAINER_WARNED", set()),
-    ("torchlens.data_classes.op", "_WARNED_REFERENCE_SAVE_MODE", False),
+    ("torchlens._data_classes.op", "_WARNED_REFERENCE_SAVE_MODE", False),
     ("torchlens.distributed._lifecycle", "_AUTO_ARM_DEGRADATION", None),
     ("torchlens.fastlog._storage_resolver", "_WARNED_REFERENCE_SAVE_MODE", False),
-    ("torchlens.postprocess.ast_branches", "_source_drift_warned", set()),
+    ("torchlens._postprocess.ast_branches", "_source_drift_warned", set()),
     # SAE splice warnings (latents size, zero variance): once per session per code.
     ("torchlens.bridge.sae", "_WARNED_CODES", set()),
     # Per-unit statistics state-size warning: once per session per code.
@@ -62,17 +62,17 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     ("torchlens.intervention._gradient_contract", "_WARNED_CODES", set()),
     # F17 quickstart nongold-value gate: once-per-trace raw-read warning keyed
     # by id(trace) (plain int keys, so a plain set() reset pins nothing).
-    ("torchlens.quickstart._gate", "_WARNED_TRACE_IDS", set()),
+    ("torchlens._quickstart._gate", "_WARNED_TRACE_IDS", set()),
     # F04 one-backward reads: the once-per-process frozen-default disclosure
     # (read_frozen_default_linearization) resets per test.
     ("torchlens.attribution.onebackward._frozen", "_DISCLOSURE_WARNED", set()),
-    ("torchlens.utils._torch_compat", "_warned_missing_capabilities", set()),
+    ("torchlens._utils._torch_compat", "_warned_missing_capabilities", set()),
     # Capture-scoped CUDA RNG retry latch (grind p5, B2P3-16): re-armed per
     # capture in the package, and reset per test here so a test that trips it
     # via a direct log_current_rng_states() call cannot degrade later tests.
-    ("torchlens.utils.rng", "_cuda_rng_unusable", False),
+    ("torchlens._utils.rng", "_cuda_rng_unusable", False),
     ("torchlens.user_funcs", "_BATCHNORM_TRAIN_STATS_WARNED", False),
-    ("torchlens.utils.introspection", "_col_offset_cache_warned", False),
+    ("torchlens._utils.introspection", "_col_offset_cache_warned", False),
     ("torchlens.validation._stock_layer_grads", "_PASS_INDEX_PARSE_WARNED", False),
     ("torchlens.visualization._render_common", "_SIBLING_ORDER_WARNING_EMITTED", False),
     # The functional (global-mutated) copy moved to _render_ordering with the
@@ -1299,7 +1299,7 @@ def _reset_warn_once_sentinels() -> Iterator[None]:
 #: fixture: lazy module lookup (flops stays unimported until a test needs
 #: it) AND lock-disciplined container access.
 _CONTENT_REGISTRIES: tuple[tuple[str, str, str | None], ...] = (
-    ("torchlens.ir.container", "_CONTAINER_REGISTRY", "_CONTAINER_REGISTRY_LOCK"),
+    ("torchlens._ir.container", "_CONTAINER_REGISTRY", "_CONTAINER_REGISTRY_LOCK"),
     ("torchlens.capture.flops", "_CUSTOM_OP_RULES", None),
 )
 
@@ -1434,7 +1434,7 @@ def _restore_lazy_capability_probes() -> Iterator[None]:
     poisoned value would just move the incident one layer down.
     """
 
-    from torchlens.utils import _torch_compat
+    from torchlens._utils import _torch_compat
 
     snapshot = _torch_compat.capability_probe_snapshot()
     try:
@@ -1721,9 +1721,7 @@ def _draw_default_outpath_in_tmp_path(tmp_path: Path) -> Iterator[None]:
         for owner, method_name, basename in _DRAW_DEFAULT_OUTPATH_TARGETS:
             func = getattr(owner, method_name)
             saved.append((func, func.__defaults__))
-            func.__defaults__ = _defaults_with_replacement(
-                func, "vis_outpath", str(tmp_path / basename)
-            )
+            func.__defaults__ = _defaults_with_replacement(func, "path", str(tmp_path / basename))
         yield
     finally:
         for func, defaults in reversed(saved):

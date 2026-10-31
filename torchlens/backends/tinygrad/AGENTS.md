@@ -23,8 +23,8 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
   (`recurrence_detection` default True).
 - Restricted option surface (each documented in the `capture_trace` docstring):
   `layers_to_save` must be `"all"` (full-save only for live traces),
-  `output_device` must be `"same"`, `save_arg_values` / `save_code_context` /
-  `save_rng_states` must be false, and `save_grads` / `backward_ready` /
+  `output_device` must be `"same"`, `save_args` / `save_source_context` /
+  `save_rng` must be false, and `save_grads` / `backward_ready` /
   `transform` / `module_filter` / `activation_transform` are unsupported.
 
 ## capabilities.py

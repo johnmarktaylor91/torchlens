@@ -81,8 +81,8 @@ def test_bare_multipass_donor_lookup_refuses_instead_of_guessing() -> None:
     hook_callable = tl.patch_from(donor).factory()
     context = make_hook_context(
         name="patch_from",
-        layer_log={"layer_label": "relu_1_2", "label": "relu_1_2"},
-        run_ctx={},
+        op={"layer_label": "relu_1_2", "label": "relu_1_2"},
+        run_context={},
     )
     with pytest.raises(HookValueError) as excinfo:
         hook_callable(base["relu_1_2:1"].out, hook=context)

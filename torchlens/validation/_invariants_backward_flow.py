@@ -6,8 +6,8 @@ from collections import Counter, defaultdict
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .invariants import (
         MetadataInvariantError,
         _resolve_op_grad_event_label,
@@ -39,7 +39,7 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
         longer match projected records.
     """
 
-    from ..ir.events import (
+    from .._ir.events import (
         BackwardCoverageGap,
         BackwardPassEnd,
         BackwardPassStart,
@@ -377,7 +377,7 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
         # live PASS after a save/load round trip, contradicting the locked
         # 2026-06-02 rule.
         return _persisted_replacement_stamp(layer) is True
-    from ..ir.events import InterventionAppliedEvent
+    from .._ir.events import InterventionAppliedEvent
 
     stream = getattr(trace, "_capture_events", None)
     # Causal binding: an edit counts only when it is bound to THIS stream's

@@ -13,33 +13,33 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state
-from ..._errors import TorchLensCaptureGapWarning
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._errors import CaptureGapWarning
 from ..._io import BlobRef as PortableBlobRef
-from ...capture.session import capture_session_for
-from ...data_classes.internal_types import FuncExecutionContext
-from ...fastlog.types import CaptureSpec, ModuleStackFrame, StorageIntent
-from ...ir.container import ContainerSpec, OutputPathComponent
-from ...ir.container_registry import ContainerLeafOccurrence, ModelSite, Phase, Role
-from ...ir.events import OpEvent, OutputRef
-from ...ir.intervention import FireResult, FunctionEventInput
-from ...ir.op_record import amend_output_parent_promotion
-from ...ir.predicate import RecordContext
-from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...ir.workspaces import RawGraphWorkspace
-from ...utils._exception_notes import annotate_guarded
-from ...utils.arg_handling import (
+from ..._ir.container import ContainerSpec, OutputPathComponent
+from ..._ir.container_registry import ContainerLeafOccurrence, ModelSite, Phase, Role
+from ..._ir.events import OpEvent, OutputRef
+from ..._ir.intervention import FireResult, FunctionEventInput
+from ..._ir.op_record import amend_output_parent_promotion
+from ..._ir.predicate import RecordContext
+from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._ir.workspaces import RawGraphWorkspace
+from ..._utils._exception_notes import annotate_guarded
+from ..._utils.arg_handling import (
     INPUT_WAS_PARAMETER_ATTR,
     normalize_input_args,
     safe_copy_input_tree,
 )
-from ...utils.introspection import (
+from ..._utils.introspection import (
     INPUT_SEARCH_DEPTH_LIMIT,
     get_vars_of_type_from_obj,
     nested_assign,
 )
-from ...utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
-from ...utils.tensor_utils import _is_cuda_available, safe_copy
+from ..._utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
+from ..._utils.tensor_utils import _is_cuda_available, safe_copy
+from ...capture.session import capture_session_for
+from ...fastlog.types import CaptureSpec, ModuleStackFrame, StorageIntent
 from . import _tl
 from ._completeness_origins import internal_scalar_read
 from ._held_refs_capture import rebind_held_torch_refs, restore_held_torch_refs
@@ -64,7 +64,7 @@ from .structure_only_belt import structure_only_escape_belt
 from .wrappers import unwrap_torch, wrap_torch
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 
 def _record_input_semantics_gaps(
@@ -107,7 +107,7 @@ def _record_input_semantics_gaps(
         "TorchLens cannot verify the captured model-input semantics "
         f"({reason}); affected path(s): {', '.join(gaps)}. The completeness "
         "verdict is ceilinged at capture_verified=False.",
-        TorchLensCaptureGapWarning,
+        CaptureGapWarning,
         stacklevel=3,
     )
 
@@ -246,7 +246,7 @@ def _promote_layers_to_save_output_parent(
     spec = CaptureSpec(
         save_out=True,
         save_metadata=True,
-        keep_grad=False,
+        save_grad=False,
         device=output_device,
         save_mode=cast(Any, getattr(trace, "save_mode", "copy")),
     )
@@ -430,9 +430,9 @@ class TorchBackend:
                         # with zero logging and return a silently empty Trace.
                         # Refuse loudly instead.
                         if not _state._is_decorated:
-                            from ..._errors import CaptureContextError
+                            from ..._errors import CaptureNotActiveError
 
-                            raise CaptureContextError(
+                            raise CaptureNotActiveError(
                                 "torch wrappers were removed between model "
                                 "preparation and capture admission (a "
                                 "concurrent unwrap_torch() call)",
@@ -1174,7 +1174,7 @@ class TorchBackend:
         """Run torch post-forward reconciliation before output extraction."""
         reconcile_buffer_writes(cast("Trace", session), trace_state)
 
-    def cleanup_halted_forward_session(self, session: object, prepared_model: object) -> None:
+    def cleanup_stopped_forward_session(self, session: object, prepared_model: object) -> None:
         """Clean up torch metadata after a halted forward capture."""
         self.cleanup_model_session(session, prepared_model)
         # F5: the raw-graph workspace may already be gone when the halt fired
@@ -1227,7 +1227,7 @@ class TorchBackend:
         # active_logging's __exit__ already turned off the toggle.
         # Clean up model session state and strip TorchLens metadata from any
         # partially-constructed tensor entries to avoid stale references (#110).
-        from ...partial import PartialTrace, _register_failed_capture
+        from ..._partial import PartialTrace, _register_failed_capture
 
         # Stamp the failed forward's ACTUAL buffer-write record (value-changing
         # journal events) on the exception while the journal is still live —
@@ -1247,7 +1247,7 @@ class TorchBackend:
                     )
 
         if getattr(session, "capture_mode", None) == "predicate":
-            from ...ir import CaptureEvents
+            from torchlens._ir.capture_events import CaptureEvents
 
             events = getattr(session, "capture_events", None)
             if events is not None:
@@ -1294,7 +1294,7 @@ class TorchBackend:
                             exc,
                             "TorchLens attached partial capture diagnostics: inspect "
                             "exc.partial_log, or recover it with "
-                            "torchlens.partial.from_failed_capture(exception).",
+                            "torchlens._partial.from_failed_capture(exception).",
                         )
                 except Exception as attachment_error:
                     _register_failed_capture(exc, partial_log)
@@ -1302,7 +1302,7 @@ class TorchBackend:
                         exc,
                         "The forward exception rejected TorchLens partial_log attachment; "
                         "recovery remains available through "
-                        "torchlens.partial.from_failed_capture(exception). "
+                        "torchlens._partial.from_failed_capture(exception). "
                         f"Attachment error: {type(attachment_error).__name__}: "
                         f"{attachment_error}",
                         RuntimeWarning,
@@ -1313,7 +1313,7 @@ class TorchBackend:
                             exc,
                             "TorchLens retained partial capture recovery in its bounded "
                             "exception-identity registry; call "
-                            "torchlens.partial.from_failed_capture(exception).",
+                            "torchlens._partial.from_failed_capture(exception).",
                         )
         finally:
             self.cleanup_model_session(session, prepared_model)
@@ -1359,7 +1359,7 @@ class TorchBackend:
             "modes and plain attributes the partial forward changed; under "
             "CaptureOptions(carry_state=True) they are not rolled back, and "
             "materialized lazy modules never are. Partial diagnostics ride the exception "
-            "(exc.partial_log / torchlens.partial.from_failed_capture).",
+            "(exc.partial_log / torchlens._partial.from_failed_capture).",
             CaptureAttemptFailedWarning,
             stacklevel=4,
         )
@@ -1383,7 +1383,7 @@ class TorchBackend:
         # on CUDA hosts (synchronizes the device and drops the warm allocator
         # arena) even for pure-CPU captures. Gate on the capture-touched-CUDA
         # predicate, matching the postprocess executor site.
-        from ...utils.tensor_utils import capture_touched_cuda
+        from ..._utils.tensor_utils import capture_touched_cuda
 
         if _is_cuda_available() and capture_touched_cuda(session):
             torch.cuda.empty_cache()

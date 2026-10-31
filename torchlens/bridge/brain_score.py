@@ -199,7 +199,7 @@ def score_parts(score: Any) -> ScoreParts:
 
 
 def per_layer(
-    log: Any,
+    trace: Any,
     benchmark: Any,
     *,
     sites: Iterable[Any] | None = None,
@@ -212,7 +212,7 @@ def per_layer(
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` containing saved outs.
     benchmark:
         Callable benchmark accepting ``(out, layer=..., **kwargs)``.
@@ -248,7 +248,7 @@ def per_layer(
         raise TypeError("Brain-Score bridge currently requires a callable offline benchmark.")
 
     scores: dict[str, ScoreParts] = {}
-    for layer in tensor_layers(log, sites, verb="bridge.brain_score.per_layer"):
+    for layer in tensor_layers(trace, sites, verb="bridge.brain_score.per_layer"):
         out = getattr(layer, "out")
         label = str(getattr(layer, "layer_label", "layer"))
         # TODO: connect the real Brain-Score Benchmark API once the offline

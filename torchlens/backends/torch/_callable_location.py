@@ -12,7 +12,7 @@ from collections.abc import Callable
 from functools import partial
 from typing import Any
 
-from ...data_classes.func_call_location import FuncCallLocation
+from ..._data_classes.func_call_location import FuncCallLocation
 
 __all__ = ("_callable_source_location",)
 

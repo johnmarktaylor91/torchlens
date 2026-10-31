@@ -114,7 +114,7 @@ def test_surviving_target_aligns_with_label_drift_disclosure(
 
     compat = recipe_namespace["compat"]
     assert compat.outcome == "COMPATIBLE_WITH_CONFIRMATION"
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
     assert f"matched   {LM_HEAD_SITE_KEY}" in compat.site_diff
     assert compat.diff.missing_site_keys == []
     assert compat.diff.new_site_keys == []
@@ -160,7 +160,7 @@ def test_reauthored_recipe_checks_exact(recipe_namespace: dict[str, Any]) -> Non
 
     compat_v2 = recipe_namespace["compat_v2"]
     assert compat_v2.outcome == "EXACT"
-    assert compat_v2.targets_resolve_identically is True
+    assert compat_v2.has_identical_target_resolution is True
 
 
 def test_page_states_no_torchlens_verb_edits_the_model() -> None:
@@ -171,11 +171,11 @@ def test_page_states_no_torchlens_verb_edits_the_model() -> None:
     assert "tests/test_skeleton_recipe_docs.py" in text
     # The authored spellings the fences depend on; a rename must retouch the page.
     for spelling in (
-        "tl.intervention.site(",
+        "tl.site(",
         "attach_hooks(",
         "tl.io.save_intervention(",
         "tl.io.load_intervention_spec(",
-        "tl.validation.check_spec_compat(",
+        "tl.intervention.check_spec_compat(",
         "site_key",
     ):
         assert spelling in text, f"recipe page lost its {spelling!r} step"

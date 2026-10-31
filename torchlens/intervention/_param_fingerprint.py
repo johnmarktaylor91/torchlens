@@ -29,9 +29,9 @@ from ..errors import InterventionError
 from .errors import ReplayPreconditionError
 
 if TYPE_CHECKING:
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ..backends.torch._param_fingerprint import ParamFingerprint
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
     from .types import LiteralTensor
 
 CHANGED_PARAMS_RUN_KEY = "replayed_with_changed_params"
@@ -132,7 +132,7 @@ def checked_param_value(component: LiteralTensor, pass_log: Op) -> Any:
         f"({changed}); replaying would silently compute with the new value. Remedy: "
         "re-capture the trace, or pass allow_changed_params=True (InterventionOptions or "
         "ReplayOptions) to replay with the current values; for an as-if weight edit use "
-        "fork.do(tl.params(name), edit)",
+        "fork.do(tl.param(name), edit)",
         code="replay_param_changed_since_capture",
         param=name,
         op=op_label,

@@ -23,7 +23,7 @@ root facade).
 from __future__ import annotations
 
 from ..bundle._bytes import bundle_retained_bytes as retained_bytes
-from ._engine import EffectsView, TopK, site_sweep, top_k
+from ._engine import EffectsView, sweep_sites
 from ._head_sugar import head_ablation_candidates
 from ._ledger import (
     ExperimentLedger,
@@ -37,7 +37,6 @@ __all__ = [
     "EffectsView",
     "ExperimentLedger",
     "LedgerEntry",
-    "TopK",
     "active_ledger",
     "head_ablation_candidates",
     "ledger",
@@ -45,6 +44,5 @@ __all__ = [
     "ledger_evidence",
     "ledger_overview",
     "retained_bytes",
-    "site_sweep",
-    "top_k",
+    "sweep_sites",
 ]

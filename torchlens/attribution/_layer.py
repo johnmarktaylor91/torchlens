@@ -13,8 +13,8 @@ from torch.utils.hooks import RemovableHandle
 
 from torchlens.attribution._core import (
     _DOCS_POINTER as _INTEGER_DOCS_POINTER,
+    Attribution,
     AttributionError,
-    AttributionResult,
     InputKwargs,
     _AttributionTarget,
     _call_model,
@@ -42,7 +42,7 @@ from torchlens.attribution._steps import (
     _validate_step_batch_size,
 )
 from torchlens.receptive_field._viz import _blend_heatmap
-from torchlens.viz.node_plots import render_heatmap
+from torchlens.viz import node_plots
 
 LayerAttributionMethod: TypeAlias = Literal["activation_x_grad", "grad"]
 
@@ -873,7 +873,7 @@ def _cam_base_image(spatial_reference: Tensor, image: Image.Image | None) -> Ima
         array = (normalized.permute(1, 2, 0).clamp(0, 1) * 255).to(torch.uint8).numpy()
         return Image.fromarray(array, mode="RGB")
     reduced = data.abs().mean(dim=0) if data.ndim == 3 else data.abs()
-    return render_heatmap(reduced.numpy(), width=width, height=height, cmap="gray")
+    return node_plots.heatmap(reduced.numpy(), width=width, height=height, cmap="gray")
 
 
 def _cam_overlay(
@@ -909,7 +909,7 @@ def _cam_overlay(
         raise AttributionError("alpha must be between 0 and 1")
     base = _cam_base_image(spatial_reference, image)
     data = native_cam.detach().float().cpu().mean(dim=(0, 1))
-    heatmap = render_heatmap(data.numpy(), width=base.width, height=base.height, cmap=cmap)
+    heatmap = node_plots.heatmap(data.numpy(), width=base.width, height=base.height, cmap=cmap)
     native_height, native_width = (int(value) for value in native_cam.shape[-2:])
     disclosure = f"CAM native map: {native_height}x{native_width}; display interpolated"
     return _blend_heatmap(base, heatmap, alpha=alpha, disclosure=disclosure)
@@ -923,11 +923,11 @@ def layer_integrated_gradients(
     target: _AttributionTarget,
     layer: str,
     baseline: Any | None = None,
-    n_steps: int = 50,
+    num_steps: int = 50,
     step_batch_size: int | None = None,
     step_audit: str | None = None,
     step_audit_seed: int | None = None,
-) -> AttributionResult:
+) -> Attribution:
     """Compute Layer Integrated Gradients for a named intermediate layer.
 
     The input path is the straight line from baseline leaves to input leaves.
@@ -953,10 +953,10 @@ def layer_integrated_gradients(
     baseline
         Optional baseline tree matching attributed input leaves. A bare tensor is
         accepted when there is exactly one attributed leaf.
-    n_steps
+    num_steps
         Number of midpoint Riemann samples along the straight input path
         (Captum's default rule is Gauss-Legendre, so values at equal
-        ``n_steps`` differ slightly; see :func:`integrated_gradients`).
+        ``num_steps`` differ slightly; see :func:`integrated_gradients`).
     step_batch_size
         Optional number of path points stacked per forward/backward; ``None``
         (default) and ``1`` run sequentially. Strictly opt-in throughput.
@@ -975,7 +975,7 @@ def layer_integrated_gradients(
         bottleneck caveat, plus cost and audit disclosure.
     """
 
-    _validate_positive_int("n_steps", n_steps)
+    _validate_positive_int("n_steps", num_steps)
     chunk_size = _validate_step_batch_size(step_batch_size)
     audit_mode = _validate_step_audit(step_audit, chunk_size)
     prepared_inputs = _normalize_model_inputs(
@@ -992,7 +992,7 @@ def layer_integrated_gradients(
         target,
         layer,
         baseline_tensors,
-        n_steps,
+        num_steps,
         chunk_size=chunk_size,
         audit_mode=audit_mode,
         audit_seed=step_audit_seed,
@@ -1013,15 +1013,15 @@ def layer_integrated_gradients(
     values = values.detach()
     baseline_scalar, input_scalar = run["endpoint_scalars"]
     target_delta = input_scalar - baseline_scalar
-    return AttributionResult(
+    return Attribution(
         method="layer_integrated_gradients",
         values=values,
         target_repr=_target_repr(target),
         extra={
             "layer": layer,
             "integer_input_layers": _integer_input_layers(prepared_inputs),
-            "n_steps": n_steps,
-            "path_evaluations_logical": n_steps,
+            "n_steps": num_steps,
+            "path_evaluations_logical": num_steps,
             "physical_forward_calls": run["physical_forward_calls"],
             "step_batch_size": chunk_size,
             "step_audit": run["audit"].to_extra(),
@@ -1039,11 +1039,11 @@ def layer_conductance(
     target: _AttributionTarget,
     layer: str,
     baseline: Any | None = None,
-    n_steps: int = 50,
+    num_steps: int = 50,
     step_batch_size: int | None = None,
     step_audit: str | None = None,
     step_audit_seed: int | None = None,
-) -> AttributionResult:
+) -> Attribution:
     """Compute Layer Conductance for a named intermediate layer.
 
     Conductance decomposes input Integrated Gradients onto hidden units by
@@ -1070,10 +1070,10 @@ def layer_conductance(
     baseline
         Optional baseline tree matching attributed input leaves. A bare tensor is
         accepted when there is exactly one attributed leaf.
-    n_steps
+    num_steps
         Number of midpoint Riemann samples along the straight input path
         (Captum's default rule is Gauss-Legendre, so values at equal
-        ``n_steps`` differ slightly; see :func:`integrated_gradients`).
+        ``num_steps`` differ slightly; see :func:`integrated_gradients`).
     step_batch_size
         Optional number of path points stacked per forward/backward; ``None``
         (default) and ``1`` run sequentially. Strictly opt-in throughput.
@@ -1092,7 +1092,7 @@ def layer_conductance(
         bottleneck caveat, plus cost and audit disclosure.
     """
 
-    _validate_positive_int("n_steps", n_steps)
+    _validate_positive_int("n_steps", num_steps)
     chunk_size = _validate_step_batch_size(step_batch_size)
     audit_mode = _validate_step_audit(step_audit, chunk_size)
     prepared_inputs = _normalize_model_inputs(
@@ -1107,7 +1107,7 @@ def layer_conductance(
         target,
         layer,
         baseline_tensors,
-        n_steps,
+        num_steps,
         chunk_size=chunk_size,
         audit_mode=audit_mode,
         audit_seed=step_audit_seed,
@@ -1138,15 +1138,15 @@ def layer_conductance(
     conductance = conductance.detach()
     baseline_scalar, input_scalar = run["endpoint_scalars"]
     target_delta = input_scalar - baseline_scalar
-    return AttributionResult(
+    return Attribution(
         method="layer_conductance",
         values=conductance,
         target_repr=_target_repr(target),
         extra={
             "layer": layer,
             "integer_input_layers": _integer_input_layers(prepared_inputs),
-            "n_steps": n_steps,
-            "path_evaluations_logical": n_steps,
+            "n_steps": num_steps,
+            "path_evaluations_logical": num_steps,
             "physical_forward_calls": run["physical_forward_calls"],
             "step_batch_size": chunk_size,
             "step_audit": run["audit"].to_extra(),
@@ -1164,7 +1164,7 @@ def layer_attribution(
     target: _AttributionTarget,
     layer: str,
     method: LayerAttributionMethod = "activation_x_grad",
-) -> AttributionResult:
+) -> Attribution:
     """Compute attribution for a named intermediate layer.
 
     Parameters
@@ -1217,7 +1217,7 @@ def layer_attribution(
             values = values + activation * gradient
         else:
             values = values + gradient.abs()
-    return AttributionResult(
+    return Attribution(
         method=f"layer_{method}",
         values=values.detach(),
         target_repr=_target_repr(target),

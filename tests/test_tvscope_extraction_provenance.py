@@ -20,11 +20,8 @@ pytest.importorskip("torchvision")
 
 import torchlens as tl  # noqa: E402
 import torchlens.preprocessing as pp  # noqa: E402
-from torchlens.dataset_extraction import (  # noqa: E402
-    INPUT_PREPROCESSING_SCHEMA,
-    DatasetExtractionResumeError,
-    input_preprocessing_of,
-)
+from torchlens._extraction_provenance import INPUT_PREPROCESSING_SCHEMA, input_preprocessing_of
+from torchlens.errors import DatasetExtractionResumeError
 
 
 class _SmallCNN(nn.Module):
@@ -71,7 +68,7 @@ def resolution() -> pp.Resolution:
         }
     )
     return pp.Resolution(
-        record=base.record,
+        preprocessing=base.preprocessing,
         declared=base.declared,
         transform=lambda batch: (batch - 0.5) / 0.5,
     )
@@ -93,7 +90,7 @@ def test_resolution_backed_run_stamps_verified_block(model, resolution, tmp_path
         _stimuli(),
         ["conv"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         input_transform=resolution,
         stimulus_ids=[f"s{i}" for i in range(5)],
         progress=False,
@@ -108,7 +105,7 @@ def test_resolution_backed_run_stamps_verified_block(model, resolution, tmp_path
     signature_value = manifest["signature"]["transform_pipeline"]
     assert set(signature_value) == {"output", "input"}
     assert signature_value["input"]["kind"] == "resolved"
-    loaded = tl.load_extraction(out_dir)
+    loaded = tl.load(out_dir)
     assert loaded.input_preprocessing["verdict"] == "verified"
 
 
@@ -116,9 +113,7 @@ def test_undeclared_run_carries_honest_unknown_block(model, tmp_path) -> None:
     """No input path declared -> the block still exists and says unknown."""
 
     out_dir = tmp_path / "plain"
-    tl.extract_dataset(
-        model, _stimuli(), ["conv"], batch_size=2, output_dir=out_dir, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), ["conv"], batch_size=2, path=out_dir, progress=False)
     manifest = json.loads((out_dir / "manifest.json").read_text())
     block = manifest["input_preprocessing"]
     assert block["verdict"] == "unknown"
@@ -143,7 +138,7 @@ def test_resume_with_differing_input_path_refuses_typed(model, resolution, tmp_p
     """The input identity rides the ONE signature door (D16)."""
 
     out_dir = tmp_path / "sig"
-    kwargs = {"batch_size": 2, "output_dir": out_dir, "progress": False}
+    kwargs = {"batch_size": 2, "path": out_dir, "progress": False}
     tl.extract_dataset(model, _stimuli(), ["conv"], input_transform=resolution, **kwargs)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
         tl.extract_dataset(model, _stimuli(), ["conv"], resume=True, **kwargs)
@@ -155,7 +150,7 @@ def test_resume_never_grafts_new_provenance(model, resolution, tmp_path) -> None
     """Composition row 3: a compatible resume keeps the artifact's own block."""
 
     out_dir = tmp_path / "graft"
-    kwargs = {"batch_size": 2, "output_dir": out_dir, "progress": False}
+    kwargs = {"batch_size": 2, "path": out_dir, "progress": False}
     paths = tl.extract_dataset(model, _stimuli(), ["conv"], input_transform=resolution, **kwargs)
     before = json.loads((out_dir / "manifest.json").read_text())["input_preprocessing"]
     again = tl.extract_dataset(
@@ -175,7 +170,7 @@ def test_opaque_input_transform_applies_and_refuses_continuation(model, tmp_path
         _stimuli(4),
         ["conv"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         input_transform=lambda batch: batch * 2.0,
         progress=False,
     )
@@ -192,7 +187,7 @@ def test_opaque_input_transform_applies_and_refuses_continuation(model, tmp_path
             _stimuli(4),
             ["conv"],
             batch_size=2,
-            output_dir=out_dir,
+            path=out_dir,
             input_transform=lambda batch: batch * 2.0,
             resume=True,
             progress=False,
@@ -233,7 +228,7 @@ def test_provenance_only_stamp_records_applied_not_audited(model, resolution, tm
         _stimuli(),
         ["conv"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         input_provenance=resolution,
         progress=False,
     )
@@ -245,16 +240,16 @@ def test_provenance_only_stamp_records_applied_not_audited(model, resolution, tm
 
 
 def test_audit_provenance_stamp_carries_its_verdict(model, resolution, tmp_path) -> None:
-    """A PreprocessingAudit provenance stamp rides with its own verdict."""
+    """A PreprocessingComparison provenance stamp rides with its own verdict."""
 
-    report = pp.audit(resolution, resolution)
+    report = pp.compare(resolution, resolution)
     out_dir = tmp_path / "auditstamp"
     tl.extract_dataset(
         model,
         _stimuli(),
         ["conv"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         input_provenance=report,
         progress=False,
     )
@@ -274,7 +269,7 @@ def test_declaration_only_resolution_as_transform_refuses(model, tmp_path) -> No
             model,
             _stimuli(),
             ["conv"],
-            output_dir=tmp_path / "x",
+            path=tmp_path / "x",
             input_transform=declaration_only,
             progress=False,
         )
@@ -321,11 +316,11 @@ def test_pil_iterable_with_item_level_authority_transform(model, tmp_path) -> No
         images,
         ["avgpool"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         input_transform=resolution,
         stimulus_ids=["a", "b"],
         progress=False,
     )
-    loaded = tl.load_extraction(out_dir)
+    loaded = tl.load(out_dir)
     assert loaded.activations["avgpool"].shape[0] == 2
     assert loaded.input_preprocessing["verdict"] == "verified"

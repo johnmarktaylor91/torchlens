@@ -292,7 +292,7 @@ def test_corrupted_saved_index_fails_for_registered_ops(model_factory, index_fun
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     try:
         index_op = next(op for op in trace.layer_list if op.func_name == index_func)
@@ -317,7 +317,7 @@ def test_index_add_never_reaches_the_scatter_overwrite_exemption(replay_record) 
         (DuplicateIndexAdd(), "index_add", False),
         (Scatter(), "scatter", True),
     ):
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
         try:
             op = next(o for o in trace.layer_list if o.func_name == func)
             assert (_get_scatter_destination_dim_index(op) is not None) is expect_components, func
@@ -349,7 +349,7 @@ def test_corrupted_saved_gather_still_fails_validation(corrupt: str) -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     try:
         gather = next(op for op in trace.layer_list if op.func_name == "gather")

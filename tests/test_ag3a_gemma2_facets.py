@@ -49,10 +49,10 @@ def _graph(model, frozen):
     return tl.attribution.build_graph(
         trace,
         _transcoders(),
-        embedding="model.embed_tokens",
+        embedding_module="model.embed_tokens",
         logits_at=tl.attribution.SiteTarget("lm_head"),
-        max_n_logits=3,
-        desired_logit_prob=0.99,
+        max_num_logits=3,
+        logit_probability_coverage=0.99,
         frozen=frozen(trace) if callable(frozen) else frozen,
     )
 
@@ -77,31 +77,31 @@ class TestGemma2Facets:
         assert sorted(scales) == sorted(INV_RMS_OPS)
         assert sorted(patterns + scales) == sorted(_frozen_ops(trace))
         graph = _graph(model, [tl.facet("pattern"), tl.facet("inv_rms")])
-        held = set(graph.frozen) - set(PATTERN_OPS) - set(INV_RMS_OPS)
+        held = set(graph.frozen_sites) - set(PATTERN_OPS) - set(INV_RMS_OPS)
         assert len(held) == 2  # the two written MLP outputs
-        assert set(PATTERN_OPS + INV_RMS_OPS) <= set(graph.frozen)
+        assert set(PATTERN_OPS + INV_RMS_OPS) <= set(graph.frozen_sites)
 
     def test_frozen_facets_build_the_same_graph(self) -> None:
         model = _model()
         by_facet = _graph(model, [tl.facet("pattern"), tl.facet("inv_rms")])
         by_label = _graph(model, list(PATTERN_OPS + INV_RMS_OPS))
         assert by_facet.nodes == by_label.nodes
-        assert set(by_facet.frozen) == set(by_label.frozen)
-        assert torch.equal(by_facet.active_features, by_label.active_features)
-        for name in ("adjacency_matrix", "node_values", "activation_values", "error_vectors"):
+        assert set(by_facet.frozen_sites) == set(by_label.frozen_sites)
+        assert torch.equal(by_facet.active_feature_indices, by_label.active_feature_indices)
+        for name in ("adjacency_matrix", "node_values", "feature_activations", "error_vectors"):
             _equal(getattr(by_facet, name), getattr(by_label, name))
         assert set(by_facet.constants) == set(by_label.constants)
         for name, value in by_facet.constants.items():
             _equal(value, by_label.constants[name])
 
     def test_facet_that_is_not_one_op_refuses(self) -> None:
-        with pytest.raises(tl.attribution.AttributionError) as info:
+        with pytest.raises(tl.errors.AttributionError) as info:
             _graph(_model(), [tl.facet("result")])
         assert info.value.fields["code"] == "attribution_graph_frozen_facet_unsupported"
         assert "tl.facet('result')" in str(info.value)
 
     def test_facet_no_module_serves_refuses(self) -> None:
-        with pytest.raises(tl.attribution.AttributionError) as info:
+        with pytest.raises(tl.errors.AttributionError) as info:
             _graph(_model(), [tl.facet("no_such_facet")])
         assert info.value.fields["code"] == "attribution_graph_site_not_found"
         assert "trace.modules[name].facets.keys()" in str(info.value)

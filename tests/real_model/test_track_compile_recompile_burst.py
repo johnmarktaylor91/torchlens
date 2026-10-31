@@ -38,7 +38,7 @@ import torchvision
 from torch import nn
 
 import torchlens as tl
-from torchlens.utils import _torch_compat
+from torchlens._utils import _torch_compat
 
 pytestmark = [pytest.mark.heavy, pytest.mark.real_model, pytest.mark.real_class]
 

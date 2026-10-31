@@ -1,4 +1,4 @@
-"""Fork serialization round-trips (pickle, tl.save/tl.load, deepcopy).
+"""Fork serialization round-trips (pickle, Trace.save/tl.load, deepcopy).
 
 ``Trace.fork()`` builds COW shells over the parent's sealed stores; detached
 fallback records (modules fork detached by design) must decode BOTH internal
@@ -6,7 +6,7 @@ M14 cell encodings (``PooledCell`` pooling and compacted singleton labels)
 while copying, because ``DetachedOpStore`` has no pool/registry to decode them
 later and streams cells verbatim into pickle state. A leaked ``PooledCell``
 made every fork serialization fail: plain pickle refused typed at restore,
-and ``tl.save`` SUCCEEDED while ``tl.load`` always refused (the safe
+and ``Trace.save`` SUCCEEDED while ``tl.load`` always refused (the safe
 unpickler blocks the non-allowlisted internal type) -- a silent dead
 artifact. These tests pin the round-trip for every spelling.
 """
@@ -118,7 +118,7 @@ def test_fork_pickle_round_trip(parent_trace: tl.Trace) -> None:
 
 
 def test_fork_save_load_round_trip(parent_trace: tl.Trace, tmp_path) -> None:
-    """``tl.save(fork)`` must produce an artifact ``tl.load`` accepts.
+    """``fork.save(path)`` must produce an artifact ``tl.load`` accepts.
 
     Pre-fix this was the silent-dead-artifact case: save succeeded and load
     ALWAYS refused (blocked internal ``PooledCell`` type).
@@ -126,7 +126,7 @@ def test_fork_save_load_round_trip(parent_trace: tl.Trace, tmp_path) -> None:
 
     fork = parent_trace.fork()
     path = os.path.join(tmp_path, "fork.tlspec")
-    tl.save(fork, path)
+    fork.save(path)
     restored = tl.load(path)
     _assert_fork_equivalent(restored, fork)
 
@@ -157,7 +157,7 @@ def test_pickle_and_deepcopy_after_receptive_field_access() -> None:
     mappingproxy-bearing solution objects that ``__getstate__`` carried
     verbatim, so ``pickle.dumps(trace)`` and ``copy.deepcopy(trace)`` raised
     ``TypeError: cannot pickle 'mappingproxy' object`` while the SAME calls
-    succeeded on a fresh trace (``tl.save`` was unaffected -- its scrub path
+    succeeded on a fresh trace (``Trace.save`` was unaffected -- its scrub path
     drops the fields). Influence geometry is an advertised lazy surface, so
     inspect-RF-then-snapshot is a realistic user path.
     """

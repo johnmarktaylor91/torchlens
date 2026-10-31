@@ -7,9 +7,9 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
-from .._errors import CaptureContextError, InvalidArgumentError, PayloadUnavailableError
+from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
+from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
-from ..utils.display import user_stacklevel
 from . import _render_utils
 from ._boundary_bundle import bundle_member_nodes
 from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
@@ -82,8 +82,8 @@ def _view_rendered_file(filepath: str) -> None:
 
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.trace import Trace
     from ._mutated_params import MutatedParameterEmission
     from .auto_collapse import ModuleRepeatFold
     from .node_universe import NodeUniverse
@@ -1054,7 +1054,7 @@ def _emit_and_finish_forward(
             # The typed raise names the saved source path, so keep the file.
             _raise_graphviz_timeout(
                 "forward graph (notebook display)",
-                f"{trace.num_tensors} nodes",
+                f"{len(trace)} nodes",
                 notebook_source_path,
                 render_timeout,
                 error,
@@ -1222,7 +1222,7 @@ def _publish_forward_render(
         except subprocess.TimeoutExpired as error:
             _raise_graphviz_timeout(
                 "forward graph",
-                f"{trace.num_tensors} nodes",
+                f"{len(trace)} nodes",
                 source_path,
                 render_timeout,
                 error,
@@ -1453,23 +1453,23 @@ def draw(
     if vis_renderer == "dagua":
         opted_in_module = sys.modules.get("torchlens.experimental.dagua")
         if not getattr(opted_in_module, "__torchlens_dagua_opted_in__", False):
-            raise CaptureContextError(
+            raise CaptureNotActiveError(
                 "dagua renderer is experimental and has not been opted into",
                 code="dagua_renderer_not_opted_in",
                 remedy="opt in via `from torchlens.experimental import dagua` first",
             )
-        from ..experimental.dagua import render_trace_with_dagua
+        from ..experimental.dagua._bridge import render_trace_with_dagua
 
         return render_trace_with_dagua(
             self,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
-            vis_outpath=resolved_outpath,
+            path=resolved_outpath,
             vis_save_only=vis_save_only,
-            vis_fileformat=vis_fileformat,
-            vis_buffers=show_buffer_layers == "always",
+            file_format=vis_fileformat,
+            show_buffers=show_buffer_layers == "always",
             vis_direction=direction,
-            vis_theme=vis_theme,
+            theme=vis_theme,
         )
     request, repeat_folds, segments, segment_lookup = _resolve_collapse_request(self, request)
 
@@ -1635,7 +1635,7 @@ def _add_orphan_island_nodes(
     """Render orphan (island) ops as a dashed cluster of disconnected nodes.
 
     Orphans are ops unreachable from both the model inputs and outputs; they are pruned
-    from the main graph and live only on ``trace.orphans`` when
+    from the main graph and live only on ``trace.graph.orphans`` when
     ``keep_orphans=True``. ``draw(show_orphans=True)`` surfaces them as a
     labelled, dashed cluster of edgeless nodes so a user can SEE the dead-end computation
     without it polluting the connected graph. This is a prototype rendering: nodes carry the

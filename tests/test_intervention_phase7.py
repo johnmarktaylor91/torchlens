@@ -217,13 +217,13 @@ def test_rerun_colliding_hook_identifiers_do_not_hide_misses() -> None:
 
     from types import SimpleNamespace
 
+    from torchlens._ir.intervention import FireResult
     from torchlens.intervention.hooks import NormalizedHookEntry
     from torchlens.intervention.rerun import (
         _assign_unique_plan_ids,
         _hook_plan_identifier,
         _reconcile_rerun_hook_fires,
     )
-    from torchlens.ir.intervention import FireResult
 
     def same_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
         """Shared callable planned under two different targets."""
@@ -407,9 +407,7 @@ def test_rerun_fast_refresh_repopulates_child_versions() -> None:
 
     x = torch.tensor([-2.0, 3.0])
     new_x = torch.tensor([-5.0, 1.0])
-    log = tl.trace(
-        InplaceVersionModel(), x, capture=tl.options.CaptureOptions(save_arg_values=True)
-    )
+    log = tl.trace(InplaceVersionModel(), x, capture=tl.options.CaptureOptions(save_args=True))
     add_site = log["add_1_1"]
     original_add_site_id = id(add_site)
 
@@ -502,7 +500,7 @@ def test_rerun_fast_refresh_keeps_every_pass_of_a_multi_pass_layer_distinct() ->
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     assert log.layer_logs["add_1_3"].num_passes == 2
 

@@ -16,7 +16,7 @@ from typing import Any
 
 import torch
 
-from ..data_classes.op import Op
+from .._data_classes.op import Op
 
 
 def _setitem_index_targets_are_unique(index: Any) -> bool:

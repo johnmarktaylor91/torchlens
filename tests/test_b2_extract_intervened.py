@@ -18,15 +18,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import extract_dataset
 from torchlens._data_substrate import read_trusted_rows
 from torchlens._errors import InvalidArgumentError
 from torchlens._extraction.harvest_schema import HARVEST_BLOCK_KEY, validate_harvest_block
-from torchlens.dataset_extraction import (
-    MANIFEST_FILENAME,
-    DatasetExtractionResumeError,
-    extract_dataset,
-    open_extraction,
-)
+from torchlens._extraction.resume import MANIFEST_FILENAME
+from torchlens.dataset_extraction import open_extraction
+from torchlens.errors import DatasetExtractionResumeError
 
 _LAYERS = {"a": "fc1", "b": "act", "c": "fc2", "d": "fc3"}
 
@@ -96,7 +94,7 @@ def test_intervened_disk_artifact_records_the_counterfactual(tmp_path: Path) -> 
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         intervene=spec,
     )
@@ -108,7 +106,7 @@ def test_intervened_disk_artifact_records_the_counterfactual(tmp_path: Path) -> 
     assert harvest.target_site_keys
     assert str(harvest.receipt_digest).startswith("sha256:")
     run_record = manifest["run"]["intervention"]
-    assert run_record["spec_digest"] == spec.spec_digest
+    assert run_record["spec_digest"] == spec.digest
     assert run_record["target_site_keys"] == list(harvest.target_site_keys)
     assert manifest["signature"]["model_mode"]["intervention"]["policy"] == "intervened"
     rows = read_trusted_rows(tmp_path)
@@ -124,7 +122,7 @@ def test_clean_disk_artifact_declares_policy_none(tmp_path: Path) -> None:
     """A clean harvest says so explicitly (never "written before the schema")."""
 
     extract_dataset(
-        _Chain().eval(), _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
+        _Chain().eval(), _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False
     )
     manifest = _manifest(tmp_path)
     assert validate_harvest_block(manifest[HARVEST_BLOCK_KEY]).policy == "none"
@@ -166,7 +164,7 @@ def test_intervened_resume_continues_and_refuses_a_changed_intervention(tmp_path
     """Same spec resumes to identical rows; another spec or a clean run refuses."""
 
     model = _Chain().eval()
-    kwargs = {"batch_size": 2, "output_dir": tmp_path, "progress": False}
+    kwargs = {"batch_size": 2, "path": tmp_path, "progress": False}
     extract_dataset(model, _stimuli(), _LAYERS, intervene=_spec(), **kwargs)
     full = open_extraction(tmp_path).materialize()
     receipt_digest = _manifest(tmp_path)[HARVEST_BLOCK_KEY]["receipt_digest"]
@@ -270,7 +268,7 @@ def test_pre_r208_manifest_still_loads_and_resumes(tmp_path: Path) -> None:
     """A manifest without the harvest block (older writers) opens and resumes clean."""
 
     model = _Chain().eval()
-    kwargs = {"batch_size": 2, "output_dir": tmp_path, "progress": False}
+    kwargs = {"batch_size": 2, "path": tmp_path, "progress": False}
     extract_dataset(model, _stimuli(), _LAYERS, **kwargs)
     full = open_extraction(tmp_path).materialize()
     manifest = _manifest(tmp_path)
@@ -292,7 +290,7 @@ def test_malformed_harvest_block_refuses_typed(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         intervene=_spec(),
     )

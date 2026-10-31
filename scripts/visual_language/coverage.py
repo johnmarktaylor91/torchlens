@@ -68,10 +68,10 @@ VIS_PREFIX = "torchlens.visualization."
 EXEMPT_PREFIX = "exempt: "
 
 DRAW_ENTRY_POINTS: Mapping[str, str] = {
-    "Trace.draw": "torchlens.data_classes._trace_viz:TraceVisualizationMixin.draw",
-    "Trace.draw_backward": "torchlens.data_classes._trace_viz:TraceVisualizationMixin.draw_backward",
-    "Trace.draw_combined": "torchlens.data_classes._trace_viz:TraceVisualizationMixin.draw_combined",
-    "Module.draw": "torchlens.data_classes.module:Module.draw",
+    "Trace.draw": "torchlens._data_classes._trace_viz:TraceVisualizationMixin.draw",
+    "Trace.draw_backward": "torchlens._data_classes._trace_viz:TraceVisualizationMixin.draw_backward",
+    "Trace.draw_combined": "torchlens._data_classes._trace_viz:TraceVisualizationMixin.draw_combined",
+    "Module.draw": "torchlens._data_classes.module:Module.draw",
 }
 CALL_ENTRY = {
     "draw": "Trace.draw",

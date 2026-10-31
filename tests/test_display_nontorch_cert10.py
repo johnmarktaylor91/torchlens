@@ -4,7 +4,7 @@ Round-10 fix ``d2bfca03`` correctly made ``finalize_single_pass_trace`` flip
 every preview-backend (MLX/tinygrad/TF/JAX/Paddle) op's ``_tracing_finished``
 to ``True``. That newly routes finalized preview-backend ops with a *saved*
 activation into ``Op._str_after_pass`` -> ``Op._tensor_contents_str_helper``
--> ``torchlens.utils.display.tensor_stats_summary``, which was written for
+-> ``torchlens._utils.display.tensor_stats_summary``, which was written for
 ``torch.Tensor`` only (``tensor.device``, ``torch.isnan``, ``.to(torch.float64)``,
 ``.detach()``, ``.requires_grad``, ...). Calling ``str(op)``/``repr(op)`` on
 such an op raised ``AttributeError`` (e.g. a numpy/preview-backend array has
@@ -30,7 +30,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.utils.display import tensor_stats_summary
+from torchlens._utils.display import tensor_stats_summary
 
 
 class _FakeArray:

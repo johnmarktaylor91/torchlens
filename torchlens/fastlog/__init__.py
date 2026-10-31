@@ -9,61 +9,36 @@ from typing import Any
 
 _LAZY_ATTRS = {
     "ActivationRecord": ("torchlens.fastlog.types", "ActivationRecord"),
-    "BundleNotFinalizedError": ("torchlens.fastlog.exceptions", "BundleNotFinalizedError"),
     "CaptureSpec": ("torchlens.fastlog.types", "CaptureSpec"),
-    "GradientRecord": ("torchlens.fastlog.types", "GradientRecord"),
+    "GradRecord": ("torchlens.fastlog.types", "GradRecord"),
     "GradRecordContext": ("torchlens.fastlog.types", "GradRecordContext"),
-    "HaltSignal": ("torchlens.fastlog._halt", "HaltSignal"),
-    "InvalidStorageError": ("torchlens.fastlog.exceptions", "InvalidStorageError"),
-    "MLXValueUnavailableError": ("torchlens.ir.predicate", "MLXValueUnavailableError"),
+    "StopSignal": ("torchlens.fastlog._halt", "StopSignal"),
     "ModuleStackFrame": ("torchlens.fastlog.types", "ModuleStackFrame"),
-    "PredicateError": ("torchlens.fastlog.exceptions", "PredicateError"),
     "Recorder": ("torchlens.fastlog._recorder", "Recorder"),
-    "RecorderStateError": ("torchlens.fastlog.exceptions", "RecorderStateError"),
-    "Recording": ("torchlens.fastlog.types", "Recording"),
-    "RecordingConfigError": ("torchlens.fastlog.exceptions", "RecordingConfigError"),
-    "RecordingOptions": ("torchlens.fastlog.options", "RecordingOptions"),
-    "RecordingTrace": ("torchlens.fastlog.types", "RecordingTrace"),
+    "DryRun": ("torchlens.fastlog.types", "DryRun"),
     "RecordContext": ("torchlens.fastlog.types", "RecordContext"),
-    "RecordContextFieldError": ("torchlens.fastlog.exceptions", "RecordContextFieldError"),
-    "RecoveryError": ("torchlens.fastlog.exceptions", "RecoveryError"),
-    "_DEFERRED_VALUE": ("torchlens.ir.predicate", "_DEFERRED_VALUE"),
+    "_DEFERRED_VALUE": ("torchlens._ir.predicate", "_DEFERRED_VALUE"),
     "cleanup_partial": ("torchlens.fastlog.cleanup", "cleanup_partial"),
     "dry_run": ("torchlens.fastlog.dry_run", "dry_run"),
-    "halt": ("torchlens.fastlog._halt", "halt"),
-    "load": ("torchlens.fastlog.recover", "load"),
+    "stop": ("torchlens.fastlog._halt", "stop"),
     "recover": ("torchlens.fastlog.recover", "recover"),
-    "record": ("torchlens.fastlog._record_one_shot", "record"),
 }
 
 __all__ = [
     "ActivationRecord",
-    "BundleNotFinalizedError",
     "CaptureSpec",
-    "GradientRecord",
+    "GradRecord",
     "GradRecordContext",
-    "HaltSignal",
-    "InvalidStorageError",
-    "MLXValueUnavailableError",
+    "StopSignal",
     "ModuleStackFrame",
-    "PredicateError",
     "Recorder",
-    "RecorderStateError",
-    "Recording",
-    "RecordingConfigError",
-    "RecordingOptions",
-    "RecordingTrace",
+    "DryRun",
     "RecordContext",
-    "RecordContextFieldError",
-    "RecoveryError",
     "_DEFERRED_VALUE",
     "cleanup_partial",
     "dry_run",
-    "halt",
-    "load",
-    "preview",
+    "stop",
     "recover",
-    "record",
 ]
 
 
@@ -121,10 +96,6 @@ def __getattr__(name: str) -> Any:
         If ``name`` is not part of the fastlog public surface.
     """
 
-    if name == "preview":
-        from ..visualization.fastlog_preview import preview_fastlog
-
-        return preview_fastlog
     if name in _LAZY_ATTRS:
         module_path, attr_name = _LAZY_ATTRS[name]
         value = getattr(_importlib.import_module(module_path), attr_name)

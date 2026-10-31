@@ -34,6 +34,12 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
+from torchlens._utils._callable_safety import (
+    _ALLOWED_FORWARD_OP_MODULES,
+    is_pure_forward_callable,
+    private_c_forward_op_module_names,
+)
 from torchlens.backends.torch import completeness_witness as cw
 from torchlens.backends.torch.completeness_witness import (
     _private_c_forward_op_modules,
@@ -42,12 +48,6 @@ from torchlens.backends.torch.completeness_witness import (
     host_escape_observer_install_failed,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
-from torchlens.utils._callable_safety import (
-    _ALLOWED_FORWARD_OP_MODULES,
-    is_pure_forward_callable,
-    private_c_forward_op_module_names,
-)
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
 _EXPECTED_MODULES = {
@@ -177,7 +177,7 @@ def test_private_c_captured_operand_consumption_ceilings(
         torch.manual_seed(0)
         data = torch.randn(1, 4)
         model = _CrossThreadModel(_CONSUMERS[surface], runner)
-        trace = tl.trace(model, (_gate_pos(), data), capture=CaptureOptions(random_seed=1, **_CAP))
+        trace = tl.trace(model, (_gate_pos(), data), capture=CaptureOptions(seed=1, **_CAP))
         assert host_escape_has_cross_thread_captured_tensor(trace), (
             f"{surface}/{thread_mode}: private-C captured-operand consumption did not ceiling"
         )
@@ -259,7 +259,7 @@ def test_private_c_patched_while_armed_and_restored_after() -> None:
             return self.lin(x).relu()
 
     model = _ProbeModel()
-    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(random_seed=1, **_CAP))
+    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(seed=1, **_CAP))
 
     assert stashed(log, "during")["count"] == len(originals)
     assert stashed(log, "during")["all_patched"] is True, "not every private-C callable was patched"
@@ -290,7 +290,7 @@ def test_install_failure_marks_observer_incomplete(monkeypatch: pytest.MonkeyPat
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return self.lin(x).relu()
 
-    trace = tl.trace(_M(), torch.randn(2, 4), capture=CaptureOptions(random_seed=1, **_CAP))
+    trace = tl.trace(_M(), torch.randn(2, 4), capture=CaptureOptions(seed=1, **_CAP))
     assert host_escape_observer_install_failed(trace)
 
 
@@ -317,7 +317,7 @@ def test_benign_own_tensor_private_c_stays_verified(thread_mode: str, tmp_path: 
     try:
         model = _BenignOwnTensorModel(runner)
         x = torch.randn(2, 4)
-        trace = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+        trace = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
         assert not host_escape_has_cross_thread_captured_tensor(trace)
         path = tmp_path / f"benign_{thread_mode}.tlspec"
         shutil.rmtree(path, ignore_errors=True)

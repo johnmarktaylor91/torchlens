@@ -119,7 +119,7 @@ def save_realistic_artifact(directory: Path, *, save_all: bool = False) -> Path:
     else:
         log = tl.trace(model, mini_ids(), save=tl.func("softmax") | tl.func("gelu"))
     path = directory / ("mini_all.tlspec" if save_all else "mini.tlspec")
-    tl.save(log, str(path))
+    log.save(str(path))
     return path
 
 
@@ -129,5 +129,5 @@ def save_loop_artifact(directory: Path) -> Path:
     generator = torch.Generator().manual_seed(1234)
     log = tl.trace(Loop().eval(), torch.randn(2, 8, generator=generator))
     path = directory / "loop.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     return path

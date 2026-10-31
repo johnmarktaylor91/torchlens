@@ -53,7 +53,7 @@ class BatchEnvelope:
         Positional arguments for ``model.forward``.
     kwargs:
         Keyword arguments for ``model.forward``.
-    row_count:
+    num_rows:
         INPUT-derived number of stimulus rows in this batch — the row-truth
         every selected output is validated against (extract D13).
     mask:
@@ -67,7 +67,7 @@ class BatchEnvelope:
 
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
-    row_count: int
+    num_rows: int
     mask: torch.Tensor | None
     disclosure: dict[str, Any]
 
@@ -178,10 +178,10 @@ def coerce_envelope(
     """
 
     if isinstance(raw, BatchEnvelope):
-        if raw.row_count <= 0:
+        if raw.num_rows <= 0:
             raise InvalidArgumentError(
-                f"collate= returned a BatchEnvelope with row_count="
-                f"{raw.row_count} for batch {batch_index}; the row count is "
+                f"collate= returned a BatchEnvelope with num_rows="
+                f"{raw.num_rows} for batch {batch_index}; the row count is "
                 "the row-truth every stored shard is validated against, so "
                 "it must be a positive integer.",
                 code="extraction_collate_invalid",
@@ -199,7 +199,7 @@ def coerce_envelope(
                 "be derived.",
                 code="extraction_collate_invalid",
                 remedy=(
-                    "return a BatchEnvelope with an explicit row_count, or "
+                    "return a BatchEnvelope with an explicit num_rows, or "
                     "include a batched tensor in the mapping"
                 ),
                 batch_index=batch_index,
@@ -207,7 +207,7 @@ def coerce_envelope(
         return BatchEnvelope(
             args=(),
             kwargs=dict(raw),
-            row_count=rows,
+            num_rows=rows,
             mask=mask,
             disclosure={"kind": source},
         )
@@ -223,7 +223,7 @@ def coerce_envelope(
                 batch_index=batch_index,
             )
         return BatchEnvelope(
-            args=(raw,), kwargs={}, row_count=rows, mask=None, disclosure={"kind": source}
+            args=(raw,), kwargs={}, num_rows=rows, mask=None, disclosure={"kind": source}
         )
     if isinstance(raw, (tuple, list)):
         return _envelope_from_sequence(raw, n_items, source, batch_index)
@@ -272,7 +272,7 @@ def _envelope_from_sequence(
             code="extraction_collate_ambiguous",
             remedy=(
                 "return a torchlens.dataset_extraction.BatchEnvelope "
-                "(args=..., kwargs=..., row_count=...), a Mapping "
+                "(args=..., kwargs=..., num_rows=...), a Mapping "
                 "(kwargs), or a single Tensor"
             ),
             batch_index=batch_index,
@@ -291,7 +291,7 @@ def _envelope_from_sequence(
             batch_index=batch_index,
         )
     return BatchEnvelope(
-        args=tuple(raw), kwargs={}, row_count=rows, mask=None, disclosure={"kind": source}
+        args=tuple(raw), kwargs={}, num_rows=rows, mask=None, disclosure={"kind": source}
     )
 
 
@@ -504,7 +504,7 @@ def _tokenize_batch(
     return BatchEnvelope(
         args=(),
         kwargs=mapping,
-        row_count=len(items),
+        num_rows=len(items),
         mask=mask,
         disclosure=disclosure,
     )

@@ -112,9 +112,9 @@ def _true_mac_flops(trace: Any) -> int:
 
     import re
 
-    from torchlens.report import flops_report
+    from torchlens.report import flops
 
-    match = re.search(r"true MACs: (\d+)", str(flops_report(trace)))
+    match = re.search(r"true MACs: (\d+)", str(flops(trace)))
     assert match is not None
     return 2 * int(match.group(1))
 
@@ -147,7 +147,7 @@ def test_matmul_family_backward_equals_flop_counter_mode(case: str) -> None:
             assert row["fcm_bwd"] == 0 and row["closed_bwd"] > 0
             assert status.executed_flops == MV_DISCLOSED[case], status
             if "a_grad=True" in case:
-                assert ("mul", 1) in status.uncounted_ops
+                assert ("mul", 1) in status.uncounted_op_counts
             return
         assert status.executed_flops == row["fcm_bwd"] == row["closed_bwd"], status
         assert status.executed_evidence == "formula_exact"
@@ -337,11 +337,11 @@ def test_uncounted_ops_are_named_never_zeroed() -> None:
     trace = _traced_backward(model, inputs)
     try:
         status = backward_status(trace)
-        names = dict(status.uncounted_ops)
+        names = dict(status.uncounted_op_counts)
         assert "_softmax_backward_data" in names
         assert all(count > 0 for count in names.values())
         assert "outside those families not counted" in status.status_line
-        ops = trace.backward_passes[0].dispatched_ops
+        ops = trace.autograd.backward_passes[0].aten_ops
         assert ops is not None
         counted = [op for op in ops if op.family == "matmul"]
         assert counted and all(op.grad_fn_call_ref is not None for op in counted)
@@ -360,7 +360,7 @@ def test_gradient_saving_never_changes_the_count() -> None:
         try:
             out = trace[trace.output_layers[0]].out
             trace.log_backward(out.sum())
-            ops = trace.backward_passes[0].dispatched_ops
+            ops = trace.autograd.backward_passes[0].aten_ops
             assert ops is not None
             return list(ops), backward_status(trace).executed_flops
         finally:
@@ -386,14 +386,14 @@ def test_loaded_trace_reads_the_saved_count(tmp_path: Path) -> None:
     try:
         live = backward_status(trace)
         path = tmp_path / "observed.tlspec"
-        tl.save(trace, path)
+        trace.save(path)
         loaded = tl.load(path)
         status = backward_status(loaded)
         assert status.state == "backward_observed"
         assert status.executed_flops == live.executed_flops is not None
         assert status.executed_evidence == "formula_exact"
         assert status.executed_flops_per_pass == live.executed_flops_per_pass
-        assert status.attributions[0].rows == live.attributions[0].rows
+        assert status.flops_attributions[0].rows == live.flops_attributions[0].rows
         assert status.unattributed_flops == live.unattributed_flops
     finally:
         trace.cleanup()

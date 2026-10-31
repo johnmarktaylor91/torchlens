@@ -22,7 +22,7 @@ class StreamingStat(Protocol):
     def update(self, value: Any) -> None:
         """Update the accumulator with one batch value."""
 
-    def result(self) -> Any:
+    def compute(self) -> Any:
         """Return the finalized statistic value."""
 
 
@@ -83,7 +83,7 @@ class Mean:
         self._mean = self._mean + (batch_mean - self._mean) * (batch_count / total)
         self._count = total
 
-    def result(self) -> float:
+    def compute(self) -> float:
         """Return the finalized mean.
 
         Returns
@@ -129,10 +129,10 @@ class Norm:
             return
         self._mean.update(torch.linalg.vector_norm(tensor, ord=self.p))
 
-    def result(self) -> float:
+    def compute(self) -> float:
         """Return the finalized mean norm."""
 
-        return self._mean.result()
+        return self._mean.compute()
 
 
 class Covariance:
@@ -199,7 +199,7 @@ class Covariance:
         self._mean += delta * (rows / total)
         self._count = total
 
-    def result(self) -> torch.Tensor:
+    def compute(self) -> torch.Tensor:
         """Return the finalized covariance matrix.
 
         Returns
@@ -367,7 +367,7 @@ class CrossCovariance:
         self._mean_b += delta_b * (rows / total)
         self._count = total
 
-    def result(self) -> torch.Tensor:
+    def compute(self) -> torch.Tensor:
         """Return the finalized sample cross-covariance matrix.
 
         Returns
@@ -481,7 +481,7 @@ class CKA:
         {\lVert C_{AA}\rVert_F\,\lVert C_{BB}\rVert_F}.
 
     Only feature-sized covariance terms are retained. If either input has
-    zero variance, ``result()`` returns NaN (warning ``cka_zero_variance``)
+    zero variance, ``compute()`` returns NaN (warning ``cka_zero_variance``)
     because the alignment denominator is zero; a NaN or infinite batch refuses
     ``cka_input_nonfinite`` at ``update()``. This follows the linear CKA formulation of Kornblith et al. (2019).
 
@@ -539,7 +539,7 @@ class CKA:
         self._covariance_a.update(matrix_a)
         self._covariance_b.update(matrix_b)
 
-    def result(self) -> SimilarityScore:
+    def compute(self) -> SimilarityScore:
         """Return the finalized linear CKA value.
 
         Returns
@@ -550,9 +550,9 @@ class CKA:
             has zero variance.
         """
 
-        cross = self._cross.result()
-        covariance_a = self._covariance_a.result()
-        covariance_b = self._covariance_b.result()
+        cross = self._cross.compute()
+        covariance_a = self._covariance_a.compute()
+        covariance_b = self._covariance_b.compute()
         numerator = torch.linalg.matrix_norm(cross, ord="fro").square()
         denominator = torch.linalg.matrix_norm(covariance_a, ord="fro") * torch.linalg.matrix_norm(
             covariance_b, ord="fro"
@@ -673,7 +673,7 @@ class PCA:
             descending eigenvalues.
         """
 
-        cov = self._covariance.result()
+        cov = self._covariance.compute()
         if cov.numel() == 0:
             return (
                 torch.empty((0, 0), dtype=torch.float64),
@@ -686,7 +686,7 @@ class PCA:
         flip = torch.where(torch.gather(components, 1, anchor) < 0, -1.0, 1.0)
         return components * flip, values[order]
 
-    def result(self) -> dict[str, Any]:
+    def compute(self) -> dict[str, Any]:
         """Return components, variances, and the P6 additive fit facts.
 
         Returns
@@ -753,8 +753,8 @@ class PCA:
             components=components,
             mean=mean,
             explained_variance=explained,
-            n_samples=self._covariance._count,
-            n_features=int(mean.numel()),
+            num_samples=self._covariance._count,
+            num_features=int(mean.numel()),
             fit_scope=str(fit_scope),
             digest=fitted_digest(components, mean, explained),
         )

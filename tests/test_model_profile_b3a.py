@@ -9,8 +9,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.constants import MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.trace import ResolvedPostprocessing, ResolvedPreprocessing, Trace
+from torchlens._constants import MODEL_LOG_FIELD_ORDER
+from torchlens._data_classes.trace import ResolvedPostprocessing, ResolvedPreprocessing, Trace
 
 
 class _ProfileTiny(nn.Module):
@@ -146,7 +146,7 @@ def test_model_profile_is_not_a_persisted_trace_field(tmp_path: Path) -> None:
     loaded = tl.load(bundle_path)
 
     assert "model_profile" not in MODEL_LOG_FIELD_ORDER
-    assert "model_profile" not in Trace.PORTABLE_STATE_SPEC
+    assert "model_profile" not in Trace._PORTABLE_STATE_SPEC
     assert "model_profile" not in _json_keys(manifest)
     assert "model_profile" not in loaded.__dict__
     assert loaded.model_profile.keystone_applicable is False

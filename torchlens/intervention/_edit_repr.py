@@ -1,7 +1,7 @@
 """Public-spelling ``repr`` for ``tl.Edit`` (the ``Edit`` dataclass).
 
 A builtin edit prints as the public constructor call that builds it, so the
-printed text is the call a user would type (``tl.grad_scale(2.0)``). Edits that
+printed text is the call a user would type (``tl.scale_grad(2.0)``). Edits that
 no public constructor reproduces from their stored arguments print as
 ``tl.Edit(...)`` with their identity fields.
 """
@@ -83,7 +83,7 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
     Returns
     -------
     tuple[str, Callable[..., Any]] | None
-        Dotted public path such as ``"tl.grad_zero"`` and the constructor, or
+        Dotted public path such as ``"tl.zero_grad"`` and the constructor, or
         ``None``.
     """
 

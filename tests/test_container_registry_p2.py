@@ -7,8 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.container import DictKey, TupleIndex
-from torchlens.ir.container_registry import Phase, Role
+from torchlens._ir.container import DictKey, TupleIndex
+from torchlens._ir.container_registry import Phase, Role
 
 
 class ScalarConfigModel(nn.Module):
@@ -284,8 +284,8 @@ def test_input_at_selects_top_level_and_nested_input_leaf() -> None:
         capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
 
-    top = trace.resolve_sites(tl.input_at("attention_mask")).first()
-    nested = trace.resolve_sites(tl.input_at("past_key_values", 0, 1)).first()
+    top = trace.resolve_sites(tl.model_input("attention_mask")).first()
+    nested = trace.resolve_sites(tl.model_input("past_key_values", 0, 1)).first()
 
     assert torch.equal(top.out, payload["attention_mask"])
     assert torch.equal(nested.out, payload["past_key_values"][0][1])
@@ -361,7 +361,7 @@ def test_multi_snapshot_record_requires_selector_and_reconstructs_selected_role(
 def test_aliasing_empty_container_and_tensor_dict_key_degradation() -> None:
     """Aliased leaves are repeated, empty containers skip, tensor keys degrade."""
 
-    from torchlens.ir.container_registry import walk_container
+    from torchlens._ir.container_registry import walk_container
 
     tensor = torch.tensor([1.0])
     payload = {"alias": [tensor, tensor], tensor: torch.tensor([2.0])}

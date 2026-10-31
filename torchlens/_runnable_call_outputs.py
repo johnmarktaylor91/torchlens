@@ -7,14 +7,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ._runnable_retention import _check_unretained_extent
-from ._runnable_state import (
-    RunResourceCeiling,
-)
-from .errors import (
-    RunPreconditionError,
-)
-from .ir.container import (
+from torchlens._runnable import ContractCheck
+
+from ._ir.container import (
     CONTAINER_KIND_CAPABILITIES,
     ContainerReconstructionError,
     ContainerSpec,
@@ -24,15 +19,21 @@ from .ir.container import (
     reconstruction_is_lossy_by_type,
     resolve_container_type,
 )
-from .runnable import (
-    ContractCheck,
+from ._runnable import (
     RunnableCallDescriptor,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from .utils._torch_compat import tensor_version_or_none
+from ._runnable_retention import _check_unretained_extent
+from ._runnable_state import (
+    RunResourceCeiling,
+)
+from ._utils._torch_compat import tensor_version_or_none
+from .errors import (
+    RunPreconditionError,
+)
 
 if TYPE_CHECKING:
     from ._runnable_execution import (

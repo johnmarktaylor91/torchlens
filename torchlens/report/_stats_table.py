@@ -32,7 +32,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from ..stats._tensor_stats import TensorStats
 
 #: Typed row states (D18): every op gets a row; absence of numbers is a
@@ -160,7 +160,7 @@ class StatsTable:
         sampled = False
         if evidence_field is not None:
             sampled = any(
-                row.stats is not None and getattr(row.stats, evidence_field).sampled
+                row.stats is not None and getattr(row.stats, evidence_field).is_sampled
                 for row in ordered
             )
         disclosure = f"sorted by {by} ({'descending' if descending else 'ascending'})"
@@ -202,15 +202,13 @@ class StatsTable:
                     "state": row.state,
                     "n": None if stats is None else stats.numel,
                     "mean": None if stats is None else stats.mean,
-                    "sd": None if stats is None else stats.sd,
+                    "sd": None if stats is None else stats.std,
                     "min": None if stats is None else stats.finite_min,
                     "max": None if stats is None else stats.finite_max,
-                    "zero_count": None if stats is None else stats.zero_count,
-                    "nan_count": None if stats is None else stats.nan_count,
-                    "inf_count": (
-                        None if stats is None else stats.posinf_count + stats.neginf_count
-                    ),
-                    "sampled": None if stats is None else stats.sd_evidence.sampled,
+                    "zero_count": None if stats is None else stats.num_zero,
+                    "nan_count": None if stats is None else stats.num_nan,
+                    "inf_count": (None if stats is None else stats.num_posinf + stats.num_neginf),
+                    "sampled": None if stats is None else stats.std_evidence.is_sampled,
                     "same_as_parent": row.parent_mark,
                     "relation_basis": row.relation_basis,
                     "reason": row.reason,
@@ -327,7 +325,7 @@ def build_stats_table(
                 else:
                     scanned_elements += payload.numel()
                     stats = tensor_stats(payload, identity=label)
-                    if stats.mean is None and stats.true_count is None and stats.numel > 0:
+                    if stats.mean is None and stats.num_true is None and stats.numel > 0:
                         unavailable = stats.mean_evidence.reason
                         if unavailable and "unsupported" in unavailable:
                             state, reason, stats = "unsupported", unavailable, None

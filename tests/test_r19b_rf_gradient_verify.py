@@ -155,7 +155,7 @@ def test_cross_batch_influence_false_after_permute_receptive() -> None:
 
     x = torch.arange(12.0).reshape(2, 1, 2, 3).requires_grad_()
     trace = _backward_trace(_MoveBatch(), x)
-    result = trace.output_ops[0].receptive_field.gradient((0, 1, 0, 2), input=trace.input_ops[0])
+    result = trace.output_ops[0].receptive_field.gradient((0, 1, 0, 2), input_op=trace.input_ops[0])
     assert result.cross_batch_influence is False
 
 

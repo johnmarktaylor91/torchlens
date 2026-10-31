@@ -5,11 +5,11 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from ..constants import PRIMITIVE_OP_FIELD_ORDER
-from ..data_classes.aten_op import AtenOp, OpRef, _ModePausedInteriorGap
+from .._constants import PRIMITIVE_OP_FIELD_ORDER
+from .._data_classes.aten_op import AtenOp, OpRef, _ModePausedInteriorGap
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .invariants import MetadataInvariantError
 
 _CAPTURE_PHASES = frozenset({"forward", "backward", "setup"})
@@ -332,11 +332,11 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         With ``primitive_op_schema_invalid`` or ``primitive_op_fk_invalid``.
     """
 
-    from .._io import TorchLensIOError
+    from .._io import ArtifactError
     from .invariants import MetadataInvariantError
 
     profile = getattr(trace, "_primitive_op_profile", None)
@@ -360,7 +360,7 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
             if any(marker in detail for marker in fk_markers)
             else "primitive_op_schema_invalid"
         )
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Primitive-operation profile failed pre-release validation: {detail}",
             code=code,
             remedy="re-capture and re-save the trace; do not edit primitive profile metadata",

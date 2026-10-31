@@ -3,7 +3,7 @@
 ``BaseException.add_note`` exists from Python 3.11; on 3.10 the six crash-note
 sites used a bare ``exc.add_note(...)`` inside a blanket suppress, so the note
 silently never appeared. Each site now calls
-``torchlens.utils._exception_notes.annotate_guarded``: a note on 3.11+, a
+``torchlens._utils._exception_notes.annotate_guarded``: a note on 3.11+, a
 ``RuntimeWarning`` with the same text on 3.10. These tests read either channel
 and run in both, so the pinned 3.10 environment exercises the fallback.
 """
@@ -19,9 +19,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.partial as tl_partial
+import torchlens._partial as tl_partial
+from torchlens._utils._exception_notes import annotate_guarded
 from torchlens.errors import ScalarEscapeWarning
-from torchlens.utils._exception_notes import annotate_guarded
 
 
 class _Boom(nn.Module):
@@ -124,7 +124,7 @@ def test_success_note_reaches_the_user_and_its_remedy_runs() -> None:
 def test_construction_failure_note_appears(monkeypatch: pytest.MonkeyPatch) -> None:
     """Site backend.py construction failed: the note survives on 3.10 too."""
 
-    from torchlens.partial import PartialTrace
+    from torchlens.types import PartialTrace
 
     def _broken(*_args: Any, **_kwargs: Any) -> Any:
         raise ValueError("planted construction failure")
@@ -137,7 +137,7 @@ def test_construction_failure_note_appears(monkeypatch: pytest.MonkeyPatch) -> N
 def test_suppressed_advisory_note_appears(monkeypatch: pytest.MonkeyPatch) -> None:
     """Site backend.py advisory suppressed: a filter raising the advisory leaves a note."""
 
-    from torchlens.partial import PartialTrace
+    from torchlens.types import PartialTrace
 
     def _broken(*_args: Any, **_kwargs: Any) -> Any:
         raise ValueError("planted construction failure")

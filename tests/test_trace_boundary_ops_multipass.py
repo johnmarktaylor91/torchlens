@@ -23,9 +23,9 @@ from torch import nn
 
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
+from torchlens._data_classes._trace_accessors import boundary_label_ops
+from torchlens._data_classes.op import Op
 from torchlens.agent import call_tool
-from torchlens.data_classes._trace_accessors import boundary_label_ops
-from torchlens.data_classes.op import Op
 from torchlens.report._agent_json import build_agent_json
 
 # This suite drives the structural grouper (grouper_v1), which serves captures
@@ -94,7 +94,7 @@ def test_input_ops_lists_each_pass_as_an_op_in_argument_order() -> None:
     trace, (a, b) = _loop_trace()
 
     ops = list(trace.input_ops)
-    assert len(ops) == 2 == trace.num_input_ops
+    assert len(ops) == 2 == len(trace.input_ops)
     assert all(isinstance(op, Op) for op in ops)
     assert [op.pass_index for op in ops] == [1, 2]
     assert torch.equal(ops[0].out, a)
@@ -106,7 +106,7 @@ def test_num_input_layers_counts_the_multi_pass_layer_once() -> None:
     trace, _ = _loop_trace()
 
     assert trace.num_input_layers == 1
-    assert trace.num_input_ops == 2
+    assert len(trace.input_ops) == 2
 
 
 def test_single_pass_inputs_are_ops_too() -> None:
@@ -117,7 +117,7 @@ def test_single_pass_inputs_are_ops_too() -> None:
     ops = list(trace.input_ops)
     assert all(isinstance(op, Op) for op in ops)
     assert [torch.equal(op.out, x) for op, x in zip(ops, (a, b), strict=True)] == [True, True]
-    assert trace.num_input_layers == 2 == trace.num_input_ops
+    assert trace.num_input_layers == 2 == len(trace.input_ops)
 
 
 def test_output_ops_hold_ops_matching_the_eager_outputs() -> None:
@@ -130,7 +130,7 @@ def test_output_ops_hold_ops_matching_the_eager_outputs() -> None:
 
     ops = list(trace.output_ops)
     assert all(isinstance(op, Op) for op in ops)
-    assert len(ops) == len(expected) == trace.num_output_ops
+    assert len(ops) == len(expected) == len(trace.output_ops)
     for op, value in zip(ops, expected, strict=True):
         assert torch.equal(op.out, value)
     assert trace.num_output_layers == len(dict.fromkeys(trace.output_layers))
@@ -154,7 +154,7 @@ def test_agent_json_and_overview_succeed_on_a_two_pass_input(tmp_path: Path) -> 
     assert trace.to_agent_json()["inputs"] == expected
 
     path = tmp_path / "loop_inputs.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     assert [op.label for op in loaded.input_ops] == expected
     envelope = call_tool("torchlens_overview", {"path": str(path)})
@@ -183,7 +183,7 @@ def test_classics_multipass_input_entries_build_agent_json(entry: Any) -> None:
 
     assert any(trace[label].num_passes > 1 for label in trace.input_layers)
     dumped = build_agent_json(trace)["inputs"]
-    assert len(dumped) == len(tensors) == trace.num_input_ops
+    assert len(dumped) == len(tensors) == len(trace.input_ops)
     for label, value in zip(dumped, tensors, strict=True):
         assert torch.equal(trace[label].out, value)
 

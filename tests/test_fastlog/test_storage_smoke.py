@@ -55,10 +55,10 @@ class DeepLinearModel(nn.Module):
 def test_ram_only_roundtrip_records_in_memory() -> None:
     """RAM-only recording returns an in-memory Recording."""
 
-    recording = tl.fastlog.record(TinyModel(), torch.ones(1, 3), default_op=True)
+    recording = tl.record(TinyModel(), torch.ones(1, 3), default_op=True)
 
-    assert recording.bundle_path is None
-    assert recording.recovered is False
+    assert recording.path is None
+    assert recording.is_recovered is False
     assert len(recording) > 0
     assert recording.n_records == len(recording)
     assert any(record.ram_payload is not None for record in recording)
@@ -77,18 +77,18 @@ def test_disk_only_roundtrip_loads_bundle(tmp_path: Path) -> None:
     """Disk-only recording writes a fastlog bundle that load can read."""
 
     bundle_path = tmp_path / "recording.tlfast"
-    recording = tl.fastlog.record(
+    recording = tl.record(
         TinyModel(),
         torch.ones(1, 3),
         default_op=True,
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
 
-    assert recording.bundle_path == bundle_path
+    assert recording.path == bundle_path
     assert (bundle_path / "manifest.json").exists()
     assert (bundle_path / "metadata.json").exists()
-    assert loaded.recovered is False
+    assert loaded.is_recovered is False
     assert len(loaded) == len(recording)
     assert loaded.n_records == len(recording)
     assert loaded.records[0].metadata["blob_id"] == recording.records[0].metadata["blob_id"]
@@ -107,14 +107,14 @@ def test_disk_only_deep_stack_stays_linear_and_round_trips(
     inputs = torch.ones(1, 3)
 
     start = time.perf_counter()
-    recording = tl.fastlog.record(
+    recording = tl.record(
         model,
         inputs,
         save=lambda ctx: ctx.kind == "op",
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
     elapsed = time.perf_counter() - start
-    loaded = tl.fastlog.load(bundle_path)
+    loaded = tl.load(bundle_path)
 
     assert elapsed < ceiling_seconds
     assert len(loaded.records) == len(recording.records)
@@ -129,12 +129,12 @@ def test_keep_grad_disk_only_default_raises_at_construction(tmp_path: Path) -> N
 
     bundle_path = tmp_path / "recording.tlfast"
 
-    with pytest.raises(RecordingConfigError, match="keep_grad=True"):
-        tl.fastlog.record(
+    with pytest.raises(RecordingConfigError, match="save_grad=True"):
+        tl.record(
             TinyModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(keep_grad=True),
-            streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            default_op=CaptureSpec(save_grad=True),
+            streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
 
     assert not bundle_path.exists()
@@ -148,14 +148,14 @@ def test_keep_grad_disk_only_predicate_raises_at_runtime(tmp_path: Path) -> None
     def keep_first(ctx: RecordContext) -> CaptureSpec | bool:
         """Request keep_grad for the first operation only."""
 
-        return CaptureSpec(keep_grad=True) if ctx.kind == "op" else False
+        return CaptureSpec(save_grad=True) if ctx.kind == "op" else False
 
     with pytest.raises(PredicateError, match="disk-only"):
-        tl.fastlog.record(
+        tl.record(
             TinyModel(),
             torch.ones(1, 3),
             save=keep_first,
-            streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
 
 
@@ -171,10 +171,10 @@ def test_keep_grad_integer_dtype_rejected_per_record() -> None:
             return (x + 1).to(torch.int64)
 
     with pytest.raises(PredicateError, match="integer or bool"):
-        tl.fastlog.record(
+        tl.record(
             IntegerModel(),
             torch.ones(1),
-            default_op=CaptureSpec(keep_grad=True),
+            default_op=CaptureSpec(save_grad=True),
         )
 
 
@@ -182,11 +182,11 @@ def test_crash_recovery_from_partial_bundle(tmp_path: Path) -> None:
     """Recover skips a partial bundle's missing blob and reports a warning."""
 
     bundle_path = tmp_path / "partial.tlfast"
-    tl.fastlog.record(
+    tl.record(
         TinyModel(),
         torch.ones(1, 3),
         default_op=True,
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
     partial_path = tmp_path / "partial_unfinalized.tlfast"
     bundle_path.rename(partial_path)
@@ -196,5 +196,5 @@ def test_crash_recovery_from_partial_bundle(tmp_path: Path) -> None:
 
     recovered = tl.fastlog.recover(partial_path)
 
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert any("missing blob" in warning for warning in recovered.recovery_warnings)

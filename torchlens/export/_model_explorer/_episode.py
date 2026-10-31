@@ -77,7 +77,7 @@ def build_episode_graphs(
             "Episode ledger is missing its stepped-module address or rows; the "
             "per-step export cannot derive step membership",
             code="model_explorer_episode_ledger_unavailable",
-            remedy="re-capture with episode=EpisodeSpec(...) or export with per_step=False",
+            remedy="re-capture with episode=EpisodeOptions(...) or export with per_step=False",
         )
     episode_facts = {
         **context.root_facts,

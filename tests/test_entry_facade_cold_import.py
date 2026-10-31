@@ -9,8 +9,9 @@ One fresh interpreter per matrix run proves, with no test-session state:
   REAL ``torchlens.recipes`` entry point planted via dist-info on the path --
   never imports or executes the provider (``EntryPoint.load()`` at probe
   time was the launch-blocking defect);
-- the reachability rows (tl.bridge / tl.callbacks / tl.neuro / tl.notebook /
-  tl.load_extraction) resolve cold, order-independent;
+- the reachability rows (tl.bridge / tl.callbacks / tl.neuro / tl.load) resolve
+  cold, order-independent, the private notebook package is no root name, and
+  the old extraction spelling teaches ``torchlens.load``;
 - explicit activation DOES import and run the planted provider, exactly
   once.
 """
@@ -42,7 +43,7 @@ import torchlens as tl
 results["post_import_absent"] = [
     name for name in (
         "torchlens.bridge", "torchlens.callbacks", "torchlens.neuro",
-        "torchlens.notebook", "torchlens.semantic",
+        "torchlens._notebook", "torchlens.semantic",
         "rsatoolbox", "brainscore_core", "IPython", "jupyter_client",
         "fake_recipe_pkg",
     ) if name in sys.modules
@@ -54,7 +55,8 @@ probe_names = (
     "__wrapped__", "rdms", "datasets",
 )
 probe_failures = []
-for namespace_name in ("tl", "tl.neuro", "tl.notebook", "tl.bridge", "tl.callbacks"):
+import torchlens._notebook as notebook_facade
+for namespace_name in ("tl", "tl.neuro", "notebook_facade", "tl.bridge", "tl.callbacks"):
     namespace = eval(namespace_name)
     for name in probe_names:
         try:
@@ -72,9 +74,15 @@ results["rows"] = {
     "bridge": tl.bridge.__name__,
     "callbacks": tl.callbacks.__name__,
     "neuro": tl.neuro.__name__,
-    "notebook": tl.notebook.__name__,
-    "load_extraction_callable": callable(tl.load_extraction),
+    "notebook_at_root": hasattr(tl, "notebook"),
+    "load_callable": callable(tl.load),
 }
+from torchlens._errors import FacadeTeachingError
+try:
+    tl.load_extraction
+    results["rows"]["load_extraction_teaches"] = "resolved (BAD)"
+except FacadeTeachingError as exc:
+    results["rows"]["load_extraction_teaches"] = "torchlens.load" in str(exc)
 
 # Cell 4: pickle-safety -- resolving a foreign reference into an appliance
 # namespace answers AttributeError and imports nothing foreign.
@@ -181,8 +189,9 @@ def test_cold_import_subprocess_matrix(tmp_path: Path) -> None:
         "bridge": "torchlens.bridge",
         "callbacks": "torchlens.callbacks",
         "neuro": "torchlens.neuro",
-        "notebook": "torchlens.notebook",
-        "load_extraction_callable": True,
+        "notebook_at_root": False,
+        "load_callable": True,
+        "load_extraction_teaches": True,
     }
 
     assert results["pickle_outcome"] == "attribute_error", results["pickle_outcome"]

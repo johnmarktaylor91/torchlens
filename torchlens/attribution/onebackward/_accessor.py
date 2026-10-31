@@ -25,7 +25,7 @@ import weakref
 from dataclasses import dataclass
 from typing import Any
 
-from ...utils._torch_compat import get_gradient_edge_support
+from ..._utils._torch_compat import get_gradient_edge_support
 from ._errors import ReadError
 
 __all__ = [

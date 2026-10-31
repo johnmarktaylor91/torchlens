@@ -74,7 +74,7 @@ def test_patching_a_logits_edge_changes_only_that_receivers_input(pair) -> None:
     edge = graph.edges["m0->logits"]
     receiver = edge.receiver
     expected = receiver.value - graph.nodes["m0"].value + corrupt.nodes["m0"].value
-    patched = mi.patch_edges(clean, [edge], corrupt=corrupt)
+    patched = mi.patch_edges(clean, [edge], corrupted_graph=corrupt)
     ln_f = model.transformer.ln_f
     torch.testing.assert_close(
         patched.modules["transformer.ln_f"].out,
@@ -93,7 +93,7 @@ def test_patching_a_q_edge_writes_only_that_heads_query(pair) -> None:
     edge = graph.edges["m0->a1.h0<q>"]
     receiver = edge.receiver
     patched_input = receiver.value - graph.nodes["m0"].value + corrupt.nodes["m0"].value
-    patched = mi.patch_edges(clean, [edge], corrupt=corrupt)
+    patched = mi.patch_edges(clean, [edge], corrupted_graph=corrupt)
     block = model.transformer.h[1]
     ln = F.layer_norm(patched_input, (8,), block.ln_1.weight, block.ln_1.bias, block.ln_1.eps)
     expected_qkv = ln @ block.attn.c_attn.weight + block.attn.c_attn.bias
@@ -117,7 +117,7 @@ def test_patching_two_edges_into_one_receiver_sums_their_deltas(pair) -> None:
     expected = receiver.value
     for edge in edges:
         expected = expected - edge.sender.value + corrupt.nodes[edge.sender.name].value
-    patched = mi.patch_edges(clean, edges, corrupt=corrupt)
+    patched = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
     block = model.transformer.h[1]
     ln_2 = patched.modules["transformer.h.1.ln_2"].out
     torch.testing.assert_close(

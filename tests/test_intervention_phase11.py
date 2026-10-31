@@ -47,8 +47,8 @@ def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
     try:
         dot = log.draw(
             vis_save_only=True,
-            vis_outpath=str(tmp_path / "node_mark"),
-            vis_fileformat="dot",
+            path=str(tmp_path / "node_mark"),
+            file_format="dot",
             vis_intervention_mode="node_mark",
             vis_show_cone=True,
         )
@@ -59,8 +59,8 @@ def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
 
         without_cone = log.draw(
             vis_save_only=True,
-            vis_outpath=str(tmp_path / "node_mark_no_cone"),
-            vis_fileformat="dot",
+            path=str(tmp_path / "node_mark_no_cone"),
+            file_format="dot",
             vis_intervention_mode="node_mark",
             vis_show_cone=False,
         )
@@ -77,8 +77,8 @@ def test_as_node_inserts_hook_node_between_site_and_consumers(tmp_path: Path) ->
     try:
         dot = log.draw(
             vis_save_only=True,
-            vis_outpath=str(tmp_path / "as_node"),
-            vis_fileformat="dot",
+            path=str(tmp_path / "as_node"),
+            file_format="dot",
             vis_intervention_mode="as_node",
         )
         assert "intervention_hook_" in dot
@@ -94,7 +94,7 @@ def test_bundle_show_accepts_vis_mode_none() -> None:
     log = _interventions()
     clean = tl.trace(_ReluAdd(), torch.randn(2, 3))
     try:
-        bundle = tl.bundle({"intervened": log, "clean": clean})
+        bundle = tl.Bundle({"intervened": log, "clean": clean})
         assert bundle.show(vis_mode="none") == {"intervened": None, "clean": None}
     finally:
         log.cleanup()

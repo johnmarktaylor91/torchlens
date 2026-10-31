@@ -59,10 +59,8 @@ def test_op_population_agrees_across_doors(parity_capture: Any) -> None:
 def test_outcome_agrees_across_report_doors(parity_capture: Any) -> None:
     """COMPLETE reads COMPLETE at every door that mentions status."""
 
-    import torchlens as tl
-
     assert parity_capture.outcome.status.name == "COMPLETE"
-    explain_text = tl.report.explain(parity_capture).lower()
+    explain_text = parity_capture.explain().lower()
     assert "failed" not in explain_text and "aborted" not in explain_text
     payload_capture_block = str(parity_capture.to_agent_json().get("capture", {})).lower()
     assert "complete" in payload_capture_block, (
@@ -73,11 +71,9 @@ def test_outcome_agrees_across_report_doors(parity_capture: Any) -> None:
 def test_no_banned_tokens_on_any_text_door(parity_capture: Any) -> None:
     """Drafting placeholders never ship through a user-facing door."""
 
-    import torchlens as tl
-
     doors = {
         "summary": str(parity_capture.summary()),
-        "explain": tl.report.explain(parity_capture),
+        "explain": parity_capture.explain(),
         "repr": repr(parity_capture),
         "agent_json": str(parity_capture.to_agent_json()),
     }

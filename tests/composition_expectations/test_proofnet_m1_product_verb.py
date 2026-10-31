@@ -22,6 +22,8 @@ from typing import Any
 import pytest
 import torch
 
+from torchlens._io.bundle import save as _save_bundle
+
 pytestmark = [pytest.mark.heavy, pytest.mark.compo]
 
 
@@ -103,7 +105,7 @@ M1_EXPECTATIONS: dict[tuple[str, str], Cell] = {
         REFUSES_UNTYPED, exc="AttributeError", gap="DIGEST-AUDIT SG#5 / B2-10 family"
     ),
     ("recording", "save_analysis"): Cell(
-        REFUSES_UNTYPED, exc="TorchLensIOError", gap="DIGEST-AUDIT SG#24 (codeless scrub refusal)"
+        REFUSES_UNTYPED, exc="ArtifactError", gap="DIGEST-AUDIT SG#24 (codeless scrub refusal)"
     ),
     ("recording", "fork"): Cell(
         REFUSES_UNTYPED, exc="AttributeError", gap="DIGEST-AUDIT product-secondary-verb sweep"
@@ -202,8 +204,8 @@ def build_episode_products() -> dict[str, Any]:
     example = torch.randn(1, 4)
 
     def _spec() -> Any:
-        return tl.options.EpisodeSpec(
-            stepped_module=root.step, n_steps=3, step_output_kind="digest"
+        return tl.options.EpisodeOptions(
+            stepped_module=root.step, num_steps=3, step_output_kind="digest"
         )
 
     episode = tl.trace(root, example, episode=_spec())
@@ -233,7 +235,7 @@ def m1_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         model, example, capture=tl.options.CaptureOptions(intervention_ready=True)
     )
     save_path = tmp_path_factory.mktemp("m1") / "live.tlspec"
-    tl.save(products["trace_live"], str(save_path))
+    products["trace_live"].save(str(save_path))
     products["trace_loaded"] = tl.load(str(save_path))
     products["trace_structure_only"] = tl.trace(
         model, example, capture=tl.options.CaptureOptions(structure_only=True)
@@ -255,7 +257,7 @@ def m1_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     trace = products["trace_live"]
     products["trace_slice"] = trace.between([trace.layer_labels[0]], [trace.layer_labels[-1]])
     products["bundle"] = tl.sweep(
-        model, example, at=tl.func("relu"), values=[0.0, 0.5], include_baseline=True
+        model, example, site=tl.func("relu"), values=[0.0, 0.5], include_baseline=True
     )
     assert set(products) >= set(PRODUCT_NAMES)
     try:
@@ -277,12 +279,12 @@ def _run_verb(verb: str, product: Any, tmp_path: Any) -> Any:
     if verb == "summary":
         return product.summary()
     if verb == "explain":
-        return tl.report.explain(product)
+        return tl.Trace.explain(product)
     if verb == "agent_json":
         return product.to_agent_json()
     if verb == "save_analysis":
         target = tmp_path / "cell.tlspec"
-        tl.save(product, str(target))
+        _save_bundle(product, str(target))
         assert target.exists(), "save reported success but wrote no artifact"
         return "saved"
     if verb == "fork":
@@ -310,7 +312,7 @@ def _assert_works(verb: str, result: Any) -> None:
     elif verb == "outcome":
         assert result.status.name in {
             "COMPLETE",
-            "HALTED",
+            "STOPPED",
             "ABORTED_NONFINITE",
             "FAILED",
             "UNATTESTED",

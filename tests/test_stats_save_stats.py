@@ -75,20 +75,22 @@ def _model_and_input(kind: str, batch: int) -> tuple[nn.Module, torch.Tensor]:
     return model, torch.randn(*shape, generator=generator, dtype=torch.float64)
 
 
-def _full_spines(trace: Any) -> dict[str, tl.stats.SpineResult]:
+def _full_spines(trace: Any) -> dict[str, tl.stats.RunningStatsResult]:
     """Per-op Spine results computed from a full capture's saved outs."""
 
-    out: dict[str, tl.stats.SpineResult] = {}
+    out: dict[str, tl.stats.RunningStatsResult] = {}
     for op in trace.ops:
         value = op.out
         if isinstance(value, torch.Tensor) and not value.is_complex():
-            spine = tl.stats.Spine()
+            spine = tl.stats.RunningStats()
             spine.update(value)
             out[str(op.label)] = spine.result()
     return out
 
 
-def _assert_same(left: tl.stats.SpineResult, right: tl.stats.SpineResult, label: str) -> None:
+def _assert_same(
+    left: tl.stats.RunningStatsResult, right: tl.stats.RunningStatsResult, label: str
+) -> None:
     """Every field equal: counts exactly, floats bit for bit."""
 
     for field in _SPINE_FIELDS:
@@ -107,7 +109,7 @@ def test_site_spines_equal_full_capture(kind: str) -> None:
         full = tl.trace(model, x)
         reduced = tl.trace(model, x, save="stats")
         expected = _full_spines(full)
-        got = {label: spine.result() for label, spine in tl.stats.site_spines(reduced).items()}
+        got = {label: spine.result() for label, spine in tl.stats.site_stats(reduced).items()}
         assert set(got) == set(expected)
         assert got, "no sites folded"
         for label, result in expected.items():
@@ -156,8 +158,8 @@ def test_payload_read_refuses_with_working_spelling() -> None:
     with pytest.raises(tl.errors.TorchLensError) as info:
         _ = trace[label].out
     assert info.value.fields["code"] == "activation_reduced_to_stats"
-    assert "tl.stats.site_spines(trace)[label]" in str(info.value)
-    assert tl.stats.site_spines(trace)[label].result().count_total > 0
+    assert "tl.stats.site_stats(trace)[label]" in str(info.value)
+    assert tl.stats.site_stats(trace)[label].result().count_total > 0
     assert isinstance(tl.trace(model, x, save="all")[label].out, torch.Tensor)
 
 
@@ -180,7 +182,7 @@ def test_site_spines_refuses_full_trace() -> None:
 
     model, x = _model_and_input("mlp", 4)
     with pytest.raises(tl.errors.TorchLensError) as info:
-        tl.stats.site_spines(tl.trace(model, x))
+        tl.stats.site_stats(tl.trace(model, x))
     assert info.value.fields["code"] == "stats_capture_not_reduced"
     assert "save='stats'" in str(info.value)
 
@@ -189,15 +191,15 @@ def test_site_spines_keep_folding_across_batches() -> None:
     """Merging two batches' site spines equals one Spine over both batches' outs."""
 
     model, x = _model_and_input("mlp", 8)
-    first = tl.stats.site_spines(tl.trace(model, x[:5], save="stats"))
-    second = tl.stats.site_spines(tl.trace(model, x[5:], save="stats"))
+    first = tl.stats.site_stats(tl.trace(model, x[:5], save="stats"))
+    second = tl.stats.site_stats(tl.trace(model, x[5:], save="stats"))
     full_a = tl.trace(model, x[:5])
     full_b = tl.trace(model, x[5:])
     for op_a, op_b in zip(full_a.ops, full_b.ops, strict=True):
         label = str(op_a.label)
         merged = first[label]
         merged.merge(second[label])
-        reference = tl.stats.Spine()
+        reference = tl.stats.RunningStats()
         reference.update(op_a.out)
         reference.update(op_b.out)
         got, want = merged.result(), reference.result()
@@ -227,7 +229,7 @@ def test_budget_refusal_names_stats_level_and_it_fits() -> None:
         tl.trace(model, x, capture=CaptureOptions(save_budget=budget))
     assert "save='stats'" in str(info.value)
     reduced = tl.trace(model, x, save="stats", capture=CaptureOptions(save_budget=budget))
-    assert tl.stats.site_spines(reduced)
+    assert tl.stats.site_stats(reduced)
 
 
 def test_chunked_reducer_tolerance(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -238,7 +240,7 @@ def test_chunked_reducer_tolerance(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_capture_stats, "_CHUNK", 7)
     model, x = _model_and_input("cnn", 8)
     full = _full_spines(tl.trace(model, x))
-    reduced = tl.stats.site_spines(tl.trace(model, x, save="stats"))
+    reduced = tl.stats.site_stats(tl.trace(model, x, save="stats"))
     for label, want in full.items():
         got = reduced[label].result()
         assert got.counts() == want.counts(), label
@@ -285,13 +287,13 @@ def test_reducer_working_memory_is_bounded() -> None:
 
     out = torch.randn(1 << 20)  # 4 MiB float32
     lean = _largest_new_allocation(_capture_stats.lean_spine, out)
-    naive = _largest_new_allocation(lambda v: tl.stats.Spine().update(v), out)
+    naive = _largest_new_allocation(lambda v: tl.stats.RunningStats().update(v), out)
     assert lean <= _capture_stats._CHUNK * 8
     assert naive >= out.numel() * 8
     assert _capture_stats.lean_spine(out).result().counts() == _spine_counts(out)
 
 
 def _spine_counts(value: torch.Tensor) -> dict[str, int]:
-    spine = tl.stats.Spine()
+    spine = tl.stats.RunningStats()
     spine.update(value)
     return spine.result().counts()

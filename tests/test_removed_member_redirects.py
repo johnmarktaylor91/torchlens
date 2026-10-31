@@ -42,7 +42,7 @@ def owners():
     try:
         yield {
             "Trace": first,
-            "Bundle": tl.bundle({"a": first, "b": second}),
+            "Bundle": tl.Bundle({"a": first, "b": second}),
             "VisualizationOptions": VisualizationOptions(),
             "VisualizationTheme": THEME_PRESETS["torchlens"],
         }
@@ -86,14 +86,14 @@ def test_removed_member_raises_typed_redirect(
     getattr(instance, replacement)  # the named replacement is live
 
 
-#: (public module, removed module-level name, live replacement on that module)
+#: (public module, removed module-level name, the live replacement's public spelling)
 REMOVED_MODULE_NAMES: list[tuple[str, str, str]] = [
-    ("torchlens.validation", "validate_saved_outs", "validate"),
-    ("torchlens.validation", "validate_trace_saved_outs", "validate"),
-    ("torchlens.io", "get_model_metadata", "log_model_metadata"),
-    ("torchlens.observers", "record_span", "span"),
-    ("torchlens.intervention", "intervening", "without_op"),
-    ("torchlens.intervention", "replay_from", "push_from"),
+    ("torchlens.validation", "validate_saved_outs", "torchlens.validate"),
+    ("torchlens.validation", "validate_trace_saved_outs", "torchlens.validate"),
+    ("torchlens.io", "get_model_metadata", "torchlens.trace"),
+    ("torchlens.observers", "record_span", "torchlens.observers.span"),
+    ("torchlens.intervention", "intervening", "torchlens.without_op"),
+    ("torchlens.intervention", "replay_from", "Trace.do"),
 ]
 
 
@@ -110,10 +110,14 @@ def test_removed_module_name_raises_typed_redirect(
         getattr(module, removed)
     assert excinfo.value.fields["code"] == "facade_redirect"
     assert removed in str(excinfo.value)
-    assert f"{module_name}.{replacement}" in str(excinfo.value)
+    assert replacement in str(excinfo.value)
     assert getattr(module, removed, "absent") == "absent"
     assert removed not in getattr(module, "__all__", ())
-    getattr(module, replacement)  # the named replacement is live
+    # The named replacement is live (``Trace.do`` resolves from the package root).
+    target: Any = importlib.import_module("torchlens")
+    parts = replacement.split(".")
+    for part in parts[1:] if parts[0] == "torchlens" else parts:
+        target = getattr(target, part)
 
 
 @pytest.mark.parametrize("owner", ["Trace", "Bundle", "VisualizationOptions", "VisualizationTheme"])

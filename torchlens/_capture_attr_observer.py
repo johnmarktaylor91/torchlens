@@ -4,7 +4,7 @@ A default ``tl.trace`` is a full pure observer: after the capture every plain
 instance attribute of every (non-lazy) module holds the object it held before
 the forward, with the contents it had, and attributes the forward added are
 gone. What the forward wrote is recorded per module as
-:class:`~torchlens.data_classes.attribute_write.AttributeWrite` rows, read at
+:class:`~torchlens._data_classes.attribute_write.AttributeWrite` rows, read at
 ``trace.modules[address].attribute_writes``; ``CaptureOptions(carry_state=True)``
 records the same rows and leaves the writes on the module.
 
@@ -27,7 +27,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from .data_classes.attribute_write import AttributeWrite
+from ._data_classes.attribute_write import AttributeWrite
 
 __all__ = (
     "ModuleAttrSnapshot",

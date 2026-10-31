@@ -43,6 +43,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
+from torchlens._utils import make_random_barcode
 from torchlens.backends.torch._tl import (
     get_buffer_address,
     get_param_meta,
@@ -51,8 +53,6 @@ from torchlens.backends.torch._tl import (
 )
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
-from torchlens.utils import make_random_barcode
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -276,7 +276,7 @@ def test_r79_leaked_param_launder_ceils_on_layout_twin(tmp_path: Path) -> None:
     path = _save(StashLaunderBranch(donor_w).eval(), x.clone(), tmp_path / "a.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 def test_r79_leaked_buffer_launder_ceils_on_layout_twin(tmp_path: Path) -> None:
@@ -294,7 +294,7 @@ def test_r79_leaked_buffer_launder_ceils_on_layout_twin(tmp_path: Path) -> None:
     path = _save(StashLaunderBranch(donor_b).eval(), x.clone(), tmp_path / "b.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 def test_r79_wrong_bind_refuses_at_save(tmp_path: Path) -> None:
@@ -342,7 +342,7 @@ def test_r79_forged_stale_param_stamp_launder_ceils(tmp_path: Path) -> None:
     path = _save(StashLaunderBranch(forged).eval(), x.clone(), tmp_path / "forged_a.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 def test_r79_forged_stale_param_stamp_wrong_bind_refuses(tmp_path: Path) -> None:
@@ -382,11 +382,11 @@ def test_r79_registered_param_layout_read_stays_verified(tmp_path: Path) -> None
 
     same = tl.load(path).run(inputs=x.clone())
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not same.report.poisoned
+    assert not same.report.is_poisoned
 
     twin = tl.load(path).run(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not twin.report.poisoned
+    assert not twin.report.is_poisoned
 
 
 def test_r79_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
@@ -397,7 +397,7 @@ def test_r79_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r79_non_popped_cross_session_reuse_stays_blocked(tmp_path: Path) -> None:
@@ -416,7 +416,7 @@ def test_r79_non_popped_cross_session_reuse_stays_blocked(tmp_path: Path) -> Non
     path = _save(StashLaunderBranch(donor_w).eval(), x.clone(), tmp_path / "nonpop.tlspec")
     result = tl.load(path).run(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 def test_r79_sequential_captures_cleanup_idempotent(tmp_path: Path) -> None:

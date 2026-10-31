@@ -273,10 +273,10 @@ def _rolled_draw(trace, tmp_path, tag, level):
     out = tmp_path / f"{tag}_{level}"
     trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         collapse=level,
         vis_mode="rolled",
-        vis_outpath=str(out),
+        path=str(out),
     )
     return str(out) + ".svg"
 
@@ -491,9 +491,9 @@ def test_unrolled_conservation_unchanged(fixture, tmp_path):
     out = tmp_path / f"{fixture}_unrolled"
     trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         collapse="max",
-        vis_outpath=str(out),
+        path=str(out),
     )
     nodes = _svg_nodes(str(out) + ".svg")
     assert len(nodes) == plan.total

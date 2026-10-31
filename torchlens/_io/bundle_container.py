@@ -17,8 +17,8 @@ import pickle
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
-from ..data_classes.trace import Trace
-from . import TorchLensIOError, _json, bundle as _bundle_module
+from .._data_classes.trace import Trace
+from . import ArtifactError, _json, bundle as _bundle_module
 from .bundle import _reject_symlink_path, _RenameAwareUnpickler
 from .bundle_metadata import (
     _load_gated_member_relations,
@@ -88,7 +88,7 @@ def _load_unified_bundle(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the bundle payload cannot be loaded or has the wrong type.
     """
 
@@ -113,7 +113,7 @@ def _load_unified_bundle(
             # though the SafeBundleUnpickler still blocked code execution.
             metadata_size = os.fstat(handle.fileno()).st_size
             if metadata_size > _bundle_module._MAX_METADATA_PKL_BYTES:
-                raise TorchLensIOError(
+                raise ArtifactError(
                     f"Bundle metadata {legacy_pickle_path} is {metadata_size} bytes, above "
                     f"the {_bundle_module._MAX_METADATA_PKL_BYTES}-byte ceiling; refusing to load a "
                     "structurally implausible artifact."
@@ -130,14 +130,12 @@ def _load_unified_bundle(
         TypeError,
         ValueError,
     ) as exc:
-        raise TorchLensIOError(
-            f"Failed to load bundle metadata from {legacy_pickle_path}."
-        ) from exc
+        raise ArtifactError(f"Failed to load bundle metadata from {legacy_pickle_path}.") from exc
 
     from ..bundle import Bundle
 
     if not isinstance(bundle, Bundle):
-        raise TorchLensIOError(f"Unified bundle payload at {legacy_pickle_path} is not a Bundle.")
+        raise ArtifactError(f"Unified bundle payload at {legacy_pickle_path} is not a Bundle.")
     return bundle
 
 
@@ -165,23 +163,21 @@ def _resolve_bundle_member_path(bundle_path: Path, relative_path: str) -> Path:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the path is absolute, contains ``".."``, or resolves outside the bundle root.
     """
 
     candidate_path = Path(relative_path)
     if candidate_path.is_absolute():
-        raise TorchLensIOError(f"Bundle rejected absolute member path {relative_path!r}.")
+        raise ArtifactError(f"Bundle rejected absolute member path {relative_path!r}.")
     if ".." in candidate_path.parts:
-        raise TorchLensIOError(
-            f"Bundle rejected parent traversal in member path {relative_path!r}."
-        )
+        raise ArtifactError(f"Bundle rejected parent traversal in member path {relative_path!r}.")
     candidate = (bundle_path / candidate_path).resolve()
     allowed_root = bundle_path.resolve()
     try:
         candidate.relative_to(allowed_root)
     except ValueError as exc:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Bundle rejected member path traversal outside bundle root: {relative_path!r}."
         ) from exc
     # SECURITY (secF-2). A member path that resolves to the bundle root itself
@@ -191,7 +187,7 @@ def _resolve_bundle_member_path(bundle_path: Path, relative_path: str) -> Path:
     # be rejected explicitly. Mutual / deeper cycles are additionally closed by the
     # visited-set + depth cap in ``_load_unified_bundle_directory``.
     if candidate == allowed_root:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Bundle rejected self-referential member path {relative_path!r} "
             "(resolves to the bundle root)."
         )
@@ -213,14 +209,14 @@ def _load_bundle_member_traces(
     members: dict[str, Trace] = {}
     for index, entry in enumerate(raw_members):
         if not isinstance(entry, dict):
-            raise TorchLensIOError(f"Unified bundle member {index} must be an object.")
+            raise ArtifactError(f"Unified bundle member {index} must be an object.")
         name = entry.get("name")
         relative_path = entry.get("path")
         if not isinstance(name, str) or not isinstance(relative_path, str):
-            raise TorchLensIOError(f"Unified bundle member {index} has invalid name/path.")
+            raise ArtifactError(f"Unified bundle member {index} has invalid name/path.")
         member_path = _resolve_bundle_member_path(bundle_path, relative_path)
         if member_path.resolve() in next_visited:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"Unified bundle member {name!r} forms a load cycle: its path "
                 f"{relative_path!r} re-enters an in-progress bundle directory."
             )
@@ -228,7 +224,7 @@ def _load_bundle_member_traces(
             member_path, _bundle_visited=next_visited, **(member_load_options or {})
         )
         if not isinstance(loaded, Trace):
-            raise TorchLensIOError(f"Unified bundle member {name!r} did not load as a Trace.")
+            raise ArtifactError(f"Unified bundle member {name!r} did not load as a Trace.")
         members[name] = loaded
     return members
 
@@ -270,7 +266,7 @@ def _load_unified_bundle_directory(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the nested bundle metadata or members are invalid, or a member forms a
         load cycle or exceeds the nesting-depth cap.
     """
@@ -282,7 +278,7 @@ def _load_unified_bundle_directory(
     visited = frozenset() if bundle_visited is None else bundle_visited
     current_root = bundle_path.resolve()
     if len(visited) >= _MAX_BUNDLE_NESTING_DEPTH:
-        raise TorchLensIOError(
+        raise ArtifactError(
             "Unified bundle nesting exceeds the maximum depth of "
             f"{_MAX_BUNDLE_NESTING_DEPTH}; refusing to recurse further."
         )
@@ -292,12 +288,12 @@ def _load_unified_bundle_directory(
         with metadata_path.open("r", encoding="utf-8") as handle:
             metadata = _json.load_bounded(handle)
     except (OSError, json.JSONDecodeError) as exc:
-        raise TorchLensIOError(f"Failed to read bundle metadata from {metadata_path}.") from exc
+        raise ArtifactError(f"Failed to read bundle metadata from {metadata_path}.") from exc
     if not isinstance(metadata, dict):
-        raise TorchLensIOError("Unified bundle metadata must be a JSON object.")
+        raise ArtifactError("Unified bundle metadata must be a JSON object.")
     raw_members = metadata.get("members")
     if not isinstance(raw_members, list):
-        raise TorchLensIOError("Unified bundle metadata must include a members list.")
+        raise ArtifactError("Unified bundle metadata must include a members list.")
 
     context = context or BundleLoadContext()
     members = _load_bundle_member_traces(
@@ -308,7 +304,7 @@ def _load_unified_bundle_directory(
 
     baseline_name = metadata.get("baseline_name")
     if baseline_name is not None and not isinstance(baseline_name, str):
-        raise TorchLensIOError("Unified bundle baseline_name must be a string or null.")
+        raise ArtifactError("Unified bundle baseline_name must be a string or null.")
     preserved_sections = _partition_bundle_sections(metadata)
     member_relations = _load_gated_member_relations(
         metadata, unknown_relations=unknown_relations, tlspec_version=context.tlspec_version
@@ -317,7 +313,7 @@ def _load_unified_bundle_directory(
     loaded_bundle = Bundle(
         members,
         baseline=baseline_name,
-        member_relations=member_relations,
+        relations=member_relations,
         preserved_sections=preserved_sections,
         bundle_id=lineage["bundle_id"],
     )

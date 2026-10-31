@@ -42,8 +42,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.utils import _rng_channels
-from torchlens.utils.rng import HOST_NONDETERMINISM_REGISTRY, host_nondeterminism_monitor
+from torchlens._utils import _rng_channels
+from torchlens._utils.rng import HOST_NONDETERMINISM_REGISTRY, host_nondeterminism_monitor
 
 
 class _LinearNoBias(nn.Module):
@@ -414,7 +414,7 @@ def test_torchlens_initiated_waits_are_not_joins() -> None:
         session = monitor._owner_sync_session
         condition = threading.Condition()
         fake_frame = type("F", (), {})()
-        fake_frame.f_globals = __import__("torchlens.utils.rng", fromlist=["x"]).__dict__
+        fake_frame.f_globals = __import__("torchlens._utils.rng", fromlist=["x"]).__dict__
         fake_frame.f_code = test_torchlens_initiated_waits_are_not_joins.__code__
         fake_frame.f_back = None
         _rng_channels.classify_owner_wait(
@@ -444,7 +444,7 @@ def test_prepool_feed_in_capture_is_not_verified(
         reason.startswith("owner_thread_waited:") for reason in seam.rng_monitor_uncertain_detail
     )
     bundle = tmp_path / "prepool.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     result = tl.load(str(bundle)).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "unverifiable"
 
@@ -511,7 +511,7 @@ def test_unjoined_flusher_capture_replays_verified(tmp_path: Path) -> None:
         assert not seam.host_rng_unreplayable
         assert not seam.rng_monitor_uncertain
         bundle = tmp_path / "flusher.tlspec"
-        tl.save(trace, str(bundle), level="runnable", include_weights=True)
+        trace.save(str(bundle), level="runnable", include_weights=True)
         assert tl.load(str(bundle)).run(inputs=x.clone()).report.path_faithfulness.value == (
             "verified"
         )

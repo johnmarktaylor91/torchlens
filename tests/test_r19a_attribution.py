@@ -71,11 +71,11 @@ def _first_tensor(values) -> torch.Tensor:
         pytest.param(lambda m, x: saliency(m, x, target=0), id="saliency"),
         pytest.param(lambda m, x: input_x_grad(m, x, target=0), id="input_x_grad"),
         pytest.param(
-            lambda m, x: integrated_gradients(m, x, target=0, n_steps=3),
+            lambda m, x: integrated_gradients(m, x, target=0, num_steps=3),
             id="integrated_gradients",
         ),
         pytest.param(
-            lambda m, x: smoothgrad(m, x, target=0, n_samples=2, seed=0),
+            lambda m, x: smoothgrad(m, x, target=0, num_samples=2, seed=0),
             id="smoothgrad",
         ),
         pytest.param(
@@ -126,7 +126,7 @@ def test_eval_root_with_training_submodule_is_restored() -> None:
         pytest.param(lambda m, x: saliency(m, x, target=0), id="saliency"),
         pytest.param(lambda m, x: input_x_grad(m, x, target=0), id="input_x_grad"),
         pytest.param(
-            lambda m, x: integrated_gradients(m, x, target=0, n_steps=3),
+            lambda m, x: integrated_gradients(m, x, target=0, num_steps=3),
             id="integrated_gradients",
         ),
         pytest.param(

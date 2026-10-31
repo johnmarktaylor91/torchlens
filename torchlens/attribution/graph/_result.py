@@ -41,8 +41,8 @@ class GraphNode:
     kind: str
     site: str
     position: int
-    feature: int | None = None
-    token: int | None = None
+    feature_index: int | None = None
+    token_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -117,17 +117,17 @@ class AttributionGraph:
     adjacency_matrix: torch.Tensor
     node_values: torch.Tensor
     constants: dict[str, torch.Tensor]
-    active_features: torch.Tensor
-    activation_values: torch.Tensor
+    active_feature_indices: torch.Tensor
+    feature_activations: torch.Tensor
     transcoder_sites: tuple[str, ...]
     error_sites: tuple[str, ...]
     error_vectors: torch.Tensor
-    input_tokens: torch.Tensor
-    logit_tokens: torch.Tensor
+    input_token_ids: torch.Tensor
+    logit_token_ids: torch.Tensor
     logit_probabilities: torch.Tensor
-    demeaned_logits: bool
-    frozen: tuple[str, ...]
-    capture_outcome: str | None
+    has_demeaned_logits: bool
+    frozen_sites: tuple[str, ...]
+    capture_status: str | None
     disclosures: tuple[str, ...] = field(default=())
 
     @property
@@ -159,11 +159,11 @@ class AttributionGraph:
         self,
         *,
         slug: str,
-        scan: str,
+        model_id: str,
         tokenizer: Any,
         prompt: str | None = None,
-        node_threshold: float = 0.8,
-        edge_threshold: float = 0.98,
+        node_influence_coverage: float = 0.8,
+        edge_influence_coverage: float = 0.98,
         path: str | Path | None = None,
     ) -> dict[str, Any]:
         """Return the pruned graph in Neuronpedia's attribution-graph schema.
@@ -180,8 +180,8 @@ class AttributionGraph:
         Pruning is circuit-tracer's rule: a node's influence is its total
         effect on the logits (weighted by their probabilities) through the
         row-normalised absolute adjacency; nodes are kept in order of
-        influence until ``node_threshold`` of the total is covered, edges
-        likewise until ``edge_threshold``, token and logit nodes are always
+        influence until ``node_influence_coverage`` of the total is covered, edges
+        likewise until ``edge_influence_coverage``, token and logit nodes are always
         kept, and feature and error nodes left without kept edges are
         dropped. Each node's ``influence`` is the share of total influence
         covered up to and including it. Every node of every kind is
@@ -196,7 +196,7 @@ class AttributionGraph:
         slug
             The graph's identifier on Neuronpedia, for example
             ``"capital-of-texas"``.
-        scan
+        model_id
             Neuronpedia's model id, for example ``"gemma-2-2b"``.
         tokenizer
             Anything with ``decode(list_of_ids) -> str``, such as the model's
@@ -204,7 +204,7 @@ class AttributionGraph:
             the schema's token strings.
         prompt
             The prompt string; ``None`` decodes the input tokens together.
-        node_threshold, edge_threshold
+        node_influence_coverage, edge_influence_coverage
             Shares of total influence kept, between 0 and 1.
         path
             When given, the JSON is also written there.
@@ -230,10 +230,10 @@ class AttributionGraph:
         return graph_to_neuronpedia(
             self,
             slug=slug,
-            scan=scan,
+            scan=model_id,
             tokenizer=tokenizer,
             prompt=prompt,
-            node_threshold=node_threshold,
-            edge_threshold=edge_threshold,
+            node_threshold=node_influence_coverage,
+            edge_threshold=edge_influence_coverage,
             path=path,
         )

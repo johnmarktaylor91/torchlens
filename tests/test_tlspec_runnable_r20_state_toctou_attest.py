@@ -9,8 +9,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,
@@ -60,7 +60,7 @@ def _run(path: Path, x: torch.Tensor) -> tl.RunResult:
         Sparse replay result with divergence returned in the report.
     """
 
-    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 def _state_clone(model: nn.Module) -> dict[str, torch.Tensor]:

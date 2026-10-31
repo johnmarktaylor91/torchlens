@@ -14,7 +14,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.intervention import MultiMatchWarning
+from torchlens.errors import MultiMatchWarning
 from torchlens.visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
@@ -62,7 +62,7 @@ def _canonical_bundle() -> tl.Bundle:
             tl.zero_ablate(),
             intervention=tl.options.InterventionOptions(confirm_mutation=True),
         )
-    return tl.bundle({"clean": trace, "ablated": ablated_log}, baseline="clean")
+    return tl.Bundle({"clean": trace, "ablated": ablated_log}, baseline="clean")
 
 
 def _normalize_svg(svg: str) -> bytes:
@@ -152,7 +152,7 @@ def test_bundle_diff_canonical_resnet_snapshot(tmp_path: Path) -> None:
 
     bundle = _canonical_bundle()
     outpath = tmp_path / "bundle_diff_clean_vs_zero_relu"
-    dot_source = bundle.show_diff(vis_outpath=str(outpath), vis_save_only=True)
+    dot_source = bundle.show_diff(path=str(outpath), vis_save_only=True)
     candidate_svg = outpath.with_suffix(".svg")
 
     assert dot_source.startswith("// TorchLens bundle diff")
@@ -208,13 +208,13 @@ def test_bundle_diff_caption_uses_selected_members(tmp_path: Path) -> None:
     model = torch.nn.Linear(3, 2).eval()
     left = tl.trace(model, torch.randn(1, 3))
     right = left.fork("patched")
-    bundle = tl.bundle({"base": left, "patched": right}, baseline="base")
+    bundle = tl.Bundle({"base": left, "patched": right}, baseline="base")
 
     outpath = tmp_path / "member_caption"
     dot_source = bundle.show_diff(
         left="base",
         right="patched",
-        vis_outpath=str(outpath),
+        path=str(outpath),
         vis_save_only=True,
     )
     svg_text = outpath.with_suffix(".svg").read_text(encoding="utf-8")

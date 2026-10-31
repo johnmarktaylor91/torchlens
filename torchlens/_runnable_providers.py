@@ -8,7 +8,21 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 
+from torchlens._runnable import ContractCheck, ReadinessReport, RunnableDiagnostic
+
 from . import _state
+from ._runnable import (
+    ActivationPayloadLayerDescriptor,
+    DivergencePolicy,
+    NumericAttestationStatus,
+    PathFaithfulness,
+    RunnableErrorCode,
+    RunResult,
+    SparseRunDescriptor,
+    StateSource,
+    derived_witness_completeness,
+    mark_trace_path_status,
+)
 from ._runnable_state import (
     RunResourceCeiling,
     prepare_runnable_state,
@@ -16,21 +30,6 @@ from ._runnable_state import (
 )
 from .errors import (
     RunPreconditionError,
-)
-from .runnable import (
-    ActivationPayloadLayerDescriptor,
-    ContractCheck,
-    DivergencePolicy,
-    NumericAttestationStatus,
-    PathFaithfulness,
-    ReadinessReport,
-    RunnableDiagnostic,
-    RunnableErrorCode,
-    RunResult,
-    SparseRunDescriptor,
-    StateSource,
-    derived_witness_completeness,
-    mark_trace_path_status,
 )
 
 if TYPE_CHECKING:
@@ -92,9 +91,7 @@ def run_loaded_sparse_trace(
     try:
         divergence_policy = DivergencePolicy(on_divergence)
     except ValueError as exc:
-        raise ValueError(
-            "on_divergence must be DivergencePolicy.RAISE or DivergencePolicy.RETURN_DIVERGED."
-        ) from exc
+        raise ValueError('on_divergence must be "raise" or "return".') from exc
     descriptor, readiness, callables = _require_loaded_sparse_provider(trace)
     # L4 2.1: resolve the static until= selection against the loaded trace's
     # settled labels BEFORE anything binds or executes; the scheduler cut is

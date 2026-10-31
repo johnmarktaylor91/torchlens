@@ -15,9 +15,9 @@ from dataclasses import dataclass, field, replace as dataclass_replace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn import GradFn
-    from ..data_classes.layer import Layer
-    from ..data_classes.module import Module
+    from .._data_classes.grad_fn import GradFn
+    from .._data_classes.layer import Layer
+    from .._data_classes.module import Module
 
 __tl_layer__ = "L0"
 __tl_vocabulary__ = True

@@ -1,6 +1,6 @@
 ## Public Surface
 
-`torchlens.__all__` is intentionally small and currently has 116 names. New user-facing
+`torchlens.__all__` is intentionally small and currently has 87 names. New user-facing
 objects should usually live under submodules (`torchlens.io`, `torchlens.options`,
 `torchlens.bridge`, `torchlens.errors`, etc.). Interim-phase policy is remove-and-rename,
 never deprecation shims (tests/test_deprecation_inventory.py pins the package
@@ -38,7 +38,7 @@ resolved sparse DAG with staged, embedded capture, or N1-a state. Analysis-only 
 Runnable descriptors are `sparse_recorded_taken_path_v2`: every call carries a REQUIRED explicit
 `CallExecutionContext` and the descriptor one `AmbientExecutionContext`, both restored at replay or
 refused typed; legacy v1 artifacts load analysis-only with a typed readiness refusal.
-Use `tl.save(trace, path, level="runnable", include_weights=True)` to opt into the full capture-time
+Use `trace.save(path, level="runnable", include_weights=True)` to opt into the full capture-time
 `state_dict` (named parameters plus persistent buffers). It is a separate `state_dict_v1` blob
 family, not part of the tensor-value-free sparse core or a reconstructed model. Used non-persistent
 buffers always ship in the REQUIRED `runnable_nonpersistent_buffer_v1` family (declared state, not
@@ -52,7 +52,7 @@ random/non-equivalent-state, and nondeterministic-capture-context runs are `not_
 `attested` always implies `verified`.
 `trace.run(inputs=..., seed=..., on_divergence="raise")` reports readiness, state source,
 `verified|diverged|unverifiable` path faithfulness, and numeric attestation in its `RunResult`.
-Use `return_diverged` only when a permanently poisoned diagnostic result is intended. Match failures
+Use `on_divergence="return"` only when a permanently poisoned diagnostic result is intended. Match failures
 through `RunnableErrorCode`; the complete frozen taxonomy is in
 `docs/reference/runnable_tlspec_contract.md`. r37: overlapping/unprovable distinct-object state
 alias topology and zero-tensor-leaf or instance-stateful container outputs refuse at save
@@ -76,12 +76,12 @@ Provisional semantic I/O examples (review-day names):
 classifier_trace = tl.trace(
     model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
 )
-classifier_trace.output_table(top_n=5)
+classifier_trace.output_table(k=5)
 
 input_trace = tl.trace(
     model,
     raw_text,
-    capture=tl.options.CaptureOptions(transform=text_to_tensor, save_raw_input="small"),
+    capture=tl.options.CaptureOptions(input_transform=text_to_tensor, save_raw_input="small"),
 )
 input_trace.draw(show_input_transform_summary=True)
 
@@ -95,15 +95,15 @@ image_trace = tl.trace(
     output_style="classification",
 )
 image_trace.model_profile
-image_trace.output_table(top_n=5)
-tl.repgeom.mds_evolution(image_trace, save=mds_layers, min_n=8)
+image_trace.output_table(k=5)
+tl.repgeom.mds_evolution(image_trace, save=mds_layers, min_stimuli=8)
 tl.repgeom.rdm_evolution(image_trace, save=mds_layers)
-tl.viz.feature_map_evolution(image_trace, save=mds_layers)
+tl.viz.feature_maps(image_trace, save=mds_layers)
 tl.repgeom.scree_evolution(image_trace, save=mds_layers)
-image_trace.draw(node_spec_fn=tl.repgeom.mds_scatter_node_spec(max_thumbnails=8))
-image_trace.draw(node_spec_fn=tl.repgeom.rdm_node_spec(max_stimuli=8))
-image_trace.draw(node_spec_fn=tl.viz.feature_map_node_spec())
-image_trace.draw(node_spec_fn=tl.repgeom.scree_node_spec())
+image_trace.draw(node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8))
+image_trace.draw(node_spec_fn=tl.viz.nodes.rdm(max_stimuli=8))
+image_trace.draw(node_spec_fn=tl.viz.nodes.feature_map())
+image_trace.draw(node_spec_fn=tl.viz.nodes.scree())
 ```
 
 Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`

@@ -21,40 +21,36 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 from torch import nn
 
+from torchlens._ir.capture_events import CaptureEvents
+
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
-from ..._errors import CaptureContextError
-from ...constants import LAYER_PASS_LOG_FIELD_ORDER
-from ...data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
-from ...data_classes.func_call_location import FuncCallLocation
-from ...data_classes.module import HookInfo
-from ...data_classes.param import Param, ParamAccessor
-from ...fastlog._halt import HaltSignal
-from ...ir import (
-    CaptureEvents,
-    ModuleEnterEvent,
-    ModuleExitEvent,
-    ModuleFrame,
-    ModulePrepEvent,
-)
-from ...ir.container_registry import ModuleSite, Phase, Role, walk_container
-from ...ir.op_record import (
+from ..._constants import LAYER_PASS_LOG_FIELD_ORDER
+from ..._data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
+from ..._data_classes.func_call_location import FuncCallLocation
+from ..._data_classes.module import HookInfo
+from ..._data_classes.param import Param, ParamAccessor
+from ..._errors import CaptureNotActiveError
+from ..._ir import ModuleEnterEvent, ModuleExitEvent, ModuleFrame, ModulePrepEvent
+from ..._ir.container_registry import ModuleSite, Phase, Role, walk_container
+from ..._ir.op_record import (
     amend_module_boundary_retention,
     amend_module_exit_intervention,
     amend_raw_hook_intervention,
 )
-from ...quantities import Bytes
-from ...utils.hashing import make_random_barcode
-from ...utils.introspection import (
+from ..._quantities import Bytes
+from ..._utils.hashing import make_random_barcode
+from ..._utils.introspection import (
     _get_code_context,
     get_arg_tensors_for_resolution,
     get_vars_of_type_from_obj,
 )
-from ...utils.tensor_utils import (
+from ..._utils.tensor_utils import (
     get_memory_amount,
     get_memory_amount_from_metadata,
     is_functorch_wrapped_tensor,
 )
+from ...fastlog._halt import StopSignal
 from . import module_stack as _mstack
 from ._held_refs import normalize_held_torch_function_refs, register_released_model
 from ._module_arg_stubs import stub_module_arg_payloads
@@ -154,7 +150,7 @@ _PYTORCH_INTERNAL = frozenset(
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +302,7 @@ def _refuse_release_during_active_capture() -> None:
 
     Raises
     ------
-    CaptureContextError
+    CaptureNotActiveError
         If ``_active_trace`` is set or logging is enabled.
     """
 
@@ -314,7 +310,7 @@ def _refuse_release_during_active_capture() -> None:
         return
     trace = _state._active_trace
     model_label = getattr(trace, "model_label", None) or getattr(trace, "model_class_name", None)
-    raise CaptureContextError(
+    raise CaptureNotActiveError(
         "tl.release_model() was called while a TorchLens capture is still active"
         + (f" for model {model_label!r}" if model_label else ""),
         code="release_during_active_capture",
@@ -343,7 +339,7 @@ def release_model(model: nn.Module) -> None:
 
     Raises
     ------
-    CaptureContextError
+    CaptureNotActiveError
         If a capture is currently active (code
         ``release_during_active_capture``). Releasing mid-capture strips the
         ``tl_*`` / ``._tl`` metadata the capture's module attribution reads,
@@ -772,7 +768,7 @@ def _add_shared_module_aliases(
 # ---------------------------------------------------------------------------
 
 
-def _get_class_metadata(module_class: type, save_code_context: bool = False) -> dict[str, Any]:
+def _get_class_metadata(module_class: type, save_source_context: bool = False) -> dict[str, Any]:
     """Return class-level metadata for a module class, cached across instances.
 
     When ``save_code_context`` is False (default), skips expensive
@@ -804,7 +800,7 @@ def _get_class_metadata(module_class: type, save_code_context: bool = False) -> 
             user_custom_methods.append(attr_name)
     meta["user_custom_methods"] = user_custom_methods
 
-    if save_code_context:
+    if save_source_context:
         try:
             meta["class_source_file"] = inspect.getfile(module_class)
         except (TypeError, OSError):
@@ -945,7 +941,7 @@ def _capture_module_metadata(
     # mutable fields (all_addresses, custom_attributes, custom_methods) are replaced
     # below with fresh instances per module, so no cross-contamination.
     save_source = getattr(trace, "save_code_context", False)
-    class_meta = _get_class_metadata(type(module), save_code_context=save_source)
+    class_meta = _get_class_metadata(type(module), save_source_context=save_source)
     meta = dict(class_meta)
     meta["all_addresses"] = [address]
 
@@ -1483,7 +1479,7 @@ def _note_replacement_event(
     events = getattr(trace, "capture_events", None)
     if events is None:
         return
-    from ...ir.events import InterventionAppliedEvent
+    from ..._ir.events import InterventionAppliedEvent
 
     # Causal binding stamped at the observation site: the edited op's event
     # already exists in this journal (the boundary/replacement op was logged
@@ -1599,7 +1595,7 @@ def _ensure_module_output_tensor_logged(
     # `register_forward_hook` on the root module itself (depth 0) therefore
     # hits this lookup with a module never present in the dict. Default to 1,
     # matching the codebase's fixed "self:1" convention for the root's single
-    # canonical call (see `torchlens/postprocess/finalization.py`). This
+    # canonical call (see `torchlens/_postprocess/finalization.py`). This
     # default is provably inert for the root: `address` is `""` for the root
     # (see `_module_address`), so every use of `module_call_index` below that
     # feeds the module-stack/equivalence-class machinery is gated on
@@ -2178,13 +2174,13 @@ def _record_predicate_module_boundary_outputs(
         ops are added to the sparse recording once.
     """
 
+    from ..._ir.predicate import RetroactiveCaptureDecision
+    from ..._ir.selector_eval import selector_contains_kind
     from ...capture.predicates import _evaluate_keep_op, _plain_module_union
     from ...capture.projections import _record_from_record_context
     from ...fastlog.types import ActivationRecord
     from ...intervention.runtime import _peek_module_intervention_parent_labels
     from ...intervention.selectors import BaseSelector
-    from ...ir.predicate import RetroactiveCaptureDecision
-    from ...ir.selector_eval import selector_contains_kind
     from .ops import _walk_output_tensors_with_paths
 
     log_predicate_boundary_replacements(trace, state, out)
@@ -2398,7 +2394,7 @@ def module_forward_decorator(
                         predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
                     )
                     _evaluate_halt(enter_ctx, state.options)
-            except HaltSignal:
+            except StopSignal:
                 _mstack.pop_frame(state.module_stack, frame)
                 raise
             except Exception as exc:
@@ -2486,7 +2482,7 @@ def module_forward_decorator(
                             predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                         )
                         _evaluate_halt(exit_ctx, state.options, frontier_output=out)
-                except HaltSignal:
+                except StopSignal:
                     if active_model_exc is None:
                         raise
                 except Exception as exc:

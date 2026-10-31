@@ -2,7 +2,7 @@
 
 A tiny next-token model and a hand-built SAE give latents two ways: one batch
 through ``splice`` (``SpliceResult.latents``) and a whole dataset through
-``tl.aggregate`` with ``tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)``.
+``tl.stats.aggregate`` with ``tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)``.
 Each writer's files are read back with ``json`` and ``safetensors`` (no
 consumer package) and compared with the hand computation: every latent's top
 examples ranked by value, then lowest example, then lowest position, and
@@ -78,7 +78,7 @@ def _hand_latents(model: _TinyLM, sae: _TinySAE, tokens: torch.Tensor) -> torch.
         return sae.encode(model.site(tokens)).double()
 
 
-#: The dataset the top-k tests stream through ``tl.aggregate``, as token-row slices.
+#: The dataset the top-k tests stream through ``tl.stats.aggregate``, as token-row slices.
 _DATASET_BATCHES = (slice(0, 3), slice(3, 5), slice(5, 7))
 
 
@@ -114,7 +114,7 @@ def _dataset_topk(model, sae, tokens, k):
     label = _relu_label(model, tokens)
     batches = [tokens[rows] for rows in _DATASET_BATCHES]
     stat = tl.stats.TopK(k=k, unit_axis=-1, encoder=sae.encode, name="latents")
-    return tl.aggregate(model, batches, metrics={label: tl.stats.Aggregator(stat)})[label][
+    return tl.stats.aggregate(model, batches, metrics={label: tl.stats.Aggregator(stat)})[label][
         "latents"
     ]
 

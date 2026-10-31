@@ -2,7 +2,7 @@
 
 The pre-execution perturbation exemptions run before the missing-saved-args guard of the
 per-op replay check, so ``_check_setitem_exempt`` sees
-``saved_args is None`` whenever a trace was captured with ``save_arg_values=False``.
+``saved_args is None`` whenever a trace was captured with ``save_args=False``.
 It must answer "not exempt" (the later guard then reports the op unverified), and it must
 never exempt a case that would fail today.
 """
@@ -51,7 +51,7 @@ def test_setitem_exempt_with_no_saved_args_answers_not_exempt() -> None:
     torch.manual_seed(0)
     for model, slot in ((_MaskedWrite(), 1), (_SliceWrite(), 0)):
         x = torch.randn(3, 5)
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=False))
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=False))
         op = _setitem_op(trace)
         assert op.saved_args is None
         assert exemptions._check_setitem_exempt(trace, op, [_parent_at(op, slot)]) is False
@@ -63,7 +63,7 @@ def test_setitem_validation_with_no_saved_args_returns_a_verdict() -> None:
     torch.manual_seed(0)
     model = _MaskedWrite()
     x = torch.randn(3, 5)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=False))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=False))
     result = trace.validate_forward_pass(model(x))
     assert result is not None
 
@@ -73,9 +73,9 @@ def test_setitem_exemption_unchanged_when_args_are_saved() -> None:
 
     torch.manual_seed(0)
     x = torch.randn(3, 5)
-    masked = tl.trace(_MaskedWrite(), x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    masked = tl.trace(_MaskedWrite(), x, capture=tl.options.CaptureOptions(save_args=True))
     op = _setitem_op(masked)
     assert exemptions._check_setitem_exempt(masked, op, [_parent_at(op, 1)]) is True
-    sliced = tl.trace(_SliceWrite(), x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    sliced = tl.trace(_SliceWrite(), x, capture=tl.options.CaptureOptions(save_args=True))
     op = _setitem_op(sliced)
     assert exemptions._check_setitem_exempt(sliced, op, [_parent_at(op, 0)]) is False

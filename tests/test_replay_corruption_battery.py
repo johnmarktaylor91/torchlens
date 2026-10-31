@@ -44,7 +44,7 @@ def _capture(model: nn.Module, x: torch.Tensor):
         alive by the caller for the trace's lifetime: post-trace parameter
         access holds only a weak reference, so an inline model whose last
         strong owner is this frame dies at the next cyclic-GC pass and
-        replay raises ``PostTraceParamUnavailable`` -- an order-dependent
+        replay raises ``ParamReleasedError`` -- an order-dependent
         red under multi-file composition (b9/T14).
     """
 
@@ -52,7 +52,7 @@ def _capture(model: nn.Module, x: torch.Tensor):
     log = trace_fn(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     with torch.no_grad():
         ground_truth = model(x)

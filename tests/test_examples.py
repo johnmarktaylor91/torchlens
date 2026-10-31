@@ -32,7 +32,6 @@ EXPECTED_EXAMPLE_STEMS = frozenset(
         "13_paired_prompt_3plus",
         "14_per_position_steering",
         "15_publishing_for_reproducibility",
-        "16_pearl_style_tl_do",
         "17_raw_forward_hook_replacement",
     }
 )

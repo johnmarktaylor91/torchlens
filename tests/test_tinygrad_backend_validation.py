@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
 from torchlens.backends.tinygrad import TinygradBackend
+from torchlens.errors import BackendUnsupportedError
 
 tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor

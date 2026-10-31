@@ -40,7 +40,7 @@ def _validate(model: nn.Module, x: torch.Tensor) -> bool:
 def _failure_reasons() -> tuple[str, list[str]]:
     failure = last_validation_failure()
     assert failure is not None
-    return failure.check, list(failure.extra.get("reasons", []))
+    return failure.check_name, list(failure.extra.get("reasons", []))
 
 
 class _GlobalReader(nn.Module):

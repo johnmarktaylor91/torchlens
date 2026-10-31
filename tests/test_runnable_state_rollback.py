@@ -6,9 +6,9 @@ import pytest
 import torch
 
 from torchlens import _runnable_state
+from torchlens._runnable import StateSource
 from torchlens._runnable_state import PreparedRunnableState, _apply_state_metadata_facts
 from torchlens.errors import StateBindingError
-from torchlens.runnable import StateSource
 
 
 class _Binding:
@@ -166,10 +166,10 @@ def test_default_run_restores_declared_state_bit_identical() -> None:
     before = _declared_state_clone(model)
     first = log.run(inputs=torch.randn(2, 4))
     _assert_declared_state_equal(model, before)
-    assert first.report.state_carried is False
+    assert first.report.has_carried_state is False
     second = log.run(inputs=torch.randn(2, 4))
     _assert_declared_state_equal(model, before)
-    assert second.report.state_carried is False
+    assert second.report.has_carried_state is False
 
 
 def test_carry_state_persists_mutations_and_discloses() -> None:
@@ -182,7 +182,7 @@ def test_carry_state_persists_mutations_and_discloses() -> None:
     log = tl.trace(model, x)
     weight_before = model.lin.weight.detach().clone()
     result = log.run(inputs=torch.randn(2, 4), carry_state=True)
-    assert result.report.state_carried is True
+    assert result.report.has_carried_state is True
     assert not torch.equal(model.lin.weight, weight_before)
 
 
@@ -225,7 +225,7 @@ def test_carry_state_loaded_sparse_refuses_typed(tmp_path) -> None:
         capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
     )
     path = tmp_path / "carry.tlspec"
-    tl.save(log, str(path), level="runnable", include_weights=True)
+    log.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     with pytest.raises(ValueError) as exc_info:
         loaded.run(inputs=x, carry_state=True)
@@ -262,7 +262,7 @@ def test_snapshot_preflight_refuses_overlapping_state_typed() -> None:
     _assert_declared_state_equal(model, before)
     # carry_state=True is the documented escape: the run proceeds without the bracket.
     result = log.run(inputs=torch.randn(2, 4), carry_state=True)
-    assert result.report.state_carried is True
+    assert result.report.has_carried_state is True
 
 
 def test_restore_failure_marks_and_raises() -> None:
@@ -326,7 +326,7 @@ def test_restore_failure_loaded_sparse_still_legal(tmp_path) -> None:
     with pytest.raises(StateBindingError):
         log.run(inputs=x)
     path = tmp_path / "latched.tlspec"
-    tl.save(log, str(path), level="runnable", include_weights=True)
+    log.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     assert loaded._runnable.state_compromised is None
     result = loaded.run(inputs=x)

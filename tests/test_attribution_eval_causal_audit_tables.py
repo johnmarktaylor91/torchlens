@@ -146,7 +146,7 @@ def _replacement(value: Tensor, ablation: str) -> Tensor:
 
 
 def _audit_kwargs(ablation: str) -> dict[str, Any]:
-    return {"ablation": 1.0 if ablation == "baseline" else ablation}
+    return {"edit": 1.0 if ablation == "baseline" else ablation}
 
 
 def _remedy(message: str) -> str:
@@ -155,7 +155,7 @@ def _remedy(message: str) -> str:
     return found.group(1)
 
 
-def _logit_metric(audit: attribution.CausalAuditResult, run: Any, ids: Tensor = IDS) -> float:
+def _logit_metric(audit: attribution.CausalAudit, run: Any, ids: Tensor = IDS) -> float:
     """The audited logit difference on a trace or fork, summed like the audit's score."""
 
     logits = run[audit.extra["logits_site"]].out.detach().to(torch.float64)
@@ -187,7 +187,7 @@ def test_dla_measured_effects_equal_the_closed_form(ablation: str) -> None:
     assert [row.measured_effect for row in audit.units] == expected
     assert [row.component for row in audit.units] == list(claim.labels)
     assert [row.site for row in audit.units] == [c.op_label for c in claim.coordinates]
-    assert audit.layer is None and audit.site is None
+    assert audit.module_address is None and audit.site is None
     assert audit.extra["claim_kind"] == "direct_logit"
     if ablation == "zero":
         assert [row.claimed_effect for row in audit.units] == expected
@@ -199,7 +199,7 @@ def test_dla_constant_row_is_reported_apart_and_rows_add_to_the_native_logits() 
 
     model = _lm()
     claim = _dla(model)
-    audit = attribution.causal_audit(model, IDS, claim=claim, k=1, random_draws=1)
+    audit = attribution.causal_audit(model, IDS, claim=claim, k=1, num_random_draws=1)
     bias = model.ln_f.bias.detach()
     head_bias = model.lm_head.bias.detach()
     weight = model.lm_head.weight.detach()
@@ -244,15 +244,17 @@ def test_dla_sets_add_up_and_random_draws_are_seeded() -> None:
 
     model = _lm()
     claim = _dla(model)
-    audit = attribution.causal_audit(model, IDS, claim=claim, k=2, random_draws=3, seed=4)
-    by_unit = {row.unit: row for row in audit.units}
+    audit = attribution.causal_audit(model, IDS, claim=claim, k=2, num_random_draws=3, seed=4)
+    by_unit = {row.index: row for row in audit.units}
     for item in audit.sets:
-        assert item.measured_effect == math.fsum(by_unit[u].measured_effect for u in item.units)
-        assert item.claimed_effect == math.fsum(by_unit[u].claimed_effect for u in item.units)
+        assert item.measured_effect == math.fsum(by_unit[u].measured_effect for u in item.indices)
+        assert item.claimed_effect == math.fsum(by_unit[u].claimed_effect for u in item.indices)
     order = sorted(by_unit, key=lambda u: -abs(by_unit[u].claimed_effect))
-    assert audit.set_of("top")[0].units == tuple(order[:2])
-    again = attribution.causal_audit(model, IDS, claim=claim, k=2, random_draws=3, seed=4)
-    assert [s.units for s in again.set_of("random")] == [s.units for s in audit.set_of("random")]
+    assert audit.set_of("top")[0].indices == tuple(order[:2])
+    again = attribution.causal_audit(model, IDS, claim=claim, k=2, num_random_draws=3, seed=4)
+    assert [s.indices for s in again.set_of("random")] == [
+        s.indices for s in audit.set_of("random")
+    ]
 
 
 @pytest.mark.parametrize("exact", [True, False], ids=["float64_exact", "float32_layernorm"])
@@ -261,12 +263,12 @@ def test_dla_recorded_ablations_replay_to_their_measured_effects(exact: bool) ->
 
     model = _lm(exact)
     ids = IDS
-    audit = attribution.causal_audit(model, ids, claim=_dla(model), k=2, random_draws=2)
+    audit = attribution.causal_audit(model, ids, claim=_dla(model), k=2, num_random_draws=2)
     for item in (*audit.units, *audit.sets):
         trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
         fork = trace.fork()
         with torch.no_grad():
-            for selection, edit in item.intervention:
+            for selection, edit in item.build_interventions:
                 fork.do(selection, edit)
         replayed = audit.original_score - _logit_metric(audit, fork, ids)
         if exact:
@@ -284,7 +286,7 @@ def test_dla_audit_leaves_the_caller_model_and_random_state_untouched() -> None:
     model.train()
     before = {name: value.detach().clone() for name, value in model.state_dict().items()}
     rng = torch.get_rng_state()
-    attribution.causal_audit(model, IDS, claim=claim, k=2, ablation="mean")
+    attribution.causal_audit(model, IDS, claim=claim, k=2, edit="mean")
     assert all(torch.equal(before[name], value) for name, value in model.state_dict().items())
     assert all(parameter.grad is None for parameter in model.parameters())
     assert model.training and all(module.training for module in model.modules())
@@ -306,13 +308,13 @@ def test_dla_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
     else:
         claim = _dla(model)
     extra = {"target": 0} if kind == "target_given" else {}
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, IDS, claim=claim, k=1, **extra)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
     fixed = eval(
         _remedy(str(excinfo.value)), {"tl": tl, "torchlens": torchlens, "model": model, "x": IDS}
     )  # noqa: S307
-    assert isinstance(fixed, attribution.CausalAuditResult) and fixed.rank_agreement == 1.0
+    assert isinstance(fixed, attribution.CausalAudit) and fixed.rank_agreement == 1.0
 
 
 def test_dla_a_row_without_a_site_refuses_and_the_remedy_runs() -> None:
@@ -332,14 +334,14 @@ def test_dla_a_row_without_a_site_refuses_and_the_remedy_runs() -> None:
         positions=claim.positions,
         identity_receipt=claim.identity_receipt,
     )
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, IDS, claim=broken, k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_unsupported"
     assert "blocks.1.proj" in str(excinfo.value)
     fixed = eval(
         _remedy(str(excinfo.value)), {"tl": tl, "torchlens": torchlens, "model": model, "x": IDS}
     )  # noqa: S307
-    assert isinstance(fixed, attribution.CausalAuditResult)
+    assert isinstance(fixed, attribution.CausalAudit)
 
 
 def test_dla_k_larger_than_the_rows_refuses_and_the_remedy_runs() -> None:
@@ -347,12 +349,12 @@ def test_dla_k_larger_than_the_rows_refuses_and_the_remedy_runs() -> None:
 
     model = _lm()
     claim = _dla(model)
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, IDS, claim=claim, k=9)
     assert excinfo.value.fields.get("code") == "attribution_eval_setting_invalid"
     scope = {"tl": tl, "torchlens": torchlens, "model": model, "x": IDS, "claim": claim}
     fixed = eval(_remedy(str(excinfo.value)), scope)  # noqa: S307
-    assert isinstance(fixed, attribution.CausalAuditResult)
+    assert isinstance(fixed, attribution.CausalAudit)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -428,8 +430,8 @@ def test_read_element_rows_measure_the_closed_form() -> None:
         for element in itertools.product(*(range(size) for size in value.shape[1:])):
             index = (slice(None), *element)
             expected[(row_index, *element)] = float((grad[index] * value[index]).sum())
-    assert {row.unit: row.measured_effect for row in audit.units} == expected
-    assert {row.unit: row.claimed_effect for row in audit.units} == expected
+    assert {row.index: row.measured_effect for row in audit.units} == expected
+    assert {row.index: row.claimed_effect for row in audit.units} == expected
     assert audit.extra["grain"] == "element"
 
 
@@ -457,13 +459,13 @@ def test_read_recorded_ablations_replay_to_their_measured_effects(reduce: str | 
 
     model = LinearNet().eval().double()
     audit = attribution.causal_audit(
-        model, X, claim=_read(model, reduce=reduce), target=_seed(), k=2, random_draws=2
+        model, X, claim=_read(model, reduce=reduce), target=_seed(), k=2, num_random_draws=2
     )
     for item in (*audit.units, *audit.sets):
         trace = tl.trace(model, X, capture=tl.options.CaptureOptions(intervention_ready=True))
         fork = trace.fork()
         with torch.no_grad():
-            for selection, edit in item.intervention:
+            for selection, edit in item.build_interventions:
                 fork.do(selection, edit)
         replayed = audit.original_score - float(fork["output_1"].out[SEED_INDEX])
         assert replayed == item.measured_effect
@@ -478,7 +480,7 @@ def test_read_audit_leaves_the_caller_model_and_random_state_untouched() -> None
     before = {name: value.detach().clone() for name, value in model.state_dict().items()}
     grads = [parameter.grad for parameter in model.parameters()]
     rng = torch.get_rng_state()
-    attribution.causal_audit(model, X, claim=table, target=_seed(), k=2, ablation="mean")
+    attribution.causal_audit(model, X, claim=table, target=_seed(), k=2, edit="mean")
     assert all(torch.equal(before[name], value) for name, value in model.state_dict().items())
     assert [parameter.grad for parameter in model.parameters()] == grads
     assert model.training and all(module.training for module in model.modules())
@@ -497,13 +499,13 @@ def test_read_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
         "not_a_seed": 1,
         "other_inputs": _seed(),
     }[kind]
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, X, claim=table, target=target, k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
     fixed = eval(
         _remedy(str(excinfo.value)), {"tl": tl, "torchlens": torchlens, "model": model, "x": X}
     )  # noqa: S307
-    assert isinstance(fixed, attribution.CausalAuditResult) and fixed.rank_agreement == 1.0
+    assert isinstance(fixed, attribution.CausalAudit) and fixed.rank_agreement == 1.0
 
 
 @pytest.mark.parametrize("kind", ["edge_rows", "two_targets", "grad_method"])
@@ -526,14 +528,14 @@ def test_read_unsupported_tables_refuse_and_the_remedy_runs(kind: str) -> None:
         claim = _read(model, target=[_seed(), attribution.seed("output_1", index=(1, 0))])
     else:
         claim = _read(model, method="grad")
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, X, claim=claim, target=_seed(), k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_unsupported"
     if kind == "edge_rows":
         assert "mixes EDGE rows with ACT rows" in str(excinfo.value)
     scope = {"tl": tl, "torchlens": torchlens, "model": model, "x": X, "claim": claim}
     fixed = eval(_remedy(str(excinfo.value)), scope)  # noqa: S307
-    assert isinstance(fixed, attribution.CausalAuditResult) and fixed.rank_agreement == 1.0
+    assert isinstance(fixed, attribution.CausalAudit) and fixed.rank_agreement == 1.0
 
 
 def test_read_rows_without_a_score_are_reported_apart() -> None:
@@ -552,4 +554,4 @@ def test_read_rows_without_a_score_are_reported_apart() -> None:
     )
     audit = attribution.causal_audit(model, X, claim=claim, target=_seed(), k=1)
     assert audit.extra["rows_not_audited"] == (("linear_3_3:1", "unreachable"),)
-    assert [row.unit for row in audit.units] == [(0,), (1,), (3,), (4,)]
+    assert [row.index for row in audit.units] == [(0,), (1,), (3,), (4,)]

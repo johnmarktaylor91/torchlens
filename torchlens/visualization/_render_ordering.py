@@ -19,8 +19,8 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, cast
 
+from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
-from ..utils.display import user_stacklevel
 from . import _render_utils
 from ._render_common import (
     _SIBLING_ORDER_WARNING_EMITTED,
@@ -44,8 +44,8 @@ from ._render_flow import (
 if TYPE_CHECKING:
     from typing import Any
 
+    from .._data_classes.module import Module
     from .._literals import VisInterventionModeLiteral
-    from ..data_classes.module import Module
     from .render_ir import RenderIROrderingConstraint
 
 

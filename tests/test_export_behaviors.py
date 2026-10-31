@@ -77,7 +77,7 @@ def test_tracker_exports_reject_objects_without_required_method() -> None:
     with pytest.raises(TypeError, match="log_metric"):
         tl.export.mlflow(log, client=object())
     with pytest.raises(TypeError, match="track"):
-        tl.export.aim(log, run=object())
+        tl.export.aim(log, to=object())
 
 
 def test_mlflow_logs_prefixed_metrics_and_returns_them() -> None:
@@ -162,7 +162,7 @@ def test_aim_tracks_prefixed_metrics_on_run_object() -> None:
             self.params[key] = value
 
     run = _Run()
-    metrics = tl.export.aim(log, run=run, prefix="tla")
+    metrics = tl.export.aim(log, to=run, prefix="tla")
 
     numeric = {
         key: metrics[key] for key in ("num_layers", "num_saved_ops", "total_activation_memory")
@@ -176,7 +176,7 @@ def test_aim_tracks_prefixed_metrics_on_run_object() -> None:
         f"tla.layers.{column}" for column in metrics["table"].columns
     }
     assert "tla.capture_honesty.capture_status=complete" in run.tags
-    bare = tl.export.aim(log, run=None)
+    bare = tl.export.aim(log, to=None)
     assert {key: bare[key] for key in numeric} == numeric
 
 
@@ -204,7 +204,7 @@ def test_wandb_builds_scalar_safe_table_and_logs_to_run(
     monkeypatch.setitem(sys.modules, "wandb", stub)
 
     run = _Run()
-    result = tl.export.wandb(log, run=run, name="my_table")
+    result = tl.export.wandb(log, to=run, name="my_table")
 
     assert result["table"] is built[0]
     assert result["artifact"] is None
@@ -437,7 +437,7 @@ def test_chrome_trace_diff_places_members_on_separate_timelines(tmp_path: Path) 
     capture = tl.options.CaptureOptions(intervention_ready=True)
     first = tl.trace(model, x, capture=capture)
     second = tl.trace(model, x, capture=capture)
-    bundle = tl.bundle({"first": first, "second": second})
+    bundle = tl.Bundle({"first": first, "second": second})
 
     destination = tl.export.chrome_trace_diff(bundle, tmp_path / "diff.json")
     payload = json.loads(destination.read_text(encoding="utf-8"))

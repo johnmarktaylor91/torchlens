@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+import torchlens.errors
 import torchlens.trackers as trk
 
 
@@ -84,7 +85,7 @@ def test_same_sink_object_listed_twice_refuses_typed() -> None:
 
     model, opt = _mlp()
     sink = trk.MemorySink()
-    with pytest.raises(trk.SinkProtocolError) as info:
+    with pytest.raises(torchlens.errors.SinkProtocolError) as info:
         trk.watch(model, to=(sink, sink), optimizer=opt)
     assert info.value.fields["code"] == "tracker_sink_duplicate"
     assert sink.scalars == []

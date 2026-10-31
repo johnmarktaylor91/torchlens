@@ -13,17 +13,17 @@ import json
 import os
 import shutil
 import tarfile
-import warnings
 from pathlib import Path
 
 import pytest
 from _oracle_env import expect_bundle_minor_version_mismatch
+from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._ecosystem import migrate
+from torchlens._ecosystem.migrate import _ABSENT_FAMILIES_BY_TARGET
+from torchlens._io import ArtifactError
 from torchlens._io.compat_ledger import MIGRATION_WITNESS_FILENAME, read_migration_witness
-from torchlens.ecosystem import migrate
-from torchlens.ecosystem.migrate import _ABSENT_FAMILIES_BY_TARGET
 
 GOLDENS_DIR = Path(__file__).parent / "release_goldens"
 CORPUS_PATH = GOLDENS_DIR / "genuine_release_artifacts.tar.gz"
@@ -51,7 +51,11 @@ def _working_copy(corpus_dir: Path, tmp_path: Path, name: str) -> Path:
     "name", ["art_v2.31.0_portable", "art_v2.33.0_portable", "art_v2.34.1_portable"]
 )
 def test_deciding_real_artifact_migration(corpus_dir: Path, tmp_path: Path, name: str) -> None:
-    """Genuine released artifacts migrate 6 -> current, reload, and validate."""
+    """Genuine released artifacts migrate 6 -> current at the manifest, then refuse typed.
+
+    The manifest migration still runs, but the payload pickles name 2.x package paths,
+    so the migrated artifact refuses at load with the 2.x remedy (3.0 reads no 2.x file).
+    """
 
     from torchlens.validation import validate_tlspec
 
@@ -68,12 +72,8 @@ def test_deciding_real_artifact_migration(corpus_dir: Path, tmp_path: Path, name
     ]
     assert all(step.level == "manifest" for step in report.steps)
     assert report.backup_path is not None and report.backup_path.is_dir()
-    # The migrated artifact loads under main and validates.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        loaded = tl.load(str(path))
-    assert isinstance(loaded, tl.Trace)
-    assert len(loaded.ops) > 0
+    # The migrated manifest validates; the 2.x payload refuses typed at load.
+    assert_refuses_as_2x(path)
     validate_tlspec(path)
     # Provenance: witness present, origin preserved, disclosures honest.
     witness = read_migration_witness(path)
@@ -109,7 +109,7 @@ def test_v216_source_refuses_with_verified_reader(corpus_dir: Path, tmp_path: Pa
     """Pre-floor migration is out of v1; the remedy names the verified reader."""
 
     path = _working_copy(corpus_dir, tmp_path, "art_v2.16.0_portable")
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(path)
     assert excinfo.value.fields["code"] == "migration_source_unsupported"
     assert "torchlens==2.17.0" in excinfo.value.fields["remedy"]
@@ -118,7 +118,7 @@ def test_v216_source_refuses_with_verified_reader(corpus_dir: Path, tmp_path: Pa
 def test_non_directory_refuses(tmp_path: Path) -> None:
     """A non-directory source refuses typed."""
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(tmp_path / "missing")
     assert excinfo.value.fields["code"] == "migration_source_unsupported"
 
@@ -129,7 +129,7 @@ def test_unknown_format_refuses(tmp_path: Path) -> None:
     source = tmp_path / "junk.tlspec"
     source.mkdir()
     (source / "README.txt").write_text("not an artifact", encoding="utf-8")
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(source)
     assert excinfo.value.fields["code"] == "migration_source_unsupported"
 
@@ -140,7 +140,7 @@ def test_stranded_staging_refuses_before_mutation(corpus_dir: Path, tmp_path: Pa
     path = _working_copy(corpus_dir, tmp_path, "art_v2.31.0_portable")
     staging = path.with_name(path.name + ".tl-migrate-staging")
     staging.mkdir()
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(path)
     assert excinfo.value.fields["code"] == "migration_concurrent_writer"
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
@@ -159,7 +159,7 @@ def test_failure_injection_leaves_source_intact(
         raise OSError("injected copy failure")
 
     monkeypatch.setattr(shutil, "copytree", _boom)
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(path)
     assert excinfo.value.fields["code"] == "migration_staging_failed"
     assert (path / "manifest.json").read_bytes() == original
@@ -183,7 +183,7 @@ def test_publish_failure_restores_source(
         real_rename(src, dst)
 
     monkeypatch.setattr(os, "rename", _second_rename_fails)
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(path)
     assert excinfo.value.fields["code"] == "migration_staging_failed"
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
@@ -200,7 +200,7 @@ def test_tampered_witness_refuses_at_load(corpus_dir: Path, tmp_path: Path) -> N
     witness = json.loads(witness_path.read_text(encoding="utf-8"))
     witness["final_manifest_sha256"] = "0" * 64
     witness_path.write_text(json.dumps(witness), encoding="utf-8")
-    with expect_bundle_minor_version_mismatch(), pytest.raises(TorchLensIOError) as excinfo:
+    with expect_bundle_minor_version_mismatch(), pytest.raises(ArtifactError) as excinfo:
         tl.load(str(path))
     # The digest cross-check fails the witness door, so the pair refuses.
     assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"
@@ -212,7 +212,7 @@ def test_broken_witness_refuses_typed(corpus_dir: Path, tmp_path: Path) -> None:
 
     path = _working_copy(corpus_dir, tmp_path, "art_v2.31.0_portable")
     (path / MIGRATION_WITNESS_FILENAME).write_text('{"witness_schema": "bogus"}', encoding="utf-8")
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         migrate(path)
     assert excinfo.value.fields["code"] == "migration_witness_invalid"
 
@@ -220,7 +220,7 @@ def test_broken_witness_refuses_typed(corpus_dir: Path, tmp_path: Path) -> None:
 def test_every_v1_step_declares_manifest_level() -> None:
     """The step-protocol guard: no v1 step quietly claims STATE level."""
 
-    from torchlens.ecosystem.migrate import _plan_steps
+    from torchlens._ecosystem.migrate import _plan_steps
 
     for step in _plan_steps(6):
         assert step.level == "manifest"
@@ -233,7 +233,7 @@ def test_migrate_source_has_no_execution_imports() -> None:
 
     import importlib
 
-    migrate_module = importlib.import_module("torchlens.ecosystem.migrate")
+    migrate_module = importlib.import_module("torchlens._ecosystem.migrate")
     source = Path(migrate_module.__file__).read_text(encoding="utf-8")
     for forbidden in ("from ..capture", "from ..backends", "from ..semantic", "import torch\n"):
         assert forbidden not in source, forbidden

@@ -63,13 +63,17 @@ DOOR_PATHS = {
     "Trace": "torchlens.Trace",
     "Layer": "torchlens.Layer",
     "Op": "torchlens.Op",
-    "Module": "torchlens.data_classes.module.Module",
-    "ModuleCall": "torchlens.data_classes.module.ModuleCall",
-    "Param": "torchlens.data_classes.param.Param",
-    "Buffer": "torchlens.data_classes.buffer.Buffer",
+    "Module": "torchlens._data_classes.module.Module",
+    "ModuleCall": "torchlens._data_classes.module.ModuleCall",
+    "Param": "torchlens._data_classes.param.Param",
+    "Buffer": "torchlens._data_classes.buffer.Buffer",
     "SummaryReport": "torchlens.report._summary_report.SummaryReport",
     "SummaryTotals": "torchlens.report._summary_report.SummaryTotals",
     "CaptureFacts": "torchlens.report._summary_report.CaptureFacts",
+    "TraceCost": "torchlens._data_classes._trace_groups.TraceCost",
+    "TraceGraph": "torchlens._data_classes._trace_groups.TraceGraph",
+    "TraceAutograd": "torchlens._data_classes._trace_groups.TraceAutograd",
+    "ParamAccessor": "torchlens._data_classes.param.ParamAccessor",
 }
 
 SCOPE = (
@@ -83,6 +87,10 @@ SCOPE = (
     "SummaryReport",
     "SummaryTotals",
     "CaptureFacts",
+    "TraceCost",
+    "TraceGraph",
+    "TraceAutograd",
+    "ParamAccessor",
 )
 
 
@@ -136,11 +144,15 @@ def _traces() -> Iterator[Any]:
 def _instances(trace: Any) -> Iterator[tuple[str, Any]]:
     report = trace.summary()
     yield "Trace", trace
+    yield "TraceCost", trace.cost
+    yield "TraceGraph", trace.graph
+    yield "TraceAutograd", trace.autograd
+    yield "ParamAccessor", trace.params
     yield "SummaryReport", report
     yield "SummaryTotals", report.totals
     yield "CaptureFacts", report.capture
     for name, accessor in (
-        ("Layer", trace.compute_layers),
+        ("Layer", trace.layers.compute),
         ("Op", trace.compute_ops),
         ("Module", trace.modules),
         ("ModuleCall", trace.module_calls),

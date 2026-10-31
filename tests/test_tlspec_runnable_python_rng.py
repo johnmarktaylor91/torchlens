@@ -27,8 +27,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import build_sparse_run_descriptor
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 
 class _PythonRandomBranch(nn.Module):
@@ -68,7 +68,7 @@ def _capture(model: nn.Module, x: torch.Tensor, *, seed: int) -> tl.Trace:
             intervention_ready=True,
             capture_container_structure=True,
             cache=False,
-            random_seed=seed,
+            seed=seed,
         ),
     )
 

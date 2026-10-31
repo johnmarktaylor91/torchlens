@@ -40,7 +40,7 @@ from ._encoding import (
 )
 
 if TYPE_CHECKING:  # typing only
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: Legend/caption disclosure wording (pinned by tests).
 STACK_AUTO_DISPLAY = "pass_index (auto)"
@@ -114,7 +114,7 @@ def resolve_stack_by(stack_by: Any, vis_mode: str) -> EncodingChannelSpec | None
                 source="auto",
                 display_name=STACK_AUTO_DISPLAY,
             )
-        from ..constants import LAYER_PASS_LOG_FIELD_ORDER
+        from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 
         if stack_by in LAYER_SOURCE_ROWS or stack_by in LAYER_PASS_LOG_FIELD_ORDER:
             return EncodingChannelSpec(
@@ -222,7 +222,7 @@ def _stack_value_for_node(state: EncodingState, node: Any) -> Any:
             ) from error
         state.stack_note(NOTE_STACK_CALLABLE)
         return value
-    from ..utils._multipass_access import get_multipass_attr
+    from .._utils._multipass_access import get_multipass_attr
 
     return get_multipass_attr(node, spec.source, None, multipass=None)
 

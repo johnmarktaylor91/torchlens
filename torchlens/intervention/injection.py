@@ -595,7 +595,7 @@ def refuse_injection_logged_stream_finalize(trace: Any) -> None:
         "computation",
         code="injection_logged_stream_unsupported",
         remedy="capture without storage=tl.to_disk(...) and save the "
-        "finished trace with tl.save() (the analysis save persists the "
+        "finished trace with trace.save() (the analysis save persists the "
         "injected family), or re-capture without log_injections",
         argument="trace",
     )

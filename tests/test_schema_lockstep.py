@@ -7,7 +7,7 @@ found ~52 such drifts by hand. Hand passes do not scale and do not stay found,
 so this module is the MECHANISM instead:
 
 1. **Closure.** ``test_every_field_catalog_is_registered`` derives the catalog
-   universe from :mod:`torchlens.constants` at runtime and demands every member
+   universe from :mod:`torchlens._constants` at runtime and demands every member
    be registered here. A new ``*_FIELD_ORDER`` cannot be added without a
    lockstep entry, so the mechanism cannot be bypassed by omission -- the exact
    hole that left ``FUNC_CALL_LOCATION_FIELD_ORDER`` outside
@@ -50,20 +50,20 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import constants
+from torchlens import _constants as constants
+from torchlens._data_classes.aten_op import AtenOp
+from torchlens._data_classes.backward_pass import BackwardPass
+from torchlens._data_classes.buffer import Buffer
+from torchlens._data_classes.field_policy import RecordFieldPolicy, field_order_from_policy
+from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
+from torchlens._data_classes.trace import Trace
 from torchlens._io import FieldPolicy
-from torchlens.data_classes.aten_op import AtenOp
-from torchlens.data_classes.backward_pass import BackwardPass
-from torchlens.data_classes.buffer import Buffer
-from torchlens.data_classes.field_policy import RecordFieldPolicy, field_order_from_policy
-from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.grad_fn_call import GradFnCall
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
-from torchlens.data_classes.trace import Trace
 
 #: Applied per test (not module-wide) so the heavy gallery gate can opt out.
 
@@ -82,7 +82,7 @@ class Catalog:
     Parameters
     ----------
     constant:
-        Name of the catalog list in :mod:`torchlens.constants`.
+        Name of the catalog list in :mod:`torchlens._constants`.
     owner:
         Record class whose ``FIELD_POLICY`` generates the catalog, or ``None``
         for a pure alias.
@@ -97,7 +97,7 @@ class Catalog:
     alias_of: str | None = None
 
 
-#: Every field catalog in ``torchlens.constants``, with its authority.
+#: Every field catalog in ``torchlens._constants``, with its authority.
 #: ``test_every_field_catalog_is_registered`` keeps this exhaustive.
 CATALOGS: tuple[Catalog, ...] = (
     Catalog("MODEL_LOG_FIELD_ORDER", owner=Trace),
@@ -535,7 +535,7 @@ def _render_method_x_model_compat() -> str:
 
     reports = _compat_reference_reports()
     label_sequences = {
-        name: tuple(row.label for row in report.rows) for name, report in reports.items()
+        name: tuple(row.label for row in report.checks) for name, report in reports.items()
     }
     (first_labels, *other_labels) = label_sequences.values()
     if any(labels != first_labels for labels in other_labels):
@@ -568,10 +568,10 @@ def _render_method_x_model_compat() -> str:
     ]
     any_non_pass = False
     for name, report in reports.items():
-        non_pass = [row.label for row in report.rows if row.status != "pass"]
+        non_pass = [row.label for row in report.checks if row.status != "pass"]
         any_non_pass = any_non_pass or bool(non_pass)
         cell = ", ".join(f"`{label}`" for label in non_pass) if non_pass else "none"
-        lines.append(f"| `{name}` | {len(report.rows)} | {cell} |")
+        lines.append(f"| `{name}` | {len(report.checks)} | {cell} |")
     lines.append("")
     if any_non_pass:
         lines.append(
@@ -632,12 +632,12 @@ class GeneratedArtifact:
 #: drifted at birth).
 GENERATED_ARTIFACTS: tuple[GeneratedArtifact, ...] = (
     GeneratedArtifact(
-        "torchlens/data_classes/_schema_bindings.py",
+        "torchlens/_data_classes/_schema_bindings.py",
         _render_schema_bindings,
         "python tools/generate_record_schema.py",
     ),
     GeneratedArtifact(
-        "torchlens/ir/op_record_manifest.py",
+        "torchlens/_ir/op_record_manifest.py",
         _render_op_record_manifest,
         "python -m tools.generate_op_record_manifest",
     ),
@@ -939,7 +939,7 @@ def _live_records(trace: Trace) -> dict[str, Any]:
         Record class name -> representative instance.
     """
 
-    grad_fn = next(record for record in trace.grad_fns if record.calls)
+    grad_fn = next(record for record in trace.autograd.grad_fns if record.calls)
     return {
         "Trace": trace,
         "Op": next(iter(trace.ops)),
@@ -950,7 +950,7 @@ def _live_records(trace: Trace) -> dict[str, Any]:
         "GradFnCall": next(iter(grad_fn.calls.values())),
         "ModuleCall": next(iter(trace.module_calls)),
         "Module": next(iter(trace.modules)),
-        "BackwardPass": next(iter(trace.backward_passes)),
+        "BackwardPass": next(iter(trace.autograd.backward_passes)),
     }
 
 
@@ -982,10 +982,10 @@ def all_live_records(trace: Trace) -> dict[str, list[Any]]:
         "ModuleCall": list(trace.module_calls),
         "Module": list(trace.modules),
     }
-    grad_fns = list(trace.grad_fns)
+    grad_fns = list(trace.autograd.grad_fns)
     families["GradFn"] = grad_fns
     families["GradFnCall"] = [call for record in grad_fns for call in record.calls.values()]
-    families["BackwardPass"] = list(trace.backward_passes)
+    families["BackwardPass"] = list(trace.autograd.backward_passes)
     return families
 
 
@@ -998,7 +998,7 @@ def runtime_attribute_names(record: Any) -> set[str]:
     ``state_items`` adapter, which is also what ``__getstate__`` persists.
     """
 
-    from torchlens.data_classes._state_adapter import state_items
+    from torchlens._data_classes._state_adapter import state_items
 
     names = set(vars(record)) if hasattr(record, "__dict__") else set()
     names |= {name for name, _value in state_items(record)}
@@ -1189,7 +1189,7 @@ def test_facade_plumbing_allowance_stays_minimal() -> None:
 
 #: Reviewed pins for the persistence version authorities. These are three
 #: INDEPENDENT counters (a merged root manifest is a different discriminated
-#: object from a rank core's manifest -- see ``torchlens/merged/_enums.py``), so
+#: object from a rank core's manifest -- see ``torchlens/_merged/_enums.py``), so
 #: this is deliberately NOT an equality assertion between them: it is a pin
 #: apiece, with the co-change list a bump must honor.
 #:
@@ -1232,7 +1232,7 @@ def _version_authority_values() -> dict[str, int]:
     """
 
     from torchlens._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION
-    from torchlens.merged._enums import MERGED_TLSPEC_VERSION
+    from torchlens._merged._enums import MERGED_TLSPEC_VERSION
 
     return {
         "TLSPEC_VERSION": TLSPEC_VERSION,
@@ -1386,8 +1386,8 @@ class TestMechanismIsRedCapable:
         """A generated module absent from the registry is reported."""
 
         unregistered, phantom = artifact_registration_gaps(
-            {"torchlens/x/_gen.py", "torchlens/ir/op_record_manifest.py"},
-            {"torchlens/ir/op_record_manifest.py"},
+            {"torchlens/x/_gen.py", "torchlens/_ir/op_record_manifest.py"},
+            {"torchlens/_ir/op_record_manifest.py"},
         )
         assert unregistered == {"torchlens/x/_gen.py"}
         assert not phantom
@@ -1396,8 +1396,8 @@ class TestMechanismIsRedCapable:
         """The header scan is not vacuous: it finds the real generated files."""
 
         found = generated_module_paths()
-        assert "torchlens/data_classes/_schema_bindings.py" in found
-        assert "torchlens/ir/op_record_manifest.py" in found
+        assert "torchlens/_data_classes/_schema_bindings.py" in found
+        assert "torchlens/_ir/op_record_manifest.py" in found
 
     def test_generated_artifact_diff_detects_a_mutated_artifact(self) -> None:
         """A byte-level edit to a generated module is reported."""

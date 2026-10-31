@@ -13,18 +13,18 @@ pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
 from torchlens import trace as trace_fn  # noqa: E402
-from torchlens.constants import (  # noqa: E402
+from torchlens._constants import (  # noqa: E402
     BUFFER_LOG_FIELD_ORDER,
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes._summary import format_call_arg  # noqa: E402
-from torchlens.data_classes.buffer import (  # noqa: E402
+from torchlens._data_classes._summary import format_call_arg  # noqa: E402
+from torchlens._data_classes.buffer import (  # noqa: E402
     _TO_PANDAS_EXCLUDED_BUFFER_FIELDS,
     BufferAccessor,
 )
-from torchlens.data_classes.module import ModuleCall  # noqa: E402
-from torchlens.data_classes.param import ParamAccessor  # noqa: E402
+from torchlens._data_classes.module import ModuleCall  # noqa: E402
+from torchlens._data_classes.param import ParamAccessor  # noqa: E402
 
 
 class _SummaryBlock(nn.Module):
@@ -348,8 +348,8 @@ def test_trace_to_pandas_covers_all_op_fields() -> None:
     added to the documented exclusion list.
     """
 
-    from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER
-    from torchlens.data_classes._trace_export import _TO_PANDAS_EXCLUDED_OP_FIELDS
+    from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER
+    from torchlens._data_classes._trace_export import _TO_PANDAS_EXCLUDED_OP_FIELDS
 
     log = trace_fn(
         _CondConvModel(),

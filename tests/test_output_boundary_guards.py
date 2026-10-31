@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.container_registry import (
+from torchlens._ir.container_registry import (
     OUTPUT_TREE_MAX_DEPTH,
     _build_container_spec,
     walk_container,

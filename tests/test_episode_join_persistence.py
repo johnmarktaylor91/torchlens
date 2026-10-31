@@ -19,7 +19,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.capture._episode_ledger import EpisodeLedger, episode_ledger_for
 from torchlens.errors import EpisodeJoinError, TorchLensWarning
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 
 class TinyLM(nn.Module):
@@ -77,7 +77,7 @@ def _capture(runner_cls, **spec_kwargs):
     return tl.trace(
         runner_cls(model, 4),
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model, n_steps=4, **spec_kwargs),
+        episode=EpisodeOptions(stepped_module=model, num_steps=4, **spec_kwargs),
     )
 
 
@@ -85,7 +85,7 @@ def _round_trip(log, tmp_path):
     path = tmp_path / "episode.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(log, str(path))
+        log.save(str(path))
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
         return tl.load(str(path))

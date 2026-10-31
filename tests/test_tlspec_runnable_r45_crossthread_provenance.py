@@ -36,11 +36,11 @@ from torch import nn
 import torchlens as tl
 import torchlens._state as _state
 import torchlens.backends.torch.wrappers as wrappers_mod
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.backends.torch.completeness_witness import (
     host_escape_has_cross_thread_captured_tensor,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
 
@@ -48,7 +48,7 @@ _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache"
 def _capture(model: nn.Module, x: Any, *, seed: int = 1) -> tl.Trace:
     """Capture a runnable-ready trace under a fixed seed."""
 
-    return tl.trace(model, x, capture=CaptureOptions(random_seed=seed, **_CAP))
+    return tl.trace(model, x, capture=CaptureOptions(seed=seed, **_CAP))
 
 
 # --------------------------------------------------------------------------------------

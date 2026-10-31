@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from ..backends import BackendUnsupportedError, get_backend_spec
+from torchlens.backends.registry import BackendUnsupportedError
+
+from ..backends.registry import get_backend_spec
 from ._engine_forward import solve_projective
 from ._errors import ReceptiveFieldUnavailableError
 from ._gradient import (
@@ -22,11 +24,11 @@ from ._gradient import (
     _support_ranges,
 )
 from ._path import descendant_labels, require_path, resolve_graph_point
-from ._types import GradientReceptiveField, ReceptiveFieldDirection
+from ._types import GradReceptiveField, ReceptiveFieldDirection
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ._engine_forward import _ProjectiveFieldSolution
 
 
@@ -266,7 +268,7 @@ def _build_projective_result(
     solution: _ProjectiveFieldSolution,
     atol: float,
     rtol: float,
-) -> GradientReceptiveField:
+) -> GradReceptiveField:
     """Build one target-space empirical projective-field result.
 
     Parameters
@@ -286,7 +288,7 @@ def _build_projective_result(
 
     Returns
     -------
-    GradientReceptiveField
+    GradReceptiveField
         Immutable target-space influence set.
     """
 
@@ -339,7 +341,7 @@ def projective_gradient_for_unit(
     atol: float = 0.0,
     rtol: float = 0.0,
     retain_graph: bool = False,
-) -> GradientReceptiveField | Mapping[str, GradientReceptiveField]:
+) -> GradReceptiveField | Mapping[str, GradReceptiveField]:
     """Probe the target-space influence of exactly one source element.
 
     The probe extracts a Jacobian column from the captured autograd graph using
@@ -362,7 +364,7 @@ def projective_gradient_for_unit(
 
     Returns
     -------
-    GradientReceptiveField or Mapping[str, GradientReceptiveField]
+    GradReceptiveField or Mapping[str, GradReceptiveField]
         One result for an explicit target, otherwise an insertion-ordered mapping.
 
     Raises
@@ -430,7 +432,7 @@ def projective_gradient_for_unit(
             "units as the O(units) alternative."
         ) from exc
 
-    results: dict[str, GradientReceptiveField] = {}
+    results: dict[str, GradReceptiveField] = {}
     for target_op, column in zip(targets, columns, strict=True):
         if column is None:
             raise ReceptiveFieldUnavailableError(

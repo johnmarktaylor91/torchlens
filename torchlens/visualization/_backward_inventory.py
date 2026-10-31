@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn import GradFn
-    from ..data_classes.trace import Trace
+    from .._data_classes.grad_fn import GradFn
+    from .._data_classes.trace import Trace
     from ._render_common import BackwardPassFilter
 
 __all__ = [
@@ -64,7 +64,7 @@ def compute_backward_style_inventory(
 
     visible = [
         grad_fn_handle
-        for grad_fn_handle in trace.grad_fns
+        for grad_fn_handle in trace.autograd.grad_fns
         if _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter)
     ]
     orders = [getattr(grad_fn_handle, "order", None) for grad_fn_handle in visible]
@@ -98,7 +98,7 @@ def _backward_pass_row(
     unrolled calls carry their one pass index.
     """
 
-    from ..utils.display import int_list_to_compact_str
+    from .._utils.display import int_list_to_compact_str
 
     if inventory is not None and inventory.suppress_bwd_row:
         return []

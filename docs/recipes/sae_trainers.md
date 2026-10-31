@@ -4,9 +4,9 @@ TorchLens extracts the activations, a trainer fits the sparse autoencoder,
 and TorchLens splices the trained SAE back into the model to measure it. The
 hand-off is four steps:
 
-1. `tl.extract_dataset(model, stimuli, layers, output_dir=...)` writes the
+1. `tl.extract_dataset(model, stimuli, layers, path=...)` writes the
    site's activations to disk, one shard per batch.
-2. `torchlens.dataset_extraction.as_torch_dataset(reader)` wraps them as a
+2. `reader.to_torch_dataset()` wraps them as a
    `torch.utils.data.Dataset`; a `DataLoader` batches them.
 3. A trainer fits the SAE on those batches: dictionary_learning's
    `trainSAE`, or sparsify's `SparseCoder`.
@@ -36,16 +36,16 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 import torchlens as tl
-from torchlens.dataset_extraction import as_torch_dataset, open_extraction
+from torchlens.dataset_extraction import open_extraction
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)).eval()
 stimuli = torch.randn(256, 8)
 output_dir = Path("relu-activations")  # any empty directory of yours
 
-tl.extract_dataset(model, stimuli, ["1"], batch_size=64, output_dir=output_dir, progress=False)
+tl.extract_dataset(model, stimuli, ["1"], batch_size=64, path=output_dir, progress=False)
 reader = open_extraction(output_dir)
-dataset = as_torch_dataset(reader)
+dataset = reader.to_torch_dataset()
 key = reader.keys[0]
 
 

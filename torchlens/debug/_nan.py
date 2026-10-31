@@ -7,18 +7,18 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import DebugReport, FoundReport
+from .._debug_report import FoundReport, Report
 from ..errors import CaptureError
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.op import Op
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.op import Op
+    from torchlens._data_classes.trace import Trace
 
 from ._common import _ordered_ops, _source_line
 
 
 @dataclass(frozen=True)
-class BisectNanResult(FoundReport):
+class BisectNanReport(FoundReport):
     """Result returned by :func:`bisect_nan`.
 
     Parameters
@@ -64,7 +64,7 @@ class BisectNanResult(FoundReport):
 
 
 @dataclass(frozen=True)
-class FindNanResult(FoundReport):
+class FindNanReport(FoundReport):
     """Structured first-non-finite diagnostic returned by ``find_nan``.
 
     Parameters
@@ -155,9 +155,9 @@ class FindNanResult(FoundReport):
         """
 
         if not self.found:
-            return f"FindNanResult(found=False, scope={self.scope!r})"
+            return f"FindNanReport(found=False, scope={self.scope!r})"
         return (
-            "FindNanResult("
+            "FindNanReport("
             f"found=True, kind={self.kind!r}, label={self.label!r}, "
             f"source_line={self.source_line!r}, scope={self.scope!r})"
         )
@@ -318,7 +318,7 @@ def _result_from_op(
     source_line: str | None = None,
     scope: str = "first non-finite tensor",
     uncertainty_zone: tuple[str, ...] = (),
-) -> FindNanResult:
+) -> FindNanReport:
     """Build a public diagnostic result from an offending op.
 
     Parameters
@@ -336,7 +336,7 @@ def _result_from_op(
 
     Returns
     -------
-    FindNanResult
+    FindNanReport
         Structured public diagnostic.
     """
 
@@ -346,7 +346,7 @@ def _result_from_op(
     message = f"{prefix} is {kind} at {label}."
     if uncertainty_zone:
         message += " Unsaved upstream uncertainty zone: " + ", ".join(uncertainty_zone) + "."
-    return FindNanResult(
+    return FindNanReport(
         found=True,
         op=op,
         label=label,
@@ -363,7 +363,7 @@ def _result_from_op(
     )
 
 
-def _no_finding_result(*, scope: str, uncertainty_zone: tuple[str, ...] = ()) -> FindNanResult:
+def _no_finding_result(*, scope: str, uncertainty_zone: tuple[str, ...] = ()) -> FindNanReport:
     """Build a no-finding diagnostic result.
 
     Parameters
@@ -375,14 +375,14 @@ def _no_finding_result(*, scope: str, uncertainty_zone: tuple[str, ...] = ()) ->
 
     Returns
     -------
-    FindNanResult
+    FindNanReport
         No-finding diagnostic.
     """
 
     message = f"No NaN/Inf found in {scope}."
     if uncertainty_zone:
         message += " Unsaved upstream uncertainty zone: " + ", ".join(uncertainty_zone) + "."
-    return FindNanResult(
+    return FindNanReport(
         False,
         None,
         None,
@@ -399,7 +399,7 @@ def _no_finding_result(*, scope: str, uncertainty_zone: tuple[str, ...] = ()) ->
     )
 
 
-def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanResult:
+def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
     """Run a memory-light live capture and return its first NaN or Inf finding.
 
     The capture stops at the first non-finite op output, rather than retaining
@@ -417,7 +417,7 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanResult:
 
     Returns
     -------
-    FindNanResult
+    FindNanReport
         First live non-finite output, or a clean result.
     """
 
@@ -482,7 +482,7 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanResult:
             isinstance(dimension, int) for dimension in shape
         ):
             raise ValueError("CaptureError non-finite payload has an invalid shape field.")
-        return FindNanResult(
+        return FindNanReport(
             True,
             raw_op,
             label,
@@ -520,7 +520,7 @@ def _exception_source_line(exc: CaptureError) -> str | None:
     return f"{exc.file_path}:{exc.line_no}"
 
 
-def find_nan_in_trace(trace: Trace) -> FindNanResult:
+def find_nan_in_trace(trace: Trace) -> FindNanReport:
     """Find the first NaN or Inf among saved trace outputs.
 
     Parameters
@@ -530,7 +530,7 @@ def find_nan_in_trace(trace: Trace) -> FindNanResult:
 
     Returns
     -------
-    FindNanResult
+    FindNanReport
         First saved non-finite output. Selectively saved traces explicitly
         report unsaved ancestor ops as an uncertainty zone.
     """
@@ -568,7 +568,7 @@ def find_nan_in_trace(trace: Trace) -> FindNanResult:
     )
 
 
-def bisect_nan(trace: Trace) -> BisectNanResult:
+def bisect_nan(trace: Trace) -> BisectNanReport:
     """Locate the first saved op whose output contains NaN or Inf.
 
     Parameters
@@ -578,7 +578,7 @@ def bisect_nan(trace: Trace) -> BisectNanResult:
 
     Returns
     -------
-    BisectNanResult
+    BisectNanReport
         Clear result object instead of raising when no non-finite saved
         activation is found.
     """
@@ -602,7 +602,7 @@ def bisect_nan(trace: Trace) -> BisectNanResult:
         if kind != "none":
             label = _op_label(op)
             source_line = _source_line(op)
-            return BisectNanResult(
+            return BisectNanReport(
                 found=True,
                 op=op,
                 label=label,
@@ -612,7 +612,7 @@ def bisect_nan(trace: Trace) -> BisectNanResult:
             )
 
     if unsaved_compute_ops:
-        return BisectNanResult(
+        return BisectNanReport(
             found=False,
             op=None,
             label=None,
@@ -624,7 +624,7 @@ def bisect_nan(trace: Trace) -> BisectNanResult:
                 "a wider predicate, or no selective save."
             ),
         )
-    return BisectNanResult(
+    return BisectNanReport(
         found=False,
         op=None,
         label=None,
@@ -649,7 +649,7 @@ with torch.autograd.set_detect_anomaly(True):
 
 
 @dataclass(frozen=True)
-class NanReport(DebugReport):
+class NonfiniteReport(Report):
     """One-call NaN forensics report (torchnative 6.5 / W3.1).
 
     The pitch is STRUCTURAL: the default capture names the ORIGIN op (not
@@ -661,7 +661,7 @@ class NanReport(DebugReport):
     custom-autograd exceptions).
     """
 
-    found: bool
+    has_nonfinite: bool
     phase: str
     kind: str
     origin_label: str | None
@@ -670,9 +670,9 @@ class NanReport(DebugReport):
     tensor_role: str | None
     nonfinite_labels: tuple[str, ...]
     coverage_basis: str
-    checked: int
-    unchecked: int
-    unexamined: int
+    num_checked_ops: int
+    num_unchecked_ops: int
+    num_unexamined_ops: int
     capture_status: str
     cost_tier: str
     amp_disclosure: str | None
@@ -688,14 +688,14 @@ class NanReport(DebugReport):
     def _report_status(self) -> str:
         """The verdict token on the card's lead line."""
 
-        return "found" if self.found else "not_found"
+        return "found" if self.has_nonfinite else "not_found"
 
     def _report_coverage(self) -> str | None:
         """What this report did and did not examine."""
 
         return (
-            f"{self.checked} checked, {self.unchecked} unchecked, "
-            f"{self.unexamined} unexamined (basis: {self.coverage_basis})"
+            f"{self.num_checked_ops} checked, {self.num_unchecked_ops} unchecked, "
+            f"{self.num_unexamined_ops} unexamined (basis: {self.coverage_basis})"
         )
 
     def _report_findings(self) -> list[str]:
@@ -713,7 +713,7 @@ class NanReport(DebugReport):
         """Return the human-readable report text."""
 
         lines = [f"NaN forensics ({self.phase}; {self.cost_tier})"]
-        if self.found:
+        if self.has_nonfinite:
             lines.append(
                 f"  origin: {self.origin_label} ({self.kind}) at "
                 f"{self.source_line or '<source unavailable>'}"
@@ -726,8 +726,8 @@ class NanReport(DebugReport):
         else:
             lines.append(f"  no non-finite value among CHECKED outputs ({self.scope_note})")
         lines.append(
-            f"  coverage: basis={self.coverage_basis}, checked={self.checked}, "
-            f"unchecked={self.unchecked}, unexamined={self.unexamined}"
+            f"  coverage: basis={self.coverage_basis}, checked={self.num_checked_ops}, "
+            f"unchecked={self.num_unchecked_ops}, unexamined={self.num_unexamined_ops}"
         )
         lines.append(f"  capture outcome: {self.capture_status}")
         if self.amp_disclosure:
@@ -737,7 +737,7 @@ class NanReport(DebugReport):
         return "\n".join(lines)
 
 
-def nan_report(subject: Any, x: Any = None, **trace_kwargs: Any) -> NanReport:
+def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> NonfiniteReport:
     """One-call NaN forensics (torchnative 6.5; placeholder spelling).
 
     Consumes an EXISTING trace's queryable nonfinite record first (free);
@@ -758,12 +758,12 @@ def nan_report(subject: Any, x: Any = None, **trace_kwargs: Any) -> NanReport:
 
     Returns
     -------
-    NanReport
+    NonfiniteReport
         Structured findings, coverage disclosure, capture outcome, cost
         tier, AMP disclosure, and the deferred-authority recipe.
     """
 
-    from ..data_classes._nonfinite import nonfinite_coverage
+    from .._data_classes._nonfinite import nonfinite_coverage
 
     if hasattr(subject, "layer_dict_main_keys") or hasattr(subject, "ops"):
         trace = subject
@@ -805,8 +805,8 @@ def nan_report(subject: Any, x: Any = None, **trace_kwargs: Any) -> NanReport:
                 "FORWARD checked values only"
             )
 
-    return NanReport(
-        found=bool(finding.found),
+    return NonfiniteReport(
+        has_nonfinite=bool(finding.found),
         phase="forward",
         kind=str(finding.kind),
         origin_label=finding.label,
@@ -821,9 +821,9 @@ def nan_report(subject: Any, x: Any = None, **trace_kwargs: Any) -> NanReport:
             if coverage is not None
             else "live_tripwire_first_bad_output"
         ),
-        checked=int(getattr(coverage, "checked", 0) or 0),
-        unchecked=int(getattr(coverage, "unchecked", 0) or 0),
-        unexamined=int(getattr(coverage, "unexamined", 0) or 0),
+        num_checked_ops=int(getattr(coverage, "checked", 0) or 0),
+        num_unchecked_ops=int(getattr(coverage, "unchecked", 0) or 0),
+        num_unexamined_ops=int(getattr(coverage, "unexamined", 0) or 0),
         capture_status=capture_status,
         cost_tier=cost_tier,
         amp_disclosure=amp_disclosure,

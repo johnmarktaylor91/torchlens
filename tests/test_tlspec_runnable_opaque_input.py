@@ -25,12 +25,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import PathDivergenceError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens.errors import PathDivergenceError
+from torchlens.options import CaptureOptions
 
 
 class _Mode(enum.Enum):
@@ -97,7 +97,7 @@ def _assert_not_blessed(report) -> None:
     assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert report.numeric_attestation is not NumericAttestationStatus.ATTESTED
     assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert report.poisoned
+    assert report.is_poisoned
     assert not any(
         check.name.startswith("numeric_attestation:") for check in report.contract_checks
     )

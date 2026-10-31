@@ -311,7 +311,7 @@ def test_solution_cache_uses_epoch_and_graph_revision(monkeypatch: pytest.Monkey
     third = _engine.solve(trace)
     assert third is not first
     assert calls == 2
-    assert type(trace).PORTABLE_STATE_SPEC["_receptive_field_solution"] is FieldPolicy.DROP
+    assert type(trace)._PORTABLE_STATE_SPEC["_receptive_field_solution"] is FieldPolicy.DROP
 
     trace._batch_remove_log_entries([trace.layer_list[-1]])
     fourth = _engine.solve(trace)

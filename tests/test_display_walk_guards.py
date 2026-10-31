@@ -13,7 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes._summary import DISPLAY_MAX_DEPTH, format_call_arg
+from torchlens._data_classes._summary import DISPLAY_MAX_DEPTH, format_call_arg
 
 
 def test_format_call_arg_renders_cycle_marker() -> None:
@@ -57,7 +57,7 @@ def test_format_call_arg_ordinary_values_unchanged() -> None:
 def test_module_hierarchy_display_still_renders() -> None:
     """The module-hierarchy display path stays intact on a real trace."""
 
-    from torchlens.data_classes.interface import _module_hierarchy_str
+    from torchlens._data_classes.interface import _module_hierarchy_str
 
     model = nn.Sequential(nn.Linear(4, 4), nn.Sequential(nn.ReLU(), nn.Linear(4, 2)))
     log = tl.trace(model, torch.ones(1, 4))

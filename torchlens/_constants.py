@@ -1,0 +1,1513 @@
+"""Shared constants: field-order tuples and function discovery for TorchLens.
+
+**FIELD_ORDER lists** define the ordered user-facing/export field surface for
+each data class (Trace, Op, Layer, etc.).  They serve two purposes:
+
+1. **Canonical ordering** — __repr__, iteration, and serialization use these lists
+   to present fields in a consistent, human-readable order.
+2. **User-facing completeness contract** — every public/exported attribute a data
+   class exposes must appear in its FIELD_ORDER.  Runtime-only and portable
+   internal state belongs in the class FIELD_POLICY / _PORTABLE_STATE_SPEC even
+   when it is intentionally not exported as a user-facing column.
+
+**Function discovery** (bottom of this module) builds ``ORIG_TORCH_FUNCS``, the
+master list of ``(namespace_str, func_name)`` pairs that ``decorate_all_once()``
+uses to permanently wrap every torch function at import time.
+"""
+
+import __future__
+
+import functools
+import sys
+import types
+import warnings
+from typing import TypeGuard
+
+import torch
+from torch.overrides import get_ignored_functions, get_testing_overrides
+
+from ._utils._torch_compat import get_torch_vf_namespace, get_variable_function_names
+
+# ---------------------------------------------------------------------------
+# Field-order definitions
+# ---------------------------------------------------------------------------
+# Each list defines the ordered user-facing/export fields for its data class.
+# Runtime-only state belongs in per-class FIELD_POLICY / _PORTABLE_STATE_SPEC.
+
+_RAW_LABEL_SUFFIX = "_raw"
+
+
+def _is_suffixed_raw_label(label: object) -> TypeGuard[str]:
+    """Return whether ``label`` carries the raw-capture ``_raw`` sentinel suffix.
+
+    A suffixed raw label can never be a final label, so it names exactly its own
+    op; an unsuffixed raw label has the final-label shape and may be outranked
+    by a final label. Consumers ask this question here instead of reading the
+    suffix constant themselves.
+    """
+
+    return isinstance(label, str) and label.endswith(_RAW_LABEL_SUFFIX)
+
+
+_RAW_LABEL_FIELD = "raw_label"
+ARG_EXPRESSIONS_FIELD = "arg_expressions"
+
+# The documented non-reproducible artifact surface (grind-r5 b7 R21, 3rd
+# round): every persisted field that LEGITIMATELY varies between two
+# byte-level-identical captures (same model, same input, same seeds, same
+# PYTHONHASHSEED, fresh processes). Empirically derived from a same-seed
+# two-process control at 1d00442c -- these were the ONLY semantic diffs.
+# Byte-identity oracles (the trace_core_design surface oracle, cross-process
+# artifact A/B gates) must mask exactly this set and nothing else; widening
+# it is a reviewed contract diff, because every additional row weakens the
+# reproducibility tripwire.
+_ARTIFACT_VOLATILE_METADATA_FIELDS: tuple[str, ...] = (
+    "random_seed",
+    "capture_start_time",
+    "capture_end_time",
+    "_phase_timings",
+    "setup_duration",
+    "forward_duration",
+    "cleanup_duration",
+    "func_calls_duration",
+    "forward_peak_memory",
+    # varies exactly with forward_peak_memory (set iff a CPU delta read 0).
+    "forward_peak_memory_reason",
+)
+_ARTIFACT_VOLATILE_MANIFEST_FIELDS: tuple[str, ...] = (
+    "created_at",
+    "rng_state_digests",
+)
+
+MODEL_LOG_FIELD_ORDER = [
+    # General info
+    "trace_label",
+    "model_class_name",
+    "model_label",
+    "tlspec_version",
+    "_tracing_finished",
+    "backend",
+    "backend_runtime_config",
+    "backend_runtime_device_summary",
+    "backend_runtime_version",
+    "module_identity_mode",
+    "param_source",
+    "derived_grads",
+    "capture_mode",
+    "structure_only",
+    # tlspec v9 entry-dark slot (C07; weightsfree memo section 5 / item 14):
+    # the immutable structure-only evidence envelope. Declared with
+    # fail-closed load validation now; the F33 writer lands later with no
+    # further version bump. None everywhere until then.
+    "structure_evidence",
+    "intervention_audit",
+    "_runnable",
+    "_fast_run_session",
+    "_distributed_plane_p",
+    "escape_detector_mode",
+    "escape_detector_verified",
+    "escape_diagnostics",
+    "escape_detector_event_count",
+    "escape_detector_callback_ns",
+    "escape_detector_backward_coverage",
+    "completeness_witness_mode",
+    "completeness_witness_verified",
+    "completeness_diagnostics",
+    "completeness_decompositions",
+    "completeness_witness_event_count",
+    "completeness_witness_accounted_count",
+    "completeness_witness_expected_opaque_count",
+    "completeness_witness_unaccounted_count",
+    "completeness_witness_callback_ns",
+    "capture_verified",
+    "capture_verification_reason",
+    "rescue_rerun",
+    "capture_owner_thread_id",
+    "capture_owner_thread_qualified",
+    "capture_thread_count_start",
+    "capture_thread_count_end",
+    "capture_thread_activity_detected",
+    "capture_guard_passes",
+    "halted",
+    "halt_reason",
+    "halt_frontier",
+    "_capture_outcome",
+    "_layers_logged",
+    "_layers_saved",
+    "keep_orphans",
+    "intervention_ready",
+    "save_arg_templates",
+    "raw_input",
+    "input_preprocessor",
+    "_transform",
+    "transform_repr",
+    "save_raw_input",
+    "batch_render",
+    "raw_output",
+    "decoded_output",
+    "output_postprocessor",
+    "output_id2label",
+    "output_num_classes",
+    "_output_transform",
+    "save_raw_output",
+    "layer_visualizers",
+    "save_visualizations",
+    "_visualizer_dir",
+    "random_seed",
+    "detach_saved_activations",
+    "output_device",
+    "backward_ready",
+    "inference_only",
+    "chunked_forward",
+    "module_filter",
+    "emit_nvtx",
+    "raise_on_nan",
+    "annotations",
+    "observer_spans",
+    "manual_tensor_connections",
+    "forward_source_file",
+    "forward_source_line",
+    "class_source_file",
+    "class_source_line",
+    "init_source_file",
+    "init_source_line",
+    "class_docstring",
+    "init_signature",
+    "init_docstring",
+    "forward_signature",
+    "forward_docstring",
+    "code_context",
+    # tlspec v9 entry-dark slot (C07; convert memo item 24): the source
+    # snapshot table, one row per (path, digest) -- per-file digests at
+    # capture with optional snapshot text. Declared with fail-closed load
+    # validation now; the F30 writer lands later with no further version
+    # bump. Empty everywhere until then.
+    "source_snapshots",
+    "capture_cache_hit",
+    "capture_cache_key",
+    "capture_cache_path",
+    "facet_registry_snapshot",
+    "recording_kept",
+    "_out_dedup_mode",
+    "_out_identity_cache",
+    "_out_hash_cache",
+    "_code_context_cache",
+    "_replay_arg_version_data_complete",
+    "save_arg_values",
+    "num_context_lines",
+    "save_grads",
+    "capture_tensor_grad_hooks",
+    "_grad_op_nums_to_save",
+    "grad_transform",
+    "grad_transform_repr",
+    "save_raw_gradients",
+    "save_code_context",
+    "save_rng_states",
+    "recurrence_detection",
+    # Grouping knob mirror + grouping-policy stamp (L1 wave 0; both
+    # FieldPolicy.DROP under tlspec v7, prerelease-registered)
+    "grouping",
+    "distributed_scope",
+    "grouping_policy",
+    "verbose",
+    "profile_enabled",
+    "has_gradients",
+    "activation_transform",
+    "_activation_transform_repr",
+    "save_raw_activations",
+    "save_mode",
+    "input_annotations",
+    "_source_code_blob",
+    "_source_model_ref",
+    "parent_run",
+    "model_object_id",
+    "model_class_qualname",
+    "param_hash_quick",
+    "param_hash_full",
+    # tlspec v9 root entry-point identity fact (C07X item (iv), foldA D10):
+    # the closed root invocation descriptor "kind:qualified_identity" with
+    # kind in {module_call, bound_method, function_call}. Written
+    # UNCONDITIONALLY on every capture (fail-closed rerun identity gating
+    # can only come from unconditional writes plus refuse-on-absence; F41
+    # joins it to the gate); None only on legacy artifacts.
+    "root_entry_point",
+    "input_object_id",
+    "input_signature_hash",
+    "mark_layer_depths",
+    "graph_shape_hash",
+    "_intervention_spec",
+    "state_history",
+    "last_run",
+    "append_history",
+    "_has_direct_writes",
+    "_warned_direct_write",
+    "_warned_mutate_in_place",
+    "_spec_revision",
+    "_out_recipe_revision",
+    "_append_sequence_id",
+    "_last_hook_handle_ids",
+    "state",
+    "is_appended",
+    "relationship_evidence",
+    "replay_frontier",
+    # Model structure info (is_recurrent, max_layer_op_count,
+    # is_branching, has_conditional_branching are computed @properties)
+    # Layer tracking logs
+    "layer_list",
+    "layer_dict_main_keys",
+    "layer_dict_all_keys",
+    "layer_logs",
+    "layer_labels",
+    "op_labels",
+    "layer_num_calls",
+    "by_pass",
+    "_layer_nums_to_save",
+    "num_ops",
+    "num_modules",
+    # Mapping from raw to final layer labels:
+    "_raw_to_final_layer_labels",
+    "_raw_to_final_parent_layer_labels",
+    "_raw_to_final_op_labels",
+    "_final_to_raw_layer_labels",
+    "_lookup_keys_to_layer_num_dict",
+    "_layer_num_to_lookup_keys_dict",
+    "_ambiguous_lookup_keys",
+    # Special layers
+    "input_layers",
+    "output_layers",
+    "input_structure",
+    "_containers",
+    "_annotation_blobs",
+    "buffer_layers",
+    "buffer_num_calls",
+    "_buffer_persistence",
+    "internal_source_ops",
+    "internal_sink_ops",
+    "internally_terminated_bool_ops",
+    "conditional_branch_edges",
+    "conditional_records",
+    "conditional_arm_entry_edges",
+    "conditional_edge_call_indices",
+    "conditionals",
+    "layers_with_params",
+    "op_equivalence_classes",
+    "_orphan_labels",
+    "_orphan_logs",
+    "orphan_records",
+    # Tensor info:
+    "total_activation_memory",
+    "total_gradient_memory",
+    "total_backward_memory",
+    "total_autograd_memory",
+    "pinned_autograd_memory",
+    "num_saved_ops",
+    "saved_activation_memory",
+    "saved_gradient_memory",
+    "num_saved_layers",
+    "num_saved_module_calls",
+    "num_saved_grad_fns",
+    "num_saved_grad_fn_calls",
+    # Param info
+    "param_logs",
+    "num_param_tensors",
+    "num_layers_with_params",
+    "num_params",
+    "num_params_trainable",
+    "num_params_frozen",
+    "total_param_memory",
+    "total_param_gradient_memory",
+    "forward_peak_memory",
+    "forward_memory_backend",
+    "forward_peak_memory_reason",
+    # Time elapsed
+    "capture_start_time",
+    "capture_end_time",
+    "_phase_timings",
+    "setup_duration",
+    "forward_duration",
+    "cleanup_duration",
+    "func_calls_duration",
+    # Backward pass
+    "has_backward_pass",
+    "grad_fn_logs",
+    "grad_fn_order",
+    "backward_pass_logs",
+    "_grad_fn_param_refs",
+    "backward_root_grad_fn_object_ids",
+    "backward_durations",
+    "num_backward_passes",
+    "backward_peak_memory",
+    "backward_memory_backend",
+    "backward_peak_memory_reason",
+]
+
+LAYER_PASS_LOG_FIELD_ORDER = [
+    # Per-pass data for a single layer execution.  One Op exists for
+    # each (layer, pass_index) pair.  Fields capture the tensor produced, the
+    # function that created it, graph connectivity, module context, and more.
+    #
+    # General info
+    "_label_raw",
+    "_layer_label_raw",
+    _RAW_LABEL_FIELD,
+    "step_index",
+    "raw_index",
+    "ordinal_index",
+    "source_trace",
+    "_tracing_finished",
+    "_construction_done",
+    # Other labeling info
+    "label",
+    "label_short",
+    "layer_label",
+    "layer_label_short",
+    "type",
+    "type_index",
+    "pass_index",
+    "num_passes",
+    "lookup_keys",
+    # Saved tensor info
+    "out",
+    "has_saved_activation",
+    "output_device",
+    "activation_transform",
+    "annotations",
+    "interventions",
+    "intervention_replaced",
+    "detach_saved_activations",
+    "has_saved_args",
+    "saved_args",
+    "saved_kwargs",
+    "args_template",
+    "kwargs_template",
+    "input_ops",
+    "input_activations",
+    "input_shapes",
+    "input_dtypes",
+    "input_memory",
+    "num_inputs",
+    "shape",
+    "transformed_out_shape",
+    "dtype",
+    "dtype_ref",
+    "transformed_out_dtype",
+    "device_ref",
+    "backend_address",
+    "resolver_status",
+    "activation_memory",
+    "transformed_activation_memory",
+    "visualizer_path",
+    "bytes_delta_at_call",
+    "bytes_peak_at_call",
+    "transformed_out",
+    "autograd_memory",
+    "num_autograd_tensors",
+    # Child tensor variation tracking
+    "has_out_variations",
+    "out_versions_by_child",
+    # Saved grad info
+    "grad",
+    "transformed_grad",
+    "save_grads",
+    "has_grad",
+    "grad_shape",
+    "transformed_grad_shape",
+    "grad_dtype",
+    "transformed_grad_dtype",
+    "gradient_memory",
+    "transformed_gradient_memory",
+    # Function call info
+    "func",
+    "func_id",
+    "func_call_id",
+    "func_name",
+    "func_qualname",
+    "code_context",
+    "var_names",
+    ARG_EXPRESSIONS_FIELD,
+    "func_duration",
+    "flops_forward",
+    "flops_backward",
+    "func_rng_states",
+    "func_autocast_state",
+    "arg_names",
+    "num_args_total",
+    "num_pos_args",
+    "num_kwargs",
+    "non_tensor_pos_args",
+    "non_tensor_kwargs",
+    "func_non_tensor_args",
+    "is_inplace",
+    "grad_fn_class_name",
+    "grad_fn_class_qualname",
+    "grad_fn_object_id",
+    "grad_fn_handle",
+    "grad_fn",
+    "in_multi_output",
+    "multi_output_index",
+    "multi_output_name",
+    "container_path",
+    "container_spec",
+    # Transform boundary info
+    "is_transform",
+    "transform_kind",
+    "transform_chain",
+    "transform_config",
+    "transform_fn_name",
+    "transform_fn_qualname",
+    "transform_fn_source",
+    "unattributed_tensor_args",
+    "dropped_edge_tensor_args",
+    # Param info
+    "parent_params",
+    "_param_barcodes",
+    "parent_param_ops",
+    "_param_logs",
+    "param_shapes",
+    "num_params",
+    "num_params_trainable",
+    "num_params_frozen",
+    "param_memory",
+    # Corresponding layer info
+    "equivalence_class",
+    "equivalent_ops",
+    "recurrent_ops",
+    # Structural position identity (site_key_v1, minted at step 7; portable
+    # bridging relation -- FieldPolicy.DROP until the coordinated tlspec bump,
+    # prerelease-registered)
+    "site_key",
+    # tlspec v9 entry-dark slot (C07; surgery memo 3.5 / items 8-9, 12): the
+    # injected-op identity record ("from intervention X, not the model") --
+    # the durable structural key (host_site_key, spec_rule_id, host_pass,
+    # firing_index, nesting_path, local_op_ordinal, output_slot). None on
+    # every model op; the F01 log_injections writer lands later with no
+    # further version bump. Fail-closed load validation from day one.
+    "injection_provenance",
+    # tlspec v9 entry-dark episode-step stamp (C07X / foldB s4.4 item 5):
+    # propagation of the ledger-row episode_step meaning onto the op record.
+    # None on every op today; the F-EPISODE read-axis lane writes it with no
+    # further version bump.
+    "episode_step",
+    # tlspec v9 entry-dark TL-authored-root marker (C07X item (iv), foldA
+    # D11/F41): True only on the root op record of a TL-authored bound-method
+    # wrapper root, disclosing that TorchLens authored the synthetic root.
+    # None on every module-root op; F41 writes it on bound-method captures.
+    "tl_authored_root",
+    # Graph info
+    "parents",
+    "parent_arg_positions",
+    "_edge_uses",
+    "edge_substitutions",
+    "edge_replacement_stamps",
+    "root_ancestors",
+    "children",
+    "has_children",
+    "is_input",
+    "input_was_parameter",
+    "has_input_ancestor",
+    "input_ancestors",
+    "min_distance_from_input",
+    "max_distance_from_input",
+    "is_output",
+    "is_output_parent",
+    "is_final_output",
+    "has_output_descendant",
+    "output_descendants",
+    "is_orphan",
+    "io_role",
+    "min_distance_to_output",
+    "max_distance_to_output",
+    "is_buffer",
+    "address",
+    "buffer_pass",
+    "buffer_source",
+    "buffer_write_kind",
+    "buffer_value_changed",
+    "buffer_replay_validated",
+    "buffer_source_func_name",
+    "is_internal_source",
+    "is_internally_initialized",
+    "has_internal_source_ancestor",
+    "internal_source_parents",
+    "internal_source_ancestors",
+    "is_internal_sink",
+    # Conditional info
+    "is_terminal_bool",
+    "is_terminal_conditional_bool",
+    "conditional_context_kind",
+    "conditional_wrapper_kind",
+    "terminal_conditional_id",
+    "is_scalar_bool",
+    "bool_value",
+    "in_conditionals",
+    "terminal_bool_for",
+    "is_in_conditional_body",
+    "conditional_branch_stack",
+    "conditional_branch_depth",
+    "conditional_entry_children",
+    "conditional_then_children",
+    "conditional_elif_children",
+    "conditional_else_children",
+    "conditional_arm_children",
+    # Module info
+    "module",
+    "_address_normalized",
+    "modules",
+    "fx_qualpath",
+    "fx_call_index",
+    "module_call_stack",
+    "input_to_module_calls",
+    "module_entry_arg_keys",
+    "output_of_modules",
+    "output_of_module_calls",
+    "is_module_output",
+    "is_atomic_module",
+    "atomic_module_call",
+    # Function config
+    "func_config",
+]
+
+# Backward-compatible alias — Op was formerly called TensorLog.
+OP_LOG_FIELD_ORDER = LAYER_PASS_LOG_FIELD_ORDER
+TENSOR_LOG_FIELD_ORDER = LAYER_PASS_LOG_FIELD_ORDER
+
+LAYER_LOG_FIELD_ORDER = [
+    # Aggregate view of a layer across all its ops.  One Layer per
+    # unique layer; it delegates per-pass queries to its child OpLogs.
+    #
+    # Identity & labeling
+    "layer_label",
+    "layer_label_short",
+    "layer_type",
+    "type_index",
+    "step_index",
+    "ordinal_index",
+    "raw_index",
+    "num_passes",
+    "source_trace",
+    # Function identity
+    "func",
+    "func_name",
+    "func_qualname",
+    "is_inplace",
+    "grad_fn_class_name",
+    "grad_fn_class_qualname",
+    "grad_fn_object_id",
+    "grad_fn_handle",
+    "grad_fn",
+    "arg_names",
+    "num_args_total",
+    "num_pos_args",
+    "num_kwargs",
+    "in_multi_output",
+    "multi_output_index",
+    "multi_output_name",
+    # Tensor type (representative from first pass)
+    "shape",
+    "transformed_out_shape",
+    "dtype",
+    "dtype_ref",
+    "transformed_out_dtype",
+    "device_ref",
+    "backend_address",
+    "resolver_status",
+    "activation_memory",
+    "transformed_activation_memory",
+    "transformed_out",
+    "autograd_memory",
+    "total_autograd_memory",
+    "num_autograd_tensors",
+    # Config
+    "output_device",
+    "visualizer_path",
+    "activation_transform",
+    "annotations",
+    "intervention_replaced",
+    "detach_saved_activations",
+    "save_grads",
+    "transformed_grad",
+    "transformed_grad_shape",
+    "transformed_grad_dtype",
+    "transformed_gradient_memory",
+    # FLOPs
+    "flops_forward",
+    "flops_backward",
+    # Param identity
+    "_param_barcodes",
+    "_param_logs",
+    "param_shapes",
+    "num_params",
+    "num_params_trainable",
+    "num_params_frozen",
+    "total_param_memory",
+    # Equivalence
+    "equivalence_class",
+    "equivalent_ops",
+    # Special flags
+    "is_input",
+    "input_was_parameter",
+    "is_output",
+    "is_final_output",
+    "is_buffer",
+    "address",
+    "buffer_source",
+    "buffer_write_kind",
+    "buffer_value_changed",
+    "buffer_replay_validated",
+    "buffer_source_func_name",
+    "has_input_ancestor",
+    "io_role",
+    "buffer_pass",
+    "is_internal_source",
+    "is_internal_sink",
+    "is_terminal_bool",
+    "is_scalar_bool",
+    "bool_value",
+    "in_conditionals",
+    "terminal_bool_for",
+    "is_in_conditional_body",
+    "conditional_role_stacks",
+    "conditional_branch_stack_ops",
+    "conditional_arm_children",
+    "conditional_entry_children",
+    "conditional_then_children",
+    "conditional_elif_children",
+    "conditional_else_children",
+    # Module (static containment)
+    "module",
+    "modules",
+    "output_of_modules",
+    "output_of_module_calls",
+    "is_atomic_module",
+    # Function config
+    "func_config",
+    # Pass management
+    "ops",
+    "call_labels",
+]
+
+# Metadata about where in user code a function was called (file, line, context).
+# FuncCallLocation has lazy properties — source loaded on first access via linecache.
+FUNC_CALL_LOCATION_FIELD_ORDER = [
+    "file",
+    "line_number",
+    "func_name",
+    "code_firstlineno",
+    "func_qualname",
+    "col_offset",
+    "source_loading_enabled",
+    "func_signature",
+    "func_docstring",
+    "call_line",
+    "code_context",
+    "source_context",
+    "code_context_labeled",
+    "num_context_lines",
+]
+
+# Per-parameter metadata (one Param per nn.Parameter in the model).
+PARAM_LOG_FIELD_ORDER = [
+    "address",
+    "name",
+    "shape",
+    "dtype",
+    "dtype_ref",
+    "device_ref",
+    "backend_address",
+    "resolver_status",
+    "num_params",
+    "param_memory",
+    "is_trainable",
+    "is_quantized",
+    "has_optimizer",
+    "module_address",
+    "module_name",
+    "module_cls",
+    "all_addresses",
+    "all_module_addresses",
+    "has_multiple_addresses",
+    "barcode",
+    "num_calls",
+    "used_by_ops",
+    "used_by_layers",
+    "num_uses_by_ops",
+    "num_uses_by_layers",
+    "co_parent_params",
+    "has_grad",
+    "grad_shape",
+    "grad_dtype",
+    "gradient_memory",
+    "_derived_grad_record_path",
+]
+
+# Per-buffer metadata exported by BufferAccessor (one row per buffer address).
+BUFFER_LOG_FIELD_ORDER = [
+    "address",
+    "module_address",
+    "name",
+    "buffer_overwrite_index",
+    "buffer_pass",
+    "layer_label",
+    "call_index",
+    "versions",
+    "shape",
+    "dtype",
+    "initial_value",
+    "activation_memory",
+    "has_saved_activation",
+    "has_grad",
+    "grad_shape",
+    "grad_dtype",
+    "gradient_memory",
+    "buffer_source",
+    "module",
+    "modules",
+]
+
+# Per-pass module execution data (one ModuleCall per forward call to a module).
+MODULE_PASS_LOG_FIELD_ORDER = [
+    "address",
+    "name",
+    "all_addresses",
+    "has_multiple_addresses",
+    "class_name",
+    "class_qualname",
+    "cls",
+    "call_index",
+    "call_label",
+    "ordinal_index",
+    "ops",
+    "num_ops",
+    "input_ops",
+    "input_layers",
+    "output_ops",
+    "output_layers",
+    "output_structure",
+    "output_paths",
+    "forward_arg_names",
+    "num_forward_args_total",
+    "num_forward_pos_args",
+    "num_forward_kwargs",
+    "forward_args_summary",
+    "forward_kwargs_summary",
+    "forward_args_template",
+    "forward_kwargs_template",
+    "forward_args",
+    "forward_kwargs",
+    "has_saved_forward_args",
+    "inputs_before_pre_hooks",
+    "inputs_after_pre_hooks",
+    "forward_pre_hook_effects",
+    "had_pre_hook_input_change",
+    "forward_duration",
+    "backward_duration",
+    "output_activation_memory",
+    "internal_activation_memory",
+    "output_gradient_memory",
+    "internal_gradient_memory",
+    "autograd_memory",
+    "param_memory",
+    "func_calls_duration",
+    "code_context",
+    "module_call_stack",
+    "call_parent",
+    "call_children",
+    "num_descendant_calls",
+    "max_descendant_depth",
+    "module",
+    "num_param_tensors",
+    "num_param_tensors_trainable",
+    "num_param_tensors_frozen",
+    "has_trainable_params",
+    "has_frozen_params",
+]
+
+# Aggregate module metadata (one Module per unique nn.Module in the model).
+MODULE_LOG_FIELD_ORDER = [
+    # Identity
+    "address",
+    "all_addresses",
+    "has_multiple_addresses",
+    "name",
+    "cls",
+    "class_name",
+    "class_qualname",
+    # Source info
+    "class_source_file",
+    "class_source_line",
+    "class_source_location",
+    "init_source_file",
+    "init_source_line",
+    "init_source_location",
+    "forward_source_file",
+    "forward_source_line",
+    "forward_source_location",
+    "class_docstring",
+    "init_signature",
+    "init_docstring",
+    "forward_signature",
+    "forward_docstring",
+    # Hierarchy — address-based
+    "address_parent",
+    "address_children",
+    "address_depth",
+    # Hierarchy — call-based
+    "call_parent",
+    "call_children",
+    "call_parent_module",
+    "call_children_modules",
+    "call_depth",
+    # Pass info
+    "num_calls",
+    "ops",
+    "call_labels",
+    # Layers
+    "layer_labels",
+    "layers",
+    "num_layers",
+    "input_ops",
+    "input_layers",
+    "output_ops",
+    "output_layers",
+    "output_structure",
+    # Parameters
+    "params",
+    "num_params",
+    "num_params_trainable",
+    "num_params_frozen",
+    "num_param_tensors",
+    "num_param_tensors_trainable",
+    "num_param_tensors_frozen",
+    "recursive_params",
+    "num_recursive_params",
+    "num_recursive_params_trainable",
+    "num_recursive_params_frozen",
+    "num_recursive_param_tensors",
+    "num_recursive_param_tensors_trainable",
+    "num_recursive_param_tensors_frozen",
+    "recursive_param_addresses",
+    "param_memory",
+    "has_trainable_params",
+    "has_frozen_params",
+    # Buffers
+    "buffer_layers",
+    # Module state
+    "training",
+    "forward_pre_hooks",
+    "forward_hooks",
+    "backward_pre_hooks",
+    "backward_hooks",
+    "full_backward_pre_hooks",
+    "full_backward_hooks",
+    "has_forward_hooks",
+    "has_backward_hooks",
+    "forward_args_summary",
+    "forward_kwargs_summary",
+    "forward_args_template",
+    "forward_kwargs_template",
+    "forward_duration",
+    "total_forward_duration",
+    "backward_duration",
+    "total_backward_duration",
+    "func_calls_duration",
+    "total_func_calls_duration",
+    "total_output_activation_memory",
+    "total_internal_activation_memory",
+    "total_output_gradient_memory",
+    "total_internal_gradient_memory",
+    "total_autograd_memory",
+    "num_descendant_calls",
+    "max_descendant_depth",
+    "custom_attributes",
+    "custom_methods",
+    # Session-time record of the forward's plain-attribute writes (never persisted)
+    "attribute_writes",
+]
+
+GRAD_FN_PASS_LOG_FIELD_ORDER = [
+    "call_index",
+    "ordinal",
+    "backward_pass_index",
+    "call_label",
+    "backward_duration",
+    "grad_inputs",
+    "grad_outputs",
+    "intervention_fire_ref",
+    "timestamp",
+    "_time_started",
+    "_time_finished",
+    "is_saved",
+]
+
+GRAD_FN_LOG_FIELD_ORDER = [
+    "grad_fn_object_id",
+    "class_name",
+    "class_qualname",
+    "class_source_file",
+    "class_source_line",
+    "class_source_location",
+    "class_docstring",
+    "init_source_file",
+    "init_source_line",
+    "init_source_location",
+    "init_signature",
+    "init_docstring",
+    "forward_source_file",
+    "forward_source_line",
+    "forward_source_location",
+    "forward_signature",
+    "forward_docstring",
+    "backward_source_file",
+    "backward_source_line",
+    "backward_source_location",
+    "backward_signature",
+    "backward_docstring",
+    "label",
+    "type",
+    "type_index",
+    "ordinal_index",
+    "step_index",
+    "is_custom",
+    "order",
+    "origin_backward_pass",
+    "creator_object_id",
+    "differentiates",
+    "modules",
+    "module_address",
+    "module_membership_source",
+    "has_op",
+    "op_label",
+    "op",
+    "next_grad_fn_ids",
+    "parents",
+    "children",
+    "siblings",
+    "co_parents",
+    "has_parents",
+    "has_children",
+    "has_siblings",
+    "has_co_parents",
+    "calls",
+    "num_calls",
+    "call_labels",
+    "backward_duration",
+    "total_backward_duration",
+]
+
+BACKWARD_PASS_FIELD_ORDER = [
+    "pass_index",
+    "trigger",
+    "implicit",
+    "outer_context",
+    "backward_call_context",
+    "root_grad_fn_ids",
+    "root_meta",
+    "root_grad_arguments",
+    "inputs_subset",
+    "order",
+    "origin_backward_pass",
+    "engine_flags",
+    "save_grads_policy",
+    "duration",
+    "peak_memory",
+    "status",
+    "order_attribution_coverage",
+    "grad_fn_calls",
+    "executed_flops_record",
+]
+
+PRIMITIVE_OP_FIELD_ORDER = [
+    "label",
+    "sequence",
+    "capture_phase",
+    "forward_pass_index",
+    "backward_epoch_index",
+    "owner_func_call_id",
+    "parent_op_refs",
+    "parent_grad_fn_call_ref",
+    "owner_status",
+    "decomposition_slot",
+    "namespace",
+    "operator",
+    "overload",
+    "schema",
+    "schema_fingerprint",
+    "module_call_stack",
+    "input_tensor_facts",
+    "output_tensor_facts",
+    "mutation_kind",
+    "view_copy_kind",
+    "autocast_context",
+    "dispatch_key_context",
+    "grad_fn_ref",
+    "grad_fn_link_status",
+    "grad_fn_link_provenance",
+    "algorithmic_flops",
+    "flop_status",
+    "flop_formula_source",
+    "flop_formula_version",
+    "outcome",
+    "exception_type",
+    "execution_context",
+]
+
+# ---------------------------------------------------------------------------
+# Function discovery for decoration
+# ---------------------------------------------------------------------------
+# IMPORTANT: The name "IGNORED_FUNCS" is a historical misnomer.  These are
+# functions that PyTorch's __torch_function__ override mechanism *ignores*
+# (i.e., they cannot be intercepted via __torch_function__), but TorchLens
+# still decorates most of them.  They are listed separately because
+# _get_torch_overridable_functions() intentionally skips them, so we must
+# add them back into ORIG_TORCH_FUNCS explicitly.
+#
+# Source: https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
+IGNORED_FUNCS = [
+    ("torch", "load"),
+    ("torch", "empty"),
+    ("torch", "empty_strided"),
+    ("torch", "empty_permuted"),
+    ("torch", "frombuffer"),
+    ("torch", "asarray"),
+    ("torch", "fill"),
+    ("torch", "as_tensor"),
+    ("torch", "from_numpy"),
+    ("torch", "tensor"),
+    ("torch", "arange"),
+    ("torch", "as_strided"),
+    ("torch", "bartlett_window"),
+    ("torch", "blackman_window"),
+    ("torch", "cudnn_affine_grid_generator"),
+    ("torch", "cudnn_batch_norm"),
+    ("torch", "cudnn_convolution"),
+    ("torch", "cudnn_convolution_transpose"),
+    ("torch", "cudnn_convolution_relu"),
+    ("torch", "cudnn_convolution_add_relu"),
+    ("torch", "cudnn_grid_sampler"),
+    ("torch", "cudnn_is_acceptable"),
+    ("torch", "eye"),
+    ("torch.fft", "fftfreq"),
+    ("torch.fft", "rfftfreq"),
+    ("torch", "from_file"),
+    ("torch", "full"),
+    ("torch", "fill_"),
+    ("torch", "hamming_window"),
+    ("torch", "hann_window"),
+    ("torch", "kaiser_window"),
+    ("torch", "linspace"),
+    ("torch", "logspace"),
+    ("torch", "mkldnn_adaptive_avg_pool2d"),
+    ("torch", "mkldnn_convolution"),
+    ("torch", "mkldnn_max_pool2d"),
+    ("torch", "mkldnn_max_pool3d"),
+    ("torch", "mkldnn_linear_backward_weights"),
+    ("torch", "normal"),
+    ("torch", "ones"),
+    ("torch", "rand"),
+    ("torch", "randn"),
+    ("torch", "randint"),
+    # r18cg: the random ``*_like`` factories are in torch's get_ignored_functions() (not
+    # overridable via __torch_function__), exactly like their non-``_like`` siblings above, so
+    # they must be re-added here to be decorated. Without them a forward using
+    # ``torch.rand_like`` / ``randn_like`` / ``randint_like`` records the freshly-allocated
+    # output as an unattributed literal (the r45 ``.mH`` capture-gap class); their arg-specs
+    # already exist in capture/arg_positions.py (_FACTORY_SOURCE_SPEC / randintlike).
+    ("torch", "rand_like"),
+    ("torch", "randn_like"),
+    ("torch", "randint_like"),
+    ("torch", "randperm"),
+    ("torch", "range"),
+    ("torch", "scalar_tensor"),
+    # The modern DLPack interop boundary. ``torch.from_dlpack`` (the same object as
+    # ``torch.utils.dlpack.from_dlpack``) is absent from BOTH of torch's override
+    # registries, so it was never decorated and the op vanished from the trace
+    # entirely: ``z = torch.from_dlpack(y); return z + 1`` recorded no dlpack node. In
+    # the aliasing variant the safety net at least disclosed
+    # ``escape_rescue_unrecovered``, but in the common cross-library direction
+    # (numpy/cupy/jax capsule -> torch, a fresh storage with no captured-tensor alias)
+    # there is no provenance signal at all and both detectors default off, so the
+    # freshly-created tensor read as an unattributed literal -- exactly the silent class
+    # the ``rand_like`` / ``.mH`` re-adds fixed. Protocol-invisible like ``from_numpy``,
+    # so it is also a mechanical-belt candidate (see backends/torch/belt.py).
+    ("torch", "from_dlpack"),
+    ("torch.utils.dlpack", "from_dlpack"),
+    # The PUBLIC sparse-compressed constructors. Only the PRIVATE
+    # ``torch._sparse_csr_tensor`` was re-added, so the whole public family was
+    # undecorated: sparse inputs/params refuse at capture entry, but IN-FORWARD sparse
+    # creation was ungated.
+    ("torch", "sparse_coo_tensor"),
+    ("torch", "sparse_csr_tensor"),
+    ("torch", "sparse_csc_tensor"),
+    ("torch", "sparse_bsr_tensor"),
+    ("torch", "sparse_bsc_tensor"),
+    ("torch", "sparse_compressed_tensor"),
+    ("torch", "_sparse_csr_tensor"),
+    # The MODERN documented window-factory namespace. Only the legacy top-level twins
+    # (``hann_window``, ``bartlett_window``, ...) were re-added, so a model using
+    # ``torch.signal.windows.hann`` silently recorded its window as an unattributed
+    # literal -- the same shape as the fixed ``rand_like`` gap, and silent with
+    # detectors off. Pure factories, so no tensor edge is dropped, only the node.
+    *(
+        ("torch.signal.windows", _window_name)
+        for _window_name in (
+            "bartlett",
+            "blackman",
+            "cosine",
+            "exponential",
+            "gaussian",
+            "general_cosine",
+            "general_hamming",
+            "hamming",
+            "hann",
+            "kaiser",
+            "nuttall",
+        )
+    ),
+    # The public FP8/MoE entry points (torch 2.13+; absent on 2.8 and earlier,
+    # incl. the 2.1 floor and 2.8 canonical CI rows). Each delegates to a wrapped
+    # ``torch._VF`` interior, so capture stayed COMPLETE, but the op recorded
+    # under the private v2 name rather than what the user called (mislabel
+    # only). Feature-detected (never a bare row) so the curated-roster liveness
+    # gate never needs a ``_KNOWN_DEAD_ROSTER_ROWS`` entry for a not-yet-
+    # introduced spelling: absent means not listed, not "dead".
+    *(
+        ("torch.nn.functional", _fp8_moe_name)
+        for _fp8_moe_name in ("scaled_mm", "grouped_mm", "scaled_grouped_mm")
+        if hasattr(torch.nn.functional, _fp8_moe_name)
+    ),
+    ("torch", "tril_indices"),
+    ("torch", "triu_indices"),
+    ("torch", "vander"),
+    ("torch", "zeros"),
+    ("torch.nn.functional", "upsample"),
+    ("torch.nn.functional", "upsample_bilinear"),
+    ("torch.nn.functional", "upsample_nearest"),
+    # ``handle_torch_function`` is deliberately ABSENT: it is __torch_function__
+    # protocol plumbing, not a tensor op. Decorating it made every composite's
+    # ``if has_torch_function(...)`` preamble route through a TorchLens wrapper
+    # whenever ANY foreign TorchFunctionMode was active (torch's own
+    # DeviceContext included), feeding function objects into tensor-arg capture
+    # and crashing with TorchLensTLCollisionError (stage-0 safety-net fix).
+    ("torch.nn.functional", "sigmoid"),
+    ("torch.nn.functional", "hardsigmoid"),
+    ("torch.nn.functional", "tanh"),
+    ("torch.nn.init", "calculate_gain"),
+    ("torch.nn.init", "uniform"),
+    ("torch.nn.init", "normal"),
+    ("torch.nn.init", "constant"),
+    ("torch.nn.init", "eye"),
+    ("torch.nn.init", "dirac"),
+    ("torch.nn.init", "xavier_uniform"),
+    ("torch.nn.init", "xavier_normal"),
+    ("torch.nn.init", "kaiming_uniform"),
+    ("torch.nn.init", "kaiming_normal"),
+    ("torch.nn.init", "orthogonal"),
+    ("torch.nn.init", "sparse"),
+    ("torch.nn.functional", "hardswish"),
+    ("torch.Tensor", "__delitem__"),
+    ("torch.Tensor", "__iter__"),
+    ("torch.Tensor", "__init_subclass__"),
+    # ``__torch_function__`` is deliberately ABSENT: same protocol-plumbing
+    # hazard as ``handle_torch_function`` above. (It was never actually
+    # decorated — classmethod access binds to <class 'method'>, which the
+    # decoration type gate skips — but listing it declared the wrong intent.)
+    ("torch.Tensor", "__new__"),
+    ("torch.Tensor", "__subclasshook__"),
+    ("torch.Tensor", "as_subclass"),
+    ("torch.Tensor", "reinforce"),
+    ("torch.Tensor", "new"),
+    ("torch.Tensor", "new_tensor"),
+    ("torch.Tensor", "new_empty"),
+    ("torch.Tensor", "new_empty_strided"),
+    ("torch.Tensor", "new_zeros"),
+    ("torch.Tensor", "new_ones"),
+    ("torch.Tensor", "new_full"),
+    ("torch.Tensor", "_make_subclass"),
+    ("torch.Tensor", "solve"),
+    ("torch.Tensor", "unflatten"),
+    ("torch.Tensor", "real"),
+    ("torch.Tensor", "imag"),
+    ("torch.Tensor", "data"),
+    ("torch.Tensor", "T"),
+    ("torch.Tensor", "mT"),
+    ("torch.Tensor", "H"),
+    # r45: ``mH`` (batched conjugate transpose) must be wrapped for capture exactly like
+    # its sibling ``H`` / ``mT`` -- otherwise a forward using ``x.mH`` records the adjoint
+    # result as an unattributed literal and the runnable artifact cannot save/run (the r44
+    # corr1_1 / secF_1 finding: ``.mH`` "not modeled as a property op at all").
+    ("torch.Tensor", "mH"),
+]
+
+
+@functools.lru_cache(None)
+def _get_torch_overridable_functions() -> list[tuple[str, str]]:
+    """Return a list of (namespace_str, func_name) pairs for all torch functions
+    that can be overridden via ``__torch_function__``.
+
+    Crawls the standard torch namespaces (torch, torch.Tensor, torch.nn.functional,
+    etc.) and collects every callable that is not explicitly ignored by PyTorch's
+    override machinery.  The result is cached via ``lru_cache`` so the crawl only
+    runs once per process.  The returned list is used to build ``ORIG_TORCH_FUNCS``,
+    which drives the one-time decoration performed by ``decorate_all_once()``.
+    """
+    ignored_funcs_set = get_ignored_functions()
+    testing_overrides_set = get_testing_overrides()
+    func_names = []  # accumulates (namespace_str, func_name) pairs
+    # Each entry: (dotted namespace string, namespace object, list of attr names to inspect).
+    # torch._VF mirrors torch._C._VariableFunctions — both are crawled so decoration
+    # can patch both the public and internal references to the same underlying C++ functions.
+    variable_function_names = get_variable_function_names()
+    tested_namespaces = [
+        ("torch", torch, torch.__all__ + variable_function_names),
+        ("torch.functional", torch.functional, torch.functional.__all__),
+        ("torch.nn.functional", torch.nn.functional, dir(torch.nn.functional)),
+        ("torch.nn.init", torch.nn.init, dir(torch.nn.init)),
+        ("torch.Tensor", torch.Tensor, dir(torch.Tensor)),
+        ("torch.linalg", torch.linalg, dir(torch.linalg)),
+        ("torch.fft", torch.fft, dir(torch.fft)),
+    ]
+    torch_vf_namespace = get_torch_vf_namespace()
+    if torch_vf_namespace is not None:
+        tested_namespaces.append(("torch._VF", torch_vf_namespace, variable_function_names))
+    if hasattr(torch, "special"):
+        tested_namespaces.append(("torch.special", torch.special, dir(torch.special)))
+    for namespace_str, namespace, ns_funcs in tested_namespaces:
+        for func_name in ns_funcs:
+            ignore = False
+            # ignore private functions or functions that are deleted in torch.__init__
+            if namespace is not torch.Tensor:
+                if func_name.startswith("__"):
+                    continue
+                elif (
+                    func_name[0].isupper()
+                ):  # Skip class-like exports (e.g. torch.Tensor, torch.Size) — only wrap functions
+                    ignore = True
+                elif func_name == "unique_dim":
+                    continue
+            else:
+                if func_name == "__weakref__":
+                    continue
+            func = getattr(namespace, func_name)
+            # Skip custom_methods inherited from object (e.g. __hash__, __repr__ on Tensor)
+            if namespace is torch.Tensor and getattr(object, func_name, None) == func:
+                continue
+            # ignore re-exported modules
+            if isinstance(func, types.ModuleType):
+                continue
+            # ignore __future__ imports
+            if isinstance(func, getattr(__future__, "_Feature")):
+                continue
+
+            # Descriptors (properties, slots) — not directly callable but have __get__.
+            # These are wrapped via their __get__ method so attribute access is intercepted.
+            if not callable(func) and hasattr(func, "__get__"):
+                if ignore:
+                    continue
+                if func.__get__ in ignored_funcs_set:
+                    # A real ``raise``, never ``assert`` (R24-4): under
+                    # ``python -O`` a torch release listing an overridable
+                    # descriptor as ignored was silently excluded from the
+                    # wrapper roster -- an invisible capture-gap generator on
+                    # exactly the version boundary this check exists to catch.
+                    if func.__get__ in testing_overrides_set:
+                        raise RuntimeError(
+                            f"{namespace}.{func.__name__} is in the tuple returned by "
+                            "torch._overrides.get_ignored_functions but still has an "
+                            "explicit override"
+                        )
+                    continue
+                else:
+                    func_names.append((f"{namespace_str}.{func_name}", "__get__"))
+                    continue
+
+            if not callable(func):
+                continue
+
+            if ignore:
+                continue
+
+            # cannot be overridden by __torch_function__
+            if func in ignored_funcs_set:
+                # A real ``raise``, never ``assert`` (grind-r5 b7 R24, the
+                # descriptor branch's twin): under ``python -O`` the assert
+                # stripped and the ``continue`` silently excluded the function
+                # from the wrapper roster -- fault-injection proved
+                # ``torch.tensor`` vanishing from the 3,350-entry roster with
+                # zero signal on exactly the future-torch drift this
+                # contradiction check exists to catch.
+                if func in testing_overrides_set:
+                    raise RuntimeError(
+                        f"{namespace}.{func.__name__} is in the tuple returned by "
+                        "torch._overrides.get_ignored_functions but still has an "
+                        "explicit override"
+                    )
+                continue
+            func_names.append((f"{namespace_str}", func_name))
+    return func_names
+
+
+# Torchvision ops accessed via torch.ops — decorated only if torchvision is installed.
+TORCHVISION_FUNCS = [
+    ("torch.ops.torchvision.nms", "_op"),
+    ("torch.ops.torchvision.deform_conv2d", "_op"),
+    ("torch.ops.torchvision.ps_roi_align", "_op"),
+    ("torch.ops.torchvision.ps_roi_pool", "_op"),
+    ("torch.ops.torchvision.roi_align", "_op"),
+    ("torch.ops.torchvision.roi_pool", "_op"),
+]
+
+_TORCHVISION_FUNCS_CACHE: list[tuple[str, str]] | None = None
+
+# Build the master function list at module load time.  Warnings are suppressed
+# because some torch namespaces emit deprecation warnings during introspection.
+# ORIG_TORCH_FUNCS = overridable functions + "ignored" functions (which we still
+# decorate).  Optional torchvision ops are appended lazily by
+# get_orig_torch_funcs() at first wrap time, not during ``import torchlens``.
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    OVERRIDABLE_FUNCS = _get_torch_overridable_functions()
+ORIG_TORCH_FUNCS = OVERRIDABLE_FUNCS + IGNORED_FUNCS
+
+
+def _get_torchvision_funcs() -> list[tuple[str, str]]:
+    """Return torchvision torch.ops targets if torchvision is already imported.
+
+    TorchLens never imports torchvision itself: importing it costs ~2 s and
+    ~150 MB RSS, and a model cannot call a torchvision custom op unless the
+    user's process has already imported torchvision (the ops only register
+    with the torch dispatcher during ``import torchvision``). The
+    not-yet-imported answer is deliberately uncached so a later user import
+    is picked up by ``wrap_torch()`` on the next capture.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Torchvision operation targets for wrapper decoration, or an empty list
+        while torchvision has not (finished) being imported.
+    """
+
+    global _TORCHVISION_FUNCS_CACHE
+    if _TORCHVISION_FUNCS_CACHE is not None:
+        return _TORCHVISION_FUNCS_CACHE
+    torchvision_module = sys.modules.get("torchvision")
+    if torchvision_module is None:
+        return []
+    spec = getattr(torchvision_module, "__spec__", None)
+    if spec is not None and getattr(spec, "_initializing", False):
+        # Mid-import (circular import): the C ops may not be registered yet.
+        return []
+    _TORCHVISION_FUNCS_CACHE = list(TORCHVISION_FUNCS)
+    return _TORCHVISION_FUNCS_CACHE
+
+
+# Submodules that re-export (``from torch import X as Y``) a plain torch
+# function under a second name, lazily imported by torch itself rather than
+# eagerly by ``import torch`` -- so the one-time ``ORIG_TORCH_FUNCS`` scan at
+# ``import torchlens`` time can miss them. Each row is the (submodule, attr)
+# pair to track once that submodule has been imported by anyone. Dynamo's own
+# ``torch._dynamo.trace_rules`` resolves ``torch.onnx.operators.shape_as_tensor``
+# as a tracked overridable; if that submodule's FIRST import lands while
+# TorchLens wrappers are installed (e.g. the import happens from inside a
+# dynamo rule-table build mid-epoch), its module-level alias binds to the
+# wrapper, and -- absent this entry -- neither ``unwrap_torch`` nor the next
+# ``wrap_torch`` ever knew that namespace existed to restore or re-wrap it,
+# permanently poisoning dynamo's identity-keyed rule map for the rest of the
+# process (round-2 CI triage, 2026-10-01). Since torch 2.8 the same module
+# also aliases ``reshape_from_tensor_shape = torch._reshape_from_tensor``; once
+# the module is in the roster, the public-site audit sees that alias holding
+# the unwrapped original unless it is tracked here too.
+#
+# ``torch.nn.utils.weight_norm`` binds ``from torch import _weight_norm,
+# norm_except_dim`` at ``import torch`` time, before any wrapping. The legacy
+# ``WeightNorm`` forward pre-hook calls that module global on every forward, so
+# without these rows the capture never sees ``_weight_norm``: the plain capture
+# needs the mode rescue re-run to record it, and the validation capture (no
+# rescue) misses it outright. ``torch.nn.utils.parametrizations.weight_norm``
+# looks ``torch._weight_norm`` up at call time and needs no row.
+_TORCH_SUBMODULE_ALIAS_TARGETS: tuple[tuple[str, str], ...] = (
+    ("torch.onnx.operators", "shape_as_tensor"),
+    ("torch.onnx.operators", "reshape_from_tensor_shape"),
+    ("torch.nn.utils.weight_norm", "_weight_norm"),
+    ("torch.nn.utils.weight_norm", "norm_except_dim"),
+)
+
+
+def _get_torch_submodule_alias_funcs() -> list[tuple[str, str]]:
+    """Return alias targets whose declaring submodule is already imported.
+
+    Deliberately uncached (like :func:`_get_torchvision_funcs`): a submodule
+    imported after the last wrap is picked up on the very next
+    ``get_orig_torch_funcs()`` call, which both ``wrap_torch`` (decoration /
+    re-install) and ``unwrap_torch`` (restore) make on every invocation.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        ``(submodule_name, attr)`` pairs ready for ``_decorate_torch_func_pairs``
+        / restoration, limited to submodules already present in
+        ``sys.modules``.
+    """
+
+    found: list[tuple[str, str]] = []
+    for module_name, attr in _TORCH_SUBMODULE_ALIAS_TARGETS:
+        module = sys.modules.get(module_name)
+        if module is None:
+            continue
+        spec = getattr(module, "__spec__", None)
+        if spec is not None and getattr(spec, "_initializing", False):
+            continue  # mid-import (circular import): attribute may not exist yet
+        if hasattr(module, attr):
+            found.append((module_name, attr))
+    return found
+
+
+def get_orig_torch_funcs(*, include_torchvision: bool = True) -> list[tuple[str, str]]:
+    """Return torch function targets for wrapper decoration.
+
+    Parameters
+    ----------
+    include_torchvision:
+        Whether to append torchvision custom op targets when torchvision is
+        installed. The import probe is intentionally deferred to first wrapper
+        use so ``import torchlens`` does not import torchvision.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Torch function targets, including torchvision targets on demand.
+    """
+
+    if not include_torchvision:
+        return [*ORIG_TORCH_FUNCS, *_get_torch_submodule_alias_funcs()]
+    return [*ORIG_TORCH_FUNCS, *_get_torchvision_funcs(), *_get_torch_submodule_alias_funcs()]
+
+
+# Legacy tensor constructors (2017-2019 idioms): ``torch.FloatTensor(size)``,
+# ``torch.LongTensor(data)``, a module attribute bound to the class at init
+# (``self.FloatTensor = torch.FloatTensor``), and ``torch.autograd.Variable(t)``.
+# Their C ``tp_new`` dispatches ``aten.empty`` / ``aten.detach`` with no Python
+# wrapper on the stack, so a forward that uses them left an unowned dispatch and
+# failed validation completeness. The CLASS OBJECTS are patched in place (their
+# ``__new__``), never the namespace attributes: identity, ``isinstance`` and
+# ``x.type(torch.FloatTensor)`` keep working, and an alias bound before the
+# first capture reaches the same patched class. Rows are (namespace, class
+# name); ``backends/torch/legacy_ctors.py`` installs and restores them.
+# ``torch.Tensor`` itself is not listed: ``torch.Tensor.__new__`` is already an
+# ``IGNORED_FUNCS`` roster row.
+LEGACY_TENSOR_DTYPE_CLASS_NAMES: tuple[str, ...] = (
+    "FloatTensor",
+    "DoubleTensor",
+    "HalfTensor",
+    "BFloat16Tensor",
+    "LongTensor",
+    "IntTensor",
+    "ShortTensor",
+    "CharTensor",
+    "ByteTensor",
+    "BoolTensor",
+)
+LEGACY_TENSOR_CONSTRUCTOR_SITES: tuple[tuple[str, str], ...] = (
+    *(("torch", name) for name in LEGACY_TENSOR_DTYPE_CLASS_NAMES),
+    *(("torch.cuda", name) for name in LEGACY_TENSOR_DTYPE_CLASS_NAMES),
+    ("torch.autograd", "Variable"),
+)

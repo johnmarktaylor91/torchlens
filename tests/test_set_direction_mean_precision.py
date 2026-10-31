@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention import reference, set_direction_mean
+from torchlens.intervention import population, set_direction_mean
 
 _DIRECTION = torch.tensor([1.0, 2.0, -1.0, 0.5, 0.25], dtype=torch.float64) / 3.0
 
@@ -41,9 +41,7 @@ def _edited_and_grad(dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor, nn
 
     model = _Net(dtype).eval()
     x, donors = _inputs(dtype)
-    edit = set_direction_mean(
-        _DIRECTION.to(dtype), reference(donors, origin="donors"), feature_axis=-1
-    )
+    edit = set_direction_mean(_DIRECTION.to(dtype), population(donors, origin="donors"), dim=-1)
     ready = tl.options.CaptureOptions(intervention_ready=True)
     fork = tl.trace(model, x, capture=ready).fork()
     fork.do("linear_1_1", edit)
@@ -86,7 +84,7 @@ def test_recorded_coefficient_is_the_one_applied() -> None:
     """The edit's kwargs keep the float32 coefficient; a float64 site applies float64."""
 
     x, donors = _inputs(torch.float64)
-    edit = set_direction_mean(_DIRECTION, reference(donors, origin="donors"), feature_axis=-1)
+    edit = set_direction_mean(_DIRECTION, population(donors, origin="donors"), dim=-1)
     coefficient = dict(edit.kwargs)["mean_coefficient"]
     unit32 = _DIRECTION.float() / _DIRECTION.float().norm()
     per_member = [(member.float() * unit32).sum(dim=-1).mean() for member in donors]

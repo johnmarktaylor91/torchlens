@@ -61,7 +61,7 @@ def test_default_trace_restores_lazy_cache_so_validate_sees_the_first_forward() 
         assert tl.validate(model, x, scope="forward") is False
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == "retrace_mismatch"
+    assert failure.check_name == "retrace_mismatch"
 
     with torch.no_grad():
         model(x)

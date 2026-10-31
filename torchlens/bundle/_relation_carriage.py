@@ -2,7 +2,7 @@
 
 The budget-preserving dynamic methods that carry the S6 member-relation
 table: ``Bundle.relate`` appends validated rows (R4 new-table install) and
-``Bundle.derive_episode_status`` folds ``episode_member`` rows into the
+``Bundle.episode_status`` folds ``episode_member`` rows into the
 derived episode status (a DERIVATION, never Bundle-level settlement).
 Split out of ``torchlens/bundle/__init__.py`` beside ``_outcome_fold.py``
 to respect its size ceiling (R43 split-never-raise); ``__init__`` re-exports
@@ -20,9 +20,9 @@ from ._fed_by import FED_BY_KIND, settle_fed_by_params
 from ._relations import MEMBER_ROW_KINDS, MemberRelationRow, MemberRelationTable
 
 if TYPE_CHECKING:
+    from .._data_classes.trace import Trace
     from ..capture._episode_fold import EpisodeFoldResult
     from ..capture._episode_ledger import EpisodeLedger
-    from ..data_classes.trace import Trace
     from . import Bundle
 
 
@@ -260,7 +260,7 @@ def _bundle_derive_episode_status(
     """Fold a bundle's episode members into a derived episode status.
 
     Exposed as the budget-preserving dynamic method
-    ``Bundle.derive_episode_status``. This is a DERIVATION, never a settled
+    ``Bundle.episode_status``. This is a DERIVATION, never a settled
     outcome: the fold recomputes from member outcomes plus optional ledger
     geometry, writes nothing, and there is no Bundle-level settlement
     (Bundle has no outcome FIELD by design; members remain the settlement

@@ -136,7 +136,7 @@ def test_gradcam_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
         sys.modules, "pytorch_grad_cam", _module("pytorch_grad_cam", GradCAM=FakeGradCAM)
     )
 
-    payload = tl.bridge.gradcam.cam(log, "conv", inputs=x, targets=["class-0"])
+    payload = tl.bridge.pytorch_grad_cam.cam(log, "conv", inputs=x, targets=["class-0"])
 
     assert payload["schema"] == "torchlens.gradcam.v1"
     assert payload["model"] is model
@@ -209,9 +209,7 @@ def test_steering_vectors_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> No
         sys.modules, "steering_vectors", _module("steering_vectors", SteeringVector=SteeringVector)
     )
 
-    direction = tl.intervention.direction_from_pairs(
-        log_pos, log_neg, "linear", read_token_index=None
-    )
+    direction = tl.intervention.fit_direction(log_pos, log_neg, "linear", read_token_index=None)
     converted = tl.bridge.steering_vectors.from_direction(direction, layer=3)
 
     expected = (log_pos["linear"].out - log_neg["linear"].out).mean(dim=0)
@@ -248,7 +246,7 @@ def test_repeng_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     log_pos, log_neg = _contrastive_logs()
     monkeypatch.setitem(sys.modules, "repeng", _module("repeng", ControlVector=ControlVector))
 
-    direction = tl.intervention.direction_from_pairs(
+    direction = tl.intervention.fit_direction(
         log_pos, log_neg, "linear", "pca", read_token_index=None
     )
     vector = tl.bridge.repeng.from_direction(direction, layer=2, model_type="tiny")
@@ -274,7 +272,7 @@ def test_dialz_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     log_pos, log_neg = _contrastive_logs()
     monkeypatch.setitem(sys.modules, "dialz", _module("dialz", SteeringVector=SteeringVector))
 
-    direction = tl.intervention.direction_from_pairs(
+    direction = tl.intervention.fit_direction(
         log_pos, log_neg, "linear", "pca", read_token_index=None
     )
     vector = direction.to_dialz(layer=1, model_type="tiny")

@@ -103,23 +103,23 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
         "RF-selection-kind-mix",
         "selection_kind_incompatible",
         "kind",
-        lambda: _tl().units("relu_1_2", [(0, 0)]) & _tl().params("0.weight"),
+        lambda: _tl().units("relu_1_2", [(0, 0)]) & _tl().param("0.weight"),
     ),
     RefusalRow(
         "RF-halted-runnable-save",
         "halted_capture_not_runnable",
         "HALTED",
-        lambda: _tl().save(
-            _tl().trace(_model(), _x(), halt=_tl().func("relu")),
-            "/tmp/proofnet-halted-runnable-refused.tlspec",
-            level="runnable",
+        lambda: (
+            _tl()
+            .trace(_model(), _x(), halt=_tl().func("relu"))
+            .save("/tmp/proofnet-halted-runnable-refused.tlspec", level="runnable")
         ),
     ),
     RefusalRow(
         "RF-edges-without-arming",
         "edge_provenance_unavailable",
         "intervention_ready",
-        lambda: _tl().trace(_model(), _x()).edges,
+        lambda: _tl().trace(_model(), _x()).graph.edges,
     ),
     RefusalRow(
         "RF-summary-axis-conflict",
@@ -137,7 +137,7 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
         "RF-topk-param-population",
         "selection_kind_incompatible",
         "ACT",
-        lambda: _tl().top_k(_tl().params("0.weight"), 3),
+        lambda: _tl().top_k(_tl().param("0.weight"), 3),
     ),
     RefusalRow(
         "RF-changed-self-comparison",

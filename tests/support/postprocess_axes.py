@@ -220,7 +220,7 @@ class AssigningVarNamesModel(nn.Module):
     Closes the matrix gap behind the ``("11.5", "var_names")`` permanent
     no-op row (module-internal calls never name the wrapped function in
     their assignment line, so the oracle axes resolve to the empty
-    default). Runs under ``save_code_context=True``.
+    default). Runs under ``save_source_context=True``.
     """
 
     def __init__(self) -> None:
@@ -256,7 +256,7 @@ def _axis_backward_armed() -> Any:
 def _axis_save_code_context() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    return tl.trace(model, model_input, capture=tl.options.CaptureOptions(save_code_context=True))
+    return tl.trace(model, model_input, capture=tl.options.CaptureOptions(save_source_context=True))
 
 
 def _axis_streaming(tmp_dir: str) -> Any:
@@ -473,7 +473,7 @@ def _axis_var_names() -> Any:
     return tl.trace(
         AssigningVarNamesModel().eval(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(save_code_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
     )
 
 

@@ -3,9 +3,9 @@
 Bundle is the THIRD instance of the "two answers for one product"
 outcome-authority disease (PartialTrace: ``_OUTCOME_DELEGATE_FIELD``;
 Recording: ``_OUTCOME_SELF_AUTHORITY``): ``outcome_for(bundle)`` returned
-``None`` while every member was COMPLETE, so ``tl.save(bundle)`` false-refused
+``None`` while every member was COMPLETE, so ``bundle.save(path)`` false-refused
 EVERY bundle (N1 status 'unknown' + a RuntimeWarning blaming the user for
-hand-building an object ``tl.bundle()`` built) while ``bundle.save()`` worked.
+hand-building an object ``tl.Bundle()`` built) while ``bundle.save()`` worked.
 
 This file pins the retirement of that disagreement:
 
@@ -28,6 +28,7 @@ import torch
 from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
 from torchlens.bundle import Bundle, _fold_member_outcomes
 from torchlens.capture.outcome import (
     CaptureOutcome,
@@ -36,14 +37,13 @@ from torchlens.capture.outcome import (
     outcome_for,
     require_capture_capability,
 )
-from torchlens.data_classes.trace import Trace
 from torchlens.errors import InvalidArgumentError
 
 # Least -> most severe; the fold picks the maximum over members.
 SEVERITY_ORDER = [
     CaptureStatus.COMPLETE,
     CaptureStatus.UNATTESTED,
-    CaptureStatus.HALTED,
+    CaptureStatus.STOPPED,
     CaptureStatus.ABORTED_NONFINITE,
     CaptureStatus.FAILED,
     CaptureStatus.UNKNOWN,
@@ -73,19 +73,19 @@ def _failed_trace() -> Trace:
         with torch.no_grad():
             tl.trace(ExplodingModel(), torch.ones(1, 3))
     except RuntimeError as exc:
-        return tl.partial.from_failed_capture(exc).trace
+        return tl._partial.from_failed_capture(exc).trace
     raise AssertionError("capture unexpectedly succeeded")
 
 
 @pytest.fixture(scope="module")
 def complete_pair():
-    """Bundle of two real COMPLETE captures, built by tl.bundle()."""
+    """Bundle of two real COMPLETE captures, built by tl.Bundle()."""
 
     with torch.no_grad():
         a = tl.trace(ThreeStageModel(), torch.ones(1, 3))
         b = tl.trace(ThreeStageModel(), torch.ones(1, 3))
     try:
-        yield tl.bundle({"a": a, "b": b})
+        yield tl.Bundle({"a": a, "b": b})
     finally:
         a.cleanup()
         b.cleanup()
@@ -101,8 +101,8 @@ def test_fold_all_complete_is_complete() -> None:
         [("a", _outcome(CaptureStatus.COMPLETE)), ("b", _outcome(CaptureStatus.COMPLETE))]
     )
     assert folded.status is CaptureStatus.COMPLETE
-    assert folded.derived is True
-    assert "worst-of-members" in (folded.settlement_note or "")
+    assert folded.is_derived is True
+    assert "worst-of-members" in (folded.note or "")
 
 
 @pytest.mark.parametrize("status", [s for s in SEVERITY_ORDER if s is not CaptureStatus.COMPLETE])
@@ -133,7 +133,7 @@ def test_fold_unsettled_member_is_unknown_fail_closed() -> None:
 
     folded = _fold_member_outcomes([("a", _outcome(CaptureStatus.COMPLETE)), ("b", None)])
     assert folded.status is CaptureStatus.UNKNOWN
-    assert "no settled outcome" in (folded.settlement_note or "")
+    assert "no settled outcome" in (folded.note or "")
 
 
 def test_fold_empty_domain_is_unknown_fail_closed() -> None:
@@ -141,7 +141,7 @@ def test_fold_empty_domain_is_unknown_fail_closed() -> None:
 
     folded = _fold_member_outcomes([])
     assert folded.status is CaptureStatus.UNKNOWN
-    assert folded.derived is True
+    assert folded.is_derived is True
 
 
 def test_fold_note_names_driving_member() -> None:
@@ -151,7 +151,7 @@ def test_fold_note_names_driving_member() -> None:
             ("bad", _outcome(CaptureStatus.FAILED)),
         ]
     )
-    note = folded.settlement_note or ""
+    note = folded.note or ""
     assert "'bad'" in note
     assert "failed" in note
 
@@ -171,7 +171,7 @@ def test_outcome_for_bundle_returns_fold_not_none(complete_pair: Bundle) -> None
     settled = outcome_for(complete_pair)
     assert settled is not None
     assert settled.status is CaptureStatus.COMPLETE
-    assert settled.derived is True
+    assert settled.is_derived is True
     assert complete_pair.outcome.status is CaptureStatus.COMPLETE
 
 
@@ -191,13 +191,13 @@ def test_capability_gate_on_bundle_no_false_hand_built_warning(complete_pair: Bu
 
 
 def test_both_doors_save_a_complete_bundle(tmp_path, complete_pair: Bundle) -> None:
-    """tl.save(bundle) stops false-refusing; both doors round-trip identically."""
+    """bundle.save(path) stops false-refusing; both doors round-trip identically."""
 
     door_tl = tmp_path / "door_tl.tlspec"
     door_method = tmp_path / "door_method.tlspec"
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.save(complete_pair, door_tl)
+        complete_pair.save(door_tl)
     hand_built = [w for w in caught if "no settled capture outcome" in str(w.message)]
     assert not hand_built, "the false hand-built-object warning must be gone"
     complete_pair.save(door_method)
@@ -217,15 +217,15 @@ def test_both_doors_save_a_halted_bundle(tmp_path) -> None:
     with torch.no_grad():
         complete = tl.trace(ThreeStageModel(), torch.ones(1, 3))
         halted = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
-    mixed = tl.bundle({"complete": complete, "halted": halted})
-    assert mixed.outcome.status is CaptureStatus.HALTED
+    mixed = tl.Bundle({"complete": complete, "halted": halted})
+    assert mixed.outcome.status is CaptureStatus.STOPPED
 
-    tl.save(mixed, tmp_path / "tl_door.tlspec")
+    mixed.save(tmp_path / "tl_door.tlspec")
     mixed.save(tmp_path / "method_door.tlspec")
     loaded = tl.load(tmp_path / "tl_door.tlspec")
     settled = outcome_for(loaded)
     assert settled is not None
-    assert settled.status is CaptureStatus.HALTED
+    assert settled.status is CaptureStatus.STOPPED
 
 
 def test_refuted_hypothesis_pin_failed_member_refuses_both_doors(tmp_path) -> None:
@@ -238,11 +238,11 @@ def test_refuted_hypothesis_pin_failed_member_refuses_both_doors(tmp_path) -> No
     with torch.no_grad():
         good = tl.trace(ThreeStageModel(), torch.ones(1, 3))
     bad = _failed_trace()
-    mixed = tl.bundle({"good": good, "bad": bad})
+    mixed = tl.Bundle({"good": good, "bad": bad})
     assert mixed.outcome.status is CaptureStatus.FAILED
 
     with pytest.raises(CaptureOutcomeError) as tl_door:
-        tl.save(mixed, tmp_path / "tl_door.tlspec")
+        mixed.save(tmp_path / "tl_door.tlspec")
     assert tl_door.value.fields["code"] == "N1"
     with pytest.raises(CaptureOutcomeError) as method_door:
         mixed.save(tmp_path / "method_door.tlspec")
@@ -256,7 +256,7 @@ def test_container_fold_never_gates_a_member_read(tmp_path) -> None:
     with torch.no_grad():
         good = tl.trace(ThreeStageModel(), torch.ones(1, 3))
     bad = _failed_trace()
-    mixed = tl.bundle({"good": good, "bad": bad})
+    mixed = tl.Bundle({"good": good, "bad": bad})
 
     # Container fold is FAILED, but the COMPLETE member's facts stay readable
     # and savable through its own per-member gate.
@@ -265,7 +265,7 @@ def test_container_fold_never_gates_a_member_read(tmp_path) -> None:
     assert require_capture_capability(good_member, "validation_entry").status is (
         CaptureStatus.COMPLETE
     )
-    tl.save(good_member, tmp_path / "good_member.tlspec")
+    good_member.save(tmp_path / "good_member.tlspec")
     # The FAILED member's own gate keeps refusing (per-member, not container).
     with pytest.raises(CaptureOutcomeError):
         require_capture_capability(mixed["bad"], "validation_entry")
@@ -279,7 +279,7 @@ def test_container_fold_never_gates_a_member_read(tmp_path) -> None:
 @pytest.mark.smoke
 def test_runnable_level_refuses_identically_at_both_doors(tmp_path, complete_pair: Bundle) -> None:
     with pytest.raises(InvalidArgumentError) as tl_door:
-        tl.save(complete_pair, tmp_path / "r1.tlspec", level="runnable")
+        complete_pair.save(tmp_path / "r1.tlspec", level="runnable")
     assert tl_door.value.fields["code"] == "artifact_save_level_unsupported"
     with pytest.raises(InvalidArgumentError) as method_door:
         complete_pair.save(tmp_path / "r2.tlspec", level="runnable")
@@ -287,13 +287,19 @@ def test_runnable_level_refuses_identically_at_both_doors(tmp_path, complete_pai
 
 
 def test_trace_only_save_options_refuse_typed(tmp_path, complete_pair: Bundle) -> None:
-    """tl.save(bundle) honors exactly the container door's surface; per-trace
+    """bundle.save(path) honors exactly the container door's surface; per-trace
     payload options refuse typed instead of being silently dropped."""
 
+    from torchlens._io.bundle import save as _save_bundle
+
     for kwargs in ({"include_weights": True}, {"include_outs": False}, {"strict": False}):
+        # Bundle.save takes no per-trace options at all; the private save door
+        # still refuses them typed rather than dropping them.
+        with pytest.raises(TypeError):
+            complete_pair.save(tmp_path / "opt.tlspec", **kwargs)
         with pytest.raises(InvalidArgumentError) as excinfo:
-            tl.save(complete_pair, tmp_path / "opt.tlspec", **kwargs)
+            _save_bundle(complete_pair, tmp_path / "opt.tlspec", **kwargs)
         assert excinfo.value.fields["code"] == "bundle_save_option_unsupported"
     # Explicitly passing a value equal to the trace-door default is honored.
-    tl.save(complete_pair, tmp_path / "default_ok.tlspec", strict=True, overwrite=True)
+    _save_bundle(complete_pair, tmp_path / "default_ok.tlspec", strict=True, overwrite=True)
     assert tl.load(tmp_path / "default_ok.tlspec").names == ["a", "b"]

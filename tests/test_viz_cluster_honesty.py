@@ -41,8 +41,8 @@ def _dot_source(tmp_path: Path, trace: tl.Trace, **draw_kwargs) -> str:
     outpath = tmp_path / "cluster_honesty"
     trace.draw(
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(outpath),
+        file_format="dot",
+        path=str(outpath),
         **draw_kwargs,
     )
     return (tmp_path / "cluster_honesty.dot").read_text()
@@ -228,12 +228,12 @@ def test_image_node_attrs_are_visualizer_relative(tmp_path: Path) -> None:
     trace = tl.trace(
         _Net(),
         images,
-        capture=tl.options.CaptureOptions(transform=_to_batch, save_raw_input=True),
+        capture=tl.options.CaptureOptions(input_transform=_to_batch, save_raw_input=True),
     )
     trace.draw(
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "img"),
+        file_format="dot",
+        path=str(tmp_path / "img"),
     )
     source = (tmp_path / "img.dot").read_text()
     image_attrs = re.findall(r'image="?([^",\]]+)"?', source)

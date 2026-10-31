@@ -8,20 +8,20 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, Literal, TypeAlias, cast
 
+from .._data_classes._compaction import compact_op_metadata
+from .._data_classes._site_key import SiteKeyMinter
+from .._data_classes.layer import Layer
+from .._data_classes.module import ModuleAccessor
+from .._data_classes.trace import Trace
+from .._ir.op_record import amend_preview_output_parent_mark
+from .._ir.workspaces import _init_module_hierarchy_data
+from .._postprocess._grouping_stamp import build_grouping_policy_stamp
+from .._postprocess._recurrence import compute_preview_recurrence_assignments, relabel_edge_metadata
+from .._postprocess.finalization import _build_module_logs, _build_root_module_log
+from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
+from .._quantities import Bytes
+from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from ..capture._nonfinite_prefix import strip_raw_label_suffix
-from ..data_classes._compaction import compact_op_metadata
-from ..data_classes._site_key import SiteKeyMinter
-from ..data_classes.layer import Layer
-from ..data_classes.module import ModuleAccessor
-from ..data_classes.trace import Trace
-from ..ir.op_record import amend_preview_output_parent_mark
-from ..ir.workspaces import _init_module_hierarchy_data
-from ..postprocess._grouping_stamp import build_grouping_policy_stamp
-from ..postprocess._recurrence import compute_preview_recurrence_assignments, relabel_edge_metadata
-from ..postprocess.finalization import _build_module_logs, _build_root_module_log
-from ..postprocess.loop_grouping_adapter import RecurrenceAssignment
-from ..quantities import Bytes
-from ..utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]
@@ -226,7 +226,7 @@ def _set_per_op_tracing_finished(trace: Trace) -> None:
 
     Notes
     -----
-    Mirrors ``torchlens.postprocess.finalization._set_tracing_finished``, which
+    Mirrors ``torchlens._postprocess.finalization._set_tracing_finished``, which
     also flips this flag on every retained ``OpLog`` (not just the trace). Without
     this, preview-backend ops stay stuck on the "mid-capture" ``__str__``/repr
     branch, which assumes torch-only attributes (e.g. ``grad_fn``) and crashes
@@ -620,7 +620,7 @@ def _finalize_single_op(
         op_log.equivalence_class = assignment.equivalence_key
     trace.layer_list.append(op_log)
     # Torch parity: layer_dict_main_keys is ALWAYS keyed by the pass-qualified
-    # op.label (postprocess/labeling.py's
+    # op.label (_postprocess/labeling.py's
     # ``self.layer_dict_main_keys[layer_entry.label] = layer_entry``), never
     # the raw backend label -- a single-pass op's raw label was never a valid
     # main key, so any lookup of a relabeled (bare or pass-qualified) final
@@ -632,7 +632,7 @@ def _finalize_single_op(
     # multi-pass groups). Without this, single-pass ops -- the common case --
     # were never resolvable by bare layer_label through layer_dict_all_keys,
     # which silently starved module-hierarchy building
-    # (postprocess/finalization.py::_build_module_logs looks each recorded
+    # (_postprocess/finalization.py::_build_module_logs looks each recorded
     # layer up by its bare label via this exact dict) of every single-pass
     # op, leaving Module.layer_labels empty for any module whose ops never
     # recur and tripping the module_layer_containment invariant.
@@ -837,7 +837,7 @@ def _update_param_totals_from_layers(trace: Trace) -> None:
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
         trace.num_layers_with_params = len(
-            {op.layer_label for op in trace.layer_list if op.uses_params}
+            {op.layer_label for op in trace.layer_list if op.has_params}
         )
 
 
@@ -1171,7 +1171,7 @@ def new_preview_function_trace(
     save_raw_input: str | bool,
     batch_render: str,
     output_transform: object | None,
-    save_raw_output: str | bool,
+    save_transformed_output: str | bool,
     param_source: str,
     compute_input_output_distances: bool = True,
 ) -> Trace:
@@ -1205,7 +1205,7 @@ def new_preview_function_trace(
         Raw-input render policy.
     output_transform:
         Optional output transform.
-    save_raw_output:
+    save_transformed_output:
         Raw-output save policy.
     param_source:
         Backend parameter provenance (``"pytree-derived"``, ``"none"``, ...).
@@ -1224,27 +1224,27 @@ def new_preview_function_trace(
         activation_transform=None,
         grad_transform=None,
         save_raw_activations=True,
-        save_raw_gradients=True,
+        save_raw_grads=True,
         keep_orphans=keep_orphans,
-        save_arg_values=False,
+        save_args=False,
         save_grads=None,
         detach_saved_activations=False,
         mark_layer_depths=compute_input_output_distances,
         num_context_lines=num_context_lines,
         optimizer=None,
-        save_code_context=False,
-        save_rng_states=False,
+        save_source_context=False,
+        save_rng=False,
         recurrence_detection=recurrence_detection,
         verbose=verbose,
         backward_ready=False,
         module_filter=None,
         emit_nvtx=False,
-        transform=None,
+        input_transform=None,
         raw_input=raw_input,
         save_raw_input=save_raw_input,
         batch_render=batch_render,
         output_transform=cast("Callable[[Any], Any] | None", output_transform),
-        save_raw_output=save_raw_output,
+        save_transformed_output=save_transformed_output,
         layer_visualizers=None,
         save_visualizations=False,
     )

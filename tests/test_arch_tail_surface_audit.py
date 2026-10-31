@@ -17,6 +17,7 @@ generator output), and the root facade's ``dir()`` advertises every row.
 from __future__ import annotations
 
 import importlib
+import pkgutil
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,11 @@ from torchlens._architecture import layer_for_module
 from torchlens._surface import surface_rows
 
 TABLE = Path(__file__).with_name("test_arch_spine_surface_table.tsv")
+
+#: Floor on the deep walk's denominator. Re-keyed 31 Oct 2026 to the decided
+#: round-1 surface (lazy namespaces plus public non-lazy submodules); it may
+#: only go down through a decided surface change.
+DEEP_WALK_FLOOR = 975
 
 _HEADER = (
     "canonical_path\thome_module\timplementation_layer\tproduct_role\tin_all\tlegacy_top_level"
@@ -56,11 +62,12 @@ def test_dir_advertises_every_surface_row() -> None:
 
 @pytest.mark.heavy
 def test_deep_reachable_walk_resolves_with_layer_rows() -> None:
-    """Every advertised member of every lazy namespace resolves to a layered home.
+    """Every advertised member of every public namespace resolves to a layered home.
 
     The denominator is walked from code, never hand-listed: the root facade's
-    lazy-attribute table names the namespaces; each namespace's ``__all__``
-    names its advertised members. RED conditions: a member that raises on
+    lazy-attribute table names the lazy namespaces, ``pkgutil`` names the
+    public non-lazy submodules, and each namespace's ``__all__`` names its
+    advertised members (underscore names never count for the submodules). RED conditions: a member that raises on
     access, and a member whose torchlens home module resolves to no declared
     layer or role.
     """
@@ -69,11 +76,23 @@ def test_deep_reachable_walk_resolves_with_layer_rows() -> None:
     unresolvable: list[tuple[str, str]] = []
     unlayered: list[tuple[str, str]] = []
     walked = 0
+    advertised: list[tuple[str, object, list[str]]] = []
+    lazy_paths = {module_path for module_path, attr in lazy.values() if attr is None}
     for _name, (module_path, attr) in sorted(lazy.items()):
         if attr is not None:
             continue  # plain name rows are covered by the root cold sweep
         namespace = importlib.import_module(module_path)
-        for member in getattr(namespace, "__all__", ()) or ():
+        advertised.append((module_path, namespace, list(getattr(namespace, "__all__", ()) or ())))
+    # Public non-lazy submodules: only their public ``__all__`` names count.
+    for info in sorted(pkgutil.iter_modules(torchlens.__path__), key=lambda i: i.name):
+        module_path = f"torchlens.{info.name}"
+        if info.name.startswith("_") or module_path in lazy_paths:
+            continue
+        namespace = importlib.import_module(module_path)
+        names = [n for n in getattr(namespace, "__all__", ()) or () if not n.startswith("_")]
+        advertised.append((module_path, namespace, names))
+    for module_path, namespace, members in advertised:
+        for member in members:
             walked += 1
             try:
                 value = getattr(namespace, member)
@@ -85,8 +104,8 @@ def test_deep_reachable_walk_resolves_with_layer_rows() -> None:
                 dotted = home[len("torchlens") :].lstrip(".")
                 if layer_for_module(dotted) is None:
                     unlayered.append((f"{module_path}.{member}", home))
-    print(f"\nDEEP SURFACE WALK: {walked} advertised members across lazy namespaces")
-    assert walked >= 1000, (
+    print(f"\nDEEP SURFACE WALK: {walked} advertised members across public namespaces")
+    assert walked >= DEEP_WALK_FLOOR, (
         f"the deep walk shrank to {walked} members -- if namespaces stopped "
         "advertising __all__ this audit lost its denominator; investigate before "
         "adjusting the floor"

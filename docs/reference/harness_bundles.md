@@ -44,7 +44,7 @@ draft_output = {"stream": "input", "batch_row": 0, "completion": [3, 6]}
 tl.io.attach_sidecar(b["draft"], "torchlens.boundary_facts", draft_output)
 b.relate("fed_by", "critique", "draft", token_spans=[[3, 6, 1, 4]], label="critique")
 
-row = b.member_relations[0]
+row = b.relations[0]
 assert (row.from_member, row.to_member) == ("critique", "draft")
 assert row.params["basis"] == "verified" and row.params["coverage"] == 1.0
 assert b.upstream("critique") == ("draft",)
@@ -164,7 +164,7 @@ re-run over the members' retained token ids, must return the same spans. Spans t
 not what the matcher finds are stored as `verified` (checked, but not found by TorchLens); spans
 that contradict the ids refuse `bundle_relation_span_unverified`; missing evidence leaves the row
 `declared`. Saved bundles keep each member's token-id input and its binding, so a matched row
-re-attests after `tl.save` and `tl.load`, lazy or not.
+re-attests after `Trace.save` and `tl.load`, lazy or not.
 
 ## Reading aligned activations
 
@@ -210,7 +210,7 @@ tl.io.attach_sidecar(draft, "torchlens.boundary_facts", binding)
 critique = tl.trace(lm, torch.tensor([[4, 5, 6, 7, 8, 9, 10, 11]]))
 b = tl.Bundle({"draft": draft, "critique": critique})
 b.relate("fed_by", "critique", "draft", token_spans="auto", label="critique")
-assert b.member_relations[0].params["basis"] == "matched"
+assert b.relations[0].params["basis"] == "matched"
 
 pairs = b.token_pairs("critique", "draft")
 assert pairs.pairs == ((3, 3), (4, 4), (5, 5), (6, 6)) and pairs.coverage == 1.0
@@ -238,7 +238,7 @@ it where you report the number and call the result a descriptive comparison.
   `selected_by`, `successor_of`, `forked_from`, `escalates`), nearest member first.
 - `b.node(site, members=["a", "b"])`: one site across a subset of members, so a foreign member such
   as a small router model does not disable the view for the rest.
-- `tl.show_bundle_graph(b, nodes="members")`: one node per member and one edge per relation row,
+- `tl.visualization.show_bundle_graph(b, nodes="members")`: one node per member and one edge per relation row,
   drawn from the earlier member to the later one and labelled with the kind, the row's `label`, on
   `fed_by` its basis and coverage, and on `selected_by` the `chosen` decision. Solid edges carry token spans TorchLens checked
   (`verified` or `matched`); every other row is dashed. `nodes="ops"` (the default) keeps the
@@ -379,7 +379,7 @@ b.relate("fed_by", "critique", "draft", token_spans="auto", label="critique")
 b.relate("fed_by", "revise", "draft", token_spans="auto")
 b.relate("fed_by", "revise", "critique", token_spans="auto", label="revision")
 assert b.downstream("draft") == ("critique", "revise")
-assert all(row.params["basis"] == "matched" for row in b.member_relations)
+assert all(row.params["basis"] == "matched" for row in b.relations)
 
 # Does the critic encode the draft the way the drafter did? Same model, aligned tokens only.
 pairs = b.token_pairs("critique", "draft")
@@ -428,7 +428,7 @@ answer = tl.trace(big, torch.cat([torch.tensor([[1]]), q, tools[choice]], dim=1)
 b = tl.Bundle({"route": route, "answer": answer})
 b.relate("selected_by", "answer", "route", chosen=choice, candidates=[0, 1])  # control, not content
 assert b.upstream("answer") == ("route",)
-assert b.member_relations[0].params["chosen"] == choice
+assert b.relations[0].params["chosen"] == choice
 # The tool's tokens in the answer prompt are covered by no span: text from outside any traced
 # call. Reads scoped with b.node(site, members=[...]) skip the foreign router model.
 ```
@@ -492,7 +492,7 @@ for i, name in enumerate(names[1:], start=1):
         params = {"label": label} if label else {}
         b.relate("fed_by", name, earlier, token_spans="auto", **params)
 assert set(b.upstream("judge")) == {"A0", "B0", "A1", "B1"}
-assert all(row.params["basis"] == "matched" for row in b.member_relations)
+assert all(row.params["basis"] == "matched" for row in b.relations)
 # How B encodes A's argument, against A's own encoding of it (same model, aligned tokens only).
 pairs = b.token_pairs("B1", "A1")
 a_side = b["A1"]["block"].out[0, pairs.source_positions]
@@ -564,7 +564,7 @@ def critique_loop(lm, q, *, intervene):  # your harness; intervene maps a call n
 
 torch.manual_seed(0)
 lm, q = TinyLM().eval(), torch.tensor([[20, 21, 22]])
-steer = tl.when(tl.module("block"), tl.steer(torch.randn(16), magnitude=6.0, feature_axis=-1))
+steer = tl.when(tl.module("block"), tl.steer(torch.randn(16), strength=6.0, dim=-1))
 
 b = critique_loop(lm, q, intervene={})
 report = b.add_alternative(critique_loop(lm, q, intervene={"draft": steer}), steered=("draft",))

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TypeAlias
 
-from . import TorchLensIOError
+from . import ArtifactError
 
 ExceptionType: TypeAlias = type[Exception]
 
@@ -14,7 +14,7 @@ def reject_symlink_path(
     path: Path,
     *,
     context: str,
-    exc_type: ExceptionType = TorchLensIOError,
+    exc_type: ExceptionType = ArtifactError,
     message_prefix: str = "Refusing symlinked",
     trailing_period: bool = True,
     code: str | None = None,
@@ -74,13 +74,13 @@ def resolve_bundle_blobs_dir(bundle_root: Path) -> Path:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the ``blobs/`` directory is a symlink.
     """
 
     blobs_dir = bundle_root / "blobs"
     if blobs_dir.is_symlink():
-        raise TorchLensIOError(f"Refusing symlinked blobs directory: {blobs_dir}.")
+        raise ArtifactError(f"Refusing symlinked blobs directory: {blobs_dir}.")
     return blobs_dir.resolve()
 
 
@@ -109,7 +109,7 @@ def resolve_bundle_blob_path(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the path is absolute, contains ``".."``, resolves outside the
         bundle's ``blobs/`` directory, or the ``blobs/`` directory itself is a
         symlink.
@@ -117,24 +117,22 @@ def resolve_bundle_blob_path(
 
     candidate_path = Path(relative_path)
     if candidate_path.is_absolute():
-        raise TorchLensIOError(f"Bundle rejected absolute relative_path {relative_path!r}.")
+        raise ArtifactError(f"Bundle rejected absolute relative_path {relative_path!r}.")
     if ".." in candidate_path.parts:
-        raise TorchLensIOError(
-            f"Bundle rejected parent traversal in relative_path {relative_path!r}."
-        )
+        raise ArtifactError(f"Bundle rejected parent traversal in relative_path {relative_path!r}.")
 
     blobs_dir = bundle_root / "blobs"
     if resolved_blobs_dir is not None and blobs_dir.is_symlink():
         # Keep the per-candidate guard when a caller reuses its canonical root:
         # replacing blobs/ with a symlink during an operation must still fail.
-        raise TorchLensIOError(f"Refusing symlinked blobs directory: {blobs_dir}.")
+        raise ArtifactError(f"Refusing symlinked blobs directory: {blobs_dir}.")
     try:
         candidate = (bundle_root / candidate_path).resolve()
     except (ValueError, OSError) as exc:
         # A NUL byte (or another OS-unrepresentable component) in a hostile
         # manifest path raised a bare ValueError from ``Path.resolve``; every
         # other hostile shape refuses typed, so this one must too.
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Bundle rejected unresolvable relative_path {relative_path!r}."
         ) from exc
     allowed_root = (
@@ -143,7 +141,7 @@ def resolve_bundle_blob_path(
     try:
         candidate.relative_to(allowed_root)
     except ValueError as exc:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Bundle rejected path traversal outside blobs/: {relative_path!r}."
         ) from exc
     return candidate

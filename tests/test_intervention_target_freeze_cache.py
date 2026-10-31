@@ -126,7 +126,7 @@ def test_predicate_intervention_targets_unchanged() -> None:
         save=tl.func("relu"),
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
     )
-    frozen = trace.intervention_spec
+    frozen = trace.recipe
     labels = [target.selector_value for target in frozen.targets]
     assert labels == sorted(set(labels), key=labels.index)
     assert len(labels) == 6

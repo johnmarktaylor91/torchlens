@@ -48,7 +48,7 @@
   becomes a presence gap), aligns seq counters as deltas from each rank's first recorded key,
   and treats witness digests as demote-only evidence. Artifacts save as `merged-directory`
   bundles whose descriptor is a cache: loads rederive from the rank cores and refuse typed on
-  any inequality. Frozen enums + error/finding codes: `torchlens.merged` +
+  any inequality. Frozen enums + error/finding codes: `torchlens._merged` +
   `docs/reference/merged_trace_contract.md` (ordered-equality gated). p2p/pipeline (C3) and
   DTensor topologies (C2) refuse typed; merged replay does not exist.
 - `CaptureOptions(save_budget=...)` is a per-device ceiling on retained activation bytes, default
@@ -63,7 +63,7 @@
 - Streamed disk writes are ASYNC BY DEFAULT for `trace(storage=tl.to_disk(...))` (spellings
   DOCUMENTED-UNSTABLE): one FIFO worker overlaps blob serialize+write+sha256 with the forward,
   payloads snapshot at submission, `to_disk(max_pending_bytes=)` (256 MiB default) blocks capture
-  when the disk falls behind, a failed write raises typed `TorchLensIOError` + PARTIAL, finalize
+  when the disk falls behind, a failed write raises typed `ArtifactError` + PARTIAL, finalize
   drains before publish, and bundles are byte-identical to sync. `async_writes=False` opts out;
   `tl.record` streaming stays synchronous and refuses an explicit `True`.
 - On torch >= 2.6 (`HAS_SET_STANCE`), every capture holds
@@ -107,7 +107,7 @@
   a helper. Tests: `tests/test_protocol_redispatch.py`.
 - Buffer provenance never rests on values: step 6 merges two buffer nodes only when
   capture recorded the same buffer version for both (tensor object, storage and version counter,
-  `RawGraphWorkspace.buffer_version_keys`) and the later one is not a journaled write, and a buffer
+  `torchlens._ir.workspaces.RawGraphWorkspace.buffer_version_keys`) and the later one is not a journaled write, and a buffer
   version replays as `identity` of its producer only on exact NaN-equal bytes (`tensor_nanequal`).
   Comparing buffer values with IEEE `torch.equal` made a model whose buffers reach NaN from one entry
   state record a different graph, so validation's re-trace called it non-reproducible.
@@ -174,15 +174,15 @@
   each step or the next rerun or recipe save refuses `helper_tensor_changed_since_capture`. A
   bound executor is live instead: each call reads the tensor, an in-place change applies to the
   next call, and `BindReport.helper_tensor_versions` shows the version counter moving.
-- "Pristine" has three senses; never read one as another. `Trace.pristine` (documented-unstable)
+- "Pristine" has three senses; never read one as another. `Trace.is_pristine` (documented-unstable)
   is the derived reading "nothing ever intervened on this trace", computed from the evidence the
-  trace carries (`torchlens/data_classes/_trace_pristine.py`, one function), so it survives save
+  trace carries (`torchlens/_data_classes/_trace_pristine.py`, one function), so it survives save
   and load and stays `False` after `clear_hooks()`, a `Trace.state` reassignment or a fork; `None`
   means no evidence (an artifact older than tlspec 9, or a non-torch backend) and must never be
   treated as `True`. `TraceState.PRISTINE` is only the operational state machine's start value: an
   assignment sets it and a func-targeted `intervene=` capture keeps it. Validation's
   pristine-torch oracle (`torchlens/validation/_pristine.py`) means unwrapped torch functions.
-  Bundle's pristine label and baseline auto-detection read `Trace.pristine is True`.
+  Bundle's pristine label and baseline auto-detection read `Trace.is_pristine is True`.
 - A capture-time module edit (`intervene=` with a `tl.module(...)` selector) is its own
   `interventionreplacement` op between the module's last op and its consumers. The last op keeps
   its pre-edit value by design (`tl.module(...)` reads the replacement op), and every later op is
@@ -193,7 +193,7 @@
 - Labels inside a binding: `spec.bind(model)` runs the model without a capture, so its ops carry
   only the raw labels minted during the forward (`relu_1_2_raw`). A final, short or pass-qualified
   label (`tl.label("relu_1_2")`, `tl.label("relu_1")`, `"conv2d_2_3:1"`, the same literals in
-  `tl.contains` or `tl.regex`) and `tl.followed_by`, `tl.preceded_by` or `tl.input_at` can never
+  `tl.label_contains` or `tl.label_matches`) and `tl.followed_by`, `tl.preceded_by` or `tl.model_input` can never
   match there, negated or combined, so `.bind(...)` refuses the rule with `BindingPreflightError`
   code `bind_rule_unsupported` before any forward runs. Select the op structurally instead:
   `tl.func("relu") & tl.in_module("1")` (the label's op type, plus a module address from

@@ -250,7 +250,7 @@ def test_validated_capture_restores_every_restorable_kind(
         before = _model_state(model)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            tl.validate(model, torch.randn(2, 6, device=device), scope="forward", random_seed=11)
+            tl.validate(model, torch.randn(2, 6, device=device), scope="forward", seed=11)
         _assert_same_state(before, _model_state(model))
         rng_states.append(torch.get_rng_state())
     assert torch.equal(rng_states[0], rng_states[1])

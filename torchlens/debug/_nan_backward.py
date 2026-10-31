@@ -25,12 +25,12 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._debug_report import FoundReport, rows_of
-from ._first_bad import FirstBadThing, amp_scaled_gradients_hint
+from ._first_bad import FirstBadThing, amp_scaled_grads_hint
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
-__all__ = ["BackwardNanResult", "BackwardTransition", "bisect_nan_backward"]
+__all__ = ["BackwardNanReport", "BackwardTransition", "bisect_nan_backward"]
 
 
 @dataclass(frozen=True)
@@ -82,7 +82,7 @@ class BackwardTransition:
 
 
 @dataclass(frozen=True)
-class BackwardNanResult(FoundReport):
+class BackwardNanReport(FoundReport):
     """Result of :func:`bisect_nan_backward`.
 
     Parameters
@@ -240,7 +240,10 @@ def _nonfinite_kind_of(leaves: list[torch.Tensor]) -> tuple[str, int, int]:
 def _grad_fn_rows(trace: Trace) -> dict[str, Any]:
     """Index grad_fn records by label through one accessor (unstable spellings)."""
 
-    return {getattr(node, "label", ""): node for node in getattr(trace, "grad_fns", ())}
+    return {
+        getattr(node, "label", ""): node
+        for node in getattr(getattr(trace, "autograd", None), "grad_fns", ())
+    }
 
 
 def _fire_index(node: Any) -> int:
@@ -289,7 +292,7 @@ def _select_backward_pass(trace: Trace, bwd: int | None) -> tuple[Any, int]:
     from .._errors import InvalidArgumentError
 
     try:
-        backward_passes = list(trace.backward_passes)
+        backward_passes = list(trace.autograd.backward_passes)
     except (ValueError, AttributeError):
         backward_passes = []
     if not backward_passes:
@@ -474,7 +477,7 @@ def bisect_nan_backward(
     *,
     bwd: int | None = None,
     grad_scale: float | None = None,
-) -> BackwardNanResult:
+) -> BackwardNanReport:
     """Locate where a backward pass's NaN/Inf gradients were BORN.
 
     Post-hoc over one logged backward; no rerun. Requires a trace captured
@@ -487,7 +490,7 @@ def bisect_nan_backward(
         Completed TorchLens trace with a captured backward.
     bwd:
         One-based backward pass selector; required when multiple passes were
-        captured (the ``gradient_flow_audit`` convention verbatim).
+        captured (the ``grad_health`` convention verbatim).
     grad_scale:
         Disclosed AMP loss scale (``scaler.get_scale()``); recorded on the
         result. The transition ledger classifies non-finiteness, which no
@@ -495,7 +498,7 @@ def bisect_nan_backward(
 
     Returns
     -------
-    BackwardNanResult
+    BackwardNanReport
         The full fire-order transition ledger with the earliest provable
         birth headlined.
 
@@ -551,11 +554,11 @@ def bisect_nan_backward(
             None,
         )
         if first_bad_kind == "inf":
-            amp_hint = amp_scaled_gradients_hint(all_nonfinite=True)
+            amp_hint = amp_scaled_grads_hint(all_nonfinite=True)
 
     message = _compose_message(walk, verdict_scope=verdict_scope, bwd=bwd, amp_hint=amp_hint)
 
-    return BackwardNanResult(
+    return BackwardNanReport(
         found=found,
         birth=birth,
         verdict_scope=verdict_scope,

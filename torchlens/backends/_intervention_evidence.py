@@ -1,6 +1,6 @@
 """Which backends write the intervention evidence a Trace's pristine reading uses.
 
-``Trace.pristine`` is derived from records an intervention leaves on the trace:
+``Trace.is_pristine`` is derived from records an intervention leaves on the trace:
 the intervention audit, the operation rows in ``state_history`` and the op
 intervention marks. Only the torch intervention engine writes those records.
 The other backends that accept interventions apply them without writing any of

@@ -17,7 +17,7 @@ the rest.
 
 ## 1. Fit the condition direction and a threshold
 
-The condition here is "the newest token is token 7". `direction_from_pairs`
+The condition here is "the newest token is token 7". `fit_direction`
 fits it from prompts that end in that token against prompts that do not, at
 the first MLP. The threshold is the midpoint between the two groups' mean
 scores on fresh prompts.
@@ -29,7 +29,7 @@ import torch.nn.functional as F
 import transformers
 
 import torchlens as tl
-from torchlens.intervention import direction_from_pairs, steer_generate
+from torchlens.intervention import fit_direction
 
 torch.manual_seed(0)
 config = transformers.LlamaConfig(
@@ -57,7 +57,7 @@ def prompts(n, triggered, seed):
 capture = tl.options.CaptureOptions(layers_to_save="all")
 pos = tl.trace(model, prompts(8, True, 1), capture=capture)
 neg = tl.trace(model, prompts(8, False, 2), capture=capture)
-condition = direction_from_pairs(pos, neg, CONDITION_SITE, method="pca")
+condition = fit_direction(pos, neg, CONDITION_SITE, method="pca")
 
 
 def score(activation):
@@ -86,7 +86,7 @@ starts empty for the next call, so no decision leaks from one prompt into the
 next. The second rule adds the behaviour direction at `STEER_SITE` only when
 that decision passed; otherwise it returns the activation object unchanged.
 
-Each prompt runs in its own `steer_generate` call, so one fire record belongs
+Each prompt runs in its own bound `generate` call, so one fire report belongs
 to one prompt and one forward. The binding derives `replaced` from object
 identity, not from anything the hook reports, which is why it is the evidence
 of whether the steer was applied.
@@ -118,13 +118,15 @@ gen_kwargs = {"max_new_tokens": 4, "do_sample": False, "use_cache": True, "pad_t
 eval_prompts = [("trigger", ids) for ids in prompts(3, True, 6)]
 eval_prompts += [("neutral", ids) for ids in prompts(3, False, 7)]
 
+bound = spec.bind(model, on_zero_fire="error")
 audit = []
 for prompt_index, (label, ids) in enumerate(eval_prompts):
     scores.clear()
-    result = steer_generate(model, ids[None], spec, on_zero_fire="error", **gen_kwargs)
-    steer_fires = [fire for fire in result.report.fires if fire["site_key"] == STEER_SITE]
+    outputs = bound.generate(ids[None], **gen_kwargs)
+    report = bound.last_report  # this call's fire records
+    steer_fires = [fire for fire in report.fires if fire["site_key"] == STEER_SITE]
     assert len(steer_fires) == len(scores)  # one condition read and one steer per forward
-    new_tokens = result.outputs[0, ids.shape[0] :].tolist()
+    new_tokens = outputs[0, ids.shape[0] :].tolist()
     for step, (value, fire) in enumerate(zip(scores, steer_fires)):
         audit.append(
             {
@@ -178,20 +180,20 @@ forward and its records carry `replaced=False` when the condition failed.
 Zero fires therefore means the rule never ran at all, which is a wiring
 mistake, never "the condition did not pass". The recipe passes
 `on_zero_fire="error"` so such a run refuses instead of producing an audit with
-no applied rows. `steer_generate`'s own default, `"warn"`, also records the
+no applied rows. The binding's default, `"warn"`, also records the
 fact on the report and warns. Here the reader is meant to run on the last
 generated token only, but the step was counted from 1: `at_step(4)`. Steps
 count from 0, so a four-token generation (steps 0 to 3) never reaches step 4:
 
 ```python
 # recipe-test: tool=transformers expected='bind_zero_fire'
-from torchlens.intervention import at_step
+from torchlens import at_step
 
 late = tl.when(tl.module(CONDITION_SITE) & at_step(4), read_condition).merge(
     tl.when(tl.module(STEER_SITE), gated_steer)
 )
 try:
-    steer_generate(model, eval_prompts[0][1][None], late, on_zero_fire="error", **gen_kwargs)
+    late.bind(model, on_zero_fire="error").generate(eval_prompts[0][1][None], **gen_kwargs)
 except Exception as error:
     RESULT = error.fields["code"]
 ```

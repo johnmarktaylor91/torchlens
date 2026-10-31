@@ -44,7 +44,7 @@ from ..semantic.patching import (
 from ._errors import refuse
 from ._params import head_weight_views
 
-__all__ = ["LoweredResult", "lowered_counterfactual"]
+__all__ = ["PatchedRun", "patch_head"]
 
 FORMULA_VERSION = "mikit_d11_v1"
 
@@ -53,7 +53,7 @@ _INVALIDATED = ("z", "pattern", "scores", "result", "q", "k", "v")
 
 
 @dataclass(frozen=True)
-class LoweredResult:
+class PatchedRun:
     """The receipted product of one lowered counterfactual.
 
     ``read_facet`` is the guarded read surface: invalidated virtual facets
@@ -130,12 +130,12 @@ def _delta_for(  # noqa: PLR0913 -- one cell's full evidence set (kind/head/two 
             remedy="use equal-length prompts",
         )
     v = _head_facet(corrupted_log, address, "v").to(torch.float32)  # [b, src, H_kv? , d]
-    group = max(1, views.n_q_heads // max(1, views.n_kv_heads))
+    group = max(1, views.num_q_heads // max(1, views.n_kv_heads))
     v_head = v[:, :, head // group if v.shape[2] == views.n_kv_heads else head, :]
     return ((pattern_clean - pattern_corrupt) @ v_head) @ w_o_h
 
 
-def lowered_counterfactual(  # noqa: PLR0913 -- the memo-normative D11 signature
+def patch_head(  # noqa: PLR0913 -- the memo-normative D11 signature
     model: Any,
     clean_input: Any,
     corrupted_input: Any,
@@ -145,7 +145,7 @@ def lowered_counterfactual(  # noqa: PLR0913 -- the memo-normative D11 signature
     kind: str = "head",
     metric: Any = None,
     trace_kwargs: Any = None,
-) -> LoweredResult:
+) -> PatchedRun:
     """Patch one head (or its pattern) on a fused model via exact lowering.
 
     Parameters
@@ -209,10 +209,10 @@ def lowered_counterfactual(  # noqa: PLR0913 -- the memo-normative D11 signature
         module = _select_layers(_attention_modules(corrupted_log), layer)[0]
         address = str(module.address)
         views = head_weight_views(corrupted_log, address)
-        if not 0 <= head < views.n_q_heads:
+        if not 0 <= head < views.num_q_heads:
             refuse(
                 code="mi_head_geometry_unavailable",
-                message=f"head {head} outside [0, {views.n_q_heads}).",
+                message=f"head {head} outside [0, {views.num_q_heads}).",
                 remedy="pass a query-head index",
                 head=head,
             )
@@ -244,7 +244,7 @@ def lowered_counterfactual(  # noqa: PLR0913 -- the memo-normative D11 signature
             address=address,
         )
         receipt = {
-            "capability": "lowered_counterfactual",
+            "capability": "patch_head",
             "formula_version": FORMULA_VERSION,
             "kind": kind,
             "requested_virtual_site": {
@@ -270,6 +270,6 @@ def lowered_counterfactual(  # noqa: PLR0913 -- the memo-normative D11 signature
         metric_value = None
         if metric is not None:
             metric_value = metric(patched_log)
-        return LoweredResult(metric_value=metric_value, receipt=receipt, _patched_trace=patched_log)
+        return PatchedRun(metric_value=metric_value, receipt=receipt, _patched_trace=patched_log)
     finally:
         _teardown(guard, clean_log, corrupted_log)

@@ -55,7 +55,7 @@ def _traced_return_capture() -> tl.Trace:
         return tl.trace(
             model,
             torch.randn(2, 4),
-            capture=CaptureOptions(layers_to_save="all", save_arg_values=True),
+            capture=CaptureOptions(layers_to_save="all", save_args=True),
         )
     finally:
         handle.remove()

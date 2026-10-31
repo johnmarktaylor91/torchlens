@@ -16,9 +16,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 JUNCTION_FUNC_NAMES = frozenset({"__add__", "add", "cat", "concat", "concatenate"})
 
