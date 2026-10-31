@@ -73,16 +73,13 @@ def test_loaded_checkpointed_trace_keeps_its_recompute_label(tmp_path: Path) -> 
         trace.cleanup()
 
 
-@pytest.mark.parametrize("version", [9, 10])
-def test_artifacts_saved_without_the_field_load_none_and_read_unknown(
-    version: int, tmp_path: Path
-) -> None:
-    """A v9 or pre-field v10 pass state default-fills None; the status reads unknown."""
+def test_artifacts_saved_without_the_field_load_none_and_read_unknown(tmp_path: Path) -> None:
+    """A pre-field v10 pass state default-fills None; the status reads unknown."""
 
     record = BackwardPass(pass_index=1, trigger="log_backward", implicit=False)
     state = dict(record.__getstate__())
     state.pop("executed_flops_record", None)
-    state["tlspec_version"] = version
+    state["tlspec_version"] = 10
     restored = BackwardPass.__new__(BackwardPass)
     restored.__setstate__(state)
     assert restored.executed_flops_record is None

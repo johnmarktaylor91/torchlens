@@ -41,7 +41,7 @@ def test_pre_floor_module_call_state_refuses_typed() -> None:
     state["tlspec_version"] = 5
 
     restored = type(call).__new__(type(call))
-    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
         restored.__setstate__(state)
 
 

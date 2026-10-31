@@ -192,7 +192,7 @@ def test_legacy_param_restore_refuses_below_floor() -> None:
 
     first = Param.__new__(Param)
 
-    with pytest.raises(ArtifactTooOldError, match="tlspec_version=6"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
         first.__setstate__(_legacy_param_state("left.weight"))
 
 
