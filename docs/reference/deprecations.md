@@ -12,45 +12,45 @@ unaffected.
 
 | Old name | New name | Status |
 | --- | --- | --- |
-| `ActivationPostfunc` | `torchlens.types.ActivationPostfunc` | removed |
+| `ActivationPostfunc` | none (no longer public) | removed |
 | `Buffer` | `torchlens.types.Buffer` | removed |
 | `FuncCallLocation` | `torchlens.types.FuncCallLocation` | removed |
-| `GradientPostfunc` | `torchlens.types.GradientPostfunc` | removed |
-| `GradFnAccessor` | `torchlens.accessors.GradFnAccessor` | removed |
+| `GradientPostfunc` | none (no longer public) | removed |
+| `GradFnAccessor` | none (no longer public) | removed |
 | `GradFn` | `torchlens.types.GradFn` | removed |
 | `GradFnCall` | `torchlens.types.GradFnCall` | removed |
-| `LayerAccessor` | `torchlens.accessors.LayerAccessor` | removed |
+| `LayerAccessor` | none (no longer public) | removed |
 | `MetadataInvariantError` | `torchlens.errors.MetadataInvariantError` | removed |
 | `MutatedReferenceError` | `torchlens.errors.MutatedReferenceError` | removed |
-| `ModuleAccessor` | `torchlens.accessors.ModuleAccessor` | removed |
+| `ModuleAccessor` | none (no longer public) | removed |
 | `Module` | `torchlens.types.Module` | removed |
 | `ModuleCall` | `torchlens.types.ModuleCall` | removed |
 | `NodeSpec` | `torchlens.experimental.dagua.NodeSpec` | removed |
 | `Param` | `torchlens.types.Param` | removed |
 | `PostTraceParamUnavailable` | `torchlens.errors.ParamReleasedError` | removed |
 | `TraceState` | `torchlens.io.TraceState` | removed |
-| `SaveLevel` | `torchlens.types.SaveLevel` | removed |
-| `SiteTable` | `torchlens.types.SiteTable` | removed |
+| `SaveLevel` | none (no longer public) | removed |
+| `SiteTable` | none (no longer public) | removed |
 | `SpecCompat` | `torchlens.types.SpecCompat` | removed |
-| `StreamingOptions` | `torchlens.options.StreamingOptions` | removed |
+| `StreamingOptions` | `torchlens.options.StorageOptions` | removed |
 | `TargetManifestDiff` | `torchlens.types.TargetManifestDiff` | removed |
-| `TensorLog` | `torchlens.types.TensorLog` | removed |
-| `TensorSliceSpec` | `torchlens.types.TensorSliceSpec` | removed |
-| `TorchLensPostfuncError` | `torchlens.errors.TorchLensPostfuncError` | removed |
+| `TensorLog` | none (no longer public) | removed |
+| `TensorSliceSpec` | none (no longer public) | removed |
+| `TorchLensPostfuncError` | `torchlens.errors.UserTransformError` | removed |
 | `TrainingModeConfigError` | `torchlens.errors.TrainingModeConfigError` | removed |
 | `VisualizationOptions` | `torchlens.options.VisualizationOptions` | removed |
-| `build_render_audit` | `torchlens.experimental.dagua.build_render_audit` | removed |
+| `build_render_audit` | none (no longer public) | removed |
 | `check_metadata_invariants` | `torchlens.validation.check_metadata_invariants` | removed |
-| `check_spec_compat` | `torchlens.validation.check_spec_compat` | removed |
+| `check_spec_compat` | `torchlens.intervention.check_spec_compat` | removed |
 | `cleanup_tmp` | `torchlens.io.cleanup_tmp` | removed |
-| `get_model_metadata` | `torchlens.io.log_model_metadata` | removed |
-| `list_logs` | `torchlens.io.list_logs` | removed |
-| `log_model_metadata` | `torchlens.io.log_model_metadata` | removed |
+| `get_model_metadata` | `torchlens.trace(model, x, save="none")` | removed |
+| `list_logs` | `torchlens.io.list_traces` | removed |
+| `log_model_metadata` | `torchlens.trace(model, x, save="none")` | removed |
 | `trace_to_dagua_graph` | `torchlens.experimental.dagua.trace_to_dagua_graph` | removed |
-| `preview_fastlog` | `torchlens.fastlog.preview` | removed |
-| `rehydrate_nested` | `torchlens.io.rehydrate_nested` | removed |
-| `render_lines_to_html` | `torchlens.experimental.dagua.render_lines_to_html` | removed |
-| `render_trace_with_dagua` | `torchlens.experimental.dagua.render_trace_with_dagua` | removed |
+| `preview_fastlog` | none (no longer public) | removed |
+| `rehydrate_nested` | `torchlens.io.materialize_nested` | removed |
+| `render_lines_to_html` | none (no longer public) | removed |
+| `render_trace_with_dagua` | none (no longer public) | removed |
 | `reset_naming_counter` | `torchlens.io.reset_naming_counter` | removed |
 | `resolve_sites` | `torchlens.validation.resolve_sites` | removed |
 | `save_intervention` | `torchlens.io.save_intervention` | removed |
@@ -82,8 +82,8 @@ unaffected.
 | `batched_extract` | `extract_dataset` | removed |
 | `validate_forward_pass` | `torchlens.validation.validate_forward_pass` | removed |
 | `validate_backward_pass` | `torchlens.validation.validate_backward_pass` | removed |
-| `validate_saved_outs` | `torchlens.validation.validate_saved_outs` | removed |
-| `summary` | `torchlens.visualization.summary` | removed |
+| `validate_saved_activations` | `torchlens.validate(scope="saved")` | removed |
+| `summary` | `torchlens.summary` | removed |
 | `show_model_graph` | `torchlens.visualization.show_model_graph` | removed |
 | `draw_backward` | `torchlens.visualization.draw_backward` | removed |
 | `draw_combined` | `torchlens.visualization.draw_combined` | removed |
@@ -168,4 +168,4 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `intervening()` | `without_op()` | removed |
 | `sweep(param=...)` | `sweep(at=...)` | removed |
 | `record_span()` | `span()` | removed |
-| `get_model_metadata()` | `log_model_metadata()` | removed |
+| `get_model_metadata()` | `torchlens.trace(model, x, save="none")` | removed |
