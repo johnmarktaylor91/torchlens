@@ -496,6 +496,9 @@ FEATURES: tuple[Feature, ...] = (
     Feature("export", CHEAP, "Tabular export (to_pandas)", after=_after_export),
 )
 
+# wave-3 fills
+from tests.behaviour._fill_capture import FEATURES  # noqa: E402, F811 (re-points claimed rows)
+
 FEATURES_BY_NAME: dict[str, Feature] = {feature.name: feature for feature in FEATURES}
 
 

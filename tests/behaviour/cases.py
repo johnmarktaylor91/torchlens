@@ -286,6 +286,9 @@ TOY_CASES: tuple[Case, ...] = (
     _toy("getitem_tracking", example_models.GetItemTracking, _vec, "views"),
 )
 
+# wave-3 fills
+from tests.behaviour._fill_capture import TOY_CASES  # noqa: E402, F811 (adds toy rows)
+
 
 @cache
 def corpus_cases() -> tuple[Case, ...]:
