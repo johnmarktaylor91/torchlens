@@ -439,6 +439,67 @@ def fp8_widen_for_numeric_ops(tensor: torch.Tensor) -> torch.Tensor:
     return tensor.to(torch.float32)
 
 
+def iter_tensors(
+    value: Any,
+    *,
+    sort_keys: bool = False,
+    mapping_types: tuple[type, ...] = (dict,),
+    max_depth: int | None = None,
+) -> Iterator[torch.Tensor]:
+    """Yield every tensor in a nest of lists, tuples and mappings.
+
+    The one container walker for tensor leaves. Lists and tuples (namedtuples
+    included) are walked in order; mappings in insertion order, or by
+    ``repr`` of their keys with ``sort_keys=True`` for digests that must not
+    depend on insertion order. Any other value, a dataclass included, is a
+    leaf and yields nothing unless it is a tensor.
+
+    Parameters
+    ----------
+    value:
+        Root of the nest.
+    sort_keys:
+        Visit mapping values in ``repr``-sorted key order.
+    mapping_types:
+        Types walked as mappings (``isinstance``); ``(dict,)`` by default.
+    max_depth:
+        Containers at this depth or deeper are not entered (a tensor at any
+        depth is still yielded); ``None`` for no bound.
+
+    Yields
+    ------
+    torch.Tensor
+        Tensor leaves in traversal order.
+    """
+
+    yield from _iter_tensors_at(value, 0, sort_keys, mapping_types, max_depth)
+
+
+def _iter_tensors_at(
+    value: Any,
+    depth: int,
+    sort_keys: bool,
+    mapping_types: tuple[type, ...],
+    max_depth: int | None,
+) -> Iterator[torch.Tensor]:
+    """Recursive step of :func:`iter_tensors` (positional for the hot path)."""
+
+    if isinstance(value, torch.Tensor):
+        yield value
+        return
+    if max_depth is not None and depth >= max_depth:
+        return
+    if isinstance(value, (list, tuple)):
+        children: Iterable[Any] = value
+    elif isinstance(value, mapping_types):
+        keys = sorted(value, key=repr) if sort_keys else value
+        children = [value[key] for key in keys]
+    else:
+        return
+    for child in children:
+        yield from _iter_tensors_at(child, depth + 1, sort_keys, mapping_types, max_depth)
+
+
 def tensor_all_nan(tensor: torch.Tensor) -> bool:
     """Return True if every element in the tensor is NaN."""
     # bool(): the comparison yields a 0-d TENSOR, and this function is declared

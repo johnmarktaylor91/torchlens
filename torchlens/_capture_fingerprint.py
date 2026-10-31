@@ -19,32 +19,6 @@ from . import _state
 from ._transport import digest_byte_view
 
 
-def _iter_tensor_inputs(obj: Any) -> list[torch.Tensor]:
-    """Collect tensor leaves from a nested input object.
-
-    Parameters
-    ----------
-    obj:
-        Arbitrary nested input object.
-
-    Returns
-    -------
-    list[torch.Tensor]
-        Tensor leaves in traversal order.
-    """
-
-    tensors: list[torch.Tensor] = []
-    if isinstance(obj, torch.Tensor):
-        return [obj]
-    if isinstance(obj, dict):
-        for key in sorted(obj.keys(), key=repr):
-            tensors.extend(_iter_tensor_inputs(obj[key]))
-    elif isinstance(obj, (list, tuple)):
-        for item in obj:
-            tensors.extend(_iter_tensor_inputs(item))
-    return tensors
-
-
 def _hash_tensor_content(tensor: torch.Tensor) -> str:
     """Return a content hash for a tensor.
 
