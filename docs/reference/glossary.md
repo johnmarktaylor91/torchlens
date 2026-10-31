@@ -2978,6 +2978,14 @@ deprecation shim owed*
   `CaptureOutcome.note`. `CaptureStatus.STOPPED` (value `"stopped"`) is the status of a capture
   stopped by `halt=` or `tl.recording.stop()`.
 
+**CaptureOutcome failure and boundary fields**
+: `CaptureOutcome.error_type` (qualified exception type name of a failed capture),
+  `CaptureOutcome.boundary_kind` and `CaptureOutcome.boundary_label` (the stop-boundary event kind
+  and op label), `CaptureOutcome.frontier_labels` (the halt-frontier labels). A failed capture
+  names its phase, one of `CapturePhase.FORWARD`, `CapturePhase.FINALIZE`,
+  `CapturePhase.POSTPROCESS` and `CapturePhase.TEARDOWN`, and its diagnostic origin, one of
+  `FailureOrigin.USER_OP`, `FailureOrigin.TORCHLENS` and `FailureOrigin.INTERRUPT`.
+
 **Recording state**
 : `Recording.is_failed` (`is_failed=`), `Recording.is_stopped` (`is_stopped=`),
   `Recording.stop_reason` (`stop_reason=`), `Recording.stops_by_pass` (`stops_by_pass=`),
@@ -3179,9 +3187,23 @@ describe each surface in depth.
 | `FacetFunction.target_scope` | Record scope the recipe targets |
 | `FacetRegistrySnapshot.functions` | Immutable active recipe entries |
 | `FacetSpec.apply_transforms` | Apply the transform chain to a value |
+| `FacetSpec.capability_class` | Weakest capability class of the transform chain |
+| `FacetSpec.capability_flags` | Weakest-link capability flags of the transform chain |
+| `FacetSpec.conflict_alias_group` | Shared-home conflict and alias group for intervention |
 | `FacetSpec.function_id` | Recipe identifier that produced this facet |
 | `FacetSpec.function_version` | Recipe version that produced this facet |
+| `FacetSpec.home` | Runtime home object; intentionally not portable |
+| `FacetSpec.home_address` | Stable home address when available |
+| `FacetSpec.home_kind` | Kind of home value |
+| `FacetSpec.home_label` | Stable home label when available |
+| `FacetSpec.output_path` | Structural output path inside a container output |
+| `FacetSpec.scatter_update` | Scatter an edited facet slice back into the full home-op output |
+| `FacetSpec.split` | Return specs for equal sections along a dimension |
+| `FacetSpec.transpose` | Append a transpose primitive |
+| `FacetSpec.value_version` | Which home value version the spec reads |
+| `FacetSpec.write_mask` | Return a boolean mask of home positions written by this facet |
 | `FacetView.function_source` | Return recipe name provenance for this view |
+| `FacetView.invalidate` | Clear cached computed facet values |
 | `FamilyEvidence.policy` | `exact`, `sampled`, `unavailable`, or nonfinite presence-only `verdict`; unavailable evidence carries a reason |
 | `FamilyEvidence.is_sampled` | Whether this family rode the seeded gathered sample |
 | `GraphNode.token_id` | Token id: the input token at ``position`` (token nodes) or the target vocabulary id (logit nodes) |
@@ -3195,6 +3217,7 @@ describe each surface in depth.
 | `LogitLens.final_logits` | The model's captured real output logits when readable, else ``None`` |
 | `LogitLens.is_validated` | Whether the reconstructed lens was numerically validated against the captured last-block ``resid_post`` -> logits pair |
 | `LogitLens.stacked` | Return all per-layer logits stacked on a new leading layer axis |
+| `LogitLensPrediction.token_ids` | Requested-token ids as given; empty when no tokens were requested |
 | `LogitLensPredictions.is_validated` | Whether the reconstructed lens passed numeric validation |
 | `MissingGrad.raise_error` | Raise the missing-gradient tensor-use error |
 | `NarrationObserver.lines` | field of `NarrationObserver` |
@@ -4015,7 +4038,6 @@ alphabetical order.
 | `Trace.show_call_tree` | Print this Trace's `ModuleCall` tree as an ASCII tree, with options for depth, atomic calls and call indices |
 | `Trace.source_snapshots` | List of dicts pairing source file paths with content digests, kept as evidence for structure-only captures |
 | `Trace.state_history` | Append-only list of lifecycle events for this trace, such as fork, push, run and direct write |
-| `Trace.stats_table` | Return per-op payload observations for the one captured batch, with typed row states for unsaved or unscanned payloads |
 | `Trace.structure_evidence` | Evidence dict for a structure-only capture, listing its claims and their status, or `None` for ordinary captures |
 | `Trace.tlspec_version` | Integer version of the `.tlspec` format, used for save and load compatibility |
 | `Trace.to_dagua_graph` | Translate this trace into an experimental Dagua graph |
@@ -4031,7 +4053,6 @@ alphabetical order.
 | `Trace.verbose` | Whether timed progress messages are printed at each pipeline stage |
 | `Trace.visualization_field_audit` | Return the audit of which fields the visualization reads for this trace |
 | `Trace.walk_calls` | Yield every `ModuleCall` in the call tree in depth-first order |
-| `Trace.with_annotations` | Return an owned, annotated copy of this trace with data or an image attached to the nodes picked by a selector |
 
 #### `tl.Op`
 
@@ -4657,14 +4678,6 @@ alphabetical order.
 | `FuncCallLocation.source_context` | The surrounding source context as a single string |
 | `FuncCallLocation.source_loading_enabled` | Whether source text is loaded for this location, `True` by default |
 | `FuncCallLocation.to_html_link` | Return a VS Code source-location link for this call, for HTML renderers |
-
-#### `torchlens._user_funcs.ParentEdge`
-
-| Spelling | Meaning |
-| --- | --- |
-| `ParentEdge.arg_position` | Position or name of the argument through which the parent feeds the child |
-| `ParentEdge.edge_use` | Kind of use this edge represents, as a string |
-| `ParentEdge.parent_label_raw` | Raw label of the parent operation |
 
 #### `tl.types.PreHookEffect`
 
