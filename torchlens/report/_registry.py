@@ -109,7 +109,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
     ),
     SurfaceEntry(
         key="explain",
-        spelling="tl.report.explain(trace)",
+        spelling="trace.explain()",
         subject="CAPTURE",
         register="NARRATIVE",
         invariants=("mints_no_facts", "truncation_disclosed"),
@@ -118,7 +118,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         requires=(),
         refuses_when="never (degrades to a partial-capture diagnosis)",
         cost_class="metadata_only",
-        example="tl.report.explain(trace)",
+        example="trace.explain()",
     ),
     SurfaceEntry(
         key="profile",
@@ -377,7 +377,7 @@ def capability_card(trace_like: Any) -> CapabilityCard:
         if "finished_trace" in entry.requires and kind == "partial_trace":
             available = False
             reason = (
-                "partial capture: use tl.report.explain(partial) for the diagnosis or "
+                "partial capture: use partial.explain() for the diagnosis or "
                 "partial.audit() for the degraded findings"
             )
         if "live_model" in entry.requires:

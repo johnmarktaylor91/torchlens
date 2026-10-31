@@ -130,9 +130,9 @@ Output:
 2 0
 ```
 
-## `audit_trace`
+## Trace health check (`trace.audit()`)
 
-`tl.debug.audit_trace(trace)` runs every trace-local health diagnostic one capture
+`trace.audit()` runs every trace-local health diagnostic one capture
 supports and returns a `HealthReport`: findings from `find_nan`, `bisect_nan`
 (full-coverage traces), `dtype_range`, and `grad_health` (exactly one
 captured backward pass). Diagnostics that need more than the trace itself (a second
@@ -146,7 +146,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.ReLU(), torch.tensor([[-1.0, 2.0]]))
-report = tl.debug.audit_trace(trace)
+report = trace.audit()
 print(report.checks_run, len(report.skipped) > 0)
 ```
 
@@ -330,7 +330,7 @@ Output:
 `tl.debug.dead_neurons(trace, *, dim=1, threshold=0.0)` reports units whose maximum
 activation is at most `threshold` or whose value has zero variance in this trace. One
 trace is only one sample; aggregate runs before making a dataset-level claim. Related:
-[`grad_health`](#gradient_flow_audit).
+[`grad_health`](#grad_health).
 
 ```python
 import torch
@@ -467,12 +467,10 @@ Output:
 ## Pandas-free row cores (`*_rows`)
 
 `tl.debug.compare_rows(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)`,
-`tl.debug.dead_neurons_rows(trace, *, dim=1, threshold=0.0)`,
-`tl.debug.gradient_flow_audit_rows(trace, *, bwd=None, vanishing_threshold=1e-7,
-exploding_threshold=1e4)`, and `tl.debug.hot_path_rows(trace, by="flops")`
+`tl.debug.dead_neurons_rows(trace, *, dim=1, threshold=0.0)`, and
+`tl.debug.hot_path_rows(trace, by="flops")`
 (DOCUMENTED-UNSTABLE spellings) are the pandas-free cores of
-[`compare`](#compare), [`dead_neurons`](#dead_neurons),
-[`grad_health`](#gradient_flow_audit), and [`hot_path`](#hot_path).
+[`compare`](#compare), [`dead_neurons`](#dead_neurons), and [`hot_path`](#hot_path).
 Each returns `(rows, attrs)` — a list of plain per-row dicts plus the same
 `attrs` mapping the report's `.to_pandas()` frame carries (aggregate counts,
 parameters, capture-honesty facts) — importable and runnable without pandas. The

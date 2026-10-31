@@ -230,7 +230,7 @@ def test_first_nonfinite_rescans_after_saved_activation_changes() -> None:
         trace.layer_list[-1].out.mul_(float("nan"))
     in_place_answer = trace.first_nonfinite()
     assert "First non-finite" in in_place_answer
-    assert "No NaN or Inf" not in tl.report.explain(trace)
+    assert "No NaN or Inf" not in trace.explain()
 
     replaced = trace.layer_list[0]
     replaced.out = torch.full_like(replaced.out, float("inf"))

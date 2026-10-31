@@ -94,7 +94,7 @@ def test_explain_works_on_a_predicate_sparse_capture() -> None:
     """``report.explain`` asks the trace the same question."""
 
     trace = tl.trace(_plain_model(), torch.randn(2, 4), save=tl.func("relu"))
-    assert isinstance(tl.report.explain(trace), str)
+    assert isinstance(trace.explain(), str)
 
 
 def test_disk_backed_reports_do_not_materialize_payloads(
@@ -152,7 +152,7 @@ def test_disk_backed_reports_do_not_materialize_payloads(
     # materialize would raise).
     assert trace.nonfinite_ops == ()
     assert trace.health_facts is not None
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert isinstance(text, str)
     assert "disk-backed" in html
     assert "disk-backed" in report
@@ -168,7 +168,7 @@ def test_explain_and_html_clean_answers_disclose_sparse_coverage(
 
     # D14 (F09): explain serves the basis in hand; arm it explicitly.
     assert trace.nonfinite_ops == ()
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert "could not be examined" in report
     assert "could not be examined" in trace._repr_html_()
 

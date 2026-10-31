@@ -27,7 +27,7 @@ stage_log["layer2"].out
 # Appliances hang off one door: trace.using(name), registered with
 # torchlens.accessors.register_appliance(name, factory) (spellings DOCUMENTED-UNSTABLE).
 print(log.summary())
-print(tl.report.explain(log))
+print(log.explain())
 log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs
 log.draw(collapse="auto", show_containers=False)  # readability-targeted module overview
 print(log.module_collapse_order[:10])

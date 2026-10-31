@@ -172,5 +172,5 @@ def test_step_join_claim_is_per_artifact_never_the_build_switch():
     # F40a claim-off honesty holds for every pre-measurement artifact.
     trace.annotations["episode"]["header"]["step_join"] = None
     assert episode_facts(trace)["step_join"] == "unmeasured"
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert "Cross-step continuity is DECLARED, not measured" in report

@@ -1104,7 +1104,7 @@
   `torchlens.agent_trace.v1` dump (capture honesty facts, counts, pass-qualified op rows
   with graph edges, module hierarchy, embedded navigation guide pointing back at the live
   public surface; payloads never inlined; `max_ops` truncation disclosed, never silent).
-  `tl.report.explain(trace, max_tokens=N)` budget-prunes the text report by whole
+  `trace.explain(max_tokens=N)` budget-prunes the text report by whole
   sections low-value-first with a disclosed `Truncation` section; capture-status honesty
   facts and partial-capture failure evidence never drop, and `max_tokens` refuses typed
   with `format="json"`. Doc: `docs/for-ai-agents.md`.

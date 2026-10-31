@@ -18,7 +18,7 @@ state as a `PartialTrace` for post-mortem inspection. `__all__` is exactly
 
 ## Gotchas
 
-- `tl.report.explain(partial)` has a dedicated partial path (text +
+- `partial.explain()` has a dedicated partial path (text +
   `capture_status="partial"` JSON) built on recorded evidence only; fields
   without evidence report `"unknown"`, never inferred.
 - Failed partials are analysis-only: conversion/replay surfaces refuse

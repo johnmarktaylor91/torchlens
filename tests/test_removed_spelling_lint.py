@@ -439,7 +439,7 @@ def test_lint_is_red_capable(tmp_path: Path) -> None:
         "buffers_bool": "log.draw(show_buffers=True)\n",
         "node_style_domain": "log.draw(node_style='vision')\n",
         "inert_opts": "opts = SaveOptions(output_dir='out')\n",
-        "batch2_report": 'payload = tl.report.explain(trace, format="json")\n',
+        "batch2_report": 'payload = trace.explain(format="json")\n',
     }
     assert set(planted) == set(_FORBIDDEN)
     assert set(_NEEDLES) == set(_FORBIDDEN), "every group needs a needle row"

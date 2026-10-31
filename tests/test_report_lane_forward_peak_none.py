@@ -87,7 +87,7 @@ def test_every_printed_surface_shows_the_reason(monkeypatch: pytest.MonkeyPatch)
     summary = trace.summary()
     assert f"forward peak unavailable ({CPU_ZERO_PEAK_REASON})" in summary.render("unicode")
     assert _FLAG in str(summary)
-    for text in (str(trace), repr(trace), str(trace.profile()), tl.report.explain(trace)):
+    for text in (str(trace), repr(trace), str(trace.profile()), trace.explain()):
         assert isinstance(text, str)
 
 

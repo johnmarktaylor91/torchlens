@@ -89,7 +89,7 @@ instead. An agent that can run a model already has Python:
 
     import torchlens as tl
     log = tl.load("run.tlspec")
-    print(tl.report.explain(log, max_tokens=500))
+    print(log.explain(max_tokens=500))
 """
 
 

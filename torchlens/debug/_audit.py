@@ -194,7 +194,7 @@ def _audit_partial_trace(partial: PartialTrace) -> HealthReport:
             message=f"{type(exception).__name__}: {exception}",
             ops=(last_label,) if last is not None else (),
             modules=modules,
-            follow_up="tl.report.explain(partial)",
+            follow_up="partial.explain()",
         )
     ]
     nonfinite = partial.first_nonfinite()

@@ -4,8 +4,8 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
 
 ## Files
 
-- `_explain.py` — `explain(log, ...)`: the prose explainer for a Trace / partial
-  trace (used as `tl.report.explain(log)` in the root docs' Common Patterns).
+- `_explain.py` — `explain(log, ...)` behind `trace.explain()` and `partial.explain()`, and
+  `ExplainReport` (the `str` they return).
   `max_tokens=N` (DOCUMENTED-UNSTABLE) budget-prunes whole sections
   low-value-first with a disclosed `Truncation` section; the `Capture status`
   honesty facts and partial failure evidence are never dropped.
@@ -19,7 +19,7 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
   honesty rows, capture-verification banner, call tree). `forward_peak_memory`
   is NOT a profile column — it lives on the Trace itself. pandas is an optional
   dependency resolved lazily via `_require_pandas()` — never import it at module top.
-- `__init__.py` — public surface (`explain`, `ProfileReport`, `profile`);
+- `__init__.py` — public surface (`ExplainReport`, `ProfileReport`, `profile`, and the diagnostics re-exported from `torchlens/_diagnostics.py`);
   `log_value(name, value)` lives in `torchlens.observers` (capture-time writers live
   with the observers; this package holds the readers).
 - `_factcore.py` / `_compute_truth.py` / `_health.py` — the C02 numbers

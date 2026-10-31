@@ -235,7 +235,7 @@ class TraceExportMixin(_TraceMixinBase):
         DOCUMENTED-UNSTABLE spelling (naming ratification pending). The dump
         is a navigation aid over the SAME public surface a human drives: it
         embeds a ``guide`` block mapping every record back to the live
-        spelling to call next (``trace[label]``, ``tl.report.explain``, ...),
+        spelling to call next (``trace[label]``, ``trace.explain``, ...),
         and carries the capture outcome/verification honesty facts verbatim.
         Tensor payloads are never inlined.
 

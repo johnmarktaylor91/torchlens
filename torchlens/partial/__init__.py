@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from torchlens.data_classes.op import Op
     from torchlens.data_classes.trace import Trace
     from torchlens.debug._audit import HealthReport
+    from torchlens.report._explain import ExplainReport
 
 
 class PartialCaptureLookupError(TorchLensError, ValueError):
@@ -384,7 +385,7 @@ class PartialTrace:
             "zero report.",
             code="partial_trace_member_unavailable",
             remedy=(
-                "Use tl.report.explain(partial) for the failure diagnosis (what ran, the "
+                "Use partial.explain() for the failure diagnosis (what ran, the "
                 "failing op, the boundary) or partial.audit() for the degraded findings; "
                 "partial.raw_layers holds the committed per-op records."
             ),
@@ -414,6 +415,37 @@ class PartialTrace:
         """Typed refusal (D25): no outputs exist on a failed forward."""
 
         return self._refuse_partial_member("output_table()")
+
+    def explain(
+        self,
+        *,
+        audience: Literal["researcher", "practitioner", "auto"] = "auto",
+        max_tokens: int | None = None,
+    ) -> ExplainReport:
+        """Explain this failed capture (what ran, the failing op, the boundary) in plain language (DOCUMENTED-UNSTABLE).
+
+        Parameters
+        ----------
+        audience:
+            Report style: ``"researcher"`` adds graph-pattern detail,
+            ``"practitioner"`` emphasizes operational status, ``"auto"``
+            balances the two.
+        max_tokens:
+            Optional token budget. Whole sections drop low-value-first until
+            the report fits, every drop is disclosed, and the capture-status
+            section never drops.
+
+        Returns
+        -------
+        Any
+            ``torchlens.report.ExplainReport``, a ``str`` of multi-section prose.
+            The machine-readable projection of the same facts is
+            ``trace.to_agent_json()``.
+        """
+
+        from ..report._explain import explain
+
+        return explain(self, audience, max_tokens=max_tokens)
 
     def capability_card(self) -> Any:
         """The D24 capability card: which family members work on THIS object."""

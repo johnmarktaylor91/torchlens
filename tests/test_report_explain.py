@@ -1,4 +1,4 @@
-"""Tests for ``torchlens.report.explain``."""
+"""Tests for ``trace.explain``."""
 
 from __future__ import annotations
 
@@ -75,13 +75,14 @@ def _captured_log() -> tl.Trace:
 
 
 def test_report_namespace_is_not_top_level_all() -> None:
-    """``tl.report.explain`` should be reachable without expanding ``tl.__all__``.
+    """``tl.report`` and ``Trace.explain`` are reachable without expanding ``tl.__all__``.
 
     The namespace size is checked against the namespace itself so this test
     guards the report names without hard-coding unrelated top-level API churn.
     """
 
-    assert hasattr(tl.report, "explain")
+    assert hasattr(tl.report, "ExplainReport")
+    assert hasattr(tl.Trace, "explain")
     public_names = set(tl.__all__)
     assert len(tl.__all__) == len(public_names)
     assert "report" not in tl.__all__
@@ -93,7 +94,7 @@ def test_explain_returns_sensible_string_for_each_audience() -> None:
 
     log = _captured_log()
     for audience in ("researcher", "practitioner", "auto"):
-        text = tl.report.explain(log, audience=audience)
+        text = log.explain(audience=audience)
         assert isinstance(text, str)
         assert "TorchLens report" in text
         assert "Model summary" in text
@@ -112,10 +113,10 @@ def test_explain_json_form_is_removed() -> None:
     import inspect
 
     log = _captured_log()
-    assert "format" not in inspect.signature(tl.report.explain).parameters
-    assert "to_agent_json()" in (tl.report.explain.__doc__ or "")
+    assert "format" not in inspect.signature(tl.Trace.explain).parameters
+    assert "to_agent_json()" in (tl.Trace.explain.__doc__ or "")
     with pytest.raises(TypeError, match="format"):
-        tl.report.explain(log, format="json")  # type: ignore[call-arg]
+        log.explain(format="json")  # type: ignore[call-arg]
     assert log.to_agent_json()["capture"]["capture_status"] == "complete"
 
 
@@ -128,7 +129,7 @@ def test_explain_and_audit_diagnose_real_partial_failure() -> None:
     last = partial.raw_layers[-1]
     last_label = str(getattr(last, "_label_raw"))
 
-    text = tl.report.explain(partial)
+    text = partial.explain()
     audit = partial.audit()
 
     assert isinstance(text, str)
@@ -162,7 +163,7 @@ def test_operational_status_line_reports_real_streamed_ops_not_a_fake_constant(
     plain_line = _operational_status_line(plain_log)
     assert "streamed_ops=0" in plain_line
 
-    plain_text = tl.report.explain(plain_log, audience="practitioner")
+    plain_text = plain_log.explain(audience="practitioner")
     assert "streamed_ops=0" in plain_text
 
     bundle_path = tmp_path / "streamed.tlspec"
@@ -176,7 +177,7 @@ def test_operational_status_line_reports_real_streamed_ops_not_a_fake_constant(
     num_layers = len(streamed_log.layer_list)
     assert f"streamed_ops={num_layers}" in streamed_line
 
-    streamed_text = tl.report.explain(streamed_log, audience="practitioner")
+    streamed_text = streamed_log.explain(audience="practitioner")
     assert f"streamed_ops={num_layers}" in streamed_text
 
 
@@ -187,7 +188,7 @@ def test_explain_reports_backward_capture() -> None:
     log = tl.trace(TinyReportModel(), x, capture=tl.options.CaptureOptions(save_grads=True))
     log.log_backward(log[log.output_layers[0]].out.sum())
 
-    text = tl.report.explain(log)
+    text = log.explain()
 
     assert "Backward summary" in text
     assert "Backward passes: 1." in text
@@ -203,7 +204,7 @@ def test_explain_reports_nonfinite_out() -> None:
     # D14 (F09 item 11): bare explain renders the basis IN HAND and never
     # scans -- the explicit spelling arms the evidence first.
     assert log.nonfinite_ops
-    text = tl.report.explain(log)
+    text = log.explain()
     assert "NaN or Inf" in text
     assert "linear_1_1" in text
     assert "vscode://file/" in log.first_nonfinite(link_format="html")
@@ -215,7 +216,7 @@ def test_explain_never_scans_unarmed_health() -> None:
 
     log = _captured_log()
     log["linear_1_1"].out[0, 0] = torch.nan
-    text = tl.report.explain(log)
+    text = log.explain()
     assert "NOT-CHECKED" in text
     assert "health_facts" in text
 
@@ -253,7 +254,7 @@ def test_explain_surfaces_halted_capture_status() -> None:
 
     assert trace.to_agent_json()["capture"]["capture_status"] == "halted"
 
-    text = tl.report.explain(trace)
+    text = trace.explain()
     assert "Capture outcome: halted." in text
 
 
@@ -268,7 +269,7 @@ def test_explain_surfaces_unverified_capture() -> None:
     assert capture["capture_verified"] is False
     assert capture["capture_verification_reason"] == "dynamo_region_not_logged"
 
-    text = tl.report.explain(log)
+    text = log.explain()
     assert "UNVERIFIED" in text
     assert "dynamo_region_not_logged" in text
 
@@ -314,7 +315,7 @@ def test_explain_without_max_tokens_is_unchanged_by_the_budget_refactor() -> Non
     """The default rendering must stay byte-identical to the section list."""
 
     log = _captured_log()
-    text = tl.report.explain(log)
+    text = log.explain()
     assert isinstance(text, str)
     assert "Truncation" not in text
     assert text.startswith("TorchLens report\n\nCapture status\n")
@@ -324,9 +325,9 @@ def test_explain_max_tokens_drops_low_value_sections_and_discloses_them() -> Non
     """A tight budget drops sections in the fixed order with full disclosure."""
 
     log = _captured_log()
-    full = tl.report.explain(log)
+    full = log.explain()
     budget = 120
-    text = tl.report.explain(log, max_tokens=budget)
+    text = log.explain(max_tokens=budget)
 
     assert isinstance(text, str)
     assert len(text) < len(full)
@@ -344,7 +345,7 @@ def test_explain_max_tokens_drops_low_value_sections_and_discloses_them() -> Non
 def test_explain_max_tokens_below_floor_keeps_honesty_facts_and_says_so() -> None:
     """A budget below the floor returns capture status plus a floor notice."""
 
-    text = tl.report.explain(_captured_log(), max_tokens=1)
+    text = _captured_log().explain(max_tokens=1)
     assert "Capture status" in text
     assert "Capture outcome" in text
     assert "below the undroppable floor" in text
@@ -354,7 +355,7 @@ def test_explain_max_tokens_large_budget_returns_full_report() -> None:
     """A generous budget changes nothing and adds no truncation section."""
 
     log = _captured_log()
-    assert tl.report.explain(log, max_tokens=100_000) == tl.report.explain(log)
+    assert log.explain(max_tokens=100_000) == log.explain()
 
 
 def test_explain_max_tokens_never_drops_partial_failure_evidence() -> None:
@@ -364,12 +365,12 @@ def test_explain_max_tokens_never_drops_partial_failure_evidence() -> None:
         tl.trace(FailingShapeModel(), torch.randn(2, 4))
     partial = tl.partial.from_failed_capture(exc_info.value)
 
-    text = tl.report.explain(partial, max_tokens=1)
+    text = partial.explain(max_tokens=1)
     assert "This is a partial capture" in text
     assert "Failure diagnosis" in text
     assert "RuntimeError" in text
     assert "below the undroppable floor" in text
-    unbudgeted = tl.report.explain(partial)
+    unbudgeted = partial.explain()
     assert unbudgeted.split("\n\nTruncation")[0] == text.split("\n\nTruncation")[0]
 
 
@@ -378,6 +379,6 @@ def test_explain_max_tokens_refusals_teach_the_fix() -> None:
 
     log = _captured_log()
     with pytest.raises(ValueError, match="positive integer"):
-        tl.report.explain(log, max_tokens=0)
+        log.explain(max_tokens=0)
     with pytest.raises(ValueError, match="positive integer"):
-        tl.report.explain(log, max_tokens=True)
+        log.explain(max_tokens=True)

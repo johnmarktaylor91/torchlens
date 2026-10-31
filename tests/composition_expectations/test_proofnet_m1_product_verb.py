@@ -277,7 +277,7 @@ def _run_verb(verb: str, product: Any, tmp_path: Any) -> Any:
     if verb == "summary":
         return product.summary()
     if verb == "explain":
-        return tl.report.explain(product)
+        return tl.Trace.explain(product)
     if verb == "agent_json":
         return product.to_agent_json()
     if verb == "save_analysis":

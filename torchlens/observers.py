@@ -411,7 +411,7 @@ def log_value(name: str, value: Any) -> None:
     ``torchlens.report``, which keeps a compatibility alias): observers own
     capture-time annotation writers, reporting surfaces own the readers.
     Values land under ``trace.annotations["logged_values"]`` and read back
-    through ``Trace.logged_values``; they render in ``tl.report.explain`` and
+    through ``Trace.logged_values``; they render in ``trace.explain`` and
     ``Trace.to_agent_json``.
 
     Parameters

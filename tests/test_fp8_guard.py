@@ -644,7 +644,7 @@ def test_a_dtype_with_no_finiteness_kernel_is_disclosed_not_called_finite() -> N
     # ``report.explain``'s anomaly bullet publishes the same verdict standalone.
     anomaly = [
         line
-        for line in tl.report.explain(trace).splitlines()
+        for line in trace.explain().splitlines()
         if "NaN or Inf" in line or "no runnable finiteness check" in line
     ]
     assert anomaly, "the report must still carry an anomaly verdict"

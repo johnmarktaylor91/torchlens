@@ -10,6 +10,7 @@ if TYPE_CHECKING:
         ReceptiveFieldProfile,
         ReceptiveFieldStatus,
     )
+    from ..report._explain import ExplainReport
     from ..report._profile import ProfileReport
     from ..trace_slice import TraceSlice
     from ..visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
@@ -759,6 +760,37 @@ class TraceStatsMixin(_TraceMixinBase):
         from ._trace_inventory import build_bill_of_materials
 
         return build_bill_of_materials(self)
+
+    def explain(
+        self: "Trace",
+        *,
+        audience: Literal["researcher", "practitioner", "auto"] = "auto",
+        max_tokens: int | None = None,
+    ) -> "ExplainReport":
+        """Explain this trace in plain language (DOCUMENTED-UNSTABLE).
+
+        Parameters
+        ----------
+        audience:
+            Report style: ``"researcher"`` adds graph-pattern detail,
+            ``"practitioner"`` emphasizes operational status, ``"auto"``
+            balances the two.
+        max_tokens:
+            Optional token budget. Whole sections drop low-value-first until
+            the report fits, every drop is disclosed, and the capture-status
+            section never drops.
+
+        Returns
+        -------
+        Any
+            ``torchlens.report.ExplainReport``, a ``str`` of multi-section prose.
+            The machine-readable projection of the same facts is
+            ``trace.to_agent_json()``.
+        """
+
+        from ..report._explain import explain
+
+        return explain(self, audience, max_tokens=max_tokens)
 
     def capability_card(self: "Trace") -> Any:
         """Return the report-family capability card for THIS trace (F09/D24).

@@ -44,7 +44,7 @@ def test_breadcrumb_spellings_resolve_cold() -> None:
     assert "to_agent_json" in docstring
     assert "torchlens.agent.guide()" in docstring
     assert "python -m torchlens" in docstring
-    for spelling in ("tl.Trace.to_agent_json", "tl.report.explain", "tl.agent.guide"):
+    for spelling in ("tl.Trace.to_agent_json", "tl.Trace.explain", "tl.agent.guide"):
         _resolves_cold(spelling)
 
 

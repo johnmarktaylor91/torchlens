@@ -94,12 +94,12 @@ def test_facts_read_the_artifact_envelope_never_the_build_switch() -> None:
 
 def test_explain_renders_break_and_unmeasured_lines() -> None:
     broken = _capture(ToolInjectRunner)
-    report = tl.report.explain(broken)
+    report = broken.explain()
     assert "Cross-step join BREAK measured (broken_at_step_2)" in report
     assert "chain-shaped at that join" in report
     stripped = _capture(GreedyRunner)
     stripped.annotations["episode"]["header"]["step_join"] = None
-    unmeasured_report = tl.report.explain(stripped)
+    unmeasured_report = stripped.explain()
     assert "Cross-step continuity is DECLARED, not measured" in unmeasured_report
 
 

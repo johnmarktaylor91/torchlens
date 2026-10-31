@@ -72,7 +72,7 @@ from ._cost_tree import (
     CostTreeRow,
     build_cost_tree as cost_tree,
 )
-from ._explain import explain
+from ._explain import ExplainReport
 from ._factcore import (
     MemoryFacts,
     ParamFacts,
@@ -120,6 +120,7 @@ __all__ = [
     "CostTree",
     "CostTreeRow",
     "DevicePeaks",
+    "ExplainReport",
     "FlopsReport",
     "HealthFacts",
     "MachineBalance",
@@ -147,7 +148,6 @@ __all__ = [
     "overhead",
     "cost_tree",
     "device_peaks",
-    "explain",
     "flops",
     "mfu",
     "padding_waste",

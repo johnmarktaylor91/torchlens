@@ -250,7 +250,7 @@ def test_profile_footer_has_no_note_without_attention() -> None:
 def test_explain_flops_line_discloses_the_full_square() -> None:
     """U04.2 (b): the explain FLOPs line carries the attention note."""
 
-    text = tl.report.explain(_attention_trace())
+    text = _attention_trace().explain()
     flops_line = next(line for line in text.splitlines() if "Forward FLOPs" in line)
     assert ATTENTION_FULL_SQUARE_NOTE in flops_line
 

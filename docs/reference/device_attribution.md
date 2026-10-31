@@ -120,12 +120,8 @@ uninstrumented and says so.
 ## Arithmetic intensity (roofline, hypothesis tier)
 
 ```python
-balance = tl.report.machine_balance(
-    compute_peak_flops_per_s=1.0e12,
-    memory_peak_bytes_per_s=1.0e11,
-    basis="advertised",
-)
-result = tl.report.roofline(log, ridge_intensity=balance.ridge_intensity)
+# Ridge intensity: peak FLOP/s over peak memory bytes/s (here advertised figures).
+result = tl.report.roofline(log, ridge_intensity=1.0e12 / 1.0e11)
 assert result.aggregate_intensity is not None
 ```
 
@@ -136,9 +132,6 @@ sub-cache ops are excluded from headline bound counts.
 
 ## What refuses, and why
 
-- `tl.report.instrumented_rate(trace)` on an all-CUDA trace refuses typed
-  (`instrumented_rate_cuda_unsupported`): host time is not a CUDA rate in
-  either direction.
 - `tl.report.attributed_kernel_utilization()` refuses typed
   (`kernel_utilization_requires_device_join`) until the correlation-ID join
   lands; that quantity is deliberately NOT called MFU.

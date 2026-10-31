@@ -875,7 +875,7 @@ def test_cleaned_trace_refuses_typed_and_settles_unknown():
     # Idempotent teardown and surviving diagnostics.
     trace.cleanup()
     assert repr(trace)
-    assert tl.report.explain(trace)
+    assert trace.explain()
 
 
 def test_failed_capture_registry_never_pins_a_nonweakrefable_exception_graph():

@@ -182,7 +182,7 @@ def test_partial_members_refuse_typed_never_attributeerror(partial_trace) -> Non
 def test_partial_explain_and_audit_still_answer(partial_trace) -> None:
     """The two remedies the refusal names actually work."""
 
-    text = tl.report.explain(partial_trace)
+    text = partial_trace.explain()
     assert "partial capture" in text
     audit = partial_trace.audit()
     assert audit is not None
@@ -202,7 +202,7 @@ def test_agent_json_is_the_one_machine_projection(family_trace) -> None:
 
     from torchlens.report._factcore import factcore
 
-    assert "format" not in inspect.signature(tl.report.explain).parameters
+    assert "format" not in inspect.signature(tl.Trace.explain).parameters
     core = factcore(family_trace)
     agent_json = family_trace.to_agent_json()
     assert agent_json["counts"]["layers"] == core.counts.layers
@@ -262,7 +262,7 @@ def test_metadata_only_members_trigger_no_scan(family_trace, monkeypatch) -> Non
         return real_scan(log, kind, stop_at_first)
 
     monkeypatch.setattr(nonfinite_module, "_scan", _counting_scan)
-    tl.report.explain(family_trace)
+    family_trace.explain()
     family_trace.profile()
     family_trace.bill_of_materials()
     family_trace.to_agent_json()
@@ -277,7 +277,7 @@ def test_family_non_mutation(family_trace) -> None:
     """Composition row 10: no family member mutates params or RNG."""
 
     rng_before = torch.get_rng_state().clone()
-    tl.report.explain(family_trace)
+    family_trace.explain()
     family_trace.profile()
     family_trace.bill_of_materials()
     family_trace.to_agent_json()

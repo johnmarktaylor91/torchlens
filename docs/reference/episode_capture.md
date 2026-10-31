@@ -369,7 +369,7 @@ shape):
 The claim stays PER-ARTIFACT: a ledger without the envelope (a
 pre-measurement artifact, or a failed live measurement) reads
 `step_join=unmeasured` on every surface, its series claims refuse
-`episode_join_unmeasured`, and `tl.report.explain` prints the disclosure
+`episode_join_unmeasured`, and `trace.explain` prints the disclosure
 line — an unmeasured join can never read as a measured one, whatever the
 build measures. Loads validate the envelope FAIL-CLOSED against the rows
 (schema, closed grades, prefill null, break-step coherence); any violation
