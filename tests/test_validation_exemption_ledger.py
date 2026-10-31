@@ -172,8 +172,10 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
             "any op other than a TorchScript boundary call, and any perturbed parent "
             "filling a slot whose graph input has a use outside aten::size/dim/numel "
             "and prim::dtype/device at input 0 (an element read, also inside a nested "
-            "helper or on an untaken branch, a return, an unlisted kind) or an "
-            "unreadable graph; forward replay still runs"
+            "helper or on an untaken branch, a return, an unlisted kind), a call "
+            "whose arguments can hold a tensor below the recorded slot map (nested "
+            "containers, scripted classes) or an unreadable graph; forward replay "
+            "still runs"
         ),
     ),
     Exemption(
