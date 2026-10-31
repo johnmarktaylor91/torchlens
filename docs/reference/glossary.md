@@ -423,7 +423,7 @@ corrupted input's `ComponentGraph`); `input` and `s` are the patched forward's o
 clean values when one receiver is patched), so a circuit (everything outside a kept set patched)
 is one call; the trace needs `intervention_ready=True`.
 
-`edge_scores(model, inputs, *, corrupted, metric, method="eap_ig", steps=None,
+`edge_scores(model, inputs, *, corrupted_input, metric, method="eap_ig", steps=None,
 example_reduction="mean")` returns a one-backward `ReadTable` of `EDGE` rows, one per
 component-graph edge, addressed `(edge name,)`: the edge attribution patching score
 `(s_corrupt - s_clean) . dM/d(input of t)`, summed over positions and reduced over examples
@@ -638,7 +638,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : The frozen result of `fit_direction`: `vector` (1-D, the rows' dtype), `site`,
   `method`, `num_pairs`, `read_token_index`, `model_type` (the traced model's
   `config.model_type`, or `None`) and `provenance`, a
-  `torchlens._selection_subspace.BasisProvenance` whose origin records the site, method, pair
+  `tl.types.BasisProvenance` whose origin records the site, method, pair
   count, read position and a sha256 digest of the rows, and whose `sha256` is the digest of
   the canonical float64 vector. `direction.steer(m)` is `tl.steer(vector, m, dim=-1)`;
   place it with `tl.when(tl.module(direction.site), ...)`. `direction.to_steering_vectors()`,
@@ -1046,14 +1046,14 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `transform_kind="autograd.Function"`, and `jitscript`, one call to a
   `torch.jit.ScriptFunction` from an eager forward, with `transform_kind="jit.script"`);
   `tl.model_output` selects model outputs, and
-  `tl.intervention.output_at` / `tl.model_input` select a nested output or model-input path.
+  `tl.model_input` selects a nested model-input path.
 
 **Temporal composition**
 : `tl.followed_by` (retroactive successor) and `tl.preceded_by` (lookback predecessor)
   compose with boolean operators to form temporal predicates over the op stream.
 
 **Backward selectors**
-: `tl.grad_fn` (backward grad_fn), `tl.intervention.grad_fn_label` (exact grad_fn label),
+: `tl.grad_fn` (backward grad_fn; `label=` matches one exact grad_fn label),
   `tl.grad_input` / `tl.grad_output` (backward event tensors), `tl.in_backward_pass`
   (one backward pass number), and `tl.without_op` (grad_fns without a paired forward op;
   the former `intervening` alias is removed).
@@ -1168,7 +1168,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (detached by default; `detach_saved_activations=False` returns graph-connected outs), and
   `tl.extract_dataset` extracts outs from an iterable dataset in batches. (The former
   `peek` and `batched_extract` aliases are removed.) Disk-mode `extract_dataset`
-  (``output_dir=``) writes a SELF-DESCRIBING artifact: atomic ``batch_XXXXX.pt`` shards
+  (``path=``) writes a SELF-DESCRIBING artifact: atomic ``batch_XXXXX.pt`` shards
   plus a ``manifest.json`` recording the run signature, per-site identity (layer label
   and structural site key where derivable), stimulus ordering/provenance
   (``stimulus_ids=`` optional), axis semantics, dtypes, devices, and the TorchLens
@@ -1259,8 +1259,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   carries no recorded request and re-saves by the capture's raw op indices, which is exact only
   when the rerun graph matches op for op; otherwise the rerun refuses `rerun_resave_ops_shifted`
   (trace unchanged).
-  `tl._io.PayloadLoadHints` carries backend-specific payload materialization hints
-  (`tl._io.JaxPayloadLoadHint` is the JAX-specific form).
+  `tl.io.PayloadLoadHints` carries backend-specific payload materialization hints
+  (`tl.io.JaxPayloadLoadHint` is the JAX-specific form).
 
 **Options**
 : `tl.options` groups the public option dataclasses: `CaptureOptions`, `SaveOptions`,
@@ -1341,7 +1341,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.stats.aggregate`. Reduce and discard (DOCUMENTED-UNSTABLE): `tl.trace(model, x,
   save="stats")` folds every op's out into a `tl.stats.RunningStats` during the forward and
   keeps no payload (one 16-slot float64 vector per op); `tl.stats.site_stats(trace)`
-  returns `{op label: Spine}`, payload reads refuse `activation_reduced_to_stats`, and
+  returns `{op label: RunningStats}`, payload reads refuse `activation_reduced_to_stats`, and
   replay or validation on the trace refuses `stats_capture_not_replayable`. Trajectory
   statistics (DOCUMENTED-UNSTABLE): `tl.mechinterp.measure_trajectory(model, data, *,
   statistics=None, facet="resid_post", layers=None, lens=None, mask_input=False,
@@ -1501,12 +1501,12 @@ shims, by declared contract. Each carries the same tag at its definition.
   the SAE registered as `name`; refuses `sae_latent_family_unknown`,
   `sae_latent_index_invalid` or `sae_latent_index_unknown`.
 
-**reconstruct (`tl.bridge.sae_lens.reconstruct(log, site, sae)`)** — *unstable — no deprecation shim owed*
+**reconstruct (`tl.bridge.sae_lens.reconstruct(trace, site, sae)`)** — *unstable — no deprecation shim owed*
 : The SAE's reconstruction of a saved site activation,
   `sae.decode(sae.encode(out))`; a callable SAE without that pair is called on
   the activation (an SAE Lens `SAE`'s forward is the same encode then decode).
   Replaces the removed `decode(log, site, sae)`, which passed the activation
-  to `sae.decode` as if it were latents. `tl.bridge.sae_lens.encode(log, site,
+  to `sae.decode` as if it were latents. `tl.bridge.sae_lens.encode(trace, site,
   sae)` gives the latents.
 
 **write_delphi (`tl.bridge.sae.write_delphi(latents, tokens, *, site, model_name, n_splits=5, directory)`)** — *unstable — no deprecation shim owed*
@@ -1783,20 +1783,20 @@ S2-gated*
   `__torchlens_cache_key__ = ("registered", name, version)`. Slot vocabulary
   `save | halt | until` is closed (S2-owned); unknown slots refuse typed.
 
-**Selection / ResolvedSelection / `__selection__`** — *unstable — no
+**Selector / Selection / `__selection__`** — *unstable — no
 deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
 : `tl.Selector` is the composable selection QUERY — a frozen AST over leaf
   terms (selector / receptive-field box / gradient-RF / facet / param / unit)
   and boolean combinators, trace-independent; `selection.resolve(trace)`
   returns a `tl.Selection` — frozen, trace-bound, an ordered tuple of
-  `Site(site_key, mask, provenance)` rows. TWO-LEVEL DENOTATION:
+  `Site(key, mask, provenance)` rows. TWO-LEVEL DENOTATION:
   (touched-site family, selected-element set); zero-mask entries are retained
-  first-class; `.empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
+  first-class; `.is_empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
   type refuses typed (`selection_bool_ambiguous`). Anything region-shaped
   implements `__selection__`; `Site.mask` returns a FRESH materialization
   (mutation cannot alter the selection). Masks are exact AS SETS; producer
   inexactness rides the closed `provenance.relation` lattice
-  (`exact | upper_bound | lower_bound | unknown`). `ResolvedSelection` is
+  (`exact | upper_bound | lower_bound | unknown`). `tl.Selection` is
   session-time only, never persisted. Selection kinds `ACT | PARAM | EDGE`
   are a closed vocabulary; mixed kinds refuse `selection_kind_incompatible`.
 
@@ -1862,7 +1862,7 @@ shim owed*
 **Graph-structural producers: tl.neighborhood / tl.between** — *unstable —
 no deprecation shim owed*
 : Select by WHERE OPS SIT IN THE EXECUTED DAG.
-  `neighborhood(of, hops=, direction=)` selects every op within N recorded
+  `neighborhood(selector, hops=, direction=)` selects every op within N recorded
   dataflow hops of a seed region (`hops=0` is the seed family itself;
   `direction` is `'both' | 'upstream' | 'downstream'`).
   `between(sources, sinks)` selects the executed sub-DAG carrying influence
@@ -1913,7 +1913,7 @@ deprecation shim owed*
   `by='abs'` (default) compares `|delta|`, `by='signed'` the signed delta
   (increased/decreased). `changed(reference, within=None, above=, below=)`
   applies strict bounds (neither given defaults to `above=0.0` — bare
-  `changed(ref)` is the "every element that moved" intervention-effect
+  `changed(reference)` is the "every element that moved" intervention-effect
   mask); `top_changed(reference, within=None, k= | fraction=, by=,
   largest=)` globally ranks deltas with the deterministic stable tie-break
   (exactly one of `k`/`fraction`; `largest=False` selects the least-moved
@@ -1982,7 +1982,7 @@ deprecation shim owed*
   optional `method=`, geometry, and the basis's sha256 content digest are
   stamped into every resolved entry's `provenance.source` (and therefore
   `do()` audit records); the frozen
-  `torchlens._selection_subspace.BasisProvenance` record is the programmatic
+  `tl.types.BasisProvenance` record is the programmatic
   face. DIMENSION HONESTY: `dim=` names the bound site axis (default `-1`,
   the trailing feature axis; conv channel directions are `dim=1`); a site
   whose extent there differs from `d` refuses `selection_unresolvable` /
@@ -2288,8 +2288,8 @@ shim owed*
   attached authority as model metadata. Accepts any recognized authority;
   an opaque callable refuses `preprocessing_attach_opaque`. Returns the model.
 
-**torchlens.preprocessing.check_card(trace_or_record, *, model=None, authority=None, offline=None)** — *unstable — no deprecation shim owed*
-: The on-request preprocessing verifier: `trace_or_record` is a `Trace` (its
+**torchlens.preprocessing.check_card(trace, *, model=None, authority=None, offline=None)** — *unstable — no deprecation shim owed*
+: The on-request preprocessing verifier: `trace` is a `Trace` (its
   `input_preprocessor` is read) or a `ResolvedPreprocessing` record. It compares the
   preprocessing a capture recorded (`Trace.input_preprocessor`) with the model's known card (HF image
   processor, torchvision weights, timm or open_clip config, or a named
@@ -2375,9 +2375,9 @@ shim owed*
   a string tag (wandb-export parity) and return `table`, `report`, `tags`
   (and `artifacts` for MLflow) beside the summary metrics and `capture_honesty`.
 
-**tl.export.xarray(log)** — *unstable — no deprecation shim owed*
+**tl.export.xarray(trace)** — *unstable — no deprecation shim owed*
 : Returns an `xarray.Dataset` (CHANGED, batch-2 buffer ruling, option c: it returned
-  a bare `DataArray`; read today's array as `tl.export.xarray(log)["out"]`).
+  a bare `DataArray`; read today's array as `tl.export.xarray(trace)["out"]`).
   `out` is the NeuroidAssembly `DataArray` of saved non-buffer outs,
   `presentation` by `neuroid` with `layer` / `layer_label` / `neuroid_index`
   coords. Each saved buffer layer is its own variable named by its layer label:
@@ -2542,12 +2542,6 @@ shim owed*
   cells are `None` and `backward_state` names the state; never 0.
   `column_conventions` names each FLOPs column's convention. Siblings fold
   only when their MAC and backward cells agree too.
-
-**BackwardPassEnd.close_path** — *unstable — no deprecation shim owed*
-: Sidecar-event-only implicit-pass close-path disclosure: `"engine_drain"`
-  when the queued final callback journaled the close, `"sync_point"` for
-  every backstop path, `None` on explicit passes. The projected
-  `BackwardPass` record field waits for the wave-3 bump.
 
 **until= (run kwarg) / report.truncated / report.stopped_at** — *unstable — no
 deprecation shim owed*
@@ -2970,9 +2964,8 @@ deprecation shim owed*
 **Extraction and preprocessing names**
 : `BatchEnvelope.num_rows` and `RaggedBatch.num_rows` (`num_rows=`), `TokenRows.num_tokens`,
   `Resolution.preprocessing` and `SiteMatrix.shaping` (`shaping=`).
-  `tl.extract_dataset(..., output_transform=...)`, `tl.neuro.extraction_plan(...,
-  output_transform=...)` and `tl._observability.is_summary_transform(output_transform)` take the
-  output transform;
+  `tl.extract_dataset(..., output_transform=...)` and `tl.neuro.plan_extraction(...,
+  output_transform=...)` take the output transform;
   `input_transform=` preprocesses inputs.
 
 **Admin and debugging names**
@@ -3006,19 +2999,19 @@ deprecation shim owed*
 **profile (`tl.report.profile`)** — *unstable — no deprecation shim owed*
 : Build a unified op, module, or invocation resource profile.
 **DTypeRangeReport fields** — *unstable — no deprecation shim owed*
-: `DTypeRangeReport.findings`, `DTypeRangeReport.n_ops_audited`, `DTypeRangeReport.n_ops_total`.
+: `DTypeRangeReport.findings`, `DTypeRangeReport.num_audited_ops`, `DTypeRangeReport.num_ops`.
 **HealthReport fields** — *unstable — no deprecation shim owed*
 : `HealthReport.checks_run`, `HealthReport.findings`, `HealthReport.skipped`.
 **MfuReport fields** — *unstable — no deprecation shim owed*
 : `MfuReport.denominator_scope`, `MfuReport.ideal_seconds`, `MfuReport.mfu`, `MfuReport.mode_terms`, `MfuReport.peaks_source`, `MfuReport.step_seconds`.
 **NonfiniteReport fields** — *unstable — no deprecation shim owed*
-: `NonfiniteReport.amp_disclosure`, `NonfiniteReport.capture_status`, `NonfiniteReport.cost_tier`, `NonfiniteReport.coverage_basis`, `NonfiniteReport.defer_recipe`, `NonfiniteReport.found`, `NonfiniteReport.nonfinite_labels`, `NonfiniteReport.origin_label`, `NonfiniteReport.phase`, `NonfiniteReport.scope_note`, `NonfiniteReport.tensor_role`, `NonfiniteReport.uncertainty_zone`.
+: `NonfiniteReport.amp_disclosure`, `NonfiniteReport.capture_status`, `NonfiniteReport.cost_tier`, `NonfiniteReport.coverage_basis`, `NonfiniteReport.defer_recipe`, `NonfiniteReport.has_nonfinite`, `NonfiniteReport.nonfinite_labels`, `NonfiniteReport.num_checked_ops`, `NonfiniteReport.num_unchecked_ops`, `NonfiniteReport.num_unexamined_ops`, `NonfiniteReport.origin_label`, `NonfiniteReport.phase`, `NonfiniteReport.scope_note`, `NonfiniteReport.tensor_role`, `NonfiniteReport.uncertainty_zone`.
 **OverheadReport fields** — *unstable — no deprecation shim owed*
-: `OverheadReport.n_forwards_run`, `OverheadReport.tiers`.
+: `OverheadReport.num_forward_runs`, `OverheadReport.tiers`.
 **ParamHealthReport fields** — *unstable — no deprecation shim owed*
 : `ParamHealthReport.checks_run`, `ParamHealthReport.findings`, `ParamHealthReport.schema_version`, `ParamHealthReport.skipped`, `ParamHealthReport.to_json`.
 **ProfileReport fields** — *unstable — no deprecation shim owed*
-: `ProfileReport.capture_status`, `ProfileReport.capture_verified`, `ProfileReport.column_additivity`, `ProfileReport.frame`, `ProfileReport.honesty`, `ProfileReport.partition_total`, `ProfileReport.tree`, `ProfileReport.unknown_events`.
+: `ProfileReport.capture_status`, `ProfileReport.column_additivity`, `ProfileReport.evidence_labels`, `ProfileReport.frame`, `ProfileReport.is_capture_verified`, `ProfileReport.partition_total`, `ProfileReport.tree`, `ProfileReport.unknown_events`.
 **RooflineReport fields** — *unstable — no deprecation shim owed*
 : `RooflineReport.aggregate_intensity`, `RooflineReport.coverage_by_reason`, `RooflineReport.excluded_cache_resident`, `RooflineReport.headline_compute_bound`, `RooflineReport.headline_memory_bound`, `RooflineReport.ridge_intensity`.
 ## Visuals and kits spellings
@@ -3049,8 +3042,8 @@ describe each surface in depth.
 | `tl.neuro.PlanSite` | One requested site's measured plan row |
 | `tl.neuro.export_npz` | Export extracted features as npz interchange (D-21) |
 | `tl.neuro.plan_extraction` | Build a measured extraction plan from two real probe captures (D-15) |
-| `tl._observability.RunningStats` | Always-on scalar spine accumulator (StreamingStat; D8) |
-| `tl._observability.RunningStatsResult` | Finalized spine statistics for one population |
+| `tl.stats.RunningStats` | Always-on scalar spine accumulator (StreamingStat; D8) |
+| `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
 | `tl._quickstart.Drawing` | Detached one-call render result. Always returned, never None |
 | `tl.stats.NarrationObserver` | Live stats-line echo mounted on the shipped observer surface |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
@@ -3201,7 +3194,7 @@ describe each surface in depth.
 | `TokenAttribution.special_tokens_mask` | 1 where the token is a tokenizer special, or ``None`` |
 | `TokenAttribution.target_repr` | Full target resolution disclosure incl. the decoded token |
 | `TokenAttributionPayload.to_markdown` | Render a plain-text fallback table with the footer lines |
-| `TrajectoryStats.compute_stats` | Return ``{layer: SpineResult}`` for one statistic (count, min, max, mean, ...) |
+| `TrajectoryStats.compute_stats` | Return ``{layer: RunningStatsResult}`` for one statistic (count, min, max, mean, ...) |
 | `TrajectoryStats.is_input_masked` | Whether each row's own input tokens were banned before reduction |
 | `TrajectoryStats.module_addresses` | Block addresses in depth order (one row per layer) |
 | `TrajectoryStats.num_examples` | Number of examples (batch rows) folded |
