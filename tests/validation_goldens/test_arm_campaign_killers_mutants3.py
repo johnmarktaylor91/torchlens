@@ -976,6 +976,21 @@ def test_module_hierarchy_fires_on_unresolvable_call_child() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_module_layer_containment_fires_on_num_layers_mismatch() -> None:
+    """Arm 1: Module.num_layers must equal len(layer_labels)."""
+
+    mod = SimpleNamespace(address="self", layer_labels=["relu_1"], num_layers=5, ops={})
+    fake_trace = SimpleNamespace(
+        modules=_AddrIndexed([mod]),
+        op_labels=["relu_1"],
+        layer_labels=["relu_1"],
+        layer_logs={"relu_1": SimpleNamespace()},
+        layer_list=[],
+    )
+    with pytest.raises(MetadataInvariantError, match="num_layers=5"):
+        _check_module_layer_containment(fake_trace)  # type: ignore[arg-type]
+
+
 def test_module_layer_containment_fires_on_invalid_modulecall_op_label() -> None:
     """Arm 2: a ModuleCall's ops must be valid op or layer labels."""
 

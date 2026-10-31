@@ -43,6 +43,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
         "class_name",
         "call_depth",
         "num_params",
+        "num_layers",
         "num_calls",
     ],
     "module_log": [
@@ -55,6 +56,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
         "address",
         "call_index",
         "call_label",
+        "num_ops",
         "forward_args_summary",
         "forward_kwargs_summary",
     ],

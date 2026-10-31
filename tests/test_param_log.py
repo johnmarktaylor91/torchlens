@@ -145,6 +145,8 @@ class TestParamLogFields:
         assert isinstance(pl.num_calls, int)
         assert isinstance(pl.used_by_ops, list)
         assert isinstance(pl.used_by_layers, list)
+        assert isinstance(pl.num_uses_by_ops, int)
+        assert isinstance(pl.num_uses_by_layers, int)
         assert isinstance(pl.co_parent_params, list)
 
     def test_repr_contains_key_info(self):
@@ -488,8 +490,8 @@ class TestGradientTracking:
             assert pl.has_grad is True
             assert pl.grad_shape == pl.shape
             assert pl.grad_dtype == pl.dtype
-            assert pl.grad_memory > 0
-            assert len(str(pl.grad_memory)) > 0
+            assert pl.gradient_memory > 0
+            assert len(str(pl.gradient_memory)) > 0
 
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()

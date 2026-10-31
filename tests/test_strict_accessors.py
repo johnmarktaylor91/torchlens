@@ -172,6 +172,8 @@ def _legacy_param_state(address: str) -> dict[str, object]:
         "device": None,
         "used_by_ops": [],
         "used_by_layers": [],
+        "num_uses_by_ops": 0,
+        "num_uses_by_layers": 0,
         "num_calls": 0,
     }
 

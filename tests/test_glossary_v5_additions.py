@@ -89,7 +89,7 @@ def test_module_recursive_params_memory_and_call_tree() -> None:
 
     assert isinstance(root, Module)
     assert isinstance(root.recursive_params, ParamAccessor)
-    assert list(root.recursive_params.keys()) == [
+    assert root.recursive_param_addresses == [
         "block.0.weight",
         "block.0.bias",
         "head.weight",
