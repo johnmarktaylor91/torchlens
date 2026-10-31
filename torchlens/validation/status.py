@@ -74,6 +74,21 @@ class ValidationStatus:
     exempted_reason_counts: Mapping[str, int] = field(default_factory=dict, repr=False)
     decisions: Sequence[Mapping[str, Any]] = field(default_factory=tuple, repr=False)
 
+    def __repr__(self) -> str:
+        """Bounded identity card (D31): the state leads, counts point, decisions never dump."""
+
+        reason = "" if self.reason is None else f", reason={self.reason!r}"
+        counts = ""
+        if self.state in ("passed", "failed"):
+            counts = (
+                f", {self.num_replayed_ops} replayed, {self.num_unverified_ops} unverified, "
+                f"{self.num_failed_ops} failed"
+            )
+        return (
+            f"ValidationStatus({self.state!r}, backend={self.backend!r}, "
+            f"source={self.source!r}{reason}{counts}; read .message)"
+        )
+
     @property
     def passed(self) -> bool:
         """Return whether replay validation ran and passed.
