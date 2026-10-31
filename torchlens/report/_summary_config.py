@@ -25,7 +25,7 @@ from ._summary_ladder import DEFAULT_ROW_BUDGET
 LEVELS: tuple[str, ...] = ("auto", "module", "op")
 
 #: View presets implemented natively by the rebuilt renderer.
-NATIVE_VIEWS: tuple[str, ...] = ("overview", "compute")
+NATIVE_VIEWS: tuple[str, ...] = ("overview", "compute", "stats")
 
 #: Removed legacy ``level=`` preset names -> what replaces each one. They
 #: refuse typed (``summary_level_invalid``) naming the replacement; there is
@@ -137,6 +137,7 @@ class SummaryConfig:
     flop_convention: str = "fma2"
     units: str = "human"
     style: str = "auto"
+    max_scan_elements: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def resolved_columns(self, mixed_trainability: bool) -> tuple[ColumnSpec, ...]:
@@ -218,6 +219,10 @@ def _resolve_columns(columns: Any, view: str) -> tuple[str, ...] | None:
 
     if columns is None:
         return None
+    if view == "stats":
+        from ._stats_view import resolve_stats_columns
+
+        return resolve_stats_columns(columns)
     if isinstance(columns, str):
         if columns in VIEW_BUNDLES:
             return VIEW_BUNDLES[columns]
@@ -304,6 +309,7 @@ GRAMMAR_OPTIONS: tuple[str, ...] = (
     "flop_convention",
     "units",
     "style",
+    "max_scan_elements",
 )
 
 
@@ -354,6 +360,7 @@ def resolve_config(**kwargs: Any) -> SummaryConfig:
     max_rows = _resolve_max_rows(kwargs.pop("max_rows", DEFAULT_ROW_BUDGET))
     columns = _resolve_columns(kwargs.pop("columns", None), view)
     filter_ = kwargs.pop("filter", None)
+    max_scan_elements = _resolve_max_scan_elements(kwargs.pop("max_scan_elements", None), view)
     if kwargs:
         _refuse_unknown_options(sorted(kwargs))
     if level == "op" and depth not in ("auto", "all", None):
@@ -375,4 +382,22 @@ def resolve_config(**kwargs: Any) -> SummaryConfig:
         flop_convention=closed["flop_convention"],
         units=closed["units"],
         style=closed["style"],
+        max_scan_elements=max_scan_elements,
     )
+
+
+def _resolve_max_scan_elements(value: Any, view: str) -> int | None:
+    """Validate max_scan_elements=: the stats view's element budget, else refused."""
+
+    if value is None:
+        return None
+    if view != "stats":
+        raise InvalidArgumentError(
+            "max_scan_elements= is the payload-scan budget of view='stats'; "
+            f"view={view!r} scans no payloads, so the request is never accepted-and-ignored.",
+            code="summary_option_invalid",
+            remedy="pass view='stats' with max_scan_elements=, or drop max_scan_elements=",
+        )
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        _refuse_choice("max_scan_elements", value, ("<non-negative int>", "None"))
+    return value

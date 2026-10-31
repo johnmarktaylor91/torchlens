@@ -15,7 +15,7 @@ real fixture in its declared state.
 | `trace.profile(sort_by=..., k=...)` | Rank me: which ops/modules cost the most time, FLOPs, or memory. | RUN-RESOURCES | RANK | metadata_only |
 | `tl.report.cost_tree(trace)` | Show compute as the module tree with exact self/subtree conservation and fwd/bwd/total FLOPs columns. | RUN-RESOURCES | SHAPE | metadata_only |
 | `tl.report.flops(trace_or_model, ...)` | The one-call paper number: analytic forward FLOPs with coverage and params. | RUN-RESOURCES | SHAPE | metadata_only |
-| `trace.stats_table()` | Observations of ONE captured batch per site: mean/std/zero/NaN fractions. | RUN-VALUES | SHAPE | payload_scan |
+| `trace.summary(view='stats')` | Observations of ONE captured batch per site: mean/std/zero/NaN fractions. | RUN-VALUES | SHAPE | payload_scan |
 | `trace.audit()` | Judge me: findings with severities, checks run, and skips disclosed. | RUN-HEALTH | VERDICT | payload_scan |
 | `trace.health_facts` | The three-state nonfinite record (found / clean / not-checked) with basis. | RUN-HEALTH | SHAPE | payload_scan |
 | `trace.bill_of_materials()` | What does THIS object retain: payload bytes now, counts, annotations. | CAPTURE | SHAPE | metadata_only |
@@ -33,7 +33,7 @@ real fixture in its declared state.
 - `profile`: refuses when the capture failed before finalization.
 - `cost_tree`: refuses when the capture failed before finalization.
 - `flops`: refuses when the trace door is passed model-door inputs.
-- `stats_table`: refuses when payloads were not retained (typed row states, never fabrication).
+- `summary_stats`: refuses when payloads were not retained (typed row states, never fabrication).
 - `audit`: refuses when never (partial captures get the degraded audit).
 - `health_facts`: refuses when never (an underivable basis is the NOT-CHECKED shape).
 - `bill_of_materials`: refuses when the capture failed before finalization.
@@ -51,7 +51,7 @@ real fixture in its declared state.
 - `profile`: truncation_disclosed, instrumented_time_labeled, conserves_totals
 - `cost_tree`: conserves_totals, truncation_disclosed
 - `flops`: conserves_totals, mints_no_facts
-- `stats_table`: mints_no_facts, truncation_disclosed
+- `summary_stats`: mints_no_facts, truncation_disclosed
 - `audit`: checks_and_skips_complete
 - `health_facts`: mints_no_facts
 - `bill_of_materials`: mints_no_facts

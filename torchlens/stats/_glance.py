@@ -61,7 +61,7 @@ def glance(
     if not isinstance(tensor, torch.Tensor):
         raise TypeError(
             "glance() renders torch tensors; for captured records use the record "
-            "surfaces (repr(log[label]) / log.stats_table()) which add provenance "
+            "surfaces (repr(log[label]) / log.summary(view='stats')) which add provenance "
             f"and honesty envelopes. Got {type(tensor).__name__}."
         )
     from ._stats_render import render_core_line

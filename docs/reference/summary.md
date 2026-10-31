@@ -70,7 +70,7 @@ tl.summary(model, input_args=None, input_kwargs=None,
     execution_mode="eval",    # eval | train | same    (one-call only)
     grad_mode="off",          # off | same             (one-call only)
     level="auto",             # auto | module | op
-    view="overview",          # overview | compute (column bundles)
+    view="overview",          # overview | compute | stats (column bundles; stats = per-site payload statistics)
     depth="auto",             # auto | all | int
     columns=None,             # bundle name, exact list, or +name/-name deltas
     filter=None,              # regex or callable; totals stay whole-model
@@ -91,7 +91,7 @@ its successor:
 
 | Removed spelling | Use instead |
 |---|---|
-| `preset=` | `view=` (`"overview"` / `"compute"`) for columns, `level=` for row grain |
+| `preset=` | `view=` (`"overview"` / `"compute"` / `"stats"`) for columns, `level=` for row grain |
 | `fields=` | `columns=` |
 | `show_ops=`, `include_ops=` | `level="op"` |
 | `mode=` | `level="op"`, or `fold_repeats=False` to unfold repeated runs |
@@ -106,9 +106,22 @@ its successor:
 | `level="waterfall"` | `trace.profile(level="op")`, or `trace.to_pandas()` in execution order |
 | `level="output"` | `trace.output_table()` |
 
+## The stats view
+
+`trace.summary(view="stats")` is the per-site payload statistics table: one row per
+executed op (`level="module"` keeps the module-output payloads), read in graph order, with
+typed row states (`ok` / `unsaved` / `disk_backed` / `unsupported` / `unscanned`) so an
+absent number is a state, never a zero. `max_scan_elements=` is the scan budget (accepted only
+with `view="stats"`; later retained rows become `unscanned` and the header says how many).
+Sampled families print with a `~` mark and never a clearance; `= parent` marks come only from
+the corroborated distribution verdict and are never folded. `str(report)` is the table,
+`report.rows` the typed rows, `report.to_pandas()` the frame; `columns=` takes the stats
+column names (`name`, `state`, `n`, `mean`, `sd`, `min`, `max`, `zero_count`, `nan_count`,
+`inf_count`, `same_as_parent`, `reason`) or `+name` / `-name` deltas.
+
 ## Columns
 
-`columns=` takes a bundle name (`"overview"`, `"compute"`), an exact
+`columns=` takes a bundle name (`"overview"`, `"compute"`, `"stats"`), an exact
 ordered list, or `+name` / `-name` deltas on the view's bundle. A `+name`
 lands at its registry position (`+input` before `output`, `+flops_pct`
 beside `fwd flops`).

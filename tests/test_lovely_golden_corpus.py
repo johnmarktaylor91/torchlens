@@ -147,7 +147,7 @@ def test_trace_and_records_ascii_sweep() -> None:
     surfaces = [repr(trace), str(trace), repr(trace.layers), str(trace.layers)]
     surfaces.extend(repr(op) for op in trace.layer_list)
     surfaces.extend(str(op) for op in trace.layer_list)
-    surfaces.extend(repr(trace.stats_table()))
+    surfaces.append(str(trace.summary(view="stats")))
     for text in surfaces:
         assert text.isascii(), text[:80]
     trace.cleanup()

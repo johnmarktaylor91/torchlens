@@ -3705,6 +3705,7 @@ Members of classes whose public home changed, one entry per class.
 | `has_validation_replay=` | field and constructor keyword of `BackendCapabilities` |
 | `history_id=` | keyword of `Bundle.effects`: which recorded history to read |
 | `input_op=` | keyword of the receptive-field queries (`Trace.receptive_fields`, `Trace.projective_fields`): the input op to measure against |
+| `max_scan_elements=` | keyword of `Trace.summary(view="stats")`: the payload-scan element budget; later retained rows become typed `unscanned` rows; refused typed with any other view |
 | `input_route=` | keyword of `tl.splice_module`: the route name for the spliced input |
 | `is_analysis_load_available=` | field and constructor keyword of `RunnableDiagnostic` |
 | `is_audited=` | field and constructor keyword of `ScanRow` |

@@ -77,11 +77,11 @@ checked capture the trace repr instead carries the per-trace PROOF line
 
 ## The graph-scale table
 
-`trace.stats_table()` renders every retained site through the same
+`trace.summary(view="stats")` renders every retained site through the same
 kernel: graph-ordered rows, typed row states (`ok` / `unsaved` /
 `disk_backed` / `unsupported` / `unscanned`), `= parent` marks backed by
 a capture-path-stable distribution verdict (function semantics +
-geometry; payload-pointer comparison is banned), a constructor element
+geometry; payload-pointer comparison is banned), a `max_scan_elements=` element
 budget echoed in the header, and disclosed sampled-column sorts.
 "Sortable, exact where it says exact."
 

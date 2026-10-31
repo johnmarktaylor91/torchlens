@@ -163,8 +163,8 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         example="tl.report.flops(trace)",
     ),
     SurfaceEntry(
-        key="stats_table",
-        spelling="trace.stats_table()",
+        key="summary_stats",
+        spelling="trace.summary(view='stats')",
         subject="RUN-VALUES",
         register="SHAPE",
         invariants=("mints_no_facts", "truncation_disclosed"),
@@ -173,7 +173,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         requires=("finished_trace",),
         refuses_when="payloads were not retained (typed row states, never fabrication)",
         cost_class="payload_scan",
-        example="trace.stats_table()",
+        example="trace.summary(view='stats')",
     ),
     SurfaceEntry(
         key="audit",
