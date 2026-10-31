@@ -409,7 +409,8 @@ def test_absent_root_entry_point_refuses_from_v10_and_2x_files_refuse(
 
     from torchlens._io._forgery_identity_facts import _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC
 
-    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == tl._io.TLSPEC_VERSION == 10
+    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == 10
+    assert tl._io.TLSPEC_VERSION >= _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC
     with tarfile.open(CORPUS, "r:gz") as tar:
         tar.extractall(tmp_path)
     assert_refuses_as_2x(tmp_path / "art_main_portable")

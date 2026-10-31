@@ -963,15 +963,15 @@ def test_real_v7_artifact_refuses_as_2x() -> None:
 
 
 def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:
-    """A fresh save stamps tlspec_version 10; the v7 fixture stays 7."""
+    """A fresh save stamps tlspec_version 11; the v7 fixture stays 7."""
 
     trace = _tiny_trace()
     state, _, _ = scrub_for_save(trace)
-    assert state["tlspec_version"] == TLSPEC_VERSION == 10
-    path = tmp_path / "fresh_v10.tlspec"
+    assert state["tlspec_version"] == TLSPEC_VERSION == 11
+    path = tmp_path / "fresh_v11.tlspec"
     trace.save(str(path))
     loaded = tl.load(str(path))
-    assert loaded.tlspec_version == 10
+    assert loaded.tlspec_version == 11
     assert [op.site_key for op in loaded.ops] == [op.site_key for op in trace.ops]
 
 

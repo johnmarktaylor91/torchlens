@@ -14,7 +14,6 @@ CaptureOptions.emit_nvtx
 CaptureOptions.hooks
 CaptureOptions.inference_only
 CaptureOptions.input_transform
-CaptureOptions.replayable
 CaptureOptions.jax_control_flow
 CaptureOptions.jax_max_control_flow_unroll
 CaptureOptions.keep_orphans
@@ -34,6 +33,7 @@ CaptureOptions.output_transform
 CaptureOptions.payload_policy
 CaptureOptions.raise_on_nan
 CaptureOptions.recurrence_detection
+CaptureOptions.replayable
 CaptureOptions.save_args
 CaptureOptions.save_budget
 CaptureOptions.save_grads

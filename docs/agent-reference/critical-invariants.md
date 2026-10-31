@@ -58,13 +58,18 @@
     `entry_state_digest`/`exit_state_digest` carried-state witness slots; v1/foreign
     versions quarantine), and entry-dark slots `Trace.root_entry_point` (written unconditionally),
     `Op.episode_step`, `Op.tl_authored_root` with fail-closed validation.
-9d. tlspec v10 (batch-2 coordinated schema write; current): one bump for every new saved
+9d. tlspec v10 (batch-2 coordinated schema write): one bump for every new saved
     field of the window, each admitted by the v10 field registry
     (`tests/test_schema_v10_contract_and_goldens.py::V10_FIELD_ADMISSIONS`) before its writer
     lands, so no further bump follows; the writer contract states the floor release as
     `2.31.0` (v9 froze the false "2.33"); `reserved_vocabularies.step_scores` reserves the
     generation step-score names, credited to inseq. Contract of record
     `torchlens/schemas/writer_contract_v10.json`; the v9 contract stays frozen beside it.
+9e. tlspec v11 (persisted-field rename write; current): stored keys follow the decided public
+    names (for example `Op.is_edited`, `Trace.is_replayable`, `Trace.name`), with no alias and
+    no old-key reader, so a v10 file refuses rather than loading under new names. Contract of
+    record `torchlens/schemas/writer_contract_v11.json`; the v10 contract stays frozen beside it
+    (`tests/test_schema_v10_contract_and_goldens.py::V10_CONTRACT_SHA256`).
 10. `backward_ready=True` rejects contradictory detaching/disk-save settings and preserves user
     `requires_grad` choices.
 10a. `inference_only=True` wraps forward capture in `torch.no_grad()` for forward-only analysis

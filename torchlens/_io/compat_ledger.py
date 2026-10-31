@@ -370,11 +370,13 @@ def runtime_row() -> LedgerRow:
 #: wheels; the "first shipped in 2.33" comment was false). tlspec 7/8/9 have
 #: only ever been written by dev builds of main self-reporting >= 2.34.1, and
 #: tlspec 10 (the batch-2 coordinated write) by dev builds self-reporting
-#: >= 2.36.0.
+#: >= 2.36.0, and tlspec 11 (the persisted-field rename write) by dev builds
+#: self-reporting >= 2.36.1.
 _GOVERNED_PRODUCER_WINDOWS: tuple[tuple[str, str | None, frozenset[int]], ...] = (
     ("2.31.0", None, frozenset({6})),
     ("2.34.1", None, frozenset({7, 8, 9})),
     ("2.36.0", None, frozenset({10})),
+    ("2.36.1", None, frozenset({11})),
 )
 
 

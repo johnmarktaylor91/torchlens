@@ -239,6 +239,7 @@ def test_alias_catalogs_share_the_primary_object(catalog: Catalog) -> None:
 PRIVATE_ORDERED_DROP_FIELDS: dict[str, dict[str, str]] = {
     "Trace": {
         "_runnable": "sparse-runnable state container; rebuilt at load, never portable itself",
+        "_replay_frontier": "session-time replay frontier tensors cached for gradient replay; never portable",
         "_fast_run_session": "session-time guarded-static-loop handle (tl.Trace.run(fast=True))",
         "_distributed_plane_p": "session-time plane-P dispatch journal for armed captures (merge-ranks C2 census evidence)",
         "_transform": "capture-time input transform callable; opaque, session-only",
@@ -1200,6 +1201,9 @@ def test_facade_plumbing_allowance_stays_minimal() -> None:
 #: also update ``docs/reference/merged_trace_contract.md``, whose stated value
 #: is checked against the code below.
 VERSION_AUTHORITY_PINS: dict[str, int] = {
+    # v11: the persisted-field rename write — stored keys follow the decided
+    # public names (no alias, no old-key reader). Contract of record:
+    # torchlens/schemas/writer_contract_v11.json (v10 frozen beside it).
     # v10: the batch-2 coordinated schema write (R2-05 with R2-38) — one
     # bump for every new saved field of the window (admitted by the v10 field
     # registry in tests/test_schema_v10_contract_and_goldens.py), the floor
@@ -1216,7 +1220,7 @@ VERSION_AUTHORITY_PINS: dict[str, int] = {
     # torchlens/schemas/writer_contract_v9.json (v8 pinned at
     # tests/release_goldens/writer_contract_v8.json). MERGED_TLSPEC_VERSION
     # versions the merged ROOT manifest independently and did not move.
-    "TLSPEC_VERSION": 10,
+    "TLSPEC_VERSION": 11,
     "MIN_TLSPEC_VERSION": 6,
     "MERGED_TLSPEC_VERSION": 7,
 }
