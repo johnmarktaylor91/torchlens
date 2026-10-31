@@ -268,6 +268,7 @@ def test_capture_touched_cuda_keys_on_recorded_op_devices() -> None:
     # backend rule (unknown -> flush), never a false "provably non-CUDA".
     class _NoRefTrace:
         forward_memory_backend = "unknown"
+        _layer_list = None
 
         def __iter__(self):
             return iter([SimpleNamespace()])
