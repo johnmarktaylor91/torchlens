@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -66,6 +67,25 @@ RECORD_RECORDING_MOVES = (
     "postprocess",
 )
 RENAMES = {"halt": "stop_after", "streaming": "storage"}
+# RecordingOptions fields that left the public class (round 2, r2-options-2):
+# the capture knobs are CaptureOptions fields, the rest are door keywords.
+RECORDING_OPTIONS_CAPTURE_MOVES = (
+    "lookback",
+    "lookback_payload_policy",
+    "seed",
+    "activation_transform",
+    "save_raw_activations",
+    "save_grads",
+    "grad_transform",
+    "save_raw_grads",
+    "detach_saved_activations",
+)
+RECORDING_OPTIONS_DOOR_MOVES = {"halt": "stop_after", "narrate": "narrate", "streaming": "storage"}
+RECORDER_RENAMES = {"streaming": "storage"}
+# Former public builders of CaptureOptions / RecordingOptions, now private with no
+# public replacement: reported, never rewritten.
+PRIVATE_BUILDERS = ("from_values", "is_field_explicit")
+OPTION_CLASSES = ("CaptureOptions", "RecordingOptions")
 DROPS = ("profile",)
 DOORS = {"trace": "trace", "record": "record", "trace_fn": "trace", "record_fn": "record"}
 
@@ -143,9 +163,21 @@ class _Edits:
 
     def apply(self) -> str:
         out = self.source
-        for a, b, text in sorted(self.edits, key=lambda e: (e[0], e[1]), reverse=True):
+        for a, b, text in sorted(self._coalesced(), key=lambda e: (e[0], e[1]), reverse=True):
             out = out[:a] + text + out[b:]
         return out
+
+    def _coalesced(self) -> list[tuple[int, int, str]]:
+        """Merge overlapping deletions (adjacent removed arguments share a comma)."""
+
+        merged: list[tuple[int, int, str]] = []
+        for a, b, text in sorted(self.edits, key=lambda e: (e[0], e[1])):
+            if merged and text == "" and merged[-1][2] == "" and a < merged[-1][1]:
+                pa, pb, _ = merged[-1]
+                merged[-1] = (pa, max(pb, b), "")
+                continue
+            merged.append((a, b, text))
+        return merged
 
 
 def _rewrite_nonfinite(
@@ -236,6 +268,16 @@ def _rewrite_door(
                 moved_capture.append(f"{inner.arg}={ed.text(inner.value)}")
             ed.remove_arg(kw, call)
             counts["save_options"] += 1
+    if door == "record":
+        for kw in call.keywords:
+            if (
+                kw.arg == "recording"
+                and isinstance(kw.value, ast.Call)
+                and _ctor_name(kw.value.func, "RecordingOptions")
+            ):
+                moved_capture.extend(
+                    _rewrite_recording_options(kw.value, call, ed, counts, reports, path)
+                )
     if door == "trace" and len(call.args) >= 3:
         third = call.args[2]
         a, _ = ed.span(third)
@@ -272,6 +314,69 @@ def _rewrite_door(
             ed.replace(b, b, f", {name}={style}({', '.join(pieces)})")
 
 
+def _rewrite_recording_options(
+    call: ast.Call,
+    door_call: ast.Call | None,
+    ed: _Edits,
+    counts: Counter,
+    reports: list[str],
+    path: Path,
+) -> list[str]:
+    """Move the removed ``RecordingOptions`` fields to their doors.
+
+    Returns the capture pieces to fold into the enclosing ``record`` door's
+    ``capture=``; door keywords are appended to the door call directly. A
+    constructor outside a ``record`` call is reported for a hand move.
+    """
+
+    moved_capture: list[str] = []
+    for kw in list(call.keywords):
+        if kw.arg is None:
+            continue
+        if kw.arg in RECORDING_OPTIONS_CAPTURE_MOVES:
+            if door_call is None:
+                reports.append(
+                    f"{path}:{call.lineno}: RecordingOptions({kw.arg}=) is a CaptureOptions "
+                    "field now; move by hand"
+                )
+                continue
+            moved_capture.append(f"{kw.arg}={ed.text(kw.value)}")
+            ed.remove_arg(kw, call)
+            counts[f"recording_options_move:{kw.arg}"] += 1
+        elif kw.arg in RECORDING_OPTIONS_DOOR_MOVES:
+            target = RECORDING_OPTIONS_DOOR_MOVES[kw.arg]
+            if door_call is None or any(k.arg == target for k in door_call.keywords):
+                reports.append(
+                    f"{path}:{call.lineno}: RecordingOptions({kw.arg}=) is the door keyword "
+                    f"{target}= now; move by hand"
+                )
+                continue
+            last = (list(door_call.args) + list(door_call.keywords))[-1]
+            _, b = ed.span(last)
+            ed.replace(b, b, f", {target}={ed.text(kw.value)}")
+            ed.remove_arg(kw, call)
+            counts[f"recording_options_door:{kw.arg}"] += 1
+    return moved_capture
+
+
+def _report_private_builders(tree: ast.Module, reports: list[str], path: Path) -> None:
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        if node.func.attr not in PRIVATE_BUILDERS:
+            continue
+        owner = node.func.value
+        owner_name = owner.id if isinstance(owner, ast.Name) else getattr(owner, "attr", None)
+        looks_like_option = owner_name is not None and re.search(
+            "capture|recording", owner_name, re.IGNORECASE
+        )
+        if owner_name in OPTION_CLASSES or looks_like_option:
+            reports.append(
+                f"{path}:{node.lineno}: .{node.func.attr}() is private on CaptureOptions and "
+                "RecordingOptions (no public replacement); review"
+            )
+
+
 def rewrite(path: Path, apply: bool, counts: Counter, reports: list[str]) -> bool:
     source = path.read_text()
     try:
@@ -279,6 +384,17 @@ def rewrite(path: Path, apply: bool, counts: Counter, reports: list[str]) -> boo
     except SyntaxError:
         return False
     ed = _Edits(source)
+    nested_recording: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or _door_name(node.func) != "record":
+            continue
+        for kw in node.keywords:
+            if (
+                kw.arg == "recording"
+                and isinstance(kw.value, ast.Call)
+                and _ctor_name(kw.value.func, "RecordingOptions")
+            ):
+                nested_recording.add(id(kw.value))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -287,6 +403,15 @@ def rewrite(path: Path, apply: bool, counts: Counter, reports: list[str]) -> boo
             _rewrite_door(node, door, ed, counts, reports, path)
         if _ctor_name(node.func, "CaptureOptions"):
             _rewrite_nonfinite(node.keywords, ed, node, counts)
+        if _ctor_name(node.func, "Recorder"):
+            for kw in node.keywords:
+                if kw.arg in RECORDER_RENAMES:
+                    a, _ = ed.span(kw)
+                    ed.replace(a, a + len(kw.arg), RECORDER_RENAMES[kw.arg])
+                    counts[f"recorder_rename:{kw.arg}"] += 1
+        if _ctor_name(node.func, "RecordingOptions") and id(node) not in nested_recording:
+            _rewrite_recording_options(node, None, ed, counts, reports, path)
+    _report_private_builders(tree, reports, path)
     if not ed.edits:
         return False
     new = ed.apply()
