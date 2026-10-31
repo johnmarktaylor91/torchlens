@@ -12,8 +12,8 @@ that made released v2.33.0 and v2.34.1 indistinguishable by stamp alone.
 Writer identity enters as the set of identity fields a conforming writer
 must STAMP (never the concrete version values): baking the release string
 into the digest would make every release trivially distinct and destroy the
-same-grammar signal the ledger keys on. Concrete writer identity lives in
-the compatibility ledger row next to the digest, not inside it.
+same-grammar signal the digest exists to give. Concrete writer identity lives in
+the manifest's own writer stamp, not inside the digest.
 
 The contract of record is committed at
 ``torchlens/schemas/writer_contract_v{TLSPEC_VERSION}.json`` (v10 as of the
@@ -22,8 +22,7 @@ with the 2.x readers) and enforced by
 ``tests/test_tlspec_envelope_contract.py``: regenerating from the live tree
 must reproduce the committed contract byte-for-byte, and a persisted field
 name that DISAPPEARS from the live contract must be covered by an alias rule
-or the diff test fails (alias-or-fail, MEMO 3.3) -- the per-PR cheap variant
-of the forward-load gate (MEMO 3.4/G8).
+or the diff test fails (alias-or-fail, MEMO 3.3).
 """
 
 from __future__ import annotations

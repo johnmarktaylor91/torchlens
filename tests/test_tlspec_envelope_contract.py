@@ -9,7 +9,7 @@ Three guarantees (ecosystem MEMO 3.1/3.3/3.4, megaplan P05):
    the same PR, making every contract diff reviewable. Regenerate with
    ``TORCHLENS_UPDATE_WRITER_CONTRACT=1 pytest tests/test_tlspec_envelope_contract.py``.
 
-2. ALIAS-OR-FAIL (the per-PR cheap variant of the forward-load gate, G8) --
+2. ALIAS-OR-FAIL --
    a persisted field name present in the contract of record but absent from
    the live tree is a reader regression unless the live contract carries an
    alias rule for it. A deleted field without an alias must be LOUD.

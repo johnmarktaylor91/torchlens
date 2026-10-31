@@ -632,12 +632,11 @@
   `docs/migration/scoped_detached_patching.md`.
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers. Manifest
   schema v2 is backend-aware; non-torch preview bundles may be audit-only or metadata-only.
-  Rehydration floor: artifacts stamped `tlspec_version` < 6 refuse to load with the typed
-  `tl.errors.ArtifactTooOldError` (drop-not-resurrect; the legacy field-alias
-  ladders are deleted). The first tlspec-6 writer was released torchlens 2.31.0, so 2.31.0 /
-  2.32.4 artifacts LOAD (the compat ledger's governed producer windows are the authority;
-  the floor is the STAMP, never a release name). Legacy 2.16 intervention specs remain
-  loadable — the floor covers Trace rehydration only. WRITE/READ SYMMETRY (W051-IO): the
+  Files saved by torchlens 2.x: a manifest stamp or Trace state stamp older than the current
+  `tlspec_version`, a pickled 2.x module path, or the 2.16 ModelLog format refuses at
+  `tl.load` with the typed `tl.errors.ArtifactTooOldError` ("saved by torchlens 2.x"; the
+  remedy names 2.36.x and re-capture). There is no reader, ledger or migration. Legacy 2.16
+  intervention specs remain loadable — the refusal covers Trace rehydration only. WRITE/READ SYMMETRY (W051-IO): the
   save path dry-runs the exact `metadata.pkl` bytes through the loader's default-deny
   unpickler before writing — an unportable value refuses typed (`annotation_value_unportable`
   naming the key path / `metadata_value_unportable`), tensors under annotations (incl.

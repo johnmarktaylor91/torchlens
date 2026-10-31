@@ -21,13 +21,11 @@ class ArtifactError(CompatibilityError, RuntimeError):
 
 
 class ArtifactTooOldError(ArtifactError):
-    """Raised when an artifact predates the supported rehydration floor.
+    """Raised when an artifact was saved by torchlens 2.x, which this release does not read.
 
-    TorchLens loads artifacts stamped ``tlspec_version >= 6`` (the first
-    tlspec-6 writer was released torchlens ``2.31.0``; the floor is the stamp,
-    never a release name). Older artifacts refuse with this error rather than
-    being partially reconstructed; re-save them with a torchlens release the
-    compat ledger proves able to read them.
+    Any stamp older than the current ``tlspec_version``, any pickled 2.x module path and the
+    2.16 ModelLog format refuse with this error rather than being partially reconstructed;
+    the remedy is to save the file again with torchlens 2.36.x or capture the model again.
     """
 
 
@@ -51,8 +49,7 @@ class ArtifactRuntimeIncompatibleError(ArtifactError):
     A runtime-axis refusal (torch major-version mismatch, unparseable torch
     version), never a schema-calendar one: the artifact stays valid and loads
     under a runtime with the recorded major version. Distinct class so
-    callers and the compatibility ledger can tell runtime policy apart from
-    the version window (ecosystem MEMO 3.1/3.2).
+    callers can tell runtime policy apart from the version window.
     """
 
 
