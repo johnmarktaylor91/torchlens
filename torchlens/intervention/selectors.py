@@ -593,7 +593,7 @@ class SiteSelector(BaseSelector):
                 "component (module_path=, op_type=, slot=, ordinal=)",
                 code="site_selector_empty",
                 remedy="pass op.site_key, or components such as "
-                "tl.site(module_path='encoder.0', op_type='linear')",
+                "tl.site(module_path='encoder.0', func='linear')",
                 argument="key",
             )
         if key is not None:

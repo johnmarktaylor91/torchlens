@@ -63,7 +63,7 @@ _FLAG_HELPERS: dict[str, Callable[[], Edit]] = {
     "replace_with": lambda: tl.replace_with(torch.ones(1, 8), allow_shape_change=True),
     "scale": lambda: tl.scale(0.5, allow_shape_change=True),
     "noise": lambda: tl.add_noise(0.1, seed=0, allow_shape_change=True),
-    "clamp": lambda: tl.clamp(min=0.0, allow_shape_change=True),
+    "clamp": lambda: tl.clamp(low=0.0, allow_shape_change=True),
     "mean_ablate": lambda: tl.mean_ablate(allow_shape_change=True),
     "scramble_elements": lambda: tl.intervention.scramble_elements(seed=0, allow_shape_change=True),
     "add": lambda: tl.add(1.0, allow_shape_change=True),

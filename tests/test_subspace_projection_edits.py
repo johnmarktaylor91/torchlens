@@ -115,7 +115,7 @@ def test_non_orthonormal_basis_is_orthonormalised_keeping_sign() -> None:
 
     log = _trace()
     fork = log.fork()
-    fork.do(tl.subspace(_SITE, 4.0 * _H[0], origin="scaled row"), tl.clamp(max=0.0))
+    fork.do(tl.subspace(_SITE, 4.0 * _H[0], origin="scaled row"), tl.clamp(high=0.0))
     component, complement = _split(fork[_SITE].out, 1)
     base_component, base_complement = _split(_COORDS @ _H, 1)
     torch.testing.assert_close(complement, base_complement, rtol=0.0, atol=1e-12)

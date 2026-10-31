@@ -62,7 +62,7 @@ def test_edit_text_rule() -> None:
 
     assert short_edit_text(tl.zero_ablate()) == "zero_ablate"
     assert short_edit_text(tl.scale(0.5)) == "scale(0.5)"
-    assert short_edit_text(tl.clamp(min=0, max=1)) == "clamp(min=0, max=1)"
+    assert short_edit_text(tl.clamp(low=0, high=1)) == "clamp(min=0, max=1)"
     assert short_edit_text(tl.add_noise(0.1)) == "noise(0.1)"
     assert short_edit_text(tl.steer(torch.ones(3))) == "steer(v)"
     # A label argument is written in (built directly: swap_with refuses a bare label at run time).

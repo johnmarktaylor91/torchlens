@@ -106,7 +106,7 @@ def test_phase3_helpers_import_and_return_specs() -> None:
         tl.intervention.scramble_elements(),
         tl.steer(torch.ones(3), dim=-1),
         tl.scale(2.0),
-        tl.clamp(min=-1.0, max=1.0),
+        tl.clamp(low=-1.0, high=1.0),
         tl.add_noise(0.1, seed=1),
         tl.project_onto(torch.ones(3), dim=-1),
         tl.project_out(torch.ones(3), dim=-1),

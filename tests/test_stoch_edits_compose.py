@@ -41,9 +41,9 @@ def test_left_to_right_order_and_noncommutativity() -> None:
     log = _toy_trace()
     baseline = log["relu_1_2"].out
     fork_lr = log.fork()
-    fork_lr.do(tl.label("relu_1_2"), compose(tl.scale(2.0), tl.clamp(max=0.5)))
+    fork_lr.do(tl.label("relu_1_2"), compose(tl.scale(2.0), tl.clamp(high=0.5)))
     fork_rl = log.fork()
-    fork_rl.do(tl.label("relu_1_2"), compose(tl.clamp(max=0.5), tl.scale(2.0)))
+    fork_rl.do(tl.label("relu_1_2"), compose(tl.clamp(high=0.5), tl.scale(2.0)))
     assert torch.equal(fork_lr["relu_1_2"].out, (baseline * 2).clamp(max=0.5))
     assert torch.equal(fork_rl["relu_1_2"].out, baseline.clamp(max=0.5) * 2)
     assert not torch.equal(fork_lr["relu_1_2"].out, fork_rl["relu_1_2"].out)
@@ -52,8 +52,8 @@ def test_left_to_right_order_and_noncommutativity() -> None:
 def test_flattening_is_syntactic_and_audit_visible() -> None:
     """compose(a, compose(b, c)) and compose(a, b, c) are ONE identity."""
 
-    nested = compose(tl.scale(2.0), compose(tl.clamp(max=0.5), tl.scale(0.5)))
-    flat = compose(tl.scale(2.0), tl.clamp(max=0.5), tl.scale(0.5))
+    nested = compose(tl.scale(2.0), compose(tl.clamp(high=0.5), tl.scale(0.5)))
+    flat = compose(tl.scale(2.0), tl.clamp(high=0.5), tl.scale(0.5))
     assert nested == flat
     assert [leaf.helper_name for leaf in nested.args] == ["scale", "clamp", "scale"]
     assert dict(nested.metadata)["compose_leaves"] == "scale|clamp|scale"
@@ -84,7 +84,7 @@ def test_one_fire_one_record_with_ordered_leaves() -> None:
 
     log = _toy_trace()
     fork = log.fork()
-    fork.do(tl.label("relu_1_2"), compose(tl.scale(3.0), tl.clamp(max=1.0)))
+    fork.do(tl.label("relu_1_2"), compose(tl.scale(3.0), tl.clamp(high=1.0)))
     fires = list(fork.ops["relu_1_2"].interventions or ())
     assert len(fires) == 1, "one composed fire, never one record per leaf"
     assert fires[0].helper is not None
@@ -107,17 +107,17 @@ def test_matches_explicit_sequential_hooks_bytewise() -> None:
 
     log = _toy_trace()
     fork_composed = log.fork()
-    fork_composed.do(tl.label("relu_1_2"), compose(tl.scale(2.0), tl.clamp(max=0.5)))
+    fork_composed.do(tl.label("relu_1_2"), compose(tl.scale(2.0), tl.clamp(high=0.5)))
     fork_sequential = log.fork()
     fork_sequential.do(tl.label("relu_1_2"), tl.scale(2.0))
-    fork_sequential.do(tl.label("relu_1_2"), tl.clamp(max=0.5))
+    fork_sequential.do(tl.label("relu_1_2"), tl.clamp(high=0.5))
     assert torch.equal(fork_composed["relu_1_2"].out, fork_sequential["relu_1_2"].out)
 
 
 def test_pickle_round_trip_preserves_leaf_order() -> None:
     """The builtin registry rebuilds the chain with leaf order intact."""
 
-    spec = compose(tl.scale(2.0), tl.clamp(max=0.5), tl.scale(0.25))
+    spec = compose(tl.scale(2.0), tl.clamp(high=0.5), tl.scale(0.25))
     restored = pickle.loads(pickle.dumps(spec))
     assert restored == spec
     assert [leaf.helper_name for leaf in restored.args] == ["scale", "clamp", "scale"]
@@ -133,7 +133,7 @@ def test_leaf_failure_is_atomic_and_named() -> None:
     exploding = tl.scale(2.0)
     log = _toy_trace()
     fork = log.fork()
-    chain = compose(exploding, tl.clamp(max=0.5))
+    chain = compose(exploding, tl.clamp(high=0.5))
     # Sabotage leaf 0's hook after construction to prove fire-time atomicity.
     object.__setattr__(chain.args[0], "factory", lambda: lambda out, *, hook: _boom())
     baseline = fork["relu_1_2"].out.clone()
