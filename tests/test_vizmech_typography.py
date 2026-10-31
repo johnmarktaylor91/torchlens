@@ -25,6 +25,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._visualization._rank_layout_internal.layout as layout_mod
+from torchlens import _visualization
 from torchlens._visualization._edge_multiplicity import _MULTIPLICITY_LABEL_FONT_SIZE
 from torchlens._visualization._render_common import _EDGE_LABEL_FONT_SIZE
 from torchlens._visualization._typography import (
@@ -39,7 +40,7 @@ from torchlens._visualization.themes import (
     theme_node_attrs,
 )
 
-_VIZ_PACKAGE = Path(tl._visualization.__file__).parent
+_VIZ_PACKAGE = Path(_visualization.__file__).parent
 
 
 def test_every_preset_pins_fontname_on_all_scopes() -> None:

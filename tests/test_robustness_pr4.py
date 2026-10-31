@@ -20,6 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import _visualization
 from torchlens._capture_state_helpers import (
     reset_compiled_model_unwrap_warning_state,
     unwrap_compiled_submodules,
@@ -254,7 +255,7 @@ def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> No
     graph_path = tmp_path / "compiled_graph"
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl._visualization.show_model_graph(
+        _visualization.show_model_graph(
             torch.compile(_Tiny(), backend="eager"),
             input_tensor,
             visualization=tl.options.VisualizationOptions(

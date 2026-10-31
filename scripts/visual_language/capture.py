@@ -24,6 +24,7 @@ from scripts.visual_language.models import FIXTURES
 from scripts.visual_language.scale_models import SCALE_FIXTURES
 from scripts.visual_language.sentinel_models import SENTINEL_FIXTURES
 from scripts.visual_language.slides import CONVENTIONS, Panel, Slide
+from torchlens import _visualization
 from torchlens._visualization import lenses
 from torchlens._visualization._encoding import EncodingChannelRequest
 from torchlens.errors import InvalidArgumentError
@@ -210,7 +211,7 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)
     if panel.call == "bundle_graph":
-        return str(tl._visualization.show_bundle_graph(_bundle(trace), **kwargs))
+        return str(_visualization.show_bundle_graph(_bundle(trace), **kwargs))
     if panel.call == "bundle_diff":
         return str(tl.viz.bundle_diff(_bundle(trace), **kwargs))
     raise ValueError(f"unknown call {panel.call!r}")

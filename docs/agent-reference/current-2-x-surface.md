@@ -316,8 +316,8 @@
   `.reader_positions`, `.coverage`, `.excluded` (dicts with side/start/end/reason/row_index);
   only re-verified one-to-one positions pair, declared/retokenized spans stay correspondences.
   Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
-  `tl._visualization.show_bundle_graph(b, nodes="members")` draws members and relation rows;
-  `tl._visualization.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
+  `torchlens._visualization.show_bundle_graph(b, nodes="members")` draws members and relation rows;
+  `torchlens._visualization.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
   and key (member lists only where members differ), and `trace.draw_backward(theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
@@ -1631,13 +1631,13 @@
   `attribution_audit_units_many`. Doc of record: `docs/reference/attribution.md`.
 - Capture door and options, current spellings: the recording knobs group in
   `tl.options.RecordingOptions`, narration in `tl.options.NarrationOptions` (`narrate=`), and
-  streaming saves in `tl.options.StorageOptions` (also `tl._user_funcs.StorageOptions`). The
+  streaming saves in `tl.options.StorageOptions` (also `torchlens._user_funcs.StorageOptions`). The
   recorder vocabulary is `tl.recording.GradRecord`, `tl.recording.DryRun`, `tl.recording.stop()` and
   `tl.recording.StopSignal`; a stopped capture settles `CaptureStatus.STOPPED` (value `"stopped"`).
   `tl.types.TraceLike` is the read protocol `Trace` and `Recording` share. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
-  `tl.clear_cache()` (`tl._user_funcs.clear_cache`), `tl.observers.register_tensor_connection`
+  `tl.clear_cache()` (`torchlens._user_funcs.clear_cache`), `tl.observers.register_tensor_connection`
   and `tl.debug.isolated_capture`.
 
 ## Debugging tools and report results
@@ -1831,5 +1831,5 @@ object's docstring):
 - `tl.types.RunReport`: Honesty, state, resolution, and contract metadata for one run.
 - `tl.types.RunnableCompatibility`: Producer/runtime versions recorded for readiness diagnostics.
 - `tl.types.RunnableDiagnostic`: Structured diagnostic shared by preflight, readiness, and run reports.
-- `tl._user_funcs.CaptureNotActiveError`: Raised when a capture-only operation is called outside an active capture.
-- `tl._user_funcs.UserTransformError`: Raised when activation_transform or grad_transform raises.
+- `torchlens._user_funcs.CaptureNotActiveError`: Raised when a capture-only operation is called outside an active capture.
+- `torchlens._user_funcs.UserTransformError`: Raised when activation_transform or grad_transform raises.

@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import _visualization
 from torchlens._visualization import show_model_graph
 from torchlens._visualization._render_common import GRADIENT_ARROW_COLOR
 from torchlens.options import CaptureOptions, VisualizationOptions
@@ -232,10 +233,10 @@ def test_backward_graph_marks_order_and_accumulation_edges(tmp_path: Path) -> No
 
 
 def test_draw_backward_top_level_function(tmp_path: Path) -> None:
-    """The top-level ``tl._visualization.draw_backward`` helper renders a Trace."""
+    """The top-level ``_visualization.draw_backward`` helper renders a Trace."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    dot = tl._visualization.draw_backward(
+    dot = _visualization.draw_backward(
         trace,
         visualization=tl.options.VisualizationOptions(
             container_path=str(tmp_path / "top_level"), save_only=True, file_format="svg"

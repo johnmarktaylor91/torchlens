@@ -1282,7 +1282,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `tl.recording` is the sparse predicate-recording namespace behind `tl.record`;
   `tl.facets` is the semantic facet namespace (canonical home `torchlens._semantic`);
   `tl.export` holds static export helpers; `tl.Bundle(...)` / `tl.Bundle` build aligned
-  Trace collections and `tl._visualization.show_bundle_graph` renders a bundle's graph:
+  Trace collections and `torchlens._visualization.show_bundle_graph` renders a bundle's graph:
   `nodes="ops"` (default) the union op graph, `nodes="members"` (spelling documented-unstable)
   one node per member and one edge per relation row, from the earlier member to the later one,
   labelled with the kind, the row's `label`, on `fed_by` its basis and coverage, and on
@@ -2233,7 +2233,7 @@ shim owed*
   `VisualizationOptions.theme`.
 
 **theme / show_legend (show_bundle_graph kwargs)** — *unstable — no deprecation shim owed*
-: `tl._visualization.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
+: `torchlens._visualization.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
   `Trace.draw`: the skin's page, ink and Helvetica face, `draw`'s node shapes and fills (oval for
   one function call, box for a leaf module, cylinder for a buffer; grey fill for weights), and with
   `show_legend=True` the key under the header. Member lists appear only on nodes and arrows that
@@ -2917,7 +2917,7 @@ deprecation shim owed*
   last selected events the sink receives on a forward exception.
 
 **StorageOptions**
-: `tl.options.StorageOptions` (also reachable as `tl._user_funcs.StorageOptions`) groups the
+: `tl.options.StorageOptions` (also reachable as `torchlens._user_funcs.StorageOptions`) groups the
   streaming-save knobs: `StorageOptions.bundle_path` (`bundle_path=`),
   `StorageOptions.retain_in_memory`, `StorageOptions.on_save` (keyword
   `on_save=`),
@@ -2969,7 +2969,7 @@ deprecation shim owed*
   `input_transform=` preprocesses inputs.
 
 **Admin and debugging names**
-: `tl.clear_cache()` (also `tl._user_funcs.clear_cache`) empties the capture cache;
+: `tl.clear_cache()` (also `torchlens._user_funcs.clear_cache`) empties the capture cache;
   `tl.observers.register_tensor_connection` registers a tensor connection;
   `tl.debug.isolated_capture` runs a capture in isolation; `Trace.capture_backward`
   (`TraceValidationMixin.capture_backward`) captures a backward pass for validation.
@@ -3369,8 +3369,8 @@ The sections above describe each surface in depth.
 | `tl.types.RunReport` | Honesty, state, resolution, and contract metadata for one run |
 | `tl.types.RunnableCompatibility` | Producer/runtime versions recorded for readiness diagnostics |
 | `tl.types.RunnableDiagnostic` | Structured diagnostic shared by preflight, readiness, and run reports |
-| `tl._user_funcs.CaptureNotActiveError` | The same class as `tl.errors.CaptureNotActiveError` |
-| `tl._user_funcs.UserTransformError` | The same class as `tl.errors.UserTransformError` |
+| `torchlens._user_funcs.CaptureNotActiveError` | The same class as `tl.errors.CaptureNotActiveError` |
+| `torchlens._user_funcs.UserTransformError` | The same class as `tl.errors.UserTransformError` |
 ### Members
 | Spelling | Meaning |
 | --- | --- |

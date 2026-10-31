@@ -176,9 +176,34 @@ def _rewrite_bare(match: re.Match[str], path: Path, repo: Path) -> str:
     return f"{head}{dots}{imp}{paren}{','.join(out)}"
 
 
+TL_PRIVATE = re.compile(r"\btl\.(_(?:capture|user_funcs|captured_run|semantic|visualization))\b")
+TL_ALIAS_IMPORT = re.compile(r"^import torchlens as tl[ \t]*$", re.M)
+
+
+def _private_attribute_access(text: str, path: Path) -> str:
+    """Replace ``tl._pkg.x`` (a root attribute the private package no longer has) by an import.
+
+    Python files get ``from torchlens import _pkg`` after ``import torchlens as tl`` and use
+    ``_pkg.x``; prose and notebooks name the import path ``torchlens._pkg.x``.
+    """
+    if not TL_PRIVATE.search(text):
+        return text
+    if path.suffix == ".py":
+        used = sorted(set(TL_PRIVATE.findall(text)))
+        if TL_ALIAS_IMPORT.search(text) is None:
+            return text
+        text = TL_PRIVATE.sub(lambda m: m.group(1), text)
+        match = TL_ALIAS_IMPORT.search(text)
+        assert match is not None
+        lines = "".join(f"\nfrom torchlens import {name}" for name in used)
+        return text[: match.end()] + lines + text[match.end() :]
+    return TL_PRIVATE.sub(lambda m: f"torchlens.{m.group(1)}", text)
+
+
 def rewrite_text(text: str, path: Path, repo: Path) -> str:
     """Return ``text`` with every moved-package spelling respelled."""
     text = DOTTED.sub(lambda m: f"{m.group(1)}.{MAPPING[m.group(2)]}", text)
+    text = _private_attribute_access(text, path)
     text = PATHED.sub(lambda m: f"torchlens/{MAPPING[m.group(1)]}", text)
     if path.suffix == ".py":
         text = RELPATH.sub(lambda m: f"{MAPPING[m.group(1)]}/{m.group(2)}", text)
@@ -250,7 +275,12 @@ def tidy(repo: Path, files: list[Path]) -> None:
     """Sort imports and format the rewritten Python files (those files only)."""
     ruff = shutil.which("ruff")
     names = [str(p) for p in files if p.suffix == ".py" and p.is_file()]
-    if ruff is None or not names:
+    if not names:
+        return
+    if ruff is None:
+        print(
+            "ruff not on PATH: run ruff check --select I --fix and ruff format on the rewritten files"
+        )
         return
     subprocess.run([ruff, "check", "--select", "I", "--fix", "-q", *names], cwd=repo, check=False)
     subprocess.run([ruff, "format", "-q", *names], cwd=repo, check=False)
