@@ -32,6 +32,10 @@ class _StockModuleGradCollector:
         self._hook_handles: list[RemovableHandle] = []
         self._tensor_hook_handles: list[RemovableHandle] = []
         self.identity_output_addresses: set[ModuleOutputGradKey] = set()
+        #: Every module-output leaf the stock forward enumerated in this run,
+        #: gradient or not: the comparator's proof that a stock None means
+        #: "autograd produced no gradient here", not "stock never saw it".
+        self.reached_output_keys: set[ModuleOutputGradKey] = set()
 
     def install(self, model: nn.Module) -> None:
         """Install one forward hook per named module.
@@ -92,6 +96,7 @@ def _make_post_hook(
         input_ids = {id(leaf) for leaf in _tensor_leaves(args)}
         for output_index, leaf_out in enumerate(output_leaves):
             output_key = (*key, output_index)
+            collector.reached_output_keys.add(output_key)
             if isinstance(module, nn.Identity) or id(leaf_out) in input_ids:
                 collector.identity_output_addresses.add(output_key)
                 continue
@@ -233,7 +238,15 @@ def _tensor_leaves(obj: Any) -> list[torch.Tensor]:
         for field in dataclasses.fields(obj):
             leaves.extend(_tensor_leaves(getattr(obj, field.name)))
         return leaves
-    return []
+    # Any other object: the same BFS the capture's output walk falls back to
+    # (``_walk_output_tensors_with_paths``), so a module returning a
+    # ``torch.distributions`` object or another plain object keys its tensor
+    # leaves in the same order on both sides.
+    from ..utils.introspection import get_vars_of_type_from_obj
+
+    return list(
+        get_vars_of_type_from_obj(obj, which_type=torch.Tensor, subclass_exceptions=[nn.Parameter])
+    )
 
 
 def _pass_index_from_layer_modules(layer: Any) -> int | None:
@@ -338,7 +351,9 @@ def _stock_layer_grads(
     loss_fn: Callable[[Any], torch.Tensor],
     random_seed: int,
     state_dict_snapshot: Mapping[str, torch.Tensor],
-) -> tuple[dict[ModuleOutputGradKey, torch.Tensor], set[ModuleOutputGradKey]]:
+) -> tuple[
+    dict[ModuleOutputGradKey, torch.Tensor], set[ModuleOutputGradKey], set[ModuleOutputGradKey]
+]:
     """Run a stock forward/backward pass and collect module-output grads.
 
     Parameters
@@ -358,8 +373,9 @@ def _stock_layer_grads(
 
     Returns
     -------
-    tuple[dict[ModuleOutputGradKey, torch.Tensor], set[ModuleOutputGradKey]]
-        Captured stock module-output grads and identity-output addresses.
+    tuple[dict[ModuleOutputGradKey, torch.Tensor], set[ModuleOutputGradKey], set[ModuleOutputGradKey]]
+        Captured stock module-output grads, identity-output addresses, and
+        every module-output key the stock forward reached in this run.
     """
 
     from ..utils.rng import set_random_seed
@@ -373,7 +389,11 @@ def _stock_layer_grads(
         loss = loss_fn(output)
         loss.backward()
         collector.collect_grads_after_backward()
-        return dict(collector.stock_module_output_grads), set(collector.identity_output_addresses)
+        return (
+            dict(collector.stock_module_output_grads),
+            set(collector.identity_output_addresses),
+            set(collector.reached_output_keys),
+        )
     finally:
         collector.cleanup()
         restore_state_dict_if_changed(model, state_dict_snapshot, load_state_dict_restore)
