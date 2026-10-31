@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import importlib
 import re
+import sys
 from pathlib import Path
 
-import pytest
+from _harness import REPO_ROOT, run_checks
 
 import torchlens as tl
 
@@ -42,7 +43,7 @@ def _repo_root() -> Path:
         Absolute repository root.
     """
 
-    return Path(__file__).resolve().parents[1]
+    return REPO_ROOT
 
 
 def _public_markdown_files() -> tuple[Path, ...]:
@@ -63,7 +64,7 @@ def _public_markdown_files() -> tuple[Path, ...]:
     )
 
 
-def test_public_surface_count_claims_match_runtime() -> None:
+def check_public_surface_count_claims_match_runtime() -> None:
     """Keep every numeric ``__all__`` claim synchronized with the runtime."""
 
     root = _repo_root()
@@ -84,7 +85,7 @@ def test_public_surface_count_claims_match_runtime() -> None:
         assert set(claims) == {PUBLIC_SURFACE_SIZE}, (relative_path, claims)
 
 
-def test_canonical_documented_symbols_resolve() -> None:
+def check_canonical_documented_symbols_resolve() -> None:
     """Resolve public symbol paths whose drift previously broke the guides."""
 
     for module_name, attributes in CANONICAL_SYMBOLS.items():
@@ -93,7 +94,7 @@ def test_canonical_documented_symbols_resolve() -> None:
             assert hasattr(module, attribute), f"{module_name}.{attribute} does not resolve"
 
 
-def test_agent_docs_use_current_internal_paths() -> None:
+def check_agent_docs_use_current_internal_paths() -> None:
     """Pin corrected backward, schema, utility, and Bundle documentation paths."""
 
     root = _repo_root()
@@ -128,7 +129,7 @@ TIER_CLAIM_RE = re.compile(
 )
 
 
-def test_dated_test_tier_claim_is_present_and_selector_is_additive() -> None:
+def check_dated_test_tier_claim_is_present_and_selector_is_additive() -> None:
     """Require a parseable dated tier record and default rare-test exclusion."""
 
     root = _repo_root()
@@ -160,7 +161,7 @@ BUDGET_CLAIM_RE = re.compile(
 )
 
 
-def test_documented_duration_budgets_match_the_shipped_constants() -> None:
+def check_documented_duration_budgets_match_the_shipped_constants() -> None:
     """AGENTS.md and tests/AGENTS.md budget sentences track conftest reality."""
 
     root = _repo_root()
@@ -190,7 +191,7 @@ def test_documented_duration_budgets_match_the_shipped_constants() -> None:
             )
 
 
-def test_public_relative_markdown_links_resolve() -> None:
+def check_public_relative_markdown_links_resolve() -> None:
     """Ensure every local Markdown link names an existing repository path."""
 
     missing: list[tuple[str, str]] = []
@@ -205,7 +206,7 @@ def test_public_relative_markdown_links_resolve() -> None:
     assert not missing
 
 
-def test_capture_outcomes_doc_vocabulary_locksteps_with_the_enums() -> None:
+def check_capture_outcomes_doc_vocabulary_locksteps_with_the_enums() -> None:
     """Gate the capture-outcome doc of record against the settlement enums.
 
     ``docs/reference/capture_outcomes.md`` is the doc of record for the
@@ -256,7 +257,7 @@ def test_capture_outcomes_doc_vocabulary_locksteps_with_the_enums() -> None:
         )
 
 
-def test_shipped_glossary_covers_the_public_surface() -> None:
+def check_shipped_glossary_covers_the_public_surface() -> None:
     """Every `tl.__all__` name appears in the shipped user glossary.
 
     docs/reference/glossary.md was complete (97/97) and gated by NOTHING —
@@ -285,8 +286,7 @@ GLOSSARY_FUTURE_SPELLINGS: dict[str, str] = {}
 DOTTED_SPELLING_RE = re.compile(r"`(?:tl|torchlens)((?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 
 
-@pytest.mark.smoke
-def test_documented_dotted_spellings_resolve() -> None:
+def check_documented_dotted_spellings_resolve() -> None:
     """Every backticked `tl.*`/`torchlens.*` glossary spelling resolves in code.
 
     The reverse half of the LOCKED docs-lockstep rule ("a rename is not done
@@ -351,7 +351,7 @@ CURATED_COMMON_VENUES = (
 )
 
 
-def test_curated_namespace_callables_are_documented() -> None:
+def check_curated_namespace_callables_are_documented() -> None:
     """Every public callable in the curated analysis namespaces has a doc row."""
 
     import inspect
@@ -377,20 +377,20 @@ def test_curated_namespace_callables_are_documented() -> None:
     )
 
 
-def test_tier_census_figures_agree_across_docs() -> None:
+def check_tier_census_figures_agree_across_docs() -> None:
     """r7 R41 (sol MED): the two documented tier censuses must be ONE census.
 
     CLAUDE.md and tests/AGENTS.md carried contradictory totals (12,430 vs
     12,651) with the SAME claimed measurement date, and the only live check
     was slow-marked and CLAUDE-only. This half is a pure textual
-    consistency gate (no collection; lives here in the smoke-marked docs
-    lockstep module -- its old home tests/test_docs_tier_drift.py is
+    consistency gate (no collection; lives here in the docs
+    lockstep script -- its old home tests/test_docs_tier_drift.py is
     module-slow): the total in AGENTS.md's
     smoke sentence must equal the total in tests/AGENTS.md's unmarked row.
     The live-count validation above stays slow (it pays a full collection).
     """
 
-    root = Path(__file__).resolve().parents[1]
+    root = REPO_ROOT
     claude = (root / "AGENTS.md").read_text(encoding="utf-8")
     agents = (root / "tests" / "AGENTS.md").read_text(encoding="utf-8")
     claude_match = re.search(r"\((\d[\d,]*)/(\d[\d,]*) collect-only, measured ([0-9-]+)", claude)
@@ -405,3 +405,28 @@ def test_tier_census_figures_agree_across_docs() -> None:
         f"{agents_total} (measured {agents_match.group(3)}) — remeasure ONCE "
         "and update both docs in the same change"
     )
+
+
+CHECKS = (
+    check_public_surface_count_claims_match_runtime,
+    check_canonical_documented_symbols_resolve,
+    check_agent_docs_use_current_internal_paths,
+    check_dated_test_tier_claim_is_present_and_selector_is_additive,
+    check_documented_duration_budgets_match_the_shipped_constants,
+    check_public_relative_markdown_links_resolve,
+    check_capture_outcomes_doc_vocabulary_locksteps_with_the_enums,
+    check_shipped_glossary_covers_the_public_surface,
+    check_documented_dotted_spellings_resolve,
+    check_curated_namespace_callables_are_documented,
+    check_tier_census_figures_agree_across_docs,
+)
+
+
+def main() -> int:
+    """Run every docs_lockstep_names check and return the exit status."""
+
+    return run_checks("docs_lockstep_names", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
