@@ -24,7 +24,9 @@ Rewrites, per tracked file under the scanned roots (history files excepted):
 - the root lazy table and ``__all__`` of ``torchlens/__init__.py`` (the ``fastlog`` row becomes the
   public ``recording`` row; the private packages lose their root rows) and the removed-name
   redirect messages that named a moved package;
-- the 2.x module-path refusal set, which gains the old package names.
+- the 2.x module-path refusal set, which gains the old package names;
+- import order and format of the rewritten Python files (``ruff check --select I --fix`` and
+  ``ruff format`` on those files only, when ``ruff`` is on the PATH).
 
 Names kept public from a now-private package already live at their decided homes (``tl.facets``,
 ``tl.mechinterp``, ``tl.viz``, ``tl.errors``, ``tl.types``, ``tl.summary``, ``tl.trace``): this pass
@@ -34,6 +36,7 @@ re-exports nothing and invents no alias.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -240,6 +243,16 @@ def move_packages(repo: Path, dry: bool) -> list[str]:
     return done
 
 
+def tidy(repo: Path, files: list[Path]) -> None:
+    """Sort imports and format the rewritten Python files (those files only)."""
+    ruff = shutil.which("ruff")
+    names = [str(p) for p in files if p.suffix == ".py" and p.is_file()]
+    if ruff is None or not names:
+        return
+    subprocess.run([ruff, "check", "--select", "I", "--fix", "-q", *names], cwd=repo, check=False)
+    subprocess.run([ruff, "format", "-q", *names], cwd=repo, check=False)
+
+
 def main(argv: list[str]) -> int:
     args = [a for a in argv[1:] if not a.startswith("--")]
     repo = Path(args[0] if args else ".").resolve()
@@ -249,6 +262,7 @@ def main(argv: list[str]) -> int:
     for line in moves:
         print("move", line)
     changed = 0
+    touched: list[Path] = []
     for path in iter_files(repo):
         try:
             text = path.read_text(encoding="utf-8")
@@ -260,6 +274,7 @@ def main(argv: list[str]) -> int:
             new = edit_root(new)
         if new != text:
             changed += 1
+            touched.append(path)
             if not dry:
                 path.write_text(new, encoding="utf-8")
     pre3 = repo / "torchlens/_io/_pre3_module_paths.py"
@@ -268,8 +283,11 @@ def main(argv: list[str]) -> int:
         new = edit_pre3(text)
         if new != text:
             changed += 1
+            touched.append(pre3)
             if not dry:
                 pre3.write_text(new, encoding="utf-8")
+    if not dry:
+        tidy(repo, touched)
     print(f"moved {len(moves)} packages, rewrote {changed} files")
     if check and (moves or changed):
         return 1
