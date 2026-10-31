@@ -191,7 +191,10 @@ def test_intervene_refusals_are_typed() -> None:
     cases = [
         (lambda out, hook: out, "extraction_intervene_invalid"),
         (tl.when(tl.label("relu_1_2"), tl.zero_ablate()), "harvest_address_class_ungated"),
-        (tl.when(tl.module("fc2"), tl.mean_ablate()), "extraction_intervention_batch_dependent"),
+        (
+            tl.when(tl.module("fc2"), tl.mean_ablate(dim=None)),
+            "extraction_intervention_batch_dependent",
+        ),
         (
             tl.when(tl.module("fc2"), lambda out, hook: out * 0),
             "extraction_intervention_batch_dependent",

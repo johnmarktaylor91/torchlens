@@ -10,14 +10,14 @@ this one) and silent for training, so a caller who needs the gradient says so wi
 ## The rules
 
 - Verbs whose result is a function of the site value keep the graph: `scale`, `clamp`, `add_noise`,
-  `steer`, `add`, `project_onto`, `project_out`, `mean_ablate()` and `mean_fill(dim=...)` (the
+  `steer`, `add`, `project_onto`, `project_out`, `mean_ablate(dim=...)` without `source=` (the
   gradient flows through the mean), `scramble_elements(seed=...)` without `source=`,
   `splice_module`, `permute_batch`, `set_direction_mean` (through the orthogonal part), the
   `subspace_*` edits (through the complement), `compose` and `at_positions` of keeping verbs, and
   hook callables that compute from their input.
 - Verbs that write a value computed elsewhere cut it: `zero_ablate`, `replace_with`, `swap_with`,
-  `patch_from` (the donor is detached by design), `resample_rows_from`, `mean_from`,
-  `mean_fill(reference, ...)`, and `mean_ablate` or `scramble_elements` with `source=`.
+  `patch_from` (the donor is detached by design), `resample_rows_from`, and `mean_ablate` or
+  `scramble_elements` with `source=` (a tensor or a population).
 - A selection door edits only the selected elements, so the rest of the site keeps the graph:
   under `do(tl.units(...))` a cutting verb still lets the gradient through the unselected
   elements, and under `do(tl.subspace(...))` through the orthogonal complement.
@@ -117,9 +117,9 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture intervene= | `patch_from` | cut | raises:edit_detached_from_graph |
 | capture intervene= | `permute_batch` | reaches | reaches |
 | capture intervene= | `resample_rows_from` | cut | raises:edit_detached_from_graph |
-| capture intervene= | `mean_from` | cut | raises:edit_detached_from_graph |
-| capture intervene= | `mean_fill` | reaches | reaches |
-| capture intervene= | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
+| capture intervene= | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
+| capture intervene= | `mean_ablate(dim=0)` | reaches | reaches |
+| capture intervene= | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
 | capture intervene= | `set_direction_mean` | reaches | reaches |
 | capture intervene= | `subspace_ablate` | reaches | reaches |
 | capture intervene= | `subspace_ablate(resample)` | reaches | reaches |
@@ -147,9 +147,9 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture hooks= | `patch_from` | cut | raises:edit_detached_from_graph |
 | capture hooks= | `permute_batch` | reaches | reaches |
 | capture hooks= | `resample_rows_from` | cut | raises:edit_detached_from_graph |
-| capture hooks= | `mean_from` | cut | raises:edit_detached_from_graph |
-| capture hooks= | `mean_fill` | reaches | reaches |
-| capture hooks= | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
+| capture hooks= | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
+| capture hooks= | `mean_ablate(dim=0)` | reaches | reaches |
+| capture hooks= | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
 | capture hooks= | `set_direction_mean` | reaches | reaches |
 | capture hooks= | `subspace_ablate` | reaches | reaches |
 | capture hooks= | `subspace_ablate(resample)` | reaches | reaches |
@@ -177,9 +177,9 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | capture InterventionDecision | `patch_from` | cut | raises:edit_detached_from_graph |
 | capture InterventionDecision | `permute_batch` | reaches | reaches |
 | capture InterventionDecision | `resample_rows_from` | cut | raises:edit_detached_from_graph |
-| capture InterventionDecision | `mean_from` | cut | raises:edit_detached_from_graph |
-| capture InterventionDecision | `mean_fill` | reaches | reaches |
-| capture InterventionDecision | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
+| capture InterventionDecision | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
+| capture InterventionDecision | `mean_ablate(dim=0)` | reaches | reaches |
+| capture InterventionDecision | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
 | capture InterventionDecision | `set_direction_mean` | reaches | reaches |
 | capture InterventionDecision | `subspace_ablate` | reaches | reaches |
 | capture InterventionDecision | `subspace_ablate(resample)` | reaches | reaches |
@@ -207,9 +207,9 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | fork.do (replay) | `patch_from` | cut | raises:edit_detached_from_graph |
 | fork.do (replay) | `permute_batch` | reaches | reaches |
 | fork.do (replay) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
-| fork.do (replay) | `mean_from` | cut | raises:edit_detached_from_graph |
-| fork.do (replay) | `mean_fill` | reaches | reaches |
-| fork.do (replay) | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
+| fork.do (replay) | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
+| fork.do (replay) | `mean_ablate(dim=0)` | reaches | reaches |
+| fork.do (replay) | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
 | fork.do (replay) | `set_direction_mean` | reaches | reaches |
 | fork.do (replay) | `subspace_ablate` | reaches | reaches |
 | fork.do (replay) | `subspace_ablate(resample)` | reaches | reaches |
@@ -237,9 +237,9 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(model=, x=) (rerun) | `patch_from` | cut | raises:edit_detached_from_graph |
 | do(model=, x=) (rerun) | `permute_batch` | reaches | reaches |
 | do(model=, x=) (rerun) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
-| do(model=, x=) (rerun) | `mean_from` | cut | raises:edit_detached_from_graph |
-| do(model=, x=) (rerun) | `mean_fill` | reaches | reaches |
-| do(model=, x=) (rerun) | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
+| do(model=, x=) (rerun) | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
+| do(model=, x=) (rerun) | `mean_ablate(dim=0)` | reaches | reaches |
+| do(model=, x=) (rerun) | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
 | do(model=, x=) (rerun) | `set_direction_mean` | reaches | reaches |
 | do(model=, x=) (rerun) | `subspace_ablate` | reaches | reaches |
 | do(model=, x=) (rerun) | `subspace_ablate(resample)` | reaches | reaches |
@@ -267,9 +267,9 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | attach_hooks + run | `patch_from` | cut | raises:edit_detached_from_graph |
 | attach_hooks + run | `permute_batch` | reaches | reaches |
 | attach_hooks + run | `resample_rows_from` | cut | raises:edit_detached_from_graph |
-| attach_hooks + run | `mean_from` | cut | raises:edit_detached_from_graph |
-| attach_hooks + run | `mean_fill` | reaches | reaches |
-| attach_hooks + run | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
+| attach_hooks + run | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
+| attach_hooks + run | `mean_ablate(dim=0)` | reaches | reaches |
+| attach_hooks + run | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
 | attach_hooks + run | `set_direction_mean` | reaches | reaches |
 | attach_hooks + run | `subspace_ablate` | reaches | reaches |
 | attach_hooks + run | `subspace_ablate(resample)` | reaches | reaches |
@@ -297,9 +297,9 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | spec.bind(model) | `patch_from` | cut | raises:edit_detached_from_graph |
 | spec.bind(model) | `permute_batch` | reaches | reaches |
 | spec.bind(model) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
-| spec.bind(model) | `mean_from` | cut | raises:edit_detached_from_graph |
-| spec.bind(model) | `mean_fill` | reaches | reaches |
-| spec.bind(model) | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
+| spec.bind(model) | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
+| spec.bind(model) | `mean_ablate(dim=0)` | reaches | reaches |
+| spec.bind(model) | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
 | spec.bind(model) | `set_direction_mean` | reaches | reaches |
 | spec.bind(model) | `subspace_ablate` | reaches | reaches |
 | spec.bind(model) | `subspace_ablate(resample)` | reaches | reaches |
@@ -327,9 +327,9 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | push(differentiable=True) | `patch_from` | cut | raises:edit_detached_from_graph |
 | push(differentiable=True) | `permute_batch` | cut | cut |
 | push(differentiable=True) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
-| push(differentiable=True) | `mean_from` | cut | raises:edit_detached_from_graph |
-| push(differentiable=True) | `mean_fill` | cut | cut |
-| push(differentiable=True) | `mean_fill(reference)` | cut | raises:edit_detached_from_graph |
+| push(differentiable=True) | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
+| push(differentiable=True) | `mean_ablate(dim=0)` | cut | cut |
+| push(differentiable=True) | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
 | push(differentiable=True) | `set_direction_mean` | cut | cut |
 | push(differentiable=True) | `subspace_ablate` | cut | cut |
 | push(differentiable=True) | `subspace_ablate(resample)` | cut | cut |
@@ -357,9 +357,9 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(tl.units(...)) | `patch_from` | reaches | raises:edit_detached_from_graph |
 | do(tl.units(...)) | `permute_batch` | reaches | reaches |
 | do(tl.units(...)) | `resample_rows_from` | reaches | raises:edit_detached_from_graph |
-| do(tl.units(...)) | `mean_from` | reaches | raises:edit_detached_from_graph |
-| do(tl.units(...)) | `mean_fill` | reaches | reaches |
-| do(tl.units(...)) | `mean_fill(reference)` | reaches | raises:edit_detached_from_graph |
+| do(tl.units(...)) | `mean_ablate(population)` | reaches | raises:edit_detached_from_graph |
+| do(tl.units(...)) | `mean_ablate(dim=0)` | reaches | reaches |
+| do(tl.units(...)) | `mean_ablate(population, dim=(0, 1))` | reaches | raises:edit_detached_from_graph |
 | do(tl.units(...)) | `set_direction_mean` | reaches | reaches |
 | do(tl.units(...)) | `subspace_ablate` | reaches | reaches |
 | do(tl.units(...)) | `subspace_ablate(resample)` | reaches | reaches |
@@ -387,9 +387,9 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(tl.subspace(...)) | `patch_from` | reaches | raises:edit_detached_from_graph |
 | do(tl.subspace(...)) | `permute_batch` | reaches | reaches |
 | do(tl.subspace(...)) | `resample_rows_from` | reaches | raises:edit_detached_from_graph |
-| do(tl.subspace(...)) | `mean_from` | reaches | raises:edit_detached_from_graph |
-| do(tl.subspace(...)) | `mean_fill` | reaches | reaches |
-| do(tl.subspace(...)) | `mean_fill(reference)` | reaches | raises:edit_detached_from_graph |
+| do(tl.subspace(...)) | `mean_ablate(population)` | reaches | raises:edit_detached_from_graph |
+| do(tl.subspace(...)) | `mean_ablate(dim=0)` | reaches | reaches |
+| do(tl.subspace(...)) | `mean_ablate(population, dim=(0, 1))` | reaches | raises:edit_detached_from_graph |
 | do(tl.subspace(...)) | `set_direction_mean` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `subspace_ablate` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |
 | do(tl.subspace(...)) | `subspace_ablate(resample)` | raises:subspace_edit_unsupported | raises:subspace_edit_unsupported |

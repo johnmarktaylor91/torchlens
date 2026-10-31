@@ -1,10 +1,11 @@
 """``tl.mean_ablate`` is the one mean door (round 2, decided rows D.11, D.4, D.17, D.19).
 
 It absorbs the former ``mean_fill`` (axis-aware self or population mean) and
-``mean_from`` (elementwise population mean). The side-by-side section runs the
-old helpers and the new door on the same captured values and requires equal
-bytes; it exists only while both spellings are importable. The contract section
-pins the door's vocabulary and derived flags.
+``mean_from`` (elementwise population mean). The equality section pins the door
+to those helpers' bodies, written out as hand oracles (commit 3d9ed5c06 ran the
+old helpers and the door side by side on the same captured values and required
+equal bytes before the old names left). The contract section pins the door's
+vocabulary and derived flags.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import population
-from torchlens.intervention.stochastic import mean_fill, mean_from, sampling_records
+from torchlens.intervention.stochastic import sampling_records
 
 pytestmark = pytest.mark.smoke
 
@@ -47,26 +48,32 @@ def _apply(log: tl.Trace, edit: object) -> torch.Tensor:
 
 
 # ----------------------------------------------------------------------------
-# side by side: old helper and new door on the existing tests' inputs
+# equality with the absorbed helpers' bodies (hand oracles)
 # ----------------------------------------------------------------------------
 def test_door_equals_mean_fill_self_global() -> None:
     log = _toy_trace()
-    assert torch.equal(_apply(log, mean_fill(dim="all")), _apply(log, tl.mean_ablate(dim=None)))
+    out = log[_SITE].out
+    assert torch.equal(_apply(log, tl.mean_ablate(dim=None)), torch.zeros_like(out) + out.mean())
 
 
 def test_door_equals_mean_fill_self_axis() -> None:
     log = _toy_trace()
-    assert torch.equal(_apply(log, mean_fill(dim=0)), _apply(log, tl.mean_ablate(dim=0)))
-    assert torch.equal(_apply(log, mean_fill(dim=(0, 1))), _apply(log, tl.mean_ablate(dim=(0, 1))))
+    out = log[_SITE].out
+    assert torch.equal(
+        _apply(log, tl.mean_ablate(dim=0)), torch.zeros_like(out) + out.mean(dim=[0], keepdim=True)
+    )
+    assert torch.equal(
+        _apply(log, tl.mean_ablate(dim=(0, 1))),
+        torch.zeros_like(out) + out.mean(dim=[0, 1], keepdim=True),
+    )
 
 
 def test_door_equals_mean_from_population_elementwise() -> None:
     log = _toy_trace()
     baseline = log[_SITE].out
     donors = population(torch.stack([baseline, baseline + 2.0]), origin="evidence")
-    old = _apply(log, mean_from(donors))
     new = _apply(log, tl.mean_ablate(donors, dim=None))
-    assert torch.equal(old, new)
+    assert torch.equal(new, donors.mean().detach().clone())
     assert torch.allclose(new, baseline + 1.0)
 
 
@@ -75,10 +82,11 @@ def test_door_equals_mean_fill_population_axis() -> None:
     baseline = log[_SITE].out
     donors = population(torch.randn(4, *baseline.shape), origin="pop")
     assert torch.equal(
-        _apply(log, mean_fill(donors, dim=0)), _apply(log, tl.mean_ablate(donors, dim=0))
+        _apply(log, tl.mean_ablate(donors, dim=0)), donors.mean(0).expand(baseline.shape).clone()
     )
     assert torch.equal(
-        _apply(log, mean_fill(donors, dim=(0, 1))), _apply(log, tl.mean_ablate(donors, dim=(0, 1)))
+        _apply(log, tl.mean_ablate(donors, dim=(0, 1))),
+        donors.mean((0, 1)).expand(baseline.shape).clone(),
     )
 
 
@@ -93,22 +101,25 @@ def test_door_equals_previous_mean_ablate_tensor_source_formula() -> None:
 
 
 def test_door_flags_match_the_old_helpers() -> None:
+    """The derived flags the absorbed helpers carried, pinned per form."""
+
     log = _toy_trace()
     baseline = log[_SITE].out
     donors = population(torch.randn(4, *baseline.shape), origin="pop")
-    pairs = [
-        (mean_fill(dim="all"), tl.mean_ablate(dim=None)),
-        (mean_fill(dim=0), tl.mean_ablate(dim=0)),
-        (mean_from(donors), tl.mean_ablate(donors, dim=None)),
-        (mean_fill(donors, dim=0), tl.mean_ablate(donors, dim=0)),
-    ]
-    for old, new in pairs:
-        assert old.batch_independent == new.batch_independent, (old, new)
-        assert old.portability == new.portability, (old, new)
-        assert dict(old.metadata).get("batch_coherent") == dict(new.metadata).get("batch_coherent")
-        assert new.helper_name == "mean_ablate"
-    assert dict(tl.mean_ablate(dim=None).kwargs)["dim"] is None
-    assert dict(tl.mean_ablate(dim=0).kwargs)["dim"] == dict(mean_fill(dim=0).kwargs)["dim"]
+    self_global, self_axis = tl.mean_ablate(dim=None), tl.mean_ablate(dim=0)
+    pop_elementwise, pop_axis = tl.mean_ablate(donors, dim=None), tl.mean_ablate(donors, dim=0)
+    for spec in (self_global, self_axis):
+        assert spec.batch_independent is False and spec.portability == "builtin"
+        assert dict(spec.metadata)["batch_coherent"] is True
+    for spec in (pop_elementwise, pop_axis):
+        assert spec.batch_independent is True and spec.portability == "opaque_audit"
+        assert "batch_coherent" not in dict(spec.metadata)
+        assert dict(spec.kwargs)["population_identity"] == donors.identity
+    for spec in (self_global, self_axis, pop_elementwise, pop_axis):
+        assert spec.helper_name == "mean_ablate"
+        assert dict(spec.metadata)["stochastic"] is False
+    assert dict(self_global.kwargs)["dim"] is None
+    assert dict(self_axis.kwargs)["dim"] == (0,)
 
 
 # ----------------------------------------------------------------------------

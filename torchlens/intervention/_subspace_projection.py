@@ -19,14 +19,14 @@ refuses ``subspace_basis_invalid``.
 Each edit verb has one of four meanings here:
 
 * coordinate verbs run on ``c`` itself (``zero_ablate``, ``scale``,
-  ``clamp``, ``noise``, ``mean_ablate()``, ``mean_fill`` without ``ref=``,
+  ``clamp``, ``noise``, ``mean_ablate(dim=...)`` without ``source=``,
   ``scramble_elements`` without ``source=``, ``add`` of a scalar,
   ``splice_module(module, input_route="out")`` and any hook callable, which
   receives the coordinates);
 * value verbs compute a value in activation space and the edit takes that
   value's component (``patch_from``, the interchange; ``swap_with``,
   ``replace_with``, ``add`` of a tensor, ``steer``, ``permute_batch``,
-  ``resample_rows_from``, ``mean_from``, ``mean_fill(ref)``);
+  ``resample_rows_from``, ``mean_ablate(population, dim=...)``);
 * source verbs map the full site value ``x`` to new coordinates
   ``[..., k]`` (``tl.intervention.set_affine_coordinates(weight, bias=b)``, so
   ``x + Q^T (W x + b - Q x)``, the LoReFT form);
@@ -95,7 +95,6 @@ _VALUE_VERBS = frozenset(
         "steer",
         "permute_batch",
         "resample_rows_from",
-        "mean_from",
     }
 )
 _NESTED_PROJECTIONS = frozenset(
@@ -134,7 +133,7 @@ _REFUSALS: dict[str, tuple[str, str]] = {
     "set_direction_mean": (
         _NESTED_WHY,
         "set the component to the population mean with "
-        "fork.do(tl.subspace(site, basis, origin=...), torchlens.intervention.stochastic.mean_from(reference))",
+        "fork.do(tl.subspace(site, basis, origin=...), tl.mean_ablate(population, dim=None))",
     ),
     **dict.fromkeys(
         sorted(_NESTED_PROJECTIONS - {"set_direction_mean"}),
@@ -154,13 +153,16 @@ _REFUSALS: dict[str, tuple[str, str]] = {
         "restrict positions through within=, e.g. tl.subspace(tl.units(site, mask), "
         "basis, origin=...) with mask True on every feature of the chosen positions",
     ),
-    **dict.fromkeys(
-        ("mean_ablate", "scramble_elements"),
-        (
-            "source= is an activation-space value whose elements are not coordinates",
-            "drop source= (tl.{verb}() acts on the component itself), or write a "
-            "source's component with tl.replace_with(source_tensor)",
-        ),
+    "mean_ablate": (
+        "a tensor source= is an activation-space value whose elements are not coordinates",
+        "drop source= (tl.mean_ablate(dim=None) averages the component itself), pass a "
+        "Population (its mean's component is written), or write a source's component "
+        "with tl.replace_with(source_tensor)",
+    ),
+    "scramble_elements": (
+        "source= is an activation-space value whose elements are not coordinates",
+        "drop source= (tl.{verb}() acts on the component itself), or write a "
+        "source's component with tl.replace_with(source_tensor)",
     ),
     "splice_module": (
         "input='in' runs the module on the call inputs, which have no coordinates",
@@ -181,8 +183,11 @@ def _refusal_for(verb: str, *, code: str = "subspace_edit_unsupported") -> Inval
 # "value", or None (refused with the verb's working spelling).
 _CONDITIONAL_MEANINGS: dict[str, Callable[[Edit, dict[str, Any]], str | None]] = {
     "add": lambda edit, _kw: "value" if isinstance(edit.args[0], torch.Tensor) else "coordinates",
-    "mean_fill": lambda _edit, kw: "value" if "population_identity" in kw else "coordinates",
-    "mean_ablate": lambda edit, _kw: "coordinates" if edit.args and edit.args[0] is None else None,
+    "mean_ablate": lambda edit, kw: (
+        "value"
+        if "population_identity" in kw
+        else ("coordinates" if edit.args and edit.args[0] is None else None)
+    ),
     "scramble_elements": lambda edit, _kw: (
         "coordinates" if edit.args and edit.args[0] is None else None
     ),

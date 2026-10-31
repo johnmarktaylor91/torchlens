@@ -29,7 +29,6 @@ from torchlens.intervention import (
     subspace_interchange,
 )
 from torchlens.intervention._subspace_projection import PROJECTION_NOTE
-from torchlens.intervention.stochastic import mean_from
 
 _H = 0.5 * torch.tensor(
     [[1, 1, 1, 1], [1, -1, 1, -1], [1, 1, -1, -1], [1, -1, -1, 1]], dtype=torch.float64
@@ -83,7 +82,7 @@ def _edited(basis: torch.Tensor, edit: Any) -> tuple[torch.Tensor, tl.Trace]:
 
 _HAND: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor]]] = {
     "zero": (tl.zero_ablate, torch.zeros_like),
-    "mean": (mean_ablate, lambda c: torch.zeros_like(c) + c.mean()),
+    "mean": (lambda: mean_ablate(dim=None), lambda c: torch.zeros_like(c) + c.mean()),
     "scale": (lambda: tl.scale(3.0), lambda c: 3.0 * c),
 }
 
@@ -203,7 +202,7 @@ _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any,
     ),
     "set_direction_mean": (
         lambda: (_subspace_sel(), set_direction_mean(_H[0], _donors(), dim=-1)),
-        lambda: (_subspace_sel(), mean_from(_donors())),
+        lambda: (_subspace_sel(), mean_ablate(_donors(), dim=None)),
     ),
     "subspace_ablate": (
         lambda: (_subspace_sel(), subspace_ablate(_H[:1])),
@@ -225,8 +224,8 @@ _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any,
         ),
     ),
     "mean_ablate_source": (
-        lambda: (_subspace_sel(), mean_ablate(torch.ones(4, 4, dtype=torch.float64))),
-        lambda: (_subspace_sel(), mean_ablate()),
+        lambda: (_subspace_sel(), mean_ablate(torch.ones(4, 4, dtype=torch.float64), dim=None)),
+        lambda: (_subspace_sel(), mean_ablate(dim=None)),
     ),
     "scramble_elements_source": (
         lambda: (_subspace_sel(), scramble_elements(torch.ones(4, 4), seed=0)),

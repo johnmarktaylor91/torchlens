@@ -3,8 +3,8 @@
 Causal scrubbing, resampling ablation and mean ablation replace an activation with values drawn
 from, or averaged over, other inputs. TorchLens builds them from one population noun and one
 sampling plan, records every draw, and makes each draw reproducible from its seed. Every name on
-this page lives in `torchlens.intervention` (not at the `tl.` root), except `mean_from`, `mean_fill`
-and `sampling_records`, which import from `torchlens.intervention.stochastic`. All are
+this page lives in `torchlens.intervention` (not at the `tl.` root), except `tl.mean_ablate` (the root
+helper) and `sampling_records`, which imports from `torchlens.intervention.stochastic`. All are
 DOCUMENTED-UNSTABLE: the spellings may change without a deprecation shim.
 
 ## The pieces
@@ -15,15 +15,13 @@ DOCUMENTED-UNSTABLE: the spellings may change without a deprecation shim.
 | `sample_from(population, seed=...)` | The one stochastic primitive: an immutable plan that draws one whole donor per firing. Apply it with `tl.patch_from(plan)`. |
 | `resample_rows_from(population, seed=..., axis=...)` | Resampling ablation: each batch row is replaced by one whole donor row, drawn with replacement, independently per row. |
 | `permute_batch(seed=..., axis=...)` | Exchanges rows within the current batch (a draw without replacement). |
-| `mean_from(population)` | Fills with the elementwise mean over the population. A mean is a reduction, never a draw, so it takes no seed. |
-| `mean_fill(dim=...)` | The axis-aware mean fill: `dim=` names the axes to average (`"all"` for the global mean). It averages the site's own value unless a population is passed first. |
+| `tl.mean_ablate(source=None, *, dim)` | The one mean door. `dim=` is required: `None` averages every axis to one scalar, an int or tuple of ints averages those axes. `source=` is what is averaged: the site's own value (default), a tensor, or a population, whose members are averaged elementwise first (`dim=None` then fills with that member-shaped mean). A mean is a reduction, never a draw, so it takes no seed. |
 | `set_direction_mean(direction, population, dim=...)` | Replaces the component along `direction` with the population's mean coefficient and keeps the orthogonal part. |
 | `scramble_elements(...)` | An elementwise random scramble. It is not a resampling ablation: each element moves on its own, so rows are no longer coherent inputs. |
 | `at_step(*steps)` | A selector qualifier for episode captures: `tl.when(site & at_step(2), edit)` edits only decoding step 2. |
 | `sampling_records(trace)` | The recorded draws of every stochastic edit on a trace: seeds, donor ids, permutations. |
 
-Two spellings are false friends. `tl.mean_ablate` is the older global mean; `mean_fill(dim=...)`
-says which axes it averages. The removed `resample_ablate` was renamed `scramble_elements`
+One spelling is a false friend. The removed `resample_ablate` was renamed `scramble_elements`
 because it never resampled whole inputs; resampling ablation is `resample_rows_from`.
 
 ## Seeds and draws
@@ -93,7 +91,6 @@ import torch
 from torch import nn
 import torchlens as tl
 from torchlens.intervention import population, set_direction_mean
-from torchlens.intervention.stochastic import mean_from
 
 
 class Toy(nn.Module):
@@ -113,9 +110,9 @@ site = tl.label("relu_1_2")
 clean = trace["relu_1_2"].out
 evidence = population(torch.stack([clean, clean + 2.0]), origin="two evidence runs")
 
-# mean_from: the elementwise mean over the population.
+# mean_ablate with a population and dim=None: the elementwise mean over the population.
 meaned = trace.fork("meaned")
-meaned.do(site, mean_from(evidence))
+meaned.do(site, tl.mean_ablate(evidence, dim=None))
 
 # set_direction_mean: only the component along the direction changes.
 direction = torch.tensor([1.0, -1.0, 0.0, 0.5])
@@ -132,7 +129,7 @@ RESULT = [
 ```
 
 `set_direction_mean` is the edit to reach for when you mean "the component along a direction".
-Under a `tl.subspace(...)` selection, `mean_from(reference)` sets the component in the basis span to the
+Under a `tl.subspace(...)` selection, `tl.mean_ablate(population, dim=None)` sets the component in the basis span to the
 population mean's component (see
 [Subspace edits](intervention_explainers.md#subspace-edits-the-component-along-a-basis)).
 `tl.project_out` and `tl.project_onto` are the projection helpers without a population.

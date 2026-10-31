@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 import torch
 
+import torchlens as tl
 from torchlens.intervention import (
     compose,
     permute_batch,
@@ -32,7 +33,6 @@ from torchlens.intervention import (
     sample_from,
     set_direction_mean,
 )
-from torchlens.intervention.stochastic import mean_fill
 
 _REPO = Path(__file__).resolve().parent.parent
 
@@ -42,8 +42,6 @@ _NEW_FAMILY_NAMES = frozenset(
         "patch_from",
         "permute_batch",
         "resample_rows_from",
-        "mean_from",
-        "mean_fill",
         "set_direction_mean",
         "compose",
     }
@@ -109,16 +107,16 @@ def test_construction_and_identity_are_backend_free() -> None:
     specs = [
         permute_batch(seed=1, axis=0),
         resample_rows_from(donors, seed=1, axis=0),
-        mean_fill(dim="all"),
+        tl.mean_ablate(dim=None),
         set_direction_mean(torch.ones(4), site_shaped, dim=1),
-        compose(mean_fill(dim="all")),
+        compose(tl.mean_ablate(dim=None)),
     ]
     del plan
     for spec in specs:
         assert repr(spec)
         assert spec == spec
     # Builtin-portability members round-trip identity through pickle.
-    for spec in (permute_batch(seed=1, axis=0), mean_fill(dim="all")):
+    for spec in (permute_batch(seed=1, axis=0), tl.mean_ablate(dim=None)):
         assert pickle.loads(pickle.dumps(spec)) == spec
 
 

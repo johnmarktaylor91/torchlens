@@ -258,7 +258,7 @@ flows into downstream ops — and `trace(halt=static_selector)` finalizes an hon
 the matched frontier (`trace.halted`, `trace.stop_reason`; parameter accounting is restricted to
 the captured ops). Static selectors are `tl.func`, `tl.label`, `tl.module`, `tl.in_module`,
 `tl.label_contains`, and boolean composites. Supported actions are `tl.zero_ablate()`, `tl.scale(...)`,
-`tl.add(scalar | mx.array)`, `tl.clamp(...)`, `tl.mean_ablate()` (self form), `tl.replace_with(...)`,
+`tl.add(scalar | mx.array)`, `tl.clamp(...)`, `tl.mean_ablate(dim=None)` (self form), `tl.replace_with(...)`,
 and callable transforms written against `mx.array`; other helpers build torch-only hooks and refuse
 by name. Hooks must preserve shape and dtype; violations refuse typed at fire time. Replay
 validation treats declared interventions as genuine user substitutions: the oracle recomputes the

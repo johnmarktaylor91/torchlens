@@ -394,11 +394,11 @@ def test_rg18_steered_generation_fires_each_step_with_negative_control(
 
 
 def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -> None:
-    """RG19 over the ACTUALLY merged surface: mean_ablate(over='self') fires
-    and moves the logits (degeneracy check), and every other over= token --
-    including the axis tokens and the one-character typo -- refuses TYPED
-    with teaching (A04's fail-closed fix for SG#15; axis-aware means are
-    honestly not implemented rather than silently global)."""
+    """RG19 over the ACTUALLY merged surface: mean_ablate(dim=None) fires
+    and moves the logits (degeneracy check), and every token outside the dim=
+    vocabulary -- a semantic axis name and the one-character typo -- refuses
+    TYPED with teaching (A04's fail-closed fix for SG#15; an axis is never
+    guessed from rank)."""
 
     import torchlens as tl
 
@@ -421,7 +421,7 @@ def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -
 
         fork = trace.fork()
         try:
-            fork.do(target, tl.mean_ablate(dim="self"))
+            fork.do(target, tl.mean_ablate(dim=None))
             edited = None
             for op in fork.output_ops:
                 if getattr(op.out, "dim", lambda: 0)() == 3:
@@ -437,9 +437,8 @@ def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -
             with pytest.raises(Exception) as excinfo:
                 tl.mean_ablate(dim=bad_token)
             message = str(excinfo.value)
-            assert "over" in message and "self" in message, (
-                f"over={bad_token!r} refused without teaching the closed"
-                f" vocabulary: {message[:160]}"
+            assert "dim" in message, (
+                f"dim={bad_token!r} refused without teaching the dim= vocabulary: {message[:160]}"
             )
     finally:
         trace.cleanup()

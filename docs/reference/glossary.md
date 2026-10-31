@@ -1071,7 +1071,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Value helpers**
 : `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.add_noise` (Gaussian noise),
-  `tl.mean_ablate` (replace with a source mean), `torchlens.intervention.scramble_elements`
+  `tl.mean_ablate` (fill with a mean; its own entry below), `torchlens.intervention.scramble_elements`
   (elementwise iid scramble from a flattened source -- the honest rename of
   the removed `resample_ablate` spelling, which a saved spec may not name either: it refuses
   `intervention_helper_renamed`; for coherent donor patching use
@@ -1091,6 +1091,21 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   the helper's tensor at each call; in-place changes apply to the next call, and
   `BindReport.helper_tensor_versions` (on `.last_report`) records each tensor's version counter,
   keyed by the rule id the call started with (a rule id follows its tensor's content).
+
+**`tl.mean_ablate(source=None, *, dim, allow_shape_change=False)`**
+: The one mean door. `dim` is required: `None` averages every axis of the source to one
+  scalar; an int or tuple of ints averages those axes (`keepdim`, broadcast back to the site).
+  `source` is what is averaged: the site's own value (the default; it reads the whole batch, so
+  the spec derives `batch_independent=False`, the append gate refuses and a chunked capture
+  refuses `chunked_replay_batch_coupling`), a tensor or Op-like object (averaged instead of the
+  site; `batch_independent=True`), or a `tl.intervention.Population` (its members are averaged
+  elementwise first; `dim=None` fills with that member-shaped mean, axes reduce it further; the
+  spec is `opaque_audit` and the fire record says `stochastic=False`). A mean is a reduction,
+  never a draw: no seed. A semantic axis name (`"batch"`, `"position"`, `"feature"`) refuses
+  `axis_semantics_unknown` until axis-role evidence exists; any other `dim` refuses
+  `intervention_over_invalid` at construction. The removed `mean_fill(dim=...)` is
+  `mean_ablate(dim=...)`, the removed `mean_from(population)` is `mean_ablate(population,
+  dim=None)`, and a saved spec naming `mean_fill` refuses `intervention_helper_renamed`.
 
 **Backward helpers**
 : `tl.hook_grad` builds a live/rerun-only backward hook; `tl.zero_grad`, `tl.scale_grad`,
@@ -1974,7 +1989,7 @@ deprecation shim owed*
   float64). Under `do()` the edit acts on the COMPONENT along the span of the
   basis rows: with `Q` the rows, on the coordinates `c = Q x`, written back as
   `x + Q^T (edit(c) - c)`; the orthogonal complement is unchanged. Coordinate
-  verbs (`zero_ablate`, `scale`, `clamp`, `add_noise`, `mean_ablate()`, hook
+  verbs (`zero_ablate`, `scale`, `clamp`, `add_noise`, `mean_ablate(dim=None)`, hook
   callables, ...) act on `c`; value verbs (`patch_from`, the interchange;
   `replace_with`, `steer`, ...) write a value's component; other verbs refuse
   `subspace_edit_unsupported`. An orthonormal basis is used as given; any

@@ -77,7 +77,7 @@ import hashlib
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import torch
 
@@ -89,8 +89,6 @@ from .types import Edit
 
 __all__ = [
     "SamplingPlan",
-    "mean_fill",
-    "mean_from",
     "permute_batch",
     "resample_rows_from",
     "sample_from",
@@ -380,9 +378,9 @@ def _resolve_over_axes(
     Parameters
     ----------
     over:
-        ``"all"``, ``"self"`` (warns; maps to ``"all"``), an explicit int
-        axis, a tuple of ints, or a named token (refuses until axis-role
-        evidence exists).
+        ``"all"``, an explicit int axis, a tuple of ints, or a named token
+        (refuses until axis-role evidence exists). ``tl.mean_ablate`` spells
+        the global mean ``dim=None`` and resolves it before calling here.
     ndim:
         Concrete rank for range validation; ``None`` runs the vocabulary
         check only (construction time, before any value exists).
@@ -396,22 +394,11 @@ def _resolve_over_axes(
         known).
     """
 
-    if over == "self":
-        warnings.warn(
-            TorchLensWarning(
-                f"{verb}(over='self') is the legacy spelling of the explicit "
-                "global-scalar mean; it maps to over='all'. Remedy: spell "
-                "over='all' directly",
-                code="mean_over_self_alias",
-            ),
-            stacklevel=3,
-        )
-        return "all"
     if over == "all":
         return "all"
     if isinstance(over, str) and over in _NAMED_AXIS_TOKENS:
         raise InvalidArgumentError(
-            f"{verb}(over={over!r}) names a semantic axis, and no axis-role "
+            f"{verb}(dim={over!r}) names a semantic axis, and no axis-role "
             "evidence is registered for this site: the axis ladder is explicit "
             "axis integers > facet/recipe-declared semantic role > registered "
             "model/site metadata > this refusal. An axis is never inferred "
@@ -434,11 +421,11 @@ def _resolve_over_axes(
             repr(token) for token in _NAMED_AXIS_TOKENS
         )
         raise InvalidArgumentError(
-            f"{verb}(over={over!r}) is outside the closed over= vocabulary "
+            f"{verb}(dim={over!r}) is outside the closed dim= vocabulary "
             f"({supported}); an accepted-but-ignored token is the audit-only-"
             "label defect this gate exists to kill",
             code="intervention_over_invalid",
-            remedy="pass over='all' for the explicit global scalar, or explicit integer axes",
+            remedy="pass dim='all' for the explicit global scalar, or explicit integer axes",
             argument="dim",
         )
     if ndim is None:
@@ -1225,170 +1212,6 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
             "seeded": True,
             "row_coherent": True,
             "batch_axis": explicit_axis,
-        },
-    )
-
-
-# ----------------------------------------------------------------------
-# deterministic reductions as edits (D3): mean_from / mean_fill
-# ----------------------------------------------------------------------
-def mean_from(
-    reference: Population,
-    *,
-    group_by: Callable[[Any], Any] | None = None,
-    matching: Any = None,
-) -> Edit:
-    """Create the deterministic elementwise evidence-set mean fill.
-
-    A mean is a reduction, never a draw (D3): the fill tensor is computed
-    eagerly at construction (populations are prepared before hooks install,
-    D10), the record says ``stochastic=False``, and no seed is ever invented.
-
-    DOCUMENTED-UNSTABLE spelling pending naming-session ratification.
-    """
-
-    _check_agreement_pair(group_by, matching, "mean_from")
-    fill = reference.mean(group_by=group_by, matching=matching)
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime evidence-mean fill hook."""
-
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Fill the site with the prepared evidence-set mean."""
-
-            _prove_event_geometry(fill, out, verb="mean_from")
-            _record_sampling(
-                hook,
-                "mean_from",
-                {
-                    "stochastic": False,
-                    "population_identity": reference.identity,
-                    "digest_kind": reference.digest_kind,
-                    "population_count": len(reference),
-                    "eligible_count": None,
-                    "base_seed": None,
-                    "derived_seed": None,
-                    "donor_group_id": None,
-                    "share_draw": None,
-                    "logical_firing_coordinate": (),
-                    "realized_draw_digest": None,
-                    "replacement_mode": "evidence_mean",
-                    "donor_grad": "detached",
-                    "recomputation": bool(hook.run_ctx.get("recomputation", False)),
-                },
-            )
-            return fill.detach().to(device=out.device, dtype=out.dtype).clone()
-
-        return _hook
-
-    from .helpers import _helper_spec
-
-    return _helper_spec(
-        "mean_from",
-        kwargs={
-            "population_identity": reference.identity,
-            "population_count": len(reference),
-        },
-        factory=factory,
-        portability="opaque_audit",
-        batch_independent=True,
-        metadata={"stochastic": False},
-    )
-
-
-def mean_fill(
-    reference: Population | None = None,
-    *,
-    dim: Any,
-    allow_shape_change: bool = False,
-) -> Edit:
-    """Create the FIXED axis-aware mean fill (the ``mean_ablate`` successor).
-
-    ``over=`` is REQUIRED and CLOSED (D17): ``"all"`` is the explicit spelling
-    of the old global scalar (and carries the batch-coupled flag when reading
-    the fire-time value); explicit int/tuple axes reduce with ``keepdim``
-    broadcast; ``"self"`` warns and maps to ``"all"``; named tokens refuse
-    ``axis_semantics_unknown`` until axis-role evidence exists (the ladder is
-    never rank-guessing). ``batch_independent`` is DERIVED, never tabled
-    (D18): ``True`` only when the fill provably never reads the traced batch
-    (an external ``ref=``), ``False`` otherwise.
-
-    DOCUMENTED-UNSTABLE spelling pending naming-session ratification.
-    """
-
-    canonical_over = _resolve_over_axes(dim, None, verb="mean_fill")
-    prepared_fill: torch.Tensor | None = None
-    if reference is not None:
-        if not isinstance(reference, Population):
-            raise InvalidArgumentError(
-                f"mean_fill ref= takes the population noun, received {type(reference).__name__}",
-                code="population_source_invalid",
-                remedy='build the population first: reference(members, origin="...")',
-                argument="ref",
-            )
-        prepared_fill = reference.mean(dim if dim != "self" else "all")
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime axis-aware mean-fill hook."""
-
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Fill the site from the configured mean (population or self)."""
-
-            if prepared_fill is not None:
-                fill = prepared_fill.detach().to(device=out.device, dtype=out.dtype)
-                try:
-                    expanded = fill.expand(out.shape) if fill.shape != out.shape else fill
-                except RuntimeError:
-                    raise InvalidArgumentError(
-                        f"mean_fill population mean of shape "
-                        f"{tuple(fill.shape)!r} does not broadcast to the site "
-                        f"shape {tuple(out.shape)!r}",
-                        code="sampling_geometry_mismatch",
-                        remedy="build the population at this site's geometry, or "
-                        "reduce over axes that broadcast back",
-                        argument="ref",
-                    ) from None
-                return expanded.clone()
-            if canonical_over == "all":
-                return torch.zeros_like(out) + out.mean()
-            # canonical_over is not "all"/"self" on this branch, so the
-            # resolved spelling is always an axes tuple.
-            axes = cast(
-                "tuple[int, ...]",
-                _resolve_over_axes(canonical_over, out.ndim, verb="mean_fill"),
-            )
-            return torch.zeros_like(out) + out.mean(dim=list(axes), keepdim=True)
-
-        return _hook
-
-    from .helpers import _helper_spec
-
-    # D18: derived, never tabled. An external ref provably never reads the
-    # traced batch; every self-sourced reduction reads the fire-time value
-    # (and no batch-axis proof source exists in v1), so it fails closed.
-    batch_independent = reference is not None
-    over_kwarg = "all" if canonical_over == "all" else canonical_over
-    return _helper_spec(
-        "mean_fill",
-        kwargs={
-            "dim": over_kwarg,
-            "allow_shape_change": allow_shape_change,
-            **(
-                {
-                    "population_identity": reference.identity,
-                    "population_count": len(reference),
-                }
-                if reference is not None
-                else {}
-            ),
-        },
-        factory=factory,
-        portability="builtin" if reference is None else "opaque_audit",
-        batch_independent=batch_independent,
-        compatible_with_append=not allow_shape_change and batch_independent,
-        metadata={
-            "stochastic": False,
-            **({} if reference is not None else {"batch_coherent": True}),
         },
     )
 
