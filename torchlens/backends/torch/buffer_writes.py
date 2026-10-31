@@ -50,6 +50,10 @@ class BufferSnapshot:
     write is already accounted (W1-BUF-2 dedup — on the meta substrate both
     ``F.batch_norm`` and the inner ``torch.batch_norm`` carry snapshots
     because neither is bottom-level once the decomposition runs below them).
+
+    ``rebinds_storage`` marks the registered buffer itself as the receiver of
+    ``Tensor.set_``: the call rebinds its storage, so it is recorded as a
+    storage rebind, never journaled as an in-place write.
     """
 
     address: str
@@ -59,6 +63,7 @@ class BufferSnapshot:
     version: int | None
     value: torch.Tensor
     writes_at_snapshot: int = 0
+    rebinds_storage: bool = False
 
 
 @dataclass(slots=True)
@@ -684,6 +689,10 @@ class BufferWriteTracker:
         # record the count at pre-call time so an OUTER wrapped mutator can
         # tell a nested call already journaled the address in its window.
         self.address_write_counts: dict[str, int] = {}
+        # Addresses whose registered buffer was the receiver of ``Tensor.set_`` in
+        # this forward. ``reconcile`` records each as a ``data_reassign`` rebind,
+        # whether or not the call changed the storage key.
+        self.storage_rebound_addresses: set[str] = set()
         # Weakref-validated: an id reused within a window never inherits a dead entry.
         self._storage_key_cache: IdentityCache[tuple[Any, ...] | None] = {}
         self._storage_range_cache: IdentityCache[tuple[int, int]] = {}
@@ -1001,6 +1010,9 @@ class BufferWriteTracker:
             current = self.address_to_tensor.get(snapshot.address)
             if current is None or id(current) != snapshot.object_id:
                 continue
+            if snapshot.rebinds_storage:
+                self._record_storage_rebind(snapshot, current)
+                continue
             if self.storage_key(current) != snapshot.storage_key:
                 continue
             if self.address_write_counts.get(snapshot.address, 0) > snapshot.writes_at_snapshot:
@@ -1009,6 +1021,25 @@ class BufferWriteTracker:
                 # double the declared mutation.
                 continue
             self._journal_snapshot_write(func_name, snapshot, current, producer_label_raw)
+
+    def _record_storage_rebind(self, snapshot: BufferSnapshot, current: torch.Tensor) -> None:
+        """Defer a ``set_`` on a registered buffer to the end-of-forward rebind record.
+
+        Whether ``set_`` changes the buffer's storage key depends only on the
+        entry state: emptying an already empty buffer, or re-applying a view of
+        a storage the buffer already views, keeps the key, while the same call
+        on a fresh buffer changes it. Journaling the unchanged-key call as an
+        ``inplace`` write gave the two entry states different graphs, so every
+        ``set_`` on the buffer itself is recorded one way: later reads link to
+        the ``set_`` output and ``reconcile`` records one ``data_reassign`` node.
+        The journal-expected value advances to the rebound value after the same
+        pre-op host-write check a journaled op gets, so a later journaled op on
+        the buffer reconciles against the bytes ``set_`` bound.
+        """
+
+        self.storage_rebound_addresses.add(snapshot.address)
+        self.clear_storage_metadata_cache()
+        self._reconcile_journaled_buffer(snapshot, _copy_tensor_value(current))
 
     def _journal_snapshot_write(
         self,
@@ -1131,12 +1162,13 @@ class BufferWriteTracker:
                 current_value = _copy_tensor_value(tensor)
                 object_changed = id(tensor) != self.address_to_object_id.get(address)
                 storage_changed = storage_key(tensor) != self.address_to_storage_key.get(address)
+                rebound = address in self.storage_rebound_addresses
                 values_equal = _tensor_equal_tristate(expected, current_value)
                 value_changed = None if values_equal is None else not values_equal
                 # W1-FAB: an UNKNOWN value verdict (weights-free) never
                 # journals a write on its own; identity/storage rebinds are
                 # real observations and still record below.
-                if not (object_changed or storage_changed or value_changed is True):
+                if not (object_changed or storage_changed or rebound or value_changed is True):
                     continue
                 # Classify the STORAGE rebind first. The live buffer object keeping its
                 # identity while its storage changed is definitionally a ``.data =``/
@@ -1147,7 +1179,9 @@ class BufferWriteTracker:
                 # the rebound buffer with the ``data`` op's own label -- the two kinds
                 # replay differently (``.data =`` detaches; an attribute rebind keeps the
                 # graph), so the distinction has to key on identity, not on the label.
-                if not object_changed and storage_changed:
+                # A ``set_`` on the buffer is the same rebind even when its storage key
+                # came out unchanged (an empty buffer emptied again, a view re-applied).
+                if not object_changed and (storage_changed or rebound):
                     self._record_write(address, tensor, "data_reassign", None, value_changed, None)
                     continue
                 producer = get_tensor_label(tensor)
@@ -1172,6 +1206,7 @@ class BufferWriteTracker:
                 _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
                 self._record_write(address, tensor, "data_reassign", None, value_changed, None)
                 continue
+        self.storage_rebound_addresses.clear()
 
     def _reconcile_params(self, model: nn.Module) -> None:
         """Flag ANY within-forward PARAMETER storage-byte change (r18 + r19-A, fail closed).
@@ -1228,11 +1263,19 @@ class BufferWriteTracker:
                     if not _param_storage_unchanged(tensor, before):
                         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
 
-    def snapshot_buffer_args(self, tensors: list[torch.Tensor]) -> list[BufferSnapshot]:
-        """Return pre-call snapshots for tensor args backed by registered buffers."""
+    def snapshot_buffer_args(
+        self, tensors: list[torch.Tensor], *, receiver_rebinds_storage: bool = False
+    ) -> list[BufferSnapshot]:
+        """Return pre-call snapshots for tensor args backed by registered buffers.
+
+        ``receiver_rebinds_storage`` is set for ``Tensor.set_``: when its
+        receiver (the first tensor argument) is a registered buffer itself, that
+        snapshot is marked ``rebinds_storage``.
+        """
 
         self.clear_storage_metadata_cache()
         snapshots: list[BufferSnapshot] = []
+        receiver = tensors[0] if receiver_rebinds_storage and tensors else None
         for tensor in tensors:
             if isinstance(tensor, nn.Parameter):
                 continue
@@ -1249,6 +1292,7 @@ class BufferWriteTracker:
                     version=_tensor_version(registered),
                     value=_copy_tensor_value(registered),
                     writes_at_snapshot=self.address_write_counts.get(address, 0),
+                    rebinds_storage=receiver is not None and tensor is receiver is registered,
                 )
             )
         return snapshots
@@ -1342,8 +1386,8 @@ class BufferWriteTracker:
         # ``storage_key_to_addresses`` would be O(aliases) instead of O(registered
         # buffers), but that index goes STALE under a mid-forward storage rebind and
         # both vectors have live repros: ``buf.data = other`` fires no hook and bumps
-        # no version, and ``buf.set_(other)`` is dropped by ``record_op_writes``'
-        # storage-key guard, so neither re-registers the address. The old full scan
+        # no version, and ``buf.set_(other)`` is never journaled by ``record_op_writes``
+        # (a deferred rebind), so neither re-registers the address. The old full scan
         # is what still catches the resulting alias, and a journaled write must not
         # silently stop refreshing it.
         #
@@ -1565,7 +1609,7 @@ def snapshot_buffer_args(
         return []
     if not _is_fused_mutator(func_name) and not _could_mutate(func_name, kwargs):
         return []
-    return tracker.snapshot_buffer_args(tensors)
+    return tracker.snapshot_buffer_args(tensors, receiver_rebinds_storage=func_name == "set_")
 
 
 def record_op_buffer_writes(
