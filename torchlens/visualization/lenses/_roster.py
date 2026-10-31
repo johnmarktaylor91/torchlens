@@ -85,7 +85,7 @@ DEBUG_LENS = register_lens(
             # label rows ride the preset spec slot (closed node_label_fields
             # vocabulary has no dtype/device tokens yet).
             "collapse": "none",
-            "show_buffer_layers": "always",
+            "show_buffers": "always",
             "show_redundant_args": True,
             "show_legend": True,
             "show_orphans": True,

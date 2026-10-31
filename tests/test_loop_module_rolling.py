@@ -1003,7 +1003,7 @@ def test_render_loop_module_rolling_demos() -> None:
         (
             "buffer_loop",
             BufferRewriteLoops(),
-            {"show_buffer_layers": "always"},
+            {"show_buffers": "always"},
             "init+forward",
         ),
         ("nested_loop", NestedLoopBlock(), {"vis_call_depth": 1}, "init+forward"),

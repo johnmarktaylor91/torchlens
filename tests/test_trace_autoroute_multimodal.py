@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.bridge.hf as hf_bridge
+import torchlens.bridge.transformers as hf_bridge
 import torchlens.user_funcs as user_funcs
 
 

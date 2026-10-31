@@ -268,7 +268,7 @@ def test_curve_refuses_misaligned_attribution_and_its_remedy_runs() -> None:
     model = SmallCnn().eval()
     x = torch.randn(1, 3, 8, 8)
     layer_result = attribution.layer_attribution(model, x, target=0, layer="features")
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.deletion_curve(model, x, target=0, attribution=layer_result)
     assert excinfo.value.fields.get("code") == "attribution_eval_map_misaligned"
     message = str(excinfo.value)
@@ -298,7 +298,7 @@ def test_curve_refuses_bad_settings_and_remedies_run(setting: str, value: Any) -
     kwargs: dict[str, Any] = {setting: value}
     if setting == "patch_size":
         kwargs["features"] = "patches"
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.deletion_curve(model, x, target=0, attribution=result, **kwargs)
     assert excinfo.value.fields.get("code") == "attribution_eval_setting_invalid"
     fixed = eval(  # noqa: S307
@@ -335,7 +335,7 @@ def test_curve_step_refuses_unmatched_input_layer_and_its_remedy_runs(
     curve = attribution.deletion_curve(model, x, target=1, attribution=result, num_steps=2)
     step = curve.steps[1]
     monkeypatch.setattr(tl, "trace", lambda *args, **kwargs: _TraceWithForeignInput())
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         _ = step.build_interventions
     assert excinfo.value.fields.get("code") == "attribution_curve_input_unmatched"
     found = re.search(r"e\.g\. (model\(step\.build_inputs\))\.", str(excinfo.value))
@@ -351,7 +351,7 @@ def test_curve_refuses_site_target() -> None:
     model = SmallCnn().eval()
     x = torch.randn(1, 3, 8, 8)
     result = attribution.saliency(model, x, target=0)
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.insertion_curve(
             model, x, target=attribution.SiteTarget("head", unit=0), attribution=result
         )

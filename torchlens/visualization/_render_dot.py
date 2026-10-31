@@ -1458,7 +1458,7 @@ def draw(
                 code="dagua_renderer_not_opted_in",
                 remedy="opt in via `from torchlens.experimental import dagua` first",
             )
-        from ..experimental.dagua import render_trace_with_dagua
+        from ..experimental.dagua._bridge import render_trace_with_dagua
 
         return render_trace_with_dagua(
             self,

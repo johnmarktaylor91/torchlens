@@ -152,13 +152,13 @@ class TestDeferredSiblingSeams:
             retention=None,
             capture_status=None,
             resolution="exact",
-            frozen_requested=False,
-            frozen_resolved=False,
+            is_frozen_requested=False,
+            is_frozen_resolved=False,
             frozen_reached=None,
             policy_digest=None,
-            detached=True,
+            is_detached=True,
             sample_id=None,
-            rescorable=True,
+            is_rescorable=True,
         )
         assert row.key == ("t0", "EDGE", (7, "positional", (0,)))
 

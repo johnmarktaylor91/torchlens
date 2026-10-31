@@ -20,6 +20,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
+import torchlens
 import torchlens.attribution as attribution
 
 
@@ -320,7 +321,7 @@ def test_repeated_reference_conflicting_baselines_raise_typed_error() -> None:
     t = torch.ones(3)
 
     with pytest.raises(
-        attribution.AttributionError,
+        torchlens.errors.AttributionError,
         match="repeated references to the same input tensor must match",
     ):
         attribution.integrated_gradients(
@@ -406,7 +407,7 @@ def test_grad_cam_rejects_multi_fire_layer_with_typed_error() -> None:
     model = SharedConvModel()
     x = torch.randn(1, 1, 5, 4)
 
-    with pytest.raises(attribution.AttributionError, match="fired 2 times"):
+    with pytest.raises(torchlens.errors.AttributionError, match="fired 2 times"):
         attribution.grad_cam(model, x, target=0, layer="conv")
 
 
@@ -458,7 +459,7 @@ def test_grad_cam_heterogeneous_double_feed_raises_typed_ambiguity() -> None:
     a = torch.randn(1, 1, 9, 7)
     b = torch.randn(1, 1, 5, 4)
 
-    with pytest.raises(attribution.AttributionError, match="different\\s+grids"):
+    with pytest.raises(torchlens.errors.AttributionError, match="different\\s+grids"):
         attribution.grad_cam(model, (a, b), target=0, layer="conv")
 
 
@@ -468,7 +469,7 @@ def test_grad_cam_refuses_when_no_spatial_input_feeds_the_layer() -> None:
     model = ParameterFedConvModel()
     decoy = torch.randn(1, 1, 9, 7)
 
-    with pytest.raises(attribution.AttributionError, match="no spatial"):
+    with pytest.raises(torchlens.errors.AttributionError, match="no spatial"):
         attribution.grad_cam(model, decoy, target=0, layer="conv")
 
 
@@ -479,7 +480,7 @@ def test_grad_cam_without_any_spatial_input_keeps_original_error() -> None:
     decoy = torch.randn(1, 3)
 
     with pytest.raises(
-        attribution.AttributionError,
+        torchlens.errors.AttributionError,
         match="requires an input tensor with spatial dimensions",
     ):
         attribution.grad_cam(model, decoy, target=0, layer="conv")

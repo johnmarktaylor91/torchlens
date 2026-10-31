@@ -499,13 +499,13 @@ class _RowBuilder:
             "retention": self._payloads.retention(label),
             "capture_status": self._capture_status,
             "resolution": "exact",
-            "frozen_requested": label in self._frozen_plan.sites,
-            "frozen_resolved": label in self._frozen_plan.sites,
+            "is_frozen_requested": label in self._frozen_plan.sites,
+            "is_frozen_resolved": label in self._frozen_plan.sites,
             "frozen_reached": None,
             "policy_digest": self._frozen_plan.digest,
-            "detached": True,
+            "is_detached": True,
             "sample_id": None,
-            "rescorable": True,
+            "is_rescorable": True,
         }
 
     def _emit(self, base: dict[str, Any]) -> None:

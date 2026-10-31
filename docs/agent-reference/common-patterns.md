@@ -202,12 +202,12 @@ assert torch.equal(oracle.find_sites(site).first().out, steered_mlp)
 
 ### Per-head attention from a Hugging Face model without a trace
 
-`tl.bridge.hf.register_attention(model)` makes TorchLens the model's attention backend
+`tl.bridge.transformers.register_attention(model)` makes TorchLens the model's attention backend
 (the `"torchlens"` attention function plus its matching mask function, so causal and padding
-masks always arrive); `tl.bridge.hf.record_attention(model)` then records every call's per-head
+masks always arrive); `tl.bridge.transformers.record_attention(model)` then records every call's per-head
 probabilities by module name. It materializes the full `(batch, heads, q, kv)` matrix per call
 (32 GiB per 4096-token sequence for a Llama-2-7B shape in bfloat16). Glossary:
-"tl.bridge.hf.register_attention".
+"tl.bridge.transformers.register_attention".
 
 ```python
 import torch
@@ -221,8 +221,8 @@ lm = transformers.LlamaForCausalLM(
 ).eval()
 batch = {"input_ids": torch.tensor([[1, 5, 9, 2], [7, 3, 0, 0]]),
          "attention_mask": torch.tensor([[1, 1, 1, 1], [1, 1, 0, 0]])}
-tl.bridge.hf.register_attention(lm)
-with torch.no_grad(), tl.bridge.hf.record_attention(lm, check_sdpa=True) as attn:
+tl.bridge.transformers.register_attention(lm)
+with torch.no_grad(), tl.bridge.transformers.record_attention(lm, check_sdpa=True) as attn:
     lm(**batch)
 probs = attn["model.layers.0.self_attn"]  # (batch, heads, q, kv), the tensor the model used
 assert probs.shape == (2, 4, 4, 4)

@@ -608,7 +608,7 @@ def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) 
         "netron.json", _normalize_export_payload(netron_payload)
     )
 
-    result = tl.bridge.huggingface.push_to_hub(
+    result = tl.bridge.huggingface_hub.push_to_hub(
         export_log,
         "example/repo",
         dry_run=True,
@@ -617,7 +617,7 @@ def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) 
     assert result["dry_run"] is True
 
     api = _FakeHubApi()
-    uploaded = tl.bridge.huggingface.push_to_hub(export_log, "example/repo", api=api)
+    uploaded = tl.bridge.huggingface_hub.push_to_hub(export_log, "example/repo", api=api)
     assert uploaded["upload_result"].startswith("https://huggingface.co/")
     assert api.created
     assert api.uploaded
@@ -703,7 +703,7 @@ def test_hub_push_uploads_real_bundle_not_metadata_stub(export_log: Any) -> None
     """
 
     api = _FakeHubApi()
-    uploaded = tl.bridge.huggingface.push_to_hub(export_log, "example/repo", api=api)
+    uploaded = tl.bridge.huggingface_hub.push_to_hub(export_log, "example/repo", api=api)
     assert uploaded["dry_run"] is False
     assert api.uploaded, "expected an upload_file call"
 
@@ -731,7 +731,7 @@ def test_hub_push_scrubs_local_paths_from_uploaded_trace(export_log: Any) -> Non
     """
 
     api = _FakeHubApi()
-    tl.bridge.huggingface.push_to_hub(export_log, "example/repo", api=api)
+    tl.bridge.huggingface_hub.push_to_hub(export_log, "example/repo", api=api)
     payload = api.uploaded_bytes[-1]
 
     # Decompress the gzip-tar and scan the actual member bytes: a compressed

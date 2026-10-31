@@ -114,7 +114,7 @@ def test_grad_cam_refuses_ambiguous_choice_and_its_remedy_runs() -> None:
     model = TwoTower()
     inputs = torch.randn(1, 3, 8, 8)
 
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.grad_cam(model, inputs, target=0)
 
     assert excinfo.value.fields.get("code") == "grad_cam_layer_choice_ambiguous"
@@ -129,6 +129,6 @@ def test_grad_cam_refuses_when_no_layer_is_a_map() -> None:
     """A model with no spatial map and no token grid has nothing to choose."""
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2))
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.grad_cam(model, torch.randn(1, 4), target=0)
     assert excinfo.value.fields.get("code") == "grad_cam_layer_unchosen"

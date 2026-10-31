@@ -1253,9 +1253,9 @@
 - `tl.receptive_field` is a lazy power-user submodule. `Op`, `Layer`, `ModuleCall`, and
   `Module` expose `receptive_field` and `projective_field` views; `Trace` exposes the matching
   `receptive_fields()` and `projective_fields()` tables.
-- HF ATTENTION BACKEND (U36.2, spellings DOCUMENTED-UNSTABLE): `tl.bridge.hf.register_attention(model=None)`
+- HF ATTENTION BACKEND (U36.2, spellings DOCUMENTED-UNSTABLE): `tl.bridge.transformers.register_attention(model=None)`
   registers the `"torchlens"` attention function AND its matching mask function (the
-  mask trap: an attention function without one gets no mask); `tl.bridge.hf.record_attention(model,
+  mask trap: an attention function without one gets no mask); `tl.bridge.transformers.record_attention(model,
   check_sdpa=False)` yields an `AttentionRecording` of per-head probabilities per attention module,
   no trace. Full `(batch, heads, q, kv)` matrix per call: 32 GiB per 4096-token Llama-2-7B-shape
   sequence in bf16. Refusal codes `hf_attention_*`.

@@ -264,7 +264,7 @@ def test_randomization_refuses_bad_settings_and_remedies_run(
     model = SmallCnn()
     x = torch.randn(1, 3, 12, 12)
     call: dict[str, Any] = {"target": 0, "method": attribution.saliency, **kwargs}
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.randomization_test(model, x, **call)
     assert excinfo.value.fields.get("code") == code
     fixed = eval(_remedy(str(excinfo.value)), {"tl": tl, "model": model, "x": x})  # noqa: S307
@@ -289,7 +289,7 @@ def test_randomization_refuses_a_map_that_changes_shape() -> None:
         untouched = torch.equal(model.head.weight, head_weight)
         return inputs if untouched else inputs[..., 1:]
 
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.randomization_test(model, x, target=0, method=_shifting_layout)
     assert excinfo.value.fields.get("code") == "attribution_randomization_map_changed"
     message = str(excinfo.value)
@@ -333,7 +333,7 @@ def test_randomization_refuses_when_no_parameterized_module_runs_and_the_remedy_
         del model, input_kwargs, target
         return inputs.detach().clone()
 
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.randomization_test(model, x, target=0, method=method)
     assert excinfo.value.fields.get("code") == "attribution_randomization_layer_invalid"
     assert "layers=" in str(excinfo.value)

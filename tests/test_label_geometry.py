@@ -40,7 +40,7 @@ DEMO_CONFIGS: list[tuple[str, type[nn.Module], dict[str, object]]] = [
     ("repeated_block_stack_collapsed", demos.RepeatedBlockStack, {"vis_call_depth": 1}),
     ("repeated_block_stack_expanded", demos.RepeatedBlockStack, {"vis_call_depth": 1000}),
     ("two_distinct_loops", demos.TwoDistinctLoops, {"vis_call_depth": 1}),
-    ("buffer_loop", demos.BufferRewriteLoops, {"show_buffer_layers": "always"}),
+    ("buffer_loop", demos.BufferRewriteLoops, {"show_buffers": "always"}),
     ("nested_loop", demos.NestedLoopBlock, {"vis_call_depth": 1}),
     ("parallel_fanout", demos.ParallelFanout, {"vis_call_depth": 1}),
     ("collapsed_block_recurrence", demos.CollapsedBlockRecurrence, {"vis_call_depth": 1000}),

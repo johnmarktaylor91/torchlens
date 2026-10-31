@@ -380,8 +380,8 @@ assert collisions == {
     # notebook deliberately exports its three real child modules (the
     # ``torchlens.bridge`` idiom: CardTree IR, the cards, the frontier query).
     "bridge": [
-        "brain_score", "captum", "depyf", "dialz", "gradcam", "hf",
-        "huggingface", "inseq", "lit", "mcp", "profiler", "pyreft",
+        "brain_score", "captum", "depyf", "dialz", "pytorch_grad_cam", "transformers",
+        "huggingface_hub", "inseq", "lit", "mcp", "profiler", "pyreft",
         "repeng", "rsatoolbox", "sae", "sae_lens", "shap",
         "steering_vectors", "treescope",
         # F21 tvscope B8: the per-site xarray/NeuroidAssembly adapter module.

@@ -58,7 +58,7 @@ _RAW_SUFFIX = "_raw"
 
 _UNAVAILABLE_REMEDY = (
     'load the model with attn_implementation="eager", or switch it to the registered '
-    '"torchlens" attention backend (tl.bridge.hf.register_attention(model)); both expand '
+    '"torchlens" attention backend (tl.bridge.transformers.register_attention(model)); both expand '
     "the grouped key/value tensor as a captured op"
 )
 

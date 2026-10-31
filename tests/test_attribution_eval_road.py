@@ -142,7 +142,7 @@ def test_road_refuses_bad_settings_and_the_remedy_runs(
     model: nn.Module = SmallCnn().eval() if image else nn.Linear(5, 3)
     x = torch.randn(1, 3, 6, 6) if image else torch.randn(2, 5)
     attribution = attribution_kit.input_x_grad(model, x, target=0)
-    with pytest.raises(attribution_kit.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution_kit.road_curve(model, x, target=0, attribution=attribution, **settings)
     assert excinfo.value.fields.get("code") == "attribution_eval_setting_invalid"
     scope = {"tl": tl, "model": model, "x": x, "attribution": attribution}

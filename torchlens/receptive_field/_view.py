@@ -655,7 +655,7 @@ class ReceptiveFieldView:
                 image=cast("Image.Image | None", image),
                 gradient=gradient,
                 retain_graph=retain_graph,
-                plane=cast("tuple[int, int] | None", plane),
+                slice=cast("tuple[int, int] | None", plane),
                 box_color=box_color,
                 alpha=alpha,
                 cmap=cmap,

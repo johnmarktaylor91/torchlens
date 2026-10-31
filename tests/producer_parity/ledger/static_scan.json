@@ -2554,7 +2554,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/bridge/gradcam.py",
+  "file": "torchlens/bridge/pytorch_grad_cam.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false

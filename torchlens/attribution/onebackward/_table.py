@@ -823,7 +823,7 @@ def load_read_table(path: str | Path) -> ReadTable:
         shape = filtered.get("shape")
         filtered["shape"] = tuple(shape) if shape is not None else None
         filtered["value"] = None
-        filtered["rescorable"] = False
+        filtered["is_rescorable"] = False
         try:
             row = ReadRow(**filtered)
         except (TypeError, ReadError) as exc:

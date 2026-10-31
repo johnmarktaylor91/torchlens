@@ -433,7 +433,7 @@ def _trace_text_capture(
         remedy = (
             "structure-only text capture needs a mask path that reads no values: load the "
             'model with attn_implementation="eager", or call '
-            "tl.bridge.hf.register_attention(model)"
+            "tl.bridge.transformers.register_attention(model)"
         )
         context = {k: v for k, v in exc.fields.items() if k not in ("code", "remedy")}
         raise ValueDependentBranchError(
@@ -495,7 +495,7 @@ def _resolve_tokenizer(model: Any) -> Any:
         from transformers import AutoTokenizer
     except ImportError as exc:
         raise ImportError(
-            "tl.bridge.hf.trace_text requires the `transformers` package. "
+            "tl.bridge.transformers.trace_text requires the `transformers` package. "
             "Install with `pip install transformers`."
         ) from exc
 
@@ -503,7 +503,7 @@ def _resolve_tokenizer(model: Any) -> Any:
     if name_or_path is None:
         raise ValueError(
             "Could not auto-resolve tokenizer for this model. "
-            "Pass `tokenizer=` explicitly to tl.bridge.hf.trace_text."
+            "Pass `tokenizer=` explicitly to tl.bridge.transformers.trace_text."
         )
     return AutoTokenizer.from_pretrained(name_or_path)
 

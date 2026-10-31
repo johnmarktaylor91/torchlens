@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import Any, cast
 
 from torchlens.autoroute.input import register
-from torchlens.bridge import hf as _hf
+from torchlens.bridge import transformers as _hf
 from torchlens.data_classes.trace import Trace
 
 
 @register(name="hf_text", priority=10)
 def hf_text(model: Any, payload: Any, **kwargs: Any) -> Trace | None:
-    """Route HuggingFace model + text input through bridge.hf.trace_text.
+    """Route HuggingFace model + text input through bridge.transformers.trace_text.
 
     Triggers when payload is a string, list of strings, or list of chat-message dicts,
     AND the model has a resolvable name_or_path resolving an AutoTokenizer.
@@ -32,7 +32,7 @@ def hf_text(model: Any, payload: Any, **kwargs: Any) -> Trace | None:
 
 @register(name="hf_multimodal", priority=20)
 def hf_multimodal(model: Any, payload: Any, **kwargs: Any) -> Trace | None:
-    """Route HuggingFace model + modality-key dict input through bridge.hf.trace_multimodal."""
+    """Route HuggingFace model + modality-key dict input through bridge.transformers.trace_multimodal."""
 
     if not _hf._is_hf_multimodal_input(payload):
         return None
@@ -43,7 +43,7 @@ def hf_multimodal(model: Any, payload: Any, **kwargs: Any) -> Trace | None:
 
 @register(name="hf_image", priority=30)
 def hf_image(model: Any, payload: Any, **kwargs: Any) -> Trace | None:
-    """Route PIL image input through bridge.hf.trace_image (four-tier preprocessing cascade)."""
+    """Route PIL image input through bridge.transformers.trace_image (four-tier preprocessing cascade)."""
 
     if not _hf._is_hf_image_input(payload):
         return None

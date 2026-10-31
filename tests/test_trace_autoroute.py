@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.bridge.hf as hf_bridge
+import torchlens.bridge.transformers as hf_bridge
 
 
 class _HFLikeTensorModel(nn.Module):
@@ -53,7 +53,7 @@ def test_string_input_hf_model_matches_trace_text() -> None:
     auto_log = tl.trace(
         model, "Hello world!", capture=tl.options.CaptureOptions(layers_to_save="none")
     )
-    direct_log = tl.bridge.hf.trace_text(
+    direct_log = tl.bridge.transformers.trace_text(
         model, "Hello world!", capture=tl.options.CaptureOptions(layers_to_save="none")
     )
 

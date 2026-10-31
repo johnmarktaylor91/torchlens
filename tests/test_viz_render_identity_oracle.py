@@ -357,7 +357,7 @@ def _cases() -> tuple[OracleCase, ...]:
                 # Domain styles moved to torchlens.experimental.node_styles
                 # (builtin node_mode keeps only 'default'/'profiling').
                 "node_spec_fn": _vision_style_spec,
-                "vis_theme": "dark",
+                "theme": "dark",
                 "node_overlay": "bytes",
                 "show_legend": True,
                 "node_label_fields": ["shape", "memory"],
@@ -378,7 +378,7 @@ def _cases() -> tuple[OracleCase, ...]:
                 "show_containers": "cluster",
                 "container_max_inline": 1,
                 "show_input_transform_summary": True,
-                "vis_theme": "paper",
+                "theme": "paper",
                 "code_panel": True,
             },
         ),
@@ -386,14 +386,14 @@ def _cases() -> tuple[OracleCase, ...]:
             "batchnorm_train_buffers",
             OracleBatchNorm,
             (2, 1, 6, 6),
-            {"show_buffer_layers": "always"},
+            {"show_buffers": "always"},
             train=True,
         ),
         OracleCase(
             "batchnorm_eval_buffers",
             OracleBatchNorm,
             (2, 1, 6, 6),
-            {"show_buffer_layers": "meaningful"},
+            {"show_buffers": "meaningful"},
         ),
         OracleCase(
             "repeat_fold_none_callback",
@@ -843,9 +843,9 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
         kwargs = dict(case.draw_kwargs)
         kwargs.update(
             {
-                "vis_outpath": str(tmp_path / case.name),
+                "path": str(tmp_path / case.name),
                 "vis_save_only": True,
-                "vis_fileformat": "svg",
+                "file_format": "svg",
                 "vis_renderer": "graphviz",
             }
         )

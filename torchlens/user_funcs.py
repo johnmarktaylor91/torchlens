@@ -132,7 +132,7 @@ from .backends.torch.bound_root import (
     _reject_non_module_ladder_root,
     is_bound_method_of_module,
 )
-from .bridge import hf as _hf_bridge
+from .bridge import transformers as _hf_bridge
 from .capture._episode_failed import attach_failed_episode_ledger
 from .capture._episode_ledger import (
     attach_episode_header,

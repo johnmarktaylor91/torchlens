@@ -308,7 +308,7 @@ def test_dla_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
     else:
         claim = _dla(model)
     extra = {"target": 0} if kind == "target_given" else {}
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, IDS, claim=claim, k=1, **extra)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
     fixed = eval(
@@ -334,7 +334,7 @@ def test_dla_a_row_without_a_site_refuses_and_the_remedy_runs() -> None:
         positions=claim.positions,
         identity_receipt=claim.identity_receipt,
     )
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, IDS, claim=broken, k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_unsupported"
     assert "blocks.1.proj" in str(excinfo.value)
@@ -349,7 +349,7 @@ def test_dla_k_larger_than_the_rows_refuses_and_the_remedy_runs() -> None:
 
     model = _lm()
     claim = _dla(model)
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, IDS, claim=claim, k=9)
     assert excinfo.value.fields.get("code") == "attribution_eval_setting_invalid"
     scope = {"tl": tl, "torchlens": torchlens, "model": model, "x": IDS, "claim": claim}
@@ -499,7 +499,7 @@ def test_read_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
         "not_a_seed": 1,
         "other_inputs": _seed(),
     }[kind]
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, X, claim=table, target=target, k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
     fixed = eval(
@@ -528,7 +528,7 @@ def test_read_unsupported_tables_refuse_and_the_remedy_runs(kind: str) -> None:
         claim = _read(model, target=[_seed(), attribution.seed("output_1", index=(1, 0))])
     else:
         claim = _read(model, method="grad")
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, X, claim=claim, target=_seed(), k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_unsupported"
     if kind == "edge_rows":

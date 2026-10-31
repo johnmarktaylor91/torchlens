@@ -2257,7 +2257,7 @@ shim owed*
   `pyreft_site_invalid`, and a mask that does not cover the other axes refuses
   `pyreft_positions_invalid`; a label is checked at `do()`. `edit` is the float64 `affine_source`.
 
-**torchlens.bridge.huggingface.from_hub(repo_id, *, path_in_repo, revision, token, api)** — *unstable — no deprecation shim owed*
+**torchlens.bridge.huggingface_hub.from_hub(repo_id, *, path_in_repo, revision, token, api)** — *unstable — no deprecation shim owed*
 : Downloads the gzipped `.tlspec` tar that `push_to_hub` uploads, checks
   every tar member (no links, absolute or parent-escaping names, one
   top-level bundle), and loads it eagerly onto the CPU through `tl.load`'s default-deny
@@ -2265,7 +2265,7 @@ shim owed*
   a pickle (`hub_push_artifact_unsupported`); its default `path_in_repo` is
   `torchlens_artifact.tar.gz`.
 
-**call_kwargs (torchlens.bridge.gradcam.cam)** — *unstable — no deprecation shim owed*
+**call_kwargs (torchlens.bridge.pytorch_grad_cam.cam)** — *unstable — no deprecation shim owed*
 : Mapping forwarded unchanged to the pytorch-grad-cam call (`aug_smooth`,
   `eigen_smooth`); an option given both here and as a keyword refuses
   `bridge_gradcam_call_option_conflict`.
@@ -2669,7 +2669,7 @@ deprecation shim owed*
   the forward when no custom output detector is registered, and after the
   capture when registered custom detectors all declined the style.
 
-**tl.bridge.hf.register_attention(model=None)** — *unstable — no deprecation shim owed*
+**tl.bridge.transformers.register_attention(model=None)** — *unstable — no deprecation shim owed*
 : Registers TorchLens as a Hugging Face attention backend: one call puts a
   `"torchlens"` attention function in transformers' `AttentionInterface`
   AND its matching mask function in `AttentionMaskInterface` (the boolean
@@ -2683,7 +2683,7 @@ deprecation shim owed*
   backend materializes the full `(batch, heads, q_len, kv_len)` probability
   matrix in every attention call, unlike fused SDPA or flash kernels.
 
-**tl.bridge.hf.record_attention(model, *, check_sdpa=False)** — *unstable — no deprecation shim owed*
+**tl.bridge.transformers.record_attention(model, *, check_sdpa=False)** — *unstable — no deprecation shim owed*
 : Context manager yielding an `AttentionRecording`: every attention call of
   a model on the `"torchlens"` backend records its per-head probabilities,
   keyed by the attention module's qualified name, without a TorchLens trace.
@@ -2698,7 +2698,7 @@ deprecation shim owed*
   a Llama-2-7B shape (32 layers, 32 heads) at 4096 tokens in bfloat16, 1 GiB
   per layer and 32 GiB per sequence.
 
-**AttentionRecording / AttentionCall (`tl.bridge.hf`)** — *unstable — no deprecation shim owed*
+**AttentionRecording / AttentionCall (`tl.bridge.transformers`)** — *unstable — no deprecation shim owed*
 : `AttentionRecording` is a read-only mapping from attention-module name to
   probabilities `(batch, heads, q_len, kv_len)`; `recording[name]` serves a
   module called once and refuses `hf_attention_multiple_calls` otherwise,

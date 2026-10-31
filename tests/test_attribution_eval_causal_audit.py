@@ -272,7 +272,7 @@ def test_unsupported_claims_refuse_and_the_remedy_runs(kind: str) -> None:
             if kind == "tensor"
             else attribution.saliency(model, x, target=0)
         )
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, x, claim=claim, target=0, k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_unsupported"
     fixed = eval(_remedy(str(excinfo.value)), {"tl": tl, "model": model, "x": x})  # noqa: S307
@@ -288,7 +288,7 @@ def test_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
         model, x[:1] if kind == "shape" else x, target=0, layer="fc1"
     )
     target = 0 if kind == "shape" else 2
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, x, claim=claim, target=target, k=1)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
     fixed = eval(_remedy(str(excinfo.value)), {"tl": tl, "model": model, "x": x})  # noqa: S307
@@ -313,7 +313,7 @@ def test_bad_settings_refuse_and_the_remedy_runs(settings: dict[str, Any]) -> No
     model, x = _linear_case()
     claim = attribution.layer_attribution(model, x, target=0, layer="fc1")
     call = {"k": 1, **settings}
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, x, claim=claim, target=0, **call)
     assert excinfo.value.fields.get("code") == "attribution_eval_setting_invalid"
     scope = {"tl": tl, "model": model, "x": x, "claim": claim}

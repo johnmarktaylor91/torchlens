@@ -6,6 +6,7 @@ import pytest
 import torch
 from torch import Tensor, nn
 
+import torchlens
 import torchlens.attribution as attribution
 
 
@@ -417,7 +418,7 @@ def test_integrated_gradients_rejects_mismatched_baseline_structure() -> None:
     first = torch.tensor([[0.5, -1.0]])
     second = torch.tensor([[2.0, 3.0]])
 
-    with pytest.raises(attribution.AttributionError, match="baseline must mirror"):
+    with pytest.raises(torchlens.errors.AttributionError, match="baseline must mirror"):
         attribution.integrated_gradients(
             model,
             (first, second),

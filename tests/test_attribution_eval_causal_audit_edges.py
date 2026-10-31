@@ -365,7 +365,7 @@ def _scope(model: Any, claim: Any, **names: Any) -> dict[str, Any]:
 
 
 def _misaligned_refusal_runs_its_remedy(model: Any, table: Any, call: dict[str, Any]) -> None:
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, CLEAN, claim=table, k=1, **call)
     assert excinfo.value.fields.get("code") == "attribution_audit_claim_misaligned"
     fixed = eval(_remedy(str(excinfo.value)), _scope(model, table))  # noqa: S307
@@ -448,7 +448,7 @@ def test_edge_unsupported_tables_and_settings_refuse_and_the_remedy_runs(kind: s
         claim = attribution.read(tl.trace(model, CLEAN), target=target, frozen=None)
         call["target"] = target
         code = "attribution_eval_setting_invalid"
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, CLEAN, claim=claim, k=1, **call)
     assert excinfo.value.fields.get("code") == code
     scope = _scope(model, claim, target=call.get("target"))
@@ -469,7 +469,7 @@ def test_edge_bad_settings_refuse_and_the_remedy_runs(kind: str) -> None:
         call["edges"] = ["input->m7"]
     else:
         call["k"] = 9
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.causal_audit(model, CLEAN, claim=table, **call)
     assert excinfo.value.fields.get("code") == "attribution_eval_setting_invalid"
     fixed = eval(_remedy(str(excinfo.value)), _scope(model, table))  # noqa: S307

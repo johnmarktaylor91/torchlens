@@ -303,7 +303,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             self,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
-            path=path,
+            vis_outpath=path,
             vis_graph_overrides=vis_graph_overrides,
             module=module,
             node_mode=node_mode,
@@ -318,12 +318,12 @@ class TraceVisualizationMixin(_TraceMixinBase):
             vis_grad_edge_overrides=vis_grad_edge_overrides,
             vis_module_overrides=vis_module_overrides,
             vis_save_only=vis_save_only,
-            file_format=file_format,
-            show_buffers=show_buffers,
+            vis_fileformat=file_format,
+            show_buffer_layers=show_buffers,
             direction=direction,
             vis_node_placement=vis_node_placement,
             vis_renderer=vis_renderer,
-            theme=theme,
+            vis_theme=theme,
             vis_intervention_mode=vis_intervention_mode,
             vis_show_cone=vis_show_cone,
             code_panel=code_panel,
@@ -657,17 +657,17 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         return _impl(
             self,
-            path=path,
+            vis_outpath=path,
             vis_graph_overrides=vis_graph_overrides,
             node_spec_fn=node_spec_fn,
             backward_node_spec_fn=backward_node_spec_fn,
             vis_edge_overrides=vis_edge_overrides,
             vis_save_only=vis_save_only,
-            file_format=file_format,
+            vis_fileformat=file_format,
             direction=vis_direction,
             vis_mode=vis_mode,
             intervening_cluster=intervening_cluster,
-            show_buffers=show_buffers,
+            show_buffer_layers=show_buffers,
             bwd=bwd,
             show_legend=show_legend,
         )
@@ -951,7 +951,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         str
             Serialized Dagua graph output or the rendered artifact path.
         """
-        from ..experimental.dagua import render_trace_with_dagua as _impl
+        from ..experimental.dagua._bridge import render_trace_with_dagua as _impl
 
         return cast(
             str,
@@ -1008,6 +1008,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
         TorchLensRenderAudit
             Audit of used and unused fields in the visualization bridge.
         """
-        from ..experimental.dagua import build_render_audit as _impl
+        from ..experimental.dagua._bridge import build_render_audit as _impl
 
         return _impl(self)

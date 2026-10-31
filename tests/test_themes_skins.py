@@ -216,6 +216,6 @@ def test_skins_compose_with_lenses(skin: str, tmp_path: Any) -> None:
     log = tl.trace(nn.Linear(4, 4), torch.randn(1, 4))
     try:
         resolution = lenses.resolve_lens(log, "overview", skin=skin)
-        assert resolution.draw_kwargs["vis_theme"] == skin
+        assert resolution.draw_kwargs["theme"] == skin
     finally:
         log.cleanup()
