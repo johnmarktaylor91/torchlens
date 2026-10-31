@@ -106,7 +106,7 @@ def mds_evolution(
         try:
             distances = activation_distance_matrix(activations, metric=metric)
             coords, _info = classical_mds(
-                distances, n_components=2, min_stimuli=min_stimuli, input_kind="distances"
+                distances, num_components=2, min_stimuli=min_stimuli, input_kind="distances"
             )
         except ValueError as exc:
             raise ValueError(f"mds_evolution failed for site {key!r}: {exc}") from exc

@@ -40,7 +40,7 @@ def show(
     direction: ReceptiveFieldDirection = ReceptiveFieldDirection.RECEPTIVE,
     target: Any | None = None,
     image: Image.Image | None = None,
-    gradient: bool = False,
+    grad: bool = False,
     retain_graph: bool = False,
     plane: tuple[int, int] | None = None,
     box_color: str = "#FF3B30",
@@ -54,12 +54,12 @@ def show(
     view:
         Receptive-field view for the target operation.
     unit:
-        Complete output-element index, required when ``gradient`` is true.
+        Complete output-element index, required when ``grad`` is true.
     input_op:
         Input operation handle or exact IO role.
     image:
         Optional base image overriding the captured raw stimulus.
-    gradient:
+    grad:
         Whether to alpha-blend the empirical gradient magnitude.
     retain_graph:
         Whether the empirical gradient probe retains autograd buffers, so a
@@ -90,13 +90,11 @@ def show(
         raise ReceptiveFieldConfigurationError("alpha must be between 0 and 1.")
     selected = target if direction is ReceptiveFieldDirection.PROJECTIVE else input_op
     descriptor = _select_descriptor(view, selected)
-    if gradient and unit is None:
-        raise ReceptiveFieldError("gradient=True requires an explicit complete output unit.")
+    if grad and unit is None:
+        raise ReceptiveFieldError("grad=True requires an explicit complete output unit.")
     box = None if unit is None else _view_box(view, unit, descriptor, selected, direction)
     gradient_result = (
-        _view_gradient(view, unit, selected, direction, retain_graph=retain_graph)
-        if gradient
-        else None
+        _view_gradient(view, unit, selected, direction, retain_graph=retain_graph) if grad else None
     )
     spatial_axes = _spatial_axes(descriptor, gradient_result)
     rendered_axes = _rendered_axes(spatial_axes, plane)
@@ -168,7 +166,7 @@ def node_spec(
     target: Any | None = None,
     cone: bool = True,
     overlay: bool = True,
-    gradient: bool = False,
+    grad: bool = False,
     dim_others: bool = True,
     box_color: str = "#FF3B30",
     alpha: float = 0.6,
@@ -195,7 +193,7 @@ def node_spec(
         If more than one model input reaches ``op`` and ``input`` is omitted.
     """
 
-    _ = overlay, gradient, box_color, alpha, cmap
+    _ = overlay, grad, box_color, alpha, cmap
     resolved_direction = ReceptiveFieldDirection(direction)
     selected = target if resolved_direction is ReceptiveFieldDirection.PROJECTIVE else input_op
     descriptor = _descriptor_for_op(op, selected, resolved_direction)
@@ -250,10 +248,10 @@ def _view_box(
     """Project a complete output unit to ``at()`` windowed coordinates."""
 
     if descriptor.axes is None:
-        raise ReceptiveFieldError("Per-unit geometry is unavailable; use .gradient() instead.")
+        raise ReceptiveFieldError("Per-unit geometry is unavailable; use .probe_grad() instead.")
     windowed_axes = tuple(axis.output_axis for axis in descriptor.axes if axis.kind == "windowed")
     if any(axis is None for axis in windowed_axes):
-        raise ReceptiveFieldError("The derived layout is ambiguous; use .gradient() instead.")
+        raise ReceptiveFieldError("The derived layout is ambiguous; use .probe_grad() instead.")
     # ``at()`` consumes windowed coordinates in ascending output-axis order.
     coordinates = tuple(
         unit[cast(int, axis)] for axis in sorted(cast("tuple[int, ...]", windowed_axes))
@@ -284,9 +282,9 @@ def _view_gradient(
 
     assert unit is not None
     if direction is ReceptiveFieldDirection.RECEPTIVE:
-        result = view.gradient(tuple(unit), input_op=selected, retain_graph=retain_graph)
+        result = view.probe_grad(tuple(unit), input_op=selected, retain_graph=retain_graph)
     else:
-        result = view.gradient(
+        result = view.probe_grad(
             tuple(unit), direction=direction, target=selected, retain_graph=retain_graph
         )
     if isinstance(result, Mapping):

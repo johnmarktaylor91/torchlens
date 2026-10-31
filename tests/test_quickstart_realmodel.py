@@ -41,7 +41,7 @@ class TestResnet18Rungs:
 
         torch.manual_seed(0)
         gold = tl.trace(resnet18_eval, torch.rand(1, 3, 224, 224))
-        declared = tl.trace(resnet18_eval, input_size=(1, 3, 224, 224))
+        declared = tl.trace(resnet18_eval, input_shape=(1, 3, 224, 224))
         inferred = tl.trace(resnet18_eval)
         assert len(gold) == len(declared) == len(inferred)
         assert trace_input_provenance(gold) is None
@@ -54,8 +54,8 @@ class TestResnet18Rungs:
         """Memo D8: the pinned surfaces leave the model bit-identical."""
 
         hash_before = state_dict_hash(resnet18_eval)
-        result = render(resnet18_eval, input_size=(1, 3, 224, 224), file=str(tmp_path / "r18.svg"))
-        tl.summary(resnet18_eval, input_size=(1, 3, 224, 224))
+        result = render(resnet18_eval, input_shape=(1, 3, 224, 224), file=str(tmp_path / "r18.svg"))
+        tl.summary(resnet18_eval, input_shape=(1, 3, 224, 224))
         assert state_dict_hash(resnet18_eval) == hash_before
         assert result.receipt.state_verified is True
         assert result.num_ops == 151  # the eval-mode regression fixture count
@@ -103,7 +103,7 @@ class TestGpt2Rungs:
         from torchlens.errors import TorchLensError
 
         with pytest.raises(TorchLensError) as excinfo:
-            tl.trace(gpt2, "The quick brown fox", input_size=(1, 16))
+            tl.trace(gpt2, "The quick brown fox", input_shape=(1, 16))
         assert excinfo.value.fields["code"] == "input_rung_conflict"
 
     @pytest.mark.slow
@@ -114,7 +114,7 @@ class TestGpt2Rungs:
         the bundle round trip field-for-field; the first raw read AFTER the
         round trip still warns once (the handoff case)."""
 
-        log = tl.trace(gpt2, input_size=(1, 16), save=tl.func("linear"))
+        log = tl.trace(gpt2, input_shape=(1, 16), save=tl.func("linear"))
         provenance = trace_input_provenance(log)
         assert provenance is not None and provenance.origin == "declared"
         recipe = provenance.recipes[0]
@@ -168,15 +168,15 @@ class TestClipBoundaryRider:
         assert result.found is False
         assert result.reason == "multi_input_required"
         assert "NoneType" in result.message
-        assert "input_size" in result.message
+        assert "input_shape" in result.message
 
     @pytest.mark.slow
     def test_mapping_form_reaches_clip_with_correct_recipes(self, clip: nn.Module) -> None:
-        """Keyword-mapping input_size= succeeds with per-input dtype recipes."""
+        """Keyword-mapping input_shape= succeeds with per-input dtype recipes."""
 
         log = tl.trace(
             clip,
-            input_size={
+            input_shape={
                 "input_ids": (1, 16),
                 "pixel_values": (1, 3, 224, 224),
                 "attention_mask": (1, 16),

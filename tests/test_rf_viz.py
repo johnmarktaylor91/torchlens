@@ -55,7 +55,7 @@ def _descriptor(
         input_op_label="input_1_raw",
         input_shape=shape,
         axes=axes,
-        layout=GridLayout(
+        axis_roles=GridLayout(
             tuple(axis.kind for axis in axes),
             tuple(range(2, rank + 2)),
             "derived",
@@ -75,7 +75,7 @@ def _box(descriptor: ReceptiveField) -> ReceptiveFieldBox:
     return ReceptiveFieldBox(
         op_label="target",
         io_role="input_1",
-        unit=(0, 0, *(3 for _ in descriptor.layout.windowed_axes)),
+        unit=(0, 0, *(3 for _ in descriptor.axis_roles.windowed_axes)),
         axes=tuple(
             ReceptiveFieldBoxAxis(
                 input_axis=index,
@@ -118,7 +118,7 @@ class _View:
         _ = unit, input_op
         return self._box
 
-    def gradient(
+    def probe_grad(
         self, unit: Sequence[int], *, input_op: Any | None = None, retain_graph: bool = False
     ) -> GradReceptiveField:
         """Return the configured empirical result."""
@@ -170,9 +170,7 @@ def test_show_2d_overlay_with_gradient_and_unknown_honesty() -> None:
 
     descriptor = _descriptor(2)
     base = Image.new("RGB", (80, 60), "white")
-    rendered = show(
-        _View(descriptor, _gradient(descriptor)), (0, 0, 3, 3), image=base, gradient=True
-    )
+    rendered = show(_View(descriptor, _gradient(descriptor)), (0, 0, 3, 3), image=base, grad=True)
     assert rendered.tobytes() != base.tobytes()
 
     unknown = _descriptor(2, ReceptiveFieldStatus.UNKNOWN)
@@ -233,11 +231,11 @@ def test_node_spec_draws_ancestor_cone_with_tooltips(tmp_path: Any) -> None:
 
 
 def test_show_gradient_retain_graph_supports_repeated_probes() -> None:
-    """R81: show(gradient=True) must plumb retain_graph to the empirical probe.
+    """R81: show(grad=True) must plumb retain_graph to the empirical probe.
 
     Without the kwarg the internal gradient call freed the captured autograd
     graph, so the canonical doc sequence -- gradient(retain_graph=True) then
-    repeated show(gradient=True) -- raised a raw RuntimeError ("backward
+    repeated show(grad=True) -- raised a raw RuntimeError ("backward
     through the graph a second time") on the second render.
     """
 
@@ -259,10 +257,10 @@ def test_show_gradient_retain_graph_supports_repeated_probes() -> None:
     )
     op = armed["relu_1_2"]
     unit = op.receptive_field.center_unit(batch_index=0)
-    op.receptive_field.gradient(unit, retain_graph=True)
-    first = op.receptive_field.show(unit, gradient=True, retain_graph=True)
-    second = op.receptive_field.show(unit, gradient=True, retain_graph=True)
+    op.receptive_field.probe_grad(unit, retain_graph=True)
+    first = op.receptive_field.show(unit, grad=True, retain_graph=True)
+    second = op.receptive_field.show(unit, grad=True, retain_graph=True)
     assert isinstance(first, Image.Image)
     assert isinstance(second, Image.Image)
     # A final non-retaining probe consumes the graph and still succeeds.
-    op.receptive_field.gradient(unit, retain_graph=False)
+    op.receptive_field.probe_grad(unit, retain_graph=False)

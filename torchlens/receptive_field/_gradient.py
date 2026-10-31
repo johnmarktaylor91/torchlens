@@ -714,7 +714,7 @@ def _build_result(
         support_mask=support,
         support_ranges=_support_ranges(support),
         spatial_support_mask=_spatial_support(
-            support, None if descriptor is None else descriptor.layout
+            support, None if descriptor is None else descriptor.axis_roles
         ),
         batch_support=batch_support,
         cross_batch_influence=cross_batch,

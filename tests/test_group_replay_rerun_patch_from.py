@@ -70,7 +70,7 @@ def _inputs() -> tuple[torch.Tensor, torch.Tensor]:
 def _rerun_patch(model: nn.Module, donor: tl.Trace, x: torch.Tensor, func: str) -> tl.Trace:
     base = tl.trace(model, x, capture=READY)
     fork = base.fork()
-    fork.do({tl.func(func): tl.patch_from(donor)}, model=model, x=x, intervention=RERUN)
+    fork.do({tl.func(func): tl.patch_from(donor)}, model=model, inputs=x, intervention=RERUN)
     return fork
 
 

@@ -1329,7 +1329,7 @@ def test_repr_source_unavailable():
         code_context=None,
         source_context="None",
         code_context_labeled="",
-        num_context_lines=0,
+        source_context_lines=0,
     )
     r = repr(loc)
     assert "source unavailable" in r

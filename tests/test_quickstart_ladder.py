@@ -47,7 +47,7 @@ class TestRungLaw:
 
     @pytest.mark.smoke
     def test_mixed_rung_refuses(self) -> None:
-        """A real input plus input_size= is a typed conflict, never a guess."""
+        """A real input plus input_shape= is a typed conflict, never a guess."""
 
         with pytest.raises(Exception) as excinfo:
             resolve_rung(torch.randn(1, 3), None, (1, 3))
@@ -60,9 +60,9 @@ class TestRungLaw:
         x = torch.randn(1, 3, 8, 8)
         messages = []
         for verb in (
-            lambda: tl.trace(model, x, input_size=(1, 3, 8, 8)),
-            lambda: tl.summary(model, x, input_size=(1, 3, 8, 8)),
-            lambda: _render(model, x, input_size=(1, 3, 8, 8)),
+            lambda: tl.trace(model, x, input_shape=(1, 3, 8, 8)),
+            lambda: tl.summary(model, x, input_shape=(1, 3, 8, 8)),
+            lambda: _render(model, x, input_shape=(1, 3, 8, 8)),
         ):
             with pytest.raises(Exception) as excinfo:
                 verb()
@@ -161,7 +161,7 @@ class TestSynthesis:
 
         model = _cnn()
         with pytest.raises(Exception) as excinfo:
-            tl.trace(model, input_size=(1, 5, 8, 8))  # wrong channel count
+            tl.trace(model, input_shape=(1, 5, 8, 8))  # wrong channel count
         # The refusal must NOT be an inference teach: the declared rung owns
         # its failure (any capture-side error is acceptable; the inference
         # code path is not).
@@ -193,9 +193,9 @@ class TestProvenanceRecord:
         assert is_gold(log)
 
     def test_declared_trace_carries_record(self) -> None:
-        """input_size= traces persist the disclosure on the KEEP field."""
+        """input_shape= traces persist the disclosure on the KEEP field."""
 
-        log = tl.trace(_cnn(), input_size=(1, 3, 8, 8))
+        log = tl.trace(_cnn(), input_shape=(1, 3, 8, 8))
         provenance = trace_input_provenance(log)
         assert provenance is not None
         assert provenance.origin == "declared"
@@ -208,7 +208,7 @@ class TestCapabilityGate:
     def test_require_gold_refuses_on_synthesized(self) -> None:
         """Derived-semantics claims hard-refuse with the real-input teach."""
 
-        log = tl.trace(_cnn(), input_size=(1, 3, 8, 8))
+        log = tl.trace(_cnn(), input_shape=(1, 3, 8, 8))
         with pytest.raises(Exception) as excinfo:
             require_gold(log, "decoded labels")
         assert excinfo.value.fields["code"] == "nongold_semantics_unavailable"
@@ -218,7 +218,7 @@ class TestCapabilityGate:
     def test_first_raw_read_warns_once_per_trace(self) -> None:
         """Layer.out warns exactly once on a synthesized trace, never on gold."""
 
-        synthesized = tl.trace(_cnn(), input_size=(1, 3, 8, 8))
+        synthesized = tl.trace(_cnn(), input_shape=(1, 3, 8, 8))
         gold = tl.trace(_cnn(), torch.randn(1, 3, 8, 8))
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
@@ -235,7 +235,7 @@ class TestCapabilityGate:
     def test_internal_readers_pass_the_ack(self) -> None:
         """Reads inside internal_read() never trip the user warning."""
 
-        synthesized = tl.trace(_cnn(), input_size=(1, 3, 8, 8))
+        synthesized = tl.trace(_cnn(), input_shape=(1, 3, 8, 8))
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             with internal_read():
@@ -250,7 +250,7 @@ class TestTypedRefusalProvocation:
         """Synthesis/inference is torch-only; other backends need a real input."""
 
         with pytest.raises(Exception) as excinfo:
-            tl.trace(_cnn(), input_size=(1, 3, 8, 8), backend="tf")
+            tl.trace(_cnn(), input_shape=(1, 3, 8, 8), backend="tf")
         assert excinfo.value.fields["code"] == "input_ladder_backend_unsupported"
 
     @pytest.mark.smoke

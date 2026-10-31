@@ -121,7 +121,7 @@ class FuncCallLocation:
         code_context: list[str] | None = _SENTINEL,
         source_context: str = _SENTINEL,
         code_context_labeled: str = _SENTINEL,
-        num_context_lines: int = _SENTINEL,
+        source_context_lines: int = _SENTINEL,
         code_firstlineno: int = _SENTINEL,
         func_qualname: str | None = None,
         col_offset: int | None = None,
@@ -153,7 +153,7 @@ class FuncCallLocation:
             Preloaded source context block for direct construction paths.
         code_context_labeled:
             Preloaded labeled source context for direct construction paths.
-        num_context_lines:
+        source_context_lines:
             Number of context lines present in preloaded source context.
         code_firstlineno:
             First source line of the enclosing function.
@@ -195,7 +195,9 @@ class FuncCallLocation:
             self._code_context_labeled = (
                 code_context_labeled if code_context_labeled is not _SENTINEL else ""
             )
-            self._num_context_lines = num_context_lines if num_context_lines is not _SENTINEL else 0
+            self._num_context_lines = (
+                source_context_lines if source_context_lines is not _SENTINEL else 0
+            )
             self._num_context_lines_requested = 0
             self._frame_func_obj = None
             self._source_loaded = True

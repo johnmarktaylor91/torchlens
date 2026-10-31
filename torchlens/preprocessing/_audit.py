@@ -527,7 +527,7 @@ def _strict_refuse(report: PreprocessingComparison) -> None:
             "strict preprocessing audit found mismatched fields -- " + "; ".join(rows),
             code="preprocessing_audit_mismatch",
             remedy=(
-                "apply the authority's own transform (resolution.transform) or "
+                "apply the authority's own transform (resolution.input_transform) or "
                 "correct the mismatched fields; rerun with strict=False to get "
                 "the full report without raising"
             ),

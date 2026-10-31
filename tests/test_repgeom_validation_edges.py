@@ -77,7 +77,7 @@ def test_classical_mds_validates_option_values_and_stimulus_counts() -> None:
 
     good = _distances(8)
 
-    with pytest.raises(ValueError, match="n_components"):
+    with pytest.raises(ValueError, match="num_components"):
         tl.repgeom.classical_mds(good, 0, input_kind="distances")
     with pytest.raises(ValueError, match="min_stimuli"):
         tl.repgeom.classical_mds(good, min_stimuli=2, input_kind="distances")

@@ -1800,7 +1800,7 @@ class Layer(_SelectionOperand):
         input_transform: Any,
         *,
         model: Any = None,
-        x: Any = None,
+        inputs: Any = None,
         intervention: Any = None,
     ) -> "Trace":
         """Apply an intervention to this layer through the owning Trace.
@@ -1811,7 +1811,7 @@ class Layer(_SelectionOperand):
             Transform or hook to apply to this layer's output.
         model:
             Model required when ``intervention.engine="rerun"``.
-        x:
+        inputs:
             Input required when ``intervention.engine="rerun"``.
         intervention:
             Grouped intervention options (``InterventionOptions``).
@@ -1826,7 +1826,7 @@ class Layer(_SelectionOperand):
             self._intervention_site(),
             input_transform,
             model=model,
-            x=x,
+            inputs=inputs,
             intervention=intervention,
         )
 

@@ -267,20 +267,20 @@ class GqaInfo:
     ----------
     num_query_heads:
         Number of query heads.
-    n_kv_heads:
+    num_key_value_heads:
         Number of key/value heads (groups); shared storage is never
         presented as independent heads.
     """
 
     num_query_heads: int
-    n_kv_heads: int
+    num_key_value_heads: int
 
     def __post_init__(self) -> None:
         """Validate the grouping arithmetic."""
 
         _require(
-            self.n_kv_heads > 0 and self.num_query_heads % self.n_kv_heads == 0,
-            f"GQA grouping {self.num_query_heads} query heads over {self.n_kv_heads} kv heads "
+            self.num_key_value_heads > 0 and self.num_query_heads % self.num_key_value_heads == 0,
+            f"GQA grouping {self.num_query_heads} query heads over {self.num_key_value_heads} kv heads "
             "does not divide evenly.",
             "pass the model config's real num_attention_heads / num_key_value_heads",
         )
@@ -288,7 +288,7 @@ class GqaInfo:
     def group(self, query_head: int) -> int:
         """Return the KV group index a query head reads from."""
 
-        return query_head // (self.num_query_heads // self.n_kv_heads)
+        return query_head // (self.num_query_heads // self.num_key_value_heads)
 
     def header(self, query_head: int) -> str:
         """Return the rendered KV-group header line for one query head."""
@@ -298,7 +298,7 @@ class GqaInfo:
     def query_heads(self, group: int) -> tuple[int, ...]:
         """Return the query heads that read KV group ``group`` (zero-based)."""
 
-        per_group = self.num_query_heads // self.n_kv_heads
+        per_group = self.num_query_heads // self.num_key_value_heads
         return tuple(range(group * per_group, (group + 1) * per_group))
 
     def group_header(self, group: int) -> str:
@@ -309,7 +309,7 @@ class GqaInfo:
         members = self.query_heads(group)
         return KV_GROUP_WORDING.format(
             group=group + 1,
-            n_groups=self.n_kv_heads,
+            n_groups=self.num_key_value_heads,
             first=members[0],
             last=members[-1],
         )
@@ -484,7 +484,7 @@ class AttentionView:
             episode=self.episode,
         )
 
-    def crop_to(self, queries: slice, keys: slice) -> AttentionView:
+    def crop_to(self, query_slice: slice, keys: slice) -> AttentionView:
         """Return a cropped view with an exact omitted-mass disclosure.
 
         Cropping NEVER renormalizes (tviz memo D5): the omitted key count
@@ -493,7 +493,7 @@ class AttentionView:
 
         Parameters
         ----------
-        queries:
+        query_slice:
             Destination (row) slice to keep.
         keys:
             Source (column) slice to keep.
@@ -506,7 +506,7 @@ class AttentionView:
 
         n_dst = self.pattern.shape[1]
         n_src = self.pattern.shape[2]
-        q_start, q_stop, q_step = queries.indices(n_dst)
+        q_start, q_stop, q_step = query_slice.indices(n_dst)
         k_start, k_stop, k_step = keys.indices(n_src)
         _require(
             q_step == 1 and k_step == 1,
@@ -666,7 +666,7 @@ class PredictionTrajectory:
 
     Parameters
     ----------
-    layers:
+    module_addresses:
         Layer labels (module addresses) in execution order.
     provenance:
         Per-layer provenance wording (``"projected through final norm/head"``
@@ -690,7 +690,7 @@ class PredictionTrajectory:
         Recorded rank tie convention.
     """
 
-    layers: tuple[str, ...]
+    module_addresses: tuple[str, ...]
     provenance: tuple[str, ...]
     position: int
     top_tokens: tuple[tuple[str, ...], ...]
@@ -705,7 +705,7 @@ class PredictionTrajectory:
     def __post_init__(self) -> None:
         """Validate per-layer alignment."""
 
-        n_layers = len(self.layers)
+        n_layers = len(self.module_addresses)
         for name in ("provenance", "top_tokens", "top_probs"):
             _require(
                 len(getattr(self, name)) == n_layers,
@@ -927,7 +927,7 @@ class CausalReceipt:
 
     Parameters
     ----------
-    layer:
+    module_address:
         Layer label the effects attach to (coordinate join, never array
         position).
     heads:
@@ -977,7 +977,7 @@ class CausalReceipt:
         (``"unpatched corrupted run"`` for a patch-grid receipt).
     """
 
-    layer: str
+    module_address: str
     heads: tuple[int, ...]
     effects: tuple[float | None, ...]
     metric: str
@@ -1021,9 +1021,9 @@ class CausalReceipt:
         _validate_receipt_controls(self)
         if self.kv_groups is not None:
             _require(
-                all(0 <= head < self.kv_groups.n_kv_heads for head in self.heads),
+                all(0 <= head < self.kv_groups.num_key_value_heads for head in self.heads),
                 f"kv-group receipt names groups {self.heads} but the model has "
-                f"{self.kv_groups.n_kv_heads} kv groups.",
+                f"{self.kv_groups.num_key_value_heads} kv groups.",
                 "build kv-group receipts from a key/value-site grid, whose head axis "
                 "counts kv groups",
             )

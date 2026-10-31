@@ -1,6 +1,6 @@
 """Reference solution: a documented refusal.
 
-Docs used: docs/quickstart.md (The three rungs: mixing a real input and input_size= refuses
+Docs used: docs/quickstart.md (The three rungs: mixing a real input and input_shape= refuses
 input_rung_conflict), docs/reference/error_refusal_contract.md (branch on exc.fields["code"];
 every refusal carries exc.fields["remedy"]).
 """
@@ -12,7 +12,7 @@ from model import build_model, make_input
 import torchlens as tl
 
 try:
-    tl.trace(build_model(), make_input(), input_size=(4, 6))
+    tl.trace(build_model(), make_input(), input_shape=(4, 6))
 except tl.errors.TorchLensError as exc:
     record = {
         "code": exc.fields["code"],

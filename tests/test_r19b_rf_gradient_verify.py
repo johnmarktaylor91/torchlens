@@ -155,7 +155,9 @@ def test_cross_batch_influence_false_after_permute_receptive() -> None:
 
     x = torch.arange(12.0).reshape(2, 1, 2, 3).requires_grad_()
     trace = _backward_trace(_MoveBatch(), x)
-    result = trace.output_ops[0].receptive_field.gradient((0, 1, 0, 2), input_op=trace.input_ops[0])
+    result = trace.output_ops[0].receptive_field.probe_grad(
+        (0, 1, 0, 2), input_op=trace.input_ops[0]
+    )
     assert result.cross_batch_influence is False
 
 
@@ -164,7 +166,9 @@ def test_cross_batch_influence_false_after_permute_projective() -> None:
 
     x = torch.arange(12.0).reshape(2, 1, 2, 3).requires_grad_()
     trace = _backward_trace(_MoveBatch(), x)
-    result = trace.input_ops[0].projective_field.gradient((1, 0, 0, 2), target=trace.output_ops[0])
+    result = trace.input_ops[0].projective_field.probe_grad(
+        (1, 0, 0, 2), target=trace.output_ops[0]
+    )
     assert result.cross_batch_influence is False
 
 
@@ -194,7 +198,7 @@ def test_verify_projective_reports_sampled_far_target_unit() -> None:
     assert check.target_unit != check.source_unit
 
     # Independent cross-check: the sampled element really is the far support[0].
-    projective = log["conv2d_1_1:1"].projective_field.gradient(
+    projective = log["conv2d_1_1:1"].projective_field.probe_grad(
         (0, 0, 2, 2), target=log.output_ops[0]
     )
     support = torch.nonzero(projective.support_mask, as_tuple=False)

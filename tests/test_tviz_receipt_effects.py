@@ -112,7 +112,7 @@ def test_default_wording_says_what_a_patch_grid_does() -> None:
     assert _receipt(grid).intervention == (
         "clean activation of one head patched into the corrupted run"
     )
-    gqa = tviz.GqaInfo(num_query_heads=4, n_kv_heads=2)
+    gqa = tviz.GqaInfo(num_query_heads=4, num_key_value_heads=2)
     assert _receipt(grid, kv_groups=gqa).intervention == (
         "clean activation of one kv group patched into the corrupted run"
     )
@@ -144,7 +144,7 @@ def test_receipt_without_a_baseline_says_so() -> None:
     """A directly built receipt (no recorded baseline) names what its cells are."""
 
     receipt = tviz.CausalReceipt(
-        layer="blk.0.attn",
+        module_address="blk.0.attn",
         heads=(0,),
         effects=(1.0,),
         metric="m",
@@ -189,7 +189,7 @@ def test_footer_never_overlaps_matrix_ticks_or_colorbar_label(
     """The footer's window extent misses the axes, every tick label and the bar label."""
 
     figures = _capture_figure(monkeypatch)
-    gqa = tviz.GqaInfo(num_query_heads=8, n_kv_heads=4) if kv else None
+    gqa = tviz.GqaInfo(num_query_heads=8, num_key_value_heads=4) if kv else None
     n_heads = 4
     values = torch.linspace(-1.0, 1.0, n_rows * n_heads).reshape(n_rows, n_heads)
     grid = _grid(values, corrupted_metric=0.0)

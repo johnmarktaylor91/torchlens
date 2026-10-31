@@ -155,7 +155,7 @@
   `docs/reference/capture_outcomes.md` ("The queryable nonfinite record").
 - QUICKSTART INPUT LADDER (F17; every quickstart spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `tl.trace`/`tl.summary`/the render facade share ONE input resolver --
-  a real input (gold rung) XOR `input_size=` (declared shape, seed-0 local synthesis,
+  a real input (gold rung) XOR `input_shape=` (declared shape, seed-0 local synthesis,
   fail-closed static dtype facts with `torchlens.types.InputSpec` as the override;
   flat tuple / sequence of tuples / forward-keyword-to-shape mapping, which reaches
   multi-input models like CLIP today) XOR nothing (inference verifies once and the
@@ -342,7 +342,7 @@
   `tl.sweep(include_baseline=True)` mints the PRISTINE baseline member (the
   legacy default discloses `sweep_baseline_absent` at construction).
   `torchlens.experiment.sweep_sites(baseline, candidates=, edit=, metric=,
-  retain=, engine="live_hook", model=, x=)` is the ONE candidate engine
+  retain=, engine="live_hook", model=, inputs=)` is the ONE candidate engine
   (serial, extract-before-cleanup, rolling `k` retention, byte
   preflight via `retention_projection_over_budget`); candidates execute in
   site-key coordinates and undeclared multi-site candidates (incl. the
@@ -751,7 +751,7 @@
   summary, slices, draw captions, exports, agent JSON, MCP). Measurement
   exports (chrome_trace/speedscope/flamegraph/memory_timeline) refuse
   `structure_only_measurements_unsupported`; `tl.summary(meta_model,
-  input_size=...)` is the rung-4 auto-selecting facade (bare summary with
+  input_shape=...)` is the rung-4 auto-selecting facade (bare summary with
   no input evidence refuses); `Trace.check_plan(plan)` is the audit-only
   nnsight-scan-parity checker (`executable=False` always). Raw text works
   structure-only (U38.1): the text bridge keeps the token ids' shape on meta
@@ -1100,7 +1100,7 @@
   `^` (full query x key square, masks/`is_causal` not discounted); the Params
   footer adds `size`, a `pruned:` raw/effective note, and the optimizer
   state (capture given `optimizer=`). One-call door: input
-  precedence args XOR `input_size=` XOR zero-input (reuses
+  precedence args XOR `input_shape=` XOR zero-input (reuses
   `guess_input_shape`'s verified trace; synthesis disclosed);
   `execution_mode`/`grad_mode`/`input_size`
   are one-call-only (`summary_one_call_only` on `trace.summary()`). Result
@@ -1420,7 +1420,7 @@
   `bridge.rsatoolbox.dataset(source, site=)` (now PER-SITE) and the new
   `bridge.xarray.data_array`/`neuroid_assembly` adapters -- file and in-memory routes
   numerically identical. `tl.extract_dataset` gains the unambiguous INPUT path
-  (`input_transform=`, distinct from the OUTPUT `transform=`; Resolution-backed runs
+  (`input_transform=`; Resolution-backed runs
   stamp verified-by-construction and join the resume signature as a value-level
   `transform_pipeline` extension; bare callables disclose opaque and refuse resume
   continuation) plus `input_provenance=` (disk-only stamp), and every new manifest

@@ -53,7 +53,7 @@ def test_site_sweep_required_arguments_refuse_typed() -> None:
             metric=_output_metric,
             retain="most",
             model=model,
-            x=x,
+            inputs=x,
         )
     assert excinfo.value.fields["code"] == "site_sweep_retain_invalid"
     with pytest.raises(BundleExperimentError) as excinfo:
@@ -64,7 +64,7 @@ def test_site_sweep_required_arguments_refuse_typed() -> None:
             metric="not callable",  # type: ignore[arg-type]
             retain="all",
             model=model,
-            x=x,
+            inputs=x,
         )
     assert excinfo.value.fields["code"] == "site_sweep_metric_invalid"
     with pytest.raises(BundleExperimentError) as excinfo:
@@ -90,7 +90,7 @@ def test_site_sweep_live_hook_lane_end_to_end() -> None:
         metric=_output_metric,
         retain="all",
         model=model,
-        x=x,
+        inputs=x,
     )
     assert bundle.names[0] == "baseline"
     assert set(bundle.names) == {"baseline", "relu", "tanh"}
@@ -124,7 +124,7 @@ def test_site_sweep_retain_none_keeps_rows_releases_members() -> None:
         metric=_output_metric,
         retain="none",
         model=model,
-        x=x,
+        inputs=x,
     )
     # Members released; numbers survive (extract-before-cleanup, D3c).
     assert bundle.names == ["baseline"]
@@ -145,7 +145,7 @@ def test_site_sweep_rolling_top_k_retention() -> None:
         metric=_output_metric,
         retain=top_k(1),
         model=model,
-        x=x,
+        inputs=x,
     )
     view = bundle.effects()
     ranked = view.rank_changes()
@@ -168,7 +168,7 @@ def test_site_sweep_refuses_undeclared_multi_site_candidate() -> None:
         metric=_output_metric,
         retain="all",
         model=model,
-        x=x,
+        inputs=x,
     )
     rows = {row.candidate_id: row for row in bundle.effects().rows}
     assert rows["broadcast"].status == "refused"
@@ -187,7 +187,7 @@ def test_site_sweep_refuses_undeclared_multi_site_candidate() -> None:
             metric=_output_metric,
             retain="all",
             model=model,
-            x=x,
+            inputs=x,
             multi_site=True,
         )
     declared_rows = {row.candidate_id: row for row in declared.effects().rows}
@@ -208,7 +208,7 @@ def test_site_sweep_duplicate_candidates_refuse_unless_replicates() -> None:
             metric=_output_metric,
             retain="none",
             model=model,
-            x=x,
+            inputs=x,
         )
     assert excinfo.value.fields["code"] == "site_sweep_duplicate_candidates"
     replicated = sweep_sites(
@@ -218,7 +218,7 @@ def test_site_sweep_duplicate_candidates_refuse_unless_replicates() -> None:
         metric=_output_metric,
         retain="none",
         model=model,
-        x=x,
+        inputs=x,
         replicates=True,
     )
     rows = [row for row in replicated.effects().rows if row.candidate_id != "__baseline__"]
@@ -237,7 +237,7 @@ def test_effect_table_survives_save_load_and_unarmed_ledger(tmp_path) -> None:
         metric=_output_metric,
         retain="none",
         model=model,
-        x=x,
+        inputs=x,
     )
     path = tmp_path / "sweep_bundle"
     bundle.save(str(path))
@@ -264,7 +264,7 @@ def test_measure_members_reports_unmeasured_and_orders_by_the_chain() -> None:
         metric=_output_metric,
         retain=top_k(1),
         model=model,
-        x=x,
+        inputs=x,
     )
     report = bundle.measure_members(metric=lambda member: len(member.op_labels))
     assert set(report["values"]) == set(bundle.names)
@@ -302,7 +302,7 @@ def test_effects_selection_tier_c_conversion_in_session() -> None:
         metric=_output_metric,
         retain="all",
         model=model,
-        x=x,
+        inputs=x,
     )
     selection = bundle.effects().top(1).to_selection()
     assert selection is not None
@@ -325,7 +325,7 @@ def test_site_sweep_engine_vocabulary_closed() -> None:
             metric=_output_metric,
             retain="all",
             model=model,
-            x=x,
+            inputs=x,
             engine="rerun",
         )
     assert excinfo.value.fields["code"] == "site_sweep_engine_invalid"
@@ -347,7 +347,7 @@ def test_site_sweep_candidate_plan_shapes_refuse_typed() -> None:
             metric=_output_metric,
             retain="all",
             model=model,
-            x=x,
+            inputs=x,
         )
 
     with pytest.raises(BundleExperimentError) as excinfo:
@@ -379,7 +379,7 @@ def test_site_sweep_keyless_baseline_refuses_typed() -> None:
             metric=_output_metric,
             retain="all",
             model=model,
-            x=x,
+            inputs=x,
         )
     assert excinfo.value.fields["code"] == "site_sweep_site_key_unavailable"
 
@@ -403,7 +403,7 @@ def test_effects_view_requires_a_stored_table() -> None:
         metric=_output_metric,
         retain="none",
         model=model,
-        x=x,
+        inputs=x,
     )
     with pytest.raises(BundleExperimentError) as excinfo:
         swept.effects(history_id="op_never_ran")

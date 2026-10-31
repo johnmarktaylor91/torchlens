@@ -33,7 +33,7 @@ t = tl.trace(model, input_kwargs={"input_ids": ids},
              capture=CaptureOptions(structure_only=True))
 
 # Face 2 — the zero-payload-storage summary rung (quickstart ladder rung 4):
-tl.summary(model, input_size=(1, 8))   # auto-selects the same contract; the
+tl.summary(model, input_shape=(1, 8))   # auto-selects the same contract; the
                                        # auto-set is recorded in provenance
 
 # Face 3 — drawing (same capture, existing render stack, banner mandatory):

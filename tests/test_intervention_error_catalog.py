@@ -364,7 +364,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
             lambda log: log.do(
                 tl.func("relu"),
                 _zero_hook,
-                x=torch.zeros(1, 3),
+                inputs=torch.zeros(1, 3),
                 intervention=tl.options.InterventionOptions(confirm_mutation=True),
             ),
             terrors.EngineDispatchError,

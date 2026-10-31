@@ -425,11 +425,11 @@ def _validate_descriptor_for_query(descriptor: ReceptiveField) -> None:
         ReceptiveFieldStatus.UNKNOWN,
         ReceptiveFieldStatus.UNSUPPORTED,
     }:
-        raise ReceptiveFieldError("Per-unit geometry is unavailable; use .gradient() instead.")
-    if not descriptor.layout.windowed_axes:
-        raise ReceptiveFieldError("No windowed axes are available; use .gradient() instead.")
-    if any(kind == "unknown" for kind in descriptor.layout.axis_kinds):
-        raise ReceptiveFieldError("The derived layout is ambiguous; use .gradient() instead.")
+        raise ReceptiveFieldError("Per-unit geometry is unavailable; use .probe_grad() instead.")
+    if not descriptor.axis_roles.windowed_axes:
+        raise ReceptiveFieldError("No windowed axes are available; use .probe_grad() instead.")
+    if any(kind == "unknown" for kind in descriptor.axis_roles.axis_kinds):
+        raise ReceptiveFieldError("The derived layout is ambiguous; use .probe_grad() instead.")
 
 
 def _windowed_axes_in_unit_order(descriptor: ReceptiveField) -> tuple[ReceptiveFieldAxis, ...]:
@@ -1176,7 +1176,7 @@ def _build_box(
     path_nonempty = any(
         all(
             item is not None and not item.is_empty
-            for item in (terminal.clipped[axis] for axis in descriptor.layout.windowed_axes)
+            for item in (terminal.clipped[axis] for axis in descriptor.axis_roles.windowed_axes)
         )
         for terminal in terminals
     )

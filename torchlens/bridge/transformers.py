@@ -667,13 +667,13 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
 
     resolution = _preprocessing.resolve(model=model)
     record = resolution.preprocessing
-    if resolution.transform is not None and record.source != "unknown":
+    if resolution.input_transform is not None and record.source != "unknown":
         if record.source == "hf_image_processor":
             # Legacy source token for the model-discovered HF tier (pinned by
             # the autoroute contract tests since before the neutral resolver).
             record.source = "hf_auto_image_processor"
             record.description = f"AutoImageProcessor: {record.identifier}"
-        return resolution.transform, record
+        return resolution.input_transform, record
     reason = record.config.get("reason") if isinstance(record.config, dict) else None
     raise InvalidArgumentError(
         f"torchlens.trace: no preprocessing authority resolved for the PIL image "

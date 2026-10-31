@@ -431,7 +431,7 @@ def test_rerun_refuses_gradient_edit_with_its_real_cause(tiny: _Fixture) -> None
             tl.module(_MLP),
             tl.zero_grad(),
             model=model,
-            x=tiny.ids,
+            inputs=tiny.ids,
             intervention=tl.options.InterventionOptions(engine="rerun", confirm_mutation=True),
         )
     assert info.value.fields["code"] == "rerun_gradient_edit_unsupported"

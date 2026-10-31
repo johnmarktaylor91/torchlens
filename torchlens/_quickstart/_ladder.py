@@ -113,7 +113,7 @@ def _trace_via_ladder(
         and resolve_rung(input_args, input_kwargs, input_size) != 1
     ):
         raise InvalidArgumentError(
-            f"input_size= and zero-argument input resolution are torch-only; "
+            f"input_shape= and zero-argument input resolution are torch-only; "
             f"backend={str(backend)!r} requires a real input.",
             code="input_ladder_backend_unsupported",
             remedy="pass a real input for non-torch backends",

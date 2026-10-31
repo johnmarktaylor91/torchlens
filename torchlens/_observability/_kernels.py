@@ -399,7 +399,7 @@ class HistogramResult:
     specials: dict[str, int] = field(default_factory=dict)
 
     @property
-    def count_total(self) -> int:
+    def numel(self) -> int:
         """Total population folded into this histogram (grid + specials)."""
 
         return sum(self.pos_counts) + sum(self.neg_counts) + sum(self.specials.values())

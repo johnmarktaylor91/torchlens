@@ -153,7 +153,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     input_args: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
     *,
-    input_size: Any | None = None,
+    input_shape: Any | None = None,
     execution_mode: Literal["eval", "train", "same"] = "eval",
     grad_mode: Literal["off", "same"] = "off",
     **summary_kwargs: Any,
@@ -168,7 +168,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     and never auto-prints (the repr self-displays).
 
     Input precedence follows the quickstart ladder (F17, memo D2): real
-    ``input_args`` XOR ``input_size=`` XOR nothing. ``input_size=``
+    ``input_args`` XOR ``input_shape=`` XOR nothing. ``input_shape=``
     synthesizes seeded tensors per the quickstart grammar and the synthesis
     is disclosed in the render; a zero-input call infers a verified input
     and REUSES its verification trace (no second capture). Mixing the
@@ -180,17 +180,17 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         PyTorch model to inspect, or a Hugging Face Hub model id (``"gpt2"``):
         a string fetches the config only, builds the architecture on the meta
         device (no weight download) and takes the weights-free path, so it
-        needs ``input_size=`` or meta inputs. Requires ``transformers``; the
+        needs ``input_shape=`` or meta inputs. Requires ``transformers``; the
         string form is DOCUMENTED-UNSTABLE.
     input_args:
         Positional args for ``model.forward()``. The quickstart input ladder
         applies (F17): a real input is the gold rung; omit it and pass
-        ``input_size=`` for a declared shape with synthesized values; omit
+        ``input_shape=`` for a declared shape with synthesized values; omit
         both for an inferred shape. Non-gold rungs are disclosed in the
         trace's persistent provenance record and in the summary text.
     input_kwargs:
         Keyword args for ``model.forward()``.
-    input_size:
+    input_shape:
         Declared input shape(s) per the quickstart grammar (one flat tuple,
         a sequence of tuples, or a forward-keyword-to-shape mapping).
     execution_mode:
@@ -236,16 +236,16 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     ladder_provenance = None
     input_synthesis: str | None = None
     facade_report = _maybe_weightsfree_summary(
-        model, input_args, input_kwargs, input_size, summary_kwargs
+        model, input_args, input_kwargs, input_shape, summary_kwargs
     )
     if facade_report is not None:
         return facade_report
-    if input_size is not None or (input_args is None and not input_kwargs):
+    if input_shape is not None or (input_args is None and not input_kwargs):
         from ._quickstart._resolve import attach_provenance, resolve_inputs
 
-        resolved = resolve_inputs(model, input_args, input_kwargs, input_size, verb="summary")
+        resolved = resolve_inputs(model, input_args, input_kwargs, input_shape, verb="summary")
         ladder_provenance = resolved.provenance
-        input_synthesis = _ladder_synthesis_note(input_size, resolved)
+        input_synthesis = _ladder_synthesis_note(input_shape, resolved)
         if (
             resolved.plan.verified_trace is not None
             and execution_mode == "eval"
@@ -302,7 +302,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
 
 
 def _format_input_size(input_size: Any) -> str:
-    """Render the caller's ``input_size=`` spelling compactly for disclosure."""
+    """Render the caller's ``input_shape=`` spelling compactly for disclosure."""
 
     try:
         if isinstance(input_size, dict):
@@ -338,7 +338,7 @@ def _ladder_synthesis_note(input_size: Any, resolved: Any) -> str | None:
     if provenance.origin == "declared":
         seeds = sorted({row["seed"] for row in recipes if row.get("seed") is not None})
         seed_part = f", seed {seeds[0]}" if len(seeds) == 1 else ""
-        return f"input_size={_format_input_size(input_size)}, {recipe_part}{seed_part}"
+        return f"input_shape={_format_input_size(input_size)}, {recipe_part}{seed_part}"
     shapes = ", ".join(str(tuple(facts.shape)) for facts in provenance.tensors)
     note = f"inferred shape {shapes or 'unknown'}, {recipe_part}"
     if provenance.strategy:
@@ -444,10 +444,10 @@ def _maybe_weightsfree_summary(
             "a weights-free model cannot serve.",
             code="weightsfree_facade_input_evidence_required",
             remedy=(
-                "pass input_size= (declared shapes; e.g. input_size=(1, 8)) "
+                "pass input_shape= (declared shapes; e.g. input_shape=(1, 8)) "
                 "or explicit meta inputs (torch.zeros(..., device='meta'))"
             ),
-            argument="input_size",
+            argument="input_shape",
         )
     return _weightsfree_summary_facade(model, input_args, input_kwargs, input_size, summary_kwargs)
 

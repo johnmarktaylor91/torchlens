@@ -790,7 +790,7 @@ class TestReleaseContract:
 
     def test_member_surfaces_refuse_typed_after_release(self, tmp_path):
         merged = self._merged()
-        merged.release()
+        merged.cleanup()
         self._assert_released_refusal(lambda: merged.ranks)
         self._assert_released_refusal(lambda: merged["anything"])
         self._assert_released_refusal(lambda: merged.at("anything"))
@@ -800,14 +800,14 @@ class TestReleaseContract:
     def test_join_ops_refuses_typed_after_release(self):
         merged = self._merged()
         (join,) = merged.joins
-        merged.release()
+        merged.cleanup()
         self._assert_released_refusal(lambda: merged.join_ops(join))
 
     def test_release_never_presents_zero_members(self):
         """A released presenter must not read as an empty merge."""
 
         merged = self._merged()
-        merged.release()
+        merged.cleanup()
         with pytest.raises(Exception) as excinfo:
             len(merged.ranks)
         assert getattr(excinfo.value, "fields", {}).get("code") == (
@@ -818,7 +818,7 @@ class TestReleaseContract:
     def test_verdicts_stay_readable_after_release(self):
         merged = self._merged()
         before = (merged.alignment, merged.value_status, merged.rank_ids)
-        merged.release()
+        merged.cleanup()
         assert (merged.alignment, merged.value_status, merged.rank_ids) == before
         assert merged.report.alignment is before[0]
         assert merged.joins and merged.gaps == merged._derivation.gap_findings
@@ -828,8 +828,8 @@ class TestReleaseContract:
 
     def test_release_is_idempotent(self):
         merged = self._merged()
-        merged.release()
-        merged.release()
+        merged.cleanup()
+        merged.cleanup()
         self._assert_released_refusal(lambda: merged.ranks)
 
     def test_pre_release_member_access_unchanged(self):

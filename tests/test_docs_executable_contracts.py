@@ -200,8 +200,8 @@ def test_root_agent_receptive_gradient_and_overlay_run() -> None:
     )
     target = trace.find_sites(tl.func("conv2d")).first()
     unit = target.receptive_field.center_unit(batch_index=0)
-    gradient = target.receptive_field.gradient(unit, retain_graph=True)
-    overlay = target.receptive_field.show(unit, gradient=True)
+    gradient = target.receptive_field.probe_grad(unit, retain_graph=True)
+    overlay = target.receptive_field.show(unit, grad=True)
 
     assert any(result.support_mask.any() for result in gradient.values())
     assert overlay.size == (5, 5)

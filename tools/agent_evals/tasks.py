@@ -367,7 +367,7 @@ of floats (4 rows of 3).""",
         "refusal",
         "a documented refusal",
         """TorchLens refuses to trace when it is given both a real input and a declared input shape.
-Do that on purpose: pass make_input() and also input_size=(4, 6). Catch the refusal and write
+Do that on purpose: pass make_input() and also input_shape=(4, 6). Catch the refusal and write
 result.json with keys:
 - code: the refusal's stable machine-readable code;
 - remedy: the refusal's remedy text;

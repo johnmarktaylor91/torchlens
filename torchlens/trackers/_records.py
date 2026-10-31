@@ -138,7 +138,7 @@ class ScalarPoint:
 class HistogramPoint:
     """One histogram emission: exact counts on explicit edges.
 
-    ``edges`` has ``len(counts) + 1`` entries; bin ``i`` covers
+    ``bin_edges`` has ``len(counts) + 1`` entries; bin ``i`` covers
     ``[edges[i], edges[i+1])``. The signed-log2 grid is NON-uniform, which
     is why relay paths refuse histogram series (G6): a relay reconstructs
     outer edges by linear extrapolation, exact only for uniform bins.
@@ -150,7 +150,7 @@ class HistogramPoint:
     tag: str
     step: int
     counts: tuple[int, ...]
-    edges: tuple[float, ...]
+    bin_edges: tuple[float, ...]
     summary: dict[str, float] = field(default_factory=dict)
 
 
@@ -356,7 +356,7 @@ def emission_from_block(
                     tag=grammar.data(family, "hist", leaf),
                     step=step,
                     counts=counts,
-                    edges=edges,
+                    bin_edges=edges,
                     summary=_histogram_summary(observation.spine),
                 )
             )

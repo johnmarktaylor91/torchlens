@@ -3170,7 +3170,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         input_transform: Any,
         *,
         model: Any = None,
-        x: Any = None,
+        inputs: Any = None,
         intervention: Any = None,
     ) -> "Trace":
         """Apply an intervention to this op through the owning Trace.
@@ -3181,7 +3181,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             Transform or hook to apply to this operation's output.
         model:
             Model required when ``intervention.engine="rerun"``.
-        x:
+        inputs:
             Input required when ``intervention.engine="rerun"``.
         intervention:
             Grouped intervention options (``InterventionOptions``).
@@ -3196,7 +3196,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             self.layer_label,
             input_transform,
             model=model,
-            x=x,
+            inputs=inputs,
             intervention=intervention,
         )
 

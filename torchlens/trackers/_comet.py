@@ -40,23 +40,25 @@ _REQUIRED_METHODS = ("log_metric", "log_text")
 class CometSink:
     """Native Comet receiver over an existing experiment (it never starts or ends one)."""
 
-    def __init__(self, experiment: Any) -> None:
+    def __init__(self, comet_experiment: Any) -> None:
         """Wrap an existing ``Experiment`` or ``OfflineExperiment`` object.
 
         Parameters
         ----------
-        experiment:
+        comet_experiment:
             The object returned by ``comet_ml.Experiment(...)`` or
             ``comet_ml.OfflineExperiment(...)``. This sink never constructs
             one.
         """
 
         missing = [
-            name for name in _REQUIRED_METHODS if not callable(getattr(experiment, name, None))
+            name
+            for name in _REQUIRED_METHODS
+            if not callable(getattr(comet_experiment, name, None))
         ]
         if missing:
             raise SinkProtocolError(
-                f"CometSink needs a live comet_ml experiment (got {type(experiment).__name__}, "
+                f"CometSink needs a live comet_ml experiment (got {type(comet_experiment).__name__}, "
                 f"which has no {', '.join(missing)}); it never constructs one -- creating the "
                 "experiment is the user's visible enablement act.",
                 code="tracker_sink_invalid",
@@ -66,7 +68,7 @@ class CometSink:
                     "comet_ml.OfflineExperiment(...)."
                 ),
             )
-        self._experiment = experiment
+        self._experiment = comet_experiment
         self._closed = False
 
     def capabilities(self) -> frozenset[str]:

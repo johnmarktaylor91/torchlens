@@ -94,7 +94,7 @@ def test_trace_input_accessor_resolves_for_empirical_rf_queries() -> None:
     target = _op(trace, "conv2d")
     accessor_input = trace.input_ops[0]
 
-    gradient = target.receptive_field.gradient(
+    gradient = target.receptive_field.probe_grad(
         (0, 0, 2, 2), input_op=accessor_input, retain_graph=True
     )
     checked = target.receptive_field.check((0, 0, 2, 2), input_op=accessor_input)
@@ -109,7 +109,7 @@ def test_trace_input_accessor_resolves_for_empirical_rf_queries() -> None:
         save_mode="reference",
     )
     source_target = _op(source_trace, "conv2d")
-    source_gradient = source_target.receptive_field.gradient(
+    source_gradient = source_target.receptive_field.probe_grad(
         (0, 0, 2, 2), source=source_trace.input_ops[0]
     )
 
@@ -230,7 +230,7 @@ def test_fork_probe_does_not_mint_parent_backward_pass() -> None:
     fork = trace.fork()
 
     fork_target = _op(fork, "conv2d")
-    fork_target.receptive_field.gradient((0, 0, 2, 2), retain_graph=True)
+    fork_target.receptive_field.probe_grad((0, 0, 2, 2), retain_graph=True)
 
     assert trace.num_backward_passes == 0
     assert getattr(trace, "has_gradients", False) is False

@@ -102,7 +102,7 @@ knockout = sweep_sites(
     metric=lambda member: kl_to_full(member[member.output_layers[0]].out),
     retain="none",
     model=model,
-    x=clean_ids,
+    inputs=clean_ids,
 )
 knockout_kl = {row.candidate_id: round(row.value, 4) for row in knockout.effects().rows
                if row.candidate_id != "__baseline__"}

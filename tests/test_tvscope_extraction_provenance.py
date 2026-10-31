@@ -70,7 +70,7 @@ def resolution() -> pp.Resolution:
     return pp.Resolution(
         preprocessing=base.preprocessing,
         declared=base.declared,
-        transform=lambda batch: (batch - 0.5) / 0.5,
+        input_transform=lambda batch: (batch - 0.5) / 0.5,
     )
 
 

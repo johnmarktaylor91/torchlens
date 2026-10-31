@@ -62,7 +62,7 @@ def test_srp_dims_for_matches_the_dense_jl_formula() -> None:
     """k = ceil(4 ln n / (eps^2/2 - eps^3/3)); the sklearn-practice value."""
 
     sizing = srp_dims_for(128, eps=0.2)
-    assert sizing.n_components == 1120  # ceil(4*ln(128) / (0.02 - 0.008/3))
+    assert sizing.num_components == 1120  # ceil(4*ln(128) / (0.02 - 0.008/3))
     assert int(sizing) == 1120
     assert sizing.formula == "dense_jl_l2_heuristic"
     assert "corr" in sizing.note  # it SAYS it is a poor corr-RDM guide
@@ -106,8 +106,8 @@ def test_probe_reports_scoped_rows_and_is_deterministic() -> None:
 
     generator = torch.Generator().manual_seed(0)
     pilot = torch.randn(12, 300, generator=generator)
-    first = srp_fidelity_probe(pilot, n_components=(16, 64), seed=7)
-    second = srp_fidelity_probe(pilot, n_components=(16, 64), seed=7)
+    first = srp_fidelity_probe(pilot, num_components=(16, 64), seed=7)
+    second = srp_fidelity_probe(pilot, num_components=(16, 64), seed=7)
     assert first.to_dict() == second.to_dict()
     assert first.corpus == "user_pilot_batch"
     assert first.distance_claim == "empirical_only"
@@ -126,15 +126,15 @@ def test_probe_refusals_are_typed() -> None:
     """Too-few rows, non-float input, empty widths, constant rows refuse."""
 
     with pytest.raises(TransformContractError) as excinfo:
-        srp_fidelity_probe(torch.randn(3, 10), n_components=(4,))
+        srp_fidelity_probe(torch.randn(3, 10), num_components=(4,))
     assert excinfo.value.fields["code"] == "transform_params_invalid"
     with pytest.raises(TransformContractError):
-        srp_fidelity_probe(torch.randint(0, 5, (8, 10)), n_components=(4,))
+        srp_fidelity_probe(torch.randint(0, 5, (8, 10)), num_components=(4,))
     with pytest.raises(TransformContractError):
-        srp_fidelity_probe(torch.randn(8, 10), n_components=())
+        srp_fidelity_probe(torch.randn(8, 10), num_components=())
     constant = torch.ones(6, 12)
     with pytest.raises(TransformContractError) as excinfo:
-        srp_fidelity_probe(constant, n_components=(4,))
+        srp_fidelity_probe(constant, num_components=(4,))
     assert "zero variance" in str(excinfo.value)
 
 
@@ -239,7 +239,7 @@ def test_pca_apply_matches_the_fp64_reference() -> None:
     out = step.apply(x[:8], None)
     reference = (x[:8].double() - fitted.mean) @ fitted.components.T
     assert torch.allclose(out.double(), reference, atol=1e-5)
-    plan = step.plan(TensorSpec.of(x))
+    plan = step.plan(TensorSpec.from_tensor(x))
     assert plan.output.shape == (None, 5)
     params = step.params_dict()
     assert params["centered"] is True

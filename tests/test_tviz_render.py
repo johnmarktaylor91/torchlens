@@ -41,7 +41,7 @@ def receipt() -> tviz.CausalReceipt:
     """A valid 4-head receipt with a joint measurement."""
 
     return tviz.CausalReceipt(
-        layer="blk.0.attn",
+        module_address="blk.0.attn",
         heads=(0, 1, 2, 3),
         effects=(13.27, -2.0, None, 0.5),
         metric="logit(' Paris')",
@@ -171,7 +171,7 @@ def test_receipt_grid_refuses_without_joint(tmp_path: Path) -> None:
     """No joint measurement, no grid figure (D13 is mandatory)."""
 
     receipt = tviz.CausalReceipt(
-        layer="blk.0.attn",
+        module_address="blk.0.attn",
         heads=(0,),
         effects=(1.0,),
         metric="m",

@@ -465,7 +465,7 @@ class PaddleBackend:
             save_grads=None,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=cast(bool, compute_input_output_distances),
-            num_context_lines=num_context_lines,
+            source_context_lines=num_context_lines,
             optimizer=None,
             save_source_context=save_code_context,
             save_rng=save_rng_states,

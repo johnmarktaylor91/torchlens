@@ -1,6 +1,6 @@
 """Hub-name input form for ``tl.summary`` (spelling DOCUMENTED-UNSTABLE).
 
-``tl.summary("gpt2", input_size=(1, 8))`` fetches the model's CONFIG only,
+``tl.summary("gpt2", input_shape=(1, 8))`` fetches the model's CONFIG only,
 builds the architecture on the meta device (no weights are downloaded or
 allocated), and hands the all-meta model to the existing weights-free
 summary path, which needs input evidence and renders under the hypothesis

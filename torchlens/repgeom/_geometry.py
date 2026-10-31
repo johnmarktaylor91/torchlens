@@ -873,7 +873,7 @@ def _average_ranks(values: np.ndarray) -> np.ndarray:
 
 def classical_mds(
     data: Any,
-    n_components: int = 2,
+    num_components: int = 2,
     *,
     min_stimuli: int = 8,
     input_kind: MDSInputKind = "auto",
@@ -894,7 +894,7 @@ def classical_mds(
     ----------
     data:
         Pairwise distance matrix or row-wise coordinate/feature data.
-    n_components:
+    num_components:
         Number of embedding axes to return.
     min_stimuli:
         Minimum number of stimuli required for visualization-oriented MDS.
@@ -915,8 +915,8 @@ def classical_mds(
         If inputs are non-finite, too small, duplicate, or rank-deficient.
     """
 
-    if n_components < 1:
-        raise ValueError("n_components must be at least 1.")
+    if num_components < 1:
+        raise ValueError("num_components must be at least 1.")
     if min_stimuli < 3:
         raise ValueError("min_stimuli must be at least 3.")
     if input_kind not in ("auto", "distances", "features"):
@@ -963,9 +963,9 @@ def classical_mds(
     positive_tolerance = _positive_rank_tolerance(eigenvalues)
     positive_mask = eigenvalues > positive_tolerance
     effective_rank = int(np.count_nonzero(positive_mask))
-    if effective_rank < n_components:
+    if effective_rank < num_components:
         raise ValueError(
-            f"classical_mds input is rank-deficient for {n_components} components: "
+            f"classical_mds input is rank-deficient for {num_components} components: "
             f"effective rank is {effective_rank}."
         )
 
@@ -975,12 +975,12 @@ def classical_mds(
     total_reported_mass = positive_mass + negative_mass
     discarded_fraction = negative_mass / total_reported_mass if total_reported_mass > 0.0 else 0.0
 
-    selected_values = np.clip(eigenvalues[:n_components], 0.0, None)
-    embedding = eigenvectors[:, :n_components] * np.sqrt(selected_values)
+    selected_values = np.clip(eigenvalues[:num_components], 0.0, None)
+    embedding = eigenvectors[:, :num_components] * np.sqrt(selected_values)
     embedding = _canonicalize_axis_signs(embedding)
     info: MDSInfo = {
         "n_stimuli": n_stimuli,
-        "n_components": n_components,
+        "n_components": num_components,
         "effective_rank": effective_rank,
         "min_stimuli": min_stimuli,
         "negative_eigenvalue_count": int(np.count_nonzero(negative_mask)),

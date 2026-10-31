@@ -91,7 +91,7 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
         "RF-input-rung-conflict",
         "input_rung_conflict",
         "input",
-        lambda: _tl().trace(_model(), _x(), input_size=(2, 4)),
+        lambda: _tl().trace(_model(), _x(), input_shape=(2, 4)),
     ),
     RefusalRow(
         "RF-unknown-backend",

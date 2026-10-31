@@ -787,7 +787,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         units: str | None = None,
         style: str | None = None,
         # One-call-only spellings (typed errors here, never no-ops).
-        input_size: Any = None,
+        input_shape: Any = None,
         execution_mode: str | None = None,
         grad_mode: str | None = None,
         # Internal plumbing from the one-call door (not public grammar).
@@ -854,7 +854,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         from .._errors import InvalidArgumentError
 
         one_call_only = {
-            "input_size": input_size,
+            "input_shape": input_shape,
             "execution_mode": execution_mode,
             "grad_mode": grad_mode,
         }

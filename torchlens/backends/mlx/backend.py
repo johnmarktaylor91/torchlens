@@ -1193,7 +1193,7 @@ class MLXBackend:
             save_grads=None,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=compute_input_output_distances,
-            num_context_lines=num_context_lines,
+            source_context_lines=num_context_lines,
             optimizer=None,
             save_source_context=save_source_context,
             save_rng=save_rng,

@@ -124,7 +124,7 @@ def test_receptive_field_docs_conform_to_public_surface() -> None:
         "receptive_fields",
         "projective_fields",
         ".at()",
-        ".gradient()",
+        ".probe_grad()",
         ".check()",
         ".show()",
         "source=",

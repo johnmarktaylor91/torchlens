@@ -1111,7 +1111,7 @@ def _freeze_transform_plans(
         if pipeline is None or not pipeline.steps:
             plans[key] = None
             continue
-        planned = pipeline.plan(TensorSpec.of(tensor), TransformContext(site_label=key))
+        planned = pipeline.plan(TensorSpec.from_tensor(tensor), TransformContext(site_label=key))
         final = planned[-1] if planned else None
         final_shape = None if final is None else list(final.output.shape[1:])
         if final_shape and key in trimmed_keys:

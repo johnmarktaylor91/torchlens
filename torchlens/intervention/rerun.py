@@ -55,7 +55,7 @@ if TYPE_CHECKING:
 def run(
     trace: Trace,
     model: nn.Module,
-    x: Any = None,
+    inputs: Any = None,
     *,
     chunk_paths: Any | None = None,
     replay: ReplayOptions | None = None,
@@ -75,7 +75,7 @@ def run(
         Trace to update in place after the fresh run validates.
     model:
         Model to execute through the run engine.
-    x:
+    inputs:
         Forward input. Rerun does not retain strong references to original
         inputs, so callers must pass the input explicitly.
     chunk_paths:
@@ -106,15 +106,15 @@ def run(
         return _chunked_rerun(
             trace,
             model,
-            x,
+            inputs,
             chunk_size=replay_options.chunk_size,
             chunk_paths=chunk_paths,
             strict=replay_options.strict,
             output_transform=output_transform,
         )
     if replay_options.append:
-        return _append_rerun(trace, model, x, strict=replay_options.strict)
-    _preflight(trace, model, x)
+        return _append_rerun(trace, model, inputs, strict=replay_options.strict)
+    _preflight(trace, model, inputs)
     model = _unwrap_compiled_model(model)
     _warn_if_direct_writes_will_be_overlaid(trace)
 
@@ -131,7 +131,7 @@ def run(
         new_log = _capture_with_active_spec(
             trace,
             model,
-            x,
+            inputs,
             intervention_spec=spec_plan.capture_spec,
             hook_plan=hook_plan,
             output_transform=output_transform,
@@ -891,10 +891,10 @@ def _preflight(log: Trace, model: nn.Module, x: Any) -> None:
 
     if x is None:
         raise InvalidArgumentError(
-            "run(..., x=None) cannot recover the original input",
+            "run(..., inputs=None) cannot recover the original input",
             code="run_input_missing",
             remedy="pass the forward input explicitly as log.run(model, x)",
-            argument="x",
+            argument="inputs",
         )
     from .._user_funcs import _reject_opaque_wrappers
 

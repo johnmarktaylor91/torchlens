@@ -183,7 +183,7 @@ class ReceptiveField:
         "io_role",
         "input_op_label",
         "input_shape",
-        "layout",
+        "axis_roles",
         "axes",
         "status",
         "alignment",
@@ -196,7 +196,7 @@ class ReceptiveField:
     io_role: str
     input_op_label: str
     input_shape: tuple[int, ...]
-    layout: GridLayout
+    axis_roles: GridLayout
     axes: tuple[ReceptiveFieldAxis, ...] | None
     status: ReceptiveFieldStatus
     alignment: ReceptiveFieldAlignment
@@ -218,7 +218,7 @@ class ReceptiveField:
         """
 
         _validate_shape(self.input_shape, "input_shape")
-        if len(self.layout.axis_kinds) != len(self.input_shape):
+        if len(self.axis_roles.axis_kinds) != len(self.input_shape):
             raise ValueError("layout axis count must match input_shape rank.")
         if self.axes is None:
             if self.status not in {
@@ -234,9 +234,13 @@ class ReceptiveField:
                 raise ValueError("axes must be ordered by consecutive input_axis values.")
             if any(axis.input_extent != self.input_shape[axis.input_axis] for axis in self.axes):
                 raise ValueError("axis input_extent values must match input_shape.")
-            if tuple(axis.kind for axis in self.axes) != self.layout.axis_kinds:
+            if tuple(axis.kind for axis in self.axes) != self.axis_roles.axis_kinds:
                 raise ValueError("axis kinds must match the derived layout.")
-        if self.batch_coupled and self.axes is not None and "full" not in self.layout.axis_kinds:
+        if (
+            self.batch_coupled
+            and self.axes is not None
+            and "full" not in self.axis_roles.axis_kinds
+        ):
             raise ValueError("batch_coupled requires a full derived input axis.")
 
     @property
@@ -285,10 +289,10 @@ class ReceptiveField:
         """
 
         if self.axes is None:
-            raise ReceptiveFieldError("Geometric axes are unavailable; use .gradient() instead.")
+            raise ReceptiveFieldError("Geometric axes are unavailable; use .probe_grad() instead.")
         values = tuple(getattr(axis, field_name) for axis in self.axes if axis.kind == "windowed")
         if not values:
-            raise ReceptiveFieldError("No windowed axes are available; use .gradient() instead.")
+            raise ReceptiveFieldError("No windowed axes are available; use .probe_grad() instead.")
         return values
 
     @property

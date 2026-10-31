@@ -633,7 +633,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         value_or_hook: Any = None,
         *,
         model: nn.Module | None = None,
-        x: Any = None,
+        inputs: Any = None,
         intervention: InterventionOptions | None = None,
         direction: str | None = None,
     ) -> "Trace":
@@ -647,7 +647,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             Optional hook for the ``(site, hook)`` input shape.
         model:
             Model required when ``engine="rerun"``.
-        x:
+        inputs:
             Input required when ``engine="rerun"``.
         intervention:
             Grouped intervention options (``InterventionOptions``: ``engine``
@@ -677,7 +677,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 hooks_or_site,
                 value_or_hook,
                 model=model,
-                x=x,
+                x=inputs,
                 intervention_options=intervention_options,
                 direction=direction,
             )
@@ -737,7 +737,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         selected_engine = self._select_do_engine(engine_value, model=model, x=x)
         if selected_engine == "rerun":
             if model is None:
-                raise EngineDispatchError("do(..., engine='rerun') requires model= and x=.")
+                raise EngineDispatchError("do(..., engine='rerun') requires model= and inputs=.")
             self._validate_supplied_model_matches_capture(model)
         # C03 fire-evidence rule: ONE transaction envelope per do() attempt,
         # written on success, no-fire, AND failure -- intervention_audit is
@@ -1019,13 +1019,13 @@ class TraceInterventionMixin(_TraceMixinBase):
         if engine != "auto":
             if engine == "rerun" and (model is None or x is None):
                 raise EngineDispatchError(
-                    "do(..., engine='rerun') requires both model= and x=. "
+                    "do(..., engine='rerun') requires both model= and inputs=. "
                     "Pass both, or use engine='replay' if full rerun is not intended."
                 )
             return engine
         if (model is None) != (x is None):
             raise EngineDispatchError(
-                "do(engine='auto') needs both model= and x= for rerun, or neither for "
+                "do(engine='auto') needs both model= and inputs= for rerun, or neither for "
                 "replay. Pass both, or use engine='replay' if rerun is not intended."
             )
         return "rerun" if model is not None else "replay"
@@ -1431,7 +1431,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             if engine not in ("replay", "set_only"):
                 raise EngineDispatchError(
                     "leaf-site selection edits (inputs/buffers) ride the replay "
-                    "engine (or set_only); for rerun, pass the modified input as x=."
+                    "engine (or set_only); for rerun, pass the modified input as inputs=."
                 )
             self._apply_leaf_selection_edits(leaf_items)
             if engine == "replay":

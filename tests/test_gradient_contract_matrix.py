@@ -257,7 +257,7 @@ def _door_replay(model: nn.Module, edit: Any) -> torch.Tensor:
 def _door_rerun(model: nn.Module, edit: Any) -> torch.Tensor:
     trace = tl.trace(model, _X)
     confirm = tl.options.InterventionOptions(confirm_mutation=True)
-    trace.do(tl.module("lin1"), edit, model=model, x=_X, intervention=confirm)
+    trace.do(tl.module("lin1"), edit, model=model, inputs=_X, intervention=confirm)
     return _out(trace)
 
 
@@ -333,7 +333,7 @@ _DOORS: dict[str, tuple[Callable[[nn.Module, Any], torch.Tensor], Callable[..., 
     "capture hooks=": (_door_hooks, _plain),
     "capture InterventionDecision": (_door_decision, _plain),
     "fork.do (replay)": (_door_replay, _plain),
-    "do(model=, x=) (rerun)": (_door_rerun, _plain),
+    "do(model=, inputs=) (rerun)": (_door_rerun, _plain),
     "attach_hooks + run": (_door_attach_run, _plain),
     "spec.bind(model)": (_door_bind, _plain),
     "push(differentiable=True)": (_door_push_differentiable, _frontier_hand),

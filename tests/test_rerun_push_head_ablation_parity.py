@@ -112,7 +112,7 @@ def _assert_head_sweep_parity(model: nn.Module, ids: torch.Tensor) -> int:
                 site,
                 tl.zero_ablate(),
                 model=model,
-                x=ids,
+                inputs=ids,
                 intervention=InterventionOptions(engine="rerun"),
             )
             where = f"L{layer}H{head}"
@@ -185,7 +185,7 @@ def _rerun(baseline: tl.Trace, site: Any, model: nn.Module, x: torch.Tensor) -> 
         site,
         tl.zero_ablate(),
         model=model,
-        x=x,
+        inputs=x,
         intervention=InterventionOptions(engine="rerun"),
     )
 
@@ -206,7 +206,7 @@ def test_layer_label_predicate_rerun_on_same_inputs_refuses_typed() -> None:
             predicate,
             tl.zero_ablate(),
             model=model,
-            x=x,
+            inputs=x,
             intervention=InterventionOptions(engine="rerun"),
         )
     assert excinfo.value.fields["code"] == "rerun_selector_unmatchable_live"

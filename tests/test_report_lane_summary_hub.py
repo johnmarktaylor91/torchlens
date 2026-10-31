@@ -1,4 +1,4 @@
-"""U04.4: ``tl.summary("<hub name>", input_size=...)`` builds on the meta path.
+"""U04.4: ``tl.summary("<hub name>", input_shape=...)`` builds on the meta path.
 
 Offline-safe: the config fetch is replaced by a tiny local config and any
 weight download fails the test, so no network is touched.
@@ -47,7 +47,7 @@ def offline_hub(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
 
 def test_hub_name_summary_builds_on_meta_without_weights(offline_hub: list[str]) -> None:
-    report = tl.summary("gpt2", input_size=(1, 8))
+    report = tl.summary("gpt2", input_shape=(1, 8))
 
     assert offline_hub == ["gpt2"]
     text = str(report)

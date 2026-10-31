@@ -43,7 +43,7 @@ BARE_RENDER_WRITES_FILE_IN_SCRIPTS = True
 _CURATED_KWARGS = frozenset(
     {
         "input_kwargs",
-        "input_size",
+        "input_shape",
         "theme",
         "collapse",
         "module",
@@ -250,7 +250,7 @@ def render(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input l
     input_args: Any = None,
     *,
     input_kwargs: dict[str, Any] | None = None,
-    input_size: Any = None,
+    input_shape: Any = None,
     theme: str | None = None,
     collapse: Any = None,
     module: Any = None,
@@ -266,7 +266,7 @@ def render(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input l
     The three input rungs (memo D2/D4)::
 
         render(model, x)                            # best: your real input
-        render(model, input_size=(1, 3, 224, 224))  # your shape, random values; disclosed
+        render(model, input_shape=(1, 3, 224, 224))  # your shape, random values; disclosed
         render(model)                               # inferred shape + random values; disclosed, or a teach
         render(lm, "The quick brown fox")           # HF models: a string is a real input
 
@@ -276,11 +276,11 @@ def render(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input l
         The model to picture.
     input_args:
         A real positional forward input (rung 1). Leave it and
-        ``input_kwargs`` unset to use ``input_size=`` (rung 2) or inference
+        ``input_kwargs`` unset to use ``input_shape=`` (rung 2) or inference
         (rung 3).
     input_kwargs:
         A real keyword forward input (rung 1).
-    input_size:
+    input_shape:
         Declared shape(s): one flat tuple, a sequence of tuples, or a mapping
         of forward keyword names to shapes (the D4 grammar).
     theme:
@@ -323,7 +323,7 @@ def render(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input l
     """
 
     _check_collisions(draw_kwargs)
-    resolved = resolve_inputs(model, input_args, input_kwargs, input_size, verb="render")
+    resolved = resolve_inputs(model, input_args, input_kwargs, input_shape, verb="render")
     trace, receipt = capture_concrete(
         model,
         resolved.plan,

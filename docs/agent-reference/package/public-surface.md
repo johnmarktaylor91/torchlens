@@ -89,7 +89,7 @@ mds_layers = tl.in_module("block1") | tl.in_module("block2")
 image_trace = tl.trace(
     model,
     image_list,
-    transform=image_batch_to_tensor,
+    capture=tl.options.CaptureOptions(input_transform=image_batch_to_tensor),
     save=mds_layers,
     save_raw_input=True,
     output_style="classification",

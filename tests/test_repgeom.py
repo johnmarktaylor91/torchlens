@@ -205,7 +205,7 @@ def test_classical_mds_recovers_closed_form_asymmetric_fixture() -> None:
     assert eigenvalues[0] > eigenvalues[1] > 0.0
 
     distances = _pairwise_distances(ANALYTIC_POINTS)
-    embedding, info = repgeom.classical_mds(distances, n_components=2)
+    embedding, info = repgeom.classical_mds(distances, num_components=2)
 
     assert info["effective_rank"] == 2
     assert np.allclose(_pairwise_distances(embedding), distances, atol=1e-9)

@@ -1594,7 +1594,7 @@ class Trace(
         capture_tensor_grad_hooks: bool = True,
         detach_saved_activations: bool = False,
         mark_layer_depths: bool = True,
-        num_context_lines: int = 7,
+        source_context_lines: int = 7,
         optimizer: torch.optim.Optimizer | None = None,
         save_source_context: bool = False,
         save_rng: bool = False,
@@ -1641,7 +1641,7 @@ class Trace(
             detach_saved_activations: Whether to detach saved tensors from the autograd graph.
             mark_layer_depths: Whether to compute BFS distances from
                 inputs/outputs for each layer.
-            num_context_lines: Number of source-code context lines to capture
+            source_context_lines: Number of source-code context lines to capture
                 around each function call (used by FuncCallLocation).
             optimizer: Optional torch optimizer, used to annotate which params
                 have optimizers attached.
@@ -1698,7 +1698,7 @@ class Trace(
         ] = "torch_module"
         self.param_source: Literal["native-module", "pytree-derived", "none"] = "native-module"
         self.derived_grads = DerivedGradAccessor()
-        self.num_context_lines = num_context_lines
+        self.num_context_lines = source_context_lines
         self._optimizer = optimizer
         self.tlspec_version = TLSPEC_VERSION
         # _tracing_finished is the master behavioural switch: False during logging,

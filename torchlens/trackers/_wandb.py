@@ -145,7 +145,7 @@ class WandbSink:
             )
         wandb = _wandb_module()
         histogram = wandb.Histogram(
-            np_histogram=(list(point.counts), list(point.edges)),
+            np_histogram=(list(point.counts), list(point.bin_edges)),
         )
         self._run.log({point.tag: histogram}, step=point.step)
 

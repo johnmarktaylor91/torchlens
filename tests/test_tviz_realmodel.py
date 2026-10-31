@@ -283,7 +283,7 @@ def test_qwen_gqa_disclosure(tmp_path) -> None:
     )
     assert view.gqa is not None
     assert view.gqa.num_query_heads == config.num_attention_heads
-    assert view.gqa.n_kv_heads == config.num_key_value_heads
+    assert view.gqa.num_key_value_heads == config.num_key_value_heads
     header = view.gqa.header(0)
     assert "kv group 1 of" in header and "shared by query heads" in header
     artifact = tl.viz.attention(view, tmp_path / "qwen-l0.png", heads=(0,))

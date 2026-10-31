@@ -402,7 +402,7 @@ def _module_record_of(trace: Any, address: str | None) -> Any:
 
 def list_sites(
     model: nn.Module,
-    x: Any = None,
+    inputs: Any = None,
     *,
     input_kwargs: dict[str, Any] | None = None,
     capture: Any = None,
@@ -413,7 +413,7 @@ def list_sites(
     ----------
     model:
         PyTorch model to inventory.
-    x:
+    inputs:
         Optional input. Omitted: the free no-input module listing (shapes
         unknown). Supplied: ONE disclosed-cost metadata-only real forward
         (no activations retained) reporting shapes, dtypes, pass indices,
@@ -432,12 +432,12 @@ def list_sites(
         Structured rows with the copy-paste-safe selector first.
     """
 
-    if x is None and input_kwargs is None:
+    if inputs is None and input_kwargs is None:
         return _module_rung(model)
     import torchlens as tl
 
     options = capture if capture is not None else tl.options.CaptureOptions(layers_to_save=None)
-    trace = tl.trace(model, x if x is not None else (), input_kwargs, capture=options)
+    trace = tl.trace(model, inputs if inputs is not None else (), input_kwargs, capture=options)
     return sites_of_trace(trace)
 
 

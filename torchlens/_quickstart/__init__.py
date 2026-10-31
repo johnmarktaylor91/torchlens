@@ -5,7 +5,7 @@ The quickstart package (workstream F17; quickstart panel memo of record
 ``tl.render``, and ``tl.trace``:
 
 - rung 1 (gold): a real input -- TorchLens guesses nothing;
-- rung 2: ``input_size=`` -- your shape, synthesized values, disclosed;
+- rung 2: ``input_shape=`` -- your shape, synthesized values, disclosed;
 - rung 3: nothing -- inferred shape, synthesized values, disclosed or a teach.
 
 Every synthesized input is disclosed in a provenance record that survives

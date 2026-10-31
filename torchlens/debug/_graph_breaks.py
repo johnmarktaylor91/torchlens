@@ -365,7 +365,7 @@ def _correlate_break(trace: Any, record: Any) -> GraphBreak:
     return GraphBreak(record.reason, record.source_file, record.line_number, labels, None)
 
 
-def graph_breaks(model: nn.Module, x: Any, **trace_kwargs: Any) -> GraphBreakReport:
+def graph_breaks(model: nn.Module, inputs: Any, **trace_kwargs: Any) -> GraphBreakReport:
     """Report Dynamo graph breaks and correlate them to eager trace operations.
 
     The Dynamo probe runs against ORIGINAL (unwrapped) torch so TorchLens's
@@ -382,7 +382,7 @@ def graph_breaks(model: nn.Module, x: Any, **trace_kwargs: Any) -> GraphBreakRep
     ----------
     model:
         Eager PyTorch module to inspect.
-    x:
+    inputs:
         Model input accepted by :func:`torchlens.trace`.
     **trace_kwargs:
         Additional keyword arguments forwarded to :func:`torchlens.trace`.
@@ -404,7 +404,7 @@ def graph_breaks(model: nn.Module, x: Any, **trace_kwargs: Any) -> GraphBreakRep
         raise GraphBreaksUnavailableError(
             "torch._dynamo.explain is unavailable in this torch runtime"
         )
-    args, kwargs = _model_call_args(model, x, trace_kwargs)
+    args, kwargs = _model_call_args(model, inputs, trace_kwargs)
     snapshot = _snapshot_model_state(model)
     try:
         with _clean_torch():
@@ -425,7 +425,7 @@ def graph_breaks(model: nn.Module, x: Any, **trace_kwargs: Any) -> GraphBreakRep
 
         from .. import trace as capture_trace
 
-        eager_trace = capture_trace(model, x, **trace_kwargs)
+        eager_trace = capture_trace(model, inputs, **trace_kwargs)
         return GraphBreakReport(
             tuple(_correlate_break(eager_trace, record) for record in normalized)
         )

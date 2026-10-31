@@ -33,7 +33,7 @@ def _receipt(**kwargs) -> tviz.CausalReceipt:
     """Build a valid receipt with both controls passing."""
 
     defaults: dict = {
-        "layer": "blk.0.attn",
+        "module_address": "blk.0.attn",
         "heads": (0, 1),
         "effects": (1.5, -0.5),
         "metric": "logit",
@@ -170,7 +170,7 @@ class TestGqa:
     def test_group_header_wording(self) -> None:
         """Shared-heads wording names the group and its query-head span."""
 
-        gqa = tviz.GqaInfo(num_query_heads=14, n_kv_heads=2)
+        gqa = tviz.GqaInfo(num_query_heads=14, num_key_value_heads=2)
         assert gqa.group(0) == 0
         assert gqa.group(7) == 1
         header = gqa.header(3)
@@ -181,7 +181,7 @@ class TestGqa:
         """Non-dividing grouping is a config error."""
 
         with pytest.raises(torchlens.errors.RenderError):
-            tviz.GqaInfo(num_query_heads=14, n_kv_heads=4)
+            tviz.GqaInfo(num_query_heads=14, num_key_value_heads=4)
 
 
 class TestAnnotationKinds:

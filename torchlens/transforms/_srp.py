@@ -1,6 +1,6 @@
 """Sparse random projection: two constructions, one honest contract (memo B6).
 
-``srp(n_components=REQUIRED, seed=0, density="auto",
+``srp(num_components=REQUIRED, seed=0, density="auto",
 construction="very_sparse_fixed", mode="flatten", share="by_extent")``.
 
 - The default ``very_sparse_fixed`` construction holds EXACTLY
@@ -185,7 +185,7 @@ def _srp_normalize(params: Mapping[str, Any]) -> dict[str, Any]:
     n_components = params.get("n_components")
     if isinstance(n_components, bool) or not isinstance(n_components, int) or n_components < 1:
         raise TransformContractError(
-            f"srp(n_components={n_components!r}) needs a positive integer output "
+            f"srp(num_components={n_components!r}) needs a positive integer output "
             "width; there is no default — srp_dims_for() is the labeled sizing "
             "heuristic that feeds it.",
             code="transform_params_invalid",
@@ -796,7 +796,7 @@ def _srp_apply(
             remedy="cast to a float dtype first (chain a cast step)",
             dtype=str(tensor.dtype),
         )
-    input_spec = TensorSpec.of(tensor)
+    input_spec = TensorSpec.from_tensor(tensor)
     extent = _resolve_extent(spec, input_spec)
     _bind_extent(spec, ctx, extent)
     entry = _matrix_entry(spec, extent, ctx)
@@ -813,7 +813,7 @@ def _srp_apply(
 
 
 def srp(
-    n_components: int,
+    num_components: int,
     seed: int | None = None,
     density: str | float = "auto",
     construction: str = "very_sparse_fixed",
@@ -824,7 +824,7 @@ def srp(
 
     Parameters
     ----------
-    n_components:
+    num_components:
         REQUIRED output width; :func:`~torchlens.transforms.srp_dims_for`
         is the labeled sizing heuristic that feeds it.
     seed:
@@ -856,7 +856,7 @@ def srp(
 
     params = _srp_normalize(
         {
-            "n_components": n_components,
+            "n_components": num_components,
             "density": density,
             "construction": construction,
             "mode": mode,
@@ -909,7 +909,7 @@ def srp_realized_facts(
 
     if isinstance(input_spec, torch.Tensor):
         device = input_spec.device
-        input_spec = TensorSpec.of(input_spec)
+        input_spec = TensorSpec.from_tensor(input_spec)
     else:
         device = torch.device("cpu")
     params = spec.params_dict()
@@ -965,7 +965,7 @@ def srp_verify_matrix(
     """
 
     if isinstance(input_spec, torch.Tensor):
-        input_spec = TensorSpec.of(input_spec)
+        input_spec = TensorSpec.from_tensor(input_spec)
     extent = _resolve_extent(spec, input_spec)
     entry = _matrix_entry(spec, extent, ctx)
     density, m = _resolve_density(spec, extent)

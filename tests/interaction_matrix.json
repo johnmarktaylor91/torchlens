@@ -161,7 +161,7 @@
   "model",
   "input_args",
   "input_kwargs",
-  "input_size",
+  "input_shape",
   "forward_kwargs"
  ],
  "plain_options": [

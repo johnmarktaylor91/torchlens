@@ -49,9 +49,9 @@ class TestOneResolverOneRecord:
         """trace / summary / render serialize the same declared record."""
 
         model = _cnn().eval()
-        trace_log = tl.trace(model, input_size=SIZE)
+        trace_log = tl.trace(model, input_shape=SIZE)
         trace_record = trace_log.input_preprocessor
-        render_result = render(model, input_size=SIZE, file=str(tmp_path / "unused.svg"))
+        render_result = render(model, input_shape=SIZE, file=str(tmp_path / "unused.svg"))
         render_record = provenance_to_record(render_result.provenance)
         assert trace_record is not None
         assert dataclasses.asdict(trace_record) == dataclasses.asdict(render_record)
@@ -106,7 +106,7 @@ class TestPinnedExecutionPolicy:
         model = _cnn().train()
         hash_before = state_dict_hash(model)
         rng_before = torch.get_rng_state()
-        result = render(model, input_size=SIZE, file=str(tmp_path / "g.svg"))
+        result = render(model, input_shape=SIZE, file=str(tmp_path / "g.svg"))
         assert model.training is True
         assert state_dict_hash(model) == hash_before
         assert torch.equal(rng_before, torch.get_rng_state())
@@ -120,7 +120,7 @@ class TestRenderFacade:
     def test_default_collapse_is_auto_and_draw_stays_none(self, tmp_path) -> None:
         """render defaults to collapse='auto'; Trace.draw keeps 'none'."""
 
-        result = render(_cnn().eval(), input_size=SIZE, file=str(tmp_path / "g.svg"))
+        result = render(_cnn().eval(), input_shape=SIZE, file=str(tmp_path / "g.svg"))
         assert result.policy["collapse"] == "auto"
         import inspect
 
@@ -151,7 +151,7 @@ class TestRenderFacade:
     def test_result_is_detached_and_resaves_without_the_trace(self, tmp_path) -> None:
         """Drawing.save() re-renders from the stored DOT source."""
 
-        result = render(_cnn().eval(), input_size=SIZE, file=str(tmp_path / "g.svg"))
+        result = render(_cnn().eval(), input_shape=SIZE, file=str(tmp_path / "g.svg"))
         assert isinstance(result, Drawing)
         assert result.trace is None  # detached by default
         saved = result.save(tmp_path / "again.pdf")
@@ -173,8 +173,8 @@ class TestRenderFacade:
 
         monkeypatch.chdir(tmp_path)
         model = _cnn().eval()
-        first = render(model, input_size=SIZE)
-        second = render(model, input_size=SIZE)
+        first = render(model, input_shape=SIZE)
+        second = render(model, input_shape=SIZE)
         assert first.path is not None and first.path.exists()
         assert second.path is not None and second.path.exists()
         assert first.path != second.path
@@ -199,7 +199,7 @@ class TestDecodeGate:
     def test_output_table_refuses_on_synthesized_trace(self) -> None:
         """decode_output (every decode door's chokepoint) requires gold."""
 
-        log = tl.trace(_cnn().eval(), input_size=SIZE)
+        log = tl.trace(_cnn().eval(), input_shape=SIZE)
         with pytest.raises(Exception) as excinfo:
             log.decode_output()
         assert excinfo.value.fields["code"] == "nongold_semantics_unavailable"

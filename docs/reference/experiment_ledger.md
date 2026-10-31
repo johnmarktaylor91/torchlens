@@ -45,7 +45,7 @@ material record, never duplicates it).
 ## Site sweeps and the effect table
 
 `torchlens.experiment.sweep_sites(baseline, candidates=, edit=, metric=,
-retain=, engine="live_hook", model=, x=)` runs ONE candidate engine (the
+retain=, engine="live_hook", model=, inputs=)` runs ONE candidate engine (the
 occlusion loop generalized): preflight once, serial execution in stable
 order, EXTRACT BEFORE CLEANUP, retain/release under policy (`"all"`,
 `"none"`, `k(k)` rolling by |effect|; `retain_ceiling_bytes=` arms the

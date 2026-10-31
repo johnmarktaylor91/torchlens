@@ -43,7 +43,7 @@ boundary is the property access itself, not the first view query.
 
 ## Views, tables, viz
 - `_view.py` - `ReceptiveFieldView` with `at()`, `center_unit()`, `check()`,
-  `gradient()`, and `show()`; `show(gradient=True)` recomputes WITHOUT retain_graph
+  `gradient()`, and `show()`; `show(grad=True)` recomputes WITHOUT retain_graph
   and frees the autograd graph, so call it last or re-capture.
 - `_table.py` - `build_rf_profile()` backs `Trace.receptive_fields()` /
   `Trace.projective_fields()` (pandas required at call time).

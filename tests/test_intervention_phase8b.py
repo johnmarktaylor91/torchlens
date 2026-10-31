@@ -225,7 +225,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     rerun_result = rerun_log.do(
         {tl.func("relu"): _zero_hook},
         model=ReluLinear(),
-        x=x,
+        inputs=x,
         intervention=InterventionOptions(confirm_mutation=True),
     )
     assert rerun_result is rerun_log
@@ -256,7 +256,7 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
     with pytest.raises(EngineDispatchError):
         log.do(
             {tl.func("relu"): _zero_hook},
-            x=x,
+            inputs=x,
             intervention=InterventionOptions(confirm_mutation=True),
         )
 
@@ -273,7 +273,7 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
         log.do(
             {tl.func("relu"): _zero_hook},
             model=WrongModel(),
-            x=torch.randn(2, 99),
+            inputs=torch.randn(2, 99),
             intervention=InterventionOptions(confirm_mutation=True),
         )
     assert len(log.state_history) == history_len

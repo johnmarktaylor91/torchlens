@@ -99,7 +99,7 @@ def test_mlflow_sink_keeps_the_callers_step_axis_and_never_ends_the_run() -> Non
     for point in memory.histograms:
         stored = client.dicts[("run-1", f"{point.tag}/step_{point.step:010d}.json")]
         assert stored["counts"] == list(point.counts)
-        assert stored["edges"] == list(point.edges)
+        assert stored["edges"] == list(point.bin_edges)
         assert stored["summary"] == point.summary
     for point in memory.texts:
         assert client.texts[("run-1", f"{point.tag}/step_{point.step:010d}.txt")] == point.text
@@ -186,7 +186,7 @@ def test_comet_sink_histograms_refuse_by_name_at_attach() -> None:
         trk.watch(model, to=trk.CometSink(_FakeComet()), optimizer=opt, hist_every=1)
     assert info.value.fields["code"] == "tracker_sink_capability_missing"
     assert info.value.fields["missing"] == ("raw_histogram",)
-    point = trk.HistogramPoint(tag="t", step=1, counts=(1,), edges=(0.0, 1.0))
+    point = trk.HistogramPoint(tag="t", step=1, counts=(1,), bin_edges=(0.0, 1.0))
     with pytest.raises(SinkProtocolError):
         trk.CometSink(_FakeComet()).emit_histogram(point)
 

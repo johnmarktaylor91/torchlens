@@ -12,7 +12,7 @@ trace.narrate	narrate= narrates the LIVE forward and refuses cache=True typed (e
 trace.forward_kwargs	entry-refusal catch-all: any non-empty value raises trace_forward_kwargs_unrouted before capture begins (F29 typed HF recovery); no value ever reaches the cache	tests/test_agent_surface_discovery.py::test_hf_entry_recovery_is_typed_and_teaching
 trace.input_args	hashed directly by _capture_cache_key, outside cache_config
 trace.input_kwargs	hashed directly by _capture_cache_key, outside cache_config
-trace.input_size	consumed by the quickstart ladder BEFORE the capture machinery (popped from public_trace_kwargs); the ladder re-enters trace() with the synthesized concrete input_args, which ARE hashed directly	tests/test_quickstart_resolver_matrix.py::TestOneResolverOneRecord::test_resolver_is_deterministic_across_calls
+trace.input_shape	consumed by the quickstart ladder BEFORE the capture machinery (popped from public_trace_kwargs); the ladder re-enters trace() with the synthesized concrete input_args, which ARE hashed directly	tests/test_quickstart_resolver_matrix.py::TestOneResolverOneRecord::test_resolver_is_deterministic_across_calls
 trace.model	hashed directly by _capture_cache_key, outside cache_config
 carry_state	post-capture model-state policy: the captured trace is identical under both values, and a cache hit runs no forward under either	tests/test_capture_pure_observer.py::test_carry_state_does_not_change_the_trace
 trace.on_zero_fire	settles only the disclosure of an intervene= that fired nowhere (warn, refuse, or record only) after the capture; the captured trace is identical under every value	tests/test_hon2_zero_fire_policy.py::test_trace_policy_never_changes_the_capture

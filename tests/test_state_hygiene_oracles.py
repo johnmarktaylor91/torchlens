@@ -340,7 +340,7 @@ def test_rerun_engine_do_composes_once_per_call(mlp) -> None:
     fork = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True)).fork()
     rerun = tl.options.InterventionOptions(engine="rerun")
     for k in (1.0, 2.0, 3.0):
-        fork.do(tl.module("fc2"), _steer(), model=model, x=x, intervention=rerun)
+        fork.do(tl.module("fc2"), _steer(), model=model, inputs=x, intervention=rerun)
         torch.testing.assert_close(
             fork.output_ops[0].out, _hooked(model, {"fc2": _steer_edit(k)}, x)
         )
@@ -533,14 +533,14 @@ def test_failed_rerun_engine_do_then_retry_applies_once(net, failure: type[BaseE
         model.fc2.forward = _failing_forward(failure)
         try:
             with pytest.raises(failure):
-                fork.do(tl.module("fc1"), tl.scale(2.0), model=model, x=x, intervention=rerun)
+                fork.do(tl.module("fc1"), tl.scale(2.0), model=model, inputs=x, intervention=rerun)
         finally:
             model.fc2.forward = original
         assert len(fork._intervention_spec.hook_specs) == 0, "a failed do() left a hook staged"
     plain_fork, retry_fork = forks
     plain_fork.run(model, x)
     torch.testing.assert_close(_readout(plain_fork), baseline)
-    retry_fork.do(tl.module("fc1"), tl.scale(2.0), model=model, x=x, intervention=rerun)
+    retry_fork.do(tl.module("fc1"), tl.scale(2.0), model=model, inputs=x, intervention=rerun)
     torch.testing.assert_close(_readout(retry_fork), expected)
     torch.testing.assert_close(_readout(parent), baseline)
 
@@ -906,7 +906,9 @@ _LOADED_DOORS: dict[str, tuple[Callable[..., Any], tuple[type[BaseException], st
         _NOT_PERSISTED,
     ),
     "do_rerun": (
-        lambda t, m, x: t.do(tl.module("fc1"), tl.scale(2.0), model=m, x=x, intervention=_RERUN),
+        lambda t, m, x: t.do(
+            tl.module("fc1"), tl.scale(2.0), model=m, inputs=x, intervention=_RERUN
+        ),
         _NOT_PERSISTED,
     ),
     # The default save is analysis-only: no replay funcs and no run descriptor,

@@ -26,7 +26,7 @@ SWEEP_NAME = "sweep"
 
 def sweep(
     model: nn.Module,
-    x: Any,
+    inputs: Any,
     site: str | BaseSelector | Callable[[Any], bool] | MissingType = MISSING,
     values: Iterable[Any] | MissingType = MISSING,
     *,
@@ -41,7 +41,7 @@ def sweep(
     ----------
     model:
         PyTorch module to capture.
-    x:
+    inputs:
         Positional input argument or argument container passed to ``tl.trace``.
     site:
         Intervention site target. Strings match either an exact TorchLens label
@@ -130,7 +130,7 @@ def sweep(
             )
         return _sweep_over_specs(
             model,
-            x,
+            inputs,
             early_values,
             input_kwargs=input_kwargs,
             names=names,
@@ -178,7 +178,7 @@ def sweep(
 
     baseline = _mint_pristine_baseline(
         model,
-        x,
+        inputs,
         member_names=member_names,
         include_baseline=include_baseline,
         input_kwargs=input_kwargs,
@@ -191,7 +191,7 @@ def sweep(
         # name (measured amnesia: byte-identical audit rows across members).
         traces[member_name] = _trace(
             model,
-            x,
+            inputs,
             input_kwargs=input_kwargs,
             intervene=when(site, sweep_replace(value)),
             **trace_kwargs,

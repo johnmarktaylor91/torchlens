@@ -179,7 +179,7 @@ def _record(
             description=description,
         ),
         declared=declared,
-        transform=transform,
+        input_transform=transform,
     )
 
 
@@ -692,7 +692,7 @@ def _as_model_metadata(resolution: Resolution) -> Resolution:
             description=record.description,
         ),
         declared=resolution.declared,
-        transform=resolution.transform,
+        input_transform=resolution.input_transform,
     )
 
 
@@ -788,7 +788,7 @@ def resolve(
             return Resolution(
                 preprocessing=resolution.preprocessing,
                 declared=None,
-                transform=authority,
+                input_transform=authority,
             )
         from torchlens._errors import InvalidArgumentError
 

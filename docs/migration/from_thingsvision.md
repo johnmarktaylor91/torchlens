@@ -131,7 +131,7 @@ model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").eval()
 processor = AutoImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
 pre = pp.resolve(processor)
 
-pixel_values = pre.transform(images)["pixel_values"]
+pixel_values = pre.input_transform(images)["pixel_values"]
 out = tl.extract(model, [input_ids, pixel_values], ["vision_model.post_layernorm"])
 with torch.no_grad():
     image_embeds = model.visual_projection(out["vision_model.post_layernorm"])

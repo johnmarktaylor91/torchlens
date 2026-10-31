@@ -112,7 +112,7 @@ def test_fitted_seam_spec_carries_the_provenance_field_set() -> None:
 
     import torchlens as tl
 
-    pca = tl.stats.PCA(n_components=2)
+    pca = tl.stats.PCA(num_components=2)
     pca.update(torch.randn(20, 5))
     fitted = pca.fitted(fit_scope="f35-contract-pin")
 
