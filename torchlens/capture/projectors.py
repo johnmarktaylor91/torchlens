@@ -774,20 +774,22 @@ class RefreshProjector:
         """
 
         from ..backends.torch.backward import _register_forward_grad_fn
-        from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
+        from ..backends.torch.tensor_tracking import _add_rebound_gradient_hook
 
         self.target.__dict__["_tl_backward_hooked_tensor_keys"] = set()
         self.target.__dict__["_tl_grad_hook_owner_by_label"] = {}
         for layer in self.target.layer_list:
             if raw_labels is not None and layer._layer_label_raw not in raw_labels:
                 continue
-            _register_forward_grad_fn(
-                self.target,
-                layer.grad_fn_handle,
-                layer._layer_label_raw,
-            )
+            grad_fn_handle = layer.grad_fn_handle
+            _register_forward_grad_fn(self.target, grad_fn_handle, layer._layer_label_raw)
             if layer.out is not None:
-                _add_tensor_backward_hook(self.target, layer.out, layer._layer_label_raw)
+                # The logged copy is a graph dead end (for an in-place op the
+                # live tensor may also have been written again): hook the
+                # pinned node the op produced instead.
+                _add_rebound_gradient_hook(
+                    self.target, layer.out, grad_fn_handle, layer._layer_label_raw
+                )
 
     def _separate_output_payloads(self) -> None:
         """Settle refreshed output-node payloads against their producer's payload.
