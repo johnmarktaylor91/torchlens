@@ -1,7 +1,7 @@
 """Shared preview-backend recurrence grouping feed.
 
 Single-pass preview finalization historically never grouped recurrent calls:
-every op became a one-pass layer and ``trace.recurrence_detection`` was stored
+every op became a one-pass layer and ``trace._options_recurrence_detection`` was stored
 as ``False``. This module ports the torch/JAX Step-7 neutral grouper
 (:mod:`torchlens._postprocess.loop_grouping_adapter`) to any preview backend
 whose materialized raw op logs carry structural call metadata, producing

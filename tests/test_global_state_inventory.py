@@ -752,9 +752,9 @@ def test_refused_concurrent_capture_leaves_winner_verified() -> None:
     assert owner_errors == []
     assert len(owner_traces) == 1
     winner = owner_traces[0]
-    assert winner.capture_verified is not False, (
+    assert winner.provenance.verified is not False, (
         "the refused loser's pre-admission side effects degraded the winner: "
-        f"capture_verified={winner.capture_verified!r}, "
+        f"capture_verified={winner.provenance.verified!r}, "
         f"reason={getattr(winner, 'capture_verification_reason', None)!r}"
     )
     assert any(op.func_name == "relu" for op in winner.compute_ops)

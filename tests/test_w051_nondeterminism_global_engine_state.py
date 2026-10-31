@@ -176,7 +176,7 @@ def test_get_draw_set_capture_requires_the_capture_seed(
     assert seam.host_rng_consumed
     assert not seam.host_rng_unreplayable
     assert not seam.rng_monitor_uncertain
-    capture_seed = trace.random_seed
+    capture_seed = trace.options.seed
     assert isinstance(capture_seed, int)
 
     bundle = tmp_path / f"{model_class.__name__}.tlspec"

@@ -9,14 +9,35 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : The finalized record of one executed path: operations, dataflow edges, module context, selected
   payloads, and capture metadata. `tl.trace(...)` returns a `Trace`.
 
-**Trace.cost / Trace.graph / Trace.autograd / Trace.source**
-: Read-only concern groups of a `Trace`. `trace.cost` holds compute and timing totals
-  (`total_flops`, `total_macs`, `macs_by_kind`, `overhead_duration`, ...); `trace.graph` holds
-  graph-shape facts (`edges`, `is_recurrent`, `is_dynamic`, `max_ops_per_layer`, degree and edge
-  counts, `orphans`, `tied_param_groups`); `trace.autograd` holds the backward records
-  (`backward_passes`, `grad_fns`, `grad_fn_calls`, `saved_grad_fns`,
-  `intermediate_derived_grads`, ...); `trace.source` holds the model source facts
-  (`class_location`, `forward_location`, `init_location`, `cls`).
+**Trace.provenance / Trace.options / Trace.cost / Trace.source / Trace.health / Trace.graph / Trace.autograd**
+: Read-only concern groups of a `Trace`; every persisted capture fact lives in exactly one group and
+  is stored privately as `_<group>_<leaf>` (tlspec v11). `trace.provenance` says how, when and from
+  what the capture happened (`backend`, `backend_version`, `backend_config`, `kind`, `start_time`,
+  `end_time`, `duration`, `setup_duration`, `cleanup_duration`, `verified`, `verification_reason`,
+  `cache_hit`, `cache_key`, `cache_path`, `recording_kept`, `fingerprint`, `input_signature_hash`,
+  `input_structure`, `input_object_id`, `model_object_id`, `param_hash_quick`, `param_hash_full`,
+  `param_source`, `root_entry_point`, `owner_thread_id`, `thread_count_start`, `thread_count_end`,
+  `thread_activity_detected`, `distributed_scope`, `observer_spans`, `is_appended`, ...) and
+  `trace.provenance.summary()` renders the capture-provenance text block; `trace.options` is the
+  stored snapshot of the capture options (`mode`, `save`, `save_grads`, `save_mode`, `save_args`,
+  `save_raw_input`, `save_transformed_output`, `save_rng`, `save_source_context`,
+  `source_context_lines`, `backward_ready`, `inference_only`, `structure_only`, `grouping`,
+  `grouping_policy`, `seed`, `on_nonfinite`, `input_transform`, `activation_transform`,
+  `grad_transform`, `output_device`, `verbose`, `chunk_size`, ...); `trace.cost` holds compute,
+  memory and timing totals (`total_flops`, `total_macs`, `macs_by_kind`, `forward_duration`,
+  `backward_durations`, `func_calls_duration`, `overhead_duration`, `forward_peak_memory`,
+  `total_activation_memory`, `total_param_memory`, `total_grad_memory`, `saved_grad_memory`, ...);
+  `trace.source` holds the model source facts (`class_name`, `class_qualname`, `class_file`,
+  `class_line`, `class_docstring`, `init_signature`, `forward_signature`, `frames`, `snapshots`,
+  `class_location`, `forward_location`, `init_location`, `cls`); `trace.health` holds the honesty
+  diagnostics (`completeness_verified`, `completeness_mode`, `num_witness_events`,
+  `num_accounted_witness_events`, `num_unaccounted_witness_events`, `escape_detector_verified`,
+  `escape_detector_mode`, `num_escape_detector_events`, ...); `trace.graph` holds graph-shape
+  facts (`edges`, `is_recurrent`, `is_dynamic`, `conditionals`, `conditional_records`,
+  `stop_frontier`, `op_equivalence_classes`, `relationship_evidence`, `structure_evidence`,
+  `manual_tensor_connections`, `orphans`, `tied_param_groups`, ...); `trace.autograd` holds the
+  backward records (`backward_passes`, `grad_fns`, `grad_fn_calls`, `grad_fn_order`,
+  `has_backward_pass`, `has_grads`, `derived_grads`, `backward_root_grad_fn_object_ids`, ...).
 
 **Trace.params filters and totals**
 : `trace.params.trainable`, `.frozen`, `.executed` and `.unexecuted` are parameter collections;
@@ -48,7 +69,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   (`backward_ready_conflict`). A per-site `CaptureSpec(save_grad=True)` stays attached either
   way, and disk payloads are always detached. An escrowed deferred-selector payload spilled to
   temporary disk comes back detached, with a `RuntimeWarning` naming the count.
-  `Trace.pinned_autograd_memory` discloses what the attached payloads keep alive: the bytes of
+  `Trace.cost.pinned_autograd_memory` discloses what the attached payloads keep alive: the bytes of
   the tensors autograd saved for every op upstream of a saved site, once per storage,
   excluding Parameters and views of them. It reads `Bytes(0)` when every payload is detached
   or the forward ran without grad, and `None` on a loaded trace (session-time, never saved).
@@ -95,7 +116,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   an explicit `inference_only=False` keeps it off. The implied flag holds only when the forward
   really discarded its graph: a forward that turns grad back on (`with torch.enable_grad():`)
   and returns an output with autograd history is not inference-only, and backward stays
-  available. An explicit `inference_only=True` is never changed. `Trace.inference_only` and
+  available. An explicit `inference_only=True` is never changed. `Trace.options.inference_only` and
   `outcome.inference_only` report the effective value; a later `log_backward()` refuses and names
   the cause (`recording_backward_inference_only` on a `Recording`).
 
@@ -142,7 +163,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `tl.trace(model.generate, ids, ...)` (also accepted by `tl.validate`). The owner resolves via
   `method.__self__` and registers as the `owner` submodule of a TorchLens-authored wrapper root
   whose forward calls the exact bound method exactly once; the capture's identity reads
-  `type(owner).__name__`, `Trace.root_entry_point` records
+  `type(owner).__name__`, `Trace.provenance.root_entry_point` records
   `"bound_method:<owner_qualname>.<method>"`, and the root op record (the output-boundary ops)
   carries `tl_authored_root=True` — both persisted with fail-closed load validation. On
   bound-method episode captures `EpisodeOptions.stepped_module` defaults to the owner. Bound-method
@@ -839,7 +860,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Bundle.why / Bundle.provenance** *(spelling documented-unstable)*
 : `b.why(member, relative_to=None)` returns a `WhyReport`: the exact-or-refused ancestry of a
   member against the baseline (or `relative_to`), with lineage status, payload fidelity, value
-  residual and comparability reported as separate axes. `b.provenance()` is the per-member list of
+  residual and comparability reported as separate axes. `b.provenance.summary()` is the per-member list of
   the same facts. Both are derived views; nothing is stored. Reference:
   `docs/reference/experiment_ledger.md`.
 
@@ -885,7 +906,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 ## Capture honesty and visualization
 
 **Capture verification reason**
-: The machine-readable `Trace.capture_verification_reason` explaining why a live capture is not
+: The machine-readable `Trace.provenance.verification_reason` explaining why a live capture is not
   positively verified, for example `mode_rescue_rerun`, `escape_rescue_unrecovered`,
   `owner_thread_tripwire_changed`, or `dynamo_region_not_logged`.
 
@@ -1009,10 +1030,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 ## Backend-neutral identity
 
 **Backend**
-: `Trace.backend`, such as `torch`, `jax`, `mlx`, `tinygrad`, `paddle`, or `tf`.
+: `Trace.provenance.backend`, such as `torch`, `jax`, `mlx`, `tinygrad`, `paddle`, or `tf`.
 
 **Module identity mode**
-: `Trace.module_identity_mode`, describing how the backend identifies module-like ownership.
+: `Trace.options.module_identity_mode`, describing how the backend identifies module-like ownership.
 
 **Backend address / resolver status**
 : Portable origin and resolution fields for backend records. They travel with `param_source`,
@@ -1372,9 +1393,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `Op.autograd_memory` / `Op.num_autograd_tensors` count the tensors the captured forward's
   autograd saved for that op's backward (each storage once within the op; a view counts in full),
   and `Layer.total_autograd_memory`, `ModuleCall.autograd_memory`,
-  `Module.total_autograd_memory` and `Trace.total_autograd_memory` sum those per-op bands, so a
+  `Module.total_autograd_memory` and `Trace.cost.total_autograd_memory` sum those per-op bands, so a
   tensor two ops save counts twice. Capture runs floating Parameters with `requires_grad=True`
-  unless `backward_ready=True`, so on frozen Parameters these and `Trace.pinned_autograd_memory`
+  unless `backward_ready=True`, so on frozen Parameters these and `Trace.cost.pinned_autograd_memory`
   exceed what an eager forward saves; with `backward_ready=True` they match eager.
 
 **Module and call counts**
@@ -1443,7 +1464,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   release-gated against
   [the merged-trace contract](merged_trace_contract.md).
 
-**Trace.distributed_scope** — *unstable — no deprecation shim owed*
+**Trace.provenance.distributed_scope** — *unstable — no deprecation shim owed*
 : The persisted shard-local capture marker (L8/F6): `None` for ordinary captures,
   `"rank_local_shard"` when any parameter or input the capture saw was one rank's local
   shard — the trace is a rank-local recording, never whole-model truth. Persists as of
@@ -1690,19 +1711,19 @@ shims, by declared contract. Each carries the same tag at its definition.
   stays `False` (no overhead); the `print(trace)` NOT-CHECKED health line
   names this option.
 
-**grouping= (trace kwarg) / trace.grouping** — *unstable — no deprecation
+**grouping= (trace kwarg) / trace.options.grouping** — *unstable — no deprecation
 shim owed; S2-gated vocabulary*
 : Closed-vocabulary grouping-policy knob: `"structural"` (default — call-site
   grouping, `docs/guides/grouping.md`), `"strict_shapes"` (reserved; refuses typed until its
   own reviewed design lands), `"fold_sites"` (the D1 within-capture folding
   axis; refuses typed on plain captures until an affirmative D1 ruling).
   Unknown values refuse `grouping_invalid`; legal-but-not-entry-legal values
-  refuse `grouping_policy_unavailable`. The mirror field `trace.grouping`
+  refuse `grouping_policy_unavailable`. The mirror field `trace.options.grouping`
   records the requested value. Distinct from the display-only `fold_repeats`
   viz knob, which folds repeated module runs at render time and never
   changes grouping.
 
-**trace.grouping_policy** — *unstable — no deprecation shim owed; S2-gated
+**trace.options.grouping_policy** — *unstable — no deprecation shim owed; S2-gated
 vocabulary*
 : The persisted, load-validated `grouping_policy_v1` stamp recording HOW the
   trace was grouped: `policy` (the step-7 grouping that actually ran —
@@ -1726,7 +1747,7 @@ S2-gated*
 : `layer_site_ambiguous`, `site_key_unavailable`, `grouping_invalid`,
   `grouping_policy_unavailable`.
 
-**structure_only (capture kwarg) / trace.structure_only** — *unstable — no
+**structure_only (capture kwarg) / trace.options.structure_only** — *unstable — no
 deprecation shim owed*
 : `tl.trace(model, x, capture=CaptureOptions(structure_only=True))` runs the
   capture under the structure-only contract: the op graph, module hierarchy,
@@ -1735,7 +1756,7 @@ deprecation shim owed*
   value-requiring consumers refuse typed through
   `torchlens.capture.structure_only.require_structure_only_capability`, and
   value-dependent branches refuse with the user's source line
-  (device-neutral). The mirror field `trace.structure_only` declares the
+  (device-neutral). The mirror field `trace.options.structure_only` declares the
   mode. Capability contract:
   [structure_only_capabilities.md](structure_only_capabilities.md).
 
@@ -2284,7 +2305,7 @@ shim owed*
 **torchlens.preprocessing.check_card(trace, *, model=None, authority=None, offline=None)** — *unstable — no deprecation shim owed*
 : The on-request preprocessing verifier: `trace` is a `Trace` (its
   `input_preprocessor` is read) or a `ResolvedPreprocessing` record. It compares the
-  preprocessing a capture recorded (`Trace.input_preprocessor`) with the model's known card (HF image
+  preprocessing a capture recorded (`Trace.provenance.input_preprocessor`) with the model's known card (HF image
   processor, torchvision weights, timm or open_clip config, or a named
   `authority=`), returns the field-level `PreprocessingComparison`, and warns
   `preprocessing_card_mismatch` when a field disagrees. Nothing runs it
@@ -2770,7 +2791,7 @@ deprecation shim owed*
   never set) and takes the weights-free summary path, so it needs
   `input_size=` or meta inputs. Requires `transformers`.
 
-**Trace.forward_peak_memory / Trace.backward_peak_memory**
+**Trace.cost.forward_peak_memory / Trace.cost.backward_peak_memory**
 : The largest memory growth above a bracket's starting baseline, including memory freed before the
   bracket ends. CPU measures only under `CaptureOptions(measure_host_peak_memory=True)`: it reads
   the process resident high-water mark, reset at each bracket on Linux (the reset also resets a
@@ -2780,16 +2801,16 @@ deprecation shim owed*
   baseline over all backward passes (CUDA: the growth of the device high-water mark).
 
 **measure_host_peak_memory (CaptureOptions)** — *unstable — no deprecation shim owed*
-: Opt-in (default `False`) for the CPU `Trace.forward_peak_memory` and
-  `Trace.backward_peak_memory`. Measuring resets the process-wide resident high-water mark at the
+: Opt-in (default `False`) for the CPU `Trace.cost.forward_peak_memory` and
+  `Trace.cost.backward_peak_memory`. Measuring resets the process-wide resident high-water mark at the
   forward bracket and at each CPU backward pass, which also resets the caller's own `VmHWM` and
   `ru_maxrss` readings and cannot be undone; the default writes nothing and reports CPU peaks as
   `None` with a reason. Mirrored on the trace as `Trace.measure_host_peak_memory`, a session-time
   knob (not persisted; load restores `False`); reruns and refreshes of a trace inherit it. CUDA
   peaks and the MPS allocator delta ignore it.
 
-**Trace.forward_peak_memory_reason** — *unstable — no deprecation shim owed*
-: Why `Trace.forward_peak_memory` is `None`. A CPU capture without
+**Trace.cost.forward_peak_memory_reason** — *unstable — no deprecation shim owed*
+: Why `Trace.cost.forward_peak_memory` is `None`. A CPU capture without
   `CaptureOptions(measure_host_peak_memory=True)` records `None` with a reason naming that
   opt-in. A CPU forward that measured zero (resident high-water growth,
   end-of-forward RSS delta and, when opted in, the Python-allocation peak all 0) is recorded as
@@ -2799,14 +2820,14 @@ deprecation shim owed*
   `artifact_forward_peak_memory_invalid`. CUDA and MPS keep their numeric semantics.
 
 **Trace.backward_peak_memory_reason** — *unstable — no deprecation shim owed*
-: Why `Trace.backward_peak_memory` is `None`: a CPU backward on a capture without
+: Why `Trace.cost.backward_peak_memory` is `None`: a CPU backward on a capture without
   `CaptureOptions(measure_host_peak_memory=True)` records `None` with a reason naming that
   opt-in. `None` when a value was measured, before any backward, and on artifacts
   that predate the field. Persisted (KEEP); a loaded reason that is not a non-empty string, or
   sits beside a number, refuses `artifact_backward_peak_memory_invalid`. CUDA and MPS keep their
   numeric semantics.
 
-**Trace.total_backward_memory**
+**Trace.cost.total_backward_memory**
 : Bytes of the gradient payloads the trace retains, counted once per storage: a payload that is a
   view charges its whole base storage, an expanded gradient its smaller storage.
 **torchlens.conformance.preview_scorecard(backend, *, workdir=None)** — *unstable — no deprecation shim owed*
@@ -3597,7 +3618,7 @@ The sections above describe each surface in depth.
 | `TensorInputObservation.python_object_id` | In-process Python object identity of the input tensor (diagnostic, not portable) |
 | `Trace.is_replayable` | Whether the capture kept what replay and edits need (set by `replayable=True`) |
 | `Trace.is_stopped` | Whether the capture stopped early (`until=`/`stop_after=`); a stopped trace is partial (was `halted`) |
-| `Trace.random_seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
+| `Trace.options.seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
 | `Trace.transformed_output` | Human-readable model output after `output_transform` (was `raw_output`) |
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |

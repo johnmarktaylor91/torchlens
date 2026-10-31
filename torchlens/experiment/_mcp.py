@@ -129,7 +129,7 @@ def ledger_evidence(path: str, entry_id: str, index: int = 0) -> dict[str, Any]:
     from .. import load as tl_load
 
     bundle = tl_load(str(target))
-    provenance_rows = bundle.provenance() if hasattr(bundle, "provenance") else []
+    provenance_rows = bundle.provenance.summary() if hasattr(bundle, "provenance") else []
     tables = getattr(bundle, "_effect_tables", {}) or {}
     return {
         "schema": "torchlens.ledger_evidence_v1",

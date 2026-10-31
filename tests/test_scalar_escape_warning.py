@@ -120,7 +120,7 @@ def test_runnable_capture_uses_existing_witness_without_plain_warning() -> None:
         )
 
     assert not [record for record in warning_records if record.category is ScalarEscapeWarning]
-    assert trace.completeness_witness_mode == "off"
+    assert trace.health.completeness_mode == "off"
     assert not hasattr(trace, "scalar_escape_count")
 
 

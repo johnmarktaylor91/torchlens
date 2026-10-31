@@ -78,8 +78,8 @@ def test_to_agent_json_carries_capture_honesty_facts() -> None:
     assert capture["backend"] == "torch"
     assert capture["structure_only"] is False
 
-    log.capture_verified = False
-    log.capture_verification_reason = "dynamo_region_not_logged"
+    log._provenance_verified = False
+    log._provenance_verification_reason = "dynamo_region_not_logged"
     ceilinged = log.to_agent_json()["capture"]
     assert ceilinged["capture_verified"] is False
     assert ceilinged["capture_verification_reason"] == "dynamo_region_not_logged"

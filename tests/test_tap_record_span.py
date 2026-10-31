@@ -54,9 +54,9 @@ def test_record_span_and_log_value_metadata() -> None:
     with tl.observers.span("phase_name"):
         log = tl.trace(MetricModel(), torch.tensor([[-1.0, 2.0]]))
 
-    assert log.observer_spans
-    assert log.observer_spans[0]["name"] == "phase_name"
-    assert log.observer_spans[0]["end"] is not None
+    assert log.provenance.observer_spans
+    assert log.provenance.observer_spans[0]["name"] == "phase_name"
+    assert log.provenance.observer_spans[0]["end"] is not None
     assert log.annotations["logged_values"]["out_sum"] == 2.0
     assert not hasattr(log, "report_values")
 

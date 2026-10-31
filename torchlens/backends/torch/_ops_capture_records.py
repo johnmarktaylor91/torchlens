@@ -417,11 +417,11 @@ def _should_keep_alias_mutation_contract(trace: "Trace") -> bool:
         mutation-position metadata.
     """
 
-    save_grads = getattr(trace, "save_grads", None)
+    save_grads = getattr(trace, "_options_save_grads", None)
     return bool(
-        getattr(trace, "save_arg_values", False)
+        getattr(trace, "_options_save_args", False)
         or getattr(trace, "is_replayable", False)
-        or getattr(trace, "backward_ready", False)
+        or getattr(trace, "_options_backward_ready", False)
         or save_grads not in (None, False)
         or getattr(trace, "_validation_active", False)
     )
@@ -730,5 +730,5 @@ def _exhaustive_capture_policy(trace: "Trace", fields_dict: dict[str, Any]) -> C
     return CapturePolicy(
         save_payload=fields_dict["has_saved_activation"],
         save_grad=fields_dict["save_grads"],
-        save_mode=getattr(trace, "save_mode", "copy"),
+        save_mode=getattr(trace, "_options_save_mode", "copy"),
     )

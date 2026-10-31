@@ -64,7 +64,7 @@
   `docs/reference/experiment_ledger.md`): Bundles carry persisted lineage
   (random `bundle_id`, `member_construction` origin anchors, hash-chained
   `operations` chronology; fork carries relations + anchors both ways);
-  `bundle.why(member)` / `bundle.provenance()` are the derived provenance
+  `bundle.why(member)` / `bundle.provenance.summary()` are the derived provenance
   join (exact-or-refused ancestry, four honesty axes, additive wording only
   on an empty reference suffix); `bundle.vary(mapping)` names one spec or
   None identity per member with complete-coverage preflight and no-rollback

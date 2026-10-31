@@ -131,7 +131,7 @@ def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
-    original_hash = log.graph_shape_hash
+    original_hash = log.provenance.fingerprint
     original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
     original_history_len = len(log.state_history)
 
@@ -139,7 +139,7 @@ def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
 
     assert result is log
     assert log.state is TraceState.RERUN_PROPAGATED
-    assert log.graph_shape_hash == original_hash
+    assert log.provenance.fingerprint == original_hash
     assert log._raw_event_shape_hash == original_raw_hash  # noqa: SLF001
     assert log.last_run["engine"] == "rerun"
     assert log.last_run["old_raw_event_shape_hash"] == original_raw_hash
@@ -273,7 +273,7 @@ def test_rerun_failure_leaves_original_log_unchanged() -> None:
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
-    original_hash = log.graph_shape_hash
+    original_hash = log.provenance.fingerprint
     original_labels = tuple(log.layer_labels)
     log.run(ReluAdd(), x)
     history_after_success = list(log.state_history)
@@ -282,7 +282,7 @@ def test_rerun_failure_leaves_original_log_unchanged() -> None:
         log.run(BadModel(), x)
 
     assert log.state is TraceState.RERUN_PROPAGATED
-    assert log.graph_shape_hash == original_hash
+    assert log.provenance.fingerprint == original_hash
     assert tuple(log.layer_labels) == original_labels
     assert log.state_history == history_after_success
 
@@ -296,7 +296,7 @@ def test_rerun_keyboard_interrupt_during_build_leaves_original_log_unchanged(
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
-    original_hash = log.graph_shape_hash
+    original_hash = log.provenance.fingerprint
     original_labels = tuple(log.layer_labels)
     original_ledger = list(log.state_history)
     original_output = log[log.output_layers[0]].out.clone()
@@ -313,7 +313,7 @@ def test_rerun_keyboard_interrupt_during_build_leaves_original_log_unchanged(
         log.run(ReluAdd(), x)
 
     assert log.state is original_run_state
-    assert log.graph_shape_hash == original_hash
+    assert log.provenance.fingerprint == original_hash
     assert tuple(log.layer_labels) == original_labels
     assert log.state_history == original_ledger
     assert torch.equal(log[log.output_layers[0]].out, original_output)
@@ -325,13 +325,13 @@ def test_rerun_strict_divergence_raises_before_swap() -> None:
     positive = torch.ones(2, 3)
     negative = -torch.ones(2, 3)
     log = _capture(BranchModel(), positive)
-    original_hash = log.graph_shape_hash
+    original_hash = log.provenance.fingerprint
     original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
 
     with pytest.raises(ControlFlowDivergenceError):
         log.run(BranchModel(), negative, replay=tl.options.ReplayOptions(strict=True))
 
-    assert log.graph_shape_hash == original_hash
+    assert log.provenance.fingerprint == original_hash
     assert log._raw_event_shape_hash == original_raw_hash  # noqa: SLF001
     assert log.state is TraceState.PRISTINE
 
@@ -342,13 +342,13 @@ def test_rerun_non_strict_divergence_warns_and_swaps() -> None:
     positive = torch.ones(2, 3)
     negative = -torch.ones(2, 3)
     log = _capture(BranchModel(), positive)
-    original_hash = log.graph_shape_hash
+    original_hash = log.provenance.fingerprint
     original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
 
     with pytest.warns(ControlFlowDivergenceWarning):
         log.run(BranchModel(), negative)
 
-    assert log.graph_shape_hash != original_hash
+    assert log.provenance.fingerprint != original_hash
     assert log._raw_event_shape_hash != original_raw_hash  # noqa: SLF001
     assert log.state is TraceState.RERUN_PROPAGATED
     assert log.last_run["divergence_count"] == 1
@@ -535,14 +535,14 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     log.state_history = history
     log._warned_direct_write = True
     log._warned_mutate_in_place = True
-    log.model_object_id = 123
-    log.model_class_qualname = "kept.Model"
-    log.param_hash_quick = "weights-a"
-    log.param_hash_full = "weights-full"
-    log.input_object_id = 456
-    log.input_signature_hash = "input-hash"
-    log.is_appended = True
-    log.relationship_evidence = {"model": Relationship.SAME_OBJECT}
+    log._provenance_model_object_id = 123
+    log._source_class_qualname = "kept.Model"
+    log._provenance_param_hash_quick = "weights-a"
+    log._provenance_param_hash_full = "weights-full"
+    log._provenance_input_object_id = 456
+    log._provenance_input_signature_hash = "input-hash"
+    log._provenance_is_appended = True
+    log._graph_relationship_evidence = {"model": Relationship.SAME_OBJECT}
     log._spec_revision = 7
 
     log.replace_state_from(new_log)
@@ -553,16 +553,16 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     assert log.state_history is history
     assert log._warned_direct_write is True
     assert log._warned_mutate_in_place is True
-    assert log.model_object_id == 123
-    assert log.model_class_qualname == "kept.Model"
-    assert log.param_hash_quick == "weights-a"
-    assert log.param_hash_full == "weights-full"
-    assert log.input_object_id == 456
-    assert log.input_signature_hash == "input-hash"
-    assert log.is_appended is True
-    assert log.relationship_evidence == {"model": Relationship.SAME_OBJECT}
+    assert log.provenance.model_object_id == 123
+    assert log.source.class_qualname == "kept.Model"
+    assert log.provenance.param_hash_quick == "weights-a"
+    assert log.provenance.param_hash_full == "weights-full"
+    assert log.provenance.input_object_id == 456
+    assert log.provenance.input_signature_hash == "input-hash"
+    assert log.provenance.is_appended is True
+    assert log.graph.relationship_evidence == {"model": Relationship.SAME_OBJECT}
     assert log._spec_revision == 7
-    assert log.graph_shape_hash == new_log.graph_shape_hash
+    assert log.provenance.fingerprint == new_log.provenance.fingerprint
     assert log.layer_labels == new_log.layer_labels
 
 

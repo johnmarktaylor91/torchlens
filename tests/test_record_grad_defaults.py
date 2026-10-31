@@ -202,7 +202,7 @@ def test_trace_under_no_grad_implies_inference_only(grad_off: type) -> None:
     with grad_off():
         trace = tl.trace(model, x)
     try:
-        assert trace.inference_only is True
+        assert trace.options.inference_only is True
         assert trace.outcome.inference_only is True
     finally:
         trace.cleanup()
@@ -229,7 +229,7 @@ def test_trace_with_grad_enabled_is_not_inference_only() -> None:
     model, x = _model_and_input()
     trace = tl.trace(model, x)
     try:
-        assert trace.inference_only is False
+        assert trace.options.inference_only is False
     finally:
         trace.cleanup()
 
@@ -253,7 +253,7 @@ def test_trace_under_no_grad_explicit_options_keep_inference_only_off(
     with torch.no_grad():
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(**capture))
     try:
-        assert trace.inference_only is False
+        assert trace.options.inference_only is False
     finally:
         trace.cleanup()
 
@@ -271,7 +271,7 @@ def test_trace_under_no_grad_keeps_saved_values() -> None:
         )
     try:
         assert implied.inference_only is True
-        assert plain.inference_only is False
+        assert plain.options.inference_only is False
         for label in plain.layer_labels:
             if plain[label].has_saved_activation:
                 assert torch.equal(implied[label].out, plain[label].out)
@@ -327,7 +327,7 @@ def test_trace_under_no_grad_with_enable_grad_inside_keeps_backward() -> None:
     with torch.no_grad():
         trace = tl.trace(model, x)
     try:
-        assert trace.inference_only is False
+        assert trace.options.inference_only is False
         assert trace.outcome.inference_only is False
         loss = trace[trace.output_layers[0]].out.sum()
         assert loss.grad_fn is not None
@@ -345,7 +345,7 @@ def test_trace_explicit_inference_only_with_enable_grad_inside_stays_on() -> Non
     with torch.no_grad():
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(inference_only=True))
     try:
-        assert trace.inference_only is True
+        assert trace.options.inference_only is True
         assert trace.outcome.inference_only is True
         loss = model(x).sum()
         with pytest.raises(ConfigurationError, match="autograd graph was discarded"):

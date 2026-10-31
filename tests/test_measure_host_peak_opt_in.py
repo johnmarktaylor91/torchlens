@@ -103,11 +103,11 @@ def test_default_capture_leaves_the_process_high_water_mark_untouched() -> None:
         # current RSS, a full plant below the mark raised above.
         assert _vm_hwm() >= hwm_before
         assert _ru_maxrss() >= maxrss_before
-        assert trace.forward_memory_backend == "cpu"
-        assert trace.forward_peak_memory is None
-        assert trace.forward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
-        assert trace.backward_memory_backend == "cpu"
-        assert trace.backward_peak_memory is None
+        assert trace.provenance.forward_memory_backend == "cpu"
+        assert trace.cost.forward_peak_memory is None
+        assert trace.cost.forward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
+        assert trace.provenance.backward_memory_backend == "cpu"
+        assert trace.cost.backward_peak_memory is None
         assert trace.backward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
         assert "measure_host_peak_memory=True" in CPU_PEAK_NOT_REQUESTED_REASON
         pair = trace.cost.forward_peak_memory_pair
@@ -139,9 +139,9 @@ def test_default_capture_gets_no_number_for_a_planted_and_freed_buffer() -> None
 
     trace = _capture_with_backward(plant=True)
     try:
-        assert trace.forward_peak_memory is None
-        assert trace.forward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
-        assert trace.backward_peak_memory is None
+        assert trace.cost.forward_peak_memory is None
+        assert trace.cost.forward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
+        assert trace.cost.backward_peak_memory is None
         assert trace.backward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
     finally:
         trace.cleanup()
@@ -153,9 +153,9 @@ def test_opt_in_measures_the_planted_buffer_as_before() -> None:
 
     trace = _capture_with_backward(HOST, plant=True)
     try:
-        assert int(trace.forward_peak_memory) >= PLANT_BYTES - MARGIN
-        assert trace.forward_peak_memory_reason is None
-        assert int(trace.backward_peak_memory) >= PLANT_BYTES - MARGIN
+        assert int(trace.cost.forward_peak_memory) >= PLANT_BYTES - MARGIN
+        assert trace.cost.forward_peak_memory_reason is None
+        assert int(trace.cost.backward_peak_memory) >= PLANT_BYTES - MARGIN
         assert trace.backward_peak_memory_reason is None
         assert trace.cost.forward_peak_memory_pair["resident_basis"] == "per_capture"
     finally:
@@ -164,12 +164,12 @@ def test_opt_in_measures_the_planted_buffer_as_before() -> None:
 
 def test_backward_reason_round_trips_and_the_knob_does_not(tmp_path: Path) -> None:
     trace = _capture_with_backward(HOST)
-    trace.backward_peak_memory = None
+    trace._cost_backward_peak_memory = None
     trace.backward_peak_memory_reason = CPU_PEAK_NOT_REQUESTED_REASON
     path = tmp_path / "backward_none.tlspec"
     trace.save(path)
     loaded = tl.load(path)
-    assert loaded.backward_peak_memory is None
+    assert loaded.cost.backward_peak_memory is None
     assert loaded.backward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
     assert loaded.measure_host_peak_memory is False  # a DROP session knob
 
@@ -195,7 +195,7 @@ def test_malformed_backward_reason_refuses_at_load(
     tmp_path: Path, peak: Any, reason: Any, why: str
 ) -> None:
     trace = _capture_with_backward(HOST)
-    trace.backward_peak_memory = peak
+    trace._cost_backward_peak_memory = peak
     trace.backward_peak_memory_reason = reason
     path = tmp_path / f"forged_{why}.tlspec"
     trace.save(path)

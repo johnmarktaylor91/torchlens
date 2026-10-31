@@ -1945,7 +1945,7 @@ def attach_sparse_run_readiness(
             "backend context, or physical input fingerprints, and absent "
             "context is never defaulted. Re-capture and re-save with this "
             f"TorchLens version to produce {RUNNABLE_TLSPEC_SCHEMA_VERSION!r}.",
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(getattr(trace, "_provenance_backend", "unknown")),
             detection_stage="descriptor_legacy_version",
             details=(
                 ("capability", capability),
@@ -1956,7 +1956,7 @@ def attach_sparse_run_readiness(
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(getattr(trace, "_provenance_backend", "unknown")),
             capability=capability,
             resolver_records=(),
             state_sources_available=(),
@@ -1974,14 +1974,14 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             RunnableErrorCode.CONTEXT_FIELD_INVALID,
             str(exc),
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(getattr(trace, "_provenance_backend", "unknown")),
             detection_stage="context_parse_validation",
             details=(("context_field", exc.field), ("reason", exc.detail)),
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(getattr(trace, "_provenance_backend", "unknown")),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -1999,14 +1999,14 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             exc.code,
             str(exc),
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(getattr(trace, "_provenance_backend", "unknown")),
             detection_stage="descriptor_parse",
             details=(("descriptor_field", exc.field), ("reason", exc.detail)),
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(getattr(trace, "_provenance_backend", "unknown")),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -2019,13 +2019,13 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
             f"Sparse runnable descriptor could not be parsed: {exc}",
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(getattr(trace, "_provenance_backend", "unknown")),
             detection_stage="descriptor_parse",
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(getattr(trace, "_provenance_backend", "unknown")),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -2051,14 +2051,14 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             RunnableErrorCode.CONTEXT_FIELD_INVALID,
             str(exc),
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(getattr(trace, "_provenance_backend", "unknown")),
             detection_stage="container_anchor_validation",
             details=(("context_field", exc.field), ("reason", exc.detail)),
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(getattr(trace, "_provenance_backend", "unknown")),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -3016,7 +3016,7 @@ def _readiness_report(
 def _analysis_only_readiness(trace: Any) -> ReadinessReport:
     """Build unsupported readiness for a loaded analysis-only Trace."""
 
-    backend = str(getattr(trace, "backend", "unknown"))
+    backend = str(getattr(trace, "_provenance_backend", "unknown"))
     diagnostic = _diagnostic(
         RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
         "Loaded analysis artifact has no sparse runnable descriptor.",

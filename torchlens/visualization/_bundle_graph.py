@@ -376,7 +376,7 @@ def _add_bundle_member_graph(
     node_ids = {name: f"member_{index}" for index, name in enumerate(bundle.names)}
     for name in bundle.names:
         member = bundle[name]
-        lines = [name, str(getattr(member, "model_class_name", "") or "")]
+        lines = [name, str(getattr(member, "_source_class_name", "") or "")]
         lines.extend(notes.get(name, []))
         attrs = merge_node_style(base_node, node_styles, name, member)
         dot.node(node_ids[name], label="\n".join(line for line in lines if line), **attrs)

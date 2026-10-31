@@ -82,7 +82,7 @@ def _unalias_trace_payloads(trace: Any, changed: list[torch.Tensor]) -> None:
     copy of its forward-time value first; the model keeps its buffer objects.
     """
 
-    if trace is None or not changed or getattr(trace, "save_mode", "copy") == "reference":
+    if trace is None or not changed or getattr(trace, "_options_save_mode", "copy") == "reference":
         # A reference-mode capture asked for aliases: restoring the live buffer is
         # then a post-capture mutation its reference tripwire must still see.
         return

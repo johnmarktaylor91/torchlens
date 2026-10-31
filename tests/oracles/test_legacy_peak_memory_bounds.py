@@ -1,4 +1,4 @@
-"""Outside-measurement bounds for ``Trace.forward_peak_memory`` and ``backward_peak_memory``.
+"""Outside-measurement bounds for ``Trace.cost.forward_peak_memory`` and ``backward_peak_memory``.
 
 Each forward (or backward hook) plants a buffer of known size, writes every
 page, and frees it before returning: a private anonymous 64 MiB mapping
@@ -119,15 +119,15 @@ def test_cpu_forward_peak_includes_a_buffer_freed_inside_the_forward() -> None:
     trace = tl.trace(model, torch.randn(2, 4), capture=HOST)
     high_water = _hwm()
     try:
-        assert trace.forward_memory_backend == "cpu"
+        assert trace.provenance.forward_memory_backend == "cpu"
         outside = SAMPLES["alive"] - SAMPLES["entry"]
         assert outside >= PLANT_BYTES - MARGIN
-        assert trace.forward_peak_memory is not None
-        reported = int(trace.forward_peak_memory)
+        assert trace.cost.forward_peak_memory is not None
+        reported = int(trace.cost.forward_peak_memory)
         assert reported >= outside - MARGIN
         assert reported >= PLANT_BYTES - MARGIN
         assert reported <= high_water - before + MARGIN
-        assert trace.forward_peak_memory_reason is None
+        assert trace.cost.forward_peak_memory_reason is None
     finally:
         trace.cleanup()
 
@@ -144,9 +144,9 @@ def test_cpu_forward_python_peak_includes_a_freed_bytearray() -> None:
     try:
         outside = SAMPLES["alive"] - SAMPLES["entry"]
         assert outside >= PY_PLANT_BYTES
-        assert trace.forward_peak_memory is not None
-        assert int(trace.forward_peak_memory) >= outside - MARGIN
-        assert int(trace.forward_peak_memory) >= PY_PLANT_BYTES - MARGIN
+        assert trace.cost.forward_peak_memory is not None
+        assert int(trace.cost.forward_peak_memory) >= outside - MARGIN
+        assert int(trace.cost.forward_peak_memory) >= PY_PLANT_BYTES - MARGIN
     finally:
         trace.cleanup()
 
@@ -158,9 +158,9 @@ def test_cpu_forward_zero_reads_none_with_the_reason(monkeypatch: pytest.MonkeyP
     torch.manual_seed(0)
     trace = tl.trace(nn.Linear(4, 2).eval(), torch.randn(2, 4), capture=HOST)
     try:
-        assert trace.forward_memory_backend == "cpu"
-        assert trace.forward_peak_memory is None
-        assert trace.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
+        assert trace.provenance.forward_memory_backend == "cpu"
+        assert trace.cost.forward_peak_memory is None
+        assert trace.cost.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
     finally:
         trace.cleanup()
 
@@ -198,11 +198,11 @@ def test_cpu_backward_peak_is_the_largest_pass_peak() -> None:
             windows.append(_hwm() - before)
             outside = samples["alive"][-1] - samples["entry"][-1]
             assert outside >= PLANT_BYTES - MARGIN
-            assert int(trace.backward_peak_memory) >= outside - MARGIN
-            assert int(trace.backward_peak_memory) >= PLANT_BYTES - MARGIN
-        assert trace.backward_memory_backend == "cpu"
+            assert int(trace.cost.backward_peak_memory) >= outside - MARGIN
+            assert int(trace.cost.backward_peak_memory) >= PLANT_BYTES - MARGIN
+        assert trace.provenance.backward_memory_backend == "cpu"
         # The largest single-pass peak, never the sum of the two passes.
-        assert int(trace.backward_peak_memory) <= max(windows) + MARGIN
+        assert int(trace.cost.backward_peak_memory) <= max(windows) + MARGIN
     finally:
         trace.cleanup()
 
@@ -224,8 +224,8 @@ def test_cuda_forward_peak_includes_a_freed_device_buffer() -> None:
     torch.cuda.reset_peak_memory_stats()
     trace = tl.trace(model, torch.randn(2, 4, device="cuda"))
     try:
-        assert trace.forward_memory_backend == "cuda"
-        reported = int(trace.forward_peak_memory)
+        assert trace.provenance.forward_memory_backend == "cuda"
+        reported = int(trace.cost.forward_peak_memory)
         assert reported >= PLANT_BYTES
         assert reported <= torch.cuda.max_memory_allocated()
     finally:
@@ -241,8 +241,8 @@ def test_cuda_backward_peak_bounds_a_device_buffer_in_a_hook() -> None:
         baseline = torch.cuda.max_memory_allocated()
         trace.backward(out.sum(), retain_graph=True)
         trace.backward(out.sum())
-        assert trace.backward_memory_backend == "cuda"
-        reported = int(trace.backward_peak_memory)
+        assert trace.provenance.backward_memory_backend == "cuda"
+        reported = int(trace.cost.backward_peak_memory)
         assert reported >= PLANT_BYTES
         assert reported <= torch.cuda.max_memory_allocated() - baseline
     finally:

@@ -340,7 +340,7 @@ class BackendSpec:
     Parameters
     ----------
     name:
-        Backend identifier used by ``backend=`` and ``Trace.backend``.
+        Backend identifier used by ``backend=`` and ``Trace.provenance.backend``.
     can_handle:
         Side-effect-light detector used only for ``backend=None`` or mismatch checks.
     capture_trace:

@@ -183,7 +183,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
         # the alias row contributes nothing to the tracked total. Input rows
         # own exactly the external inputs' bytes and stay counted.
         if record_type(layer_entry) != "output":
-            self.total_activation_memory += layer_entry.activation_memory
+            self._cost_total_activation_memory += layer_entry.activation_memory
 
         # Track layers that consume parameters (a per-LAYER fact, kept here):
         if layer_entry.layer_label not in unique_layers_seen and layer_entry.has_params:
@@ -193,7 +193,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
         # Tally elapsed time:
 
-        self.func_calls_duration += layer_entry.func_duration
+        self._cost_func_calls_duration += layer_entry.func_duration
 
     _tally_params_by_identity(self, mbd)
     _compute_fx_qualpaths(self)
@@ -245,7 +245,7 @@ def _tally_params_by_identity(self: "Trace", mbd: dict[str, Any]) -> None:
     self.num_params_trainable = 0
     self.num_params_frozen = 0
     self._num_param_tensors = 0
-    self.total_param_memory = Bytes(0)
+    self._cost_total_param_memory = Bytes(0)
     for pl in self._param_logs:
         count, memory = _effective_param_geometry(pl)
         self.num_params += count
@@ -254,7 +254,7 @@ def _tally_params_by_identity(self: "Trace", mbd: dict[str, Any]) -> None:
         else:
             self.num_params_frozen += count
         self._num_param_tensors += 1
-        self.total_param_memory += memory
+        self._cost_total_param_memory += memory
 
         containing_modules: set[str] = set()
         owner_addresses = set(getattr(pl, "all_module_addresses", None) or [])
@@ -894,7 +894,7 @@ def _add_lookup_keys_for_layer_entry(
     }
 
     # Relabel the module ops if this pass built module metadata:
-    if self.capture_mode in {"exhaustive", "predicate"}:
+    if self._options_mode in {"exhaustive", "predicate"}:
         layer_entry.output_of_module_calls = [
             _module_call_label(module_call) for module_call in layer_entry.output_of_module_calls
         ]
@@ -1026,7 +1026,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     # (present in `_raw_layer_dict`); synthetic halt reasons that are NOT op
     # labels ("linear:exit:1" module-exit reasons, "" empty, custom fastlog
     # strings) are left untouched.
-    for halt_field in ("stop_reason", "halt_frontier"):
+    for halt_field in ("stop_reason", "_graph_stop_frontier"):
         raw_halt_label = getattr(self, halt_field, None)
         if raw_halt_label is not None and raw_halt_label in self._raw_graph_ws.raw_layer_dict:
             setattr(self, halt_field, self._raw_graph_ws.raw_layer_dict[raw_halt_label].layer_label)
@@ -1053,20 +1053,20 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     self.layers_with_params = new_param_tensors
 
     new_equiv_operations_tensors: dict[Any, set[str]] = {}
-    for key, equiv_values in self.op_equivalence_classes.items():
+    for key, equiv_values in self._graph_op_equivalence_classes.items():
         new_equiv_operations_tensors[key] = {
             self._raw_to_final_op_labels[tensor_label] for tensor_label in equiv_values
         }
-    self.op_equivalence_classes = new_equiv_operations_tensors
+    self._graph_op_equivalence_classes = new_equiv_operations_tensors
 
-    for t, (child, parent) in enumerate(self.conditional_branch_edges):
+    for t, (child, parent) in enumerate(self._graph_conditional_branch_edges):
         new_child, new_parent = (
             self._raw_to_final_parent_layer_labels[child],
             self._raw_to_final_parent_layer_labels[parent],
         )
-        self.conditional_branch_edges[t] = (new_child, new_parent)
+        self._graph_conditional_branch_edges[t] = (new_child, new_parent)
 
-    self.conditional_arm_entry_edges = {
+    self._graph_conditional_arm_entry_edges = {
         (cond_id, branch_kind): [
             (
                 self._raw_to_final_parent_layer_labels[parent],
@@ -1074,7 +1074,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
             )
             for parent, child in arm_edges
         ]
-        for (cond_id, branch_kind), arm_edges in self.conditional_arm_entry_edges.items()
+        for (cond_id, branch_kind), arm_edges in self._graph_conditional_arm_entry_edges.items()
     }
 
     conditional_edge_call_indices: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
@@ -1083,7 +1083,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         child,
         cond_id,
         branch_kind,
-    ), call_indexs in self.conditional_edge_call_indices.items():
+    ), call_indexs in self._graph_conditional_edge_call_indices.items():
         edge_key = (
             self._raw_to_final_parent_layer_labels[parent],
             self._raw_to_final_parent_layer_labels[child],
@@ -1093,9 +1093,9 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         for call_index in call_indexs:
             if call_index not in conditional_edge_call_indices[edge_key]:
                 conditional_edge_call_indices[edge_key].append(call_index)
-    self.conditional_edge_call_indices = dict(conditional_edge_call_indices)
+    self._graph_conditional_edge_call_indices = dict(conditional_edge_call_indices)
 
-    for conditional_event in self.conditional_records:
+    for conditional_event in self._graph_conditional_records:
         conditional_event.bool_layers = [
             self._raw_to_final_parent_layer_labels[layer_label]
             for layer_label in conditional_event.bool_layers

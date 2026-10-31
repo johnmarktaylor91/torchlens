@@ -209,7 +209,7 @@ def scrub_for_save(
         so ``False`` drops the whole channel; values are never rewritten.
     backend_name:
         Backend identifier for payload audit records. Defaults to
-        ``trace.backend`` when present.
+        ``trace._provenance_backend`` when present.
     payload_materialization:
         Whether this backend can serialize materialized tensor payloads.
     sparse_runnable:
@@ -231,8 +231,8 @@ def scrub_for_save(
         include_custom_attributes=include_custom_attributes,
         include_buffer_values=include_buffer_values,
         sparse_runnable=sparse_runnable,
-        structure_only=bool(getattr(trace, "structure_only", False)),
-        backend_name=str(backend_name or getattr(trace, "backend", "torch")),
+        structure_only=bool(getattr(trace, "_options_structure_only", False)),
+        backend_name=str(backend_name or getattr(trace, "_provenance_backend", "torch")),
         payload_materialization=payload_materialization,
     )
     options.payload_codec = get_payload_codec(options.backend_name)
@@ -453,7 +453,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
                 remap_barcode_text(key): value for key, value in parent_param_ops.items()
             }
 
-    equivalence_groups = state.get("op_equivalence_classes")
+    equivalence_groups = state.get("_graph_op_equivalence_classes")
     if isinstance(equivalence_groups, dict):
         rebuilt_groups = {
             equivalence_class_map.get(key) or canonical_equivalence_key(key): value
@@ -474,9 +474,9 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
             remapped_groups.update(rebuilt_groups)
         else:
             remapped_groups = type(equivalence_groups)(rebuilt_groups)
-        state["op_equivalence_classes"] = remapped_groups
+        state["_graph_op_equivalence_classes"] = remapped_groups
 
-    grad_fn_order = list(state.get("grad_fn_order") or ())
+    grad_fn_order = list(state.get("_autograd_grad_fn_order") or ())
     grad_fn_logs = state.get("_grad_fn_logs") or {}
     grad_id_map: dict[int, int] = {}
 
@@ -525,9 +525,10 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
             ]
             remapped_logs[remap_grad_id(grad_id)] = grad_fn
         state["_grad_fn_logs"] = remapped_logs
-    state["grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
-    state["backward_root_grad_fn_object_ids"] = [
-        remap_grad_id(grad_id) for grad_id in (state.get("backward_root_grad_fn_object_ids") or ())
+    state["_autograd_grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
+    state["_autograd_backward_root_grad_fn_object_ids"] = [
+        remap_grad_id(grad_id)
+        for grad_id in (state.get("_autograd_backward_root_grad_fn_object_ids") or ())
     ]
     for record in (*ops, *layers):
         record.grad_fn_object_id = remap_grad_id(getattr(record, "grad_fn_object_id", None))
@@ -536,8 +537,12 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         if root_ids:
             pass_record.root_grad_fn_ids = [remap_grad_id(root_id) for root_id in root_ids]
 
-    state["model_object_id"] = 1 if state.get("model_object_id") is not None else None
-    state["input_object_id"] = 1 if state.get("input_object_id") is not None else None
+    state["_provenance_model_object_id"] = (
+        1 if state.get("_provenance_model_object_id") is not None else None
+    )
+    state["_provenance_input_object_id"] = (
+        1 if state.get("_provenance_input_object_id") is not None else None
+    )
 
 
 def detach_conditional_trace_backrefs(value: Any) -> None:
@@ -563,7 +568,7 @@ def detach_conditional_trace_backrefs(value: Any) -> None:
 
     if not isinstance(value, MutableMapping):
         return
-    accessor = value.get("conditionals")
+    accessor = value.get("_graph_conditionals")
     if not isinstance(accessor, ConditionalAccessor):
         return
     detached: list[Conditional] = []
@@ -576,7 +581,7 @@ def detach_conditional_trace_backrefs(value: Any) -> None:
         conditional_copy = copy.copy(conditional)
         conditional_copy.arms = detached_arms
         detached.append(conditional_copy)
-    value["conditionals"] = ConditionalAccessor(detached)
+    value["_graph_conditionals"] = ConditionalAccessor(detached)
 
 
 def _mapping_key_payload_reason(key: Any, options: _ScrubOptions) -> str | None:
@@ -1190,7 +1195,7 @@ def _scrub_value(
         # B8-20: a functools.partial repr embeds its bound argument VALUES, so the
         # scrubbed persistence repr redacts them.
         scrubbed_state["_activation_transform_repr"] = _scrubbed_transform_repr(
-            value.activation_transform
+            value._options_activation_transform
         )
         # P7/R10: a capture TorchLens itself refused to bless must not round-trip
         # into "no claim". The NEGATIVE disclosure persists as a string-only row
@@ -1198,8 +1203,8 @@ def _scrub_value(
         # so a loaded artifact can never CLAIM verification -- the row can only
         # ever worsen a verdict, preserving the monotonicity the runnable side
         # enforces structurally. rescue_rerun stays session-time as documented.
-        if getattr(value, "capture_verified", None) is False:
-            reason = getattr(value, "capture_verification_reason", None)
+        if getattr(value, "_provenance_verified", None) is False:
+            reason = getattr(value, "_provenance_verification_reason", None)
             scrubbed_state["_capture_verification"] = {
                 "verified": False,
                 "reason": str(reason) if reason is not None else None,
@@ -1238,7 +1243,7 @@ def _scrub_value(
     # metadata (docstrings + absolute source files) as the Trace. Dispatch on the
     # field signature rather than the class so any source-metadata owner is
     # covered without an ``_io`` -> ``data_classes`` import cycle.
-    elif "class_docstring" in scrubbed_state:
+    elif "_source_class_docstring" in scrubbed_state:
         _apply_source_metadata_policy(scrubbed_state, options)
     # ``ConditionalEvent`` records (in ``conditional_records``) carry the absolute
     # path of the user's forward-defining module in ``source_file``. Dispatch on the
@@ -1367,15 +1372,15 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         # into declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is
         # consulted BEFORE the spec, so an entry here makes the declared policy
         # dead code.
-        "jax_closed_jaxpr",
+        "_provenance_jax_closed_jaxpr",
         "jax_equation_captures",
         "jax_ordered_captures",
         "jax_region_captures",
         "_jax_capture_index_to_raw_op_label",
         "jax_capture_index_to_final_op_label",
-        "jax_inlined_call_primitives",
+        "_provenance_jax_inlined_call_primitives",
         "jax_outvar_key_to_capture_index",
-        "jax_static_argnums",
+        "_options_jax_static_argnums",
         "_selective_save_hidden_payloads",
         # B1-02: the four semantic-output scratch names moved OUT of this
         # allowance and into `Trace._PORTABLE_STATE_SPEC` as declared
@@ -1550,6 +1555,13 @@ def _scrub_field(
     )
 
 
+#: Stored Trace option behind each raw-value save policy (tlspec v11 group keys).
+_RAW_SAVE_POLICY_ATTR = {
+    "input": "_options_save_raw_input",
+    "transformed_output": "_options_save_transformed_output",
+}
+
+
 def _scrub_raw_value_for_save(
     owner: Trace,
     field_name: str,
@@ -1584,10 +1596,9 @@ def _scrub_raw_value_for_save(
         Scrubbed raw value, a bounded placeholder, or ``None``.
     """
 
-    policy_name = {"input": "save_raw_input", "transformed_output": "save_raw_output"}.get(
-        field_name, f"save_{field_name}"
-    )
-    policy = getattr(owner, policy_name, "small")
+    policy_name = f"save_{field_name}"
+    stored_policy_attr = _RAW_SAVE_POLICY_ATTR.get(field_name, policy_name)
+    policy = getattr(owner, stored_policy_attr, "small")
     if policy is False:
         return None
     if policy is True:

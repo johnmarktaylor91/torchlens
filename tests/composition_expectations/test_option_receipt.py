@@ -49,11 +49,11 @@ def test_receipt_distinguishes_explicit_from_default() -> None:
     default = by_name["raise_on_nan"]
     assert not default.explicit and default.reason == "default"
     assert default.requested is MISSING
-    assert default.effective == CaptureOptions().raise_on_nan
+    assert default.effective == CaptureOptions().options.on_nonfinite
 
     # An EXPLICIT value equal to the default is still explicit (the
     # explicit-default cell of the option axis, memo 3.3).
-    explicit_default = CaptureOptions(raise_on_nan=CaptureOptions().raise_on_nan)
+    explicit_default = CaptureOptions(raise_on_nan=CaptureOptions().options.on_nonfinite)
     entry = {e.name: e for e in option_receipt(explicit_default)}["raise_on_nan"]
     assert entry.explicit and entry.reason == "explicit"
 

@@ -12,8 +12,8 @@ are in [Performance: choosing a fast path](guides/fast_paths.md).
 Backend note: `backend=None` preserves the torch eager default, and EVERY preview backend
 auto-routes genuine framework models (MLX, JAX, tinygrad, Paddle, TensorFlow).
 `tl.record()`/fastlog and true backward capture are torch-only in backend v1. Backend-neutral
-metadata lives on `Trace.backend`, `Trace.module_identity_mode`, `Trace.param_source`,
-`Trace.derived_grads`, `Trace.autograd.intermediate_derived_grads`, `Trace.payload_load_status`,
+metadata lives on `Trace.provenance.backend`, `Trace.options.module_identity_mode`, `Trace.provenance.param_source`,
+`Trace.autograd.derived_grads`, `Trace.autograd.intermediate_derived_grads`, `Trace.payload_load_status`,
 `Trace.validation_replay_status`, `dtype_ref`, `device_ref`, `backend_address`, and
 `resolver_status`.
 JAX leaf gradients are requested with `tl.backends.jax.GradOptions`; they are derived by a
@@ -29,13 +29,13 @@ with `GradOptions(intermediate_grads=True)` and are exposed only through
 `Trace.autograd.intermediate_derived_grads` and `Op.derived_grad`; they never populate true backward
 surfaces.
 MLX leaf gradients use `tl.backends.mlx.GradOptions`; they run a second
-`mx.value_and_grad` pass with module param rebinding and expose `Trace.derived_grads` after
+`mx.value_and_grad` pass with module param rebinding and expose `Trace.autograd.derived_grads` after
 the raw-output honesty guard passes. MLX intermediate derived gradients are requested with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`; the same AD replay installs
 custom-VJP taps through the MLX wrappers, then exposes only exact grouped-signature matches whose
 replacement-gradient and perturbation oracle passes.
 Paddle leaf gradients use `tl.backends.paddle.GradOptions`; they run a second guarded Paddle AD
-pass and expose `Trace.derived_grads` without setting `has_backward_pass`. Paddle intermediate
+pass and expose `Trace.autograd.derived_grads` without setting `has_backward_pass`. Paddle intermediate
 derived gradients are requested with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` and expose only exact replay
 matches through `Trace.autograd.intermediate_derived_grads` and `Op.derived_grad`. Paddle capture is

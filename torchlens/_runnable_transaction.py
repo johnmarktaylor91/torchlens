@@ -968,7 +968,7 @@ def _live_readiness_report(trace: Any) -> ReadinessReport:
     return ReadinessReport(
         status=ReadinessStatus.READY,
         provider=RunProvider.LIVE,
-        backend=str(getattr(trace, "backend", "torch")),
+        backend=str(getattr(trace, "_provenance_backend", "torch")),
         capability="live_model_fast_capture",
         resolver_records=(),
         state_sources_available=(StateSource.LIVE_MODEL_STATE,),

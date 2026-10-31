@@ -309,7 +309,7 @@ def trace_text(
             model._torchlens_output_tokenizer = previous_tokenizer
         else:
             delattr(model, "_torchlens_output_tokenizer")
-    log.input_preprocessor = _tokenizer_preprocessing_record(
+    log._provenance_input_preprocessor = _tokenizer_preprocessing_record(
         tok,
         model,
         explicit=tokenizer_was_explicit,
@@ -344,7 +344,7 @@ def trace_image(model: Any, image: Any, **kwargs: Any) -> Trace:
         input_transform=_make_image_transform(transform),
     )
     log = tl.trace(model, image, capture=capture, **kwargs)
-    log.input_preprocessor = record
+    log._provenance_input_preprocessor = record
     return log
 
 
@@ -403,7 +403,7 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
         input_transform=transform,
     )
     log = tl.trace(model, cast(Any, input_dict), capture=capture, **kwargs)
-    log.input_preprocessor = record
+    log._provenance_input_preprocessor = record
     return log
 
 

@@ -523,7 +523,7 @@ def export_collapse_plan(trace: Any, mode: str = "auto") -> dict[str, Any]:
         COLLAPSE_PLAN_PAYLOAD_KEY: {
             "mode": mode,
             "plan_addresses": addresses,
-            "graph_shape_hash": getattr(trace, "graph_shape_hash", None),
+            "graph_shape_hash": getattr(trace, "_provenance_fingerprint", None),
             "profile": {
                 "keys": dict(profile.keys),
                 "per_call_counts": per_call,
@@ -602,7 +602,7 @@ def reapply_collapse_plan(
         changed.append((key, "added_on_target"))
     graph_shape_match = payload.get("graph_shape_hash") is not None and payload[
         "graph_shape_hash"
-    ] == getattr(trace, "graph_shape_hash", None)
+    ] == getattr(trace, "_provenance_fingerprint", None)
     report = CollapsePlanReapply(
         applicable=not changed,
         changed_cohorts=tuple(changed),

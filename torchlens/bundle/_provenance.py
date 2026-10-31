@@ -1,4 +1,4 @@
-"""The provenance join: ``bundle.why()`` / ``bundle.provenance()`` (F03 item 4).
+"""The provenance join: ``bundle.why()`` / ``bundle.provenance.summary()`` (F03 item 4).
 
 A PURE DERIVED VIEW over the repaired material record (ledger memo D1b):
 nothing here is stored, loads recompute the projection, and ancestry is

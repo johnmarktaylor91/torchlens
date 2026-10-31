@@ -35,7 +35,7 @@ def test_l2_merge_capture_flat_kwarg_still_applies() -> None:
 
     merged = options.merge_capture_options(capture=None, verbose=True)
     assert isinstance(merged, options.CaptureOptions)
-    assert merged.verbose is True
+    assert merged.options.verbose is True
 
 
 def test_l2_merge_save_flat_kwarg_still_applies() -> None:
@@ -43,14 +43,14 @@ def test_l2_merge_save_flat_kwarg_still_applies() -> None:
 
     merged = options.merge_save_options(save=None, save_raw_activations=False)
     assert isinstance(merged, options.SaveOptions)
-    assert merged.save_raw_activations is False
+    assert merged.options.save_raw_activations is False
 
 
 def test_l2_merge_default_when_none_unchanged() -> None:
     """Merging with ``None`` still yields the plain defaults."""
 
     merged = options.merge_capture_options(capture=None)
-    assert merged.verbose is False
+    assert merged.options.verbose is False
     assert merged.save_args is False
 
 

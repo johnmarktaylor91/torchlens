@@ -105,7 +105,7 @@ def test_paddle_default_tlspec_round_trip_materializes_payloads(tmp_path: Path) 
     validate_tlspec(path)
     loaded = tl.load(path)
 
-    assert loaded.backend == "paddle"
+    assert loaded.provenance.backend == "paddle"
     assert check_metadata_invariants(loaded) is True
     _assert_paddle_tensor_equal(_saved_output(loaded), expected)
 

@@ -55,7 +55,7 @@ def test_preview_stamp_settles_halted_when_trace_is_halted() -> None:
     assert outcome.is_derived is False
     assert outcome.is_partial is True
     assert outcome.reason == trace.stop_reason
-    assert outcome.boundary_label == trace.halt_frontier
+    assert outcome.boundary_label == trace.graph.stop_frontier
     assert outcome.frontier_labels == tuple(trace.output_layers)
     assert outcome.num_committed_ops is not None
     # The stamp is the trace's settled outcome, in both homes.
@@ -241,7 +241,7 @@ def test_preview_stamp_consumes_latch_on_the_normal_halted_arm() -> None:
     trace.__dict__["_stop_requested"] = StopRequest(
         kind="halt",
         reason=trace.stop_reason,
-        boundary_label=trace.halt_frontier,
+        boundary_label=trace.graph.stop_frontier,
     )
     outcome = stamp_backend_finalized(trace)
     assert outcome.status is CaptureStatus.STOPPED

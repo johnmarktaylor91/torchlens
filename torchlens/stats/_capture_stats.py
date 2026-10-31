@@ -224,9 +224,9 @@ def unpack_spine(vector: torch.Tensor, *, name: str | None = None) -> RunningSta
 def is_stats_capture(trace: Any) -> bool:
     """Whether ``trace`` was captured with ``save="stats"`` (live or reloaded)."""
 
-    if getattr(trace, "save_raw_activations", True):
+    if getattr(trace, "_options_save_raw_activations", True):
         return False
-    transform = getattr(trace, "activation_transform", None)
+    transform = getattr(trace, "_options_activation_transform", None)
     if getattr(transform, "_tl_stats_reducer", False):
         return True
     return trace._activation_transform_repr == STATS_REDUCER_REPR  # noqa: SLF001 -- declared Trace field

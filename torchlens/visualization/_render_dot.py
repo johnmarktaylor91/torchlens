@@ -434,7 +434,7 @@ def _build_graphviz_shell(
     graph_caption = f"<<FONT COLOR='{theme.default_font}'>{caption_body}</FONT>>"
 
     dot = graphviz.Digraph(
-        name=trace.model_class_name,
+        name=trace._source_class_name,
         comment="Computational graph for the feedforward sweep",
         format=target.fileformat,
     )

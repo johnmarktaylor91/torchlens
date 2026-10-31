@@ -347,7 +347,7 @@ def _execution_context(
         sdpa_policy=tuple(sdpa_policy),
         compile_stance="forced_eager",
         owner_thread_coverage=(threading.get_ident(),),
-        completeness_witness_mode=str(getattr(trace, "completeness_witness_mode", "off")),
+        completeness_witness_mode=str(getattr(trace, "_health_completeness_mode", "off")),
     )
 
 

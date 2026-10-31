@@ -444,7 +444,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             Normalized hook entries about to attach.
         """
 
-        if not getattr(self, "chunked_forward", False):
+        if not getattr(self, "_options_chunk_size", False):
             return
         for entry in entries:
             helper = getattr(entry, "helper_spec", None)
@@ -1695,7 +1695,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         # say verified -- the silent-wrongness door the ruling closes).
         # Interim posture: bound-method captures refuse rerun/append; never
         # widened past the ruling.
-        root_fact = getattr(self, "root_entry_point", None)
+        root_fact = getattr(self, "_provenance_root_entry_point", None)
         if root_fact is None:
             raise ModelMismatchError(
                 "rerun/append identity gate is fail-closed on the root "
@@ -1703,7 +1703,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 "artifact saved before the fact was written unconditionally). "
                 "The gate cannot prove the supplied model is the captured "
                 "entry point. Remedy: re-capture with a current TorchLens "
-                "(every capture writes Trace.root_entry_point), or use the "
+                "(every capture writes Trace.provenance.root_entry_point), or use the "
                 "replay engine, which re-executes recorded ops and needs no "
                 "live model",
                 code="root_entry_point_unavailable",
@@ -1735,7 +1735,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 root_entry_point=str(root_fact),
             )
 
-        expected_class = getattr(self, "model_class_qualname", None)
+        expected_class = getattr(self, "_source_class_qualname", None)
         actual_class = _qualname_for_model(model)
         if expected_class is not None and actual_class != expected_class:
             raise ModelMismatchError(
@@ -1743,7 +1743,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 f"expected {expected_class!r}, got {actual_class!r}."
             )
 
-        expected_fingerprint = getattr(self, "param_hash_quick", None)
+        expected_fingerprint = getattr(self, "_provenance_param_hash_quick", None)
         if expected_fingerprint is None:
             return
         actual_fingerprint = _fingerprint_model_weights(model)

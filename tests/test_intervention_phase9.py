@@ -135,12 +135,12 @@ def test_relationship_matrix_gates_node_operations() -> None:
     good = _log(_ReluModel())
     different = _log(_TanhModel())
     for member in (good, different):
-        member.model_object_id = None
-        member.model_class_qualname = None
-        member.param_hash_quick = None
-        member.param_hash_full = None
-        member.graph_shape_hash = None
-        member.input_signature_hash = None
+        member._provenance_model_object_id = None
+        member._source_class_qualname = None
+        member._provenance_param_hash_quick = None
+        member._provenance_param_hash_full = None
+        member._provenance_fingerprint = None
+        member._provenance_input_signature_hash = None
     bundle = tl.Bundle({"good": good, "different": different})
 
     assert bundle.comparability("good", "different") is Relationship.UNKNOWN

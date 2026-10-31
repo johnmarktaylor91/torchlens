@@ -175,7 +175,7 @@ def test_chunk_size_shape_and_remainder() -> None:
     assert trace[output_label].out.shape[0] == 10
     assert len(trace._append_history) == 3
     assert [row["chunk_size"] for row in trace._append_history] == [4, 4, 2]
-    assert trace.chunked_forward is True
+    assert trace.options.chunk_size is True
 
 
 def test_chunk_size_with_save_predicate_appends_saved_payloads_only() -> None:
@@ -221,8 +221,8 @@ def test_chunk_size_with_layers_to_save_keeps_selective_scope() -> None:
 
     relu = trace.find_sites(tl.func("relu")).first()
     assert relu.out.shape[0] == 10
-    assert trace.layers_to_save != "all"
-    assert "relu_1_2:1" in trace.layers_to_save
+    assert trace.options.save != "all"
+    assert "relu_1_2:1" in trace.options.save
     saved_types = {
         record_type(op)
         for op in trace._layer_list
@@ -366,7 +366,7 @@ def test_omitted_chunk_size_does_not_block_non_torch_backend() -> None:
         assert "chunk_paths" not in kwargs
         del args, kwargs
         trace = tl.trace(DeterministicToy().eval(), _toy_inputs()[:1], backend="torch")
-        trace.backend = "chunk_fake"
+        trace._provenance_backend = "chunk_fake"
         return trace
 
     def validate_entry(*args: Any, **kwargs: Any) -> bool:
@@ -404,7 +404,7 @@ def test_omitted_chunk_size_does_not_block_non_torch_backend() -> None:
     finally:
         tl.backends.unregister("chunk_fake")
 
-    assert trace.backend == "chunk_fake"
+    assert trace.provenance.backend == "chunk_fake"
 
 
 def test_log_backward_rejects_chunked_forward() -> None:

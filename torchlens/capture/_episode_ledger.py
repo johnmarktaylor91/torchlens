@@ -1477,7 +1477,7 @@ def _build_header(
 ) -> EpisodeLedgerHeader:
     """Build the finalized ledger header from the settled trace."""
 
-    entry_seed = getattr(trace, "random_seed", None)
+    entry_seed = getattr(trace, "_options_seed", None)
     if not isinstance(entry_seed, int) or isinstance(entry_seed, bool):
         raise _ledger_error(
             "episode ledger requires the capture's effective random_seed (the "
@@ -1717,7 +1717,7 @@ def _write_settled_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> Epis
     )
 
     frontier: dict[str, str] | None = None
-    halt_frontier = getattr(trace, "halt_frontier", None)
+    halt_frontier = getattr(trace, "_graph_stop_frontier", None)
     if halt_frontier:
         first = halt_frontier[0] if isinstance(halt_frontier, (list, tuple)) else halt_frontier
         frontier = {"boundary_kind": "op", "boundary_label": str(first)}
@@ -1863,7 +1863,7 @@ def capture_kind_for(trace: Any) -> str:
     otherwise, including fresh re-execution products whose episode evidence
     the annotations travel policy dropped (those are not episode products;
     the in-key note is the disclosure). Implementation behind the public
-    ``Trace.capture_kind`` spelling (lane F40a; DOCUMENTED-UNSTABLE).
+    ``Trace.provenance.kind`` spelling (lane F40a; DOCUMENTED-UNSTABLE).
     """
 
     annotations = getattr(trace, "annotations", None)

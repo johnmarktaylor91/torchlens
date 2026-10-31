@@ -94,7 +94,7 @@ def test_control_flow_summary_has_no_escape_bytes() -> None:
         capture=tl.options.CaptureOptions(layers_to_save=None),
     )
     try:
-        for text in (str(log.summary(level="op")), log.provenance()):
+        for text in (str(log.summary(level="op")), log.provenance.summary()):
             assert "\x1b" not in text
     finally:
         log.cleanup()
@@ -107,14 +107,14 @@ def test_memory_footer_reports_measured_peak(small_log: tl.Trace) -> None:
 
     text = str(small_log.summary())
     assert "not tracked" not in text
-    backend = small_log.forward_memory_backend
+    backend = small_log.provenance.forward_memory_backend
     assert backend in {"cpu", "cuda", "mps"}
     facts = pass_peak_facts(small_log)
     if facts.value_bytes is None:
         # forks.13: a CPU RSS delta of 0 is recorded as None with its reason,
         # which the footer prints verbatim (never "not tracked", never a 0).
         assert backend == "cpu"
-        assert facts.meaning == small_log.forward_peak_memory_reason
+        assert facts.meaning == small_log.cost.forward_peak_memory_reason
         assert f"forward peak unavailable ({facts.meaning})" in text
         return
     # The basis is always named; a measured value is never called unavailable.
@@ -125,6 +125,6 @@ def test_memory_footer_reports_measured_peak(small_log: tl.Trace) -> None:
 def test_memory_footer_unavailable_is_distinct(small_log: tl.Trace) -> None:
     """A capture with no recorded backend reports unavailable, never a fake zero (A7)."""
 
-    small_log.forward_memory_backend = "unknown"
+    small_log._provenance_forward_memory_backend = "unknown"
     text = str(small_log.summary())
     assert "forward peak unavailable (not measured on this capture)" in text

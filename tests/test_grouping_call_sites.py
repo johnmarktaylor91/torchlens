@@ -47,7 +47,7 @@ def _capture(build: Callable[[], nn.Module], x: Any) -> Any:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(model, x)
-    assert trace.grouping_policy["detector"] == "callsite_v1"
+    assert trace.options.grouping_policy["detector"] == "callsite_v1"
     return trace
 
 

@@ -191,7 +191,7 @@ def test_tlspec_roundtrip_still_loads(tmp_path: object) -> None:
     path = str(tmp_path) + "/roundtrip.tlspec"  # type: ignore[operator]
     log.save(path)
     loaded = tl.load(path)
-    assert loaded.backend == "torch"
+    assert loaded.provenance.backend == "torch"
     assert loaded.summary()
 
 

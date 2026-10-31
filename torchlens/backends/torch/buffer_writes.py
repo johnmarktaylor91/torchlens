@@ -1310,7 +1310,7 @@ class BufferWriteTracker:
     ) -> str | None:
         """Log the graph node representing one written buffer version."""
 
-        if self.trace.capture_mode != "exhaustive":
+        if self.trace._options_mode != "exhaustive":
             return None
         from .sources import log_source_tensor
 
@@ -1558,7 +1558,7 @@ def snapshot_buffer_args(
 ) -> list[BufferSnapshot]:
     """Snapshot buffer-backed arguments for one wrapped torch call."""
 
-    if trace.capture_mode != "exhaustive":
+    if trace._options_mode != "exhaustive":
         return []
     tracker = peek_buffer_write_tracker(trace)
     if not isinstance(tracker, BufferWriteTracker):

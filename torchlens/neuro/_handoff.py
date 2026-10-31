@@ -876,7 +876,7 @@ def base_descriptors(
     if payload.pass_index is not None:
         descriptors["pass_index"] = payload.pass_index
     if trace is not None:
-        model_name = getattr(trace, "model_class_name", None)
+        model_name = getattr(trace, "_source_class_name", None)
         if model_name:
             # The reserved multi-model slot (memo section 8): one factual
             # model identity per Dataset today, a stack key tomorrow.

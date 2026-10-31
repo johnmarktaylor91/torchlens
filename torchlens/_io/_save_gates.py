@@ -80,13 +80,13 @@ def _refuse_shard_local_erasure(trace: Any) -> None:
     never a narrowing, no D-ruling owed.
     """
 
-    if getattr(trace, "distributed_scope", None) != "rank_local_shard":
+    if getattr(trace, "_provenance_distributed_scope", None) != "rank_local_shard":
         return
     from .._data_classes.trace import Trace as _Trace
     from . import FieldPolicy
     from .prerelease import prerelease_fields_active
 
-    policy_entry = _Trace._FIELD_POLICY.get("distributed_scope")
+    policy_entry = _Trace._FIELD_POLICY.get("_provenance_distributed_scope")
     portable_policy = getattr(policy_entry, "portable_policy", policy_entry)
     if portable_policy is not None and portable_policy is not FieldPolicy.DROP:
         return

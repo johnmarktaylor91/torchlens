@@ -807,7 +807,7 @@ def _trace_container_capability(trace: Any, role: Role) -> str:
     # backend seam (a torch-era legacy artifact), so it resolves the torch
     # default instead of a hardcoded claim; an unresolvable backend fails
     # CLOSED to "none".
-    backend = getattr(trace, "backend", None) or "torch"
+    backend = getattr(trace, "_provenance_backend", None) or "torch"
     try:
         from ..backends.registry import get_backend_spec
 

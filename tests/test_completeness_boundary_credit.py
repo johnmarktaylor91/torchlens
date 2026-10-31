@@ -215,7 +215,7 @@ def test_census_names_only_the_stale_relu_in_iql_shape(monkeypatch: pytest.Monke
     operators = [row["operator"] for row in trace.completeness_diagnostics]
     assert "aten.relu.default" in operators
     assert "aten.tanh.default" not in operators
-    assert trace.capture_verified is False
+    assert trace.provenance.verified is False
 
 
 _ATEN = torch.ops.aten

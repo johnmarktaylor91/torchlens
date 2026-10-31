@@ -300,7 +300,7 @@ def test_real_package_inventory_covers_field_tables_and_shims() -> None:
     """The walk over the real package reaches the names the dry run found missing."""
 
     rows = {row["id"]: row for row in build_inventory()["rows"]}
-    durations = rows["member:torchlens._data_classes.trace:Trace.backward_durations"]
+    durations = rows["member:torchlens._data_classes.trace:Trace.cost.backward_durations"]
     assert "torchlens._constants:MODEL_LOG_FIELD_ORDER" in durations["field_tables"]
     assert {
         "member:torchlens._vocab.trace_state:TraceState.APPENDED",

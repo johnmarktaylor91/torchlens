@@ -148,9 +148,9 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 
 | Old name | New name | Status |
 | --- | --- | --- |
-| `Trace.conditional_then_entry_edges` | `Trace.conditional_arm_entry_edges` | removed |
-| `Trace.conditional_elif_entry_edges` | `Trace.conditional_arm_entry_edges` | removed |
-| `Trace.conditional_else_entry_edges` | `Trace.conditional_arm_entry_edges` | removed |
+| `Trace.conditional_then_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
+| `Trace.conditional_elif_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
+| `Trace.conditional_else_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
 | `Trace.validate_saved_outs()` | `Trace.validate_forward_pass()` | removed |
 | `Trace.replay()` | `Trace.push()` | removed |
 | `Trace.replay_from()` | `Trace.push_from()` | removed |

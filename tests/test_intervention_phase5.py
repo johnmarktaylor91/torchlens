@@ -185,10 +185,10 @@ def test_graph_shape_hash_is_stable_and_sensitive() -> None:
         capture=tl.options.CaptureOptions(replayable=True),
     )
 
-    assert log1.graph_shape_hash is not None
-    assert len(log1.graph_shape_hash) == 64
-    assert log1.graph_shape_hash == log2.graph_shape_hash
-    assert log3.graph_shape_hash != log1.graph_shape_hash
+    assert log1.provenance.fingerprint is not None
+    assert len(log1.provenance.fingerprint) == 64
+    assert log1.provenance.fingerprint == log2.provenance.fingerprint
+    assert log3.provenance.fingerprint != log1.provenance.fingerprint
 
 
 def test_graph_shape_hash_is_referentially_transparent() -> None:

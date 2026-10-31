@@ -140,7 +140,7 @@ def _resolve_source(
             remedy="export with privacy_profile='local', or drop this provider",
             argument="overlays",
         )
-    if getattr(log, "structure_only", False) and canonical in _VALUE_DERIVED:
+    if getattr(log, "_options_structure_only", False) and canonical in _VALUE_DERIVED:
         raise ModelExplorerExportError(
             f"Overlay provider {canonical!r} needs activation/gradient values, and a "
             "structure-only capture retained none",

@@ -649,7 +649,7 @@ def require_structure_only_capability(
     marker persists plainly as of tlspec v8 and the row is supported.
     """
 
-    if not bool(getattr(trace, "structure_only", False)):
+    if not bool(getattr(trace, "_options_structure_only", False)):
         return None
     row = STRUCTURE_ONLY_CAPABILITIES[capability]
     if row.status_v1.startswith("refuse:"):
@@ -829,8 +829,8 @@ def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
     structurally by the W1-RPT alignment (dropout/BN-stat records diverge).
     """
 
-    structure_class = getattr(structure_trace, "model_class_name", None)
-    real_class = getattr(real_trace, "model_class_name", None)
+    structure_class = getattr(structure_trace, "_source_class_name", None)
+    real_class = getattr(real_trace, "_source_class_name", None)
     if structure_class and real_class and structure_class != real_class:
         _refuse_incomparable(
             "model_class",
@@ -843,8 +843,8 @@ def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
             "input_geometry",
             f"structure side inputs {structure_inputs!r} vs real side {real_inputs!r}.",
         )
-    structure_rt = getattr(structure_trace, "backend_runtime_version", None)
-    real_rt = getattr(real_trace, "backend_runtime_version", None)
+    structure_rt = getattr(structure_trace, "_provenance_backend_version", None)
+    real_rt = getattr(real_trace, "_provenance_backend_version", None)
     if structure_rt and real_rt and structure_rt != real_rt:
         _refuse_incomparable(
             "backend_runtime_version",
@@ -951,7 +951,7 @@ def _structural_alignment_contradiction(structure_trace: Any, real_trace: Any) -
 def _require_discharge_preconditions(structure_trace: Any, real_trace: Any) -> None:
     """Typed precondition refusals (never silent Nones)."""
 
-    if not bool(getattr(structure_trace, "structure_only", False)):
+    if not bool(getattr(structure_trace, "_options_structure_only", False)):
         raise StructureOnlyCapabilityError(
             "discharge_against is only defined on a structure-only capture; "
             "this trace is an ordinary capture. Remedy: call it on the "
@@ -959,7 +959,7 @@ def _require_discharge_preconditions(structure_trace: Any, real_trace: Any) -> N
             code="structure_only_discharge_precondition",
             capability="discharge",
         )
-    if bool(getattr(real_trace, "structure_only", False)):
+    if bool(getattr(real_trace, "_options_structure_only", False)):
         raise StructureOnlyCapabilityError(
             "discharge_against requires an ORDINARY (non-structure-only) real "
             "capture as the oracle; received another structure-only trace. "

@@ -70,7 +70,7 @@ def test_trace_records_weight_norm_without_rescue(model_cls: type[nn.Module], ex
     trace = tl.trace(model_cls(), torch.randn(1, 4, 8))
     func_names = [layer.func_name for layer in trace.layers]
     assert func_names.count("_weight_norm") == expected_ops
-    assert trace.capture_verified is not False, trace.capture_verification_reason
+    assert trace.provenance.verified is not False, trace.provenance.verification_reason
 
 
 def test_weight_norm_module_alias_is_wrapped_while_installed():

@@ -201,7 +201,7 @@ def _commit_annotation_tensors(trace: Any, staged: OrderedDict[str, torch.Tensor
 
     if not staged:
         return
-    backend_name = str(getattr(trace, "backend", TORCH_BACKEND_NAME))
+    backend_name = str(getattr(trace, "_provenance_backend", TORCH_BACKEND_NAME))
     if backend_name != TORCH_BACKEND_NAME:
         raise ValueError(
             "Tensor annotation blobs are supported only for torch traces in this "

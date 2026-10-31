@@ -1796,7 +1796,7 @@ def test_trace_save_arg_values(default_input1):
     """Test save_args=True populates saved_args on entries."""
     model = example_models.SimpleFF()
     mh = trace(model, default_input1, capture=tl.options.CaptureOptions(save_args=True))
-    assert mh.save_arg_values is True
+    assert mh.options.save_args is True
     # At least one non-input layer should have saved_args
     found = False
     for label in mh.layer_labels:

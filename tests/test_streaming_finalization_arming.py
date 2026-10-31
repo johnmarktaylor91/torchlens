@@ -39,7 +39,7 @@ def test_streamed_bundle_is_finalized_and_loadable(tmp_path) -> None:
     path, trace = _capture_streamed(tmp_path)
     assert path.exists(), "streamed bundle missing on disk after capture"
     loaded = tl.load(str(path))
-    assert loaded.backend == "torch"
+    assert loaded.provenance.backend == "torch"
     assert set(loaded.layer_labels) == set(trace.layer_labels)
 
 

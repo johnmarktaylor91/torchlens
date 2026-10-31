@@ -132,7 +132,7 @@ def _evidence_recorded(trace: Any) -> bool:
     # Deferred: backends sit above data_classes in the layer map.
     from ..backends._intervention_evidence import records_intervention_evidence
 
-    if not records_intervention_evidence(str(trace.backend)):
+    if not records_intervention_evidence(str(trace._provenance_backend)):
         return False
     version = trace.tlspec_version
     return isinstance(version, int) and version >= PRISTINE_EVIDENCE_MIN_TLSPEC

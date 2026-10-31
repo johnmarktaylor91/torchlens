@@ -84,31 +84,43 @@ def test_capture_touched_cuda_predicate_gates_on_trace_fact() -> None:
     from torchlens._utils.tensor_utils import capture_touched_cuda
 
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu", _layer_list=None))
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="cpu", _layer_list=None)
+        )
         is False
     )
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="mps", _layer_list=None))
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="mps", _layer_list=None)
+        )
         is False
     )
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="cuda", _layer_list=None))
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="cuda", _layer_list=None)
+        )
         is True
     )
     # Unknown/missing fails toward the historical flush, never toward skipping.
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="unknown", _layer_list=None))
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="unknown", _layer_list=None)
+        )
         is True
     )
     assert capture_touched_cuda(SimpleNamespace(_layer_list=None)) is True
     # Other KNOWN accelerator homes must not flush the CUDA allocator (the
     # old blanket `not in ("cpu", "mps")` over-broadly flushed for them).
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="xpu", _layer_list=None))
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="xpu", _layer_list=None)
+        )
         is False
     )
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="hpu", _layer_list=None))
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="hpu", _layer_list=None)
+        )
         is False
     )
 
@@ -130,12 +142,14 @@ def test_capture_touched_cuda_consults_recorded_op_devices() -> None:
     cuda_op = SimpleNamespace(device_ref="cuda:0")
     assert (
         capture_touched_cuda(
-            SimpleNamespace(forward_memory_backend="cpu", _layer_list=[cpu_op, cuda_op])
+            SimpleNamespace(_provenance_forward_memory_backend="cpu", _layer_list=[cpu_op, cuda_op])
         )
         is True
     )
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu", _layer_list=[cpu_op]))
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="cpu", _layer_list=[cpu_op])
+        )
         is False
     )
 
@@ -146,7 +160,7 @@ def test_capture_touched_cuda_consults_recorded_op_devices() -> None:
     # Consult failure keeps the stamped fact's verdict (adds flushes only).
     assert (
         capture_touched_cuda(
-            SimpleNamespace(forward_memory_backend="cpu", _layer_list=_RaisingOps())
+            SimpleNamespace(_provenance_forward_memory_backend="cpu", _layer_list=_RaisingOps())
         )
         is False
     )
@@ -371,7 +385,7 @@ def test_cleanup_does_not_flush_cuda_for_cpu_capture() -> None:
     from torchlens._data_classes import cleanup as cleanup_module
 
     trace = tl.trace(nn.Sequential(nn.Linear(4, 4)), torch.randn(2, 4))
-    assert getattr(trace, "forward_memory_backend", None) in ("cpu", "mps")
+    assert getattr(trace, "_provenance_forward_memory_backend", None) in ("cpu", "mps")
 
     calls = {"flush": 0}
     saved_available = cleanup_module._is_cuda_available

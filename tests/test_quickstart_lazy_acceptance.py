@@ -106,7 +106,7 @@ class TestFlipSignal:
         ground_truth = sum(p.numel() for p in model.parameters())
         assert log.num_params == ground_truth
         assert log.num_params_trainable + log.num_params_frozen == log.num_params
-        assert int(log.total_param_memory) > 0
+        assert int(log.cost.total_param_memory) > 0
 
     def test_summary_totals_are_truthful(self) -> None:
         """The one-call summary's totals include the materialized head."""

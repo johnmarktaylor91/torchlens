@@ -1,6 +1,6 @@
 """The pass-level-peak publication gate (observe item 4).
 
-``Trace.forward_peak_memory`` / ``backward_peak_memory`` are real runtime
+``Trace.cost.forward_peak_memory`` / ``backward_peak_memory`` are real runtime
 measurements with BACKEND-DEPENDENT meaning: CUDA reports the device
 allocator peak; CPU reports a process-RSS endpoint delta (non-reproducible --
 measured 151.0 -> 113.7 MB on identical runs, and 332 KB while retaining
@@ -26,6 +26,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
+#: Stored attribute of each pass's peak-memory reason (the forward reason is a v11 group key;
+#: the backward reason keeps its stored name).
+_PEAK_REASON_ATTR = {
+    "forward": "_cost_forward_peak_memory_reason",
+    "backward": "backward_peak_memory_reason",
+}
+
 
 __all__ = ["PassPeakFacts", "format_pass_peak", "pass_peak_facts"]
 
@@ -77,13 +85,13 @@ def pass_peak_facts(trace: Any, which: str = "forward") -> PassPeakFacts:
         Backend-checked facts; renderers never read the raw fields directly.
     """
 
-    backend = getattr(trace, f"{which}_memory_backend", None)
-    peak = getattr(trace, f"{which}_peak_memory", None)
+    backend = getattr(trace, f"_provenance_{which}_memory_backend", None)
+    peak = getattr(trace, f"_cost_{which}_peak_memory", None)
     if not backend or backend == "unknown" or peak is None:
         # a CPU peak that was not requested or read 0 is recorded
         # as None WITH the reason naming the opt-in; surface it verbatim.
         # The reason explains a CPU measurement only, never an unknown backend.
-        reason = getattr(trace, f"{which}_peak_memory_reason", None)
+        reason = getattr(trace, _PEAK_REASON_ATTR[which], None)
         explained = backend == "cpu" and isinstance(reason, str) and bool(reason)
         return PassPeakFacts(
             which=which,

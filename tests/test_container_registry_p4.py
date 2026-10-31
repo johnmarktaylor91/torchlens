@@ -37,7 +37,7 @@ def _semantic_digest(trace: tl.Trace) -> str:
     """Return a stable semantic digest for flag-off byte-neutral comparisons."""
 
     projection = {
-        "graph_shape_hash": trace.graph_shape_hash,
+        "graph_shape_hash": trace.provenance.fingerprint,
         "has_containers": "_containers" in trace.__dict__,
         "output_layers": list(trace.output_layers),
         "ops": [
@@ -87,7 +87,7 @@ def _assert_structural_roundtrip(trace: tl.Trace) -> None:
     assert "_containers" in trace.__dict__
     assert any(Role.MODEL_INPUT in record.roles for record in trace._containers.values())
     assert any(Role.MODEL_OUTPUT in record.roles for record in trace._containers.values())
-    assert trace.input_structure.kind == "dict"
+    assert trace.provenance.input_structure.kind == "dict"
     rebuilt_input = trace.reconstruct_container(role=Role.MODEL_INPUT)
     rebuilt_output = trace.reconstruct_output()
 
@@ -148,8 +148,8 @@ def test_flag_off_container_persistence_is_semantically_neutral(
                 capture_container_structure=False,
             ),
         )
-        assert first.capture_cache_key == round_tripped.capture_cache_key
-        assert round_tripped.capture_cache_hit is True
+        assert first.provenance.cache_key == round_tripped.provenance.cache_key
+        assert round_tripped.provenance.cache_hit is True
     else:
         path = tmp_path / "streamed-off.tlspec"
         tl.trace(
@@ -165,7 +165,7 @@ def test_flag_off_container_persistence_is_semantically_neutral(
         assert len(records) == 1, records
         roles = {snapshot.role for snapshot in records[0].snapshots}
         assert roles and roles <= {Role.MODEL_OUTPUT, Role.CALL_OUTPUT}
-    assert baseline.graph_shape_hash == explicit_false.graph_shape_hash
+    assert baseline.provenance.fingerprint == explicit_false.graph_shape_hash
     assert _semantic_digest(baseline) == _semantic_digest(explicit_false)
     assert _semantic_digest(explicit_false) == _semantic_digest(round_tripped)
 
@@ -207,8 +207,8 @@ def test_flag_on_container_structure_round_trips(
                 capture_container_structure=True,
             ),
         )
-        assert round_tripped.capture_cache_hit is True
-        assert trace.capture_cache_key == round_tripped.capture_cache_key
+        assert round_tripped.provenance.cache_hit is True
+        assert trace.provenance.cache_key == round_tripped.provenance.cache_key
     else:
         path = tmp_path / "streamed-on.tlspec"
         streamed_trace = tl.trace(

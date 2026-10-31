@@ -129,7 +129,7 @@ def test_autograd_saved_bytes_on_every_door(variant: str) -> None:
         assert int(trace.module_calls["self:1"].autograd_memory) == whole
         assert int(trace.modules["a"].total_autograd_memory) == (a_bytes or 0)
         assert int(trace.modules["self"].total_autograd_memory) == whole
-        assert int(trace.total_autograd_memory) == whole
-        assert int(trace.pinned_autograd_memory) == pinned
+        assert int(trace.cost.total_autograd_memory) == whole
+        assert int(trace.cost.pinned_autograd_memory) == pinned
     finally:
         trace.cleanup()

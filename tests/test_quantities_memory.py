@@ -112,8 +112,8 @@ def test_memory_fields_are_bytes_and_format_directly() -> None:
     buffer = trace.buffers[0]
 
     fields = [
-        trace.total_activation_memory,
-        trace.saved_activation_memory,
+        trace.cost.total_activation_memory,
+        trace.cost.saved_activation_memory,
         op.activation_memory,
         op.input_memory,
         op.param_memory,
@@ -142,11 +142,11 @@ def test_duration_flops_and_macs_fields_are_quantity_types() -> None:
     call = module.ops[0]
 
     duration_fields = [
-        trace.setup_duration,
-        trace.forward_duration,
-        trace.cleanup_duration,
-        trace.capture_duration,
-        trace.func_calls_duration,
+        trace.provenance.setup_duration,
+        trace.cost.forward_duration,
+        trace.provenance.cleanup_duration,
+        trace.provenance.duration,
+        trace.cost.func_calls_duration,
         op.func_duration,
         layer.func_duration,
         module.forward_duration,
@@ -321,5 +321,5 @@ def test_forward_peak_memory_ignores_pre_existing_external_tracemalloc_peak() ->
     # A tiny nn.Linear(10, 10) forward pass should report a small, proportionate
     # peak -- not the ~20MB phantom footprint from the unrelated prior activity,
     # and the two calls should not be pinned to an identical foreign value.
-    assert int(log1.forward_peak_memory) < 5_000_000
-    assert int(log2.forward_peak_memory) < 5_000_000
+    assert int(log1.cost.forward_peak_memory) < 5_000_000
+    assert int(log2.cost.forward_peak_memory) < 5_000_000

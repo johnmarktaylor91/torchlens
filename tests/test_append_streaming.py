@@ -109,5 +109,5 @@ def test_append_rerun_on_loaded_streaming_trace_works(tmp_path: Path) -> None:
 
     loaded.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
-    assert loaded.is_appended is True
+    assert loaded.provenance.is_appended is True
     assert loaded._append_sequence_id == 1

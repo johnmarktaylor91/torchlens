@@ -88,7 +88,7 @@ def test_each_named_host_source_records_one_advisory_row(name: str) -> None:
     assert not [w for w in caught if "host buffer" in str(w.message)]
     facts = capture_honesty_facts(trace)
     plain_facts = capture_honesty_facts(plain)
-    assert trace.capture_verified is None
+    assert trace.provenance.verified is None
     assert facts["capture_status"] == plain_facts["capture_status"]
     assert facts["capture_verified"] == plain_facts["capture_verified"]
     assert facts["capture_verification_reason"] == plain_facts["capture_verification_reason"]

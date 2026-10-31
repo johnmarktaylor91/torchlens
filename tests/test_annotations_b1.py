@@ -163,7 +163,7 @@ def test_annotate_rerun_preserves_user_annotations_and_refreshes_internals() -> 
     relu = trace.resolve_sites(tl.func("relu"), max_fanout=10).first()
     key = f"layer:{relu.layer_label}"
     trace.annotations["user"] = {"trace_note": "keep"}
-    trace.input_annotations["user"] = {"input_note": "keep"}
+    trace.provenance.input_annotations["user"] = {"input_note": "keep"}
     trace.annotate(tl.func("relu"), data=torch.ones(2, 2))
     trace.annotate(tl.func("relu"), data={"node_note": "keep"})
     relu.annotations["dedup_reference_label"] = "stale"
@@ -174,7 +174,7 @@ def test_annotate_rerun_preserves_user_annotations_and_refreshes_internals() -> 
 
     assert result is trace
     assert result.annotations["user"] == {"trace_note": "keep"}
-    assert result.input_annotations["user"] == {"input_note": "keep"}
+    assert result.provenance.input_annotations["user"] == {"input_note": "keep"}
     assert result._annotation_blobs is not None
     assert torch.equal(result._annotation_blobs[key], torch.ones(2, 2))
     assert rerun_relu.annotations["user"]["data"] == {"node_note": "keep"}
@@ -189,7 +189,9 @@ def test_non_torch_backend_rejects_torch_tensor_annotation() -> None:
     """Tensor annotation blobs are gated to torch traces for B1."""
 
     trace, _model, _x = _trace_tiny()
-    trace.backend = "jax"  # Simulate a non-torch active payload codec without optional runtimes.
+    trace._provenance_backend = (
+        "jax"  # Simulate a non-torch active payload codec without optional runtimes.
+    )
 
     with pytest.raises(ValueError, match="supported only for torch traces"):
         trace.annotate(tl.func("relu"), data=torch.ones(1))

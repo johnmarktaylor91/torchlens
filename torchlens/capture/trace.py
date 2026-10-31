@@ -93,7 +93,7 @@ restore bracket (breaking byte-exact RNG neutrality for a seeded host
 process) or, if the draw were bracketed too, made consecutive auto-seeded
 captures reuse one identical seed (silently correlating dropout patterns
 across runs). A private stream preserves both guarantees; the chosen seed is
-always disclosed on ``trace.random_seed``.
+always disclosed on ``trace._options_seed``.
 """
 
 
@@ -130,7 +130,7 @@ def _structure_only_forward_boundary(trace: "Trace") -> "contextlib.AbstractCont
     lazy import keeps this backend-neutral module torch-light.
     """
 
-    if bool(getattr(trace, "structure_only", False)):
+    if bool(getattr(trace, "_options_structure_only", False)):
         return _weightsfree_and_belt_boundary(trace)
     return contextlib.nullcontext()
 
@@ -157,8 +157,8 @@ def _weightsfree_and_belt_boundary(trace: "Trace") -> "Iterator[None]":
 def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "Iterator[None]":
     """Record forward-pass peak memory around the model forward call.
 
-    Stores the peak on ``trace.forward_peak_memory`` and the backend label on
-    ``trace.forward_memory_backend``. CUDA snapshots ``max_memory_allocated``
+    Stores the peak on ``trace._cost_forward_peak_memory`` and the backend label on
+    ``trace._provenance_forward_memory_backend``. CUDA snapshots ``max_memory_allocated``
     around the forward WITHOUT ``reset_peak_memory_stats`` (R36-2): resetting
     clobbered the caller's process-wide high-water counter on every capture
     (the CPU branch below explicitly refuses the analogous clobber). When the
@@ -234,12 +234,12 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
                 # the forward stayed under the pre-existing high-water mark
                 # and the figure honestly reads 0 (see docstring, R36-2).
                 live_peak = peak_after if peak_after > peak_before else 0
-                trace.forward_peak_memory = Bytes(live_peak)
-                trace.forward_peak_memory_reason = None  # the pair moves together
+                trace._cost_forward_peak_memory = Bytes(live_peak)
+                trace._cost_forward_peak_memory_reason = None  # the pair moves together
             with contextlib.suppress(Exception):
                 reserved_after = int(torch_module.cuda.max_memory_reserved(cuda_device))
                 resident_peak = reserved_after if reserved_after > reserved_before else 0
-            trace.forward_memory_backend = backend_label
+            trace._provenance_forward_memory_backend = backend_label
             # F20 peak PAIR (brainpipe D-7): live allocation vs resident
             # high-water are different physical quantities; a single number
             # cannot be both correct and portable. Session-time only.
@@ -325,7 +325,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
             else:
                 after = process_rss_bytes()
         rss_delta = max(0, after - before)
-        trace.forward_memory_backend = backend_label
+        trace._provenance_forward_memory_backend = backend_label
         # F20 peak PAIR (brainpipe D-7). ``live`` is a Python-allocation peak
         # and exists only when the tracemalloc opt-in paid for it; ``None``
         # means unmeasured, never zero. ``resident`` is the host high-water
@@ -361,7 +361,7 @@ def _backend_name_for_trace(trace: "Trace") -> BackendName:
         for old or partially constructed trace objects.
     """
 
-    return cast(BackendName, getattr(trace, "backend", "torch"))
+    return cast(BackendName, getattr(trace, "_provenance_backend", "torch"))
 
 
 def _capture_backend_from_registry(
@@ -485,7 +485,7 @@ def _run_predicate_forward_with_root_frame(
         pass_index=state.pass_index,
         event_index=state.event_index,
         step_index=None,
-        time_since_pass_start=time.time() - trace.capture_start_time,
+        time_since_pass_start=time.time() - trace._provenance_start_time,
         include_source_events=state.options.include_source_events,
         sample_id=state.sample_id,
     )
@@ -539,7 +539,7 @@ def _run_predicate_forward_with_root_frame(
             pass_index=state.pass_index,
             event_index=state.event_index,
             step_index=None,
-            time_since_pass_start=time.time() - trace.capture_start_time,
+            time_since_pass_start=time.time() - trace._provenance_start_time,
             include_source_events=state.options.include_source_events,
             sample_id=state.sample_id,
         )
@@ -622,15 +622,17 @@ def save_new_outs(
         Nothing; mutates ``self`` in place with new out values.
     """
     if backward_ready is not None:
-        model_detach_saved_activations = self.detach_saved_activations
-        model_train_mode = getattr(self, "backward_ready", False)
+        model_detach_saved_activations = self._options_detach_saved_activations
+        model_train_mode = getattr(self, "_options_backward_ready", False)
         layer_detach_saved_activations = {
             layer_log_entry: layer_log_entry.detach_saved_activations for layer_log_entry in self
         }
-        target_detach_saved_activations = False if backward_ready else self.detach_saved_activations
+        target_detach_saved_activations = (
+            False if backward_ready else self._options_detach_saved_activations
+        )
         try:
-            self.detach_saved_activations = target_detach_saved_activations
-            self.backward_ready = backward_ready
+            self._options_detach_saved_activations = target_detach_saved_activations
+            self._options_backward_ready = backward_ready
             for layer_log_entry in layer_detach_saved_activations:
                 layer_log_entry.detach_saved_activations = target_detach_saved_activations
             save_new_outs(
@@ -645,8 +647,8 @@ def save_new_outs(
                 _run_until_plan=_run_until_plan,
             )
         finally:
-            self.detach_saved_activations = model_detach_saved_activations
-            self.backward_ready = model_train_mode
+            self._options_detach_saved_activations = model_detach_saved_activations
+            self._options_backward_ready = model_train_mode
             for layer_log_entry, detach_saved_activations in layer_detach_saved_activations.items():
                 layer_log_entry.detach_saved_activations = detach_saved_activations
         return
@@ -654,10 +656,10 @@ def save_new_outs(
     from ..user_funcs import _run_model_and_save_specified_outs
     from .projectors import RefreshProjector
 
-    save_grads_policy = getattr(self, "save_grads", None)
+    save_grads_policy = getattr(self, "_options_save_grads", None)
     layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
     grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
-    refresh_seed = self.random_seed if seed is None else seed
+    refresh_seed = self._options_seed if seed is None else seed
     resolved_layer_nums: tuple[int, ...] | None = None
     if layer_nums_to_save != "all":
         expanded_layer_nums = set(cast(list[int], layer_nums_to_save))
@@ -672,28 +674,28 @@ def save_new_outs(
         input_args=input_args,
         input_kwargs=input_kwargs or {},
         layers_to_save="all" if resolved_layer_nums is None else "none",
-        output_device=getattr(self, "output_device", "same"),
-        activation_transform=getattr(self, "activation_transform", None),
-        grad_transform=getattr(self, "grad_transform", None),
-        save_raw_activations=getattr(self, "save_raw_activations", True),
-        save_raw_grads=getattr(self, "save_raw_gradients", True),
-        save_mode=getattr(self, "save_mode", "copy"),
+        output_device=getattr(self, "_options_output_device", "same"),
+        activation_transform=getattr(self, "_options_activation_transform", None),
+        grad_transform=getattr(self, "_options_grad_transform", None),
+        save_raw_activations=getattr(self, "_options_save_raw_activations", True),
+        save_raw_grads=getattr(self, "_options_save_raw_grads", True),
+        save_mode=getattr(self, "_options_save_mode", "copy"),
         capture_tensor_grad_hooks=getattr(self, "capture_tensor_grad_hooks", True),
-        keep_orphans=getattr(self, "keep_orphans", False),
-        mark_layer_depths=getattr(self, "mark_layer_depths", False),
-        detach_saved_activations=getattr(self, "detach_saved_activations", False),
-        save_args=getattr(self, "save_arg_values", False),
+        keep_orphans=getattr(self, "_options_keep_orphans", False),
+        mark_layer_depths=getattr(self, "_options_mark_layer_depths", False),
+        detach_saved_activations=getattr(self, "_options_detach_saved_activations", False),
+        save_args=getattr(self, "_options_save_args", False),
         save_grads=save_grads_policy not in (None, False),
         grads_to_save=grad_layers_to_save,
         seed=refresh_seed,
         num_context_lines=getattr(self, "num_context_lines", 7),
         optimizer=getattr(self, "_optimizer", None),
-        save_source_context=getattr(self, "save_code_context", False),
-        save_rng=getattr(self, "save_rng_states", False),
-        recurrence_detection=getattr(self, "recurrence_detection", True),
-        verbose=getattr(self, "verbose", False),
-        backward_ready=getattr(self, "backward_ready", False),
-        inference_only=getattr(self, "inference_only", False),
+        save_source_context=getattr(self, "_options_save_source_context", False),
+        save_rng=getattr(self, "_options_save_rng", False),
+        recurrence_detection=getattr(self, "_options_recurrence_detection", True),
+        verbose=getattr(self, "_options_verbose", False),
+        backward_ready=getattr(self, "_options_backward_ready", False),
+        inference_only=getattr(self, "_options_inference_only", False),
         # A refresh retains payloads like any capture; dropping the configured
         # budget here silently rebudgeted every refresh/run() forward at the
         # default "auto" (or left a save_budget=None session budgeted).
@@ -701,11 +703,11 @@ def save_new_outs(
         # F2: a refresh re-arms the nonfinite tripwire. The historical refresh
         # forwarded only inference_only, so a raise_on_nan capture silently
         # lost its abort policy on every refreshed forward.
-        raise_on_nan=bool(getattr(self, "raise_on_nan", False)),
+        raise_on_nan=bool(getattr(self, "_options_on_nonfinite", False)),
         # A refresh measures CPU peaks only if the source opted in.
         measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),
         output_transform=getattr(self, "_output_transform", None),
-        save_transformed_output=getattr(self, "save_raw_output", "small"),
+        save_transformed_output=getattr(self, "_options_save_transformed_output", "small"),
         retain_output_parents_for_layers_to_save=True,
         _resolved_layer_nums_to_save=resolved_layer_nums,
         _resolved_grad_layer_nums_to_save=(
@@ -764,7 +766,7 @@ def save_new_outs(
     # proof (``bare_tensor_root``), not the stale capture-time one. Missing/malformed fresh
     # proof leaves the field absent -> the live reconstructor fails closed (not faithful).
     self._runnable.output_losslessness = refreshed._runnable.output_losslessness
-    if self.save_arg_values:
+    if self._options_save_args:
         self._replay_arg_version_data_complete = True
 
 
@@ -1010,7 +1012,7 @@ def _register_model_input_container_snapshots(
             reconstructable=result.reconstructable,
         )
     if first_spec is not None:
-        trace.__dict__["input_structure"] = first_spec
+        trace.__dict__["_provenance_input_structure"] = first_spec
 
 
 _OPAQUE_INPUT_LEAF = object()
@@ -1361,7 +1363,7 @@ def _scrub_failed_capture_transients(self: "Trace") -> None:
     events = self.__dict__.pop("capture_events", None)
     if events is None:
         return
-    if getattr(self, "capture_mode", None) == "predicate":
+    if getattr(self, "_options_mode", None) == "predicate":
         return
     if hasattr(events, "release_runtime_sidecars"):
         events.release_runtime_sidecars()
@@ -1502,11 +1504,11 @@ def _finalize_halted_trace(
 
     self.is_stopped = True
     self.stop_reason = halt_exc.reason
-    self.halt_frontier = halt_exc.reason
+    self._graph_stop_frontier = halt_exc.reason
     self.transformed_output = None
     if not postprocess:
         self.__dict__.pop("_output_attribution_input_tensors", None)
-        self.capture_end_time = time.time()
+        self._provenance_end_time = time.time()
         return frontier_output
 
     output_tensors, output_tensor_addresses = _extract_and_mark_outputs(
@@ -1518,7 +1520,7 @@ def _finalize_halted_trace(
     # by output extraction and must never survive onto the finished product
     # (an unpopped copy blocked halted analysis saves via _PORTABLE_STATE_SPEC).
     self.__dict__.pop("_output_attribution_input_tensors", None)
-    _vprint(self, f"Postprocessing halted graph at {self.halt_frontier!r}...")
+    _vprint(self, f"Postprocessing halted graph at {self._graph_stop_frontier!r}...")
     set_capture_phase(self, CapturePhase.POSTPROCESS)
     self._postprocess(output_tensors, output_tensor_addresses)
     return frontier_output
@@ -1564,7 +1566,7 @@ def run_and_log_inputs_through_model(
         # The private stream keeps both properties: byte-exact global-engine
         # neutrality AND fresh seeds per capture.
         seed = _AUTO_SEED_ENTROPY.randint(1, 4294967294)
-    self.random_seed = seed  # type: ignore[assignment]
+    self._options_seed = seed  # type: ignore[assignment]
     # The per-capture code-context cache (and the call-site anchor stored
     # inside it) is only valid for the stack of ONE capture run: the anchor
     # frame is proven alive by identity for the duration of a single capture,
@@ -1577,7 +1579,7 @@ def run_and_log_inputs_through_model(
         input_args,
         input_kwargs,
     )
-    backend.set_capture_producer_policy(self, self.capture_mode)
+    backend.set_capture_producer_policy(self, self._options_mode)
 
     if getattr(self, "_source_model_ref", None) is None:
         # Needed so unlabeled output tensors that are direct registered-buffer
@@ -1590,7 +1592,7 @@ def run_and_log_inputs_through_model(
 
         self._source_model_ref = make_weak_model_ref(model)  # type: ignore[arg-type]
 
-    if self.capture_mode == "predicate":
+    if self._options_mode == "predicate":
         self._layer_nums_to_save = []
         self._grad_op_nums_to_save = []
     else:
@@ -1688,7 +1690,7 @@ def run_and_log_inputs_through_model(
             _restore_user_global_rng()
             raise
 
-        self.capture_start_time = time.time()
+        self._provenance_start_time = time.time()
         # Settlement state for this pass: the phase marker attributes failures
         # to FORWARD/FINALIZE/POSTPROCESS, and any stale stop-request latch
         # from a prior pass on a carried-over Trace must never classify this
@@ -1752,7 +1754,7 @@ def run_and_log_inputs_through_model(
 
         # RNG state snapshot for deterministic explicit refreshes and legacy
         # two-pass consistency (#58).
-        if self.capture_mode == "exhaustive":
+        if self._options_mode == "exhaustive":
             self._pre_forward_rng_states = backend.snapshot_rng(self)
 
         from torchlens._ir.capture_events import CaptureEvents
@@ -1762,16 +1764,16 @@ def run_and_log_inputs_through_model(
         if not isinstance(getattr(self, "_stop_directive", None), StopDirective):
             self._stop_directive = StopDirective(
                 halt_options=getattr(self, "_predicate_save_options", None),
-                raise_on_nan=bool(getattr(self, "raise_on_nan", False)),
+                raise_on_nan=bool(getattr(self, "_options_on_nonfinite", False)),
                 forward_error_mode=getattr(
                     getattr(self, "_predicate_save_options", None),
                     "on_forward_error",
                     "raise",
                 ),
-                inference_only=bool(getattr(self, "inference_only", False)),
+                inference_only=bool(getattr(self, "_options_inference_only", False)),
             )
         self._capture_config = InternalCaptureConfig(
-            capture_mode=str(self.capture_mode),
+            capture_mode=str(self._options_mode),
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
             random_seed=seed,
@@ -1795,11 +1797,11 @@ def run_and_log_inputs_through_model(
 
             # Per-session model preparation
             backend.prepare_model_session(self, model)
-        self.setup_duration = Duration(time.time() - self.capture_start_time)
-        _vprint(self, f"Model prepared ({self.setup_duration:.2f s})")
+        self._provenance_setup_duration = Duration(time.time() - self._provenance_start_time)
+        _vprint(self, f"Model prepared ({self._provenance_setup_duration:.2f s})")
 
         # Print input summary
-        if getattr(self, "verbose", False):
+        if getattr(self, "_options_verbose", False):
             devices = set()
             for t in input_tensors:
                 if hasattr(t, "device"):
@@ -1844,7 +1846,7 @@ def run_and_log_inputs_through_model(
         # inputs/outputs.  Source tensors (model inputs) are logged explicitly
         # before invoking the model; all subsequent operations are captured
         # automatically by the decorated wrappers.
-        _vprint(self, f"Running {self.capture_mode} forward pass...")
+        _vprint(self, f"Running {self._options_mode} forward pass...")
         with backend.active_logging(self):
             # Under an active ``force_eager`` stance (torch >= 2.6) the
             # inventoried compiled callables run their original eager Python and
@@ -1896,7 +1898,7 @@ def run_and_log_inputs_through_model(
 
             # The root forward runs undecorated: keep its arguments for the root call.
             self._module_capture_ws.root_forward_args = (input_args, input_kwargs)
-            if self.capture_mode == "predicate":
+            if self._options_mode == "predicate":
                 with _structure_only_forward_boundary(self):
                     outputs = _run_predicate_forward_with_root_frame(
                         self,
@@ -2023,7 +2025,7 @@ def run_and_log_inputs_through_model(
         # an implied inference_only holds only if the forward discarded its graph.
         cleared = cleared_inference_only_directive(self._stop_directive, outputs)
         if cleared is not None:  # before settlement stamps the flag on the outcome
-            self.inference_only, self._stop_directive = False, cleared
+            self._options_inference_only, self._stop_directive = False, cleared
         set_capture_phase(self, CapturePhase.FINALIZE)
         from .._data_classes._nonfinite import drain_pending_nonfinite
         from .._utils.tensor_utils import synchronize_pending_cpu_async_copies
@@ -2055,12 +2057,12 @@ def run_and_log_inputs_through_model(
         # reach here (halt, failure, interrupt) -- see B1-02.
         _drop_semantic_output_transients(self)
 
-        self.forward_duration = Duration(
-            time.time() - self.capture_start_time - self.setup_duration
+        self._cost_forward_duration = Duration(
+            time.time() - self._provenance_start_time - self._provenance_setup_duration
         )
         _vprint(
             self,
-            f"Forward pass complete ({self.forward_duration:.2f s}, "
+            f"Forward pass complete ({self._cost_forward_duration:.2f s}, "
             f"{len(self.capture_events.op_events)} raw operations)",
         )
 
@@ -2085,7 +2087,7 @@ def run_and_log_inputs_through_model(
             self._fastlog_captured_run_core = capture_session.seal()
             self.__dict__.pop("_output_attribution_input_tensors", None)
             backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
-            self.capture_end_time = time.time()
+            self._provenance_end_time = time.time()
             self.__dict__.pop("_capture_producer_policy", None)
             settle_completed(self, capture_session)
             return outputs

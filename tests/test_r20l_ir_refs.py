@@ -46,7 +46,7 @@ class TestBackendFieldDivergence:
     def test_backend_semantics_diverge_between_refs(self) -> None:
         # The whole point of N11: identical field name, different meaning.
         dtype_backend = DtypeRef.from_value(torch.float32).backend  # type: ignore[union-attr]
-        device_backend = DeviceRef.from_value("cuda:0").backend  # type: ignore[union-attr]
+        device_backend = DeviceRef.from_value("cuda:0").provenance.backend  # type: ignore[union-attr]
         assert dtype_backend == "torch"
         assert device_backend == "cuda"
         assert dtype_backend != device_backend

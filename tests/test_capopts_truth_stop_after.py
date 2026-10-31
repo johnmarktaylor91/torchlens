@@ -210,7 +210,7 @@ def test_stop_after_cache_key_distinct_from_halt(tmp_path) -> None:
         halt=tl.func("relu"),
         capture=CaptureOptions(cache=True, cache_dir=str(tmp_path)),
     )
-    assert second.capture_cache_key != first.capture_cache_key
+    assert second.provenance.cache_key != first.provenance.cache_key
 
 
 @pytest.mark.real_model

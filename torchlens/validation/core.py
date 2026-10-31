@@ -913,7 +913,9 @@ def validate_saved_outs(
             decision="failed",
             reason=dispatch_count_result.reason,
         )
-        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+        status = decision_recorder.as_status(
+            backend=str(getattr(self, "_provenance_backend", "torch"))
+        )
         setattr(self, "_validation_replay_status", status)
         return status
     if dispatch_count_result.decision == "validated":
@@ -988,7 +990,9 @@ def validate_saved_outs(
                 decision="failed",
                 reason="output_count_mismatch",
             )
-            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+            status = decision_recorder.as_status(
+                backend=str(getattr(self, "_provenance_backend", "torch"))
+            )
             setattr(self, "_validation_replay_status", status)
             return status
         output_label_counts: dict[str, int] = defaultdict(int)
@@ -1014,7 +1018,9 @@ def validate_saved_outs(
                     decision="failed",
                     reason="output_missing",
                 )
-                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+                status = decision_recorder.as_status(
+                    backend=str(getattr(self, "_provenance_backend", "torch"))
+                )
                 setattr(self, "_validation_replay_status", status)
                 return status
             if not _ground_truth_output_matches_saved(
@@ -1043,7 +1049,9 @@ def validate_saved_outs(
                     decision="failed",
                     reason="ground_truth_mismatch",
                 )
-                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+                status = decision_recorder.as_status(
+                    backend=str(getattr(self, "_provenance_backend", "torch"))
+                )
                 setattr(self, "_validation_replay_status", status)
                 return status
             decision_recorder.record(
@@ -1090,7 +1098,9 @@ def validate_saved_outs(
                 decision_recorder,
             )
         if parents_valid.failed:
-            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+            status = decision_recorder.as_status(
+                backend=str(getattr(self, "_provenance_backend", "torch"))
+            )
             setattr(self, "_validation_replay_status", status)
             return status
 
@@ -1124,7 +1134,9 @@ def validate_saved_outs(
             decision="failed",
             reason="bfs_incomplete",
         )
-        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+        status = decision_recorder.as_status(
+            backend=str(getattr(self, "_provenance_backend", "torch"))
+        )
         setattr(self, "_validation_replay_status", status)
         return status
 
@@ -1161,7 +1173,7 @@ def validate_saved_outs(
             raise
     # Source-less tensor args replay fine from saved args; a gap records a failure here.
     check_source_provenance(self, decision_recorder, verbose)
-    status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+    status = decision_recorder.as_status(backend=str(getattr(self, "_provenance_backend", "torch")))
     setattr(self, "_validation_replay_status", status)
     return status
 
@@ -1523,7 +1535,7 @@ def _not_saved_by_user_justification(
         return None
     if bool(getattr(layer, "has_saved_activation", False)):
         return None
-    if bool(getattr(trace, "save_arg_values", False)):
+    if bool(getattr(trace, "_options_save_args", False)):
         return None
     raw_label = getattr(layer, "_label_raw", None)
     if raw_label is None:
@@ -1547,7 +1559,7 @@ def _not_saved_by_user_justification(
         f"(original_reason={original_reason}, op_label={label}, func_name={func_name}, "
         f"predicate_decision_key={decision_key!r}, predicate_save_out=False, "
         f"has_saved_activation=False, saved_args_present={saved_args_present}, "
-        f"save_arg_values={bool(getattr(trace, 'save_arg_values', False))}, "
+        f"save_arg_values={bool(getattr(trace, '_options_save_args', False))}, "
         f"default_op={default_op}, keep_op={keep_op_name})"
     )
 

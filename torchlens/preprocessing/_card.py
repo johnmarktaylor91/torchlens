@@ -1,7 +1,7 @@
 """The on-request preprocessing card check.
 
 :func:`check_card` compares the preprocessing a capture RECORDED
-(``Trace.input_preprocessor``) with the model's known card -- its HF image
+(``Trace.provenance.input_preprocessor``) with the model's known card -- its HF image
 processor, torchvision weights preset, timm config or open_clip config, or an
 authority the caller names -- and warns when they disagree. Nothing in
 TorchLens calls it automatically: it runs only when asked, matching the
@@ -140,7 +140,7 @@ def _record_of(trace_or_record: Any) -> ResolvedPreprocessing | None:
 
     if isinstance(trace_or_record, ResolvedPreprocessing):
         return trace_or_record
-    return getattr(trace_or_record, "input_preprocessor", None)
+    return getattr(trace_or_record, "_provenance_input_preprocessor", None)
 
 
 def _live_model(trace_or_record: Any) -> Any:

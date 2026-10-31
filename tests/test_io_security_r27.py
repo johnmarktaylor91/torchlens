@@ -317,7 +317,7 @@ def test_torch_bundle_normal_load(tmp_path: Path) -> None:
 
     bundle_path = _build_torch_bundle(tmp_path)
     trace = tl.load(bundle_path)
-    assert trace.model_class_name == "_TorchTraceModel"
+    assert trace.source.class_name == "_TorchTraceModel"
 
 
 def test_torch_bundle_rejects_non_torch_tensor_codec(tmp_path: Path) -> None:

@@ -254,7 +254,7 @@ every spelling here is DOCUMENTED-UNSTABLE pending the naming session):
 
 ## Discoverability
 
-`trace.capture_kind` reads `"episode"` on episode-declared products and
+`trace.provenance.kind` reads `"episode"` on episode-declared products and
 `"plain"` otherwise (including fresh re-execution products whose evidence
 the travel policy dropped, below). `trace.episode` is the public step
 access: the parsed ledger with `header`, ordered per-step `rows`,
@@ -465,7 +465,7 @@ the LOAD itself, not on the first `trace.episode_coupling` read (which
 still re-derives against the attached payload). Any failure quarantines
 `episode_ledger_incoherent` with the failed anchor named in the note's
 `detail`; the product still loads, its rows stop being claims, and
-`Trace.capture_kind` keeps reading `episode` (a quarantined ledger is a
+`Trace.provenance.kind` keeps reading `episode` (a quarantined ledger is a
 declaration in doubt, not an absent one — the per-op `episode_step` stamps
 of a corrupted genuine artifact must stay loadable).
 

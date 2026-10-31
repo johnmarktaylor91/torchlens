@@ -64,7 +64,7 @@ def test_offloaded_capture_is_clean_and_value_exact(kind: str) -> None:
 
     provenance_warnings = [w for w in caught if "provenance" in str(w.message)]
     assert not provenance_warnings
-    assert offload_trace.capture_verified is None
+    assert offload_trace.provenance.verified is None
     # Zero hook-infrastructure pollution: exact op-label parity with the plain twin.
     assert [op.label for op in offload_trace.ops.values()] == [
         op.label for op in reference_trace.ops.values()

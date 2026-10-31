@@ -145,8 +145,8 @@ def _graph_hash(model: nn.Module, x: torch.Tensor) -> str:
 
     trace = tl.trace(model, x, capture=_SAVE_ALL)
     try:
-        assert trace.graph_shape_hash is not None
-        return trace.graph_shape_hash
+        assert trace.provenance.fingerprint is not None
+        return trace.provenance.fingerprint
     finally:
         trace.cleanup()
 

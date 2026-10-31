@@ -26,7 +26,7 @@ _REMOVED_KWARGS: dict[str, tuple[object, str]] = {
     "mode": ("unrolled", "level='op'"),
     "print_to": (print, "report.print("),
     "count_fma_as_two": (False, "flop_convention="),
-    "show_input_preprocessing_details": (True, "trace.provenance()"),
+    "show_input_preprocessing_details": (True, "trace.provenance.summary()"),
 }
 
 #: removed legacy level= preset -> token the refusal must name
@@ -36,7 +36,7 @@ _REMOVED_LEVELS: dict[str, str] = {
     "cost": "view='compute'",
     "graph": "trace.to_agent_json()",
     "memory": "trace.profile(sort_by='activation_memory')",
-    "control_flow": "trace.conditional_records",
+    "control_flow": "trace.graph.conditional_records",
     "waterfall": "trace.profile(level='op')",
     "output": "trace.output_table()",
 }

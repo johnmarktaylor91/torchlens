@@ -111,7 +111,7 @@ def test_tracked_bytes_partition_input_inclusive_alias_exclusive() -> None:
             owned = sum(
                 int(op.activation_memory or 0) for op in log._layer_list if not op.is_output
             )
-            assert int(log.total_activation_memory) == owned, name
+            assert int(log.cost.total_activation_memory) == owned, name
         finally:
             log.cleanup()
 

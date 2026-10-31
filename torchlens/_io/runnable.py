@@ -328,7 +328,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
 
     _normalize_trace_numpy_scalar_metadata(trace)
     diagnostics: list[RunnableDiagnostic] = []
-    backend = str(getattr(trace, "backend", "torch"))
+    backend = str(getattr(trace, "_provenance_backend", "torch"))
     try:
         runnable_supported = "runnable" in get_backend_spec(backend).capabilities.save_levels
     except BackendRegistryError:
@@ -661,7 +661,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # coverage for its forward, so it ceilings through the observer-uncertain
         # gap (unverifiable), never a silent false VERIFIED.
         _gap(WitnessGapKind.ESCAPE_OBSERVER_UNCERTAIN, "capture")
-    if getattr(trace, "capture_verified", None) is False:
+    if getattr(trace, "_provenance_verified", None) is False:
         # r35 I2 completion: a capture whose own verification tripwire fired
         # (unaccounted dispatches, escaped callables, unverified transform
         # routes) cannot claim complete witness coverage for replay either.
@@ -914,7 +914,7 @@ def _build_rng_profile(trace: Any) -> RunnableRngProfile:
     """
 
     consumed = bool(trace._runnable.host_rng_consumed)
-    seed = getattr(trace, "random_seed", None)
+    seed = getattr(trace, "_options_seed", None)
     capture_seed = int(seed) if isinstance(seed, int) and not isinstance(seed, bool) else None
     # r37 hon1_2: a touch on any NON-global monitored channel (RNG instances,
     # SystemRandom/secrets, os entropy, clocks, the default_rng factory) is
@@ -2560,7 +2560,7 @@ def _build_control_witnesses(
             # stripped alias so a loop-arm child resolves to its first owning call.
             if ":" in str(label):
                 call_by_op_label.setdefault(str(label).rsplit(":", 1)[0], call.call_id)
-    arm_edges = getattr(trace, "conditional_arm_entry_edges", {}) or {}
+    arm_edges = getattr(trace, "_graph_conditional_arm_entry_edges", {}) or {}
     for (conditional_id, arm_kind), edges in sorted(
         arm_edges.items(), key=lambda item: (int(item[0][0]), str(item[0][1]))
     ):

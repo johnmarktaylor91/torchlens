@@ -62,15 +62,15 @@ GAP-059	cache_key_coverage	VisualizationOptions.skip_fn	2026-08-26	oracles-6b	no
 GAP-060	cache_key_coverage	VisualizationOptions.stack_by	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-061	cache_key_coverage	VisualizationOptions.theme	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-062	cache_key_coverage	VisualizationOptions.view	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
-GAP-063	cache_key_coverage	trace.backend	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-063	cache_key_coverage	trace.provenance.backend	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-064	cache_key_coverage	trace.episode	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-065	cache_key_coverage	trace.grad_options	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
-GAP-066	cache_key_coverage	trace.grouping	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
-GAP-067	cache_key_coverage	trace.jax_static_argnums	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-066	cache_key_coverage	trace.options.grouping	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
+GAP-067	cache_key_coverage	trace.options.jax_static_argnums	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-070	cache_key_coverage	trace.reconstruction_ready	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-071	cache_key_coverage	trace.storage	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-072	cache_key_coverage	trace.streaming	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
-GAP-073	default_truth	trace.grouping	2026-08-26	A06	docstring default '"structural"' vs authority <no-authority>
+GAP-073	default_truth	trace.options.grouping	2026-08-26	A06	docstring default '"structural"' vs authority <no-authority>
 GAP-074	invariance_witness	trace.capture	2026-08-30	F36-remainder	dont-care witness slot empty: the grouped-options container needs a per-field decomposition witness (6b residue)
 GAP-075	invariance_witness	trace.input_args	2026-08-30	F36-remainder	dont-care witness slot empty: input identity is keyed through the input fingerprint, not this field; witness the fingerprint equivalence (6b residue)
 GAP-076	invariance_witness	trace.input_kwargs	2026-08-30	F36-remainder	dont-care witness slot empty: same fingerprint-equivalence witness as input_args (6b residue)

@@ -499,7 +499,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
             output_tensor = grad_log[output_label].out
             output_tensor.sum().backward()
 
-            out.write(_capture("grad_log.has_gradients", grad_log.has_gradients))
+            out.write(_capture("grad_log.autograd.has_grads", grad_log.autograd.has_grads))
             out.write(
                 _capture(
                     "grad_log.saved_grad_ops",

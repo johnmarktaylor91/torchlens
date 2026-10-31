@@ -178,11 +178,11 @@ def _apply_live_hooks_to_outputs_legacy(
     if (
         not _st._active_hook_plan
         and not predicate_intervene_active
-        or self.capture_mode not in {"exhaustive", "predicate"}
+        or self._options_mode not in {"exhaustive", "predicate"}
     ):
         return out_orig
     if (
-        self.capture_mode == "predicate"
+        self._options_mode == "predicate"
         and predicate_intervene_active
         and not _st._active_hook_plan
     ):
@@ -323,7 +323,7 @@ def _apply_predicate_mode_interventions_to_outputs(
             pass_index=state.pass_index,
             event_index=state.event_index + output_ordinal,
             step_index=state.step_index + output_ordinal,
-            capture_start_time=trace.capture_start_time,
+            capture_start_time=trace._provenance_start_time,
             include_source_events=state.options.include_source_events,
             sample_id=state.sample_id,
             address=module_frame.address if module_frame else None,

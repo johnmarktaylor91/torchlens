@@ -205,7 +205,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # driver) and the settlement seam (wrap-generation stamp + envelope
     # write) land at the trace entry by design; conscious raise, split
     # target unchanged.
-    # 4230 -> 4235: C07X adds the unconditional Trace.root_entry_point
+    # 4230 -> 4235: C07X adds the unconditional Trace.provenance.root_entry_point
     # identity-fact write (foldA D10) at the one-door capture site -- a
     # 2-line addition with no extractable seam; a split here would be
     # confetti (R43: never split code merely to satisfy the number).

@@ -207,7 +207,7 @@ def _preprocessed_trace(model_key: str):
 
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x)
-        trace.input_preprocessor = ResolvedPreprocessing(
+        trace._provenance_input_preprocessor = ResolvedPreprocessing(
             source="visual-audit demo",
             identifier="demo-normalize",
             verified=False,

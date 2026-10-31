@@ -404,7 +404,7 @@ def test_cooked_halted_outcome_matches_exhaustive_settlement() -> None:
     assert outcome.boundary_kind == exhaustive.outcome.boundary_kind == "op"
     # Coherence with the trace's own remapped halt fields (final label space).
     assert outcome.reason == cooked.stop_reason
-    assert outcome.boundary_label == cooked.halt_frontier
+    assert outcome.boundary_label == cooked.graph.stop_frontier
     assert "_raw" not in str(outcome.reason)
     assert "_raw" not in str(outcome.boundary_label)
 

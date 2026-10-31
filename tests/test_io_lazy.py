@@ -393,7 +393,7 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
     )
     restored = load(resaved_path, lazy=False)
 
-    assert restored.model_class_name == lazy_log.model_class_name
+    assert restored.source.class_name == lazy_log.source.class_name
 
 
 @pytest.mark.parametrize("lazy", [False, True])

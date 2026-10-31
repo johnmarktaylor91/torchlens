@@ -402,7 +402,6 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     out.mkdir(exist_ok=True)
     return {
         "summary": lambda t: t.summary(),
-        "provenance": lambda t: t.provenance(),
         "profile": lambda t: t.profile(),
         "to_pandas": lambda t: t.to_pandas(),
         # Plain draw AND an encoding-channel draw: the channel path is the
@@ -851,7 +850,7 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
 def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     """N5: a defaultdict ``op_equivalence_classes`` must not crash the scrub.
 
-    ``Trace.op_equivalence_classes`` starts life as ``defaultdict(set)``
+    ``Trace.graph.op_equivalence_classes`` starts life as ``defaultdict(set)``
     (``data_classes/trace.py``); the torch backend's postprocessing always
     reassigns it to a plain ``dict`` before save (``cleanup.py``,
     ``labeling.py``), but the neutral/preview backends (tf, jax, tinygrad,
@@ -871,11 +870,11 @@ def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     groups = collections.defaultdict(set)
     groups["conv2d_param_000002_param_000001"] = {"conv2d_1_1"}
     groups["relu"] = {"relu_2_1"}
-    state: dict[str, Any] = {"op_equivalence_classes": groups}
+    state: dict[str, Any] = {"_graph_op_equivalence_classes": groups}
 
     _scrub_nondeterministic_identities(state)
 
-    rebuilt = state["op_equivalence_classes"]
+    rebuilt = state["_graph_op_equivalence_classes"]
     assert isinstance(rebuilt, collections.defaultdict)
     assert rebuilt.default_factory is set
     # No matching param barcode was registered (no params/ops/layers were

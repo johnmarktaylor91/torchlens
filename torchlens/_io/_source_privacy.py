@@ -85,12 +85,18 @@ def _relativize_source_text(value: Any) -> Any:
 # persisted an absolute path unscrubbed.
 _SOURCE_FILE_FIELDS = (
     "class_source_file",
+    "_source_class_file",
+    "_source_init_file",
+    "_source_forward_file",
     "init_source_file",
     "forward_source_file",
     "backward_source_file",
 )
 _DOCSTRING_FIELDS = (
     "class_docstring",
+    "_source_class_docstring",
+    "_source_init_docstring",
+    "_source_forward_docstring",
     "init_docstring",
     "forward_docstring",
     "backward_docstring",
@@ -104,6 +110,8 @@ _DOCSTRING_FIELDS = (
 # owner; the rest ride Trace / Module / GradFn logs (guarded by presence).
 _SIGNATURE_FIELDS = (
     "init_signature",
+    "_source_init_signature",
+    "_source_forward_signature",
     "forward_signature",
     "backward_signature",
 )
@@ -404,8 +412,8 @@ def _apply_conditional_source_policy(
 ) -> None:
     """Apply the source-embedding privacy policy to a scrubbed conditional record.
 
-    Both ``ConditionalEvent.source_file`` (in ``Trace.conditional_records``) and
-    ``Conditional.source_file`` (in the public ``Trace.conditionals`` accessor) hold
+    Both ``ConditionalEvent.source_file`` (in ``Trace.graph.conditional_records``) and
+    ``Conditional.source_file`` (in the public ``Trace.graph.conditionals`` accessor) hold
     the ABSOLUTE path of the user's forward-defining module. Like every other
     source-file reference in a bundle each is relativized to a bare basename
     (unconditional privacy win); with ``include_source=False`` it is cleared to

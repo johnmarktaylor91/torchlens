@@ -123,9 +123,9 @@ step 17.5 (the contracted container-adoption + workspace-drop seam).
 Step 5 builds AST indexes, classifies terminal scalar bools, materializes dense
 `conditional_records`, runs a backward flood from branch bools, attributes forward arm edges,
 then derives legacy THEN/ELIF/ELSE views. Canonical structures are:
-- `Trace.conditional_records`
-- `Trace.conditional_arm_entry_edges`
-- `Trace.conditional_edge_call_indices`
+- `Trace.graph.conditional_records`
+- `Trace.graph.conditional_arm_entry_edges`
+- `Trace.graph.conditional_edge_call_indices`
 - `conditional_arm_children` on `Op` and `Layer`
 
 ## equivalence_class module suffix

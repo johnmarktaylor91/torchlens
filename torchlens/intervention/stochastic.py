@@ -15,7 +15,7 @@ pass, step, and site. The fix is one stateless mechanism:
 - ``seed=`` is a REQUIRED int or the literal ``"auto"``; ``None`` never
   reaches a hook (D4).
 - ``"auto"`` canonicalizes ONCE per capture into
-  ``base_seed = H(trace.random_seed, rule_identity, population_identity)``
+  ``base_seed = H(trace._options_seed, rule_identity, population_identity)``
   (D5 with the DIS-4 adjudication: the identity component is PERSISTED helper
   identity, never a transient construction ordinal) -- never the ambient
   global RNG, and recorded.
@@ -227,7 +227,7 @@ def _require_seed(seed: Any, verb: str) -> int | str:
             "edits, so unacknowledged stochasticity never reaches a hook",
             code="sampling_seed_required",
             remedy="pass an explicit integer seed, or seed='auto' to derive one "
-            "from the capture's recorded trace.random_seed",
+            "from the capture's recorded trace._options_seed",
             argument="seed",
         )
     return seed
@@ -244,7 +244,7 @@ def _base_seed(
     """Resolve the base seed for one firing (D5, DIS-4 spelling).
 
     An explicit int is its own base. ``"auto"`` derives from the capture's
-    recorded ``trace.random_seed`` (threaded through ``run_ctx`` by the
+    recorded ``trace._options_seed`` (threaded through ``run_ctx`` by the
     live/replay doors), the helper's persisted identity, and the population
     identity -- never the ambient RNG, never a transient construction ordinal.
     """
@@ -254,7 +254,7 @@ def _base_seed(
     trace_seed = hook.run_ctx.get("trace_random_seed")
     if trace_seed is None:
         raise InvalidArgumentError(
-            f"{verb} seed='auto' needs the capture's recorded trace.random_seed, "
+            f"{verb} seed='auto' needs the capture's recorded trace._options_seed, "
             "and this door's run context does not carry one",
             code="sampling_trace_seed_unavailable",
             remedy="pass an explicit integer seed=, or run the edit on a door "

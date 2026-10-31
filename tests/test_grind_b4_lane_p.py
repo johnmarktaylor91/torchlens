@@ -64,11 +64,11 @@ def test_capture_cache_separates_training_and_nonpersistent_state(tmp_path: Path
     x = torch.ones(1)
     model = _NonPersistentBufferModel().eval()
     first = tl.trace(model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     assert (
         tl.trace(
             model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
-        ).capture_cache_hit
+        ).provenance.cache_hit
         is True
     )
 
@@ -400,7 +400,7 @@ def test_over_ceiling_entry_is_refused_at_store_not_wiped_at_evict(
     big.register_buffer("big_buffer", torch.arange(120_000, dtype=torch.float32))
     with pytest.warns(UserWarning, match="above the .*byte cache-entry ceiling"):
         first = tl.trace(big, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
 
     surviving = sorted(path.name for path in cache_root.glob("*.pkl"))
     assert surviving == small_entries, (
@@ -574,7 +574,7 @@ def test_barcode_remap_scrubs_every_registered_barcode(tmp_path: Path) -> None:
         equivalence = getattr(op, "equivalence_class", None)
         if isinstance(equivalence, str):
             leaked.extend(b for b in raw_barcodes if b in equivalence)
-    for key in getattr(loaded, "op_equivalence_classes", {}) or {}:
+    for key in getattr(loaded, "_graph_op_equivalence_classes", {}) or {}:
         if isinstance(key, str):
             leaked.extend(b for b in raw_barcodes if b in key)
     assert not leaked, f"raw capture barcodes leaked into persisted identity keys: {leaked!r}"

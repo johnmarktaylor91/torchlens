@@ -50,7 +50,7 @@ Tier-1 standalone spec (no `capture_backend`); the `BackendSpec` in
 
 ## Local Invariants
 - True backward capture is unsupported: MLX traces always report
-  `Trace.has_backward_pass = False`; RNG replay snapshots are `None`.
+  `Trace.autograd.has_backward_pass = False`; RNG replay snapshots are `None`.
 - fastlog, streaming, and rng_replay stay refused (registry flags); unsupported
   trace options refuse typed through `.._options` policies.
 - `capabilities.py` only re-exports registry truth; never hardcode flags here.

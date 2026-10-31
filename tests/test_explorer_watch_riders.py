@@ -66,15 +66,15 @@ class TestMemoryTruth:
             ),
         )
         # Raw nominal footprint is KBs; retained summaries are a few floats.
-        assert int(log.saved_activation_memory) < 100
-        assert int(log.total_activation_memory) > 1000
+        assert int(log.cost.saved_activation_memory) < 100
+        assert int(log.cost.total_activation_memory) > 1000
         assert int(total_transformed_activation_memory(log)) > 0
         assert int(total_transformed_activation_memory(log)) <= 100
 
     @pytest.mark.smoke
     def test_raw_retention_accounting_unchanged(self) -> None:
         log = tl.trace(_model(), torch.randn(32, 8))
-        assert int(log.saved_activation_memory) >= int(log.total_activation_memory)
+        assert int(log.cost.saved_activation_memory) >= int(log.cost.total_activation_memory)
         assert int(total_transformed_activation_memory(log)) == 0
         assert int(total_transformed_gradient_memory(log)) == 0
 
@@ -88,7 +88,7 @@ class TestMemoryTruth:
         )
         # Raw retained: historical raw-bytes accounting, transformed extra
         # visible only through the new total.
-        assert int(log.saved_activation_memory) >= int(log.total_activation_memory)
+        assert int(log.cost.saved_activation_memory) >= int(log.cost.total_activation_memory)
         assert int(total_transformed_activation_memory(log)) > 0
 
 

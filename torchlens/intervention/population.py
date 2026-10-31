@@ -128,10 +128,10 @@ def _iter_member_ops(member: Any) -> tuple[Any, ...]:
 #: ordinal (``twoblock_1``, ``twoblock_2``, ...), a transient of the session,
 #: not a fact of the capture.
 _TRACE_ADDRESS_FACTS = (
-    "model_class_qualname",
-    "random_seed",
+    "_source_class_qualname",
+    "_options_seed",
     "num_operations",
-    "input_signature_hash",
+    "_provenance_input_signature_hash",
 )
 
 

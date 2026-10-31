@@ -124,7 +124,7 @@ Use `backend=` only when the backend is intentionally part of the test or exampl
 ```python
 torch_trace = tl.trace(model, x, backend="torch")
 tf_trace = tl.trace(tf_model, tf_x, backend="tf")
-assert torch_trace.backend == "torch"
+assert torch_trace.provenance.backend == "torch"
 ```
 
 Before debugging wrapper-specific failures, run:

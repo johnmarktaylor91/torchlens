@@ -172,7 +172,7 @@ def test_save_persists_the_marker_plainly(tmp_path) -> None:
     path = tmp_path / "structure.tlspec"
     log.save(path)
     loaded = tl.load(path)
-    assert loaded.structure_only is True
+    assert loaded.options.structure_only is True
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
         loaded.run(inputs=torch.randn(2, 4))
     assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
@@ -224,7 +224,7 @@ def test_registrar_switch_round_trips_the_marker_and_load_fails_closed(tmp_path)
     with activate_prerelease_fields():
         log.save(artifact)
         reloaded = tl.load(artifact)
-        assert reloaded.structure_only is True
+        assert reloaded.options.structure_only is True
     # Outside the switch the stamped artifact can NEVER pass as a real one.
     from torchlens._io import PreReleaseArtifactError
 

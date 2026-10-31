@@ -41,7 +41,7 @@ def test_ordinary_capture_pays_no_weightsfree_machinery() -> None:
     assert active_factory_device() is None
     assert admission_record_for(trace) is None
     assert not weightsfree_meta_active(trace)
-    assert trace.structure_evidence is None
+    assert trace.graph.structure_evidence is None
 
 
 def test_ordinary_digest_stable_across_repeat_captures() -> None:

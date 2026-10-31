@@ -179,7 +179,7 @@ def attach_tf_derived_grads(
     Returns
     -------
     None
-        ``trace.derived_grads`` and optionally
+        ``trace._autograd_derived_grads`` and optionally
         ``trace.autograd.intermediate_derived_grads`` are populated.
     """
 
@@ -232,7 +232,7 @@ def attach_tf_derived_grads(
         if not _tf_trees_close(tf, replay_result.output, captured_output):
             raise ValueError(
                 "TensorFlow derived gradient run raw output diverged from captured "
-                "raw output; refusing to expose trace.derived_grads."
+                "raw output; refusing to expose trace._autograd_derived_grads."
             )
         intermediate_accessor = IntermediateDerivedGradAccessor()
         if grad_options.intermediate_grads:
@@ -272,7 +272,7 @@ def attach_tf_derived_grads(
         if module_tree is not None and previous_forward_args is not None:
             module_tree.forward_args_by_call.clear()
             module_tree.forward_args_by_call.update(previous_forward_args)
-    trace.derived_grads = DerivedGradAccessor(records)
+    trace._autograd_derived_grads = DerivedGradAccessor(records)
     if grad_options.intermediate_grads:
         from ..._data_classes._trace_stats import set_intermediate_derived_grads
 

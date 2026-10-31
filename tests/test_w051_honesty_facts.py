@@ -113,7 +113,7 @@ def test_default_capture_verification_reads_not_checked(model_and_x) -> None:
 
     model, x = model_and_x
     trace = tl.trace(model, x)
-    assert trace.capture_verified is None
+    assert trace.provenance.verified is None
     explained = trace.explain()
     assert "no ceiling recorded" not in explained
     assert "Capture verification: not checked" in explained

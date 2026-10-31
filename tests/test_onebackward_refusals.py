@@ -69,7 +69,7 @@ class TestLivenessGate:
     def test_implied_inference_only_refusal_names_no_grad_and_a_working_remedy(self) -> None:
         with torch.no_grad():
             trace = _trace()
-        assert trace.inference_only is True
+        assert trace.options.inference_only is True
         error = _read_error(
             lambda: ob.read_edge_index(trace),
             "read_addressing_unavailable",

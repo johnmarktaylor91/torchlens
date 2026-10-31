@@ -122,7 +122,7 @@ _FIELD_TIER_OVERRIDES: dict[str, dict[str, FieldTier]] = {
         "code_context": FieldTier.ENRICHMENT,
     },
     "trace": {
-        "code_context": FieldTier.ENRICHMENT,
+        "_source_frames": FieldTier.ENRICHMENT,
     },
 }
 

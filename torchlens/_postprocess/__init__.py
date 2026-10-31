@@ -464,7 +464,7 @@ def _check_postprocess_contract(
     elif step == "16":
         assert getattr(self, "_module_logs", None) is not None, "Step 16 must build module logs"
     elif step == "16.5":
-        assert self.graph_shape_hash is not None, "Step 16.5 must compute graph_shape_hash"
+        assert self._provenance_fingerprint is not None, "Step 16.5 must compute graph_shape_hash"
     elif step == "17":
         assert self._tracing_finished is True, "Step 17 must mark tracing finished"
 
@@ -576,7 +576,7 @@ def _populate_var_names(self: "Trace") -> None:
         Trace being postprocessed.
     """
 
-    if not getattr(self, "save_code_context", False):
+    if not getattr(self, "_options_save_source_context", False):
         return
     for op in getattr(self, "_layer_list", ()):
         if getattr(op, "type", None) == "output":
@@ -688,7 +688,7 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
     # this same aggregate: it counts the payloads capture actually kept.
     from .._save_budget import retained_activation_bytes
 
-    self.saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
+    self._cost_saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
     refresh_saved_module_call_count(self, {layer_entry.label for layer_entry in saved_layers})
     refresh_pinned_autograd_memory(self, saved_layers)
 
@@ -793,7 +793,7 @@ def _postprocess_body(
         f"Postprocessing {len(self._raw_graph_ws.raw_layer_labels_list):,} layers "
         f"({len(self.buffer_layers):,} buffers)...",
     )
-    _post_t0 = time.time() if getattr(self, "verbose", False) else 0
+    _post_t0 = time.time() if getattr(self, "_options_verbose", False) else 0
 
     # Steps 1-20 run through the derived-order executor (_executor.py): the
     # registry mirrors the historical hand order (R2 pins them equal), each

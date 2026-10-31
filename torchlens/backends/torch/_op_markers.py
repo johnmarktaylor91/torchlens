@@ -203,7 +203,7 @@ def _push_op_markers(trace: Any, func_name: str, func_call_id: int) -> tuple[boo
     """
 
     session = resolve_active_session_fn()()
-    wants_nvtx = bool(getattr(trace, "emit_nvtx", False))
+    wants_nvtx = bool(getattr(trace, "_options_emit_nvtx", False))
     if session is None and not wants_nvtx:
         return (False, None)
     visual, join = _op_marker_labels(func_name, func_call_id)

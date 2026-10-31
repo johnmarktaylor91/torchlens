@@ -208,7 +208,7 @@ def test_plain_pickle_roundtrip_still_works() -> None:
     restored = pickle.loads(pickle.dumps(live_log))
 
     assert isinstance(restored, Trace)
-    assert restored.model_class_name == live_log.model_class_name
+    assert restored.source.class_name == live_log.source.class_name
     assert len(restored._layer_list) == len(live_log._layer_list)
     assert restored._layer_list[0].source_trace is restored
 
@@ -283,16 +283,16 @@ def test_trace_setstate_coerces_wrong_typed_total_backward_memory() -> None:
 
     live_log = _build_live_log()
     state = live_log.__getstate__()
-    state.pop("total_backward_memory")
+    state.pop("_cost_total_backward_memory")
 
     restored = Trace.__new__(Trace)
     restored.__setstate__(state)
 
-    assert isinstance(restored.total_backward_memory, Bytes)
+    assert isinstance(restored.cost.total_backward_memory, Bytes)
     # Must format cleanly like every sibling memory field, not just compare
     # equal-by-value (Bytes subclasses int, so a bare `int` would pass a
     # naive `== 0` check while still failing `isinstance`/format checks).
-    f"{restored.total_backward_memory:.2f MB}"
+    f"{restored.cost.total_backward_memory:.2f MB}"
 
 
 def test_trace_setstate_coerces_present_but_wrong_typed_total_backward_memory() -> None:
@@ -300,13 +300,13 @@ def test_trace_setstate_coerces_present_but_wrong_typed_total_backward_memory() 
 
     live_log = _build_live_log()
     state = live_log.__getstate__()
-    state["total_backward_memory"] = 12345  # legacy plain int, not Bytes
+    state["_cost_total_backward_memory"] = 12345  # legacy plain int, not Bytes
 
     restored = Trace.__new__(Trace)
     restored.__setstate__(state)
 
-    assert isinstance(restored.total_backward_memory, Bytes)
-    assert int(restored.total_backward_memory) == 12345
+    assert isinstance(restored.cost.total_backward_memory, Bytes)
+    assert int(restored.cost.total_backward_memory) == 12345
 
 
 def test_trace_setstate_coerces_present_but_wrong_typed_container_fields() -> None:

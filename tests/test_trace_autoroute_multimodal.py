@@ -51,9 +51,9 @@ def test_clip_style_dict_routes_via_auto_processor() -> None:
         capture=tl.options.CaptureOptions(layers_to_save="none"),
     )
 
-    assert log.input_preprocessor is not None
-    assert log.input_preprocessor.source == "hf_auto_processor"
-    assert log.input_preprocessor.verified is True
+    assert log.provenance.input_preprocessor is not None
+    assert log.provenance.input_preprocessor.source == "hf_auto_processor"
+    assert log.provenance.input_preprocessor.verified is True
 
 
 def test_non_modality_dict_does_not_route(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -72,7 +72,7 @@ def test_non_modality_dict_does_not_route(monkeypatch: pytest.MonkeyPatch) -> No
         capture=tl.options.CaptureOptions(layers_to_save="none"),
     )
 
-    assert log.input_preprocessor is None
+    assert log.provenance.input_preprocessor is None
 
 
 def test_empty_dict_does_not_route() -> None:
@@ -106,7 +106,7 @@ def test_model_without_auto_processor_gate_fails(monkeypatch: pytest.MonkeyPatch
         capture=tl.options.CaptureOptions(layers_to_save="none"),
     )
 
-    assert log.input_preprocessor is None
+    assert log.provenance.input_preprocessor is None
 
 
 def test_dict_transform_override_skips_multimodal_autoroute(
@@ -134,6 +134,6 @@ def test_dict_transform_override_skips_multimodal_autoroute(
     # The explicit transform bypasses the multimodal autoroute entirely: no
     # bridge stamped provenance, so the record is the honest user_transform
     # stamp (tvscope B1), never the multimodal bridge's richer record.
-    assert log.input_preprocessor is not None
-    assert log.input_preprocessor.source == "user_transform"
-    assert log.input_preprocessor.verified is False
+    assert log.provenance.input_preprocessor is not None
+    assert log.provenance.input_preprocessor.source == "user_transform"
+    assert log.provenance.input_preprocessor.verified is False

@@ -401,7 +401,7 @@ def test_cross_grammar_quarantine_through_the_real_load_path():
     # A quarantined record is not claims: the public accessor serves None,
     # while the capture-kind marker still reads the declaration as episode.
     assert restored.episode is None
-    assert restored.capture_kind == "episode"
+    assert restored.provenance.kind == "episode"
 
 
 def test_cache_len_never_reappears_in_the_grammar():

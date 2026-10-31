@@ -70,7 +70,9 @@ def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
     log_a.state_history.append({"op": "sentinel"})
     assert log_b.state_history == []
     assert log_a.state is TraceState.PRISTINE
-    assert all(value is Relationship.UNKNOWN for value in log_a.relationship_evidence.values())
+    assert all(
+        value is Relationship.UNKNOWN for value in log_a.graph.relationship_evidence.values()
+    )
 
     pass_a = next(iter(_capture_tiny_log()))
     pass_b = next(iter(_capture_tiny_log()))

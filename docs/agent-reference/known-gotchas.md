@@ -6,7 +6,7 @@
   `allowed_custom_callable_modules={"my_trusted_module"}` is narrower and remains restrictive even if
   the boolean is also true. TorchLens-owned `torchlens.*` custom callables and the fixed trusted
   namespaces resolve without an opt-in.
-- CPU peaks are opt-in: a default capture reads CPU `Trace.forward_peak_memory` and
+- CPU peaks are opt-in: a default capture reads CPU `Trace.cost.forward_peak_memory` and
   `backward_peak_memory` as `None`, with `forward_peak_memory_reason` / `backward_peak_memory_reason`
   naming `CaptureOptions(measure_host_peak_memory=True)`, and never writes the process high-water
   mark. Under the opt-in the CPU forward peak is the host resident high-water growth (`VmHWM` after

@@ -237,7 +237,9 @@ def test_persisted_equivalence_class_keys_are_canonically_ordered(tmp_path: Path
         )
         spec = tmp_path / f"nested_{index}.tlspec"
         trace.save(str(spec))
-        groups = pickle.loads((spec / "metadata.pkl").read_bytes()).get("op_equivalence_classes")
+        groups = pickle.loads((spec / "metadata.pkl").read_bytes()).get(
+            "_graph_op_equivalence_classes"
+        )
         for key in groups or {}:
             tokens = param_token.findall(key)
             if len(tokens) >= 2:
@@ -277,13 +279,15 @@ def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> 
         torch.randn(2, 3, 4),
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
-    live_groups = dict(trace.op_equivalence_classes)
+    live_groups = dict(trace.graph.op_equivalence_classes)
     live_outindex_keys = {key for key in live_groups if "_outindex" in key}
     assert len(live_outindex_keys) >= 2, "expected multi-output param groups in-memory"
 
     spec = tmp_path / "lstm_outindex.tlspec"
     trace.save(str(spec))
-    persisted = pickle.loads((spec / "metadata.pkl").read_bytes()).get("op_equivalence_classes")
+    persisted = pickle.loads((spec / "metadata.pkl").read_bytes()).get(
+        "_graph_op_equivalence_classes"
+    )
     assert persisted is not None
 
     persisted_outindex_keys = {key for key in persisted if "_outindex" in key}

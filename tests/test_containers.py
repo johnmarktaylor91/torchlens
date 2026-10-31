@@ -330,7 +330,7 @@ def test_capture_container_structure_default_off_preserves_output_shape_metadata
         capture=tl.options.CaptureOptions(seed=0, capture_container_structure=False),
     )
 
-    assert default_trace.graph_shape_hash == explicit_false_trace.graph_shape_hash
+    assert default_trace.provenance.fingerprint == explicit_false_trace.provenance.fingerprint
     assert (
         [default_trace.ops[label].container_spec for label in default_trace.output_layers]
         == [
@@ -462,7 +462,7 @@ def test_paths_only_backend_registry_view_does_not_fake_reconstruct() -> None:
         (torch.tensor([1.0]), torch.tensor([2.0])),
         capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
-    trace.backend = "jax"
+    trace._provenance_backend = "jax"
 
     container = trace.ops[trace.output_layers[0]].container
     stack_op = next(op for op in trace.ops if op.func_name == "stack")
@@ -487,7 +487,7 @@ def test_backend_none_container_capability_returns_no_false_view() -> None:
         (torch.tensor([1.0]), torch.tensor([2.0])),
         capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
-    trace.backend = "mlx"
+    trace._provenance_backend = "mlx"
 
     output_op = trace.ops[trace.output_layers[0]]
     stack_op = next(op for op in trace.ops if op.func_name == "stack")
