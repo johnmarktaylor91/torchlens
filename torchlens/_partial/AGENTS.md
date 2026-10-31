@@ -13,12 +13,12 @@ state as a `PartialTrace` for post-mortem inspection. `__all__` is exactly
   partially populated `trace`, the `original_exception`, and exposes
   `raw_layers` (tuple of raw `Op` records), `outcome` (the settled
   `CaptureOutcome`, see `docs/reference/capture_outcomes.md`),
-  `first_nonfinite()`, `audit()` (-> `TraceAudit`, same as
+  `first_nonfinite()`, `audit()` (-> `HealthReport`, same as
   `tl.debug.audit_trace`), `draw()`, and `show(method="graph"|"repr"|"html")`.
 
 ## Gotchas
 
-- `tl.report.explain(partial)` has a dedicated partial path (text +
+- `partial.explain()` has a dedicated partial path (text +
   `capture_status="partial"` JSON) built on recorded evidence only; fields
   without evidence report `"unknown"`, never inferred.
 - Failed partials are analysis-only: conversion/replay surfaces refuse

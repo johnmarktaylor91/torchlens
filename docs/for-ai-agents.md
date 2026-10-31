@@ -229,7 +229,7 @@ sprint) describe the same surface the rest of this page drives:
   Tensor payloads are never inlined; read them as `trace[layer_label].out`. Pass
   `max_ops=N` to cap op rows — any omission is disclosed in the `truncation` block, and
   the `counts` block stays full-capture truth.
-- `tl.report.explain(trace, max_tokens=N)` budget-prunes the text report by whole
+- `trace.explain(max_tokens=N)` budget-prunes the text report by whole
   sections (low-value first), disclosing every drop in a trailing `Truncation` section.
   The `Capture status` honesty facts and partial-capture failure evidence are never
   dropped: a budget below that floor returns the floor plus a disclosure instead of a
@@ -256,7 +256,7 @@ relu_row = next(row for row in dump["ops"] if row["layer_label"] == "relu_1_2")
 assert relu_row["saved"] is True
 assert trace[relu_row["layer_label"]].out.shape == (2, 4)
 
-budgeted = tl.report.explain(trace, max_tokens=120)
+budgeted = trace.explain(max_tokens=120)
 assert "Capture status" in budgeted
 assert "Truncation" in budgeted  # drops are disclosed, never silent
 ```
@@ -289,7 +289,7 @@ The nine tools:
   ceiling. A `full` page holds its rows in `data["ops"]` and a `graph` page in
   `data["rows"]`; both use the `trace.to_agent_json()` op-row shape, so every row carries
   `layer_label`.
-- `torchlens_explain` — `tl.report.explain(trace, max_tokens=..., audience=...)`;
+- `torchlens_explain` — `trace.explain(max_tokens=..., audience=...)`;
   `max_tokens` defaults to the explain budget (4,000 tokens) and, unlike every other tool,
   is not a ceiling: a larger request is honoured rather than refused. The record carries
   the same `capture`/`audit` honesty blocks the overview serves.

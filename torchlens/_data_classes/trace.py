@@ -55,7 +55,7 @@ if TYPE_CHECKING:
         ReadinessReport,
         SparseRunDescriptor,
     )
-    from ..debug._audit import TraceAudit
+    from ..debug._audit import HealthReport
     from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
 
@@ -989,7 +989,7 @@ class Trace(
 
         return find_nan_in_trace(self)
 
-    def audit(self) -> "TraceAudit":
+    def audit(self) -> "HealthReport":
         """Return an honest one-call health report for this completed trace.
 
         Payload-dependent and gradient-dependent diagnostics are listed as
@@ -998,7 +998,7 @@ class Trace(
 
         Returns
         -------
-        torchlens.debug.TraceAudit
+        torchlens.report.HealthReport
             Prioritized findings plus checks run and skipped-check reasons.
         """
 

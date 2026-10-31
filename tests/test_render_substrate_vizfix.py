@@ -73,13 +73,11 @@ def test_coverage_record_counts_inference_payloads(inference_trace: tl.Trace) ->
 
 
 def test_report_explain_under_inference_mode_does_not_raise(inference_trace: tl.Trace) -> None:
-    from torchlens import report
-
     # D14 (F09): bare explain never scans -- arm the saved-payload basis
     # through the explicit door (it persists the record), then the
     # inference-coverage gap note renders from the basis in hand.
-    report.health_facts(inference_trace)
-    text = str(report.explain(inference_trace))
+    assert inference_trace.health_facts is not None
+    text = str(inference_trace.explain())
     assert "inference tensors" in text
 
 

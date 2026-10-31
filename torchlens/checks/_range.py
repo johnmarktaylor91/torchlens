@@ -50,7 +50,7 @@ class RangeProbe:
         Site target -> ``(low, high)`` declared semantic bounds (either
         side ``None``). Site targets are anything the public ``hooks=``
         door accepts (labels, selectors); bounds are the USER'S semantics,
-        never a dtype fact -- dtype headroom is ``dtype_range_audit``'s
+        never a dtype fact -- dtype headroom is ``dtype_range``'s
         different, already-covered question.
     event_stream:
         Optional stream to publish per-fire verdict events into.

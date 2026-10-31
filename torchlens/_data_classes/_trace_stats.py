@@ -11,7 +11,8 @@ if TYPE_CHECKING:
         ReceptiveFieldProfile,
         ReceptiveFieldStatus,
     )
-    from ..report._profile import TraceProfile
+    from ..report._explain import ExplainReport
+    from ..report._profile import ProfileReport
     from ..visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from ._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceSource
     from .buffer import BufferAccessor
@@ -675,7 +676,7 @@ class TraceStatsMixin(_TraceMixinBase):
         ascending: bool = False,
         top_k: int | None = None,
         group_by: Literal["source_line"] | None = None,
-    ) -> "TraceProfile":
+    ) -> "ProfileReport":
         """Return a unified resource profile assembled from this trace.
 
         Parameters
@@ -695,7 +696,7 @@ class TraceStatsMixin(_TraceMixinBase):
 
         Returns
         -------
-        torchlens.report.TraceProfile
+        torchlens.report.ProfileReport
             Printable table object that also exposes ``to_pandas()``.
 
         Notes
@@ -704,9 +705,9 @@ class TraceStatsMixin(_TraceMixinBase):
         as relative hotspot guidance, not clean benchmark timings.
         """
 
-        from ..report._profile import build_profile
+        from ..report._profile import profile
 
-        return build_profile(
+        return profile(
             self,
             level=level,
             sort_by=sort_by,
@@ -760,6 +761,37 @@ class TraceStatsMixin(_TraceMixinBase):
         from ._trace_inventory import build_bill_of_materials
 
         return build_bill_of_materials(self)
+
+    def explain(
+        self: "Trace",
+        *,
+        audience: Literal["researcher", "practitioner", "auto"] = "auto",
+        max_tokens: int | None = None,
+    ) -> "ExplainReport":
+        """Explain this trace in plain language (DOCUMENTED-UNSTABLE).
+
+        Parameters
+        ----------
+        audience:
+            Report style: ``"researcher"`` adds graph-pattern detail,
+            ``"practitioner"`` emphasizes operational status, ``"auto"``
+            balances the two.
+        max_tokens:
+            Optional token budget. Whole sections drop low-value-first until
+            the report fits, every drop is disclosed, and the capture-status
+            section never drops.
+
+        Returns
+        -------
+        Any
+            ``torchlens.report.ExplainReport``, a ``str`` of multi-section prose.
+            The machine-readable projection of the same facts is
+            ``trace.to_agent_json()``.
+        """
+
+        from ..report._explain import explain
+
+        return explain(self, audience, max_tokens=max_tokens)
 
     def capabilities(self: "Trace") -> Any:
         """Return the report-family capability card for THIS trace (F09/D24).

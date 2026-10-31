@@ -15,7 +15,7 @@ is banned over a kernel-union denominator or a measured-achievable peak
   uninstrumented end-to-end step wall time ONLY. The kernel-union
   quantity is a different metric with its own name and stays a typed
   refusal until the correlation-ID join lands (D22).
-- :func:`time_clean_step` -- the opt-in clean-step helper (D16): warmups,
+- :func:`measure_clean_step` -- the opt-in clean-step helper (D16): warmups,
   median, method disclosed; it states plainly that it re-runs the
   caller's forward.
 - :func:`roofline` -- theoretical intensity/work map (D21): read-once/
@@ -28,7 +28,7 @@ is banned over a kernel-union denominator or a measured-achievable peak
 - :func:`instrumented_rate` -- the boxed opt-in diagnostic (D20):
   CPU-cells only, "instrumented" in the header, per-row applicability by
   execution device, typed refusal when the whole trace executed on CUDA.
-- :func:`cost_report` -- a cost MEASURER, never an estimator (D27): runs
+- :func:`overhead` -- a cost MEASURER, never an estimator (D27): runs
   the requested tiers on the user's own model and host and discloses
   that it ran N forwards.
 
@@ -158,7 +158,7 @@ def device_peaks(rows: Any) -> DevicePeaks:
 
 
 @dataclass(frozen=True)
-class MfuResult:
+class MfuReport:
     """The mode-split time-normalized MFU facts (D16).
 
     ``mode_terms`` disclose each execution mode's (flops, peak, ideal
@@ -179,7 +179,7 @@ class MfuResult:
         """Bounded identity card (F10/D31): mode terms point, never dump."""
 
         return (
-            f"MfuResult(mfu={self.mfu:.4f}, ideal={self.ideal_seconds:.6f} s / "
+            f"MfuReport(mfu={self.mfu:.4f}, ideal={self.ideal_seconds:.6f} s / "
             f"step={self.step_seconds:.6f} s, {len(self.mode_terms)} mode term(s), "
             f"peaks_source={self.peaks_source!r}; read .mode_terms)"
         )
@@ -207,7 +207,7 @@ def mfu(
     peaks_by_mode: dict[str, float],
     step_seconds: float,
     provenance: MfuProvenance | None = None,
-) -> MfuResult:
+) -> MfuReport:
     """Model FLOPs utilization: mode-split, step-wall-time-normalized (D16).
 
     ``ideal_seconds = sum_m flops_m / advertised_dense_peak_m``;
@@ -231,7 +231,7 @@ def mfu(
             "exists to expose and matches no published MFU.",
             code="mfu_denominator_invalid",
             remedy=(
-                "Pass uninstrumented end-to-end step wall time (tl.report.time_clean_step "
+                "Pass uninstrumented end-to-end step wall time (tl.report.measure_clean_step "
                 "is the opt-in helper). The utilization-within-attributed-kernels quantity "
                 "is a different metric with its own name (attributed_kernel_utilization)."
             ),
@@ -286,7 +286,7 @@ def mfu(
             ),
             stacklevel=2,
         )
-    return MfuResult(
+    return MfuReport(
         mfu=value,
         ideal_seconds=ideal,
         step_seconds=float(step_seconds),
@@ -331,7 +331,7 @@ class CleanStepTime:
     n_forwards_run: int
 
 
-def time_clean_step(
+def measure_clean_step(
     model: Any,
     input_args: Any,
     input_kwargs: dict[str, Any] | None = None,
@@ -398,7 +398,7 @@ class RooflineRow:
 
 
 @dataclass(frozen=True)
-class RooflineResult:
+class RooflineReport:
     """The roofline map: rows, sum/sum aggregate, coverage by reason."""
 
     rows: tuple[RooflineRow, ...]
@@ -416,7 +416,7 @@ class RooflineResult:
             "None" if self.aggregate_intensity is None else f"{self.aggregate_intensity:.3f}"
         )
         return (
-            f"RooflineResult({len(self.rows)} rows, aggregate_intensity={aggregate}, "
+            f"RooflineReport({len(self.rows)} rows, aggregate_intensity={aggregate}, "
             f"{self.headline_memory_bound} memory-bound / "
             f"{self.headline_compute_bound} compute-bound; read .rows)"
         )
@@ -474,7 +474,7 @@ def roofline(
     *,
     ridge_intensity: float | None = None,
     cache_resident_bytes: int = CACHE_RESIDENT_BYTES_DEFAULT,
-) -> RooflineResult:
+) -> RooflineReport:
     """Build the theoretical intensity/work map over known compute ops (D21).
 
     Parameters
@@ -577,7 +577,7 @@ def roofline(
             )
         )
     aggregate = (total_flops / total_bytes) if total_bytes else None
-    return RooflineResult(
+    return RooflineReport(
         rows=tuple(rows),
         aggregate_intensity=aggregate,
         coverage_by_reason=coverage,
@@ -748,49 +748,6 @@ def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
     return InstrumentedRateTable(rows=tuple(rows))
 
 
-@dataclass(frozen=True)
-class RateCalibration:
-    """The instrumented-rate inflation factor for THIS capture path (D20)."""
-
-    inflation_factor: float
-    instrumented_seconds: float
-    raw_seconds: float
-    n_forwards_run: int
-    method: str
-
-
-def instrumented_rate_calibration(
-    model: Any,
-    input_args: Any,
-    input_kwargs: dict[str, Any] | None = None,
-    *,
-    repeats: int = 3,
-) -> RateCalibration:
-    """Measure this capture path's actual time inflation (D20 calibrate).
-
-    Runs ``repeats`` raw forwards and ONE TorchLens capture, both timed,
-    and reports instrumented/raw -- the factor by which per-op
-    instrumented time overstates cost on this host.
-    """
-
-    from ..user_funcs import trace as _trace
-
-    kwargs = input_kwargs or {}
-    args = input_args if isinstance(input_args, (list, tuple)) else (input_args,)
-    clean = time_clean_step(model, input_args, input_kwargs, warmup=1, repeats=repeats)
-    start = time.perf_counter()
-    captured = _trace(model, list(args) if len(args) > 1 else args[0], kwargs)
-    instrumented = time.perf_counter() - start
-    captured.cleanup()
-    return RateCalibration(
-        inflation_factor=instrumented / clean.seconds if clean.seconds > 0 else float("inf"),
-        instrumented_seconds=instrumented,
-        raw_seconds=clean.seconds,
-        n_forwards_run=clean.n_forwards_run + 1,
-        method="one timed capture vs median uninstrumented forward (perf_counter)",
-    )
-
-
 # ---------------------------------------------------------------------------
 # The cost measurer (D27)
 
@@ -816,7 +773,7 @@ class CostTierMeasurement:
 
 
 @dataclass(frozen=True)
-class CostReportResult:
+class OverheadReport:
     """Measured capture costs on the USER'S model and host (D27)."""
 
     tiers: tuple[CostTierMeasurement, ...]
@@ -828,7 +785,7 @@ class CostReportResult:
 
         tiers = ", ".join(tier.tier for tier in self.tiers)
         return (
-            f"CostReportResult({len(self.tiers)} tier(s): {tiers}; measured over "
+            f"OverheadReport({len(self.tiers)} tier(s): {tiers}; measured over "
             f"{self.n_forwards_run} forwards; print() for the report, read .tiers)"
         )
 
@@ -851,14 +808,14 @@ class CostReportResult:
         return "\n".join(lines)
 
 
-def cost_report(
+def overhead(
     model: Any,
     input_args: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     tiers: tuple[str, ...] = COST_REPORT_TIERS,
     repeats: int = 3,
-) -> CostReportResult:
+) -> OverheadReport:
     """Measure requested capture tiers on the user's own model/host (D27).
 
     A cost MEASURER, never an estimator: the published grid varies 15x
@@ -943,7 +900,7 @@ def cost_report(
         "device": "cpu",
         "threads": str(torch.get_num_threads()),
     }
-    return CostReportResult(
+    return OverheadReport(
         tiers=tuple(measurements),
         n_forwards_run=n_forwards,
         environment=environment,

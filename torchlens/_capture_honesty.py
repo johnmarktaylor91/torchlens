@@ -6,7 +6,7 @@ verification ceiling, the rescue disclosure, structure-only hypothesis status,
 sparse-run poisoning, episode capture (including the forced-tokens
 non-verifying basis), and persisted capture-time advisories.
 
-``tl.report.explain`` and ``Trace.to_agent_json`` read their honesty facts
+``Trace.explain`` and ``Trace.to_agent_json`` read their honesty facts
 through this module, and every exporter in ``torchlens.export``, every debug
 DataFrame, ``Trace.to_pandas``, and the fastlog table attach the same facts
 through :func:`attach_dataframe_honesty` / :func:`honesty_preamble_lines` --
@@ -657,11 +657,11 @@ _PRESENTER_REMEDIES: dict[str, str] = {
         "merged.to_pandas()) or report on one member rank Trace"
     ),
     "TraceSlice": (
-        "report on the slice's source trace (tl.report.explain("
-        "slice.source_trace)); the slice itself discloses via slice.summary()"
+        "report on the slice's source trace (slice.source_trace.explain()); "
+        "the slice itself discloses via slice.summary()"
     ),
-    "Bundle": "report on one member Trace (e.g. tl.report.explain(bundle[name]))",
-    "Recording": ("cook the recording into a Trace first: tl.report.explain(recording.to_trace())"),
+    "Bundle": "report on one member Trace (e.g. bundle[name].explain())",
+    "Recording": ("cook the recording into a Trace first: recording.to_trace().explain()"),
 }
 
 

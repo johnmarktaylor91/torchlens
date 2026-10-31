@@ -44,7 +44,7 @@ def test_chain_halted_settle_save_load_report_doors(tmp_path: Any) -> None:
     assert loaded.outcome.status.name == "STOPPED", "the halt fact fell off at the save/load hop"
     for door, text in (
         ("summary", str(loaded.summary())),
-        ("explain", tl.report.explain(loaded)),
+        ("explain", loaded.explain()),
     ):
         assert "stopped" in text.lower(), (
             f"the {door} door on the LOADED stopped trace never says stopped --"
@@ -65,7 +65,7 @@ def test_chain_structure_only_save_load_capability_doors(tmp_path: Any) -> None:
     trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.structure_only, "structure_only flag fell off at the load hop"
-    assert "hypothes" in tl.report.explain(loaded).lower(), (
+    assert "hypothes" in loaded.explain().lower(), (
         "the loaded structure-only trace's explain() no longer discloses the hypothesis ladder"
     )
     with pytest.raises(Exception) as excinfo:

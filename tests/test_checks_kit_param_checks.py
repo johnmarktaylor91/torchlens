@@ -104,7 +104,7 @@ def test_dead_layer_gradient_fact_fires_and_naive_change_is_vacuous(mechanism: s
         assert '"dead"' not in finding.message
     # The cone finding points at the frontier follow-up (D3, load-bearing).
     sample = next(f for f in report.findings if f.check == "param_received_no_gradient")
-    assert "gradient_flow_audit" in sample.follow_up
+    assert "grad_health" in sample.follow_up
 
 
 def test_no_grad_findings_distinguish_none_from_zero() -> None:

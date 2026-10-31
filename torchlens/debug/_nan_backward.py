@@ -490,7 +490,7 @@ def bisect_nan_backward(
         Completed TorchLens trace with a captured backward.
     bwd:
         One-based backward pass selector; required when multiple passes were
-        captured (the ``gradient_flow_audit`` convention verbatim).
+        captured (the ``grad_health`` convention verbatim).
     grad_scale:
         Disclosed AMP loss scale (``scaler.get_scale()``); recorded on the
         result. The transition ledger classifies non-finiteness, which no

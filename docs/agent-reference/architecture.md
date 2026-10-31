@@ -64,7 +64,7 @@ Key entry points:
   JSON-serializable `torchlens.agent_trace.v1` dump (capture honesty facts,
   counts, pass-qualified op rows with graph edges, module hierarchy, embedded
   navigation guide; payloads never inlined; `max_ops` truncation disclosed).
-  `tl.report.explain(trace, max_tokens=N)` budget-prunes the text report by
+  `trace.explain(max_tokens=N)` budget-prunes the text report by
   whole sections low-value-first with a disclosed `Truncation` section;
   capture-status honesty facts and partial-capture failure evidence never
   drop. The report is prose only: its machine projection is `trace.to_agent_json()`.

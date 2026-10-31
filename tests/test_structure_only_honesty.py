@@ -96,7 +96,7 @@ def test_profile_repr_carries_the_banner() -> None:
 
 def test_explain_carries_the_hypothesis_line() -> None:
     log = _structure_trace()
-    text = tl.report.explain(log)
+    text = log.explain()
     assert "Structure-only capture" in text
     assert "HYPOTHESES" in text
 

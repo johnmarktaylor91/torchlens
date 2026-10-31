@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
 
-from .._debug_report import DebugReport, table_report, trace_subject
+from .._debug_report import Report, table_report, trace_subject
 from .._quantities import Bytes
 from ._common import _ordered_ops, _require_pandas, _source_line
 
@@ -304,7 +304,7 @@ def hot_path_rows(
     return [dict(row) for row in sorted_rows], attrs
 
 
-def hot_path(trace: Trace, by: CostMetric = "flops") -> DebugReport:
+def hot_path(trace: Trace, by: CostMetric = "flops") -> Report:
     """Rank source lines by aggregate forward cost.
 
     Parameters
@@ -316,7 +316,7 @@ def hot_path(trace: Trace, by: CostMetric = "flops") -> DebugReport:
 
     Returns
     -------
-    DebugReport
+    Report
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         Columns are ``source_file:line``, ``op_count``, ``total_cost``, and

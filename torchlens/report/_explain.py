@@ -22,13 +22,23 @@ from ._summary_columns import attention_full_square_line, counted_attention_ops
 Audience = Literal["researcher", "practitioner", "auto"]
 
 
+class ExplainReport(str):
+    """The plain-language report ``trace.explain()`` returns (DOCUMENTED-UNSTABLE).
+
+    A ``str``: print it, search it or slice it like the prose it is. The
+    machine-readable projection of the same facts is ``trace.to_agent_json()``.
+    """
+
+    __slots__ = ()
+
+
 def explain(
     trace: Any,
     audience: Audience = "auto",
     *,
     max_tokens: int | None = None,
-) -> str:
-    """Explain a TorchLens log in plain language.
+) -> ExplainReport:
+    """Explain a TorchLens log in plain language (the body of ``trace.explain()``).
 
     Parameters
     ----------
@@ -49,8 +59,8 @@ def explain(
 
     Returns
     -------
-    str
-        Multi-section prose.
+    ExplainReport
+        Multi-section prose (a ``str``).
 
     Raises
     ------
@@ -64,7 +74,7 @@ def explain(
     ``format="json"`` form of this report is removed.
     """
 
-    refuse_presenter_subject(trace, "tl.report.explain")
+    refuse_presenter_subject(trace, "trace.explain")
     if audience not in {"researcher", "practitioner", "auto"}:
         raise ValueError("audience must be 'researcher', 'practitioner', or 'auto'.")
     if max_tokens is not None and (
@@ -77,7 +87,9 @@ def explain(
 
     if _is_partial_trace(trace):
         diagnosis = _partial_diagnosis(trace)
-        return _budgeted_report(_partial_sections(diagnosis), max_tokens, drop_order=())
+        return ExplainReport(
+            _budgeted_report(_partial_sections(diagnosis), max_tokens, drop_order=())
+        )
 
     sections = [
         ("Capture status", _capture_status_lines(trace)),
@@ -91,7 +103,7 @@ def explain(
     logged_value_lines = _logged_value_lines(trace)
     if logged_value_lines:
         sections.append(("Logged values", logged_value_lines))
-    return _budgeted_report(sections, max_tokens, drop_order=_SECTION_DROP_ORDER)
+    return ExplainReport(_budgeted_report(sections, max_tokens, drop_order=_SECTION_DROP_ORDER))
 
 
 #: Low-value-first order in which ``max_tokens`` drops report sections.

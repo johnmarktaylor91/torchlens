@@ -2,23 +2,27 @@
 
 Power-user diagnostics for completed traces. Imported lazily as `tl.debug` and
 deliberately NOT in the top-level `__all__`. Everything here is read-only analysis;
-nothing mutates a trace or the capture pipeline.
+nothing mutates a trace or the capture pipeline. The facade re-exports the health
+diagnostics (`param_health`, `grad_health`, `dtype_range`, `nonfinite_origin`,
+`check_determinism`, their reports and `Report`) from `torchlens/_diagnostics.py`, so
+re-homing them is one facade edit. `HealthReport` and `FlopsCrossCheck` are defined
+here but exported from `tl.report`.
 
 ## The report object (U42.2; DOCUMENTED-UNSTABLE)
-- Every report-shaped result is a `tl.debug.DebugReport` (defined in
-  `torchlens/_debug_report.py`, at the package root so `checks.ParamAudit` can
+- Every report-shaped result is a `tl.debug.Report` (defined in
+  `torchlens/_debug_report.py`, at the package root so `checks.ParamHealthReport` can
   subclass it without importing this package): `report_type`, `subject`,
   `status`, `to_dict()`, `to_pandas()`, and `str()` = a bounded card (lead line,
   at most five findings, exact remainder, exits). Results with a house-voice
-  `__repr__` (`TraceAudit`, `DTypeRangeAudit`, `FindNanReport`, `ParamAudit`) keep
+  `__repr__` (`HealthReport`, `DTypeRangeReport`, `FindNanReport`, `ParamHealthReport`) keep
   printing it (`_prints_repr = True`; the card is `report.card()`).
 - Subclasses state the lead through `_report_subject` / `_report_status` /
   `_report_findings` (optionally `_report_coverage`, `_report_severity_counts`,
   `_report_rows`). Do not add dataclass fields named `report_type`, `subject` or
   `status` (they are base properties).
 - The tabular helpers (`hot_path`, `dead_neurons`, `compare`,
-  `recompute_candidates`, `gradient_flow_audit`, `compare_params`) return a
-  tabular `DebugReport` built by `table_report(...)`; `.to_pandas()` is the frame
+  `recompute_candidates`, `grad_health`, `compare_params`) return a
+  tabular `Report` built by `table_report(...)`; `.to_pandas()` is the frame
   (attrs included). It never forwards DataFrame methods. The `*_rows` helpers stay
   the pandas-free core.
 - Not reports: the context managers (`isolated_capture`, `preserved_rng_state`,
@@ -44,7 +48,7 @@ nothing mutates a trace or the capture pipeline.
 
 ## _cost.py
 - `hot_path(trace, by="flops")` ranks source lines by cost metric (a tabular
-  `DebugReport`; `.to_pandas()` is the frame).
+  `Report`; `.to_pandas()` is the frame).
 - `theoretical_op_bytes(op)` estimates input/parameter traffic from metadata only.
 
 ## _compile_counter.py
@@ -58,7 +62,7 @@ nothing mutates a trace or the capture pipeline.
   `GraphBreaksUnavailableError` / `GraphBreaksNormalizationError`.
 
 ## _audit.py
-- `audit_trace(trace)` returns a `TraceAudit` of `AuditFinding`s; accepts a
+- `audit_trace(trace)` returns a `HealthReport` of `AuditFinding`s; accepts a
   `PartialTrace` and routes it through `_audit_partial_trace()`.
 
 ## _graph.py
@@ -66,12 +70,12 @@ nothing mutates a trace or the capture pipeline.
   `dead_neurons(trace, dim=..., threshold=...)` scans saved activations.
 
 ## _dtype_range.py
-- `dtype_range_audit(...)` -> `DTypeRangeAudit`: overflow headroom, subnormal
+- `dtype_range(...)` -> `DTypeRangeReport`: overflow headroom, subnormal
   fractions, and narrowing casts per op.
 
 ## _gradients.py
-- `gradient_flow_audit(...)` builds a gradient-magnitude table (a tabular
-  `DebugReport`); its frame is an annotated empty frame with a message rather than
+- `grad_health(...)` builds a gradient-magnitude table (a tabular
+  `Report`); its frame is an annotated empty frame with a message rather than
   raising when grads are absent.
 
 ## _infer_input_shape.py
@@ -88,5 +92,5 @@ nothing mutates a trace or the capture pipeline.
 - pandas is required lazily per call (`_require_pandas()`), not at import.
 - Several helpers (`find_nan`, `graph_breaks`, `guess_input_shape`) run fresh
   forwards/captures; they are not safe on models with destructive side effects.
-- Keep result objects typed dataclasses that subclass `DebugReport`; callers branch
+- Keep result objects typed dataclasses that subclass `Report`; callers branch
   on fields, not messages.

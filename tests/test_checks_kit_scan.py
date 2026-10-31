@@ -167,15 +167,15 @@ def test_audit_params_within_filters_exact_names() -> None:
 
 
 def test_debug_door_and_knob_parity() -> None:
-    """tl.debug.audit_params is the memo door; knobs match dtype_range_audit."""
+    """tl.debug.param_health is the memo door; knobs match dtype_range_audit."""
 
     import torchlens as tl
 
-    assert tl.debug.audit_params is tc.audit_params
-    assert tl.debug.ParamAudit is tc.ParamAudit
+    assert tl.debug.param_health is tc.audit_params
+    assert tl.debug.ParamHealthReport is tc.ParamAudit
 
     audit_defaults = signature(tc.audit_params).parameters
-    range_defaults = signature(tl.debug.dtype_range_audit).parameters
+    range_defaults = signature(tl.debug.dtype_range).parameters
     # Knob parity through the ONE constants module (memo 4.4).
     assert audit_defaults["max_fraction"].default == range_defaults["max_fraction"].default
     assert (

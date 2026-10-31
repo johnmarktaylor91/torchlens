@@ -1,4 +1,4 @@
-"""The one-call paper number: ``flops_report`` (F09; costreport D10-D13).
+"""The one-call paper number: ``flops`` (F09; costreport D10-D13).
 
 Both doors -- the model door (one safe capture under the summary
 execution contract: eval mode, ``no_grad``, module flags and RNG restored
@@ -311,7 +311,7 @@ def _build_report(
     )
 
 
-def flops_report(
+def flops(
     subject: Any,
     input_args: Any = None,
     input_kwargs: dict[str, Any] | None = None,
@@ -346,7 +346,7 @@ def flops_report(
             raise InvalidArgumentError(
                 "the model door needs example inputs to run its one capture.",
                 code="flops_report_inputs_required",
-                remedy="Call tl.report.flops_report(model, example_inputs).",
+                remedy="Call tl.report.flops(model, example_inputs).",
             )
         trace = _capture_for_report(subject, input_args, input_kwargs)
         try:
@@ -363,7 +363,7 @@ def flops_report(
             "input_args/input_kwargs are model-door arguments; the trace door takes none.",
             code="flops_report_trace_door_inputs",
             remedy=(
-                "Call tl.report.flops_report(trace) on a finished trace, or pass the model "
+                "Call tl.report.flops(trace) on a finished trace, or pass the model "
                 "itself as the first argument to run the one-capture model door."
             ),
         )

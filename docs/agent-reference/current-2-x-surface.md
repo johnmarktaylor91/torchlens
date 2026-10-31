@@ -1117,7 +1117,7 @@
   `torchlens.agent_trace.v1` dump (capture honesty facts, counts, pass-qualified op rows
   with graph edges, module hierarchy, embedded navigation guide pointing back at the live
   public surface; payloads never inlined; `max_ops` truncation disclosed, never silent).
-  `tl.report.explain(trace, max_tokens=N)` budget-prunes the text report by whole
+  `trace.explain(max_tokens=N)` budget-prunes the text report by whole
   sections low-value-first with a disclosed `Truncation` section; capture-status honesty
   facts and partial-capture failure evidence never drop, and `max_tokens` refuses typed
   with `format="json"`. Doc: `docs/for-ai-agents.md`.
@@ -1640,3 +1640,27 @@
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
   `tl.clear_cache()` (`tl.user_funcs.clear_cache`), `tl.observers.register_tensor_connection`
   and `tl.report.isolated_capture`.
+
+## Debugging tools and report results
+
+Debugging tools live in `tl.debug`, trace-describing reports in `tl.report`.
+
+| spelling | what it is |
+|---|---|
+| `tl.debug.DTypeRangeReport` | Coverage-bounded dtype range audit result. |
+| `tl.debug.NonfiniteReport` | One-call NaN forensics report. |
+| `tl.debug.ParamHealthReport` | Notebook-friendly parameter-space audit. |
+| `tl.debug.dtype_range` | Audit saved activations for numeric-range and precision hazards. |
+| `tl.debug.grad_health` | Audit saved op gradients for vanishing, exploding, and zero gradients. |
+| `tl.debug.nonfinite_origin` | One-call NaN forensics. |
+| `tl.debug.param_health` | Audit parameter/buffer space for numeric-health findings. |
+| `tl.report.ExplainReport` | The plain-language report trace.explain() returns: a str of multi-section prose. |
+| `tl.report.FlopsCrossCheck` | Side-by-side dispatch-formula evidence (never an oracle). |
+| `tl.report.HealthReport` | Notebook-friendly report from trace-local health diagnostics. |
+| `tl.report.MfuReport` | The mode-split time-normalized MFU facts. |
+| `tl.report.OverheadReport` | Measured capture costs on the USER'S model and host. |
+| `tl.report.ProfileReport` | A printable, tabular resource profile assembled from one trace. |
+| `tl.report.RooflineReport` | The roofline map: rows, sum/sum aggregate, coverage by reason. |
+| `tl.report.measure_clean_step` | Measure an UNINSTRUMENTED forward wall time (the MFU denominator). |
+| `tl.report.overhead` | Measure requested capture tiers on the user's own model/host. |
+| `tl.report.profile` | Build a unified op, module, or invocation resource profile. |

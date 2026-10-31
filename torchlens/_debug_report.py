@@ -1,10 +1,10 @@
 """The one typed ``tl.debug`` report object (spelling DOCUMENTED-UNSTABLE).
 
-Every report-shaped ``tl.debug`` result is a :class:`DebugReport`: the typed
-results (``TraceAudit``, ``DeterminismReport``, ``NanReport``, ...) subclass
+Every report-shaped ``tl.debug`` result is a :class:`Report`: the typed
+results (``HealthReport``, ``DeterminismReport``, ``NonfiniteReport``, ...) subclass
 it, and the tabular helpers (``hot_path``, ``dead_neurons``, ``compare``,
-``recompute_candidates``, ``gradient_flow_audit``, ``compare_params``)
-return a tabular :class:`DebugReport` whose ``.to_pandas()`` is the frame
+``recompute_candidates``, ``grad_health``, ``compare_params``)
+return a tabular :class:`Report` whose ``.to_pandas()`` is the frame
 they used to return. The object HAS a table, it never IS one (the F10
 report protocol, ``torchlens.report._report_protocol.BoundedReport``).
 
@@ -18,7 +18,7 @@ The common surface:
   exact remainder, the exits). Reports that already print a house-voice
   summary keep it unchanged.
 
-The public spelling is ``torchlens.debug.DebugReport``. This module sits at
+The public spelling is ``torchlens.debug.Report``. This module sits at
 the package root (not inside ``torchlens.debug``) so ``torchlens.checks``
 can subclass it without importing the ``debug`` package, which itself
 imports ``checks``.
@@ -33,7 +33,7 @@ from typing import Any
 
 __tl_layer__ = "L1"
 
-#: Nesting depth past which :meth:`DebugReport.to_dict` summarizes values.
+#: Nesting depth past which :meth:`Report.to_dict` summarizes values.
 _MAX_PLAIN_DEPTH = 6
 
 #: Exits every card names on its ``More:`` line.
@@ -47,7 +47,7 @@ def _require_pandas() -> Any:
         import pandas as pd
     except ImportError as exc:
         raise ImportError(
-            "DebugReport.to_pandas() requires pandas. Install with `pip install torchlens[tabular]`."
+            "Report.to_pandas() requires pandas. Install with `pip install torchlens[tabular]`."
         ) from exc
     return pd
 
@@ -85,7 +85,7 @@ def _plain(value: Any, depth: int = 0) -> Any:
 def _plain_structured(value: Any, depth: int) -> Any:
     """Convert a report, enum, mapping, dataclass or sequence element-wise."""
 
-    if isinstance(value, DebugReport):
+    if isinstance(value, Report):
         return value.to_dict()
     if isinstance(value, enum.Enum):
         return _plain(value.value, depth + 1)
@@ -117,7 +117,7 @@ def _plain_leaf(value: Any) -> str:
     return f"<{type(value).__name__}>"
 
 
-class DebugReport:
+class Report:
     """Base class of every report-shaped ``tl.debug`` result.
 
     Subclasses state their lead through three hooks: ``_report_subject``
@@ -255,8 +255,8 @@ class DebugReport:
         return self.card()
 
 
-class FoundReport(DebugReport):
-    """A :class:`DebugReport` whose verdict is a ``found`` flag.
+class FoundReport(Report):
+    """A :class:`Report` whose verdict is a ``found`` flag.
 
     The status is ``"found"`` / ``"not_found"`` and the lead finding is the
     report's ``message``; subclasses add subject, coverage or more findings.
@@ -288,7 +288,7 @@ def rows_of(records: Sequence[Any]) -> list[dict[str, Any]]:
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
-class _TableReport(DebugReport):
+class _TableReport(Report):
     """A tabular ``tl.debug`` result: the report HAS the frame.
 
     ``to_pandas()`` returns a copy of the frame the helper used to return
@@ -367,8 +367,8 @@ def table_report(
     *,
     subject: str,
     finding_columns: Sequence[str],
-) -> DebugReport:
-    """Wrap a helper's frame in the tabular :class:`DebugReport`.
+) -> Report:
+    """Wrap a helper's frame in the tabular :class:`Report`.
 
     Parameters
     ----------
@@ -383,7 +383,7 @@ def table_report(
 
     Returns
     -------
-    DebugReport
+    Report
         The tabular report.
     """
 

@@ -33,8 +33,6 @@ from typing import Any
 HEALTH_FACTS_ANNOTATIONS_KEY = "health_facts"
 #: HealthFacts payload schema version.
 HEALTH_FACTS_SCHEMA_VERSION = 1
-#: The three-state verdict vocabulary (D5). Closed; silence is not a state.
-HEALTH_VERDICTS: tuple[str, ...] = ("found", "checked_and_clean", "not_checked")
 
 
 @dataclass(frozen=True)

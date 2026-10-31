@@ -13,7 +13,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.report import EVIDENCE_VALUES, SummaryReport, compute_aggregation
+from torchlens.report import SummaryReport
+from torchlens.report._compute_truth import compute_aggregation
+from torchlens.report._summary_report import EVIDENCE_VALUES
 
 
 def _model() -> nn.Module:

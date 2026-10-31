@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import DebugReport
+from .._debug_report import Report
 from .._utils._torch_compat import read_legacy_fp32_controls, snapshot_fp32_precision_controls
 from ._common import _compute_ops, _op_label, _safe_out, _source_line
 from ._first_bad import FirstBadThing
@@ -36,7 +36,7 @@ VERDICTS = ("repeatable_under_test", "nondeterminism_observed", "inconclusive")
 
 
 @dataclass(frozen=True)
-class DeterminismReport(DebugReport):
+class DeterminismReport(Report):
     """Typed result of :func:`check_determinism`.
 
     Parameters

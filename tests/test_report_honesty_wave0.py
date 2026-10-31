@@ -74,7 +74,7 @@ def test_explain_text_is_escape_free() -> None:
     # D14 (F09): explain serves the basis in hand and never scans; arm the
     # evidence through the explicit spelling first.
     assert trace.nonfinite_ops
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert ESC not in report
     # The non-finite evidence still names the site in plain text.
     assert "truediv" in report
@@ -146,7 +146,7 @@ def test_log_value_read_back_and_renders() -> None:
     view = trace.logged_values
     view["gate_mean"] = -1.0
     assert trace.logged_values == {"gate_mean": 0.25}
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert "Logged values" in report and "gate_mean = 0.25" in report
     dump = trace.to_agent_json(max_ops=1)
     assert dump["logged_values"] == {"gate_mean": 0.25}
@@ -163,7 +163,7 @@ def test_logged_values_render_is_bounded() -> None:
             return torch.relu(x)
 
     trace = tl.trace(_Logging(), torch.randn(2, 3))
-    report = tl.report.explain(trace)
+    report = trace.explain()
     section = report[report.index("Logged values") :]
     for line in section.splitlines():
         assert len(line) < 120
@@ -213,7 +213,7 @@ def test_explain_and_agent_json_refuse_trace_slice_typed() -> None:
     trace = _clean_trace()
     trace_slice = trace.between(trace.layer_labels[0], trace.layer_labels[-1])
     with pytest.raises(tl.errors.InvalidArgumentError) as exc_info:
-        tl.report.explain(trace_slice)
+        tl.Trace.explain(trace_slice)
     assert exc_info.value.fields["code"] == "report_subject_unsupported"
     with pytest.raises(tl.errors.InvalidArgumentError):
         tl.Trace.to_agent_json(trace_slice)
@@ -226,7 +226,7 @@ def test_explain_refuses_recording_typed() -> None:
         nn.Sequential(nn.Linear(3, 4), nn.ReLU()), torch.randn(2, 3), save=tl.func("relu")
     )
     with pytest.raises(tl.errors.InvalidArgumentError) as exc_info:
-        tl.report.explain(recording)
+        tl.Trace.explain(recording)
     assert "to_trace" in str(exc_info.value)
 
 
@@ -237,7 +237,7 @@ def test_poisoned_trace_stops_rendering_clean() -> None:
     trace._runnable.poisoned = True
     trace._runnable.path_faithfulness = PathFaithfulness.DIVERGED
 
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert "POISONED" in report and "NOT" in report
     dump = trace.to_agent_json(max_ops=1)
     assert dump["capture"]["poisoned"] is True
@@ -363,7 +363,7 @@ def test_episode_facts_surface_on_report_surfaces() -> None:
         },
         "rows": [],
     }
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert "Episode capture" in report
     assert "NON-VERIFYING" in report
     dump = trace.to_agent_json(max_ops=1)

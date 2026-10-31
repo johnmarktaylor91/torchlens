@@ -172,7 +172,7 @@ class CheckReport:
         return json.dumps(self.to_dict(), indent=indent, sort_keys=True)
 
     def __repr__(self) -> str:
-        """Render a compact house-style summary (matches ``TraceAudit``)."""
+        """Render a compact house-style summary (matches ``HealthReport``)."""
 
         by_severity = dict.fromkeys(SEVERITIES, 0)
         for finding in self.findings:

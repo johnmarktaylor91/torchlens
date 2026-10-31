@@ -97,7 +97,7 @@ def _rendered_strings(trace: "tl.Trace") -> list[tuple[str, str]]:
         ("modules-repr", repr(trace.modules)),
         ("params-repr", repr(trace.params)),
         ("summary", trace.summary()),
-        ("explain", tl.report.explain(trace)),
+        ("explain", trace.explain()),
     ]
     for op in trace.ops:
         rendered.append((f"op-{op.label}", str(op)))

@@ -5,17 +5,17 @@ locate non-finite saved tensors, walk dependencies, compare runs, rank cost and
 recomputation candidates, audit saved gradients, and infer a runnable input shape. Capture
 with the normal `tl.trace(...)` API, then pass the resulting trace to a helper.
 
-## The report object (`DebugReport`)
+## The report object (`Report`)
 
-Every report-shaped `tl.debug` result is a `tl.debug.DebugReport` (DOCUMENTED-UNSTABLE
+Every report-shaped `tl.debug` result is a `tl.debug.Report` (DOCUMENTED-UNSTABLE
 spelling): `report_type`, `subject` and `status` name what was examined and the verdict,
 `to_dict()` returns a plain JSON-friendly payload, `to_pandas()` returns the table, and
 `print(report)` shows a bounded card (a lead line, at most five findings, the exact
-remainder, and the exits). The typed results (`TraceAudit`, `DeterminismReport`,
-`NanReport`, `FindNanReport`, `ParamAudit`, ...) are `DebugReport` subclasses; results
+remainder, and the exits). The typed results (`HealthReport`, `DeterminismReport`,
+`NonfiniteReport`, `FindNanReport`, `ParamHealthReport`, ...) are `Report` subclasses; results
 that already print a house-voice summary keep it, and `report.card()` gives the card.
-The table helpers (`compare`, `compare_params`, `dead_neurons`, `gradient_flow_audit`,
-`hot_path`, `recompute_candidates`) return a tabular `DebugReport`: the report has a
+The table helpers (`compare`, `compare_params`, `dead_neurons`, `grad_health`,
+`hot_path`, `recompute_candidates`) return a tabular `Report`: the report has a
 table and never is one, so read the DataFrame with `.to_pandas()` (it needs pandas; the
 `*_rows` cores below do not).
 
@@ -26,7 +26,7 @@ import torchlens as tl
 
 trace = tl.trace(nn.Linear(2, 2), torch.ones(1, 2))
 report = tl.report.hot_path(trace, by="flops")
-print(isinstance(report, tl.debug.DebugReport), report.report_type)
+print(isinstance(report, tl.debug.Report), report.report_type)
 print(report.to_pandas().columns.tolist())
 ```
 
@@ -102,15 +102,15 @@ True
 1/2 capabilities present; absent: HAS_B
 ```
 
-## `audit_params`
+## `param_health`
 
-`tl.debug.audit_params(target, *, include_buffers=True, within=None,
+`tl.debug.param_health(target, *, include_buffers=True, within=None,
 bounds=None, max_fraction=0.9, subnormal_fraction_threshold=0.1)` is the
 one-shot parameter/buffer-space scan (the checks-kit door; canonical home
 `torchlens.checks.audit_params`, spelling DOCUMENTED-UNSTABLE). `target` is an
 `nn.Module` or ANY name->tensor `Mapping` — a `state_dict`, flattened
 optimizer state, EMA shadow weights, a loaded checkpoint: same door, same
-batched scan kernel. Returns a `ParamAudit` (findings / rows / checks_run /
+batched scan kernel. Returns a `ParamHealthReport` (findings / rows / checks_run /
 skipped-with-reason / coverage) with signed nonfinite counts, declared-bounds,
 dtype-headroom, subnormal, and all-same/all-zero findings. See
 [the checks kit](checks_kit.md) for the recipes.
@@ -120,7 +120,7 @@ import torch
 from torch import nn
 import torchlens as tl
 
-param_audit = tl.debug.audit_params(nn.Linear(2, 1))
+param_audit = tl.debug.param_health(nn.Linear(2, 1))
 print(len(param_audit.rows), len(param_audit.findings))
 ```
 
@@ -130,11 +130,11 @@ Output:
 2 0
 ```
 
-## `audit_trace`
+## Trace health check (`trace.audit()`)
 
-`tl.debug.audit_trace(trace)` runs every trace-local health diagnostic one capture
-supports and returns a `TraceAudit`: findings from `find_nan`, `bisect_nan`
-(full-coverage traces), `dtype_range_audit`, and `gradient_flow_audit` (exactly one
+`trace.audit()` runs every trace-local health diagnostic one capture
+supports and returns a `HealthReport`: findings from `find_nan`, `bisect_nan`
+(full-coverage traces), `dtype_range`, and `grad_health` (exactly one
 captured backward pass). Diagnostics that need more than the trace itself (a second
 trace, a fresh execution, a start op, a `bwd=` selection) are listed in `skipped`
 with a reason and are never counted as checks that ran. Accepts a completed `Trace`
@@ -146,7 +146,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.ReLU(), torch.tensor([[-1.0, 2.0]]))
-report = tl.debug.audit_trace(trace)
+report = trace.audit()
 print(report.checks_run, len(report.skipped) > 0)
 ```
 
@@ -224,7 +224,7 @@ True __sub__
 ## `compare`
 
 `tl.report.compare(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` compares saved dense
-floating activations with matching operation labels and returns a tabular `DebugReport`
+floating activations with matching operation labels and returns a tabular `Report`
 whose `.to_pandas()` DataFrame carries aggregate counts in `attrs`.
 
 ```python
@@ -249,7 +249,7 @@ Output:
 
 `tl.report.compare_params(model_a, model_b, *, rtol=1e-5, atol=1e-8, include_buffers=False)`
 (DOCUMENTED-UNSTABLE spelling) is the weight-space counterpart of `compare`: it aligns two
-models' parameters on their qualified names and returns a tabular `DebugReport` whose
+models' parameters on their qualified names and returns a tabular `Report` whose
 `.to_pandas()` DataFrame has one row per name and aggregate counts in `attrs`. Tensors on different devices are compared on CPU;
 shape/dtype mismatches and meta tensors skip the value comparison with the reason recorded.
 `include_buffers=True` adds registered buffers (rows carry `kind="buffer"`).
@@ -330,7 +330,7 @@ Output:
 `tl.debug.dead_neurons(trace, *, dim=1, threshold=0.0)` reports units whose maximum
 activation is at most `threshold` or whose value has zero variance in this trace. One
 trace is only one sample; aggregate runs before making a dataset-level claim. Related:
-[`gradient_flow_audit`](#gradient_flow_audit).
+[`grad_health`](#grad_health).
 
 ```python
 import torch
@@ -348,13 +348,13 @@ Output:
 ['op', 'total_units', 'dead_count', 'dead_frac', 'sample_dead_idx', 'reason']
 ```
 
-## `dtype_range_audit`
+## `dtype_range`
 
-`tl.debug.dtype_range_audit(trace, *, max_fraction=0.9, subnormal_fraction_threshold=0.1)`
+`tl.debug.dtype_range(trace, *, max_fraction=0.9, subnormal_fraction_threshold=0.1)`
 audits saved activations for numeric-range and precision hazards: non-finite values
 (same classifier as [`find_nan`](#find_nan)), finite magnitudes near the saved dtype's
 finite maximum, subnormal-heavy tensors, and downcasts from recorded wider input dtypes.
-Returns a `DTypeRangeAudit` with structured findings and audited/total coverage
+Returns a `DTypeRangeReport` with structured findings and audited/total coverage
 (`n_ops_audited` / `n_ops_total`) — unsaved and non-tensor payloads are never
 inspected, and the coverage says so.
 
@@ -364,7 +364,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.ReLU(), torch.tensor([[-1.0, 2.0]]))
-audit = tl.debug.dtype_range_audit(trace)
+audit = tl.debug.dtype_range(trace)
 print(len(audit.findings), audit.n_ops_audited <= audit.n_ops_total)
 ```
 
@@ -374,9 +374,9 @@ Output:
 0 True
 ```
 
-## `gradient_flow_audit`
+## `grad_health`
 
-`tl.debug.gradient_flow_audit(trace, *, bwd=None, vanishing_threshold=1e-7,
+`tl.debug.grad_health(trace, *, bwd=None, vanishing_threshold=1e-7,
 exploding_threshold=1e4, grad_scale=None, grad_scales=None, basis="total_norm")`
 ranks saved gradients and flags zero, vanishing, and exploding norms. Capture
 with `save_grads=True`, then call `trace.log_backward(...)` first.
@@ -403,7 +403,7 @@ from torchlens.options import CaptureOptions
 
 trace = tl.trace(nn.Linear(2, 1), torch.ones(1, 2), capture=CaptureOptions(save_grads=True))
 trace.log_backward(trace[trace.output_layers[0]].out.sum())
-report = tl.debug.gradient_flow_audit(trace).to_pandas()
+report = tl.debug.grad_health(trace).to_pandas()
 print(report.shape, report.attrs["bwd"])
 ```
 
@@ -413,15 +413,15 @@ Output:
 (2, 15) 1
 ```
 
-## `nan_report`
+## `nonfinite_origin`
 
-`tl.debug.nan_report(trace)` is the one-call NaN forensics door (torchnative
+`tl.debug.nonfinite_origin(trace)` is the one-call NaN forensics door (torchnative
 6.5): it consumes the existing capture's queryable nonfinite record FIRST
 (free), names the ORIGIN op with module address and file:line, scopes clean
 results to CHECKED values, discloses AMP limits, and prints the
 `torch.autograd.set_detect_anomaly` recipe verbatim for the cases it does
 not cover (backward-born NaNs, custom-autograd exceptions). The live form
-`tl.debug.nan_report(model, x)` runs one memory-light tripwire forward. It
+`tl.debug.nonfinite_origin(model, x)` runs one memory-light tripwire forward. It
 NEVER auto-runs anomaly mode — a second execution can mutate state and
 follow another stochastic path.
 
@@ -467,12 +467,10 @@ Output:
 ## Pandas-free row cores (`*_rows`)
 
 `tl.debug.compare_rows(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)`,
-`tl.debug.dead_neurons_rows(trace, *, dim=1, threshold=0.0)`,
-`tl.debug.gradient_flow_audit_rows(trace, *, bwd=None, vanishing_threshold=1e-7,
-exploding_threshold=1e4)`, and `tl.report.hot_path_rows(trace, by="flops")`
+`tl.debug.dead_neurons_rows(trace, *, dim=1, threshold=0.0)`, and
+`tl.report.hot_path_rows(trace, by="flops")`
 (DOCUMENTED-UNSTABLE spellings) are the pandas-free cores of
-[`compare`](#compare), [`dead_neurons`](#dead_neurons),
-[`gradient_flow_audit`](#gradient_flow_audit), and [`hot_path`](#hot_path).
+[`compare`](#compare), [`dead_neurons`](#dead_neurons), and [`hot_path`](#hot_path).
 Each returns `(rows, attrs)` — a list of plain per-row dicts plus the same
 `attrs` mapping the report's `.to_pandas()` frame carries (aggregate counts,
 parameters, capture-honesty facts) — importable and runnable without pandas. The

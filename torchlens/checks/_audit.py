@@ -1,4 +1,4 @@
-"""``audit_params`` -- the one-shot parameter/buffer-space scan (memo D15).
+"""``param_health`` -- the one-shot parameter/buffer-space scan (memo D15).
 
 Mapping-only, no policy: an ``nn.Module`` or ANY name->tensor Mapping enters
 through the same door (state_dicts, flattened optimizer state, EMA shadows,
@@ -7,7 +7,7 @@ kernel). No ``grads=``, no ``optimizer=``: transient gradients are
 phase-sensitive (a checkpoint verdict must not depend on WHEN you called
 it), and the caller who names the mapping owns the phase label.
 
-Knob parity with ``tl.debug.dtype_range_audit`` is pinned by test against
+Knob parity with ``tl.debug.dtype_range`` is pinned by test against
 :mod:`torchlens.checks._constants` (one constants module, memo 4.4).
 """
 
@@ -20,7 +20,7 @@ from typing import Any
 
 import torch
 
-from .._debug_report import DebugReport
+from .._debug_report import Report
 from ._constants import MAX_FRACTION_DEFAULT, SUBNORMAL_FRACTION_THRESHOLD_DEFAULT
 from ._errors import CheckConfigError
 from ._records import CHECK_REPORT_SCHEMA_VERSION, CheckFinding, severity_sorted
@@ -30,8 +30,8 @@ __tl_layer__ = "L5"
 
 
 @dataclass(frozen=True)
-class ParamAudit(DebugReport):
-    """Notebook-friendly parameter-space audit (mirrors ``TraceAudit``).
+class ParamHealthReport(Report):
+    """Notebook-friendly parameter-space audit (mirrors ``HealthReport``).
 
     ``rows`` carries one entry per unique tensor (tied aliases preserved);
     ``skipped`` the ``(name, reason)`` pairs for unscannable tensors;
@@ -90,12 +90,12 @@ class ParamAudit(DebugReport):
         """Render a compact audit summary suitable for notebooks."""
 
         heading = (
-            f"ParamAudit: {len(self.findings)} finding(s) over {len(self.rows)} tensor(s); "
+            f"ParamHealthReport: {len(self.findings)} finding(s) over {len(self.rows)} tensor(s); "
             f"{len(self.checks_run)} checks run, {len(self.skipped)} skipped"
         )
         if not self.findings:
             heading = (
-                f"ParamAudit: no issues found over {len(self.rows)} tensor(s); "
+                f"ParamHealthReport: no issues found over {len(self.rows)} tensor(s); "
                 f"{len(self.checks_run)} checks run, {len(self.skipped)} skipped"
             )
         lines = [heading]
@@ -320,7 +320,7 @@ def _coverage(rows: tuple[ScanRow, ...], skipped: int) -> dict[str, Any]:
     }
 
 
-def audit_params(  # noqa: PLR0913 -- the memo-4.4 signature IS the designed public surface (mapping target + five audit knobs); bundling knobs would hide the dtype_range_audit parity
+def param_health(  # noqa: PLR0913 -- the memo-4.4 signature IS the designed public surface (mapping target + five audit knobs); bundling knobs would hide the dtype_range_audit parity
     target: Any,
     *,
     include_buffers: bool = True,
@@ -328,7 +328,7 @@ def audit_params(  # noqa: PLR0913 -- the memo-4.4 signature IS the designed pub
     bounds: Mapping[str, tuple[float | None, float | None]] | None = None,
     max_fraction: float = MAX_FRACTION_DEFAULT,
     subnormal_fraction_threshold: float = SUBNORMAL_FRACTION_THRESHOLD_DEFAULT,
-) -> ParamAudit:
+) -> ParamHealthReport:
     """Audit parameter/buffer space for numeric-health findings (memo 4.4).
 
     Parameters
@@ -347,13 +347,13 @@ def audit_params(  # noqa: PLR0913 -- the memo-4.4 signature IS the designed pub
         ``None``. Unknown names refuse typed.
     max_fraction:
         Fraction of the dtype ceiling above which headroom warns (knob
-        parity with ``tl.debug.dtype_range_audit``).
+        parity with ``tl.debug.dtype_range``).
     subnormal_fraction_threshold:
         Minimum subnormal fraction that warns.
 
     Returns
     -------
-    ParamAudit
+    ParamHealthReport
         Findings, per-tensor rows, skip reasons, and coverage.
 
     Raises
@@ -397,7 +397,7 @@ def audit_params(  # noqa: PLR0913 -- the memo-4.4 signature IS the designed pub
         "param_subnormal",
         "param_all_same",
     )
-    return ParamAudit(
+    return ParamHealthReport(
         findings=severity_sorted(findings),
         rows=rows,
         checks_run=checks_run,
@@ -406,4 +406,4 @@ def audit_params(  # noqa: PLR0913 -- the memo-4.4 signature IS the designed pub
     )
 
 
-__all__ = ["ParamAudit", "audit_params"]
+__all__ = ["ParamHealthReport", "param_health"]

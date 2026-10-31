@@ -89,7 +89,7 @@ def test_trace_profile_levels_columns_aggregation_and_sorting() -> None:
     ]
     assert features_row["op_count"] == len(features_ops)
     assert features_row["flops"] == sum(int(op.flops_forward or 0) for op in features_ops)
-    assert "TraceProfile" not in repr(trace.profile())
+    assert "ProfileReport(" not in repr(trace.profile())
 
 
 def test_trace_profile_preserves_subsecond_time_for_hotspot_sorting() -> None:

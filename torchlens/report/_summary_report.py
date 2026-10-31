@@ -15,7 +15,7 @@ Binding laws carried here:
   survives cleanup and GC (pin: build report; del trace; to_dict() works).
 - ``SummaryReport`` subclasses ``str``. From ``summary()`` the text IS the
   canonical byte-stable ASCII contract (memo 3.9). A report assembled from
-  caller text (``build_summary_report``) carries no rebuilt payload, and
+  caller text (``summary``) carries no rebuilt payload, and
   the rebuilt-only result methods refuse it typed.
 
 Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
@@ -408,7 +408,7 @@ def _summary_rows(trace: Trace) -> tuple[SummaryRow, ...]:
     return tuple(rows)
 
 
-def build_summary_report(trace: Trace, text: str) -> SummaryReport:
+def summary(trace: Trace, text: str) -> SummaryReport:
     """Attach the detached typed data to one rendered summary text.
 
     The builder split (data / format / render): the DATA stage reads

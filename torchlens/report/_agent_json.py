@@ -3,7 +3,7 @@
 DOCUMENTED-UNSTABLE spelling (naming ratification deferred to the UI/naming
 sprint). The dump describes the SAME public surface a human drives -- it is a
 navigation aid, never a parallel API: every record points back at the live
-spelling (``trace[label]``, ``tl.func(...)``, ``tl.report.explain(...)``) an
+spelling (``trace[label]``, ``tl.func(...)``, ``trace.explain()``) an
 agent should call next.
 
 Honesty contract (report/AGENTS.md): capture outcome/verification facts are
@@ -100,8 +100,8 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
 
     steps: dict[str, str] = {
         "summary": "trace.summary()",
-        "plain_language_report": "tl.report.explain(trace)",
-        "budgeted_report": "tl.report.explain(trace, max_tokens=500)",
+        "plain_language_report": "trace.explain()",
+        "budgeted_report": "trace.explain(max_tokens=500)",
         "health_audit": "trace.audit()",
         "resource_profile": "trace.profile(level='module')",
         "inventory": "trace.bill_of_materials()",

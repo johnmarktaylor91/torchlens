@@ -7,8 +7,8 @@ the first call to ``trace()`` and stay wrapped afterward. TorchLens 2.0 keeps
 the top-level namespace intentionally small; historical spellings live in
 their owning submodules.
 
-For AI agents: ``trace.to_agent_json()``, ``tl.report.explain(trace,
-max_tokens=N)``, ``torchlens.agent.guide()``, and the CLI
+For AI agents: ``trace.to_agent_json()``, ``trace.explain(max_tokens=N)``,
+``torchlens.agent.guide()``, and the CLI
 (``python -m torchlens --help``) are the machine-facing doors.
 """
 

@@ -15,7 +15,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import gradient_flow_audit_rows
+from torchlens.debug._gradients import gradient_flow_audit_rows
 from torchlens.report import FirstBadThing, bisect_nan_backward
 
 
@@ -256,7 +256,7 @@ def test_audit_trace_runs_bisector_automatically_when_unambiguous() -> None:
 
     captured = _backward_trace(_WithBadBackward(), torch.randn(2, 3, requires_grad=True))
     try:
-        audit = tl.debug.audit_trace(captured)
+        audit = captured.audit()
         assert "bisect_nan_backward" in audit.checks_run
         assert any(finding.check == "bisect_nan_backward" for finding in audit.findings)
     finally:

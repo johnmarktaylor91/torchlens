@@ -11,13 +11,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.report import (
-    GRAINS,
-    capture_fingerprint,
-    compute_aggregation,
-    factcore,
-    health_facts,
-)
+from torchlens.report._compute_truth import compute_aggregation
+from torchlens.report._factcore import GRAINS, capture_fingerprint, factcore
+from torchlens.report._health import health_facts
 
 
 class _Loop(nn.Module):

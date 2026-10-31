@@ -22,7 +22,7 @@ What ships today: the **correlation-ID join door**
 one owned profiler session; device kernel time lands on your named ops via
 runtime correlation IDs, never name matching), **NVTX named ranges for
 Nsight** (visual correlation only), the analytic cost surfaces
-(`flops_report`, `cost_tree`, `roofline`), the instrumented-host-time
+(`flops`, `cost_tree`, `roofline`), the instrumented-host-time
 profile, and `device_time` / `kernel_time` / `attribution_status` columns on
 every compute row — filled from a joined session, `None` otherwise (missing
 is None, never zero). The door shipping BEFORE the gate passes is deliberate:
@@ -87,7 +87,7 @@ observed; the count comes from per-op cost rules). Coverage is a four-way
 classification and unknown-cost ops are a named work queue:
 
 ```python
-report = tl.report.flops_report(log)
+report = tl.report.flops(log)
 assert type(report.forward_flops) is int
 assert "actual-path analytic" in str(report)
 ```
@@ -114,18 +114,14 @@ assert "time (instrumented)" in repr(profile)
 
 The time column is labeled instrumented everywhere it appears: it is relative
 hotspot guidance under capture instrumentation, never a clean benchmark. For
-a clean number, `tl.report.time_clean_step(model, x)` re-runs your forward
+a clean number, `tl.report.measure_clean_step(model, x)` re-runs your forward
 uninstrumented and says so.
 
 ## Arithmetic intensity (roofline, hypothesis tier)
 
 ```python
-balance = tl.report.machine_balance(
-    compute_peak_flops_per_s=1.0e12,
-    memory_peak_bytes_per_s=1.0e11,
-    basis="advertised",
-)
-result = tl.report.roofline(log, ridge_intensity=balance.ridge_intensity)
+# Ridge intensity: peak FLOP/s over peak memory bytes/s (here advertised figures).
+result = tl.report.roofline(log, ridge_intensity=1.0e12 / 1.0e11)
 assert result.aggregate_intensity is not None
 ```
 
@@ -136,9 +132,6 @@ sub-cache ops are excluded from headline bound counts.
 
 ## What refuses, and why
 
-- `tl.report.instrumented_rate(trace)` on an all-CUDA trace refuses typed
-  (`instrumented_rate_cuda_unsupported`): host time is not a CUDA rate in
-  either direction.
 - `tl.report.attributed_kernel_utilization()` refuses typed
   (`kernel_utilization_requires_device_join`) until the correlation-ID join
   lands; that quantity is deliberately NOT called MFU.

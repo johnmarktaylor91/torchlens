@@ -1,4 +1,4 @@
-"""U42.2: every report-shaped ``tl.debug`` helper returns the one ``DebugReport``.
+"""U42.2: every report-shaped diagnostic helper returns the one ``tl.debug.Report``.
 
 One test per helper checks the common surface (type, lead facts, ``to_dict``,
 ``to_pandas``, the printed form). The six table helpers additionally pin that
@@ -71,25 +71,25 @@ def _helper_calls() -> dict[str, Callable[[dict[str, Any]], Any]]:
 
     debug = tl.debug
     return {
-        "audit_trace": lambda f: debug.audit_trace(f["trace"]),
-        "check_determinism": lambda f: debug.check_determinism(f["model"], f["x"]),
-        "dtype_range_audit": lambda f: debug.dtype_range_audit(f["trace"]),
+        "audit_trace": lambda f: f["trace"].audit(),
+        "check_determinism": lambda f: tl.debug.check_determinism(f["model"], f["x"]),
+        "dtype_range_audit": lambda f: tl.debug.dtype_range(f["trace"]),
         "flops_vs_dispatch": lambda f: tl.report.flops_vs_dispatch(f["model"], f["x"]),
         "graph_breaks": lambda f: debug.graph_breaks(f["model"], f["x"]),
         "guess_input_shape": lambda f: debug.guess_input_shape(nn.Linear(4, 2)),
         "lineage": lambda f: debug.lineage(f["trace"], f["trace"].output_layers[0]),
         "find_nan": lambda f: tl.report.find_nan(f["model"], f["x"]),
         "bisect_nan": lambda f: debug.bisect_nan(f["trace"]),
-        "nan_report": lambda f: debug.nan_report(f["model"], f["x"]),
+        "nan_report": lambda f: tl.debug.nonfinite_origin(f["model"], f["x"]),
         "bisect_nan_backward": lambda f: debug.bisect_nan_backward(f["grad_trace"]),
         "bisect_precision": lambda f: debug.bisect_precision(f["model"], f["x"]),
-        "audit_params": lambda f: debug.audit_params(f["model"]),
+        "audit_params": lambda f: tl.debug.param_health(f["model"]),
         "first_bad_thing": lambda f: tl.report.find_nan(f["model"], f["x"]).first_bad_thing,
         "hot_path": lambda f: debug.hot_path(f["trace"]),
         "dead_neurons": lambda f: debug.dead_neurons(f["trace"]),
         "compare": lambda f: tl.report.compare(f["trace"], f["trace"]),
         "recompute_candidates": lambda f: debug.recompute_candidates(f["trace"]),
-        "gradient_flow_audit": lambda f: debug.gradient_flow_audit(f["grad_trace"]),
+        "gradient_flow_audit": lambda f: tl.debug.grad_health(f["grad_trace"]),
         "compare_params": lambda f: tl.report.compare_params(f["model"], f["model"]),
     }
 
@@ -103,11 +103,11 @@ def fixtures(model: nn.Module, x: torch.Tensor, trace: Any, grad_trace: Any) -> 
 def test_helper_returns_the_debug_report(helper: str, fixtures: dict[str, Any]) -> None:
     report = _helper_calls()[helper](fixtures)
 
-    assert isinstance(report, tl.debug.DebugReport)
+    assert isinstance(report, tl.debug.Report)
     assert isinstance(report, BoundedReport)
     assert report.report_type and report.subject and report.status
     payload = report.to_dict()
-    if type(report).to_dict is tl.debug.DebugReport.to_dict:
+    if type(report).to_dict is tl.debug.Report.to_dict:
         assert payload["report_type"] == report.report_type
         assert payload["status"] == report.status
     json.dumps(payload)
@@ -126,12 +126,12 @@ def test_helper_returns_the_debug_report(helper: str, fixtures: dict[str, Any]) 
 
 
 def test_param_audit_prints_exactly_as_before(model: nn.Module) -> None:
-    """ParamAudit kept its house-voice summary: str() is its unchanged repr."""
+    """ParamHealthReport kept its house-voice summary: str() is its unchanged repr."""
 
-    audit = tl.debug.audit_params(model)
+    audit = tl.debug.param_health(model)
     text = str(audit)
     assert text == audit.__repr__()
-    assert text.splitlines()[0].startswith("ParamAudit: ")
+    assert text.splitlines()[0].startswith("ParamHealthReport: ")
 
 
 def test_table_report_never_is_a_dataframe(trace: Any) -> None:
@@ -189,11 +189,11 @@ def test_compare_frame_is_unchanged(trace: Any) -> None:
 
 
 def test_gradient_flow_audit_frame_is_unchanged(grad_trace: Any) -> None:
-    from torchlens.debug._gradients import _GRAD_AUDIT_COLUMNS
+    from torchlens.debug._gradients import _GRAD_AUDIT_COLUMNS, gradient_flow_audit_rows
 
-    rows, attrs = tl.debug.gradient_flow_audit_rows(grad_trace)
+    rows, attrs = gradient_flow_audit_rows(grad_trace)
     expected = _frame(rows, list(_GRAD_AUDIT_COLUMNS), attrs)
-    _assert_same(tl.debug.gradient_flow_audit(grad_trace), expected)
+    _assert_same(tl.debug.grad_health(grad_trace), expected)
 
 
 def test_recompute_candidates_frame_is_unchanged(trace: Any) -> None:

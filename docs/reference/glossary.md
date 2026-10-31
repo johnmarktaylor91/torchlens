@@ -2700,9 +2700,9 @@ deprecation shim owed*
   tensors, their raw element count, and the mask zeros (`masked=None` when
   the capture retained no mask values).
 
-**FlopsReport.attention_full_square_ops / TraceProfile.attention_full_square_ops** — *unstable — no deprecation shim owed*
+**FlopsReport.attention_full_square_ops / ProfileReport.attention_full_square_ops** — *unstable — no deprecation shim owed*
 : The count (the `attention_full_square_ops` field) of `scaled_dot_product_attention` ops in the forward FLOP total
-  of a `flops_report` or a `trace.profile()`; when non-zero the report or the
+  of a `flops` or a `trace.profile()`; when non-zero the report or the
   profile footer prints that attention FLOPs count the full query x key
   square and masks / `is_causal` are not discounted. Every attention FLOP
   line carries the same note: the `tl.summary` FLOP cells (marked, with the
@@ -2754,26 +2754,26 @@ deprecation shim owed*
   `AttentionCall` records (`module_name`, `probs`, `num_key_value_heads`,
   `mask_kind`, `sdpa_checked`), and `.nbytes` is the retained total.
 
-**DebugReport (`tl.debug.DebugReport`)** — *unstable — no deprecation shim owed*
+**Report (`tl.debug.Report`)** — *unstable — no deprecation shim owed*
 : The one typed result of every report-shaped `tl.debug` helper (U42.2):
   `report_type`, `subject` and `status` (the lead), `to_dict()` (a plain,
   JSON-friendly payload; tensors and graph records summarized, never
   inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:
   lead line, at most five findings, the exact remainder, the exits). The
-  typed results (`TraceAudit`, `DeterminismReport`, `NanReport`,
-  `FindNanReport`, `ParamAudit`, ...) subclass it; those with a house-voice
+  typed results (`HealthReport`, `DeterminismReport`, `NonfiniteReport`,
+  `FindNanReport`, `ParamHealthReport`, ...) subclass it; those with a house-voice
   `__repr__` keep printing it and serve the card as `report.card()`. The
   table helpers `compare`, `compare_params`, `dead_neurons`,
-  `gradient_flow_audit`, `hot_path` and `recompute_candidates` return a
-  tabular `DebugReport` whose `.to_pandas()` is the DataFrame they used to
+  `grad_health`, `hot_path` and `recompute_candidates` return a
+  tabular `Report` whose `.to_pandas()` is the DataFrame they used to
   return (`attrs` included); the report has a table and never is one.
 
-**Trace.profile(group_by="source_line") / TraceProfile.group_by** — *unstable — no deprecation shim owed*
+**Trace.profile(group_by="source_line") / ProfileReport.group_by** — *unstable — no deprecation shim owed*
 : `group_by="source_line"` folds the op rows of `trace.profile()` into one
   row per user source line (`"<file>:<line>"`, the op's recorded call site),
   summing activation bytes, FLOPs and instrumented time; boundary rows fold
   into one `<inputs and outputs>` row, so every additive column sums to the
-  ungrouped op view. Only with `level="op"`. `TraceProfile.group_by` records
+  ungrouped op view. Only with `level="op"`. `ProfileReport.group_by` records
   the key (`None` for one row per op).
 
 **tl.summary("<hub model id>", input_size=...)** — *unstable — no deprecation shim owed*
@@ -2980,3 +2980,44 @@ deprecation shim owed*
   `tl.observers.register_tensor_connection` registers a tensor connection;
   `tl.report.isolated_capture` runs a capture in isolation; `Trace.capture_backward`
   (`TraceValidationMixin.capture_backward`) captures a backward pass for validation.
+### Debugging tools and report results
+**DTypeRangeReport (`tl.debug.DTypeRangeReport`)** — *unstable — no deprecation shim owed*
+: Coverage-bounded dtype range audit result.
+**dtype_range (`tl.debug.dtype_range`)** — *unstable — no deprecation shim owed*
+: Audit saved activations for numeric-range and precision hazards.
+**nonfinite_origin (`tl.debug.nonfinite_origin`)** — *unstable — no deprecation shim owed*
+: One-call NaN forensics.
+**param_health (`tl.debug.param_health`)** — *unstable — no deprecation shim owed*
+: Audit parameter/buffer space for numeric-health findings.
+**ExplainReport (`tl.report.ExplainReport`)** — *unstable — no deprecation shim owed*
+: The plain-language report trace.explain() returns: a str of multi-section prose.
+**FlopsCrossCheck (`tl.report.FlopsCrossCheck`)** — *unstable — no deprecation shim owed*
+: Side-by-side dispatch-formula evidence (never an oracle).
+**MfuReport (`tl.report.MfuReport`)** — *unstable — no deprecation shim owed*
+: The mode-split time-normalized MFU facts.
+**OverheadReport (`tl.report.OverheadReport`)** — *unstable — no deprecation shim owed*
+: Measured capture costs on the USER'S model and host.
+**RooflineReport (`tl.report.RooflineReport`)** — *unstable — no deprecation shim owed*
+: The roofline map: rows, sum/sum aggregate, coverage by reason.
+**measure_clean_step (`tl.report.measure_clean_step`)** — *unstable — no deprecation shim owed*
+: Measure an UNINSTRUMENTED forward wall time (the MFU denominator).
+**overhead (`tl.report.overhead`)** — *unstable — no deprecation shim owed*
+: Measure requested capture tiers on the user's own model/host.
+**profile (`tl.report.profile`)** — *unstable — no deprecation shim owed*
+: Build a unified op, module, or invocation resource profile.
+**DTypeRangeReport fields** — *unstable — no deprecation shim owed*
+: `DTypeRangeReport.findings`, `DTypeRangeReport.n_ops_audited`, `DTypeRangeReport.n_ops_total`.
+**HealthReport fields** — *unstable — no deprecation shim owed*
+: `HealthReport.checks_run`, `HealthReport.findings`, `HealthReport.skipped`.
+**MfuReport fields** — *unstable — no deprecation shim owed*
+: `MfuReport.denominator_scope`, `MfuReport.ideal_seconds`, `MfuReport.mfu`, `MfuReport.mode_terms`, `MfuReport.peaks_source`, `MfuReport.step_seconds`.
+**NonfiniteReport fields** — *unstable — no deprecation shim owed*
+: `NonfiniteReport.amp_disclosure`, `NonfiniteReport.capture_status`, `NonfiniteReport.cost_tier`, `NonfiniteReport.coverage_basis`, `NonfiniteReport.defer_recipe`, `NonfiniteReport.found`, `NonfiniteReport.nonfinite_labels`, `NonfiniteReport.origin_label`, `NonfiniteReport.phase`, `NonfiniteReport.scope_note`, `NonfiniteReport.tensor_role`, `NonfiniteReport.uncertainty_zone`.
+**OverheadReport fields** — *unstable — no deprecation shim owed*
+: `OverheadReport.n_forwards_run`, `OverheadReport.tiers`.
+**ParamHealthReport fields** — *unstable — no deprecation shim owed*
+: `ParamHealthReport.checks_run`, `ParamHealthReport.findings`, `ParamHealthReport.schema_version`, `ParamHealthReport.skipped`, `ParamHealthReport.to_json`.
+**ProfileReport fields** — *unstable — no deprecation shim owed*
+: `ProfileReport.capture_status`, `ProfileReport.capture_verified`, `ProfileReport.column_additivity`, `ProfileReport.frame`, `ProfileReport.honesty`, `ProfileReport.partition_total`, `ProfileReport.tree`, `ProfileReport.unknown_events`.
+**RooflineReport fields** — *unstable — no deprecation shim owed*
+: `RooflineReport.aggregate_intensity`, `RooflineReport.coverage_by_reason`, `RooflineReport.excluded_cache_resident`, `RooflineReport.headline_compute_bound`, `RooflineReport.headline_memory_bound`, `RooflineReport.ridge_intensity`.

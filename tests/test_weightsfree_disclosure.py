@@ -128,7 +128,7 @@ def _channel_agent_json(trace, tmp_path):
 
 
 def _channel_explain(trace, tmp_path):
-    return tl.report.explain(trace)
+    return trace.explain()
 
 
 def _channel_csv(trace, tmp_path):

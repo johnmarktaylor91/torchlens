@@ -27,7 +27,7 @@ stage_log["layer2"].out
 # Appliances hang off one door: trace.using(name), registered with
 # torchlens.appliances.register(name, factory) (spellings DOCUMENTED-UNSTABLE).
 print(log.summary())
-print(tl.report.explain(log))
+print(log.explain())
 log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs
 log.draw(collapse="auto", show_containers=False)  # readability-targeted module overview
 print(log.module_collapse_order[:10])
@@ -270,7 +270,7 @@ except tl.errors.OutputStyleUnknownError as error:
     assert error.fields["code"] == "output_style_unknown"
 else:
     raise AssertionError("output_style_unknown did not refuse")
-# Also exported: tl.debug.DebugReport (base class of report-shaped tl.debug results),
+# Also exported: tl.debug.Report (base class of report-shaped tl.debug results),
 # tl.report.PrunedParamFacts (prune state in the FactCore parameter facts),
 # torchlens.trackers.MLflowSink and torchlens.trackers.CometSink (forward-watch sinks over a run or
 # experiment the user owns) and torchlens.transformer.render_logit_lens_heatmap(result, path)

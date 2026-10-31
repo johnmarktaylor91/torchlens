@@ -377,7 +377,7 @@ def _handle_explain(args: dict[str, Any]) -> dict[str, Any]:
     instead of being dead gates (AUD-CODE 3.11a).
     """
 
-    from ..report import explain
+    from ..report._explain import explain
     from ._artifacts import load_trace
     from ._overview import honesty_blocks
 

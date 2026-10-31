@@ -15,7 +15,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens.debug import GradFnWalkError
+from torchlens.errors import GradFnWalkError
 from torchlens.report import sketch_grad_fn, walk_grad_fn
 
 

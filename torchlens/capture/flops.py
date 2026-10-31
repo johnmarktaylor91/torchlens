@@ -1271,7 +1271,7 @@ def _einsum_flops(
 #: or ``is_causal`` zeroes part of it (``_sdpa_flops`` below).
 ATTENTION_FULL_SQUARE_FUNCS: frozenset[str] = frozenset({"scaled_dot_product_attention"})
 
-#: The disclosure every attention FLOP line carries: summary, flops_report,
+#: The disclosure every attention FLOP line carries: summary, tl.report.flops,
 #: profile, explain and graph labels all print this one wording.
 ATTENTION_FULL_SQUARE_NOTE = (
     "attention FLOPs count the full query x key square; "
