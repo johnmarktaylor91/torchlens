@@ -91,7 +91,7 @@ def _finding(
     severity: AuditSeverity,
     check: str,
     message: str,
-    follow_up: str = "tl.report.dtype_range(trace)",
+    follow_up: str = "tl.debug.dtype_range(trace)",
 ) -> AuditFinding:
     """Build one dtype finding with recorded operation provenance.
 

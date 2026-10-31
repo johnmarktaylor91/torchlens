@@ -28,7 +28,7 @@ def test_grad_basis_invalid_provoked() -> None:
 
     trace = _tiny_trace()
     with pytest.raises(Exception) as excinfo:
-        tl.report.grad_health(trace, basis="vibes")
+        tl.debug.grad_health(trace, basis="vibes")
     assert excinfo.value.fields["code"] == "grad_basis_invalid"
     assert excinfo.value.fields["remedy"]
 
@@ -38,7 +38,7 @@ def test_grad_scale_conflict_provoked() -> None:
 
     trace = _tiny_trace()
     with pytest.raises(Exception) as excinfo:
-        tl.report.grad_health(trace, grad_scale=2.0, grad_scales={1: 2.0})
+        tl.debug.grad_health(trace, grad_scale=2.0, grad_scales={1: 2.0})
     assert excinfo.value.fields["code"] == "grad_scale_conflict"
 
 

@@ -18,7 +18,7 @@ The common surface:
   exact remainder, the exits). Reports that already print a house-voice
   summary keep it unchanged.
 
-The public spelling is ``torchlens.report.Report``. This module sits at
+The public spelling is ``torchlens.debug.Report``. This module sits at
 the package root (not inside ``torchlens.debug``) so ``torchlens.checks``
 can subclass it without importing the ``debug`` package, which itself
 imports ``checks``.

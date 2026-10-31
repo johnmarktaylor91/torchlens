@@ -2,11 +2,15 @@
 
 Power-user diagnostics for completed traces. Imported lazily as `tl.debug` and
 deliberately NOT in the top-level `__all__`. Everything here is read-only analysis;
-nothing mutates a trace or the capture pipeline.
+nothing mutates a trace or the capture pipeline. The facade re-exports the health
+diagnostics (`param_health`, `grad_health`, `dtype_range`, `nonfinite_origin`,
+`check_determinism`, their reports and `Report`) from `torchlens/_diagnostics.py`, so
+re-homing them is one facade edit. `HealthReport` and `FlopsCrossCheck` are defined
+here but exported from `tl.report`.
 
 ## The report object (U42.2; DOCUMENTED-UNSTABLE)
-- Every report-shaped result is a `tl.report.Report` (defined in
-  `torchlens/_debug_report.py`, at the package root so `checks.ParamAudit` can
+- Every report-shaped result is a `tl.debug.Report` (defined in
+  `torchlens/_debug_report.py`, at the package root so `checks.ParamHealthReport` can
   subclass it without importing this package): `report_type`, `subject`,
   `status`, `to_dict()`, `to_pandas()`, and `str()` = a bounded card (lead line,
   at most five findings, exact remainder, exits). Results with a house-voice

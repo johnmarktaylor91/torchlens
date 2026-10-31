@@ -2706,7 +2706,7 @@ deprecation shim owed*
   `AttentionCall` records (`module_name`, `probs`, `num_key_value_heads`,
   `mask_kind`, `sdpa_checked`), and `.nbytes` is the retained total.
 
-**Report (`tl.report.Report`)** — *unstable — no deprecation shim owed*
+**Report (`tl.debug.Report`)** — *unstable — no deprecation shim owed*
 : The one typed result of every report-shaped `tl.debug` helper (U42.2):
   `report_type`, `subject` and `status` (the lead), `to_dict()` (a plain,
   JSON-friendly payload; tensors and graph records summarized, never

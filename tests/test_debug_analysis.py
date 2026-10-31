@@ -194,9 +194,9 @@ def test_gradient_flow_audit_empty_torch_only_and_defaults() -> None:
         TinyMlp(), torch.randn(2, 4), capture=tl.options.CaptureOptions(save_grads=True)
     )
 
-    no_backward = tl.report.grad_health(trace).to_pandas()
-    non_torch = tl.report.grad_health(RaisingGradTrace()).to_pandas()  # type: ignore[arg-type]
-    params = signature(tl.report.grad_health).parameters
+    no_backward = tl.debug.grad_health(trace).to_pandas()
+    non_torch = tl.debug.grad_health(RaisingGradTrace()).to_pandas()  # type: ignore[arg-type]
+    params = signature(tl.debug.grad_health).parameters
 
     assert "re-trace backward_ready=True" in no_backward.attrs["message"]
     assert non_torch.attrs["message"] == "torch-only"
@@ -213,7 +213,7 @@ def test_gradient_flow_audit_reports_saved_gradients() -> None:
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
 
-    frame = tl.report.grad_health(trace).to_pandas()
+    frame = tl.debug.grad_health(trace).to_pandas()
 
     assert len(frame) > 0
     assert frame.attrs["bwd"] == 1

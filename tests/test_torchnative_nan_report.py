@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.report import nonfinite_origin
+from torchlens.debug import nonfinite_origin
 from torchlens.utils._torch_compat import get_cpu_half_kernels_support
 
 

@@ -7,7 +7,7 @@ with the normal `tl.trace(...)` API, then pass the resulting trace to a helper.
 
 ## The report object (`Report`)
 
-Every report-shaped `tl.debug` result is a `tl.report.Report` (DOCUMENTED-UNSTABLE
+Every report-shaped `tl.debug` result is a `tl.debug.Report` (DOCUMENTED-UNSTABLE
 spelling): `report_type`, `subject` and `status` name what was examined and the verdict,
 `to_dict()` returns a plain JSON-friendly payload, `to_pandas()` returns the table, and
 `print(report)` shows a bounded card (a lead line, at most five findings, the exact
@@ -26,7 +26,7 @@ import torchlens as tl
 
 trace = tl.trace(nn.Linear(2, 2), torch.ones(1, 2))
 report = tl.debug.hot_path(trace, by="flops")
-print(isinstance(report, tl.report.Report), report.report_type)
+print(isinstance(report, tl.debug.Report), report.report_type)
 print(report.to_pandas().columns.tolist())
 ```
 
@@ -104,7 +104,7 @@ True
 
 ## `param_health`
 
-`tl.report.param_health(target, *, include_buffers=True, within=None,
+`tl.debug.param_health(target, *, include_buffers=True, within=None,
 bounds=None, max_fraction=0.9, subnormal_fraction_threshold=0.1)` is the
 one-shot parameter/buffer-space scan (the checks-kit door; canonical home
 `torchlens.checks.audit_params`, spelling DOCUMENTED-UNSTABLE). `target` is an
@@ -120,7 +120,7 @@ import torch
 from torch import nn
 import torchlens as tl
 
-param_audit = tl.report.param_health(nn.Linear(2, 1))
+param_audit = tl.debug.param_health(nn.Linear(2, 1))
 print(len(param_audit.rows), len(param_audit.findings))
 ```
 
@@ -350,7 +350,7 @@ Output:
 
 ## `dtype_range`
 
-`tl.report.dtype_range(trace, *, max_fraction=0.9, subnormal_fraction_threshold=0.1)`
+`tl.debug.dtype_range(trace, *, max_fraction=0.9, subnormal_fraction_threshold=0.1)`
 audits saved activations for numeric-range and precision hazards: non-finite values
 (same classifier as [`find_nan`](#find_nan)), finite magnitudes near the saved dtype's
 finite maximum, subnormal-heavy tensors, and downcasts from recorded wider input dtypes.
@@ -364,7 +364,7 @@ from torch import nn
 import torchlens as tl
 
 trace = tl.trace(nn.ReLU(), torch.tensor([[-1.0, 2.0]]))
-audit = tl.report.dtype_range(trace)
+audit = tl.debug.dtype_range(trace)
 print(len(audit.findings), audit.n_ops_audited <= audit.n_ops_total)
 ```
 
@@ -376,7 +376,7 @@ Output:
 
 ## `grad_health`
 
-`tl.report.grad_health(trace, *, bwd=None, vanishing_threshold=1e-7,
+`tl.debug.grad_health(trace, *, bwd=None, vanishing_threshold=1e-7,
 exploding_threshold=1e4, grad_scale=None, grad_scales=None, basis="total_norm")`
 ranks saved gradients and flags zero, vanishing, and exploding norms. Capture
 with `save_grads=True`, then call `trace.log_backward(...)` first.
@@ -403,7 +403,7 @@ from torchlens.options import CaptureOptions
 
 trace = tl.trace(nn.Linear(2, 1), torch.ones(1, 2), capture=CaptureOptions(save_grads=True))
 trace.log_backward(trace[trace.output_layers[0]].out.sum())
-report = tl.report.grad_health(trace).to_pandas()
+report = tl.debug.grad_health(trace).to_pandas()
 print(report.shape, report.attrs["bwd"])
 ```
 
@@ -415,13 +415,13 @@ Output:
 
 ## `nonfinite_origin`
 
-`tl.report.nonfinite_origin(trace)` is the one-call NaN forensics door (torchnative
+`tl.debug.nonfinite_origin(trace)` is the one-call NaN forensics door (torchnative
 6.5): it consumes the existing capture's queryable nonfinite record FIRST
 (free), names the ORIGIN op with module address and file:line, scopes clean
 results to CHECKED values, discloses AMP limits, and prints the
 `torch.autograd.set_detect_anomaly` recipe verbatim for the cases it does
 not cover (backward-born NaNs, custom-autograd exceptions). The live form
-`tl.report.nonfinite_origin(model, x)` runs one memory-light tripwire forward. It
+`tl.debug.nonfinite_origin(model, x)` runs one memory-light tripwire forward. It
 NEVER auto-runs anomaly mode — a second execution can mutate state and
 follow another stochastic path.
 
@@ -613,7 +613,7 @@ no rerun. `result.first_bad_thing` projects into the shared `FirstBadThing` voca
 
 ## `check_determinism`
 
-`tl.report.check_determinism(model, input_args, *, runs=2, seed=0, rtol=None, atol=None,
+`tl.debug.check_determinism(model, input_args, *, runs=2, seed=0, rtol=None, atol=None,
 seed_sensitivity=False)` (DOCUMENTED-UNSTABLE spelling) answers ONE controlled question:
 do N isolated same-seed runs agree? Every run executes on a fresh released deep copy
 with cloned inputs under preserved, identically-seeded RNG. The verdict is three-state

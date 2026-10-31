@@ -374,7 +374,7 @@ def audit_trace(trace: Trace | PartialTrace) -> HealthReport:
                 (
                     "gradient_flow_audit",
                     f"{num_backward} backward passes captured; select one with "
-                    "tl.report.grad_health(trace, bwd=...)",
+                    "tl.debug.grad_health(trace, bwd=...)",
                 )
             )
             skipped.append(
@@ -395,7 +395,7 @@ def audit_trace(trace: Trace | PartialTrace) -> HealthReport:
                         message=str(row["reason"] or "gradient-flow anomaly"),
                         ops=(str(row["op"]),),
                         modules=(),
-                        follow_up="tl.report.grad_health(trace)",
+                        follow_up="tl.debug.grad_health(trace)",
                     )
                 )
             # The backward NaN bisector runs automatically exactly here: ONE
