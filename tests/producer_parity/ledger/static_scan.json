@@ -6921,14 +6921,6 @@
  },
  {
   "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/postprocess/_executor.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/postprocess/_executor.py",
   "has_default": false,
