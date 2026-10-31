@@ -1489,7 +1489,7 @@ def _enqueue_nondeterminism_note(ctx: HookContext, helper_name: str) -> None:
 
     Parameters
     ----------
-    hook:
+    ctx:
         Hook context.
     helper_name:
         Helper name.

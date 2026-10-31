@@ -96,7 +96,7 @@ class TapObserver:
         ----------
         out:
             Activation observed at the hook site.
-        hook:
+        ctx:
             Hook context supplied by TorchLens.
 
         Returns

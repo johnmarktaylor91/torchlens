@@ -243,7 +243,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 ----------
                 out:
                     Facet slice supplied by the facet hook wrapper.
-                hook:
+                ctx:
                     Hook context supplied by TorchLens.
 
                 Returns
