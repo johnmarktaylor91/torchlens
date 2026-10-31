@@ -1351,9 +1351,9 @@ and the convergence record.
 
 ### `SiteStash` and the epsilon-LRP litmus
 
-`tl.attribution.SiteStash` is the ENTIRE permanent LRP-adjacent surface: a forward/backward
-pairing store (`stash`/`fetch`, LIFO pairing proven on reused modules, leftovers disclosed).
-There is no rule registry, no composites, no canonizers -- the cleanroom epsilon-LRP recipe
+TorchLens has no public LRP surface. The recipe uses `SiteStash`, an internal forward/backward
+pairing store in `torchlens.attribution._stash` (`stash`/`fetch`, LIFO pairing proven on reused
+modules, leftovers disclosed); it is not exported from `tl.attribution`. There is no rule registry, no composites, no canonizers -- the cleanroom epsilon-LRP recipe
 with its per-site conservation ledger lives in
 [`docs/recipes/lrp_epsilon_litmus.md`](../recipes/lrp_epsilon_litmus.md).
 

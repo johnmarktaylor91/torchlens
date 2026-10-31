@@ -3,7 +3,7 @@
 | TransformerLens operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
 | Cache activations with `run_with_cache` | `log = tl.trace(model, x, save=tl.in_module("block"))` | TorchLens records a broader PyTorch op DAG, not only transformer hook points. |
-| Inspect hook names | `log.find_sites(tl.contains("..."))` or `log.summary()` | Equivalent discovery workflow, different names. |
+| Inspect hook names | `log.find_sites(tl.label_contains("..."))` or `log.summary()` | Equivalent discovery workflow, different names. |
 | Target a hook point by TLens name | `torchlens.mechinterp.resolve_alias(log, "blocks.5.attn.hook_pattern")` (2.x names, 3.x bridge-cache names, 4.x canonical names such as `blocks.5.attn.o.hook_in`, plus tuple and compact `"k6"` forms), or discover once and use `tl.label(label)` | TLens spellings resolve against the trace; exact labels remain the reproducible form. |
 | `run_with_hooks` | `tl.trace(model, x, intervene=tl.when(site, hook), save=site)` | Capture-time `intervene=` is the direct live execution equivalent when the site is known. |
 | Patch from clean cache into corrupted run | Capture clean and corrupted logs, then `corrupted.fork().set(site, clean_site.out).push()` | Equivalent for graph-stable patching. |

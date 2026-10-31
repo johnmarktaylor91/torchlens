@@ -1,6 +1,6 @@
 # Containers
 
-TorchLens records input and output container structure for supported Python containers and exposes it as a lightweight runtime view. The public names in this guide are provisional for review: `Container`, `input_at`, `output_at`, `register_container`, and `capture_container_structure`.
+TorchLens records input and output container structure for supported Python containers and exposes it as a lightweight runtime view. The public names in this guide are provisional for review: `torchlens.types.Container`, `torchlens.types.register_container`, and the `capture_container_structure` option.
 
 ## Runtime View
 
@@ -42,16 +42,6 @@ output = trace.reconstruct_output()
 The FINAL model-output snapshot is recorded on every capture (one `ContainerSpec` per capture), so `trace.reconstruct_output()` and a live `trace.run()` rebuild the exact tuple/dict/namedtuple/dataclass/`ModelOutput` the model returned on a default capture too; the output op records still carry `container_spec=None` unless the structure opt-in below is set. A container holding a tensor-bearing object the codec cannot represent (for example a HuggingFace `DynamicCache`) is recorded as `opaque`: `reconstruct_output()` refuses typed and the runnable save refuses at preflight instead of advertising a contract it cannot fill.
 
 Input-container reconstruction and module-boundary container records require container structure to be captured. Use `capture_container_structure=True` when you need nested inputs or per-op container specs recorded after capture or after `.tlspec` load without enabling intervention replay metadata. `intervention_ready=True` also captures that structure as part of its broader replay-template metadata. (The former `capture_output_structure=` alias is removed.)
-
-## Nested Output Selection
-
-`tl.intervention.output_at(path)` selects an output leaf by nested path:
-
-```python
-site = trace.resolve_sites(tl.intervention.output_at(("past_key_values", 0, 1))).first()
-```
-
-The selector matches TorchLens typed paths for dict keys, HuggingFace `ModelOutput` keys, namedtuple/dataclass fields, and tuple/list indices.
 
 ## Visualization
 

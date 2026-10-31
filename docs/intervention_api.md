@@ -23,7 +23,7 @@ Selectors resolve against completed `Trace.layers` records.
 | `tl.label_matches` | `regex(pattern: str)` | Case-sensitive `re.search` over labels. |
 | `tl.where` | `where(predicate, *, name_hint=None)` | Predicate over layer pass records; non-portable. |
 | `tl.in_module` | `in_module(address: str)` | Match sites contained in a module address. |
-| `tl.grad_fn_label` | `grad_fn_label(name: str)` | Exact backward grad_fn label (backward sites only). |
+| `tl.grad_fn` | `grad_fn(name=None, *, label=None, is_custom=None)` | Backward grad_fn by autograd class name, label substring or custom flag (backward sites only). |
 
 One interpreter evaluates every selector in every lifecycle (capture-time
 `save=`, post-hoc `find_sites`, live hooks); `contains` is case-insensitive and

@@ -240,15 +240,15 @@ runs, and no activation payload is kept. The capture logs the same graph as a
 full capture (the reducer's own torch calls never enter it), makes no raw
 copy of an out, and keeps one fixed 16-number float64 vector (128 bytes) per
 op whatever the batch size. `tl.stats.site_stats(trace)` returns
-`{op label: Spine}` in capture order. For a float64 out the counts, the
-extrema, the sum and the mean equal `Spine().update(out)` on the full
+`{op label: RunningStats}` in capture order. For a float64 out the counts, the
+extrema, the sum and the mean equal `RunningStats().update(out)` on the full
 capture's out exactly. The reducer folds each out in chunks of 2^16 values,
 so its largest working tensor is 512 KiB whatever the out's size (where
-`Spine.update` holds full-size float64 copies); the sum of squares, the sum
+`RunningStats.update` holds full-size float64 copies); the sum of squares, the sum
 of absolute values and M2 are therefore bit-equal for outs up to one chunk
 and otherwise equal within float64 reduction-order rounding. A float32 out's sum
 accumulates in float64 without a converted copy, so it can differ from
-`Spine.update` in the last bits. The returned spines are live accumulators:
+`RunningStats.update` in the last bits. The returned spines are live accumulators:
 `merge` folds another batch's spines in and `tl.stats.save_fitted` saves
 them.
 
@@ -289,7 +289,7 @@ distribution to the layer's), `max_prob`, and, when a batch is
 token (rank 1 is the top token; tied logits share the smallest rank). The
 result is a `tl.mechinterp.TrajectoryStats`: `position_means[statistic]` is a
 float64 `[layers, positions]` tensor of means over every example, and
-`running_stats[statistic][layer]` is a `Spine` pooled over examples and positions
+`running_stats[statistic][layer]` is a `RunningStats` pooled over examples and positions
 (`summary(statistic)` returns their results). `mask_input=True` bans each
 row's own input tokens before every reduction, final output included; the
 same knob on `logit_lens_predictions` masks before its top-k and
@@ -353,6 +353,6 @@ print(traj.compute_stats("target_rank")["blocks.1"].mean)
 - `tl.stats.aggregate` captures with the ordinary verified `tl.trace` engine; for
   tight training loops that only need a few sites, `tl.fastlog.Recorder`
   (built once, `.log()` per step) is the cheaper repeated-capture door.
-- The observability kernels (`Spine`, `Histogram`) have one implementation
+- The observability kernels (`RunningStats`, `Histogram`) have one implementation
   home shared with the `torchlens.trackers.watch` tiers; see
   [docs/reference/observability_substrate.md](observability_substrate.md).
