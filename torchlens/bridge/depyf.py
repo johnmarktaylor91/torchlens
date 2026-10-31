@@ -16,7 +16,7 @@ def dump(model: Any, x: Any, path: str | Path, **kwargs: Any) -> list[Path]:
     the generated kernels for this example input into ``path``. This is a
     companion bridge, not TorchLens native ``torch.compile`` support:
     TorchLens still reports ``torch.compile`` capture as SCOPE in
-    ``tl.compat.report``.
+    ``tl.report.doctor``.
 
     Parameters
     ----------

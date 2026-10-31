@@ -3330,7 +3330,9 @@ The sections above describe each surface in depth.
 | `tl.report.ValidationStatus` | Machine-readable replay-validation availability or result |
 | `tl.report.compare_topology` | Compare two Traces structurally |
 | `tl.report.diff` | The same function as `tl.differential.diff` |
-| `tl.report.doctor` | Run a TorchLens startup health check (no arguments) |
+| `tl.report.DoctorReport` | Environment and optional model compatibility report; records are constructed by TorchLens |
+| `tl.report.DoctorCheck` | One diagnostic row; constructor keywords are outside the public contract |
+| `tl.report.doctor` | Inspect the environment always, and a model/input tree when supplied; never executes the supplied model |
 | `tl.report.kernel_profile` | Run one save-nothing capture under the owned session and join it |
 | `tl.trackers.HistoryReader` | Read one artifact without loading the run or importing a model |
 | `tl.trackers.correct_running_stats` | Apply the closed-form unscale correction to one spine record |
@@ -3431,9 +3433,21 @@ The sections above describe each surface in depth.
 | `ClipLedgerSnapshot.has_constancy_hint` | Whether the clip ledger saw a constant clipping pattern worth hinting |
 | `CloseReport.is_disabled` | Whether the watcher was disabled |
 | `CloseReport.is_final_sample_forced` | Whether close forced a final sample |
-| `CompatReport.check` | Return one report row by stable key |
-| `CompatReport.checks` | Truth-table rows for the inspected model/input pair |
-| `CompatRow.is_detected` | Whether the row's condition was detected in the supplied model/input |
+| `DoctorReport.check` | Return one diagnostic row by stable key; raises KeyError for an unknown key |
+| `DoctorReport.checks` | Ordered tuple of environment and optional model checks |
+| `DoctorReport.torch_version` | Installed PyTorch version, always set |
+| `DoctorReport.model_type` | Qualified model type, or None for an environment-only report |
+| `DoctorReport.capability_snapshot` | Full named runtime capability mapping |
+| `DoctorReport.compat_window` | Property returning the governed tl.report.CompatWindow |
+| `DoctorReport.to_markdown` | Return the diagnostic table as Markdown |
+| `DoctorReport.show` | Print and return the fixed-width table; str(report) returns the same text |
+| `DoctorCheck.key` | Stable row key; environment keys retain probe names except torch_capabilities |
+| `DoctorCheck.label` | Readable diagnostic title |
+| `DoctorCheck.status` | pass, known_broken, scope, or not_tested |
+| `DoctorCheck.severity` | ok, info, warning, or error |
+| `DoctorCheck.is_detected` | Detected condition; environment rows use status other than pass |
+| `DoctorCheck.details` | Diagnostic explanation |
+| `DoctorCheck.suggestion` | Remedy text or an empty string |
 | `CompatWindow.promise` | The promise text and window status |
 | `CompatWindow.runtime` | Current runtime identity facts (torchlens version, schema ceiling and floor, live writer contract digest) |
 | `ConformanceReport.is_claim_eligible` | `True` only when the pretrained-family floor is met; toys earn nothing regardless of pass rate |
@@ -3727,7 +3741,6 @@ Members of classes whose public home changed, one entry per class.
 | `is_complete=` | field and constructor keyword of `InterventionValidationReport` |
 | `is_consistent=` | field and constructor keyword of `InterventionValidationReport` |
 | `is_constant=` | field and constructor keyword of `ScanRow` |
-| `is_detected=` | field and constructor keyword of `CompatRow` |
 | `is_disabled=` | field and constructor keyword of `CloseReport` |
 | `is_enabled=` | field and constructor keyword of `ScaleLedgerSnapshot` |
 | `is_final_sample_forced=` | field and constructor keyword of `CloseReport` |

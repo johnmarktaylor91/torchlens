@@ -42,7 +42,7 @@ def _v33_like_plan(citation_range: str) -> list[str]:
         "| FLOPs / MACs aggregation | yes | no | no | no | no | no |",
         "| Validation against autograd | yes | no | no | no | no | no |",
         "| Apple Silicon MLX backend | yes | no | no | no | no | no |",
-        "| Compatibility report (`tl.compat.report`) | yes | no | no | no | no | no |",
+        "| Compatibility report (`tl.report.doctor`) | yes | no | no | no | no | no |",
         "| Mature transformer-internals shortcuts | no | yes | partial | no | no | partial |",
     ]
     for offset, row in enumerate(data_rows, start=1167):

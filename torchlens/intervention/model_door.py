@@ -37,7 +37,7 @@ MODEL_DOOR_INVENTORY: dict[str, bool] = {
     "bind": True,
     "record": False,
     "validate": False,
-    "compat.report": False,
+    "report.doctor": False,
     "extract_dataset": False,
     "autoroute": False,
 }

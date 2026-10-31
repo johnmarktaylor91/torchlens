@@ -78,7 +78,7 @@ class HostRngMonitorResult:
         self.replayable_reads: set[str] = set()
         self.uncertain: bool = False
         # Actionable named-thread / failure detail for the INCOMPLETE ceiling so the
-        # readiness diagnostic and ``tl.compat.report()`` can name the offending domain.
+        # readiness diagnostic and ``tl.report.doctor()`` can name the offending domain.
         self.uncertain_detail: tuple[str, ...] = ()
         # Thread-local channel touches (clock family / OS-entropy funnels / PRIVATE
         # ``random.Random`` instance draws) made by a thread that is neither the

@@ -20,10 +20,15 @@ def test_doctor_returns_sane_report() -> None:
 
     report = tl.report.doctor()
     assert report.checks
-    names = {check.name for check in report.checks}
+    assert report.model_type is None
+    assert report.torch_version
+    assert isinstance(report, tl.report.DoctorReport)
+    assert all(isinstance(check, tl.report.DoctorCheck) for check in report.checks)
+    assert len({check.key for check in report.checks}) == len(report.checks)
+    names = {check.key for check in report.checks}
     assert {
         "pytorch",
-        "runtime capabilities",
+        "torch_capabilities",
         "torch wrapper bindings",
         "cuda",
         "graphviz",
@@ -31,10 +36,12 @@ def test_doctor_returns_sane_report() -> None:
         "extras",
         "model fingerprint",
     } <= names
-    assert all(check.status in {"PASS", "FAIL", "SKIP", "WARN"} for check in report.checks)
+    assert all(
+        check.status in {"pass", "known_broken", "not_tested", "scope"} for check in report.checks
+    )
     text = report.show()
     assert "TorchLens doctor report" in text
-    assert "pytorch" in text
+    assert "Pytorch" in text
 
 
 def test_doctor_surfaces_every_runtime_capability() -> None:
@@ -48,7 +55,7 @@ def test_doctor_surfaces_every_runtime_capability() -> None:
     """
 
     report = tl.report.doctor()
-    row = next(check for check in report.checks if check.name == "runtime capabilities")
+    row = next(check for check in report.checks if check.key == "torch_capabilities")
     expected = set(get_torch_capability_snapshot()) | set(get_tf_capability_snapshot())
 
     snapshot = tl._utils.capability_snapshot()
@@ -57,10 +64,10 @@ def test_doctor_surfaces_every_runtime_capability() -> None:
 
     absent = sorted(name for name, available in snapshot.items() if not available)
     present = len(snapshot) - len(absent)
-    assert row.detail.split(";")[0] == f"{present}/{len(snapshot)} capabilities present"
+    assert row.details.split(";")[0] == f"{present}/{len(snapshot)} capabilities present"
     for name in absent:
-        assert name in row.detail
-    assert "tl._utils.capability_snapshot()" in row.detail
+        assert name in row.details
+    assert "report.capability_snapshot()" in row.details
 
 
 def test_doctor_warns_on_stale_torch_wrapper_binding(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -71,10 +78,10 @@ def test_doctor_warns_on_stale_torch_wrapper_binding(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr("torch.relu", original_relu)
 
     report = tl.report.doctor()
-    row = next(check for check in report.checks if check.name == "torch wrapper bindings")
+    row = next(check for check in report.checks if check.key == "torch wrapper bindings")
 
-    assert row.status == "WARN"
-    assert "torch.relu" in row.detail
+    assert row.status == "scope"
+    assert "torch.relu" in row.details
 
 
 def test_declared_extra_probes_track_packaging_metadata() -> None:
@@ -224,3 +231,78 @@ def test_bounded_subprocess_children_are_armed_to_die_with_the_parent():
     )
     completed = sp.run_bounded_subprocess([sys.executable, "-c", probe], timeout=30, text=True)
     assert completed.stdout.strip() == str(int(signal.SIGKILL))
+
+
+def test_doctor_inspects_model_without_executing_it(capsys: pytest.CaptureFixture[str]) -> None:
+    """One door combines environment/model rows without running forward."""
+
+    import torch
+    from torch import nn
+
+    class NeverExecute(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            raise AssertionError("doctor must never execute the supplied model")
+
+    report = tl.report.doctor(model=NeverExecute(), inputs=torch.ones(1))
+    assert report.model_type.endswith("NeverExecute")
+    assert report.check("pytorch").status == "pass"
+    assert report.check("torch_capabilities") in report.checks
+    assert report.check("quantized_tensor").status == "pass"
+    assert len({row.key for row in report.checks}) == len(report.checks)
+    capsys.readouterr()
+    assert str(report) == report.show()
+    assert capsys.readouterr().out == str(report) + "\n"
+    assert "| Row | Status |" in report.to_markdown()
+    assert isinstance(report.compat_window, tl.report.CompatWindow)
+    with pytest.raises(KeyError, match="absent-key"):
+        report.check("absent-key")
+
+
+@pytest.mark.parametrize(
+    ("raw_status", "status", "severity"),
+    [
+        ("PASS", "pass", "ok"),
+        ("WARN", "scope", "warning"),
+        ("FAIL", "known_broken", "error"),
+        ("SKIP", "not_tested", "info"),
+    ],
+)
+def test_environment_status_mapping(
+    monkeypatch: pytest.MonkeyPatch, raw_status: str, status: str, severity: str
+) -> None:
+    """Every environment probe maps uniformly into the merged vocabulary."""
+
+    from torchlens import _utils
+    from torchlens.report._doctor import _ENVIRONMENT_REMEDIES
+
+    raw_checks = tuple(
+        _utils._EnvironmentCheck(key, raw_status, "diagnostic") for key in _ENVIRONMENT_REMEDIES
+    )
+    monkeypatch.setattr(_utils, "_environment_checks", lambda: raw_checks)
+    report = tl.report.doctor()
+    for row in report.checks:
+        assert row.status == status
+        assert row.severity == severity
+        assert row.is_detected is (status != "pass")
+        assert row.details == "diagnostic"
+        assert bool(row.suggestion) is (status != "pass")
+        assert not hasattr(row, "name")
+        assert not hasattr(row, "detail")
+
+
+def test_doctor_has_one_public_home() -> None:
+    """Removed compat and utility spellings have no compatibility aliases."""
+
+    from torchlens import _utils
+    from torchlens.report import DoctorCheck, DoctorReport, doctor
+
+    assert doctor is tl.report.doctor
+    assert DoctorCheck is tl.report.DoctorCheck
+    assert DoctorReport is tl.report.DoctorReport
+    for name in ("report", "CompatReport", "CompatRow"):
+        assert not hasattr(tl.compat, name)
+        assert name not in tl.compat.__all__
+    for name in ("doctor", "DoctorReport", "DoctorCheck"):
+        assert not hasattr(_utils, name)
+        assert name not in _utils.__all__
+        assert not hasattr(getattr(tl, "utils", None), name)

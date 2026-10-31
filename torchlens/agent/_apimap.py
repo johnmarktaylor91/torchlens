@@ -200,9 +200,9 @@ def submodule_map() -> dict[str, str]:
     """The deliberately-unlisted power submodules an agent should know about."""
 
     return {
-        "tl.report": "ProfileReport/profile, flops, overhead, health diagnostics",
+        "tl.report": "ProfileReport/profile, flops, overhead, doctor(model=None, inputs=None)",
         "tl.observers": "log_value(name, value), tap, span: in-forward value recording",
-        "tl.compat": "compat.report(model, x): capture-compatibility findings",
+        "tl.compat": "migration adapters: from_fx, from_timm, from_huggingface, ...",
         "tl.debug": "power-user diagnostics (bisect_nan, hot_path, ...)",
         "tl.receptive_field": "lazy influence-geometry submodule",
         "tl.bridge": "optional external-tool adapters (captum, shap, mcp, ...)",

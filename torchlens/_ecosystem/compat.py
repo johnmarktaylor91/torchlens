@@ -1,6 +1,6 @@
 """The compatibility-window report over the governed ledger (MEMO 3.1/3.2).
 
-``compat_window()`` is the ``tl.compat_window()``-shaped surface: it renders
+``compat_window()`` implements ``tl.report.doctor().compat_window``: it renders
 the ledger rows, the rehydration floor facts, and the promise status as one
 frozen report. The report never asserts anything the ledger cannot back --
 the promise window NUMBER is FORK F1 and renders as pending until

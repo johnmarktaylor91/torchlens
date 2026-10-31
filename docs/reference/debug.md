@@ -42,65 +42,43 @@ For *environment* problems (rather than trace problems), start with
 
 ## `tl.report.doctor`
 
-`tl.report.doctor()` runs a TorchLens startup health check and returns a structured
-`DoctorReport` — use it first when captures fail before a trace even exists (import
-errors, missing renderers, stale wrapper installs). It lives in `tl._utils`, not
-`tl.debug`, because it needs no trace.
+`tl.report.doctor(model=None, inputs=None)` returns a `tl.report.DoctorReport`.
+It always checks the environment; supply a model and optional inputs to add compatibility
+findings. Inputs are inspected and the supplied model is never executed.
 
-The report is a tuple of `DoctorCheck(name, status, detail)` rows, one per probe, with
-`status` one of `"PASS"`, `"FAIL"`, `"SKIP"`, or `"WARN"`:
+`DoctorReport.checks` is a tuple of `tl.report.DoctorCheck` rows. Each row exposes
+`key`, `label`, `status`, `severity`, `is_detected`, `details`, and `suggestion`.
+Statuses are `pass`, `known_broken`, `scope`, and `not_tested`; severities are
+`ok`, `info`, `warning`, and `error`. Records are built by TorchLens; constructor
+keywords are outside the public contract.
 
-- `pytorch` — the installed torch version.
-- `runtime capabilities` — the feature-detected capability snapshot (the same named
-  `HAS_*` flags surfaced by `tl.compat.report()`; graceful degradations flip these).
-  The row shows the grouped absences-first summary; the full `flag -> available`
-  mapping lives on the detail accessors below.
-- `torch wrapper bindings` — warning-only detector for stale torch namespace
-  attributes after wrap/unwrap cycles (cannot see closure-bound local aliases).
-- `cuda` — device availability and count (`SKIP` on CPU-only hosts).
-- `graphviz` / `safetensors` / `extras` — optional-dependency probes for rendering
-  and serialization paths.
-- `model fingerprint` — a tiny end-to-end capture probe.
+Environment rows cover PyTorch, `torch_capabilities`, torch wrapper bindings, mechanical
+belt coverage, CUDA, Graphviz, safetensors, optional extras, and model fingerprinting.
+Missing optional extras are disclosed without implying a broken installation.
+Model rows inspect supported wrappers, tensor variants, distributed state, and capture
+scope. Stable keys let you retrieve one finding with `report.check(key)`.
 
 ```python
 import torchlens as tl
 
 report = tl.report.doctor()
-print(report.show())          # text table
-bad = [c for c in report.checks if c.status == "FAIL"]
+report.show()                # prints the fixed-width table
+text = str(report)           # the same table as text
+bad = [c for c in report.checks if c.status == "known_broken"]
+# Add a model and input tree: tl.report.doctor(model, inputs)
 ```
 
-A `FAIL` row names the missing dependency or broken probe in `detail`; `WARN` rows are
-degraded-but-usable states. For per-model compatibility questions (unsupported tensor
-variants, distributed state, wrapper coverage), use `tl.compat.report(model, x)`
-instead — `doctor()` checks the environment, `compat.report()` checks one model.
+`DoctorReport.model_type` is `None` without a model and the qualified model type otherwise;
+`torch_version` is always set. `to_markdown()` returns a Markdown table. The bounded repr
+summarizes findings. `report.compat_window` returns the governed `tl.report.CompatWindow`.
 
-### Capability snapshot accessors
+### Capability snapshot accessor
 
-`tl._utils.capability_snapshot()` (DOCUMENTED-UNSTABLE spelling) returns the full
-runtime capability snapshot as a `flag -> available` mapping — every feature-detected
-`HAS_*` flag, torch plus the optional preview backends. The same mapping is served as
-a detail accessor on both report objects: `DoctorReport.capability_snapshot()` and
-`CompatReport.capability_snapshot()`. Report rows and reprs deliberately show only the
-grouped summary (absences are the signal; the full `name=value` dump was a
-~1,900-character line), rendered by the one shared formatter
-`tl._utils.format_capability_summary(snapshot)` (DOCUMENTED-UNSTABLE spelling), which
-returns `present/total capabilities present` plus the sorted absent flag names.
-
-```python
-import torchlens as tl
-
-snapshot = tl._utils.capability_snapshot()
-print(all(isinstance(v, bool) for v in snapshot.values()))
-print(tl._utils.format_capability_summary({"HAS_A": True, "HAS_B": False}))
-```
-
-Output:
-
-```text
-True
-1/2 capabilities present; absent: HAS_B
-```
+`report.capability_snapshot()` returns the full `flag -> available` mapping of named
+`HAS_*` capabilities, including optional preview backends. The `torch_capabilities` row
+shows a grouped summary and names missing, unprobed, and optional capabilities; graceful
+degradations remain visible. Optional absences and lazy probes that have not run do not
+imply a failure.
 
 ## `param_health`
 

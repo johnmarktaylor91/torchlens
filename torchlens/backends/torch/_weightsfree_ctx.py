@@ -15,7 +15,7 @@ owner-thread-scoped (``threading.local`` — worker threads never see the
 slot), restores on ``BaseException`` (context-manager ``finally``), wraps
 ONLY the user forward (armed by the capture scope in
 ``torchlens/capture/trace.py``, never imports/preparation/postprocessing),
-and is published through ``tl.compat.report()`` beside the W1 root set.
+and is published through ``tl.report.doctor()`` beside the W1 root set.
 
 Every spelling is DOCUMENTED-UNSTABLE pending naming-session ratification.
 """

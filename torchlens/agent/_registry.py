@@ -240,12 +240,12 @@ def _present_row_key(data: dict[str, Any], row_key: str | tuple[str, ...] | None
 def _handle_doctor(args: dict[str, Any]) -> dict[str, Any]:
     """Environment health report."""
 
-    from .._utils import doctor
+    from ..report import doctor
 
     report = doctor()
     data = {
         "checks": [
-            {"name": check.name, "status": check.status, "detail": check.detail}
+            {"name": check.key, "status": check.status, "detail": check.details}
             for check in report.checks
         ]
     }

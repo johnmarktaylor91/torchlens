@@ -23,7 +23,7 @@ small quantized MLPs). "Verified" means exactly what the named tests assert.
 | PEFT/LoRA (`peft.get_peft_model`) | output parity, adapter modules in the hierarchy, adapter params attributed at their addresses, forward replay validation passes |
 | post-hoc `tl.debug.walk_grad_fn` / `sketch_grad_fn` | a real GPT-2 cross-entropy loss graph walks completely with named parameter leaves; structure-only legend on every render |
 
-The compatibility report (`tl.compat.report(model, x)`) reflects the same
+The compatibility report (`tl.report.doctor(model, x)`) reflects the same
 ledger: single-execution-device dispatch, offload, quantization, and PEFT
 rows read `pass` with severity `info`/`warning` and evidence-stating details.
 
@@ -64,9 +64,9 @@ uint8 payloads) outside the registered parameter/buffer contract:
 - FLOPs counts and out-dtype metadata are best-effort (the standing
   quantized-module disclosure).
 
-## Disclosed by `tl.compat.report`, not verified (scale honesty)
+## Disclosed by `tl.report.doctor`, not verified (scale honesty)
 
-Three deployment paths have no verified capture on any venue. `tl.compat.report(model, x)`
+Three deployment paths have no verified capture on any venue. `tl.report.doctor(model, x)`
 names each one when it detects it, so a capture on these paths is never silently
 presented as verified. The row keys are DOCUMENTED-UNSTABLE.
 

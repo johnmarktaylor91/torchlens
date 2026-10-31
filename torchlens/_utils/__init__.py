@@ -88,7 +88,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class DoctorCheck:
+class _EnvironmentCheck:
     """One TorchLens environment health-check row.
 
     Parameters
@@ -104,83 +104,6 @@ class DoctorCheck:
     name: str
     status: Literal["PASS", "FAIL", "SKIP", "WARN"]
     detail: str
-
-
-@dataclass(frozen=True)
-class DoctorReport:
-    """Structured report returned by :func:`doctor`.
-
-    Parameters
-    ----------
-    checks:
-        Ordered health-check rows.
-    """
-
-    checks: tuple[DoctorCheck, ...]
-
-    def show(self) -> str:
-        """Render the doctor report as a text table.
-
-        Returns
-        -------
-        str
-            Human-readable report.
-        """
-
-        rows = ["TorchLens doctor report:"]
-        for check in self.checks:
-            rows.append(f"- {check.status:<4} {check.name}: {check.detail}")
-        return "\n".join(rows)
-
-    def __str__(self) -> str:
-        """Return the rendered report.
-
-        Returns
-        -------
-        str
-            Human-readable report.
-        """
-
-        return self.show()
-
-    def __repr__(self) -> str:
-        """Return the designed bounded render, never a dataclass wall.
-
-        The auto-generated dataclass repr was a 3,000+-character one-line
-        wall (sumfam wave-0 item 2). Every emitted line is width-capped with
-        a disclosed truncation; the full row text stays on ``.checks``.
-
-        Returns
-        -------
-        str
-            Bounded multi-line report.
-        """
-
-        lines = []
-        for line in self.show().splitlines():
-            if len(line) > _REPORT_REPR_LINE_CAP:
-                line = line[: _REPORT_REPR_LINE_CAP - 3] + "..."
-            lines.append(line)
-        lines.append("(full row text: report.checks; capability dump: capability_snapshot())")
-        return "\n".join(lines)
-
-    def capability_snapshot(self) -> dict[str, bool]:
-        """Return the full runtime capability snapshot (the detail accessor).
-
-        The doctor row shows the grouped absences-first summary; this is the
-        complete ``flag -> available`` mapping the summary was computed from.
-
-        Returns
-        -------
-        dict[str, bool]
-            Capability flag availability.
-        """
-
-        return _runtime_capability_snapshot()
-
-
-#: Width cap for report ``__repr__`` lines (bounded-reprs doctrine).
-_REPORT_REPR_LINE_CAP = 200
 
 
 def capability_snapshot() -> dict[str, bool]:
@@ -344,12 +267,12 @@ def _module_is_installed(module_name: str) -> bool:
     return True
 
 
-def _probe_graphviz() -> DoctorCheck:
+def _probe_graphviz() -> _EnvironmentCheck:
     """Probe Python and system Graphviz availability.
 
     Returns
     -------
-    DoctorCheck
+    _EnvironmentCheck
         Graphviz health-check row.
     """
 
@@ -369,7 +292,7 @@ def _probe_graphviz() -> DoctorCheck:
             timeout=5,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        return DoctorCheck(
+        return _EnvironmentCheck(
             "graphviz",
             "FAIL",
             f"python graphviz={python_graphviz}; dot unavailable ({exc})",
@@ -378,26 +301,26 @@ def _probe_graphviz() -> DoctorCheck:
     status: Literal["PASS", "FAIL"] = (
         "PASS" if python_graphviz and completed.returncode == 0 else "FAIL"
     )
-    return DoctorCheck(
+    return _EnvironmentCheck(
         "graphviz",
         status,
         f"python graphviz={python_graphviz}; dot={version_text or completed.returncode}",
     )
 
 
-def _probe_extras() -> DoctorCheck:
+def _probe_extras() -> _EnvironmentCheck:
     """Probe declared optional extras by importing their representative modules.
 
     Returns
     -------
-    DoctorCheck
+    _EnvironmentCheck
         Optional-extras health-check row.
     """
 
     try:
         extra_probes = _declared_extra_probes()
     except importlib.metadata.PackageNotFoundError as exc:
-        return DoctorCheck("extras", "FAIL", f"package metadata unavailable ({exc})")
+        return _EnvironmentCheck("extras", "FAIL", f"package metadata unavailable ({exc})")
 
     installed = []
     missing = []
@@ -414,15 +337,15 @@ def _probe_extras() -> DoctorCheck:
         f"installed={installed or 'none'}; missing={missing or 'none'}; "
         f"no_python_probes={no_python_probes or 'none'}"
     )
-    return DoctorCheck("extras", "PASS", detail)
+    return _EnvironmentCheck("extras", "PASS", detail)
 
 
-def _probe_fingerprint() -> DoctorCheck:
+def _probe_fingerprint() -> _EnvironmentCheck:
     """Probe model weight fingerprinting on a tiny module.
 
     Returns
     -------
-    DoctorCheck
+    _EnvironmentCheck
         Fingerprint utility health-check row.
     """
 
@@ -432,17 +355,19 @@ def _probe_fingerprint() -> DoctorCheck:
         model = nn.Linear(2, 1)
         fingerprint = _fingerprint_model_weights(model)
     except Exception as exc:
-        return DoctorCheck("model fingerprint", "FAIL", repr(exc))
+        return _EnvironmentCheck("model fingerprint", "FAIL", repr(exc))
     status: Literal["PASS", "FAIL"] = "PASS" if fingerprint else "FAIL"
-    return DoctorCheck("model fingerprint", status, fingerprint[:16] if fingerprint else "empty")
+    return _EnvironmentCheck(
+        "model fingerprint", status, fingerprint[:16] if fingerprint else "empty"
+    )
 
 
-def _probe_torch_capabilities() -> DoctorCheck:
+def _probe_torch_capabilities() -> _EnvironmentCheck:
     """Return the runtime capability snapshot doctor row.
 
     Returns
     -------
-    DoctorCheck
+    _EnvironmentCheck
         Snapshot of probed private integration capabilities.
     """
 
@@ -481,7 +406,7 @@ def _probe_torch_capabilities() -> DoctorCheck:
     ]
     optional_absent = [name for name in absent if name in OPTIONAL_CAPABILITY_FLAGS]
     # Grouped absences-first summary; the full name=value dump lives on the
-    # detail accessor (tl._utils.capability_snapshot()), not in the row cell.
+    # detail accessor (report.capability_snapshot()), not in the row cell.
     detail = format_capability_summary(snapshot)
     if missing:
         detail += "; missing=" + ",".join(missing)
@@ -489,20 +414,20 @@ def _probe_torch_capabilities() -> DoctorCheck:
         detail += "; unprobed=" + ",".join(unprobed)
     if optional_absent:
         detail += "; optional_absent=" + ",".join(optional_absent)
-    detail += "; full dump: tl._utils.capability_snapshot()"
+    detail += "; full dump: report.capability_snapshot()"
     # Report the true state: a missing private-integration capability is a
     # degraded (WARN) row, not a "PASS". These flags are feature-detected and may
     # be legitimately absent across torch versions, so WARN (not FAIL) is honest.
     status: Literal["PASS", "WARN"] = "PASS" if not missing else "WARN"
-    return DoctorCheck("runtime capabilities", status, detail)
+    return _EnvironmentCheck("runtime capabilities", status, detail)
 
 
-def _probe_torch_wrapper_bindings() -> DoctorCheck:
+def _probe_torch_wrapper_bindings() -> _EnvironmentCheck:
     """Check torch namespace attributes against the installed wrapper registry.
 
     Returns
     -------
-    DoctorCheck
+    _EnvironmentCheck
         Warning-only detector for stale torch module attributes. This cannot
         inspect arbitrary local aliases such as closure-bound ``from torch
         import relu`` references, but it catches the cheap process-global case
@@ -512,9 +437,9 @@ def _probe_torch_wrapper_bindings() -> DoctorCheck:
     from .introspection import nested_getattr
 
     if not _state._orig_to_decorated:
-        return DoctorCheck("torch wrapper bindings", "SKIP", "wrappers not installed yet")
+        return _EnvironmentCheck("torch wrapper bindings", "SKIP", "wrappers not installed yet")
     if not _state._is_decorated:
-        return DoctorCheck("torch wrapper bindings", "SKIP", "torch is currently unwrapped")
+        return _EnvironmentCheck("torch wrapper bindings", "SKIP", "torch is currently unwrapped")
 
     from .._constants import get_orig_torch_funcs
 
@@ -537,25 +462,25 @@ def _probe_torch_wrapper_bindings() -> DoctorCheck:
 
     if stale:
         examples = ", ".join(stale[:5])
-        return DoctorCheck(
+        return _EnvironmentCheck(
             "torch wrapper bindings",
             "WARN",
             f"{len(stale)}/{checked} torch attrs still point at original callables; "
             f"examples={examples}",
         )
-    return DoctorCheck(
+    return _EnvironmentCheck(
         "torch wrapper bindings",
         "PASS",
         f"checked={checked}; no stale torch namespace bindings detected",
     )
 
 
-def _probe_mechanical_belt() -> DoctorCheck:
+def _probe_mechanical_belt() -> _EnvironmentCheck:
     """Report protocol-invisible belt coverage gaps.
 
     Returns
     -------
-    DoctorCheck
+    _EnvironmentCheck
         Disclosure row for belt probe failures and unprobed candidates. A
         candidate whose mode visibility could not be MEASURED (probe raised,
         or no probe recipe exists) is neither belt-patched nor proven
@@ -567,14 +492,14 @@ def _probe_mechanical_belt() -> DoctorCheck:
     from ..backends.torch.belt import belt_report
 
     if not _state._is_decorated:
-        return DoctorCheck(
+        return _EnvironmentCheck(
             "mechanical belt",
             "SKIP",
             "belt not derived yet (torch wrapping is lazy; run a capture first)",
         )
     report = belt_report()
     if report is None:
-        return DoctorCheck("mechanical belt", "SKIP", "belt derivation unavailable")
+        return _EnvironmentCheck("mechanical belt", "SKIP", "belt derivation unavailable")
     # Unprobed candidates are a STANDING recipe-coverage limitation (hundreds
     # of in-place variants have no probe recipe on every healthy build), so
     # they are disclosed as a count with examples but never flip the status —
@@ -585,7 +510,7 @@ def _probe_mechanical_belt() -> DoctorCheck:
     if unprobed_examples:
         unprobed_detail += f" (e.g. {unprobed_examples})"
     if not report.probe_failures:
-        return DoctorCheck(
+        return _EnvironmentCheck(
             "mechanical belt",
             "PASS",
             f"members={len(report.members)}; probe_failures=none; {unprobed_detail}",
@@ -600,7 +525,7 @@ def _probe_mechanical_belt() -> DoctorCheck:
         detail += "; failure_details=" + "; ".join(
             f"{ns}.{fn}: {reason}" for ns, fn, reason in report.probe_failure_details
         )
-    return DoctorCheck("mechanical belt", "WARN", detail)
+    return _EnvironmentCheck("mechanical belt", "WARN", detail)
 
 
 def _runtime_capability_snapshot() -> dict[str, bool]:
@@ -623,28 +548,28 @@ def _runtime_capability_snapshot() -> dict[str, bool]:
     return snapshot
 
 
-def doctor() -> DoctorReport:
+def _environment_checks() -> tuple[_EnvironmentCheck, ...]:
     """Run a TorchLens startup health check.
 
     Returns
     -------
-    DoctorReport
-        Structured report with PyTorch, CUDA, Graphviz, safetensors, extras,
+    tuple[_EnvironmentCheck, ...]
+        Private probes for PyTorch, CUDA, Graphviz, safetensors, extras,
         and model-fingerprint checks.
     """
 
-    checks: list[DoctorCheck] = [
-        DoctorCheck("pytorch", "PASS", torch.__version__),
+    checks: list[_EnvironmentCheck] = [
+        _EnvironmentCheck("pytorch", "PASS", torch.__version__),
         _probe_torch_capabilities(),
         _probe_torch_wrapper_bindings(),
         _probe_mechanical_belt(),
-        DoctorCheck(
+        _EnvironmentCheck(
             "cuda",
             "PASS" if torch.cuda.is_available() else "SKIP",
             f"available={torch.cuda.is_available()}; devices={torch.cuda.device_count()}",
         ),
         _probe_graphviz(),
-        DoctorCheck(
+        _EnvironmentCheck(
             "safetensors",
             "PASS" if _module_is_installed("safetensors") else "FAIL",
             "installed" if _module_is_installed("safetensors") else "missing",
@@ -652,7 +577,7 @@ def doctor() -> DoctorReport:
         _probe_extras(),
         _probe_fingerprint(),
     ]
-    return DoctorReport(tuple(checks))
+    return tuple(checks)
 
 
 def list_modules(model: nn.Module) -> list[tuple[str, type[nn.Module]]]:
@@ -1235,8 +1160,6 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "AutocastRestore",
-    "DoctorCheck",
-    "DoctorReport",
     "MAX_FLOATING_POINT_TOLERANCE",
     "_ATTR_SKIP_SET",
     "_AUTOCAST_DEVICES",
@@ -1249,7 +1172,6 @@ __all__ = [
     "capability_snapshot",
     "copy_arg_tree",
     "copy_tensor_payload",
-    "doctor",
     "format_capability_summary",
     "ensure_iterable",
     "get_attr_values_from_tensor_list",

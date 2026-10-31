@@ -15,7 +15,7 @@
 - `intervention/`: Bundle, sites/selectors, hooks, helpers, replay/rerun/fork/save.
 - `fastlog/`: sparse `Recording` path, predicate normalization, RAM/disk storage.
 - `bridge/`: optional adapters for external tools; bridge and autoroute surfaces stay lazy, as pinned by tests/test_import_hygiene.py.
-- `compat/`: migration helpers and `compat.report(model, x)`.
+- `compat/`: migration helpers and private model probes for `tl.report.doctor(model, x)`.
 - `callbacks/`: Lightning callback integration.
 - `partial/`: partial log wrapper for failed captures.
 - `debug/`, `report/`, `stats/`, `viz/`, `experimental/`: diagnostics, explanation,

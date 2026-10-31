@@ -21,7 +21,7 @@
   `backward_peak_memory` is the largest pass peak on CPU, not a sum.
 - Distributed/sharded state is detected in `torchlens/_distributed.py` and refused at capture entry
   with `DistributedCaptureUnsupportedError`; the same detection feeds the `dtensor` / `device_mesh` /
-  `tensor_parallel` / `pipeline_parallel` rows of `tl.compat.report`, so the two cannot drift.
+  `tensor_parallel` / `pipeline_parallel` rows of `tl.report.doctor`, so the two cannot drift.
   `dtensor`, active TP hooks/styles, and `pipeline_parallel` refuse; dense parameters do not make a
   `PrepareModuleInput` redistribution safe. Only a bare inert mesh is informational. Detection is
   capability-probed (`HAS_DTENSOR`, `HAS_DEVICE_MESH`, `HAS_PIPELINING`), never version-parsed, and

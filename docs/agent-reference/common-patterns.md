@@ -130,7 +130,7 @@ assert torch_trace.backend == "torch"
 Before debugging wrapper-specific failures, run:
 
 ```python
-print(tl.compat.report(model, x).to_markdown())
+print(tl.report.doctor(model, x).to_markdown())
 ```
 
 ### Steering many forwards / generation
@@ -310,3 +310,15 @@ file on neuronpedia.org under the key's account and returns its URL;
 `direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], model_id="gemma-2-2b", name="honesty")`
 publishes a `Direction` the same way. Both check every field before the first request and
 never write the key into a message. DOCUMENTED-UNSTABLE.
+
+### Environment and model diagnostics
+
+`tl.report.doctor(model=None, inputs=None)` is the diagnostic entry point. It always
+checks the environment and inspects a supplied model/input tree without executing it.
+`tl.report.DoctorReport` exposes `checks`, `check(key)`, `torch_version`, `model_type`
+(`None` without a model), `capability_snapshot()`, `compat_window`, `to_markdown()`,
+and `show()`. `str(report)` is the table that `show()` prints and returns.
+`tl.report.DoctorCheck` rows expose `key`, `label`, `status`, `severity`, `is_detected`,
+`details`, and `suggestion`. The statuses are `pass`, `known_broken`, `scope`, and
+`not_tested`; severities are `ok`, `info`, `warning`, and `error`. Constructors are
+internal; read the returned records. `compat_window` returns `tl.report.CompatWindow`.

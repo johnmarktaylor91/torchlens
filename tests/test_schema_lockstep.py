@@ -475,7 +475,7 @@ inputs = {
 
 for name, model in models.items():
     print(name)
-    print(tl.compat.report(model, inputs[name]).to_markdown())"""
+    print(tl.report.doctor(model, inputs[name]).to_markdown())"""
 
 _COMPAT_DOC_REGENERATE_COMMAND = (
     "python -c \"import sys; sys.path.insert(0, 'tests'); "
@@ -484,12 +484,12 @@ _COMPAT_DOC_REGENERATE_COMMAND = (
 
 
 def _compat_reference_reports() -> dict[str, Any]:
-    """Return the doc's representative ``tl.compat.report`` results.
+    """Return the doc's representative ``tl.report.doctor`` results.
 
     Returns
     -------
     dict[str, Any]
-        Model name -> ``CompatReport``, built exactly as the published
+        Model name -> ``DoctorReport``, built exactly as the published
         snippet builds them.
     """
 
@@ -513,14 +513,23 @@ def _compat_reference_reports() -> dict[str, Any]:
         "linear_mlp": torch.ones(1, 4),
         "conv_pool": torch.ones(1, 1, 5, 5),
     }
-    return {name: tl.compat.report(model, inputs[name]) for name, model in models.items()}
+    from dataclasses import replace
+
+    environment_keys = {row.key for row in tl.report.doctor().checks}
+    reports = {name: tl.report.doctor(model, inputs[name]) for name, model in models.items()}
+    return {
+        name: replace(
+            report, checks=tuple(row for row in report.checks if row.key not in environment_keys)
+        )
+        for name, report in reports.items()
+    }
 
 
 def _render_method_x_model_compat() -> str:
     """Return a fresh rendering of ``docs/method_x_model_compatibility.md``.
 
     The doc is generated from the MACHINE-INVARIANT projection of the two
-    representative reports: the row LABELS (the check list, fixed by the
+    representative reports: the model-only row LABELS (environment rows are excluded; fixed by the
     torchlens code), the row COUNT, and each row's pass/non-pass STATUS on the
     toy CPU models (structural probes that never execute the model). Row
     ``details``/``severity`` strings embed environment facts (torch build
@@ -552,8 +561,9 @@ def _render_method_x_model_compat() -> str:
         _COMPAT_DOC_REGENERATE_COMMAND,
         "-->",
         "",
-        "Generated from `tl.compat.report` on representative eager PyTorch models. These rows are a",
+        "Generated from `tl.report.doctor` on representative eager PyTorch models. These rows are a",
         "smoke reference for ordinary dense eager execution, not a complete certification matrix.",
+        "Environment rows are excluded from this projection; the full doctor report includes them.",
         "",
         "Generation snippet:",
         "",
@@ -588,7 +598,7 @@ def _render_method_x_model_compat() -> str:
             "Interpretation: plain eager dense PyTorch models are the compatibility baseline. For"
             " wrappers,",
             "compiled execution, sharding/offload, quantization, or concurrent capture, run",
-            "`tl.compat.report(model, x)` on the exact model/input pair and include the report when"
+            "`tl.report.doctor(model, x)` on the exact model/input pair and include the report when"
             " filing an",
             "issue.",
         ]

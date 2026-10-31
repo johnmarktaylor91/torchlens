@@ -12,7 +12,7 @@ B1-B3) packages the artifact-compatibility promise machinery for users:
   metadata-only discovery, explicit distribution-scoped activation.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending naming-session
-ratification; the memo's ``tl.migrate`` / ``tl.compat_window`` /
+ratification; the memo's ``tl.migrate`` / ``tl.report.doctor().compat_window`` /
 ``tl.plugins`` placeholders route through this subpackage until the naming
 sprint and the surface lane (F35) assign facade rows.
 """

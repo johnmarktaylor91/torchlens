@@ -391,7 +391,7 @@ def test_clean_fp8_capture_does_not_trip_raise_on_nan() -> None:
 
 
 # ---------------------------------------------------------------------------
-# compat.report tells the user before they capture
+# report.doctor tells the user before they capture
 # ---------------------------------------------------------------------------
 
 
@@ -424,7 +424,7 @@ def test_compat_report_flags_fp8_state() -> None:
 
             return self.fc(x)
 
-    row = tl.compat.report(Fp8Buffer(), torch.randn(2, 4)).check("fp8_dtype")
+    row = tl.report.doctor(Fp8Buffer(), torch.randn(2, 4)).check("fp8_dtype")
     assert row.is_detected is True
     assert row.status == "scope"
     assert "float32" in row.details
@@ -434,7 +434,7 @@ def test_compat_report_flags_fp8_state() -> None:
 def test_compat_report_fp8_row_is_quiet_and_honest_when_clean() -> None:
     """No fp8 state reports pass -- while disclosing what it could not see."""
 
-    row = tl.compat.report(nn.Linear(4, 4), torch.randn(2, 4)).check("fp8_dtype")
+    row = tl.report.doctor(nn.Linear(4, 4), torch.randn(2, 4)).check("fp8_dtype")
     assert row.is_detected is False
     assert row.status == "pass"
     assert "inside the forward" in row.details
@@ -444,7 +444,7 @@ def test_compat_report_flags_an_fp8_input() -> None:
     """An fp8 model input is detected too."""
 
     fp8_input = torch.randn(2, 4).to(torch.float8_e4m3fn)
-    row = tl.compat.report(nn.Linear(4, 4), fp8_input).check("fp8_dtype")
+    row = tl.report.doctor(nn.Linear(4, 4), fp8_input).check("fp8_dtype")
     assert row.is_detected is True
     assert "inputs" in row.details
 

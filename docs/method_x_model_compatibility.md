@@ -5,8 +5,9 @@ regenerates and diffs this doc. Refresh from the repo root with:
 python -c "import sys; sys.path.insert(0, 'tests'); import test_schema_lockstep as m; m.write_method_x_model_compatibility_doc()"
 -->
 
-Generated from `tl.compat.report` on representative eager PyTorch models. These rows are a
+Generated from `tl.report.doctor` on representative eager PyTorch models. These rows are a
 smoke reference for ordinary dense eager execution, not a complete certification matrix.
+Environment rows are excluded from this projection; the full doctor report includes them.
 
 Generation snippet:
 
@@ -28,18 +29,17 @@ inputs = {
 
 for name, model in models.items():
     print(name)
-    print(tl.compat.report(model, inputs[name]).to_markdown())
+    print(tl.report.doctor(model, inputs[name]).to_markdown())
 ```
 
 ## Representative Results
 
 | Model | Rows | Non-pass rows |
 | --- | ---: | --- |
-| `linear_mlp` | 28 | `Runtime capability snapshot` |
-| `conv_pool` | 28 | `Runtime capability snapshot` |
+| `linear_mlp` | 27 | none |
+| `conv_pool` | 27 | none |
 
-Non-pass rows above name the checks that did not report `pass`; every other check
-reported `pass`. The full check list:
+Both representative models report `pass` for every check:
 
 - HF Transformers wrapper
 - Accelerate device_map='auto'
@@ -61,7 +61,6 @@ reported `pass`. The full check list:
 - DeepSpeed
 - torch.compile
 - FX GraphModule
-- Runtime capability snapshot
 - Protocol-invisible belt coverage
 - Lightning training_step mid-loop
 - vmap/functorch
@@ -72,5 +71,5 @@ reported `pass`. The full check list:
 
 Interpretation: plain eager dense PyTorch models are the compatibility baseline. For wrappers,
 compiled execution, sharding/offload, quantization, or concurrent capture, run
-`tl.compat.report(model, x)` on the exact model/input pair and include the report when filing an
+`tl.report.doctor(model, x)` on the exact model/input pair and include the report when filing an
 issue.

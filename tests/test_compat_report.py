@@ -1,4 +1,4 @@
-"""Tests for the Phase 13 ``torchlens.compat.report`` API."""
+"""Tests for the Phase 13 ``torchlens.report.doctor`` API."""
 
 from __future__ import annotations
 
@@ -15,8 +15,9 @@ from torchlens._utils._torch_compat import get_torch_capability_snapshot
 from torchlens._utils.rng import log_current_rng_states, set_rng_from_saved_states
 from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
-from torchlens.compat import CompatReport, _report as compat_report_module, report
+from torchlens.compat import _report as compat_report_module
 from torchlens.options import CaptureOptions
+from torchlens.report import DoctorReport, doctor as report
 
 EXPECTED_COMPAT_ROW_KEYS = {
     "accelerate_cpu_disk_offload",
@@ -279,7 +280,7 @@ def _reference_models() -> Iterator[tuple[nn.Module, torch.Tensor]]:
     Yields
     ------
     tuple[nn.Module, torch.Tensor]
-        Model/input pair for ``tl.compat.report``.
+        Model/input pair for ``tl.report.doctor``.
     """
 
     yield SmallCnn(), torch.randn(2, 1, 4, 4)
@@ -290,16 +291,29 @@ def _reference_models() -> Iterator[tuple[nn.Module, torch.Tensor]]:
 
 
 def test_report_runs_on_five_reference_models(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``tl.compat.report`` runs without executing or crashing on required references."""
+    """``tl.report.doctor`` runs without executing or crashing on required references."""
 
     monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
     reports = [report(model, x) for model, x in _reference_models()]
 
     assert len(reports) == 5
-    assert all(isinstance(item, CompatReport) for item in reports)
-    assert all({row.key for row in item.checks} == EXPECTED_COMPAT_ROW_KEYS for item in reports)
+    assert all(isinstance(item, DoctorReport) for item in reports)
+    environment_keys = {
+        "pytorch",
+        "torch wrapper bindings",
+        "mechanical belt",
+        "cuda",
+        "graphviz",
+        "safetensors",
+        "extras",
+        "model fingerprint",
+    }
+    assert all(
+        {row.key for row in item.checks} == EXPECTED_COMPAT_ROW_KEYS | environment_keys
+        for item in reports
+    )
     assert reports[1].check("hf_transformers").is_detected is True
-    assert reports[1].check("torch_capabilities").status in {"pass", "not_tested"}
+    assert reports[1].check("torch_capabilities").status in {"pass", "scope"}
     assert reports[2].check("quantized_tensor").status == "known_broken"
     assert reports[3].check("multi_gpu_rng").is_detected is True
     assert reports[4].check("fsdp").status == "scope"
@@ -347,11 +361,12 @@ def test_report_surfaces_every_runtime_capability() -> None:
     # lockstep-with-defined-flags tripwire now bites.
     surfaced = set(compat_report.capability_snapshot())
     assert surfaced == expected
-    assert row.details.startswith("Runtime capabilities: ")
+    snapshot = compat_report.capability_snapshot()
+    present = sum(snapshot.values())
+    assert row.details.startswith(f"{present}/{len(snapshot)} capabilities present")
     assert "capabilities present" in row.details
     assert "capability_snapshot()" in row.details
     # Every ABSENT flag stays named in the row cell itself (absences-first).
-    snapshot = compat_report.capability_snapshot()
     for name, available in snapshot.items():
         if not available:
             assert name in row.details

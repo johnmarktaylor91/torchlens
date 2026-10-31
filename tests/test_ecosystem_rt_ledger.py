@@ -20,7 +20,6 @@ from _oracle_env import expect_bundle_minor_version_mismatch
 from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
-from torchlens._ecosystem import compat_window
 from torchlens._io import ArtifactError
 from torchlens._io.compat_ledger import (
     LEDGER_ROWS,
@@ -31,6 +30,7 @@ from torchlens._io.compat_ledger import (
     pair_is_governed,
     ungoverned_pair_error,
 )
+from torchlens.report import doctor
 
 GOLDENS_DIR = Path(__file__).parent / "release_goldens"
 CORPUS_PATH = GOLDENS_DIR / "genuine_release_artifacts.tar.gz"
@@ -162,7 +162,7 @@ def test_ungoverned_pair_error_payload() -> None:
 def test_compat_window_report_shape() -> None:
     """compat_window() renders runtime identity, promise status, and rows."""
 
-    report = compat_window()
+    report = doctor().compat_window
     assert report.runtime["floor_tlspec_version"] == 6
     assert report.runtime["producer_floor_writer"] == "2.31.0"
     assert len(report.runtime["writer_contract_digest"]) == 64

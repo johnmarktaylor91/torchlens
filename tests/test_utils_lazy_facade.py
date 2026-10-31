@@ -13,8 +13,6 @@ import torchlens._utils as utils
 
 _EXPECTED_EXPORTS = (
     "AutocastRestore",
-    "DoctorCheck",
-    "DoctorReport",
     "MAX_FLOATING_POINT_TOLERANCE",
     "_ATTR_SKIP_SET",
     "_AUTOCAST_DEVICES",
@@ -27,7 +25,6 @@ _EXPECTED_EXPORTS = (
     "capability_snapshot",
     "copy_arg_tree",
     "copy_tensor_payload",
-    "doctor",
     "format_capability_summary",
     "ensure_iterable",
     "get_attr_values_from_tensor_list",
@@ -96,10 +93,7 @@ def test_every_previous_utils_export_resolves_to_identical_object() -> None:
 
     assert tuple(utils.__all__) == _EXPECTED_EXPORTS
     assert set(_REEXPORTED_OBJECTS) == set(_EXPECTED_EXPORTS) - {
-        "DoctorCheck",
-        "DoctorReport",
         "capability_snapshot",
-        "doctor",
         "format_capability_summary",
         "flop_count",
         "list_modules",

@@ -128,7 +128,7 @@ RESERVED_STEP_SCORE_CREDIT = (
 # instead of asserting a reader.
 _BELOW_FLOOR_REMEDY = (
     "Re-save the artifact with a torchlens release verified to read it; "
-    "torchlens._ecosystem.compat_window() lists the governed rows and their "
+    "torchlens.report.doctor().compat_window lists the governed rows and their "
     "verified readers."
 )
 

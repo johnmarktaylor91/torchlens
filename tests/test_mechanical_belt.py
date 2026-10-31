@@ -223,23 +223,23 @@ def test_probe_failure_reaches_doctor_row(monkeypatch: pytest.MonkeyPatch) -> No
     row consumed the belt report at all.
     """
 
-    import torchlens._utils as tl_utils
+    import torchlens as tl
 
     monkeypatch.setattr(belt, "_report", _forged_failure_report())
     monkeypatch.setattr(belt, "_member_map", {})
-    rows = {check.name: check for check in tl_utils.doctor().checks}
+    rows = {check.key: check for check in tl.report.doctor().checks}
     assert "mechanical belt" in rows, "no doctor row consumes the belt report"
     row = rows["mechanical belt"]
-    assert row.status == "WARN"
-    assert "torch.frombuffer" in row.detail
-    assert "probe exploded" in row.detail
-    assert "unprobed_candidates=2" in row.detail
+    assert row.status == "scope"
+    assert "torch.frombuffer" in row.details
+    assert "probe exploded" in row.details
+    assert "unprobed_candidates=2" in row.details
 
 
 def test_probe_failure_reaches_compat_row(monkeypatch: pytest.MonkeyPatch) -> None:
-    """grind-r6 b3 R02 (sol MED): compat.report() must carry the belt row."""
+    """grind-r6 b3 R02 (sol MED): report.doctor() must carry the belt row."""
 
-    from torchlens.compat import report as compat_report
+    from torchlens.report import doctor as compat_report
 
     monkeypatch.setattr(belt, "_report", _forged_failure_report())
     monkeypatch.setattr(belt, "_member_map", {})
@@ -261,7 +261,7 @@ def test_clean_belt_reports_pass_not_false_alarm() -> None:
     """
 
     import torchlens._utils as tl_utils
-    from torchlens.compat import report as compat_report
+    from torchlens.report import doctor as compat_report
 
     real = belt.belt_report()
     assert real is not None

@@ -514,7 +514,7 @@
   the allocator hook costs 1.7x-2.5x total capture time on real CNNs/ViTs. The flag is a
   session-time knob (`FieldPolicy.DROP`, not in `MODEL_LOG_FIELD_ORDER`) and does not survive
   save/load. Never assert `forward_peak_memory > 0` on the default path.
-- Sharded distributed state is REFUSED, not silently mis-captured. `tl.compat.report` carries
+- Sharded distributed state is REFUSED, not silently mis-captured. `tl.report.doctor` carries
   `dtensor`, `device_mesh`, `tensor_parallel`, and `pipeline_parallel` rows, and capture entry
   raises `tl.errors.DistributedCaptureUnsupportedError` (structured findings on
   `exc.fields["findings"]`; branch on `finding.kind`, never message text). DTensor/ShardedTensor
@@ -1251,7 +1251,7 @@
   `hot_path(by="device_time")`; `tl.region` correlation). `torchlens._observe`
   is the user-facing verbs door.
 - ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens._ecosystem` --
-  `compat_window(...)` (dated support-window ledger; would have caught the
+  `tl.report.doctor().compat_window` (dated support-window ledger; would have caught the
   v2.33.0-cannot-load-v2.34.1 class), `migrate` (tl.migrate v1), and `plugins` (entry-point discovery
   that NEVER executes third-party code at discovery; kill switch).
   `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
@@ -1810,7 +1810,7 @@ object's docstring):
 - `tl.report.ValidationFailure`: A structured description of the first surfaced validation mismatch.
 - `tl.report.ValidationStatus`: Machine-readable replay-validation availability or result.
 - `tl.report.compare_topology`: Compare two Traces structurally.
-- `tl.report.doctor`: Run a TorchLens startup health check.
+- `tl.report.doctor(model=None, inputs=None)`: Environment health and optional model/input compatibility checks without executing the supplied model.
 - `tl.trackers.HistoryReader`: Read one artifact without loading the run or importing a model.
 - `tl.trackers.correct_running_stats`: Apply the closed-form unscale correction to one spine record.
 - `tl.trackers.corrected_grad_block`: Return `block` with every SCALED gradient observation corrected.
