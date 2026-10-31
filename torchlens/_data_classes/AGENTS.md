@@ -47,7 +47,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_trace_stats.py` | Trace aggregate stats and backward-pass projections |
 | `_trace_validation.py` | Trace validation and log-entry removal helpers |
 | `_trace_viz.py` | Trace visualization entrypoints |
-| `op.py` | `Op` two-word row facade (`_core`/`_row` over `_trace_core`), `TensorLog` alias, tensor save, per-pass fields |
+| `op.py` | `Op` two-word row facade (`_core`/`_row` over `_trace_core`), tensor save, per-pass fields |
 | `_op_transforms.py` | User-transform apply + train-mode/streaming output validation helpers (split from `op.py`; `op.py` re-exposes them) |
 | `layer.py` | `Layer` aggregate, pass delegation, graph unions |
 | `buffer.py` | `Buffer` and `BufferAccessor` |
@@ -262,8 +262,8 @@ layer.ops  # dict[int, Op]
   `save_source_context=True`; inline, unnameable, dynamic-source, attribute, and
   subscript targets are represented as `[]`.
 - `save_activation()` must route through `safe_copy()` and respect `backward_ready`.
-- `TensorLog` is a compatibility alias from `op.py`; new docs should prefer
-  `Op` unless referring to the alias itself.
+- `TensorLog` was the 2.x name of `Op`; the alias is gone, and a pickle naming it
+  refuses as a file saved by torchlens 2.x.
 
 ## Layer Gotchas
 

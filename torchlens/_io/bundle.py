@@ -1540,9 +1540,9 @@ def _load_trace_payload(
                 "hand-edited. Remedy: re-save the trace with trace.save().",
                 code="metadata_payload_not_a_mapping",
             )
-        # AUD-CODE 3.0b: snapshot the stamp/row-count facts from the bytes as
-        # written; rehydration mutates the persisted layer_list in place.
-        anchor_facts = persisted_anchor_facts(scrubbed_state)
+        # AUD-CODE 3.0b: snapshot the row count from the bytes as written;
+        # rehydration mutates the persisted layer_list in place.
+        persisted_rows = persisted_anchor_facts(scrubbed_state)
     except ArtifactError:
         raise
     except (pickle.UnpicklingError, EOFError) as exc:
@@ -1588,11 +1588,10 @@ def _load_trace_payload(
             f"Failed to load bundle at {bundle_path}: metadata nesting exceeded the "
             "interpreter recursion limit during rehydration."
         ) from exc
-    # AUD-CODE 3.0b: the manifest's stamp and row count must agree with the
-    # pickled root state (a tl.migrate lineage is the one witnessed exception).
-    # Runs AFTER rehydrate so the owner-specific persisted-claim refusals
+    # AUD-CODE 3.0b: the manifest's row count must agree with the pickled root
+    # state. Runs AFTER rehydrate so the owner-specific persisted-claim refusals
     # (injection codec, site keys, graph structure, ...) keep precedence.
-    check_manifest_metadata_anchors(manifest, anchor_facts, bundle_path)
+    check_manifest_metadata_anchors(manifest, persisted_rows, bundle_path)
     # W051-CAPT3 (EPISODE remainder): inside ``Trace.__setstate__`` the root
     # output was an unmaterialized blob handle, so the episode ledger's
     # evidence anchor had nothing to compare. Payloads are attached now; the

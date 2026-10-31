@@ -23,8 +23,8 @@ __all__ = [
     "Param",
 ]
 
-# Trace, Layer, Op, and TensorLog are intentionally NOT
+# Trace, Layer, and Op are intentionally NOT
 # re-exported here to avoid circular imports. Import them directly:
 #   from .data_classes.trace import Trace
 #   from .data_classes.layer import Layer
-#   from .data_classes.op import Op, TensorLog
+#   from .data_classes.op import Op

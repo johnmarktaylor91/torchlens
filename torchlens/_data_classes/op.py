@@ -4723,11 +4723,6 @@ def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
                 _pool_container_members(value, pool, 0)
 
 
-# Backward-compatible alias: TensorLog was the original name for
-# Op before the Layer aggregate class was introduced in PR #92.
-TensorLog = Op
-
-
 # The tlspec v8 coordinated bump retired this class's S3 pre-release
 # registrations (site_key, edge_substitutions, edge_replacement_stamps);
 # their persisting policies are declared directly in FIELD_POLICY above.
