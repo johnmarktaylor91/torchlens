@@ -491,7 +491,7 @@ class SteerPlan:
                     "Rerun hook plan entries fired at zero sites on the new inputs: "
                     f"{list(unfired)!r}. The rerun completed, but those interventions were "
                     "no-ops. Remedy: resolve the target sites against the rerun trace "
-                    "(trace.resolve_sites) before re-applying",
+                    "(trace[selector]) before re-applying",
                     code="rerun_zero_fire",
                     unfired_plan_ids=list(unfired),
                 ),

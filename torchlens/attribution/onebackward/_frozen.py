@@ -192,7 +192,7 @@ def _resolve_explicit(
                 code="read_frozen_selection_invalid",
                 kind=getattr(lifted, "kind", None),
             )
-        selection = lifted.resolve(trace)
+        selection = lifted._resolve(trace)
     if selection is not None:
         if selection.kind != "ACT":
             raise ReadError(

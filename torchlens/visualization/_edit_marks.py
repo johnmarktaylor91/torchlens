@@ -331,14 +331,14 @@ def _staged_marks(trace: Trace) -> dict[str, list[EditMark]]:
     spec = trace._intervention_spec
     if spec is None:
         return {}
-    from ..intervention.resolver import resolve_sites
+    from ..intervention.resolver import _resolve_sites
     from .node_spec import _forward_site
 
     marks: dict[str, list[EditMark]] = {}
     fanout = max(1, len(getattr(trace, "layer_list", ()) or ()))
     for target, build in _staged_entries(spec):
         try:
-            table = resolve_sites(trace, target, max_fanout=fanout)
+            table = _resolve_sites(trace, target, max_fanout=fanout)
         except (LookupError, ValueError, TypeError):
             # A target that resolves to no site here names no node to mark.
             continue

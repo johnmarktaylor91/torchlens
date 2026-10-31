@@ -125,7 +125,7 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
     Resolution ladder: Selection/`__selection__` producers resolve to their
     touched-site families; a fully-scoped FacetSelector (facet name + head +
     module address) is structurally ONE site; everything else resolves
-    through ``resolve_sites``. An UNKNOWN count (an unscoped facet selector —
+    through ``_resolve_sites``. An UNKNOWN count (an unscoped facet selector —
     the measured ``tl.head(5)`` 36-site broadcast) is treated as multi-site,
     never as one.
     """
@@ -155,7 +155,7 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
     if not isinstance(lifted, (Selector, Selection)) and callable(converter):
         lifted = converter()
     if isinstance(lifted, (Selector, Selection)):
-        resolved = lifted.resolve(baseline) if isinstance(lifted, Selector) else lifted
+        resolved = lifted._resolve(baseline) if isinstance(lifted, Selector) else lifted
         # ResolvedSelection is a Sequence of Site rows. Entry site keys
         # are (layer_label, pass_index) tuples; the structural L1 key rides
         # structural_site_key and the label backstop derives it.
@@ -175,9 +175,9 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
             unit_digest=str(getattr(resolved, "resolve_digest", "")),
         )
     if isinstance(where, str):
-        from ..intervention.resolver import resolve_sites
+        from ..intervention.resolver import _resolve_sites
 
-        table = resolve_sites(baseline, where, max_fanout=100_000)
+        table = _resolve_sites(baseline, where, max_fanout=100_000)
         labels = tuple(str(getattr(site, "label", site)) for site in table)
         return _Candidate(
             candidate_id=candidate_id,
@@ -186,9 +186,9 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
             resolved_site_count=len(labels),
             resolution_digest=_digest(("sites",) + tuple(sorted(labels))),
         )
-    from ..intervention.resolver import resolve_sites
+    from ..intervention.resolver import _resolve_sites
 
-    table = resolve_sites(baseline, where, max_fanout=100_000)
+    table = _resolve_sites(baseline, where, max_fanout=100_000)
     labels = tuple(str(getattr(site, "label", site)) for site in table)
     return _Candidate(
         candidate_id=candidate_id,

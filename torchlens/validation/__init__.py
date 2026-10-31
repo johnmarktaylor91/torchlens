@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._io import _json
-from ..intervention.resolver import resolve_sites
 from ..user_funcs import (
     validate_backward_pass,
     validate_batch_of_models_and_inputs,
@@ -1336,6 +1335,5 @@ __all__ = [
     "validate_batch_of_models_and_inputs",
     "validate_forward_pass",
     "check_metadata_invariants",
-    "resolve_sites",
     "validate_tlspec",
 ]

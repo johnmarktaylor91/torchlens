@@ -178,7 +178,7 @@ def check_plan(trace: Any, plan: Any) -> PlanCheckReport:
                 )
             )
             continue
-        table = trace.resolve_sites(selector)
+        table = trace._resolve_sites(selector)
         labels_attr = getattr(table, "labels", None)
         raw_labels = labels_attr() if callable(labels_attr) else labels_attr
         labels = tuple(str(site) for site in (raw_labels or _labels_of(table)))
@@ -275,7 +275,7 @@ def _is_static_selector(selector: Any) -> bool:
 
 
 def _labels_of(table: Any) -> tuple[str, ...]:
-    """Best-effort site labels from a resolver SiteTable."""
+    """Best-effort site labels from a resolver _SiteTable."""
 
     for attribute in ("site_labels", "resolved_labels", "sites"):
         value = getattr(table, attribute, None)

@@ -25,9 +25,10 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 from .._errors import AmbiguousOpLookupError, InvalidArgumentError
+from .._selection import Selector
 from ..capture.projections import LiveOpView
 from ..intervention.errors import AmbiguousSiteError
-from ..intervention.selectors import BaseSelector
+from ..intervention.selectors import BaseSelector, FacetSelector
 from ..intervention.types import FrozenTargetSpec, TargetSpec
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .op import Op
@@ -103,6 +104,52 @@ def _getitem_during_pass(self: "Trace", ix: Any) -> Op | LiveOpView:
     )
 
 
+def _names_one_thing(selector: Any) -> bool:
+    """Return whether a selector spelling addresses exactly one site.
+
+    A target spec, a frozen target spec, an exact-label selector and a facet
+    selector each name one thing; every other selector names a set.
+    """
+
+    if isinstance(selector, TargetSpec | FrozenTargetSpec | FacetSelector):
+        return True
+    return getattr(selector, "selector_kind", None) == "label"
+
+
+def _getitem_selector(self: "Trace", ix: Any) -> Any:
+    """Resolve ``trace[selector]``: one record for a one-thing spelling, else a Selection.
+
+    A selector that names a set (``tl.func``, ``tl.in_module``, ``tl.where``,
+    ``tl.label_contains`` and their compositions) returns a ``tl.Selection``
+    of every matching site, never capped; its ``repr`` and ``len`` report the
+    count, and an empty result is a legal empty Selection. A spelling that
+    names one thing (an exact label, a target spec, a facet selector) must
+    match exactly one site and returns that record.
+
+    Raises
+    ------
+    AmbiguousSiteError
+        ``code="site_spelling_not_unique"`` when a one-thing spelling matches
+        several sites.
+    """
+
+    from .._selection import _selection_from_selector
+    from ..intervention.resolver import _resolve_sites
+
+    if not _names_one_thing(ix):
+        return _selection_from_selector(ix)._resolve(self)
+    table = _resolve_sites(self, ix, max_fanout=max(1, len(self.layer_list)))
+    if len(table) != 1:
+        raise AmbiguousSiteError(
+            f"{ix!r} names one site but matched {len(table)} on this trace; address one "
+            "site exactly, or use a set-naming selector (tl.func, tl.in_module, "
+            "tl.label_contains) to get every match as a Selection.",
+            code="site_spelling_not_unique",
+            matched=len(table),
+        )
+    return table[0]
+
+
 def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     """Universal lookup for Trace entries after postprocessing.
 
@@ -125,15 +172,11 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         KeyError: No match found.
         ValueError: Ambiguous substring match or invalid index.
     """
-    if isinstance(ix, BaseSelector | TargetSpec | FrozenTargetSpec):
-        from ..intervention.resolver import resolve_sites
+    if isinstance(ix, Selector):
+        return ix._resolve(self)
 
-        table = resolve_sites(self, ix, max_fanout=1)
-        if len(table) != 1:
-            raise AmbiguousSiteError(
-                f"site {ix!r} matched {len(table)} sites, but Trace.__getitem__ requires one."
-            )
-        return table.first()
+    if isinstance(ix, BaseSelector | TargetSpec | FrozenTargetSpec):
+        return _getitem_selector(self, ix)
 
     if isinstance(ix, slice):
         return self.layer_list[ix]  # #78: slice indexing support

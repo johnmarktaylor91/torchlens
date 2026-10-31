@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import weakref
-from collections.abc import Iterator, Mapping
-from typing import Any, Generic, TypeVar
+from collections.abc import Callable, Iterator, Mapping
+from typing import Any, ClassVar, Generic, TypeVar
+
+from .._errors import InvalidArgumentError
 
 T = TypeVar("T")
+
+#: Scalar types a record field may hold for ``count_by`` to group on it.
+_COUNTABLE_SCALARS: tuple[type, ...] = (str, int, bool, type(None))
+_MISSING = object()
 
 
 def attach_source_honesty(frame: Any, records: list[Any]) -> Any:
@@ -149,6 +155,66 @@ class Accessor(Generic[T]):
     def items(self) -> list[tuple[Any, T]]:
         """Return ``(key, value)`` pairs."""
         return list(self._dict.items())
+
+    #: Public key -> reader for the fields a user may ``count_by``; subclasses
+    #: declare theirs. Any other string or int field of the record also counts.
+    _COUNTABLE_FIELDS: ClassVar[dict[str, Callable[[Any], Any]]] = {}
+
+    def count_by(self, *keys: str) -> dict[Any, int]:
+        """Count records by one or more record fields.
+
+        Parameters
+        ----------
+        *keys:
+            Field names of this accessor's records. One key gives
+            ``{value: count}``; two or more give ``{(v1, v2, ...): count}``.
+            Keys appear in first-seen record order.
+
+        Returns
+        -------
+        dict
+            Counts keyed by the field value(s). ``len(accessor)`` is the total.
+
+        Raises
+        ------
+        InvalidArgumentError
+            ``accessor_count_by_key_required`` with no key;
+            ``accessor_count_by_key_unknown`` for a key that is not a countable
+            field, naming the countable fields.
+        """
+
+        if not keys:
+            raise InvalidArgumentError(
+                "count_by needs at least one field name; len(accessor) is the total.",
+                code="accessor_count_by_key_required",
+                countable=tuple(self._COUNTABLE_FIELDS),
+            )
+        readers = [self._countable_reader(key) for key in keys]
+        counts: dict[Any, int] = {}
+        for record in self._list:
+            values = tuple(reader(record) for reader in readers)
+            group = values[0] if len(values) == 1 else values
+            counts[group] = counts.get(group, 0) + 1
+        return counts
+
+    def _countable_reader(self, key: str) -> Callable[[Any], Any]:
+        """Return the reader for ``key``, refusing typed when it is not countable."""
+
+        reader = self._COUNTABLE_FIELDS.get(key)
+        if reader is not None:
+            return reader
+        if self._list and all(
+            isinstance(getattr(record, key, _MISSING), _COUNTABLE_SCALARS) for record in self._list
+        ):
+            return lambda record: getattr(record, key)
+        declared = ", ".join(repr(name) for name in self._COUNTABLE_FIELDS) or "none declared"
+        raise InvalidArgumentError(
+            f"{key!r} is not a countable field of {self._item_kind} records; countable "
+            f"fields: {declared}, or any string or int field every record carries.",
+            code="accessor_count_by_key_unknown",
+            key=key,
+            countable=tuple(self._COUNTABLE_FIELDS),
+        )
 
     def to_pandas(self) -> Any:
         """Return a dataframe containing one row per accessor item.

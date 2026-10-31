@@ -227,7 +227,7 @@ def _resolve_within_impl(
     else:
         lifted = _lift_within(within, "read")
         if isinstance(lifted, Selector):
-            resolved = lifted.resolve(trace)
+            resolved = lifted._resolve(trace)
         else:
             raise ReadError(
                 "within= did not lift to a selection. Remedy: pass None, a "

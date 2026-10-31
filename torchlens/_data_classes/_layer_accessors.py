@@ -26,8 +26,26 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 
+def _record_module(record: object) -> str:
+    """Return the containing module address of a layer or op record (``"self"`` at the root)."""
+
+    return str(getattr(record, "module", None) or "self")
+
+
+def _record_kind(record: object) -> str:
+    """Return the op family token (``conv2d``, ``relu``) of a layer or op record."""
+
+    return str(getattr(record, "func_name", None) or getattr(record, "layer_type", None))
+
+
+#: ``count_by`` fields shared by the layer and op accessors.
+_LAYER_COUNTABLE_FIELDS = {"module": _record_module, "kind": _record_kind}
+
+
 class OpAccessor(Accessor["Op"]):
     """Scoped dict-like accessor for the Op entries owned by one Layer."""
+
+    _COUNTABLE_FIELDS = _LAYER_COUNTABLE_FIELDS
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
@@ -172,6 +190,8 @@ class LayerAccessor(Accessor["Layer"]):
     Available as ``trace.layers``.
     """
 
+    _COUNTABLE_FIELDS = _LAYER_COUNTABLE_FIELDS
+
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
@@ -281,91 +301,6 @@ class LayerAccessor(Accessor["Layer"]):
         """Access Layers representing internal-sink positions."""
 
         return self._trace_filtered("_layers_internal_sink")
-
-    def by_operator(self, operator: str | None = None) -> dict[str, int] | list[str]:
-        """Group layers by Torch operator name.
-
-        Parameters
-        ----------
-        operator:
-            Optional operator name. When supplied, matching layer labels are returned.
-
-        Returns
-        -------
-        Dict[str, int] | List[str]
-            Counts by operator, or labels for one operator.
-        """
-
-        if operator is not None:
-            return [
-                layer.layer_label
-                for layer in self._list
-                if (layer.func_name or layer.layer_type) == operator
-            ]
-        counts: dict[str, int] = {}
-        for layer in self._list:
-            key = str(layer.func_name or layer.layer_type)
-            counts[key] = counts.get(key, 0) + 1
-        return counts
-
-    def by_module(self, module: str | None = None) -> dict[str, int] | list[str]:
-        """Group layers by containing module address.
-
-        Parameters
-        ----------
-        module:
-            Optional module address. When supplied, matching layer labels are returned.
-
-        Returns
-        -------
-        Dict[str, int] | List[str]
-            Counts by module, or labels for one module.
-        """
-
-        if module is not None:
-            return [
-                layer.layer_label
-                for layer in self._list
-                if layer.module == module or module in getattr(layer, "modules", [])
-            ]
-        counts: dict[str, int] = {}
-        for layer in self._list:
-            key = str(layer.module or "self")
-            counts[key] = counts.get(key, 0) + 1
-        return counts
-
-    def by_module_and_operator(
-        self,
-        module: str | None = None,
-        operator: str | None = None,
-    ) -> dict[tuple[str, str], int] | list[str]:
-        """Group layers by module and operator.
-
-        Parameters
-        ----------
-        module:
-            Optional module address filter.
-        operator:
-            Optional operator-name filter.
-
-        Returns
-        -------
-        Dict[Tuple[str, str], int] | List[str]
-            Counts by ``(module, operator)`` or labels matching both filters.
-        """
-
-        if module is not None and operator is not None:
-            return [
-                layer.layer_label
-                for layer in self._list
-                if (layer.module == module or module in getattr(layer, "modules", []))
-                and (layer.func_name or layer.layer_type) == operator
-            ]
-        counts: dict[tuple[str, str], int] = {}
-        for layer in self._list:
-            key = (str(layer.module or "self"), str(layer.func_name or layer.layer_type))
-            counts[key] = counts.get(key, 0) + 1
-        return counts
 
     def total(self) -> int:
         """Return the number of aggregate layers.

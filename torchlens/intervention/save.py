@@ -37,10 +37,10 @@ from .errors import (
 )
 from .helpers import HELPER_REGISTRY_VERSION, helper_from_serialized
 from .resolver import (
+    _resolve_sites,
     function_registry_key_from_callable,
     resolve_function_registry_key,
     resolve_import_ref,
-    resolve_sites,
 )
 from .spec_compat import (
     SpecCompat,
@@ -1705,7 +1705,7 @@ def _build_target_manifest(
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", MultiMatchWarning)
-                resolved = resolve_sites(
+                resolved = _resolve_sites(
                     log,
                     target,
                     strict=True,

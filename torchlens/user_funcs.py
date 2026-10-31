@@ -170,7 +170,7 @@ from .intervention._zero_fire import settle_capture_zero_fire, zero_fire_policy_
 from .intervention.errors import ChunkedForwardConfigError
 from .intervention.hooks import normalize_hook_plan
 from .intervention.predicates import InterventionPredicate
-from .intervention.resolver import _selector_resolution_direction, resolve_sites
+from .intervention.resolver import _resolve_sites, _selector_resolution_direction
 from .intervention.selectors import BaseSelector
 from .intervention.types import InterventionDecision
 from .options import (
@@ -2224,7 +2224,7 @@ def _render_layer_visualizers(
 
     for selector, visualizer in layer_visualizers.items():
         try:
-            selected_ops = tuple(resolve_sites(trace, selector, max_fanout=max_fanout))
+            selected_ops = tuple(_resolve_sites(trace, selector, max_fanout=max_fanout))
         except Exception as exc:
             warnings.warn(
                 f"Skipping layer visualizer for selector {selector!r}: {exc}",

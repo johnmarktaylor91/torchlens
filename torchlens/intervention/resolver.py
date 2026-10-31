@@ -741,8 +741,12 @@ def resolve_import_ref(
 
 
 @dataclass(frozen=True)
-class SiteTable:
-    """Result of resolving a selector; ordered, indexable, dataframe-convertible."""
+class _SiteTable:
+    """Internal record-grain result of resolving a selector (ordered, indexable).
+
+    Not public: the public resolution door is ``trace[selector]``, which returns
+    a ``tl.Selection`` of ``tl.types.Site`` rows for a set-naming selector.
+    """
 
     _sites: tuple[Site, ...]
     selector: Any | None = None
@@ -769,7 +773,7 @@ class SiteTable:
 
         return iter(self._sites)
 
-    def __getitem__(self, idx: int | slice) -> Site | SiteTable:
+    def __getitem__(self, idx: int | slice) -> Site | _SiteTable:
         """Return one site or a sliced site table.
 
         Parameters
@@ -779,12 +783,12 @@ class SiteTable:
 
         Returns
         -------
-        Op | SiteTable
+        Op | _SiteTable
             Single layer pass for integer indexes, table for slices.
         """
 
         if isinstance(idx, slice):
-            return SiteTable(self._sites[idx], selector=self.selector)
+            return _SiteTable(self._sites[idx], selector=self.selector)
         return self._sites[idx]
 
     def __repr__(self) -> str:
@@ -798,16 +802,16 @@ class SiteTable:
 
         count = len(self)
         if count == 0:
-            return "SiteTable(0 sites)"
+            return "_SiteTable(0 sites)"
         labels = self.labels()
         if count == 1:
-            return f"SiteTable(1 site: {labels[0]})"
+            return f"_SiteTable(1 site: {labels[0]})"
         if count <= 3:
-            return f"SiteTable({count} sites: {', '.join(labels)})"
+            return f"_SiteTable({count} sites: {', '.join(labels)})"
         prefix = ", ".join(labels[:3])
-        return f"SiteTable({count} sites: {prefix}, ... {labels[-1]})"
+        return f"_SiteTable({count} sites: {prefix}, ... {labels[-1]})"
 
-    def where(self, predicate: Callable[[Site], bool]) -> SiteTable:
+    def where(self, predicate: Callable[[Site], bool]) -> _SiteTable:
         """Filter the table with a predicate.
 
         Parameters
@@ -817,11 +821,11 @@ class SiteTable:
 
         Returns
         -------
-        SiteTable
+        _SiteTable
             Filtered table in original execution order.
         """
 
-        return SiteTable(
+        return _SiteTable(
             tuple(site for site in self._sites if predicate(site)), selector=self.selector
         )
 
@@ -840,7 +844,7 @@ class SiteTable:
         """
 
         if not self._sites:
-            raise SiteResolutionError("SiteTable is empty; no first site is available.")
+            raise SiteResolutionError("_SiteTable is empty; no first site is available.")
         return self._sites[0]
 
     def labels(self) -> tuple[str, ...]:
@@ -960,13 +964,13 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
     )
 
 
-def resolve_sites(
+def _resolve_sites(
     trace: Trace,
     selector: SelectorInput,
     *,
     strict: bool = False,
     max_fanout: int = 8,
-) -> SiteTable:
+) -> _SiteTable:
     """Resolve a selector or accepted shorthand against a model log.
 
     Parameters
@@ -982,7 +986,7 @@ def resolve_sites(
 
     Returns
     -------
-    SiteTable
+    _SiteTable
         Ordered table of resolved sites.
 
     Raises
@@ -1018,7 +1022,7 @@ def resolve_sites(
         matched = indexed
         if not matched:
             raise SiteResolutionError(
-                f"selector {selector!r} matched 0 sites. Use log.find_sites(...) to discover labels."
+                f"selector {selector!r} matched 0 sites. Use trace[selector] to inspect what a selector matches."
             )
         _refuse_bare_multipass_label(selector, matched)
     if len(matched) > max_fanout:
@@ -1032,7 +1036,7 @@ def resolve_sites(
             MultiMatchWarning,
             stacklevel=2,
         )
-    return SiteTable(matched, selector=selector)
+    return _SiteTable(matched, selector=selector)
 
 
 def _resolve_facet_sites(
@@ -1110,7 +1114,7 @@ def _label_index_scope() -> Iterator[None]:
     match, and later plain-label resolutions against the same trace look the
     answer up instead of evaluating the selector on every op. The caller
     guarantees that no op is added, removed or relabelled inside the block;
-    every other check of :func:`resolve_sites` still runs per query. A nested
+    every other check of :func:`_resolve_sites` still runs per query. A nested
     scope reuses the outer one.
 
     Yields
@@ -1215,7 +1219,7 @@ def find_sites(
     *,
     strict: bool = False,
     max_fanout: int = 8,
-) -> SiteTable:
+) -> _SiteTable:
     """Find matching sites and return a table.
 
     Parameters
@@ -1231,7 +1235,7 @@ def find_sites(
 
     Returns
     -------
-    SiteTable
+    _SiteTable
         Ordered table of resolved sites.
     """
 
@@ -1256,7 +1260,7 @@ def find_sites(
             f"site {query!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
             "Pass a larger max_fanout explicitly or use a narrower selector."
         )
-    return SiteTable(matched, selector=query)
+    return _SiteTable(matched, selector=query)
 
 
 def _guard_episode_step_query(log: Trace, selector: Any) -> None:
@@ -1455,4 +1459,4 @@ def _normalize_query(query: SelectorInput) -> BaseSelector:
     return normalize_selector_like(query, lifecycle="site")
 
 
-__all__ = ["SiteTable", "_selector_resolution_direction", "find_sites", "resolve_sites"]
+__all__ = ["_SiteTable", "_selector_resolution_direction", "find_sites", "_resolve_sites"]

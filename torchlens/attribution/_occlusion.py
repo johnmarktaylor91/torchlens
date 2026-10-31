@@ -172,7 +172,7 @@ def _resolve_selection(trace: Any, selection: Any) -> Selection:
     if isinstance(lifted, Selection):
         return lifted if lifted._trace is trace else lifted.align_to(trace)
     if isinstance(lifted, Selector):
-        return lifted.resolve(trace)
+        return lifted._resolve(trace)
     raise AttributionError("occlusion selection did not produce a Selection")
 
 

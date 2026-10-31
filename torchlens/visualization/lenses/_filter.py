@@ -170,9 +170,9 @@ def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
     if isinstance(selection, Selection):
         resolved: Any = selection
     elif isinstance(selection, Selector):
-        resolved = selection.resolve(trace)
+        resolved = selection._resolve(trace)
     elif hasattr(selection, "__selection__"):
-        resolved = selection.__selection__().resolve(trace)
+        resolved = selection.__selection__()._resolve(trace)
     else:  # duck-typed entries-bearing object (admitted by _normalize_rules)
         resolved = selection
     bound_trace = getattr(resolved, "_trace", None)

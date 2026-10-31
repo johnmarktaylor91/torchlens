@@ -1543,7 +1543,7 @@ def _reconcile_rerun_hook_fires(
             "Rerun hook plan entries fired at zero sites on the new inputs: "
             f"{unfired!r}. The rerun completed, but those interventions were "
             "no-ops. Remedy: resolve the target sites against the rerun trace "
-            "(trace.resolve_sites) before re-applying, or route the edit "
+            "(trace[selector]) before re-applying, or route the edit "
             "through the push engine (fork().do(...)), which validates sites "
             "at plan time"
         )
@@ -1635,7 +1635,7 @@ def _matched_site_count(log: Trace, entry: Any) -> int:
 
     fanout = len(getattr(log, "layer_list", ()) or ()) + 1
     try:
-        return len(log.resolve_sites(entry.site_target, max_fanout=fanout))
+        return len(log._resolve_sites(entry.site_target, max_fanout=fanout))
     except Exception:  # noqa: BLE001 - an unresolvable target keeps the warning path
         return 0
 

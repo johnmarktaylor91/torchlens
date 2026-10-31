@@ -1527,7 +1527,7 @@ def _origin_sites_for_hooks(
     target_keys: set[str] = set()
     with _label_index_scope():  # resolution reads the trace; nothing relabels it here
         for entry in hook_entries:
-            for site in log.resolve_sites(
+            for site in log._resolve_sites(
                 entry.site_target, strict=strict, max_fanout=len(log.layer_list)
             ):
                 target_keys.add(_replay_site_key(site))
@@ -1561,7 +1561,7 @@ def _hook_targets_by_label(
     targets: dict[str, list[NormalizedHookEntry]] = {}
     with _label_index_scope():  # resolution reads the trace; nothing relabels it here
         for entry in hook_entries:
-            for site in log.resolve_sites(
+            for site in log._resolve_sites(
                 entry.site_target, strict=strict, max_fanout=len(log.layer_list)
             ):
                 targets.setdefault(_replay_site_key(site), []).append(entry)
@@ -1593,7 +1593,7 @@ def _resolve_single_origin(
 
     if hasattr(site, "layer_label") and hasattr(site, "out"):
         return cast("Op", site)
-    return cast("Op", log.resolve_sites(site, strict=strict, max_fanout=1).first())
+    return cast("Op", log._resolve_sites(site, strict=strict, max_fanout=1).first())
 
 
 def _func_call_groups(log: Trace) -> dict[int | None, tuple[Op, ...]]:

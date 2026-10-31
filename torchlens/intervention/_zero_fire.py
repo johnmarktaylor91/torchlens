@@ -222,7 +222,7 @@ def raise_rerun_zero_fire(message: str, unfired_plan_ids: list[str]) -> NoReturn
     raise SiteResolutionError(
         f"{message} Trace.run(..., on_zero_fire='error') refuses the run.",
         code="rerun_zero_fire",
-        remedy="resolve the target sites against the rerun trace (trace.resolve_sites) "
+        remedy="resolve the target sites against the rerun trace (trace[selector]) "
         "before re-applying, or run with the default on_zero_fire='warn' or 'disclose'",
         unfired_plan_ids=list(unfired_plan_ids),
     )

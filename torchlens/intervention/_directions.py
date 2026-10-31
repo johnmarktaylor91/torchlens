@@ -412,7 +412,7 @@ def _saved_out(trace: Any, site: Any, side: str) -> torch.Tensor:
     from .errors import SiteResolutionError
 
     try:
-        record = trace.resolve_sites(site, max_fanout=1).first()
+        record = trace._resolve_sites(site, max_fanout=1).first()
     except SiteResolutionError:
         if not isinstance(site, str):
             raise

@@ -2,7 +2,7 @@
 
 ``Selection`` is the composable QUERY — a frozen AST over leaf terms and
 boolean combinators, model/trace-independent; resolving it is explicit.
-``ResolvedSelection`` is returned by ``selection.resolve(trace)`` — frozen,
+``Selection`` is returned by ``trace[selector]`` — frozen,
 concrete, trace-bound: an ordered tuple of :class:`Site` rows.
 
 Every public spelling here ships DOCUMENTED-UNSTABLE pending its
@@ -34,7 +34,7 @@ The kind vocabulary ``ACT | PARAM | EDGE`` is a CLOSED public vocabulary
 (``selection_kind_incompatible``); the matrix cells change only via explicit
 D-ruling landing as an S2 amendment, never a lane-local edit.
 
-``ResolvedSelection`` is SESSION-TIME ONLY and is never persisted.
+``Selection`` is SESSION-TIME ONLY and is never persisted.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ import hashlib
 import random as _random_module
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
@@ -302,7 +302,7 @@ def _mask_equal(a: _Mask, b: _Mask) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Site + ResolvedSelection.
+# Site + Selection.
 # ---------------------------------------------------------------------------
 
 
@@ -395,6 +395,20 @@ def _graph_entry_order(trace: Any, entries: Iterable[Site]) -> tuple[Site, ...]:
     return tuple(entry for _, entry in sorted(enumerate(placed), key=sort_key))
 
 
+def _entry_label(trace: Any, entry: Site) -> str:
+    """Return the pass-qualified label of one row (the record's op label for ACT)."""
+
+    if entry.kind != "ACT" or len(entry.key) != 2:
+        return ":".join(str(part) for part in entry.key)
+    layer_label, pass_index = entry.key
+    for op in _forward_ops(trace):
+        if (getattr(op, "layer_label", None) or op.label) == layer_label and (
+            getattr(op, "pass_index", 1) or 1
+        ) == pass_index:
+            return str(op.label)
+    return f"{layer_label}:{pass_index}"
+
+
 class Selection:
     """Frozen, concrete, trace-bound selection: an ordered tuple of Site.
 
@@ -404,14 +418,17 @@ class Selection:
     Session-time only; never persisted.
     """
 
-    __slots__ = ("_digest", "_entries", "_kind", "_trace")
+    __slots__ = ("_digest", "_entries", "_kind", "_selector", "_trace")
 
     _digest: str
     _entries: tuple[Site, ...]
     _kind: str
+    _selector: Any
     _trace: Any
 
-    def __init__(self, trace: Any, kind: str, entries: Iterable[Site]) -> None:
+    def __init__(
+        self, trace: Any, kind: str, entries: Iterable[Site], *, selector: Any = None
+    ) -> None:
         """Freeze a resolved selection (internal constructor).
 
         Parameters
@@ -422,12 +439,16 @@ class Selection:
             Selection kind, one of the closed ``ACT | PARAM | EDGE``.
         entries:
             Site entries; canonicalized to deterministic order.
+        selector:
+            The selector that produced the rows, when one did (``None`` for
+            selections built by composition or complement).
         """
 
         if kind not in _SELECTION_KINDS:
             raise ValueError(f"selection kind must be one of {_SELECTION_KINDS}; got {kind!r}.")
         object.__setattr__(self, "_trace", trace)
         object.__setattr__(self, "_kind", kind)
+        object.__setattr__(self, "_selector", selector)
         object.__setattr__(self, "_entries", _graph_entry_order(trace, entries))
         digest = hashlib.sha256()
         digest.update(kind.encode())
@@ -440,13 +461,34 @@ class Selection:
     def __setattr__(self, name: str, value: Any) -> None:
         """Refuse mutation after freeze."""
 
-        raise AttributeError("ResolvedSelection is frozen; construct a new selection instead.")
+        raise AttributeError("Selection is frozen; construct a new selection instead.")
 
     @property
     def kind(self) -> str:
         """Return the selection kind (``ACT`` / ``PARAM`` / ``EDGE``)."""
 
         return self._kind
+
+    @property
+    def selector(self) -> Any:
+        """Return the selector that produced these rows, or ``None``.
+
+        Set when the selection came from ``trace[selector]`` or a lifted
+        selector; ``None`` for selections built by composition or complement.
+        """
+
+        return self._selector
+
+    @property
+    def labels(self) -> tuple[str, ...]:
+        """Return one pass-qualified label per row, in row order.
+
+        ACT rows read the op label of the trace record at their
+        ``(layer_label, pass_index)`` key; PARAM and EDGE rows read the
+        string form of their key.
+        """
+
+        return tuple(_entry_label(self._trace, entry) for entry in self._entries)
 
     @property
     def is_empty(self) -> bool:
@@ -505,10 +547,47 @@ class Selection:
 
         return iter(self._entries)
 
-    def __getitem__(self, index: int) -> Site:
-        """Return one site entry by position."""
+    @overload
+    def __getitem__(self, index: int) -> Site: ...
 
+    @overload
+    def __getitem__(self, index: slice) -> Selection: ...
+
+    def __getitem__(self, index: int | slice) -> Site | Selection:
+        """Return one site entry by position, or a sliced Selection."""
+
+        if isinstance(index, slice):
+            return Selection(self._trace, self._kind, self._entries[index], selector=self._selector)
         return self._entries[index]
+
+    def to_pandas(self) -> Any:
+        """Return a pandas table with one row per site.
+
+        Columns: ``label``, ``kind``, ``key``, ``num_selected``, ``numel``,
+        ``shape``, ``relation``, ``source``.
+        """
+
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
+        rows = [
+            {
+                "label": label,
+                "kind": entry.kind,
+                "key": entry.key,
+                "num_selected": entry.num_selected,
+                "numel": entry._mask.numel(),
+                "shape": entry.shape,
+                "relation": entry.provenance.relation,
+                "source": entry.provenance.source,
+            }
+            for label, entry in zip(self.labels, self._entries, strict=True)
+        ]
+        return pd.DataFrame(rows)
 
     def __eq__(self, other: object) -> bool:
         """Compare BOTH denotation levels: family AND per-site masks."""
@@ -533,7 +612,7 @@ class Selection:
         """Return a compact two-level summary."""
 
         elements = sum(entry.num_selected for entry in self._entries)
-        return f"ResolvedSelection[{self._kind}]({len(self._entries)} sites, {elements} elements)"
+        return f"Selection[{self._kind}]({len(self._entries)} sites, {elements} elements)"
 
     def __selection__(self) -> Selection:
         """Pass anywhere a selection is expected."""
@@ -704,12 +783,12 @@ class _Combinator:
 class Selector:
     """Composable, trace-independent selection query (frozen AST).
 
-    Compose with ``|  &  -  ~``; resolve explicitly with
-    ``selection.resolve(trace)``. Truthiness is deliberately AMBIGUOUS on the
-    query type: ``bool(selection)`` refuses typed
+    Compose with ``|  &  -  ~``; resolve against a trace with
+    ``trace[selector]``, the one resolution door. Truthiness is deliberately
+    AMBIGUOUS on the query type: ``bool(selector)`` refuses typed
     (``selection_bool_ambiguous``) because ``a and b`` on a lazily-composable
-    AST silently discards the left operand. Resolve first;
-    ``ResolvedSelection`` is truthy on "has any selected element".
+    AST silently discards the left operand. Resolve first; the
+    ``Selection`` is truthy on "has any selected element".
     """
 
     __slots__ = ("_direction", "_kind", "_node")
@@ -754,7 +833,7 @@ class Selector:
         raise SelectionError(
             "bool() on a Selection query is ambiguous: `a and b` / `a or b` would "
             "silently discard an operand instead of composing. Use `a & b` / `a | b`, "
-            "or resolve first (`selection.resolve(trace)`) and test the resolved "
+            "or resolve first (`trace[selector]`) and test the resolved "
             "selection.",
             code="selection_bool_ambiguous",
         )
@@ -793,12 +872,14 @@ class Selector:
 
     # Resolution ------------------------------------------------------------
 
-    def resolve(self, trace: Trace) -> Selection:
+    def _resolve(self, trace: Trace) -> Selection:
         """Resolve this query against one trace's site lifecycle.
+
+        The public door is ``trace[selector]``, which calls this.
 
         Returns
         -------
-        ResolvedSelection
+        Selection
             Frozen (family, masks) pair. Empty results are LEGAL and
             first-class — emptiness is disclosure, never an error.
 
@@ -813,7 +894,10 @@ class Selector:
             ``basis_dim_mismatch``).
         """
 
-        return _resolve_node(self._node, trace, self._kind)
+        resolved = _resolve_node(self._node, trace, self._kind)
+        if resolved._selector is None:
+            object.__setattr__(resolved, "_selector", self)
+        return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -942,10 +1026,10 @@ def _align_resolved_operands(lifted_left: Any, lifted_right: Any) -> tuple[Selec
     if isinstance(lifted_left, Selection):
         if not isinstance(lifted_right, Selector):
             raise RuntimeError("mixed composition lost its Selection operand")
-        return lifted_left, lifted_right.resolve(lifted_left._trace)
+        return lifted_left, lifted_right._resolve(lifted_left._trace)
     if not isinstance(lifted_left, Selector) or not isinstance(lifted_right, Selection):
         raise RuntimeError("mixed composition lost its Selection operand")
-    return lifted_left.resolve(lifted_right._trace), lifted_right
+    return lifted_left._resolve(lifted_right._trace), lifted_right
 
 
 def _compose_queries(op: str, lifted_left: Selector, lifted_right: Selector) -> Selector:
@@ -1195,7 +1279,7 @@ def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> Selection:
         _act_entry(op, _mask_whole(_site_shape(op)), "exact", f"selector {node.selector!r}")
         for op in matched
     ]
-    return Selection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries, selector=node.selector)
 
 
 def _resolve_box_term(node: _BoxTerm, trace: Any) -> Selection:
@@ -1506,7 +1590,7 @@ def _resolve_operand_for_random(operand: Any, trace: Any) -> Selection:
         return operand
     if not isinstance(operand, Selector):
         raise RuntimeError("random_selection operand must lift to a Selection")
-    return operand.resolve(trace)
+    return operand._resolve(trace)
 
 
 # ---------------------------------------------------------------------------
@@ -1577,7 +1661,7 @@ def random_like(
 ) -> Selector:
     """Seeded, size-matched random control selection.
 
-    Both operands resolve at ``resolve(trace)`` time; the sampling population
+    Both operands resolve at ``trace[selector]`` time; the sampling population
     is ``within``'s selected-element set; the result kind is ``within``'s
     kind; ``|result| == |like|`` sampled without replacement. A population
     smaller than ``|like|`` (including an empty complement) refuses typed
@@ -1807,7 +1891,7 @@ def _resolve_do_target(trace: Any, selection_like: Any) -> Selection:
             )
         resolved = lifted
     else:
-        resolved = lifted.resolve(trace)
+        resolved = lifted._resolve(trace)
     if resolved.kind == "PARAM":
         raise _apply_invalid(
             "not_maskable",

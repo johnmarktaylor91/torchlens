@@ -834,7 +834,7 @@ def _get_op_nums_from_user_labels(
         return sorted(
             {
                 site.raw_index
-                for site in self.resolve_sites(
+                for site in self._resolve_sites(
                     which_layers,
                     strict=False,
                     max_fanout=max(1, len(getattr(self, "layer_list", []))),
@@ -852,7 +852,7 @@ def _get_op_nums_from_user_labels(
         if isinstance(layer_key, BaseSelector):
             raw_layer_nums_to_save.update(
                 site.raw_index
-                for site in self.resolve_sites(
+                for site in self._resolve_sites(
                     layer_key,
                     strict=False,
                     max_fanout=max(1, len(getattr(self, "layer_list", []))),

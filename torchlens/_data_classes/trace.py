@@ -2008,14 +2008,22 @@ class Trace(
             return len(self._raw_graph_ws.raw_layer_dict)
 
     def __getitem__(self, ix: Any) -> Any:
-        """Returns an object logging a model layer given an index. If the pass is finished,
-        it'll do this intelligently; if not, it simply queries based on the layer's raw barcode.
+        """Return one record, or the Selection a selector names.
+
+        After the pass: an int, slice or string addresses records as before;
+        a selector is the one resolution door. A set-naming selector
+        (``tl.func``, ``tl.in_module``, ``tl.where``, ``tl.label_contains``,
+        a ``tl.Selector`` and their compositions) returns a ``tl.Selection``
+        of every matching site, never capped (``len`` and ``repr`` report the
+        count). A spelling that names one thing (an exact label, a target
+        spec, a facet selector) must match exactly one and returns that
+        record. During the pass, the raw barcode lookup applies.
 
         Args:
-            ix: desired index
+            ix: index, slice, label, address, substring or selector.
 
         Returns:
-            Tensor log entry object with info about specified layer.
+            Op, Layer, Module, ModuleCall, Param, Buffer, GradFn or Selection.
         """
         if self._tracing_finished:
             return _getitem_after_pass(self, ix)
@@ -2036,7 +2044,7 @@ class Trace(
 
         Returns
         -------
-        SiteTable
+        _SiteTable
             Ordered table of matching layer-pass records.
         """
 
@@ -2044,8 +2052,12 @@ class Trace(
 
         return find_sites(self, selector, strict=strict, max_fanout=max_fanout)
 
-    def resolve_sites(self, selector: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
-        """Resolve intervention sites matching a query.
+    def _resolve_sites(self, selector: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
+        """Resolve the record-grain site table for internal planning (private).
+
+        The public door is ``trace[selector]``: a set-naming selector returns a
+        ``tl.Selection`` of every match, never capped; a one-thing spelling
+        returns its one record.
 
         Parameters
         ----------
@@ -2058,13 +2070,13 @@ class Trace(
 
         Returns
         -------
-        SiteTable
+        _SiteTable
             Ordered table of matching layer-pass records.
         """
 
-        from ..intervention.resolver import resolve_sites
+        from ..intervention.resolver import _resolve_sites
 
-        return resolve_sites(self, selector, strict=strict, max_fanout=max_fanout)
+        return _resolve_sites(self, selector, strict=strict, max_fanout=max_fanout)
 
     def check_plan(self, plan: Any) -> Any:
         """Audit-only plan check (weightsfree memo D14; nnsight-scan parity).
@@ -2198,7 +2210,7 @@ class Trace(
                 code="annotation_payload_missing",
                 remedy="pass data=, image=, or both to annotate()",
             )
-        sites = self.resolve_sites(selector, max_fanout=max_fanout)
+        sites = self._resolve_sites(selector, max_fanout=max_fanout)
         image_value = str(image) if image is not None else None
         data_kind = self._annotation_data_kind(data)
         for site in sites:
