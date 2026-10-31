@@ -378,9 +378,129 @@ STEP_REGISTRY: tuple[StepSpec, ...] = (
 )
 
 
+def _step_11_violation(trace: Trace) -> str | None:
+    """Return the first step-11 lookup-key postcondition violation, if any."""
+
+    for op in trace.layer_list:
+        if not op.label:
+            return f"Step 11 left {op!r} without a final op label"
+        if not op.layer_label:
+            return f"Step 11 left {op!r} without a final layer label"
+        if not op.lookup_keys:
+            return f"Step 11 left {op.label} without lookup keys"
+        if trace.layer_dict_all_keys[op.label] is not op:
+            return f"Step 11 did not map op label {op.label!r} to its own op"
+        # The bare layer label resolves to ONE pass of that layer (the public
+        # lookup contract keeps the LAST pass for multi-pass layers), never to
+        # a foreign layer's op.
+        resolved = trace.layer_dict_all_keys[op.layer_label]
+        if resolved.layer_label != op.layer_label:
+            return (
+                f"Step 11 mapped layer label {op.layer_label!r} to a foreign op {resolved.label!r}"
+            )
+    return None
+
+
+def _step_15_5_violation(trace: Trace) -> str | None:
+    """Return the step-15.5 aggregate-layer postcondition violation, if any."""
+
+    if not trace.layer_logs:
+        return "Step 15.5 must build aggregate layer logs"
+    if len(trace.layer_logs) != len(trace.layer_labels):
+        return (
+            f"Step 15.5 built {len(trace.layer_logs)} layer logs for "
+            f"{len(trace.layer_labels)} layer labels"
+        )
+    if not isinstance(trace.by_pass, dict):
+        return "Step 15.5 must build by_pass as a dict"
+    return None
+
+
+def _step_1_violation(trace: Trace) -> str | None:
+    """Return the step-1 output-registration postcondition violation, if any."""
+
+    if not trace.output_layers:
+        return "Step 1 must register output layers"
+    return None
+
+
+def _step_8_violation(trace: Trace) -> str | None:
+    """Return the step-8 label-map postcondition violation, if any."""
+
+    if not trace._raw_to_final_layer_labels:
+        return "Step 8 must build raw-to-final layer labels"
+    if not trace._raw_to_final_op_labels:
+        return "Step 8 must build raw-to-final op labels"
+    return None
+
+
+def _step_16_violation(trace: Trace) -> str | None:
+    """Return the step-16 module-log postcondition violation, if any."""
+
+    if getattr(trace, "_module_logs", None) is None:
+        return "Step 16 must build module logs"
+    return None
+
+
+def _step_16_5_violation(trace: Trace) -> str | None:
+    """Return the step-16.5 graph-hash postcondition violation, if any."""
+
+    if trace.graph_shape_hash is None:
+        return "Step 16.5 must compute graph_shape_hash"
+    return None
+
+
+def _step_17_violation(trace: Trace) -> str | None:
+    """Return the step-17 tracing-finished postcondition violation, if any."""
+
+    if trace._tracing_finished is not True:
+        return "Step 17 must mark tracing finished"
+    return None
+
+
+#: Per-step postconditions checked after the step runs, on every capture.
+STEP_POSTCONDITIONS: dict[str, Callable[[Trace], str | None]] = {
+    "1": _step_1_violation,
+    "8": _step_8_violation,
+    "11": _step_11_violation,
+    "15.5": _step_15_5_violation,
+    "16": _step_16_violation,
+    "16.5": _step_16_5_violation,
+    "17": _step_17_violation,
+}
+
+
+def _check_step_postconditions(trace: Trace, step: str) -> None:
+    """Raise if a completed step left its postcondition unmet.
+
+    Runs on every capture, with no env gate, and raises a typed error rather
+    than ``assert`` so ``python -O`` cannot strip it. A violation is a
+    postprocess defect, never a user error.
+
+    Raises
+    ------
+    MetadataInvariantError
+        With check name ``postprocess_step_postcondition`` and a message
+        naming the step.
+    """
+
+    check = STEP_POSTCONDITIONS.get(step)
+    violation = None if check is None else check(trace)
+    if violation is not None:
+        from ..validation.invariants import MetadataInvariantError
+
+        raise MetadataInvariantError("postprocess_step_postcondition", violation)
+
+
 def run_pipeline(ctx: StepContext) -> None:
-    """Execute steps 1-20 in registry order, skipping steps whose gate is false."""
+    """Execute steps 1-20 in registry order, skipping steps whose gate is false.
+
+    After each step that runs, ``_check_step_postconditions`` checks that
+    step's postcondition from ``STEP_POSTCONDITIONS`` (steps 1, 8, 11, 15.5,
+    16, 16.5 and 17 carry one).
+    """
 
     for spec in STEP_REGISTRY:
         if spec.should_run(ctx):
             spec.run(ctx)
+            _check_step_postconditions(ctx.trace, spec.step)

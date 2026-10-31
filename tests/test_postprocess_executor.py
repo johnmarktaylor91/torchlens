@@ -301,3 +301,131 @@ def test_buffer_duplicate_axis_actually_merges(
         )
     finally:
         trace.cleanup()
+
+
+def _wrap_then(real: Any, after: Any) -> Any:
+    """Return a step function that runs ``real`` and then breaks its result."""
+
+    def patched(trace: Any, *args: Any) -> Any:
+        result = real(trace, *args)
+        after(trace)
+        return result
+
+    return patched
+
+
+def _clear_layer_label_map(trace: Any) -> None:
+    trace._raw_to_final_layer_labels.clear()
+
+
+def _clear_op_label_map(trace: Any) -> None:
+    trace._raw_to_final_op_labels.clear()
+
+
+def _drop_first_lookup_keys(trace: Any) -> None:
+    trace.layer_list[0].lookup_keys = []
+
+
+def _clear_layer_logs(trace: Any) -> None:
+    trace.layer_logs.clear()
+
+
+def _null_module_logs(trace: Any) -> None:
+    trace._module_logs = None
+
+
+def _postcondition_breakers() -> list[Any]:
+    """(step, patched attribute, factory of the breaking replacement, message)."""
+
+    import torchlens.postprocess as pp
+
+    def noop(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    return [
+        pytest.param("1", "_add_output_layers", lambda: noop, "must register output", id="1"),
+        pytest.param(
+            "8",
+            "_map_raw_labels_to_final_labels",
+            lambda: _wrap_then(pp._map_raw_labels_to_final_labels, _clear_layer_label_map),
+            "raw-to-final layer labels",
+            id="8-layer",
+        ),
+        pytest.param(
+            "8",
+            "_map_raw_labels_to_final_labels",
+            lambda: _wrap_then(pp._map_raw_labels_to_final_labels, _clear_op_label_map),
+            "raw-to-final op labels",
+            id="8-op",
+        ),
+        pytest.param(
+            "11",
+            "_build_lookup_keys_and_finalize_retained_layers",
+            lambda: _wrap_then(
+                pp._build_lookup_keys_and_finalize_retained_layers, _drop_first_lookup_keys
+            ),
+            "without lookup keys",
+            id="11",
+        ),
+        pytest.param(
+            "15.5",
+            "_build_layer_logs",
+            lambda: _wrap_then(pp._build_layer_logs, _clear_layer_logs),
+            "aggregate layer logs",
+            id="15.5",
+        ),
+        pytest.param(
+            "16",
+            "_build_module_logs",
+            lambda: _wrap_then(pp._build_module_logs, _null_module_logs),
+            "module logs",
+            id="16",
+        ),
+        pytest.param(
+            "16.5",
+            "compute_graph_shape_hash",
+            lambda: lambda *_args, **_kwargs: None,
+            "graph_shape_hash",
+            id="16.5",
+        ),
+        pytest.param("17", "_set_tracing_finished", lambda: noop, "tracing finished", id="17"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("step", "attribute", "make_breaker", "message"), _postcondition_breakers()
+)
+def test_unmet_step_postcondition_raises_typed_error(
+    monkeypatch: pytest.MonkeyPatch,
+    step: str,
+    attribute: str,
+    make_breaker: Any,
+    message: str,
+) -> None:
+    """A step that leaves its postcondition unmet fails the capture, naming the step.
+
+    The check runs on the default path (no env flag) and is a typed raise, not
+    an ``assert``, so ``python -O`` cannot strip it.
+    """
+
+    import re
+
+    import torchlens.postprocess as pp
+    from torchlens.validation import MetadataInvariantError
+
+    monkeypatch.setattr(pp, attribute, make_breaker())
+    with pytest.raises(MetadataInvariantError) as excinfo:
+        tl.trace(_TinyModel().eval(), torch.randn(2, 3))
+    assert excinfo.value.check_name == "postprocess_step_postcondition"
+    text = str(excinfo.value)
+    assert re.search(rf"\bStep {re.escape(step)} ", text), text
+    assert message in text, text
+
+
+def test_step_postconditions_cover_the_seven_steps() -> None:
+    """The executor checks exactly the seven postcondition steps, all registered."""
+
+    from torchlens.postprocess import _executor as ex
+
+    assert set(ex.STEP_POSTCONDITIONS) == {"1", "8", "11", "15.5", "16", "16.5", "17"}
+    assert set(ex.STEP_POSTCONDITIONS) <= {spec.step for spec in ex.STEP_REGISTRY}
