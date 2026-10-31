@@ -77,7 +77,11 @@ _MODELLOG_216_NOTE = (
 
 
 def pre_3_artifact_error(
-    observed: str, *, path: str | None = None, remedy_note: str = ""
+    observed: str,
+    *,
+    path: str | None = None,
+    remedy_note: str = "",
+    code: str = "artifact_version_below_floor",
 ) -> ArtifactTooOldError:
     """Build the typed refusal for an artifact saved by torchlens 2.x.
 
@@ -91,6 +95,9 @@ def pre_3_artifact_error(
     remedy_note:
         One extra sentence appended to the remedy when the standard one is not enough for
         this origin (the 2.16 ModelLog format).
+    code:
+        Always ``"artifact_version_below_floor"``; raise sites pass it explicitly so the
+        S-17 census sees the code where the raise happens.
 
     Returns
     -------
@@ -104,7 +111,7 @@ def pre_3_artifact_error(
     return ArtifactTooOldError(
         f"This artifact was saved by torchlens 2.x ({observed}); torchlens 3 does not read "
         f"files saved by torchlens 2.x. Remedy: {remedy}",
-        code="artifact_version_below_floor",
+        code=code,
         observed=observed,
         floor_tlspec_version=MIN_TLSPEC_VERSION,
         floor_torchlens_version="3.0.0",
@@ -113,13 +120,17 @@ def pre_3_artifact_error(
     )
 
 
-def modellog_216_error(path: str) -> ArtifactTooOldError:
+def modellog_216_error(
+    path: str, *, code: str = "artifact_version_below_floor"
+) -> ArtifactTooOldError:
     """Build the 2.x refusal for a portable ModelLog bundle of torchlens 2.16.
 
     Parameters
     ----------
     path:
         Artifact path.
+    code:
+        Always ``"artifact_version_below_floor"``, passed explicitly by each raise site.
 
     Returns
     -------
@@ -128,7 +139,10 @@ def modellog_216_error(path: str) -> ArtifactTooOldError:
     """
 
     return pre_3_artifact_error(
-        "the portable ModelLog format of torchlens 2.16", path=path, remedy_note=_MODELLOG_216_NOTE
+        "the portable ModelLog format of torchlens 2.16",
+        path=path,
+        remedy_note=_MODELLOG_216_NOTE,
+        code=code,
     )
 
 
@@ -155,4 +169,4 @@ def refuse_pre_3_module_path(module: str, name: str = "") -> None:
         or module in _PRE_3_PRIVATE_MODULES
         or (module, name) in _PRE_3_GLOBALS
     ):
-        raise pre_3_artifact_error(f"module_path={module}")
+        raise pre_3_artifact_error(f"module_path={module}", code="artifact_version_below_floor")

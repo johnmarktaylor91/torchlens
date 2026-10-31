@@ -1403,7 +1403,7 @@ def load(
                 allowed_custom_callable_modules=allowed_custom_callable_modules,
             )
         if tlspec_format == "v2.16_modellog_portable":
-            raise modellog_216_error(str(bundle_path))
+            raise modellog_216_error(str(bundle_path), code="artifact_version_below_floor")
         if tlspec_format == "v2.0_unified":
             return _load_unified_tlspec(
                 bundle_path,

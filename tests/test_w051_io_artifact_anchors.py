@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
+from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
 from torchlens._io import ArtifactError
@@ -102,12 +103,18 @@ def test_manifest_row_count_disagreeing_with_metadata_refuses(
     _assert_refuses(path, "bundle_manifest_metadata_mismatch", field="n_layers")
 
 
-def test_root_stamp_disagreeing_with_manifest_refuses(source_bundle: Path, tmp_path: Path) -> None:
+def test_root_stamp_older_than_manifest_refuses_as_2x(source_bundle: Path, tmp_path: Path) -> None:
+    """A root state stamped older than its manifest is a 2.x payload: it refuses as 2.x.
+
+    The state decoder refuses an older stamp before the anchor check compares the two, so the
+    typed 2.x error is what surfaces; the anchor comparison stays as a second door.
+    """
+
     def older_root(state: dict[str, Any]) -> None:
         state["tlspec_version"] = state["tlspec_version"] - 2
 
     path = _tampered(source_bundle, tmp_path / "stamp.tlspec", older_root)
-    _assert_refuses(path, "bundle_manifest_metadata_mismatch", field="tlspec_version")
+    assert_refuses_as_2x(path)
 
 
 # --- (b) op-graph coherence ---------------------------------------------------

@@ -77,17 +77,26 @@ def test_trace_dict_path_refuses_unknown_field(tiny_trace) -> None:
 
 
 def test_trace_refusal_covers_both_writer_directions(tiny_trace) -> None:
-    """Symmetric refusal: same-stamp drift AND older-writer unknown field."""
+    """Same-stamp drift refuses as an unknown field; an older writer refuses as 2.x first."""
 
     from torchlens._data_classes.trace import Trace
+    from torchlens._io import ArtifactTooOldError
 
-    for declared_version in (TLSPEC_VERSION, 6):
-        state = tiny_trace.__getstate__()
-        state[UNKNOWN_KEY] = 1
-        state["tlspec_version"] = declared_version
-        with governed_artifact_load(), pytest.raises(UnknownPersistedFieldError) as excinfo:
-            Trace.__new__(Trace).__setstate__(state)
-        assert excinfo.value.fields["declared_tlspec_version"] == declared_version
+    state = tiny_trace.__getstate__()
+    state[UNKNOWN_KEY] = 1
+    state["tlspec_version"] = TLSPEC_VERSION
+    with governed_artifact_load(), pytest.raises(UnknownPersistedFieldError) as excinfo:
+        Trace.__new__(Trace).__setstate__(state)
+    assert excinfo.value.fields["declared_tlspec_version"] == TLSPEC_VERSION
+
+    # An older writer's state never reaches the unknown-field partition: this release
+    # reads no state a 2.x release wrote.
+    state = tiny_trace.__getstate__()
+    state[UNKNOWN_KEY] = 1
+    state["tlspec_version"] = 6
+    with governed_artifact_load(), pytest.raises(ArtifactTooOldError) as too_old:
+        Trace.__new__(Trace).__setstate__(state)
+    assert "saved by torchlens 2.x" in str(too_old.value)
 
 
 def test_op_columnar_path_refuses_typed_never_attributeerror(tiny_trace) -> None:
