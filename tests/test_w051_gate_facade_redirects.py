@@ -113,7 +113,7 @@ def test_fastlog_teaches_recording() -> None:
 
     assert tl._REDIRECTS["fastlog"] == "use torchlens.recording -- fastlog was renamed recording"
     with pytest.raises(FacadeTeachingError, match=r"torchlens\.recording"):
-        getattr(tl, "fastlog")
+        _ = tl.fastlog
 
 
 def test_subpackage_rows_are_the_ruled_three() -> None:

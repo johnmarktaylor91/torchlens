@@ -29,15 +29,20 @@ from torchlens._surface import surface_rows
 TABLE = TESTS_DIR / "test_arch_spine_surface_table.tsv"
 
 #: Floor on the deep walk's denominator. Re-keyed 31 Oct 2026 to the decided
-#: round-1 surface (lazy namespaces plus public non-lazy submodules, with
-#: ``tl.debug``'s ``clone_input_tree`` and ``preserved_rng_state`` kept by
-#: namespace ruling 1: 975 -> 977); it may only go down through a decided
-#: surface change. 977 -> 976: the option receipt removal (e7449cd47) took
-#: tl.options.OptionReceiptEntry off the surface. 976 -> 969: round 2 (module
-#: moves) made the visualization (5 names) and semantic (2 names) packages
-#: private. 969 -> 967: the 2.x saved-file cut removed ``tl.report.CompatWindow``
-#: and ``tl.errors.ArtifactSchemaAgeWarning``.
-DEEP_WALK_FLOOR = 967
+#: round-1 surface (lazy namespaces plus public non-lazy submodules); it may
+#: only go down through a decided surface change, each step named here.
+#: 975 -> 974: the option receipt removal (e7449cd47) took
+#: tl.options.OptionReceiptEntry off the surface. 974 -> 962, measured on the
+#: round-2 batch (B1), every step a decided removal: module moves -7
+#: (visualization 5 names, semantic 2); 2.x saved-file cut -2
+#: (tl.report.CompatWindow, tl.errors.ArtifactSchemaAgeWarning); doctor merge
+#: -2 (tl.compat.report, CompatReport, CompatRow out; DoctorReport, DoctorCheck
+#: in; receptive_field.self_check folded into verify); experiment ledger -2
+#: (ledger_entry, ledger_evidence, ledger_overview out; read_ledger in);
+#: selection door -1 (tl.validation.resolve_sites); tl.debug restore +2
+#: (clone_input_tree, preserved_rng_state). fastlog -> recording, facets.info ->
+#: describe, Reference -> Population and Relationship -> tl.types are net zero.
+DEEP_WALK_FLOOR = 962
 
 _HEADER = (
     "canonical_path\thome_module\timplementation_layer\tproduct_role\tin_all\tlegacy_top_level"
