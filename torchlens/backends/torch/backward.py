@@ -1823,7 +1823,7 @@ def _fold_fired_events(
             _time_started=event.fire_started_monotonic,
             _time_finished=event.fire_finished_monotonic,
         )
-        call.source_trace = trace
+        call._source_trace = trace
         grad_fn_record.calls[ordinal] = call
         pass_to_calls.setdefault(event.pass_index, []).append(call)
 
@@ -1968,7 +1968,7 @@ def _build_backward_pass_records(
             order_attribution_coverage=order_attribution_coverage,
             grad_fn_calls=grad_fn_calls,
         )
-        pass_record.source_trace = trace
+        pass_record._source_trace = trace
         backward_pass_logs[pass_index] = pass_record
         state.built_pass_indices.add(pass_index)
         if pass_order is not None:

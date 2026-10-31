@@ -151,7 +151,7 @@ class BackwardPass:
     def _census_record(self) -> dict[str, Any] | None:
         """The persisted form of this pass's census attribution, if it has one."""
 
-        trace = self.source_trace
+        trace = self._source_trace
         ops = self.aten_ops
         if trace is None or ops is None:
             return None
@@ -210,14 +210,14 @@ class BackwardPass:
         record_state_restore(self, state)
 
     @property
-    def source_trace(self) -> Any:
+    def _source_trace(self) -> Any:
         """Return the owning Trace if it is still alive."""
 
         ref = self._source_trace_ref
         return None if ref is None else ref()
 
-    @source_trace.setter
-    def source_trace(self, value: Any) -> None:
+    @_source_trace.setter
+    def _source_trace(self, value: Any) -> None:
         """Set the owning Trace weakref."""
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
@@ -226,7 +226,7 @@ class BackwardPass:
     def trace(self) -> Any:
         """Alias for the owning Trace."""
 
-        return self.source_trace
+        return self._source_trace
 
     @property
     def aten_ops(self) -> tuple[Any, ...] | None:
@@ -238,7 +238,7 @@ class BackwardPass:
         ``None`` when this object holds no record for the pass (a loaded
         trace, an implicit pass opened by tensor hooks, another backend).
         """
-        trace = self.source_trace
+        trace = self._source_trace
         if trace is None:
             return None
         from ..backends.torch._backward_dispatch import recorded_ops
@@ -256,7 +256,7 @@ class BackwardPass:
         pass has no recorded census on this object and was not saved with
         its count (a loaded trace reads the saved record).
         """
-        trace = self.source_trace
+        trace = self._source_trace
         ops = self.aten_ops
         from ..report._backward_attribution import attribute_census, attribution_from_record
 

@@ -170,7 +170,7 @@ class RegionTarget:
     def trace(self) -> Any:
         """The trace the region is bound to."""
 
-        return self._slice.source_trace
+        return self._slice._source_trace
 
     @property
     def labels(self) -> tuple[str, ...]:
@@ -410,7 +410,7 @@ def region(slice_: Any, *, exits: Any = None) -> RegionTarget:
         )
     graph = slice_._graph
     members = slice_._member_set
-    trace = slice_.source_trace
+    trace = slice_._source_trace
 
     # Convexity: between(R, R) <= R, in the shipped address algebra.
     from .._selection_graph import _between_label_set

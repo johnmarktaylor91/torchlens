@@ -436,7 +436,7 @@ def save(
         raise SelectionError(
             "trace.save() does not support TraceSlice: a slice is a VIEW with "
             "declared dangling boundary edges, not a self-contained capture. "
-            "Save the underlying trace (slice.source_trace.save(path)) "
+            "Save the trace the slice was taken from (trace.save(path)) "
             "and re-derive the view after loading.",
             code="slice_save_unsupported",
         )

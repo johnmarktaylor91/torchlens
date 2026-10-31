@@ -1347,7 +1347,7 @@ class TraceStatsMixin(_TraceMixinBase):
         calls: OrderedDict[str, Any] = OrderedDict()
         for grad_fn_handle in self.autograd.grad_fns:
             for call_index, call in grad_fn_handle.calls.items():
-                call.source_trace = self
+                call._source_trace = self
                 calls[f"{grad_fn_handle.label}:{call_index}"] = call
         return TraceGradFnCallAccessor(calls)
 

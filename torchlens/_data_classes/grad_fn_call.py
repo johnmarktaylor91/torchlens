@@ -194,14 +194,14 @@ class GradFnCall:
             self.ordinal = self.call_index
 
     @property
-    def source_trace(self) -> Any:
+    def _source_trace(self) -> Any:
         """Return the owning Trace if it is still alive."""
 
         ref = self._source_trace_ref
         return None if ref is None else ref()
 
-    @source_trace.setter
-    def source_trace(self, value: Any) -> None:
+    @_source_trace.setter
+    def _source_trace(self, value: Any) -> None:
         """Set the owning Trace weakref."""
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
@@ -210,7 +210,7 @@ class GradFnCall:
     def trace(self) -> Any:
         """Alias for the owning Trace."""
 
-        return self.source_trace
+        return self._source_trace
 
     def __eq__(self, other: object) -> bool:
         """Typed, tensor-safe value equality (never a torch ``RuntimeError``).
@@ -265,7 +265,7 @@ class GradFnCall:
         trace's projection returns ``-1`` like a trace-less call.
         """
 
-        trace = self.source_trace
+        trace = self._source_trace
         if trace is None:
             return -1
         revision = getattr(trace, "_backward_projection_revision", None)

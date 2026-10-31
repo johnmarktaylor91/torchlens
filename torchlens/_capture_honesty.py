@@ -657,7 +657,7 @@ _PRESENTER_REMEDIES: dict[str, str] = {
         "merged.to_pandas()) or report on one member rank Trace"
     ),
     "TraceSlice": (
-        "report on the slice's source trace (slice.source_trace.explain()); "
+        "report on the trace the slice was taken from (trace.explain()); "
         "the slice itself discloses via slice.summary()"
     ),
     "Bundle": "report on one member Trace (e.g. bundle[name].explain())",

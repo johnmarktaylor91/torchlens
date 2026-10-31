@@ -3657,7 +3657,7 @@ Members of classes whose public home changed, one entry per class.
 : One immutable narration record. `NarrationEvent.extra_labels`: extra (key, value) labels; `NarrationEvent.late`: ordinal distance disclosed on a buffered release; `NarrationEvent.module_depth`: nesting depth of the module; `NarrationEvent.module_type`: class name of the module, or `None`; `NarrationEvent.ordinal`: position of the event in the narration; `NarrationEvent.output_index`: index of the output, or `None`; `NarrationEvent.source_location`: the source location, or `None`; `NarrationEvent.step_index`: the step index, or `None`.
 
 **`tl.types.TraceSlice`**
-: Frozen presenter over one trace's executed sub-DAG. `TraceSlice.as_region`: derive an admissible region that is operated on as one unit; `TraceSlice.source_trace`: the trace this slice views (never copied).
+: Frozen presenter over one trace's executed sub-DAG. `TraceSlice.as_region`: derive an admissible region that is operated on as one unit; the slice views its trace without copying it.
 
 **`tl.transformer.Annotation`**
 : One typed annotation attached to an attention picture. `Annotation.legend`: the kind legend line.
