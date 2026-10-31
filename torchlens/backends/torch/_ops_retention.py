@@ -429,8 +429,8 @@ def _save_predicate_activation_fields(
     options = getattr(trace, "_predicate_save_options", None)
     streaming = None if options is None else options.streaming
     intent = StorageIntent(
-        in_ram=streaming is None or streaming.bundle_path is None or streaming.retain_in_memory,
-        on_disk=streaming is not None and streaming.bundle_path is not None,
+        in_ram=streaming is None or streaming.path is None or streaming.retain_in_memory,
+        on_disk=streaming is not None and streaming.path is not None,
     )
     budget_reservation = _admit_save_budget(
         trace,

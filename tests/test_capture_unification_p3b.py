@@ -153,7 +153,7 @@ def test_layers_to_save_supports_disk_streaming(tmp_path: Path) -> None:
         TinyLinear(),
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
-        streaming=tl.options.StorageOptions(bundle_path=bundle_path),
+        streaming=tl.options.StorageOptions(path=bundle_path),
     )
     saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
     assert saved
@@ -398,7 +398,7 @@ def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None
         model,
         x,
         capture=tl.options.CaptureOptions(layers_to_save=[-1]),
-        streaming=tl.options.StorageOptions(bundle_path=bundle_path),
+        streaming=tl.options.StorageOptions(path=bundle_path),
     )
     assert bundle_path.exists()
     loaded = tl.load(bundle_path)

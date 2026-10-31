@@ -143,7 +143,7 @@ class EchoSession:
         self.tier = tier
         self.disabled = False
         self._sink = EchoSink(options.sink)
-        select = options.select
+        select = options.sites
         self._modules_only = select == "modules"
         self._select_all = select is True or self._modules_only
         self._selector = None if self._select_all else select

@@ -448,7 +448,7 @@ def test_return_partial_does_not_finalize_aborted_disk_storage(tmp_path: Path) -
     partials = list(tmp_path.glob("failed.tlfast.tmp.*"))
     assert len(partials) == 1
     assert (partials[0] / PARTIAL_SENTINEL).exists()
-    assert recording.bundle_path == partials[0]
+    assert recording.path == partials[0]
 
 
 def test_disk_partial_bundle_path_points_to_recoverable_temp_dir(tmp_path: Path) -> None:
@@ -463,10 +463,10 @@ def test_disk_partial_bundle_path_points_to_recoverable_temp_dir(tmp_path: Path)
         on_forward_error="return_partial",
     )
 
-    assert recording.bundle_path is not None
-    assert recording.bundle_path.name.startswith("recoverable.tlfast.tmp.")
-    assert (recording.bundle_path / "fastlog_index.jsonl").exists()
-    recovered = tl.fastlog.recover(recording.bundle_path)
+    assert recording.path is not None
+    assert recording.path.name.startswith("recoverable.tlfast.tmp.")
+    assert (recording.path / "fastlog_index.jsonl").exists()
+    recovered = tl.fastlog.recover(recording.path)
     assert recovered.is_recovered is True
     assert recovered.status == "recovered"
     assert len(recovered) > 0

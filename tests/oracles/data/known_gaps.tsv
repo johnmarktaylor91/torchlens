@@ -20,7 +20,7 @@ GAP-017	cache_key_coverage	ReplayOptions.append	2026-08-26	oracles-6b	non-captur
 GAP-018	cache_key_coverage	ReplayOptions.differentiable	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-019	cache_key_coverage	ReplayOptions.strict	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-020	cache_key_coverage	StorageOptions.async_writes	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
-GAP-021	cache_key_coverage	StorageOptions.bundle_path	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
+GAP-021	cache_key_coverage	StorageOptions.path	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-022	cache_key_coverage	StorageOptions.include_buffer_values	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-023	cache_key_coverage	StorageOptions.include_custom_attributes	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-024	cache_key_coverage	StorageOptions.max_pending_bytes	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row

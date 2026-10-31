@@ -37,7 +37,7 @@ def _write_bundle(path: Path) -> tl.Recording:
         PersistenceModel(),
         torch.ones(1, 3),
         default_op=True,
-        streaming=tl.options.StorageOptions(bundle_path=path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(path=path, retain_in_memory=False),
     )
 
 
@@ -113,9 +113,7 @@ def test_load_and_recover_rehydrate_disk_payload_contents(tmp_path: Path) -> Non
 def test_recover_with_missing_manifest_walks_jsonl(tmp_path: Path) -> None:
     """Recovery ignores a missing manifest and scans JSONL."""
 
-    bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "missing"
-    )
+    bundle_path = _copy_bundle(_write_bundle(tmp_path / "source.tlfast").path, tmp_path / "missing")
     (bundle_path / "manifest.json").unlink()
 
     recovered = tl.fastlog.recover(bundle_path)
@@ -128,7 +126,7 @@ def test_recover_with_malformed_manifest_uses_jsonl(tmp_path: Path) -> None:
     """Recovery ignores malformed manifest JSON and scans JSONL."""
 
     bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "badmanifest"
+        _write_bundle(tmp_path / "source.tlfast").path, tmp_path / "badmanifest"
     )
     (bundle_path / "manifest.json").write_text("{", encoding="utf-8")
 
@@ -141,9 +139,7 @@ def test_recover_with_malformed_manifest_uses_jsonl(tmp_path: Path) -> None:
 def test_recover_missing_jsonl_raises(tmp_path: Path) -> None:
     """Recovery fails clearly when the JSONL index is absent."""
 
-    bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "noindex"
-    )
+    bundle_path = _copy_bundle(_write_bundle(tmp_path / "source.tlfast").path, tmp_path / "noindex")
     (bundle_path / "manifest.json").unlink()
     (bundle_path / "fastlog_index.jsonl").unlink()
 
@@ -155,7 +151,7 @@ def test_recover_skips_truncated_last_jsonl_line(tmp_path: Path) -> None:
     """Recovery skips a truncated JSONL tail line and keeps earlier records."""
 
     bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "truncated"
+        _write_bundle(tmp_path / "source.tlfast").path, tmp_path / "truncated"
     )
     (bundle_path / "manifest.json").unlink()
     index_path = bundle_path / "fastlog_index.jsonl"
@@ -171,9 +167,7 @@ def test_recover_skips_truncated_last_jsonl_line(tmp_path: Path) -> None:
 def test_recover_skips_malformed_middle_line_and_continues(tmp_path: Path) -> None:
     """Recovery skips malformed middle lines and continues scanning."""
 
-    bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "middle"
-    )
+    bundle_path = _copy_bundle(_write_bundle(tmp_path / "source.tlfast").path, tmp_path / "middle")
     (bundle_path / "manifest.json").unlink()
     index_path = bundle_path / "fastlog_index.jsonl"
     lines = index_path.read_text(encoding="utf-8").splitlines()
@@ -190,7 +184,7 @@ def test_recover_skips_missing_blob_record(tmp_path: Path) -> None:
     """Recovery skips JSONL records whose blob file is missing."""
 
     bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "missingblob"
+        _write_bundle(tmp_path / "source.tlfast").path, tmp_path / "missingblob"
     )
     (bundle_path / "manifest.json").unlink()
     _first_blob(bundle_path).unlink()
@@ -204,9 +198,7 @@ def test_recover_skips_missing_blob_record(tmp_path: Path) -> None:
 def test_recover_skips_hash_mismatch_record(tmp_path: Path) -> None:
     """Recovery skips JSONL records whose blob hash does not match."""
 
-    bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "hash"
-    )
+    bundle_path = _copy_bundle(_write_bundle(tmp_path / "source.tlfast").path, tmp_path / "hash")
     (bundle_path / "manifest.json").unlink()
     _first_blob(bundle_path).write_bytes(b"corrupt")
 
@@ -220,7 +212,7 @@ def test_load_rejects_hash_mismatch_in_finalized_bundle(tmp_path: Path) -> None:
     """``load()`` fails closed on a finalized bundle with a corrupt blob."""
 
     bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path,
+        _write_bundle(tmp_path / "source.tlfast").path,
         tmp_path / "corrupt_finalized",
     )
     _first_blob(bundle_path).write_bytes(b"corrupt")
@@ -240,7 +232,7 @@ def test_load_rejects_incomplete_blob_metadata_in_finalized_bundle(tmp_path: Pat
     """``load()`` rejects finalized records whose blob checksum metadata is missing."""
 
     bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path,
+        _write_bundle(tmp_path / "source.tlfast").path,
         tmp_path / "missing_sha",
     )
     index_path = bundle_path / "fastlog_index.jsonl"
@@ -271,7 +263,7 @@ def test_recover_depth_bomb_index_line_degrades_to_malformed_warning(tmp_path: P
     """
 
     bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "depthbomb"
+        _write_bundle(tmp_path / "source.tlfast").path, tmp_path / "depthbomb"
     )
     (bundle_path / "manifest.json").unlink()
     index_path = bundle_path / "fastlog_index.jsonl"
@@ -289,7 +281,7 @@ def test_recover_depth_bomb_tail_line_degrades_to_truncated_tail(tmp_path: Path)
     """A depth-bomb final index line reports the graceful truncated-tail outcome."""
 
     bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "tailbomb"
+        _write_bundle(tmp_path / "source.tlfast").path, tmp_path / "tailbomb"
     )
     (bundle_path / "manifest.json").unlink()
     index_path = bundle_path / "fastlog_index.jsonl"
@@ -314,7 +306,7 @@ def test_recover_oversized_index_refuses_typed(
     recover_module = importlib.import_module("torchlens.fastlog.recover")
 
     bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "oversized"
+        _write_bundle(tmp_path / "source.tlfast").path, tmp_path / "oversized"
     )
     (bundle_path / "manifest.json").unlink()
     monkeypatch.setattr(recover_module, "_INDEX_MAX_BYTES", 8)
@@ -328,7 +320,7 @@ def test_recover_depth_bomb_metadata_degrades_to_empty_metadata(tmp_path: Path) 
     """A depth-bomb ``metadata.json`` degrades to empty metadata, not RecursionError."""
 
     bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "metabomb"
+        _write_bundle(tmp_path / "source.tlfast").path, tmp_path / "metabomb"
     )
     (bundle_path / "manifest.json").unlink()
     (bundle_path / "metadata.json").write_text("[" * 100_000, encoding="utf-8")
@@ -348,9 +340,7 @@ def test_recovery_warnings_capped_with_accurate_suppression_count(tmp_path: Path
     accurate.
     """
 
-    bundle_path = _copy_bundle(
-        _write_bundle(tmp_path / "source.tlfast").bundle_path, tmp_path / "flood"
-    )
+    bundle_path = _copy_bundle(_write_bundle(tmp_path / "source.tlfast").path, tmp_path / "flood")
     (bundle_path / "manifest.json").unlink()
     index_path = bundle_path / "fastlog_index.jsonl"
     lines = index_path.read_text(encoding="utf-8").splitlines()
@@ -376,7 +366,7 @@ def test_disk_roundtrip_label_index_deduplicates_same_raw_label(tmp_path: Path) 
         PersistenceModel(),
         torch.ones(1, 3),
         save=tl.func("relu"),
-        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
     )
 
     label = recording.records[0].ctx.label
@@ -437,7 +427,7 @@ def test_disk_finalize_baseexception_marks_partial(
             PersistenceModel(),
             torch.ones(1, 3),
             default_op=True,
-            streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
         )
 
     assert not bundle_path.exists()
@@ -467,7 +457,7 @@ def test_disk_finalize_refuses_concurrently_created_target(
             PersistenceModel(),
             torch.ones(1, 3),
             default_op=True,
-            streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
         )
 
     assert list(bundle_path.iterdir()) == []

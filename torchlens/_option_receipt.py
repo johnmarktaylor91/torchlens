@@ -115,7 +115,7 @@ def _set_frozen_fields(
 
 
 _ECHO_FIELDS: Final[tuple[str, ...]] = (
-    "select",
+    "sites",
     "stats",
     "sink",
     "tail_on_error",
@@ -138,7 +138,7 @@ class NarrationOptions:
 
     Parameters
     ----------
-    select:
+    sites:
         Narration scope: ``True`` (every completed tensor-output event plus
         module structure lines), ``"modules"`` (structure lines only -- a
         cheap flight recorder), or any LIVE-evaluable selector/callable
@@ -171,12 +171,12 @@ class NarrationOptions:
 
     Examples
     --------
-    >>> opts = NarrationOptions(select=True, stats="off", tail_on_error=20)
+    >>> opts = NarrationOptions(sites=True, stats="off", tail_on_error=20)
     >>> opts.stats
     'off'
     """
 
-    select: Any = True
+    sites: Any = True
     stats: str = "off"
     sink: Any = None
     tail_on_error: int = 20
@@ -188,7 +188,7 @@ class NarrationOptions:
 
     def __init__(  # noqa: PLR0913 - an option-group constructor mirrors its public fields
         self,
-        select: Any | MissingType = MISSING,
+        sites: Any | MissingType = MISSING,
         stats: str | MissingType = MISSING,
         sink: Any | MissingType = MISSING,
         *,
@@ -200,7 +200,7 @@ class NarrationOptions:
 
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
-            "select": _resolve_option_value("select", select, True, specified_fields),
+            "sites": _resolve_option_value("sites", sites, True, specified_fields),
             "stats": _resolve_option_value("stats", stats, "off", specified_fields),
             "sink": _resolve_option_value("sink", sink, None, specified_fields),
             "tail_on_error": _resolve_option_value(

@@ -130,7 +130,7 @@ class _StorageBackend(Protocol):
 def _resolve_storage_intent(options: RecordingOptions) -> StorageIntent:
     """Resolve storage destinations from StorageOptions."""
 
-    if options.streaming is None or options.streaming.bundle_path is None:
+    if options.streaming is None or options.streaming.path is None:
         return StorageIntent(in_ram=True, on_disk=False)
     return StorageIntent(
         in_ram=options.streaming.retain_in_memory,
@@ -149,8 +149,8 @@ def _empty_recording(options: RecordingOptions) -> Recording:
         orphan_records=[],
         path=(
             None
-            if options.streaming is None or options.streaming.bundle_path is None
-            else Path(options.streaming.bundle_path)
+            if options.streaming is None or options.streaming.path is None
+            else Path(options.streaming.path)
         ),
         num_ops=0,
         start_times=[],

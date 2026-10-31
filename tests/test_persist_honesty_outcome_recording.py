@@ -104,9 +104,9 @@ def aborted_bundle(tmp_path):
         storage=tl.to_disk(str(tmp_path / "bundle")),
         on_forward_error="return_partial",
     )
-    assert rec.is_failed and rec.bundle_path is not None
-    assert (rec.bundle_path / "PARTIAL").exists()
-    return rec.bundle_path
+    assert rec.is_failed and rec.path is not None
+    assert (rec.path / "PARTIAL").exists()
+    return rec.path
 
 
 @pytest.mark.smoke
@@ -129,7 +129,7 @@ def test_recover_still_salvages_clean_crash_debris_as_unknown(tmp_path):
     rec = tl.record(
         model, torch.randn(2, 4), save=tl.func("relu"), storage=tl.to_disk(str(tmp_path / "ok"))
     )
-    bundle = rec.bundle_path
+    bundle = rec.path
     assert bundle is not None
     # Simulate a hard crash: strip the finalized manifest so only the index
     # remains, with no PARTIAL/REASON abort debris.

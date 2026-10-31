@@ -2186,7 +2186,7 @@
   {
    "id": "A40",
    "pair": [],
-   "summary": "Disk output is spelled storage=tl.to_disk(path) on trace and record, output_dir= on extract_dataset, and bundle_path inside streaming options.",
+   "summary": "Disk output is spelled storage=tl.to_disk(path) on trace and record, output_dir= on extract_dataset, and path inside streaming options.",
    "evidence": "docs/agent-reference/current-2-x-surface.md",
    "recommendation": "document",
    "ruling": "pending"

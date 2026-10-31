@@ -73,7 +73,7 @@ def normalize_echo(narrate: Any) -> NarrationOptions | None:
     if narrate is None or narrate is False:
         return None
     normalized = _coerce_echo_value(narrate)
-    select = normalized.select
+    select = normalized.sites
     if select is None or select is False:
         return None
     _validate_select(select)
@@ -93,10 +93,10 @@ def _coerce_echo_value(echo: Any) -> NarrationOptions:
     if isinstance(echo, NarrationOptions):
         return echo
     if echo is True:
-        return NarrationOptions(select=True)
+        return NarrationOptions(sites=True)
     if isinstance(echo, str):
         if echo == "modules":
-            return NarrationOptions(select="modules")
+            return NarrationOptions(sites="modules")
         raise NarrationConfigError(
             f"narrate={echo!r} is not a live narration scope: label/substring selections "
             "resolve against FINAL labels, which do not exist during a live forward. "
@@ -106,7 +106,7 @@ def _coerce_echo_value(echo: Any) -> NarrationOptions:
             remedy="pass True, 'modules', a live selector, or NarrationOptions",
         )
     if callable(echo):
-        return NarrationOptions(select=echo)
+        return NarrationOptions(sites=echo)
     raise NarrationConfigError(
         f"narrate= received unsupported type {type(echo).__name__}. Remedy: pass True, "
         "'modules', a live selector/callable, or tl.options.NarrationOptions.",
@@ -116,11 +116,11 @@ def _coerce_echo_value(echo: Any) -> NarrationOptions:
 
 
 def _validate_select(select: Any) -> None:
-    """Refuse non-live ``NarrationOptions.select`` spellings typed."""
+    """Refuse non-live ``NarrationOptions.sites`` spellings typed."""
 
     if isinstance(select, str) and select != "modules":
         raise NarrationConfigError(
-            f"NarrationOptions.select={select!r} is not a live narration scope. Remedy: use "
+            f"NarrationOptions.sites={select!r} is not a live narration scope. Remedy: use "
             "True, 'modules', or a live selector; post-hoc narrate() accepts substrings.",
             code="echo_argument_invalid",
             remedy="use True, 'modules', or a live selector",
@@ -131,7 +131,7 @@ def _validate_select(select: Any) -> None:
         _refuse_finalized_selector(select)
     elif select is not True and not callable(select) and select != "modules":
         raise NarrationConfigError(
-            f"NarrationOptions.select received unsupported type {type(select).__name__}. "
+            f"NarrationOptions.sites received unsupported type {type(select).__name__}. "
             "Remedy: pass True, 'modules', or a live selector/callable.",
             code="echo_argument_invalid",
             remedy="pass True, 'modules', or a live selector/callable",

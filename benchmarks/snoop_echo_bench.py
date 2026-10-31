@@ -101,27 +101,27 @@ def _bench_model(name: str, model: torch.nn.Module, x: torch.Tensor, repeats: in
         line_counter["n"] += 1
 
     scenarios: dict[str, NarrationOptions] = {
-        "record_echo_devnull_s": NarrationOptions(select=True, sink=devnull),
-        "record_echo_callable_s": NarrationOptions(select=True, sink=count_sink),
-        "record_echo_sampled_s": NarrationOptions(select=True, sink=devnull, stats="sampled"),
+        "record_echo_devnull_s": NarrationOptions(sites=True, sink=devnull),
+        "record_echo_callable_s": NarrationOptions(sites=True, sink=count_sink),
+        "record_echo_sampled_s": NarrationOptions(sites=True, sink=devnull, stats="sampled"),
     }
     for key, options in scenarios.items():
         rows[key] = _time_best(lambda opt=options: tl.record(model, x, narrate=opt), repeats)
     with tempfile.NamedTemporaryFile(suffix=".log", delete=False) as handle:
         flush_path = handle.name
     rows["record_echo_flushed_file_s"] = _time_best(
-        lambda: tl.record(model, x, narrate=NarrationOptions(select=True, sink=flush_path)), repeats
+        lambda: tl.record(model, x, narrate=NarrationOptions(sites=True, sink=flush_path)), repeats
     )
     os.unlink(flush_path)
     rows["trace_substrate_s"] = _time_best(lambda: tl.trace(model, x, save=None), repeats)
     rows["trace_echo_devnull_s"] = _time_best(
-        lambda: tl.trace(model, x, save=None, narrate=NarrationOptions(select=True, sink=devnull)),
+        lambda: tl.trace(model, x, save=None, narrate=NarrationOptions(sites=True, sink=devnull)),
         repeats,
     )
     devnull.close()
 
     line_counter["n"] = 0
-    tl.record(model, x, narrate=NarrationOptions(select=True, sink=count_sink))
+    tl.record(model, x, narrate=NarrationOptions(sites=True, sink=count_sink))
     lines = line_counter["n"]
     base = rows["baseline_forward_s"]
 
@@ -180,7 +180,7 @@ def _bench_crash_flush(name: str, model: torch.nn.Module, x: torch.Tensor) -> di
             tl.record(
                 crasher,
                 x,
-                narrate=NarrationOptions(select=True, sink=flush_path, tail_on_error=20),
+                narrate=NarrationOptions(sites=True, sink=flush_path, tail_on_error=20),
                 on_forward_error="return_partial",
             )
     except Exception:  # noqa: BLE001, S110 - the crash row MEASURES a failing forward

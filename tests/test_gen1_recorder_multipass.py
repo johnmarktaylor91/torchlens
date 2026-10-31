@@ -66,7 +66,7 @@ def test_selector_save_matches_plain_callable_record_for_record() -> None:
 def test_selector_save_disk_bundle_loads_one_record_per_pass(tmp_path: Path) -> None:
     bundle = tmp_path / "bundle"
     recording = _record_passes(
-        tl.func("relu"), streaming=StorageOptions(bundle_path=bundle, retain_in_memory=True)
+        tl.func("relu"), streaming=StorageOptions(path=bundle, retain_in_memory=True)
     )
     loaded = load(bundle)
 

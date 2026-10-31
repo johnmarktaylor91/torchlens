@@ -40,7 +40,7 @@ _VISUALIZATION_CASES = [
     ("node_style", "vis_node_mode", "profiling", "node_mode"),
 ]
 _STREAMING_CASES = [
-    ("bundle_path", "save_outs_to", Path("bundle"), "save_outs_to"),
+    ("path", "save_outs_to", Path("bundle"), "save_outs_to"),
     ("retain_in_memory", "keep_outs_in_memory", False, "keep_outs_in_memory"),
     ("on_save", "out_sink", torch.sigmoid, "out_sink"),
 ]

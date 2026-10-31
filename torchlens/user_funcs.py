@@ -2049,7 +2049,7 @@ def _run_model_and_save_specified_outs(
                 halt=halt_predicate,
                 default_op=default_op,
                 streaming=StorageOptions(
-                    bundle_path=save_outs_to,
+                    path=save_outs_to,
                     retain_in_memory=keep_outs_in_memory,
                     include_custom_attributes=stream_custom_attributes,
                     include_buffer_values=stream_buffer_values,
@@ -3351,21 +3351,21 @@ def _trace_torch_model(
         grads_to_save_resolved = save_grads_policy
     else:
         grads_to_save_resolved = cast("str | list[Any] | None", save_grads_policy)
-    grad_storage_path_value = streaming_options.bundle_path if should_save_grads else None
+    grad_storage_path_value = streaming_options.path if should_save_grads else None
     retain_grads_in_memory_value = streaming_options.retain_in_memory
 
     from ._options_validation import _validate_output_device
 
     _validate_output_device(output_device)
-    if streaming_options.bundle_path is not None and streaming_options.on_save is not None:
+    if streaming_options.path is not None and streaming_options.on_save is not None:
         raise ArgumentConflictError(
             "Both disk-backed output storage and an output callback were configured",
             code="output_sink_conflict",
             remedy=(
                 "choose either disk storage (storage=tl.to_disk(...) / "
-                "streaming.bundle_path) or streaming.on_save"
+                "streaming.path) or streaming.on_save"
             ),
-            arguments=("bundle_path", "on_save"),
+            arguments=("path", "on_save"),
         )
     if capture_options.structure_only:
         layers_to_save = _enforce_structure_only_entry_contract(
@@ -3950,7 +3950,7 @@ def _trace_torch_model(
         save_source_context=save_source_context,
         save_rng=save_rng,
         recurrence_detection=recurrence_detection,
-        save_outs_to=streaming_options.bundle_path,
+        save_outs_to=streaming_options.path,
         keep_outs_in_memory=streaming_options.retain_in_memory,
         stream_custom_attributes=streaming_options.include_custom_attributes,
         stream_buffer_values=streaming_options.include_buffer_values,
@@ -4038,7 +4038,7 @@ def _trace_torch_model(
     # ``layer_visualizers`` (rendered once on the returned trace, after the
     # driver).
     rescue_eligible = (
-        streaming_options.bundle_path is None
+        streaming_options.path is None
         and streaming_options.on_save is None
         and grad_storage_path_value is None
         and halt is None

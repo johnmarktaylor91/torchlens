@@ -237,8 +237,8 @@ def _promote_layers_to_save_output_parent(
     options = trace._predicate_save_options
     streaming = options.streaming
     intent = StorageIntent(
-        in_ram=streaming is None or streaming.bundle_path is None or streaming.retain_in_memory,
-        on_disk=streaming is not None and streaming.bundle_path is not None,
+        in_ram=streaming is None or streaming.path is None or streaming.retain_in_memory,
+        on_disk=streaming is not None and streaming.path is not None,
     )
     output_device = getattr(trace, "output_device", None)
     if output_device == "same":

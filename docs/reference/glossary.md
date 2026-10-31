@@ -2911,14 +2911,16 @@ deprecation shim owed*
 : `tl.record(...)`, `Recorder(...)` and `tl.options.RecordingOptions` take `narrate=` (a
   `tl.options.NarrationOptions`, with `NarrationOptions.as_dict()`,
   `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`) and
-  `save_raw_grads=` (`RecordingOptions.save_raw_grads`). `NarrationOptions.sink` receives the
+  `save_raw_grads=` (`RecordingOptions.save_raw_grads`). `NarrationOptions.sites` (`sites=`)
+  scopes the narration (`True` for every event, `"modules"` for structure lines only, or a
+  live selector); `trace.narrate(select=...)` filters post hoc. `NarrationOptions.sink` receives the
   narrated lines, `NarrationOptions.max_lines` caps them, `NarrationOptions.on_error_only`
   narrates only when the forward raises, and `NarrationOptions.tail_on_error` is how many of the
   last selected events the sink receives on a forward exception.
 
 **StorageOptions**
 : `tl.options.StorageOptions` (also reachable as `tl.user_funcs.StorageOptions`) groups the
-  streaming-save knobs: `StorageOptions.bundle_path` (`bundle_path=`),
+  streaming-save knobs: `StorageOptions.path` (`path=`),
   `StorageOptions.retain_in_memory`, `StorageOptions.on_save` (keyword
   `on_save=`),
   `StorageOptions.include_custom_attributes`, `StorageOptions.include_buffer_values`,

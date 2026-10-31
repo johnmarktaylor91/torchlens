@@ -109,7 +109,7 @@ def test_auto_maps_to_fail_fast_for_disk(tmp_path: Path) -> None:
             save=keep_op,
             on_predicate_error="auto",
             streaming=tl.options.StorageOptions(
-                bundle_path=tmp_path / "disk.tlfast",
+                path=tmp_path / "disk.tlfast",
                 retain_in_memory=False,
             ),
         )
