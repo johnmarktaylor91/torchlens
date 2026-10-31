@@ -368,10 +368,9 @@ assert collisions == {
     # F29: the agent inspection surface -- children are cli plus
     # underscore-private modules; __all__ never collides with a child.
     "agent": [],
-    # T47/T48 (2026-08-28): attribution deliberately exports its onebackward
-    # child module (tl.attribution.onebackward is the documented door to the
-    # one-backward read surface), the fastlog/intervention pattern.
-    "attribution": ["onebackward"], "autoroute": ["input", "output"],
+    # The visuals rename removed the tl.attribution.onebackward export; the
+    # child module stays importable by its full path.
+    "attribution": [], "autoroute": ["input", "output"],
     "backends": [],
     # Entry/facade repair (workstream A10): the integration and appliance
     # namespaces gained root reachability rows; bridge/callbacks export
@@ -380,10 +379,10 @@ assert collisions == {
     # notebook deliberately exports its three real child modules (the
     # ``torchlens.bridge`` idiom: CardTree IR, the cards, the frontier query).
     "bridge": [
-        "brain_score", "captum", "depyf", "dialz", "pytorch_grad_cam", "transformers",
-        "huggingface_hub", "inseq", "lit", "mcp", "profiler", "pyreft",
-        "repeng", "rsatoolbox", "sae", "sae_lens", "shap",
-        "steering_vectors", "treescope",
+        "brain_score", "captum", "depyf", "dialz", "huggingface_hub", "inseq",
+        "lit", "mcp", "profiler", "pyreft", "pytorch_grad_cam", "repeng",
+        "rsatoolbox", "sae", "sae_lens", "shap", "steering_vectors",
+        "transformers", "treescope",
         # F21 tvscope B8: the per-site xarray/NeuroidAssembly adapter module.
         "xarray",
     ],
