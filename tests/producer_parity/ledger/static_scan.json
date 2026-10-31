@@ -6196,7 +6196,7 @@
   "field": "raw_index",
   "file": "torchlens/capture/session.py",
   "has_default": false,
-  "sites": 21,
+  "sites": 22,
   "via_getattr": false
  },
  {
@@ -9908,7 +9908,7 @@
   "field": "modules",
   "file": "torchlens/visualization/_render_edges.py",
   "has_default": false,
-  "sites": 10,
+  "sites": 8,
   "via_getattr": false
  },
  {
@@ -10029,6 +10029,14 @@
   "file": "torchlens/visualization/_render_leaf.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/visualization/_render_module_scope.py",
+  "has_default": false,
+  "sites": 3,
   "via_getattr": false
  },
  {

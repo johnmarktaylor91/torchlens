@@ -30,6 +30,9 @@ Core capture path:
   own marker, so pushes and pops nest across captures hooking one node) and
   `executing_grad_fn_ref`, the one executing-node resolver the census, the private
   ATen recorder and the checkpoint unpack evidence all call.
+- `_grad_fn_source.py` — best-effort grad-fn source metadata for `GradFn` records
+  (custom-autograd detection; class and method source file, line, signature,
+  docstring), split out of `backward.py` under its size ratchet.
 
 Safety net and honesty:
 - `belt.py` — the mechanical BELT: protocol-invisible stale-reference coverage

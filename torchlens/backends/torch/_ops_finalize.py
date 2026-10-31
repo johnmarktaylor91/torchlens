@@ -252,6 +252,7 @@ def _make_layer_log_entry(
             raw_index,
             t,
             retain_activation=not (keep_by_predicate and save_this_activation),
+            raw_label=fields_dict.get("_label_raw"),
         )
     _note_module_filter_suppression(self, keep_by_predicate, save_this_activation)
     if keep_by_predicate and save_this_activation:
