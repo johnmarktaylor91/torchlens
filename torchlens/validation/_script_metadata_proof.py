@@ -31,7 +31,8 @@ from typing import Any
 from ..backends.torch._script_boundary import script_function_of
 
 SCRIPT_METADATA_ONLY_REASON = "torchscript_metadata_only_argument"
-"""Exemption reason recorded when the graph proof holds."""
+"""Exemption reason recorded when the graph proof holds (spelled as a literal at the
+``core.py`` call site, where the exemption ledger's scanner reads it)."""
 
 METADATA_READ_NODE_KINDS: frozenset[str] = frozenset(
     {

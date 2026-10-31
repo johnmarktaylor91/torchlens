@@ -164,6 +164,19 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
+        code="torchscript_metadata_only_argument",
+        tier="early_exit",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._script_metadata_proof:script_metadata_only_proof",
+        refuses=(
+            "any op other than a TorchScript boundary call, and any perturbed parent "
+            "filling a slot whose graph input has a use outside aten::size/dim/numel "
+            "and prim::dtype/device at input 0 (an element read, also inside a nested "
+            "helper or on an untaken branch, a return, an unlisted kind) or an "
+            "unreadable graph; forward replay still runs"
+        ),
+    ),
+    Exemption(
         code="ulp_swamped_perturbation",
         tier="early_exit",
         contract="C4 numeric resolution",
