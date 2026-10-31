@@ -420,6 +420,10 @@
   assignment now runs the creator rule and the topology inference to a fixed point, so the nodes
   created by differentiating an inferred-order node sit one order above it. The invariant is
   unchanged.
+- **replay**: a hook-style edit aimed at a buffer version that nothing threads into (an unwritten
+  buffer's initial read, such as `fork.do(tl.label("buffer_1:1"), tl.scale(0.5))`) now fires on
+  the captured value and replays its consumers; the engine used to skip the site with the
+  threading step, so the edit neither applied nor refused and no fire was recorded.
 - **replay**: replay no longer refuses a template parent as "ambiguous across the 2 passes of
   that layer" when a fused multi-pass layer's public raw label equals another op's final label
   (each residual add pair of a Hugging Face Gemma-2 decoder layer); it resolves the exact op the
