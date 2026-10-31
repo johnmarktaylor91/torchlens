@@ -145,7 +145,7 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
         "refused",
     ),
     "scale": (lambda: scale(3.0), lambda out: 3.0 * out, "coord"),
-    "clamp": (lambda: clamp(min=-0.3, max=0.3), lambda out: out.clamp(-0.3, 0.3), "coord"),
+    "clamp": (lambda: clamp(low=-0.3, high=0.3), lambda out: out.clamp(-0.3, 0.3), "coord"),
     # A linear tail and a sum loss make the gradient independent of the draw.
     "add_noise": (lambda: add_noise(0.1, seed=0), lambda out: out + 0.0, "coord"),
     "steer": (lambda: steer(_V, 2.0, dim=-1), lambda out: out + 2.0 * _V, "value"),

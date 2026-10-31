@@ -86,7 +86,7 @@ _ORTHONORMALISED_NOTE = " [basis orthonormalised: coordinates are along the Gram
 _ORTHONORMAL_TOL = 1e-10
 _GUIDE = "see the subspace section of docs/intervention_explainers.md"
 
-_COORDINATE_VERBS = frozenset({"zero_ablate", "scale", "clamp", "noise"})
+_COORDINATE_VERBS = frozenset({"zero_ablate", "scale", "clamp", "add_noise"})
 _VALUE_VERBS = frozenset(
     {
         "patch_from",
@@ -99,7 +99,7 @@ _VALUE_VERBS = frozenset(
     }
 )
 _NESTED_PROJECTIONS = frozenset(
-    {"project_onto", "project_off", "set_direction_mean", "subspace_ablate", "subspace_interchange"}
+    {"project_onto", "project_out", "set_direction_mean", "subspace_ablate", "subspace_interchange"}
 )
 
 
