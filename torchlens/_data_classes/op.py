@@ -36,6 +36,7 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
     bottom-level submodule output status.
 """
 
+import operator
 import warnings
 import weakref
 from collections import defaultdict
@@ -637,6 +638,36 @@ def _count_container_ids(
             _count_container_ids(member, id_counts, expanded_ids, depth + 1)
 
 
+#: Cell classes the pooling sweep acts on (everything else is skipped).
+_SWEEP_CELL_CLASSES = frozenset({tuple, dict, list, set, defaultdict})
+_GET_CLASS = operator.attrgetter("__class__")
+
+
+def _sweep_columns(rows: list[list[Any]], scan_classes: frozenset[type], get_class: Any) -> Any:
+    """Return the field ids whose column holds at least one swept-class cell.
+
+    A ``__class__`` that is not hashable (only a pathological proxy can
+    report one) cannot be tested against the set; every column is swept then.
+    """
+
+    try:
+        return [
+            fid
+            for fid, column in enumerate(zip(*rows))
+            if not scan_classes.isdisjoint(map(get_class, column))
+        ]
+    except TypeError:
+        return range(len(rows[0])) if rows else ()
+
+
+#: ``_container_pool_key`` of an empty exact ``list``/``dict``/``set``.
+_EMPTY_CONTAINER_POOL_KEYS: dict[type, Any] = {
+    list: ("l", ()),
+    dict: ("d", ()),
+    set: ("s", frozenset()),
+}
+
+
 def _pool_container_cells(
     stores: list[tuple[Any, Any]], container_pool: dict[Any, PooledCell]
 ) -> None:
@@ -660,10 +691,22 @@ def _pool_container_cells(
     # the same scan collects the pool candidates (container-classed cells at
     # sanctioned fids) and the singleton-compaction sites (kind-table list
     # cells), so neither later pass re-walks rows x fields.
+    #
+    # Empty exact dict/list/set cells (most container cells) take an inline
+    # fast path with the same outcome as the general one: their census entry
+    # is the id count alone (nothing to expand), their pool key is the
+    # constant ``_container_pool_key`` returns for an empty container, and a
+    # one-element-list singleton site can never be empty. Empty tuples hold
+    # no container to count. Every cell whose own id is aliased is skipped
+    # before its key is built: that id is the first one the key walk visits,
+    # so the alias guard would refuse it anyway.
     id_counts: dict[int, int] = {}
     expanded_ids: set[int] = set()
-    cell_sites: list[tuple[Any, int, Any]] = []
+    cell_sites: list[tuple[Any, int, Any, Any]] = []
     singleton_sites: list[tuple[Any, int, int, Any, Any]] = []
+    empty_keys = _EMPTY_CONTAINER_POOL_KEYS
+    get_class = _GET_CLASS
+    scan_classes = _SWEEP_CELL_CLASSES
     any_swept = False
     for store, fids in stores:
         rows = store.rows_building()
@@ -671,30 +714,46 @@ def _pool_container_cells(
             continue
         any_swept = True
         fid_set = None if fids is None else frozenset(fids)
+        # Column filter: a column none of whose cells is a tuple or a swept
+        # container class does nothing in the loop below, so the row-major
+        # walk visits only the other columns (same cells, same order). The
+        # test reads ``__class__`` exactly like the loop does.
+        sweep_fids = _sweep_columns(rows, scan_classes, get_class)
         for row_idx, row_cells in enumerate(rows):
-            for fid, value in enumerate(row_cells):
+            for fid in sweep_fids:
+                value = row_cells[fid]
                 cls = value.__class__
                 if cls is tuple:
-                    _count_container_ids(value, id_counts, expanded_ids, 0)
+                    if value:
+                        _count_container_ids(value, id_counts, expanded_ids, 0)
                     continue
                 if not (cls is dict or cls is list or cls is set or cls is defaultdict):
                     continue
+                if not value and cls is not defaultdict:
+                    oid = id(value)
+                    id_counts[oid] = id_counts.get(oid, 0) + 1
+                    if fid_set is None or fid in fid_set:
+                        cell_sites.append((row_cells, fid, value, empty_keys[cls]))
+                    continue
                 _count_container_ids(value, id_counts, expanded_ids, 0)
                 if fid_set is None or fid in fid_set:
-                    cell_sites.append((row_cells, fid, value))
+                    cell_sites.append((row_cells, fid, value, None))
                 if fid_set is None and cls is list:
                     singleton_sites.append((store, row_idx, fid, row_cells, value))
     if not any_swept:
         return
     candidates: list[tuple[Any, int, Any, Any]] = []
     key_counts: dict[Any, int] = {}
-    for row_cells, fid, value in cell_sites:
-        visited_ids: list[int] = []
-        key = _container_pool_key(value, 0, visited_ids)
+    for row_cells, fid, value, key in cell_sites:
+        if id_counts[id(value)] > 1:
+            continue
         if key is None:
-            continue
-        if any(id_counts[oid] > 1 for oid in visited_ids):
-            continue
+            visited_ids: list[int] = []
+            key = _container_pool_key(value, 0, visited_ids)
+            if key is None:
+                continue
+            if any(id_counts[oid] > 1 for oid in visited_ids):
+                continue
         candidates.append((row_cells, fid, value, key))
         key_counts[key] = key_counts.get(key, 0) + 1
     for row_cells, fid, value, key in candidates:
