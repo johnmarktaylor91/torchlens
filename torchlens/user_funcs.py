@@ -2539,7 +2539,7 @@ def render(*args: Any, **kwargs: Any) -> Any:
 
 def trace(
     model: nn.Module | Callable[..., Any],
-    inputs: str | torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
+    input_args: str | torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
     save_mode: SaveMode | MissingType = MISSING,
@@ -2752,7 +2752,7 @@ def trace(
         del forward_kwargs  # must never ride the ladder's locals() snapshot below
         _reject_non_mapping_input_kwargs(input_kwargs)
         model, intervene = _model_door.resolve_trace_operands(model, intervene)
-        if input_size is not None or inputs is None:
+        if input_size is not None or input_args is None:
             model = _reject_non_module_ladder_root(model)
             # Quickstart input ladder (F17, memo D2/D4): declared/inferred rungs
             # resolve BEFORE any capture machinery, then re-enter trace() as gold.
@@ -2761,7 +2761,7 @@ def trace(
                 ladder_kwargs.pop(consumed)
             from .quickstart._ladder import _trace_via_ladder
 
-            return _trace_via_ladder(model, inputs, input_kwargs, input_size, ladder_kwargs)
+            return _trace_via_ladder(model, input_args, input_kwargs, input_size, ladder_kwargs)
         if not isinstance(model, nn.Module) and is_dynamo_compiled_callable(model):
             raise InvalidArgumentError(
                 "TorchLens cannot capture a torch.compile-produced plain callable because it is "
@@ -2806,7 +2806,7 @@ def trace(
         if backend is not None:
             explicit_backend_spec = get_backend_spec(str(backend))
             _filter_trace_kwargs_for_backend(public_trace_kwargs, explicit_backend_spec)
-            explicit_backend_spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
+            explicit_backend_spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
         if (
             backend is None
             and chunk_size in (MISSING, None)
@@ -2838,7 +2838,7 @@ def trace(
                 "on_zero_fire": on_zero_fire,
             }
             for detector in autoroute.input.iter_by_priority():
-                result = detector(model, inputs, **autoroute_kwargs)
+                result = detector(model, input_args, **autoroute_kwargs)
                 if result is not None:
                     return cast("Trace", result)
         if closed_bool_env("TORCHLENS_AUTO"):
@@ -2849,7 +2849,7 @@ def trace(
                 environment_variable="TORCHLENS_AUTO",
             )
         resolved_spec = explicit_backend_spec or resolve_backend_spec(
-            backend, model, inputs, input_kwargs
+            backend, model, input_args, input_kwargs
         )
         from .snoop._entry import refuse_echo_non_torch
 
@@ -4224,7 +4224,7 @@ def _trace_torch_model(
 
 def log_model_metadata(
     model: nn.Module,
-    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
 ) -> Trace:
     """Return model metadata without saving any outs.
@@ -4246,7 +4246,7 @@ def log_model_metadata(
 
     return trace(
         model,
-        inputs,
+        input_args,
         input_kwargs,
         capture=CaptureOptions(
             layers_to_save=None,

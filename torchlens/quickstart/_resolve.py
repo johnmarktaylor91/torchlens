@@ -165,7 +165,7 @@ def _resolve_declared(model: nn.Module, input_size: Any) -> ResolvedInputs:
 
 def resolve_inputs(
     model: nn.Module,
-    inputs: Any = None,
+    input_args: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     input_size: Any = None,
     *,
@@ -203,9 +203,9 @@ def resolve_inputs(
         remedies when the zero-argument rung cannot verify an input.
     """
 
-    rung = resolve_rung(inputs, input_kwargs, input_size)
+    rung = resolve_rung(input_args, input_kwargs, input_size)
     if rung == RUNG_GOLD:
-        plan = normalize_gold_args(inputs, input_kwargs)
+        plan = normalize_gold_args(input_args, input_kwargs)
         return ResolvedInputs(plan=plan, provenance=provenance_for_plan(plan))
     if rung == RUNG_DECLARED:
         return _resolve_declared(model, input_size)

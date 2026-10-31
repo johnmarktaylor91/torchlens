@@ -403,7 +403,7 @@ def _validate_receptive_field_scope(
 
 def validate(
     model: nn.Module,
-    inputs: Any,
+    input_args: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     scope: str,
@@ -522,14 +522,14 @@ def validate(
     )
     save_options = _save_option_kwargs(output_device, save_budget)
     if normalized_scope == "backward":
-        spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
+        spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward validation."
             )
         return validate_backward_pass(
             model,
-            inputs,
+            input_args,
             input_kwargs=input_kwargs,
             loss_fn=loss_fn,
             validate_metadata=validate_metadata,
@@ -541,14 +541,14 @@ def validate(
             layer_grad_rtol=layer_grad_rtol,
         )
     if normalized_scope == "receptive_field":
-        spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
+        spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support receptive-field validation."
             )
         return _validate_receptive_field_scope(
             model,
-            inputs,
+            input_args,
             input_kwargs,
             random_seed=random_seed,
             validate_metadata=validate_metadata,
@@ -587,7 +587,7 @@ def validate(
             try:
                 passed = validate_forward_pass(
                     model,
-                    inputs,
+                    input_args,
                     input_kwargs=input_kwargs,
                     random_seed=random_seed,
                     verbose=verbose,
@@ -642,7 +642,7 @@ def validate(
         return passed
     return _intervention_report(
         model,
-        inputs,
+        input_args,
         input_kwargs,
         random_seed=random_seed,
         verbose=verbose,

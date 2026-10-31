@@ -649,7 +649,7 @@ def registered_backend_specs() -> tuple[BackendSpec, ...]:
 def resolve_backend_spec(
     backend: BackendName | None,
     model: object,
-    inputs: object,
+    input_args: object,
     input_kwargs: dict[Any, Any] | None = None,
 ) -> BackendSpec:
     """Resolve the backend spec for a public call.
@@ -673,14 +673,16 @@ def resolve_backend_spec(
 
     if backend is not None:
         spec = get_backend_spec(str(backend))
-        if not spec.coercible and not spec.can_handle(model, inputs, input_kwargs):
+        if not spec.coercible and not spec.can_handle(model, input_args, input_kwargs):
             raise BackendMismatchError(
                 f"backend={backend!r} cannot handle model type {type(model).__qualname__}."
             )
         return spec
 
     matches = [
-        spec for spec in registered_backend_specs() if spec.can_handle(model, inputs, input_kwargs)
+        spec
+        for spec in registered_backend_specs()
+        if spec.can_handle(model, input_args, input_kwargs)
     ]
     if not matches:
         return get_backend_spec("torch")

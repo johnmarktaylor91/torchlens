@@ -333,7 +333,7 @@ class CleanStepTime:
 
 def time_clean_step(
     model: Any,
-    inputs: Any,
+    input_args: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     warmup: int = 2,
@@ -354,7 +354,7 @@ def time_clean_step(
             remedy="Pass warmup >= 0 and repeats >= 1.",
         )
     kwargs = input_kwargs or {}
-    args = inputs if isinstance(inputs, (list, tuple)) else (inputs,)
+    args = input_args if isinstance(input_args, (list, tuple)) else (input_args,)
     for _ in range(warmup):
         model(*args, **kwargs)
     samples: list[float] = []
@@ -761,7 +761,7 @@ class RateCalibration:
 
 def instrumented_rate_calibration(
     model: Any,
-    inputs: Any,
+    input_args: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     repeats: int = 3,
@@ -776,8 +776,8 @@ def instrumented_rate_calibration(
     from ..user_funcs import trace as _trace
 
     kwargs = input_kwargs or {}
-    args = inputs if isinstance(inputs, (list, tuple)) else (inputs,)
-    clean = time_clean_step(model, inputs, input_kwargs, warmup=1, repeats=repeats)
+    args = input_args if isinstance(input_args, (list, tuple)) else (input_args,)
+    clean = time_clean_step(model, input_args, input_kwargs, warmup=1, repeats=repeats)
     start = time.perf_counter()
     captured = _trace(model, list(args) if len(args) > 1 else args[0], kwargs)
     instrumented = time.perf_counter() - start
@@ -853,7 +853,7 @@ class CostReportResult:
 
 def cost_report(
     model: Any,
-    inputs: Any,
+    input_args: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     tiers: tuple[str, ...] = COST_REPORT_TIERS,
@@ -885,7 +885,7 @@ def cost_report(
             remedy="Include 'raw_forward' in tiers.",
         )
     kwargs = input_kwargs or {}
-    args = inputs if isinstance(inputs, (list, tuple)) else (inputs,)
+    args = input_args if isinstance(input_args, (list, tuple)) else (input_args,)
     n_forwards = 0
 
     def _measure(run: Any) -> tuple[float, float]:

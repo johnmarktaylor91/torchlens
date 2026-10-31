@@ -247,7 +247,7 @@ def _gate_value_channels(trace: Any, draw_kwargs: dict[str, Any]) -> None:
 
 def render(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input ladder plus the render dials ARE the spec'd surface
     model: nn.Module,
-    inputs: Any = None,
+    input_args: Any = None,
     *,
     input_kwargs: dict[str, Any] | None = None,
     input_size: Any = None,
@@ -323,7 +323,7 @@ def render(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input l
     """
 
     _check_collisions(draw_kwargs)
-    resolved = resolve_inputs(model, inputs, input_kwargs, input_size, verb="render")
+    resolved = resolve_inputs(model, input_args, input_kwargs, input_size, verb="render")
     trace, receipt = capture_concrete(
         model,
         resolved.plan,

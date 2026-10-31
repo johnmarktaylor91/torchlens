@@ -313,7 +313,7 @@ def _build_report(
 
 def flops_report(
     subject: Any,
-    inputs: Any = None,
+    input_args: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     *,
     main_input_numel: int | None = None,
@@ -342,13 +342,13 @@ def flops_report(
     import torch.nn as nn
 
     if isinstance(subject, nn.Module):
-        if inputs is None:
+        if input_args is None:
             raise InvalidArgumentError(
                 "the model door needs example inputs to run its one capture.",
                 code="flops_report_inputs_required",
                 remedy="Call tl.report.flops_report(model, example_inputs).",
             )
-        trace = _capture_for_report(subject, inputs, input_kwargs)
+        trace = _capture_for_report(subject, input_args, input_kwargs)
         try:
             return _build_report(
                 trace,
@@ -358,7 +358,7 @@ def flops_report(
             )
         finally:
             trace.cleanup()
-    if inputs is not None or input_kwargs:
+    if input_args is not None or input_kwargs:
         raise InvalidArgumentError(
             "input_args/input_kwargs are model-door arguments; the trace door takes none.",
             code="flops_report_trace_door_inputs",

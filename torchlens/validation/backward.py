@@ -541,7 +541,7 @@ def _warn_if_no_module_output_evidence(layer_report: LayerGradReport) -> None:
 
 def validate_backward_pass(
     model: nn.Module,
-    inputs: Any,
+    input_args: Any,
     input_kwargs: dict[str, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
@@ -617,15 +617,15 @@ def validate_backward_pass(
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
-    inputs = _coerce_input_args(model, inputs)
-    check_model_and_input_variants(model, inputs, input_kwargs)
+    input_args = _coerce_input_args(model, input_args)
+    check_model_and_input_variants(model, input_args, input_kwargs)
     if input_kwargs is None:
         input_kwargs = {}
     if loss_fn is None:
         loss_fn = _sum_tensors
     if random_seed is None:
         random_seed = random.randint(1, 4294967294)
-    inputs = normalize_input_args(inputs, model)
+    input_args = normalize_input_args(input_args, model)
     model_device = next((parameter.device for parameter in model.parameters()), None)
     if _refuse_non_leaf_parameters(model):
         return False
@@ -642,7 +642,7 @@ def validate_backward_pass(
     try:
         set_random_seed(random_seed)
         stock_inputs, stock_kwargs = _prepare_inputs_for_backward(
-            inputs, input_kwargs, model_device
+            input_args, input_kwargs, model_device
         )
         model.zero_grad(set_to_none=True)
         # R75-1 sibling site: the "stock autograd" reference pass must run on
@@ -692,7 +692,7 @@ def validate_backward_pass(
         _restore_training_mode(model, original_training)
         set_random_seed(random_seed)
         logged_inputs, logged_kwargs = _prepare_inputs_for_backward(
-            inputs, input_kwargs, model_device
+            input_args, input_kwargs, model_device
         )
         model.zero_grad(set_to_none=True)
         trace = trace_fn(

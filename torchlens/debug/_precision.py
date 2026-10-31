@@ -121,7 +121,7 @@ class BisectPrecisionResult(FoundReport):
 
 def bisect_precision(
     model: nn.Module,
-    inputs: Any,
+    input_args: Any,
     input_kwargs: dict[Any, Any] | None = None,
     *,
     reference_dtype: torch.dtype = torch.float64,
@@ -176,14 +176,14 @@ def bisect_precision(
     try:
         native_trace = isolated_capture(
             model,
-            inputs,
+            input_args,
             input_kwargs,
             seed=seed,
             capture=capture,
         )
         reference_trace = isolated_capture(
             model,
-            _cast_tree(inputs, reference_dtype),
+            _cast_tree(input_args, reference_dtype),
             _cast_tree(input_kwargs, reference_dtype),
             seed=seed,
             prepare=lambda run_model: run_model.to(reference_dtype),

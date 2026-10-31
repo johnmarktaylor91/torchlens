@@ -415,7 +415,7 @@ def _first_user_frame() -> tuple[str | None, int | None]:
 
 def check_model_and_input_variants(
     model: nn.Module,
-    inputs: Any = None,
+    input_args: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     *,
     admit_meta: bool = False,
@@ -479,7 +479,7 @@ def check_model_and_input_variants(
     # Distributed/sharded state is checked next: DTensor parameters otherwise
     # sail past every dense-tensor check below (a DTensor reports a real device
     # and a strided layout) and capture then silently reports zero parameters.
-    check_distributed_capture(model, inputs, input_kwargs)
+    check_distributed_capture(model, input_args, input_kwargs)
 
     # SPMD processes that first-capture with distributed already initialized
     # arm collective-boundary capture lazily here (restricted registry seeding,
@@ -489,18 +489,18 @@ def check_model_and_input_variants(
 
     maybe_auto_arm()
 
-    meta_admission = _maybe_admit_meta(model, inputs, input_kwargs) if admit_meta else None
+    meta_admission = _maybe_admit_meta(model, input_args, input_kwargs) if admit_meta else None
 
     offenses: list[dict[str, Any]] = []
 
     # Treat a bare tensor and a container of tensors identically — ``_iter_tensors``
     # yields tensors directly for a tensor, or recurses into list/tuple/dict.
-    if inputs is None:
+    if input_args is None:
         args_payload: Any = []
-    elif isinstance(inputs, torch.Tensor):
-        args_payload = inputs
+    elif isinstance(input_args, torch.Tensor):
+        args_payload = input_args
     else:
-        args_payload = inputs
+        args_payload = input_args
 
     # Input-side tensors.
     for path, t in _iter_tensors_with_paths(args_payload, root_path="args"):

@@ -39,7 +39,7 @@ from .types import CaptureSpec, Recording
 
 def record(
     model: nn.Module,
-    inputs: Any,
+    input_args: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     save: PredicateFn | None = None,
@@ -190,16 +190,16 @@ def record(
             remedy="prefer storage=, or remove one of the two arguments",
         )
     validate_postprocess(postprocess)
-    inputs = _coerce_input_args(model, inputs)
+    input_args = _coerce_input_args(model, input_args)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
     # storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
     # instead of crashing deep in capture with an opaque torch error.
-    check_model_and_input_variants(model, inputs, input_kwargs)
+    check_model_and_input_variants(model, input_args, input_kwargs)
     if generate_kwargs is not None:
         output, generation = record_generation(
             model,
-            inputs,
+            input_args,
             input_kwargs,
             generate_kwargs,
             {
@@ -260,7 +260,7 @@ def record(
         echo=echo,
         detach_saved_activations=detach_saved_activations,
     ) as recorder:
-        output = recorder.log(inputs, input_kwargs)
+        output = recorder.log(input_args, input_kwargs)
     recording = recorder.recording
     if postprocess != "none":
         recording = recording.enrich(postprocess)

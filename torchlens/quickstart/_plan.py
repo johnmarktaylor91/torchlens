@@ -80,7 +80,7 @@ def _has_real_input(input_args: Any, input_kwargs: dict[str, Any] | None) -> boo
 
 
 def resolve_rung(
-    inputs: Any,
+    input_args: Any,
     input_kwargs: dict[str, Any] | None,
     input_size: Any,
 ) -> int:
@@ -109,7 +109,7 @@ def resolve_rung(
         guesses which one the caller meant.
     """
 
-    real = _has_real_input(inputs, input_kwargs)
+    real = _has_real_input(input_args, input_kwargs)
     if real and input_size is not None:
         raise ArgumentConflictError(
             "Got BOTH a real input and input_size=. The input ladder's rungs are "
@@ -128,7 +128,7 @@ def resolve_rung(
     return RUNG_INFERRED
 
 
-def normalize_gold_args(inputs: Any, input_kwargs: dict[str, Any] | None) -> InputPlan:
+def normalize_gold_args(input_args: Any, input_kwargs: dict[str, Any] | None) -> InputPlan:
     """Build the gold-rung plan from caller-authoritative arguments.
 
     Mirrors the historical ``tl.trace`` convention: a single tensor (or any
@@ -149,11 +149,11 @@ def normalize_gold_args(inputs: Any, input_kwargs: dict[str, Any] | None) -> Inp
     """
 
     kwargs = dict(input_kwargs) if input_kwargs else {}
-    if inputs is None:
+    if input_args is None:
         return InputPlan(rung=RUNG_GOLD, input_args=(), input_kwargs=kwargs)
-    if isinstance(inputs, (list, tuple)):
-        return InputPlan(rung=RUNG_GOLD, input_args=tuple(inputs), input_kwargs=kwargs)
-    return InputPlan(rung=RUNG_GOLD, input_args=(inputs,), input_kwargs=kwargs)
+    if isinstance(input_args, (list, tuple)):
+        return InputPlan(rung=RUNG_GOLD, input_args=tuple(input_args), input_kwargs=kwargs)
+    return InputPlan(rung=RUNG_GOLD, input_args=(input_args,), input_kwargs=kwargs)
 
 
 def tensor_leaves(plan: InputPlan) -> tuple[torch.Tensor, ...]:

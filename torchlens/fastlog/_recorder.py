@@ -458,7 +458,7 @@ class Recorder:
 
     def log(
         self,
-        inputs: Any,
+        input_args: Any,
         input_kwargs: dict[str, Any] | None = None,
         *,
         sample_id: str | int | None = None,
@@ -487,7 +487,7 @@ class Recorder:
                 "Recorder is in a failed state after a forward exception; "
                 "create a new Recorder for further captures."
             )
-        output = self._run_unified_capture(inputs, input_kwargs, sample_id=sample_id)
+        output = self._run_unified_capture(input_args, input_kwargs, sample_id=sample_id)
         self._next_pass_index += 1
         return output
 

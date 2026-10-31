@@ -111,7 +111,7 @@ def release_model(model: nn.Module) -> None:
 
 def log_model_metadata(
     model: nn.Module,
-    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
 ) -> Trace:
     """Return model metadata without saving any outs.
@@ -137,7 +137,7 @@ def log_model_metadata(
     model = unwrap_compiled_model(model)
     model_trace = _user_funcs.trace(
         model,
-        inputs,
+        input_args,
         input_kwargs,
         capture=CaptureOptions(
             layers_to_save=None,
@@ -149,7 +149,7 @@ def log_model_metadata(
 
 def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input rungs plus the two execution dials ARE the spec'd surface (F17 B11)
     model: nn.Module | str,
-    inputs: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
     *,
     input_size: Any | None = None,
@@ -235,14 +235,14 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     ladder_provenance = None
     input_synthesis: str | None = None
     facade_report = _maybe_weightsfree_summary(
-        model, inputs, input_kwargs, input_size, summary_kwargs
+        model, input_args, input_kwargs, input_size, summary_kwargs
     )
     if facade_report is not None:
         return facade_report
-    if input_size is not None or (inputs is None and not input_kwargs):
+    if input_size is not None or (input_args is None and not input_kwargs):
         from .quickstart._resolve import attach_provenance, resolve_inputs
 
-        resolved = resolve_inputs(model, inputs, input_kwargs, input_size, verb="summary")
+        resolved = resolve_inputs(model, input_args, input_kwargs, input_size, verb="summary")
         ladder_provenance = resolved.provenance
         input_synthesis = _ladder_synthesis_note(input_size, resolved)
         if (
@@ -259,11 +259,11 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
                 grad_mode="off",
                 input_synthesis=input_synthesis,
             )
-        inputs = list(resolved.plan.input_args)
+        input_args = list(resolved.plan.input_args)
         input_kwargs = dict(resolved.plan.input_kwargs)
 
-    inputs = _coerce_input_args(model, inputs)
-    check_model_and_input_variants(model, inputs, input_kwargs)
+    input_args = _coerce_input_args(model, input_args)
+    check_model_and_input_variants(model, input_args, input_kwargs)
 
     saved_training_flags = [(module, module.training) for module in model.modules()]
     rng_snapshot = log_current_rng_states()
@@ -277,7 +277,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         with grad_context:
             trace = _user_funcs._run_model_and_save_specified_outs(
                 model=model,
-                input_args=inputs,
+                input_args=input_args,
                 input_kwargs=input_kwargs,
                 layers_to_save=None,
                 recurrence_detection=True,
@@ -540,7 +540,7 @@ def _summary_execution_note(execution_mode: str, grad_mode: str) -> str:
 
 def show_model_graph(
     model: nn.Module,
-    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     view: VisModeLiteral | MissingType = MISSING,
     depth: int | MissingType = MISSING,
@@ -611,8 +611,8 @@ def show_model_graph(
     model = _unwrap_data_parallel(model)
     if not input_kwargs:
         input_kwargs = {}
-    inputs = _coerce_input_args(model, inputs)
-    check_model_and_input_variants(model, inputs, input_kwargs)
+    input_args = _coerce_input_args(model, input_args)
+    check_model_and_input_variants(model, input_args, input_kwargs)
 
     if recurrence_detection is MISSING:
         recurrence_detection = True
@@ -635,7 +635,7 @@ def show_model_graph(
 
     trace = _user_funcs._run_model_and_save_specified_outs(
         model=model,
-        input_args=inputs,
+        input_args=input_args,
         input_kwargs=input_kwargs,
         layers_to_save=None,
         activation_transform=None,
@@ -908,7 +908,7 @@ def show_bundle_graph(
 
 def validate_forward_pass(
     model: nn.Module,
-    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     random_seed: int | None = None,
     verbose: bool = False,
@@ -964,7 +964,7 @@ def validate_forward_pass(
 
     _validate_output_device(output_device)
     resolve_save_budget(save_budget)
-    spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
+    spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
     # Forward only non-default save options: a default call reaches every
     # backend's entry with exactly the keywords it always received.
     save_options: dict[str, Any] = {}
@@ -983,7 +983,7 @@ def validate_forward_pass(
         )
     return spec.validate_entry(
         model,
-        inputs,
+        input_args,
         input_kwargs=input_kwargs,
         random_seed=random_seed,
         verbose=verbose,
@@ -1833,7 +1833,7 @@ def _validate_forward_pass_torch(
 
 def validate_backward_pass(
     model: nn.Module,
-    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
@@ -1891,7 +1891,7 @@ def validate_backward_pass(
 
     return _impl(
         model,
-        inputs,
+        input_args,
         input_kwargs=input_kwargs,
         loss_fn=loss_fn,
         validate_metadata=validate_metadata,
