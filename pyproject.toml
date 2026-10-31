@@ -389,6 +389,7 @@ markers = [
     "backend_tinygrad: marks tests that require the optional tinygrad backend runtime",
     "backend_paddle: marks tests that require the optional paddle backend runtime",
     "tf_backend: marks tests that require the optional TensorFlow backend runtime",
+    "packaging: clean-environment wheel and sdist install tests over tools/packaging/matrix.toml (always also slow)",
     # The two composition SELECTION markers. ORTHOGONAL
     # selectors, never cost tiers: they compose with any smoke/heavy/slow tier and
     # never alter tier resolution or duration budgets. The marker ALGEBRA is declared
