@@ -1365,6 +1365,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/receptive_field/rules/__init__.py", "__all__"),
         ("torchlens/repgeom/__init__.py", "__all__"),
         ("torchlens/report/__init__.py", "__all__"),
+        ("torchlens/report/_stats_view.py", "__all__"),
         ("torchlens/_runnable.py", "__all__"),
         ("torchlens/_selection.py", "__all__"),
         ("torchlens/_selection_compare.py", "__all__"),

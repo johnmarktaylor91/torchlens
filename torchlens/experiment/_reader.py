@@ -101,6 +101,8 @@ class _LedgerReader:
         }
 
     def _evidence_refs(self, entry_events: list[LedgerEvent]) -> list[dict[str, Any]]:
+        """Every evidence ref the entry's events carry, with its availability on disk."""
+
         root = Path(self._path).resolve().parent
         refs: list[dict[str, Any]] = []
         for event in entry_events:
