@@ -9,7 +9,7 @@ oracles through the public surface:
 | --- | --- |
 | `trace` | `tl.trace` finishes with ops and the outcome the features declare (COMPLETE, or HALTED under `halt`) |
 | `validate` | `tl.validate(model, inputs, scope="forward", validate_metadata=True)` is true, with the default tolerances |
-| `save` | `tl.save(trace, path, level="portable")` succeeds |
+| `save` | `trace.save(path, level="portable")` succeeds |
 | `load` | `tl.load(path)` returns a trace |
 | `equality` | the loaded trace equals the live one: op labels, structural hash, per-op shape, dtype, parents, children, pass index, module addresses and saved payloads |
 | `forward_match` | the trace's reconstructed output equals a plain `model(*inputs)` exactly; under a capture edit it is the replay (`trace.run`) that must reproduce the captured output; under `halt` the halt feature checks the op prefix instead |

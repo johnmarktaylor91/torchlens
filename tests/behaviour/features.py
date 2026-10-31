@@ -314,7 +314,7 @@ def _after_multipass(cell: Cell) -> None:
         if trace is None:
             continue
         cell.expect(bool(trace.graph.is_recurrent), f"{name} trace is not recurrent")
-        cell.expect(len(trace.recurrent_layers) > 0, f"{name} trace has no recurrent layer")
+        cell.expect(len(trace.layers.recurrent) > 0, f"{name} trace has no recurrent layer")
 
 
 def _after_record(cell: Cell) -> None:
@@ -381,7 +381,7 @@ def _after_bind(cell: Cell) -> None:
 def _after_bundle(cell: Cell) -> None:
     trace = cell.require_trace()
     members = [trace] if cell.loaded is None else [trace, cell.loaded]
-    bundle = tl.bundle(members)
+    bundle = tl.Bundle(members)
     cell.expect(len(bundle) == len(members), f"bundle has {len(bundle)} members")
 
 
@@ -491,7 +491,7 @@ FEATURES: tuple[Feature, ...] = (
         requires=frozenset({"child_module", "float_output"}),
         after=_after_bind,
     ),
-    Feature("bundle", CHEAP, "Traces together (tl.bundle)", after=_after_bundle),
+    Feature("bundle", CHEAP, "Traces together (tl.Bundle)", after=_after_bundle),
     Feature("validate", MEDIUM, "Saved-scope validation (tl.validate)", after=_after_validate),
     Feature("export", CHEAP, "Tabular export (to_pandas)", after=_after_export),
 )

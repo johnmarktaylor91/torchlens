@@ -439,7 +439,7 @@ def _validate(cell: Cell) -> None:
 
 
 def _save(cell: Cell) -> None:
-    tl.save(cell.require_trace(), cell.tmp / "cell.tlspec", level="portable")
+    cell.require_trace().save(cell.tmp / "cell.tlspec", level="portable")
 
 
 def _load(cell: Cell) -> None:
@@ -467,7 +467,10 @@ def _equality(cell: Cell) -> None:
         [op.label for op in live_ops] == [op.label for op in loaded_ops],
         "loaded op labels differ from the live trace",
     )
-    cell.expect(tl.hash.trace(live) == tl.hash.trace(loaded), "structural hash differs after load")
+    cell.expect(
+        tl.fingerprint.trace(live) == tl.fingerprint.trace(loaded),
+        "structural hash differs after load",
+    )
     for a, b in zip(live_ops, loaded_ops, strict=True):
         cell.expect(_op_facts(a) == _op_facts(b), f"op {a.label}: {_op_facts(a)} != {_op_facts(b)}")
     cell.expect(
