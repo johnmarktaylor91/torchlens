@@ -28,10 +28,11 @@ from torchlens._surface import surface_rows
 
 TABLE = Path(__file__).with_name("test_arch_spine_surface_table.tsv")
 
-#: Floor on the deep walk's denominator. Re-keyed 31 Oct 2026 to the decided
-#: round-1 surface (lazy namespaces plus public non-lazy submodules); it may
-#: only go down through a decided surface change.
-DEEP_WALK_FLOOR = 975
+#: Floor on the deep walk's denominator, keyed to the decided round-1 surface
+#: (lazy namespaces plus public non-lazy submodules, with ``tl.debug``'s
+#: ``clone_input_tree`` and ``preserved_rng_state`` kept by namespace ruling 1);
+#: it may only go down through a decided surface change.
+DEEP_WALK_FLOOR = 977
 
 _HEADER = (
     "canonical_path\thome_module\timplementation_layer\tproduct_role\tin_all\tlegacy_top_level"
