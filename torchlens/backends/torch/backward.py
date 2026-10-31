@@ -9,7 +9,6 @@ from __future__ import annotations
 import contextlib
 import functools
 import inspect
-import os
 import re
 import threading
 import time
@@ -41,6 +40,7 @@ from ..._ir.events import (
 )
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
+from ..._utils._package_frames import is_torchlens_code
 from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
     get_accumulate_grad_class,
@@ -100,7 +100,6 @@ _ORIGINAL_SAVED_TENSORS_HOOKS_ENTER: Callable[..., Any] | None = None
 _INSTALLED_SAVED_TENSORS_HOOKS_INIT: Callable[..., Any] | None = None
 _INSTALLED_SAVED_TENSORS_HOOKS_ENTER: Callable[..., Any] | None = None
 _SAVED_TENSORS_HOOKS_INIT_PATCHED = False
-_TORCHLENS_PKG_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _INFERENCE_ONLY_BACKWARD_ERROR = (
     "Cannot run log_backward on a trace captured with inference_only=True: the autograd "
     "graph was discarded during capture. inference_only is either passed explicitly or "
@@ -224,8 +223,7 @@ def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
         return None
     frame = frame.f_back
     while frame is not None:
-        filename = os.path.abspath(frame.f_code.co_filename)
-        if not filename.startswith(_TORCHLENS_PKG_DIR):
+        if not is_torchlens_code(frame.f_code):
             source_loading_enabled = bool(getattr(trace, "save_code_context", False))
             func_name = frame.f_code.co_name
             return FuncCallLocation(
