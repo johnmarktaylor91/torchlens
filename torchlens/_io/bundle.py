@@ -55,6 +55,7 @@ from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor
 from ._canonical_pickle import dump_canonical_metadata
 from ._durability import fsync_dir, fsync_tree
 from ._portability_preflight import preflight_metadata_portability
+from ._pre3_module_paths import modellog_216_error
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
@@ -62,7 +63,6 @@ from ._save_gates import (
     _refuse_shard_local_erasure,
     _save_bundle_via_container_door,
 )
-from .compat_ledger import raise_if_modellog_portable
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy, sha256_of_file
 from .paths import (
@@ -147,66 +147,14 @@ _RUNNABLE_NONPERSISTENT_BUFFER_KIND = "runnable_nonpersistent_buffer"
 _RUNNABLE_ACTIVATION_KIND = "runnable_activation"
 
 
-_RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
-    # Clean break: the edit-object class was renamed to ``Edit``; artifacts
-    # written before the rename (tlspec 6-9) pickle it under its old name.
-    ("torchlens.intervention.types", "HelperSpec"): ("torchlens.intervention.types", "Edit"),
-    ("torchlens._data_classes.model_log", "ModelLog"): (
-        "torchlens._data_classes.trace",
-        "Trace",
-    ),
-    ("torchlens._data_classes.model_log", "Trace"): (
-        "torchlens._data_classes.trace",
-        "Trace",
-    ),
-    ("torchlens._data_classes.layer_pass_log", "LayerPassLog"): (
-        "torchlens._data_classes.op",
-        "Op",
-    ),
-    ("torchlens._data_classes.layer_pass_log", "TensorLog"): (
-        "torchlens._data_classes.op",
-        "TensorLog",
-    ),
-    ("torchlens._data_classes.op_log", "Op"): (
-        "torchlens._data_classes.op",
-        "Op",
-    ),
-    ("torchlens._data_classes.op_log", "TensorLog"): (
-        "torchlens._data_classes.op",
-        "TensorLog",
-    ),
-    ("torchlens._data_classes.module_log", "ModulePassLog"): (
-        "torchlens._data_classes.module",
-        "ModuleCall",
-    ),
-    ("torchlens._data_classes.module_log", "ModuleCall"): (
-        "torchlens._data_classes.module",
-        "ModuleCall",
-    ),
-    ("torchlens._data_classes.grad_fn_pass_log", "GradFnPassLog"): (
-        "torchlens._data_classes.grad_fn_call",
-        "GradFnCall",
-    ),
-    ("torchlens._data_classes.grad_fn_call_log", "GradFnCall"): (
-        "torchlens._data_classes.grad_fn_call",
-        "GradFnCall",
-    ),
-    ("torchlens." + "multi_trace.node_view", "NodeView"): (
-        "torchlens.intervention._super.super_op",
-        "SuperOp",
-    ),
-}
-
-
 class _RenameAwareUnpickler(SafeBundleUnpickler):
-    """Restricted, rename-aware unpickler for untrusted portable bundle metadata.
+    """Restricted unpickler for untrusted portable bundle metadata.
 
     A loaded ``.tlspec`` bundle is UNTRUSTED input, so ``metadata.pkl`` is read
     with the default-deny :class:`SafeBundleUnpickler` class allowlist (which
-    closes a load-time ``__reduce__`` / ``os.system`` RCE). The locked
-    class/module rename remapping is preserved by feeding
-    ``_RENAMED_PICKLE_GLOBALS`` to the restricted unpickler; each remapped target
-    is still gated through the allowlist.
+    closes a load-time ``__reduce__`` / ``os.system`` RCE). A global that only a 2.x release
+    wrote refuses with the one 2.x error; nothing is renamed on the way in (the class name
+    predates that and stays).
     """
 
     def __init__(
@@ -216,7 +164,7 @@ class _RenameAwareUnpickler(SafeBundleUnpickler):
         trust_custom_callables: bool = False,
         allowed_custom_callable_modules: Collection[str] | None = None,
     ) -> None:
-        """Initialize the restricted unpickler with the rename remapping.
+        """Initialize the restricted unpickler.
 
         Parameters
         ----------
@@ -230,7 +178,6 @@ class _RenameAwareUnpickler(SafeBundleUnpickler):
 
         super().__init__(
             file,
-            rename_map=_RENAMED_PICKLE_GLOBALS,
             trust_custom_callables=trust_custom_callables,
             allowed_custom_callable_modules=allowed_custom_callable_modules,
         )
@@ -1455,7 +1402,8 @@ def load(
                 trust_custom_callables=trust_custom_callables,
                 allowed_custom_callable_modules=allowed_custom_callable_modules,
             )
-        raise_if_modellog_portable(tlspec_format, "Bundle", str(bundle_path))
+        if tlspec_format == "v2.16_modellog_portable":
+            raise modellog_216_error(str(bundle_path))
         if tlspec_format == "v2.0_unified":
             return _load_unified_tlspec(
                 bundle_path,
@@ -1547,7 +1495,7 @@ def _load_trace_payload(
     blobs_path = bundle_path / "blobs"
     python_major_mismatch = False
     try:
-        enforce_version_policy(manifest, bundle_path=bundle_path)
+        enforce_version_policy(manifest)
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)
         _validate_manifest_blob_paths(manifest, bundle_path, resolved_blobs_dir)
         _check_unknown_blob_entries(manifest, blobs_path)

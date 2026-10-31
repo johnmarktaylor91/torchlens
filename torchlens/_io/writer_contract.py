@@ -17,10 +17,8 @@ the compatibility ledger row next to the digest, not inside it.
 
 The contract of record is committed at
 ``torchlens/schemas/writer_contract_v{TLSPEC_VERSION}.json`` (v10 as of the
-batch-2 coordinated schema write; the superseded v9 contract stays frozen
-byte-for-byte at ``torchlens/schemas/writer_contract_v9.json`` and the v8
-contract at ``tests/release_goldens/writer_contract_v8.json``, for the
-reviewable cross-version field-set diffs) and enforced by
+batch-2 coordinated schema write; the superseded v8 and v9 contracts left
+with the 2.x readers) and enforced by
 ``tests/test_tlspec_envelope_contract.py``: regenerating from the live tree
 must reproduce the committed contract byte-for-byte, and a persisted field
 name that DISAPPEARS from the live contract must be covered by an alias rule

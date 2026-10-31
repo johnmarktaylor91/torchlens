@@ -40,7 +40,7 @@
     envelope-shape load validation; `"health_facts"`/`"capture_advisories"` are reserved
     annotation families; entry-dark declared slots `Op.injection_provenance` (F01 writes),
     `Trace.source_snapshots` (F30), `Trace.structure_evidence` (F33) validate fail-closed.
-    Contract of record `torchlens/schemas/writer_contract_v9.json`; the field-intent
+    Contract of record `torchlens/schemas/writer_contract_v10.json`; the field-intent
     census is maintained privately.
 9c. The C07X amendment rides the same v9 window (TLSPEC_VERSION stays 9): bundle relation
     grammar v2 (required/optional split; `successor_of` optional evidence envelope +

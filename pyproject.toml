@@ -566,9 +566,6 @@ line-length = 100
 # without its exclusion, and a stale exclusion cannot outlive its generator.
 extend-exclude = [
     "tests/classics_corpus/models",
-    # Harvested-corpus provenance dir: same vendored-data doctrine as the
-    # classics corpus row (P05 request, sprint packaging queue, landed by A12).
-    "tests/release_goldens",
     "torchlens/_data_classes/_schema_bindings.py",
     "torchlens/_ir/op_record_manifest.py",
 ]

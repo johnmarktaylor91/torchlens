@@ -1538,7 +1538,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
             If the (possibly renamed) global is not admitted by the allowlist.
         """
 
-        refuse_pre_3_module_path(module)
+        refuse_pre_3_module_path(module, name)
         module, name = self._rename_map.get((module, name), (module, name))
 
         # Safe wrappers for the two legitimately-needed but individually-dangerous

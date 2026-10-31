@@ -840,21 +840,6 @@ jobs:
             "tests/test_ci_packaging_gates.py::test_built_sdist_manifest_is_governed" \
             --tb=short -q
 
-      - name: Forward-load gate (the previous release's wheel loads the new goldens)
-        # P05 / ecosystem MEMO 3.4 G8 (packaging_requests 2026-08-26, placement
-        # ruled by D05): install the PREVIOUS release's torchlens wheel
-        # (--no-deps --target; torch is reused from this env) and analysis-load
-        # the current tree's golden artifacts under it. Green = every golden at
-        # or below the previous reader's schema ceiling loads cleanly and every
-        # golden above it refuses TYPED. The only mechanism that catches a
-        # same-stamp drift break (the released v2.33.0/v2.34.1 pair). "Previous"
-        # is the live PyPI latest, so the gate follows every release without a
-        # hand-edited version literal (~40 s measured green against 2.34.1).
-        run: |
-          previous="$(curl -sSf https://pypi.org/pypi/torchlens/json | python -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])')"
-          echo "previous release: torchlens $previous"
-          python tools/forward_load_gate.py --previous "$previous"
-
   platform-canary:
     # macOS and Windows had ZERO controlled execution while the universal
     # py3-none-any wheel and explicit win32/darwin code paths ship (grind r5,

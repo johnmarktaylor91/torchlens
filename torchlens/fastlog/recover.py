@@ -584,7 +584,7 @@ def _validate_fastlog_layout(bundle_path: Path, manifest: Manifest) -> None:
     decision.
     """
 
-    enforce_version_policy(manifest, bundle_path=bundle_path)
+    enforce_version_policy(manifest)
     if manifest.bundle_format != "fastlog-directory":
         raise ArtifactError("Expected fastlog-directory bundle format.")
     required = (

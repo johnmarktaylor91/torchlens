@@ -3310,7 +3310,6 @@ The sections above describe each surface in depth.
 | `tl.intervention.model_output` | Create an output selector |
 | `tl.options.HtmlReportOptions` | Options for emitting the offline HTML report (thumbnail budgets, determinism, share-safe stripping) |
 | `tl.receptive_field.GradReceptiveField` | Empirical receptive-field influence set measured by autograd |
-| `tl.report.CompatWindow` | Frozen compatibility-window report |
 | `tl.report.DiffReport` | The same class as `tl.differential.DiffReport` |
 | `tl.report.InterventionValidationReport` | Five-axis intervention validation result |
 | `tl.report.KernelProfileReport` | One door call: one execution, one trace, one joined result |
@@ -3424,8 +3423,6 @@ The sections above describe each surface in depth.
 | `CompatReport.check` | Return one report row by stable key |
 | `CompatReport.checks` | Truth-table rows for the inspected model/input pair |
 | `CompatRow.is_detected` | Whether the row's condition was detected in the supplied model/input |
-| `CompatWindow.promise` | The promise text and window status |
-| `CompatWindow.runtime` | Current runtime identity facts (torchlens version, schema ceiling and floor, live writer contract digest) |
 | `ConformanceReport.is_claim_eligible` | `True` only when the pretrained-family floor is met; toys earn nothing regardless of pass rate |
 | `CostTreeRow.num_unknown_ops` | Directly-owned ops with no cost rule |
 | `DeterminismReport.first_problem` | Project the first divergence into the shared vocabulary |

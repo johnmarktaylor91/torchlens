@@ -5,9 +5,7 @@ the facts both carry must agree at load or the artifact has been edited,
 truncated, or spliced from two sources. The loader compares:
 
 * the ``tlspec_version`` stamp -- the manifest's against the pickled root
-  state's; the ONE lawful divergence is a ``tl.migrate`` artifact, which
-  bumps the manifest stamp only and proves the lineage through the
-  append-only migration witness (``tl_migration_provenance.json``);
+  state's; they must be equal;
 * ``n_layers`` -- the manifest's declared retained-op count against the
   persisted ``layer_list`` length (a dropped or grafted op row).
 
@@ -21,7 +19,6 @@ from pathlib import Path
 from typing import Any
 
 from . import ArtifactError
-from .compat_ledger import read_migration_witness
 
 __all__ = ["check_manifest_metadata_anchors"]
 
@@ -64,7 +61,7 @@ def check_manifest_metadata_anchors(
     anchor_facts:
         The :func:`persisted_anchor_facts` snapshot taken before rehydration.
     bundle_path:
-        Artifact directory (the migration witness sidecar lives beside it).
+        Artifact directory, named in the refusal.
 
     Raises
     ------
@@ -80,12 +77,10 @@ def check_manifest_metadata_anchors(
         and isinstance(root_stamp, int)
         and not isinstance(root_stamp, bool)
         and root_stamp != manifest_stamp
-        and not _migration_explains(bundle_path, root_stamp, manifest_stamp)
     ):
         _refuse(
             f"manifest.json declares tlspec_version={manifest_stamp} but the pickled "
-            f"Trace state carries tlspec_version={root_stamp}, and no migration "
-            "witness (tl_migration_provenance.json) proves that lineage",
+            f"Trace state carries tlspec_version={root_stamp}",
             bundle_path=bundle_path,
             field="tlspec_version",
             reason="stamp_mismatch",
@@ -100,20 +95,6 @@ def check_manifest_metadata_anchors(
             field="n_layers",
             reason="row_count_mismatch",
         )
-
-
-def _migration_explains(bundle_path: Path, root_stamp: int, manifest_stamp: int) -> bool:
-    """True iff a migration witness records exactly this root -> manifest stamp lineage."""
-
-    try:
-        witness = read_migration_witness(bundle_path)
-    except ArtifactError:
-        return False
-    if not isinstance(witness, Mapping):
-        return False
-    origin = witness.get("origin")
-    origin_stamp = origin.get("tlspec_version") if isinstance(origin, Mapping) else None
-    return origin_stamp == root_stamp and witness.get("final_tlspec_version") == manifest_stamp
 
 
 def _refuse(message: str, *, bundle_path: Path, field: str, reason: str) -> None:

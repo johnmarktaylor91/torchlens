@@ -101,7 +101,7 @@ def detect_tlspec_format(path: str | Path) -> str:
     ):
         # The GENUINE v2.16.0 ModelLog spellings (io_format_version /
         # n_activation_blobs / n_gradient_blobs), measured on the only genuine
-        # v2.16 bundle in existence (tests/release_goldens, ecosystem panel
+        # v2.16 bundle in existence (tests/goldens/legacy, ecosystem panel
         # r3). The checked-in "v2.16" fixtures elsewhere use the modern
         # spellings above -- a format that never shipped -- so before this
         # branch the real artifact classified "unknown" while the never-real

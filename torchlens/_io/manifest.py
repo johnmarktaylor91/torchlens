@@ -29,11 +29,9 @@ from . import (
     TLSPEC_VERSION,
     ArtifactError,
     ArtifactRuntimeIncompatibleError,
-    ArtifactSchemaAgeWarning,
     _json,
     above_ceiling_error,
     below_floor_error,
-    compat_ledger,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -534,13 +532,11 @@ class Manifest:
             # present-but-non-int value stays a required-field type error below.
             raise below_floor_error(
                 observed="no tlspec_version (predates portable I/O versioning)",
-                subject="Bundle manifest",
                 code="artifact_version_below_floor",
             )
         if isinstance(raw_version, int) and raw_version < MIN_TLSPEC_VERSION:
             raise below_floor_error(
                 observed=f"tlspec_version={raw_version}",
-                subject="Bundle manifest",
                 code="artifact_version_below_floor",
             )
         if isinstance(raw_version, int) and raw_version > TLSPEC_VERSION:
@@ -550,7 +546,6 @@ class Manifest:
             # instead of the above-ceiling refusal that names the remedy.
             raise above_ceiling_error(
                 observed=raw_version,
-                subject="Bundle manifest",
                 code="artifact_version_above_runtime",
             )
 
@@ -923,33 +918,22 @@ def _optional_sha256(data: dict[str, Any], field_name: str) -> str | None:
     return value
 
 
-def enforce_version_policy(manifest: Manifest, *, bundle_path: Path | None = None) -> None:
+def enforce_version_policy(manifest: Manifest) -> None:
     """Apply the bundle version and integrity compatibility policy for a loaded manifest.
 
     Parameters
     ----------
     manifest:
         Parsed manifest to validate against the current runtime.
-    bundle_path:
-        Artifact directory, when the caller has it in scope. Enables the
-        migration-witness door for producer pair-consistency: a migrated
-        artifact keeps its original writer identity and proves its
-        (writer, stamp) lineage through ``tl_migration_provenance.json``.
 
     Raises
     ------
     ArtifactTooOldError
-        If the bundle predates the ``tlspec_version >= 6`` rehydration floor
-        (first written by released torchlens 2.31.0).
+        If the bundle's ``tlspec_version`` is older than the current format, which
+        means torchlens 2.x saved it.
     ArtifactError
         If the bundle targets a newer I/O format or an incompatible torch
         major version.
-
-    Warns
-    -----
-    ArtifactSchemaAgeWarning
-        If the bundle is between the rehydration floor and the current
-        ``tlspec_version`` and therefore loads at its own recorded schema.
     """
 
     if manifest.tlspec_version > TLSPEC_VERSION:
@@ -958,26 +942,12 @@ def enforce_version_policy(manifest: Manifest, *, bundle_path: Path | None = Non
             subject="Bundle",
             code="artifact_version_above_runtime",
         )
-    if manifest.tlspec_version < MIN_TLSPEC_VERSION:
+    if manifest.tlspec_version < TLSPEC_VERSION:
+        # Every format older than the current one was written by torchlens 2.x, and this
+        # release carries no reader for it.
         raise below_floor_error(
             observed=f"tlspec_version={manifest.tlspec_version}",
-            subject="Bundle",
             code="artifact_version_below_floor",
-        )
-    if manifest.tlspec_version < TLSPEC_VERSION:
-        # Honest between-floor-and-current advisory (r6 L7): the artifact loads
-        # at its recorded schema; fields introduced by later schema versions are
-        # absent, never default-filled (``Manifest.from_dict`` fails closed on
-        # required fields). Categorized ``ArtifactSchemaAgeWarning`` (a visible
-        # ``UserWarning`` subclass), never ``DeprecationWarning``: this advisory
-        # deprecates no API, and the default warning filters hide
-        # ``DeprecationWarning`` from end users (grind r3, R15-F1).
-        warnings.warn(
-            f"Bundle tlspec_version={manifest.tlspec_version} is older than "
-            f"runtime tlspec_version={TLSPEC_VERSION}; loading at the recorded "
-            "schema. Re-save the artifact with this release to upgrade it.",
-            ArtifactSchemaAgeWarning,
-            stacklevel=2,
         )
 
     runtime_torch = _parse_version(torch.__version__, label="runtime torch")
@@ -1025,32 +995,6 @@ def enforce_version_policy(manifest: Manifest, *, bundle_path: Path | None = Non
             code="bundle_producer_unverifiable",
             remedy="re-save the artifact with a released torchlens",
         )
-    # Producer PAIR-CONSISTENCY against the governed compatibility ledger
-    # (ecosystem MEMO 3.1, gate G5). This replaced the hand-typed
-    # ``< "2.33"`` inequality that orphaned lawful released v2.31.0/v2.32.4
-    # artifacts: the first tlspec-6 writer was v2.31.0 (measured on genuine
-    # wheels), so a (writer, stamp) pair refuses only when NO governed ledger
-    # window says that writer emitted that stamp. A migrated artifact keeps
-    # its original writer identity and proves its lineage through the
-    # migration witness sidecar instead; an invalid witness refuses typed.
-    if manifest_torchlens is not None and not compat_ledger.pair_is_governed(
-        manifest.torchlens_version, manifest.tlspec_version
-    ):
-        witness = (
-            compat_ledger.read_migration_witness(bundle_path) if bundle_path is not None else None
-        )
-        if witness is None or not compat_ledger.migrated_pair_is_governed(
-            manifest.torchlens_version,
-            manifest.tlspec_version,
-            witness,
-            bundle_path=bundle_path,
-        ):
-            raise compat_ledger.ungoverned_pair_error(
-                manifest.torchlens_version,
-                manifest.tlspec_version,
-                subject="Bundle",
-                code="artifact_producer_pair_ungoverned",
-            )
     if runtime_torchlens is not None and manifest_torchlens is not None:
         if manifest_torchlens > runtime_torchlens:
             warnings.warn(
