@@ -172,6 +172,15 @@ li.node.open > .row .doc1 code, .details pre code { background: var(--surface); 
 .tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--grid); border-radius: 3px; padding: 0 5px; line-height: 16px; }
 .tag.all { border-style: dashed; }
+.legend-bar { border-bottom: 1px solid var(--grid); padding: var(--sp-sm) var(--sp-lg); font-size: 12.5px; line-height: 1.5; color: var(--muted); background: var(--surface-2); }
+.legend-bar summary { cursor: pointer; color: var(--ink); font-weight: 600; font-size: 13px; padding: 2px 0; }
+.legend-bar summary:hover { color: var(--accent); }
+.legend-items { columns: 300px; column-gap: 24px; margin-top: var(--sp-sm); }
+.legend-items .item { display: block; break-inside: avoid; margin: 0 0 6px; }
+.legend-items .item .badge, .legend-items .item .tag, .legend-items .item .mark { margin-right: 4px; vertical-align: middle; }
+.legend-items .item .badge { margin-right: 2px; }
+.legend-items .item b { color: var(--ink); font-weight: 600; }
+.mark { font-family: var(--font-mono); font-size: 11px; color: var(--ink); border: 1px solid var(--grid); border-radius: 3px; padding: 0 5px; line-height: 16px; background: var(--surface); }
 .count-hidden { font-size: 11px; color: var(--muted); }
 
 .details { margin: 2px 0 var(--sp-sm) 30px; padding: var(--sp-sm) var(--sp-md); border: 1px solid var(--grid); border-radius: var(--r-md); background: var(--surface-2); font-size: 13px; }
@@ -215,7 +224,7 @@ footer code { font-size: 12px; }
   .badge { grid-column: 2; min-width: 0; margin-top: 2px; }
   .main { grid-column: 2; }
   .details { margin-left: var(--sp-sm); }
-  .controls .group .lbl { display: none; }
+  .controls .group .lbl { padding-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .tog svg { transition: none; } }
 @media print { header.top { position: static; } .controls, .help { display: none; } }
@@ -229,12 +238,12 @@ footer code { font-size: 12px; }
   </div>
   <div class="controls">
     <div class="search">
-      <input id="q" type="search" aria-label="Search names, argument names and summaries" placeholder="Search names and arguments" title="Press / to focus; matches names, argument names and summaries" autocomplete="off" spellcheck="false">
+      <input id="q" type="search" aria-label="Search names, argument names and summaries" placeholder="Search names" title="Press / to focus; matches names, argument names and summaries" autocomplete="off" spellcheck="false">
       <span class="count" id="count" aria-live="polite"></span>
       <button class="clear" id="clear" type="button" aria-label="Clear search" hidden>&#x2715;</button>
     </div>
-    <div class="group" role="group" aria-label="Expand to depth">
-      <span class="lbl">Expand</span>
+    <div class="group" role="group" aria-label="Open the trees to a depth">
+      <span class="lbl">Open depth</span>
       <button class="btn" type="button" data-depth="1" title="Open every row one level deep">1</button>
       <button class="btn" type="button" data-depth="2" title="Open every row two levels deep">2</button>
       <button class="btn" type="button" data-depth="3" title="Open every row three levels deep">3</button>
@@ -243,9 +252,24 @@ footer code { font-size: 12px; }
     </div>
     <button class="btn" type="button" id="internals" aria-pressed="false" title="Also list private modules and underscore names">Internals</button>
     <button class="btn" type="button" id="theme" aria-label="Theme: automatic" title="Switch between automatic, light and dark">Theme: auto</button>
-    <button class="btn" type="button" id="helpbtn" aria-label="Help: keys and legend" aria-expanded="false" title="Keys and legend">?</button>
+    <button class="btn" type="button" id="helpbtn" aria-label="Keys and clicks" aria-expanded="false" title="Keyboard keys and what clicks do">Keys</button>
   </div>
 </header>
+
+<details class="legend-bar" id="legend" open>
+  <summary>Legend: what the badges, tags and marks on each row mean</summary>
+  <div class="legend-items">
+    <p class="item"><span class="badge k-package">package</span> <span class="badge k-class">class</span> <span class="badge k-function">function</span> <span class="badge k-property">property</span> <span class="badge k-field">field</span> Kind of the row: package (a directory with <code>__init__.py</code>), module (one file), class, function or method, property (read like an attribute), dataclass field, attribute, constant, enum member.</p>
+    <p class="item"><span class="tag">L4 core</span> Implementation layer from <code>torchlens/_architecture.py</code>: the number is the layer (L0 is the foundation; a higher layer may import a lower one, never the reverse), the word its tier: <b>core</b> (L0 to L5, the capture engine and its data), <b>appliance</b> (L6, tools on the core), <b>present</b> (L7, rendering and reports), <b>bridge</b> (L8, adapters to external tools), <b>recipe</b> (L9, workflows over the rest). Not a deprecation mark.</p>
+    <p class="item"><span class="tag">facade</span> A thin lazy namespace module (<code>torchlens</code> itself, <code>torchlens.io</code>) that re-exports things defined deeper; not a layer. Such root rows say "same as" and link the real home.</p>
+    <p class="item"><span class="tag">legacy root</span> A root <code>tl.NAME</code> implemented at L6 or above. Supported and kept at the top level until the next major release; the deeper module is the long-term spelling.</p>
+    <p class="item"><span class="tag all">__all__</span> Dashed: declared in <code>torchlens.__all__</code>. Root names without it are public too (they are in the frozen surface table) but <code>from torchlens import *</code> skips them.</p>
+    <p class="item"><span class="tag">dataclass</span> Python detail tags: frozen, enum, settable (property with a setter), classmethod, staticmethod, contextmanager, async.</p>
+    <p class="item"><span class="mark">+N internal</span> N non-public members (underscore names, private modules), hidden until <b>Internals</b> is on.</p>
+    <p class="item"><span class="mark">=MISSING</span> An argument you may leave out: <code>MISSING</code> is the TorchLens sentinel for "not passed", so the option's own default applies and an omitted argument is told apart from one passed explicitly.</p>
+    <p class="item"><span class="mark">rows</span> Rows list argument names with short defaults (underscore-prefixed parameters left out); click a row for the full typed signature, docstring and defining file; the caret opens its children.</p>
+  </div>
+</details>
 
 <main>
   <section class="tree" id="tree-tl">
@@ -264,7 +288,7 @@ footer code { font-size: 12px; }
   Root public names come from the frozen surface table; below the root, a name is public when its module lists it in <code>__all__</code> or it has no leading underscore.
 </footer>
 
-<aside class="help" id="help" hidden role="dialog" aria-label="Keys and legend">
+<aside class="help" id="help" hidden role="dialog" aria-label="Keys and clicks">
   <button class="close" type="button" id="helpclose" aria-label="Close">&#x2715;</button>
   <h3>Keys and clicks</h3>
   <table>
@@ -276,23 +300,7 @@ footer code { font-size: 12px; }
     <tr><td>row</td><td>show the full signature with types, the docstring and the defining file</td></tr>
     <tr><td>name</td><td>puts the row's path in the address bar: a link you can share or bookmark</td></tr>
   </table>
-  <h3 style="margin-top:12px">Legend</h3>
-  <div class="legend">
-    <span class="badge k-package">package</span><span>a directory with an <code>__init__.py</code>; module: one file</span>
-    <span class="badge k-class">class</span><span>fields, properties and methods nest under it</span>
-    <span class="badge k-function">function</span><span>method: defined on a class; the signature omits <code>self</code></span>
-    <span class="badge k-property">property</span><span>read like an attribute; "settable" when it has a setter</span>
-    <span class="badge k-field">field</span><span>dataclass field; attribute: other class-level name; constant: UPPER_CASE module value</span>
-  </div>
-  <h3 style="margin-top:12px">Tags</h3>
-  <div class="legend">
-    <span class="tag">L0 core</span><span>implementation layer from <code>torchlens/_architecture.py</code>: L0 to L5 core, L6 appliance, L7 present (presentation), L8 bridge (external tools), L9 recipe</span>
-    <span class="tag">facade</span><span>a thin lazy namespace module, not a layer of its own</span>
-    <span class="tag">legacy root</span><span>a root name implemented at L6 or above, kept until the next major release</span>
-    <span class="tag all">__all__</span><span>dashed: listed in <code>torchlens.__all__</code>; other root names are reachable but undeclared</span>
-    <span class="tag">dataclass</span><span>also: frozen, enum, settable (property with a setter), classmethod, staticmethod, contextmanager</span>
-  </div>
-  <p class="meta">Row signatures show argument names and short defaults, leaving out underscore-prefixed parameters; the full typed signature is in the row's details. <code>MISSING</code> is the TorchLens sentinel for "not passed": the option's own default applies and the call is recorded as omitted. Searching with <code>?q=word</code> in the address bar opens the page on that search.</p>
+  <p class="meta">The legend for badges, tags and marks sits under the toolbar (click its title to fold or unfold it). Searching with <code>?q=word</code> in the address bar opens the page on that search; <code>#tl.trace</code> opens on that row.</p>
 </aside>
 
 <script id="api-map-data" type="application/json">/*__DATA__*/</script>
@@ -808,6 +816,11 @@ footer code { font-size: 12px; }
   var initialQuery = "";
   try { initialQuery = new URLSearchParams(location.search).get("q") || ""; } catch (e) {}
   if (initialQuery) { q.value = initialQuery; runSearch(initialQuery.trim()); }
+  var legend = document.getElementById("legend");
+  try { if (localStorage.getItem("tl-api-map:legend") === "closed") legend.open = false; } catch (e) {}
+  legend.addEventListener("toggle", function () {
+    try { localStorage.setItem("tl-api-map:legend", legend.open ? "open" : "closed"); } catch (e) {}
+  });
   onHash();
 })();
 </script>
