@@ -757,7 +757,7 @@ def _anomaly_lines(log: Any) -> list[str]:
     return [
         (
             f"- NOT-CHECKED: non-finite health has not been established on this object "
-            f"({facts.unexamined} saved output(s) unexamined; basis: {basis})."
+            f"({facts.num_unexamined_ops} saved output(s) unexamined; basis: {basis})."
         ),
         (
             "- To scan retained payloads (payload_scan cost): "

@@ -333,7 +333,7 @@ def claim_string(report: ConformanceReport) -> str:
             f"Report for backend {report.backend!r} earned no claim: earned_tier="
             f"{report.earned_tier!r}, pretrained families={pretrained} (floor "
             f"{CLAIM_MIN_PRETRAINED_FAMILIES} for C1+), claim_eligible="
-            f"{report.claim_eligible}. Toy/hermetic models are the smoke pack "
+            f"{report.is_claim_eligible}. Toy/hermetic models are the smoke pack "
             "and mutation substrate only; they emit no claim. Remedy: run the "
             "real pretrained packs (pinned revisions) and pass every cell.",
             code="conformance_claim_unearned",

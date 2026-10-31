@@ -190,7 +190,7 @@ def _row_findings(
                 action="collect",
                 message=(
                     f"{row.name} ({row.kind}) holds nonfinite values: "
-                    f"{row.n_nan} NaN, {row.n_posinf} +inf, {row.n_neginf} -inf "
+                    f"{row.num_nan} NaN, {row.num_posinf} +inf, {row.num_neginf} -inf "
                     f"of {row.numel} elements. Every later step on corrupt "
                     "state is wasted compute."
                 ),

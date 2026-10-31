@@ -1585,7 +1585,7 @@ class RunResult:
             f"RunResult(output={_describe_value(self.output)}, "
             f"faithfulness={report.path_faithfulness.value}, "
             f"attestation={report.numeric_attestation.value}, "
-            f"poisoned={report.poisoned})"
+            f"poisoned={report.is_poisoned})"
         )
 
 
