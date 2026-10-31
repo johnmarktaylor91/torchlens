@@ -113,13 +113,13 @@ def test_unrepresentable_policy_captures_and_refuses_runnable_save(
             assert ambient[field] is None
     path = tmp_path / f"{scenario}.tlspec"
     with pytest.raises(RunnablePreflightError) as excinfo:
-        tl.save(trace, str(path), level="runnable")
+        trace.save(str(path), level="runnable")
     diagnostics = excinfo.value.fields["diagnostics"]
     codes = {diag.code for diag in diagnostics}
     assert RunnableErrorCode.EXECUTION_CONTEXT_UNAVAILABLE in codes
     assert not path.exists()
     # Analysis capture and an analysis save stay available.
-    tl.save(trace, str(tmp_path / f"{scenario}-analysis.tlspec"))
+    trace.save(str(tmp_path / f"{scenario}-analysis.tlspec"))
 
 
 def test_legacy_set_policy_stays_representable_and_verified(tmp_path: Path) -> None:
@@ -131,7 +131,7 @@ def test_legacy_set_policy_stays_representable_and_verified(tmp_path: Path) -> N
     trace = tl.trace(model, x, capture=_CAPTURE)
     assert tc.AMBIENT_FP32_UNREPRESENTABLE_KEY not in trace._runnable.capture_ambient
     path = tmp_path / "legacy.tlspec"
-    tl.save(trace, str(path), level="runnable", include_weights=True)
+    trace.save(str(path), level="runnable", include_weights=True)
 
     report = tl.load(str(path)).run(inputs=x.clone(), seed=0).report
     assert report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -141,7 +141,7 @@ def test_legacy_set_policy_stays_representable_and_verified(tmp_path: Path) -> N
 def test_replay_restores_the_callers_exact_mixed_policy(tmp_path: Path) -> None:
     model, x = _model_and_input()
     path = tmp_path / "clean.tlspec"
-    tl.save(tl.trace(model, x, capture=_CAPTURE), str(path), level="runnable", include_weights=True)
+    tl.trace(model, x, capture=_CAPTURE).save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
 
     _set("cudnn.conv", "tf32")

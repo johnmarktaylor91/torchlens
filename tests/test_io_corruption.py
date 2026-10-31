@@ -353,7 +353,7 @@ def test_io_artifact_door_codes_are_provoked(tmp_path: Path) -> None:
     assert level.value.fields["code"] == "artifact_save_level_unsupported"
 
     with pytest.raises(ValueError) as payload:
-        tl.save(source, tmp_path / "weights.tl", level="portable", include_weights=True)
+        source.save(tmp_path / "weights.tl", level="portable", include_weights=True)
     assert payload.value.fields["code"] == "save_payload_level_conflict"
 
 

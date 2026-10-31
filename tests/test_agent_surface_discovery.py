@@ -126,7 +126,7 @@ def test_guide_snippets_run_verbatim(tmp_path: Path) -> None:
         code = "\n".join(line[4:] for line in snippet.splitlines())
         if "tl.trace" in code and "model" in code and "import torchlens" not in code:
             continue  # phase-1 fragments need a live model; composed below
-        if "tl.save" in code:
+        if "Trace.save" in code:
             # A saving snippet writes its OWN artifact (never onto the fixture).
             code = code.replace("run.tlspec", str(tmp_path / f"snippet_{index}.tlspec"))
         else:

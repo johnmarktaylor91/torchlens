@@ -454,7 +454,7 @@ class TraceValidationMixin(_TraceMixinBase):
 
         Derived at read time from records that persist with the trace (the
         intervention audit, the operation history, mutation states, direct
-        writes and op intervention marks), so it survives ``tl.save`` /
+        writes and op intervention marks), so it survives ``Trace.save`` /
         ``tl.load`` and no reset makes a touched trace read pristine again.
         It is a reading, never a verdict: it does not change validation or
         any run report. Distinct from ``Trace.state`` (``TraceState.PRISTINE``

@@ -127,7 +127,7 @@ def _build_torch_bundle(tmp_path: Path, *, name: str = "trace.tlspec") -> Path:
         capture=CaptureOptions(layers_to_save="all", random_seed=0),
     )
     bundle_path = tmp_path / name
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     return bundle_path
 
 

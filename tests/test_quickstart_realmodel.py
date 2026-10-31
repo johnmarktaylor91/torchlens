@@ -123,7 +123,7 @@ class TestGpt2Rungs:
         assert excinfo.value.fields["code"] == "nongold_semantics_unavailable"
 
         path = tmp_path / "gpt2_declared.tlspec"
-        tl.save(log, str(path))
+        log.save(str(path))
         loaded = tl.load(str(path))
         loaded_provenance = trace_input_provenance(loaded)
         assert loaded_provenance is not None

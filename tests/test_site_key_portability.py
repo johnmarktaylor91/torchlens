@@ -44,7 +44,7 @@ def test_g1_roundtrip_bundle_writer(tmp_path) -> None:
     assert all(isinstance(key, str) for key in saved_keys.values())
     path = tmp_path / "sites.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
     assert _keys(loaded) == saved_keys
 
@@ -70,7 +70,7 @@ def test_g2_loaded_recompute_byte_parity(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "parity.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
     minter = SiteKeyMinter()
     for label in loaded.op_labels:
@@ -92,7 +92,7 @@ def test_g3_forged_key_fails_is1_and_is2(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "forged.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
     assert check_metadata_invariants(loaded)
     # Malformed forgery -> I-S1.
@@ -112,7 +112,7 @@ def test_g3_label_bearing_forged_key_fails_sweep(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "label_forged.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
     loaded.ops["relu_1_2:1"].site_key = "s1|act_raw|relu||9"
     with pytest.raises(MetadataInvariantError, match="survived postprocessing"):
@@ -130,7 +130,7 @@ def test_g4_marked_bundle_refuses_switch_off(tmp_path) -> None:
     trace = tl.trace(_Tied(), torch.randn(2, 8))
     path = tmp_path / "marked.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
     with pytest.raises(PreReleaseArtifactError, match="pre-release field marker"):
         tl.load(str(path))
 

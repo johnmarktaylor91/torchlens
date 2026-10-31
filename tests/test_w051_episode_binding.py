@@ -78,7 +78,7 @@ def _episode(model: _Greedy, prompt: int, **extra) -> tl.Trace:
 def _save(trace: tl.Trace, path) -> str:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(trace, path)
+        trace.save(path)
     return glob.glob(str(path) + "/**/metadata.pkl", recursive=True)[0]
 
 

@@ -28,7 +28,7 @@ class BufferedToy(nn.Module):
 
 def _roundtrip(trace, tmp_path):
     path = tmp_path / "trace.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     return tl.load(str(path))
 
 

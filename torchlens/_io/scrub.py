@@ -1092,7 +1092,7 @@ def _scrub_value(
             # public ``Trace.intervention_spec`` accessor). Those cells are
             # DERIVED state that rebuilds on access, never portable fields,
             # and they appear only after a read -- refusing them here made a
-            # read-only public property poison every later ``tl.save``
+            # read-only public property poison every later ``Trace.save``
             # (B3R4-R10-1). Skip the whole class structurally; the check runs
             # only on the refusal path, so the hot field loop pays nothing.
             if isinstance(
@@ -1344,7 +1344,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_unrecorded_operator_mutations",
         "_last_sibling_ordering_decision",
         # Sibling render diagnostic (same _render_dot write site as the row
-        # above); left unenrolled, ONE draw() poisoned every later tl.save.
+        # above); left unenrolled, ONE draw() poisoned every later Trace.save.
         "_last_encoding_state",
         # Layout-execution geometry record (vizmech D24), same write site class.
         "_last_render_geometry",

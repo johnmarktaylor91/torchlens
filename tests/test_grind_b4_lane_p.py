@@ -566,7 +566,7 @@ def test_barcode_remap_scrubs_every_registered_barcode(tmp_path: Path) -> None:
     }
     assert raw_barcodes, "expected live param barcodes on a param-bearing capture"
 
-    tl.save(trace, str(tmp_path / "t.tlspec"))
+    trace.save(str(tmp_path / "t.tlspec"))
     loaded = tl.load(str(tmp_path / "t.tlspec"))
 
     leaked: list[str] = []

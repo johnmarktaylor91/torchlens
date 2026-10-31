@@ -190,7 +190,7 @@ def test_scalar_input_runnable_manifest_records_input_hash(tmp_path) -> None:
         capture=CaptureOptions(intervention_ready=True),
     )
     dest = tmp_path / "run.tlspec"
-    tl.save(log, str(dest), level="runnable")
+    log.save(str(dest), level="runnable")
     manifest = json.loads((dest / "manifest.json").read_text())
     input_hash = manifest.get("provenance", {}).get("input_hash")
     assert _is_sha256_hex(input_hash)

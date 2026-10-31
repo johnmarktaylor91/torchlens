@@ -74,7 +74,7 @@ def test_peak_pair_is_session_time_only() -> None:
     assert log.forward_peak_memory_pair is not None
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "trace.tlspec"
-        tl.save(log, path)
+        log.save(path)
         loaded = tl.load(path)
     assert loaded.forward_peak_memory_pair is None
 

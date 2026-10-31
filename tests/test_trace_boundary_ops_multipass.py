@@ -154,7 +154,7 @@ def test_agent_json_and_overview_succeed_on_a_two_pass_input(tmp_path: Path) -> 
     assert trace.to_agent_json()["inputs"] == expected
 
     path = tmp_path / "loop_inputs.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     assert [op.label for op in loaded.input_ops] == expected
     envelope = call_tool("torchlens_overview", {"path": str(path)})

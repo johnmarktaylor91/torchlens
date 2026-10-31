@@ -54,7 +54,7 @@ def _build(tmp_path: Path) -> Path:
     cap = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
     trace = tl.trace(_M().eval(), torch.randn(2, 4), capture=cap)
     bundle = tmp_path / "base.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     return bundle
 
 

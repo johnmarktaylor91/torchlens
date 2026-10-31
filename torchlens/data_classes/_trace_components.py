@@ -521,7 +521,7 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
     ),
     # --- __dict__-spelled transients surfaced by the r6 R45 gate widening --
     # Every row below is popped/consumed within its own window; none can
-    # reach tl.save on the exhaustive path (the counter that COULD --
+    # reach Trace.save on the exhaustive path (the counter that COULD --
     # _backward_grad_fn_type_counter -- was fixed to rewalk-scoped scratch
     # instead of being ledgered here).
     "_tl_pending_accumulate_grad_fire_records": (

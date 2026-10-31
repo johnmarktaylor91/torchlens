@@ -123,8 +123,8 @@ def test_save_does_not_dereference_symlinks_into_the_artifact(tmp_path: Path) ->
 
     core0 = tmp_path / "rank0.tlspec"
     core1 = tmp_path / "rank1.tlspec"
-    tl.save(_rank_trace(0), core0)
-    tl.save(_rank_trace(1), core1)
+    _rank_trace(0).save(core0)
+    _rank_trace(1).save(core1)
     # Plant a symlink inside rank 0's core pointing at the private file.
     (core0 / "leak.link").symlink_to(secret)
 

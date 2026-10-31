@@ -417,7 +417,7 @@ def test_plain_v8_round_trip_persists_the_profile(tmp_path: Path) -> None:
 
     trace = _armed_trace()
     default_path = tmp_path / "default.tlspec"
-    tl.save(trace, default_path)
+    trace.save(default_path)
     loaded = tl.load(default_path)
     assert len(loaded._primitive_op_profile.primitive_ops) == len(
         trace._primitive_op_profile.primitive_ops
@@ -457,7 +457,7 @@ def test_prerelease_load_refuses_dangling_and_forged_op_fks(
     row.parent_op_refs = (replacement,)
     path = tmp_path / f"{tamper_kind}.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, path)
+        trace.save(path)
         with pytest.raises(TorchLensIOError) as exc_info:
             tl.load(path)
     assert exc_info.value.fields["code"] == "primitive_op_fk_invalid"

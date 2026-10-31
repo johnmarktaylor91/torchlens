@@ -26,7 +26,7 @@ state, then optional embedded capture state, then the versioned
 `torchlens_role_init_v2` fallback (degenerate-total: empty slots consume zero RNG); random reports
 name every initialized slot.
 
-`tl.save(trace, path, level="runnable", include_weights=True)` bundles the full capture-time
+`trace.save(path, level="runnable", include_weights=True)` bundles the full capture-time
 `state_dict` (all named parameters plus persistent buffers) as the separate, schema-versioned
 `state_dict_v1` blob family. The default is `include_weights=False`, so the sparse core stays
 tensor-value-free. Load validates embedded state through the same strict binder; run reports
@@ -40,7 +40,7 @@ topology refuses at save with `state_alias_topology_unsupported`. Payload blobs 
 allocating, and one atomic run-preparation staging pass moves all state families to their recorded
 devices (a CUDA artifact on a CPU-only host loads for analysis and refuses `.run()` typed).
 
-`tl.save(trace, path, level="runnable", include_activations=True)` independently archives exactly
+`trace.save(path, level="runnable", include_activations=True)` independently archives exactly
 the activations already retained by the capture-time `save=` decision, including retained raw and
 transformed outputs, as `selected_activation_v2` with physical `InputAttestationFingerprint`
 eligibility records. Load exposes them through

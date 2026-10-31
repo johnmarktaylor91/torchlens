@@ -3,7 +3,7 @@
 ``InputProvenance`` is the rich runtime view; it serializes INTO the shipped
 ``ResolvedPreprocessing`` field shape (source / identifier / verified /
 config / description) and rides the existing KEEP-registered
-``Trace.input_preprocessor`` slot on the ``tl.save``/``tl.load`` bundle path,
+``Trace.input_preprocessor`` slot on the ``Trace.save``/``tl.load`` bundle path,
 so a synthesized trace can never masquerade as a real one after a handoff --
 with ZERO new persisted schema fields (the C07 census is closed; this lane
 mints none).

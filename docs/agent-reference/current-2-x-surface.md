@@ -124,7 +124,7 @@
   A swallowed halt/nonfinite signal (broad `except:` in user code) raises
   `tl.errors.StopSignalSwallowedError` at the capture boundary and settles
   FAILED, never COMPLETE. Refresh re-arms `raise_on_nan`. Halted analysis
-  `tl.save` works (the transient-leak refusal is fixed); halted `log_backward`
+  `Trace.save` works (the transient-leak refusal is fixed); halted `log_backward`
   and loaded-sparse `run()` remain allowed.
 - QUERYABLE NONFINITE RECORD (spellings DOCUMENTED-UNSTABLE): `trace.nonfinite_ops`
   returns the pass-qualified labels of ops whose output held NaN/Inf and
@@ -892,7 +892,7 @@
   the MergedTrace precedent): member ops in execution order, internal
   dataflow edges, and an EXPLICIT boundary (`boundary_in_edges` /
   `boundary_out_edges` name every crossing edge; `source_ops`/`sink_ops`
-  the entry/exit ops). A slice offers NO save/replay/validate; `tl.save`
+  the entry/exit ops). A slice offers NO save/replay/validate; `Trace.save`
   refuses `slice_save_unsupported`; `__selection__` lifts the member family
   back into the algebra (slices compose and feed `do()`).
   `trace.subgraph(selection)` is the general door presenting ANY ACT region

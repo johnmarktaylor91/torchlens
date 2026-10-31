@@ -74,7 +74,7 @@ def test_mutated_fork_cannot_save_as_attested_complete(parent_trace: tl.Trace, t
     op = fork["relu_1_2"].ops[0]
     op.out = torch.zeros_like(op.out)
     path = os.path.join(tmp_path, "mutated_fork.tlspec")
-    tl.save(fork, path)
+    fork.save(path)
     restored = tl.load(path)
     assert restored.outcome.status is not CaptureStatus.COMPLETE
     assert restored.outcome.status is CaptureStatus.UNATTESTED
@@ -106,7 +106,7 @@ def test_fork_keeps_analysis_capabilities(parent_trace: tl.Trace, tmp_path) -> N
     fork = parent_trace.fork()
     # save_analysis allows UNATTESTED.
     path = os.path.join(tmp_path, "fork.tlspec")
-    tl.save(fork, path)
+    fork.save(path)
     assert tl.load(path)["relu_1_2"] is not None
     # validation entry allows UNATTESTED (the tripwire stays armed).
     from torchlens.capture.outcome import require_capture_capability

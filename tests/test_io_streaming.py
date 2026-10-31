@@ -520,7 +520,7 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
 
 
 def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -> None:
-    """Streaming bundles must write the same unified manifest as ``tl.save()``.
+    """Streaming bundles must write the same unified manifest as ``trace.save()``.
 
     Regression test: ``BundleStreamWriter.finalize()`` used to write a bare
     legacy ``Manifest`` with no ``"kind"`` key, so ``detect_tlspec_format()``
@@ -570,7 +570,7 @@ def _stream(model: nn.Module, inputs: torch.Tensor, bundle_path: Path) -> None:
 
 
 def test_streaming_bundle_permissions_are_tight(tmp_path: Path) -> None:
-    """Streaming bundles must match tl.save's 0700/0600 permission parity (B8-10)."""
+    """Streaming bundles must match Trace.save's 0700/0600 permission parity (B8-10)."""
 
     import os
     import stat

@@ -3,7 +3,7 @@
 A trace is pristine when nothing ever intervened on it: no capture-time
 ``intervene=``, no staged hook or value replacement, no ``do()``/``set()``/
 region edit, no hooked rerun or run, no direct write. The reading is DERIVED at
-read time from records that already persist with the trace (``tl.save`` /
+read time from records that already persist with the trace (``Trace.save`` /
 ``tl.load``, pickle, ``copy.deepcopy``, ``fork()``), never stored as a flag of
 its own, so no later call can make a touched trace read pristine again: the
 records it is derived from are append-only, and ``Trace.state`` (the mutable

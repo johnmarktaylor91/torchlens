@@ -239,7 +239,7 @@ def test_tampered_artifact_on_disk_degrades_and_then_refuses_export(tmp_path) ->
 
     trace = tl.trace(_Small().eval(), torch.ones(1, 3))
     path = tmp_path / "tampered.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.outcome is not None
     assert loaded.outcome.status is CaptureStatus.COMPLETE

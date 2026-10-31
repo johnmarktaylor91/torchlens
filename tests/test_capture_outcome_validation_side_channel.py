@@ -73,7 +73,7 @@ def test_validate_then_save_round_trips(tmp_path) -> None:
     # Validation entry writes the side channel unconditionally, even on a pass.
     assert TRACE_FAILURE_ATTR in trace.__dict__
     path = tmp_path / "validated.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     # DROP scrubs the VALUE to None (the key stays, like every other DROP
     # row); no session-time diagnostic reaches the portable artifact.
@@ -101,7 +101,7 @@ def test_save_after_a_recorded_failure_payload_round_trips(tmp_path) -> None:
     assert isinstance(trace.__dict__[TRACE_FAILURE_ATTR], ValidationFailure)
     assert trace.__dict__[TRACE_DIAGNOSTICS_ATTR]
     path = tmp_path / "failed_validation.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     # The whole record is gone -- not a partially-portable ValidationFailure.
     for name in _SIDE_CHANNEL_ATTRS:
@@ -118,7 +118,7 @@ def test_repeated_validate_save_cycles_stay_saveable(tmp_path) -> None:
     trace, ground_truth = _traced()
     for index in range(3):
         trace.validate_forward_pass([ground_truth])
-        tl.save(trace, str(tmp_path / f"cycle_{index}.tlspec"))
+        trace.save(str(tmp_path / f"cycle_{index}.tlspec"))
 
 
 def test_side_channel_survives_plain_pickle_like_fast_run_session() -> None:

@@ -233,7 +233,7 @@ def m1_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         model, example, capture=tl.options.CaptureOptions(intervention_ready=True)
     )
     save_path = tmp_path_factory.mktemp("m1") / "live.tlspec"
-    tl.save(products["trace_live"], str(save_path))
+    products["trace_live"].save(str(save_path))
     products["trace_loaded"] = tl.load(str(save_path))
     products["trace_structure_only"] = tl.trace(
         model, example, capture=tl.options.CaptureOptions(structure_only=True)
@@ -282,7 +282,7 @@ def _run_verb(verb: str, product: Any, tmp_path: Any) -> Any:
         return product.to_agent_json()
     if verb == "save_analysis":
         target = tmp_path / "cell.tlspec"
-        tl.save(product, str(target))
+        product.save(str(target))
         assert target.exists(), "save reported success but wrote no artifact"
         return "saved"
     if verb == "fork":

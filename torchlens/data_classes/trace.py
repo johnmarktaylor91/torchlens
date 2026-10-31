@@ -2860,26 +2860,60 @@ class Trace(
         else:
             return iter(list(self._raw_graph_ws.raw_layer_dict.values()))
 
-    def save(self, path: str | Path, **kwargs: Any) -> None:
-        """Call :func:`torchlens.save` for this model log.
+    def save(
+        self,
+        path: str | Path,
+        *,
+        level: str = "portable",
+        overwrite: bool = False,
+        include_outs: bool | None = None,
+        include_weights: bool = False,
+        include_grads: bool | None = None,
+        include_saved_args: bool | None = None,
+        include_rng_states: bool | None = None,
+        include_activations: bool = False,
+        include_source: bool = True,
+        include_custom_attributes: bool = True,
+        include_buffer_values: bool | None = None,
+        strict: bool = True,
+    ) -> None:
+        """Save this trace as a ``.tlspec`` directory; ``tl.load(path)`` reads it back.
 
         Parameters
         ----------
         path:
-            Destination bundle directory.
-        **kwargs:
-            Portable save options. For runnable saves, ``include_weights=True``
-            bundles the full capture-time ``state_dict``: all named parameters
-            and persistent buffers, as state rather than a reconstructed model.
-            Independently, ``include_activations=True`` archives exactly the
-            capture-time ``save=``-selected payloads for inspection and eligible
-            byte-exact attestation; those payloads never seed execution.
-            ``include_source`` (default ``True``) controls whether the captured
-            model source code is embedded; set it ``False`` to strip verbatim
-            source, docstrings, and source-file references from a shared
-            ``.tlspec``. Absolute source paths are always relativized to a bare
-            basename, so no ``$HOME`` / username is ever embedded. See
-            :func:`torchlens.save` for the full option list.
+            Destination ``.tlspec`` directory.
+        level:
+            ``"audit"``, ``"executable_with_callables"``, ``"portable"`` or
+            ``"runnable"``.
+        overwrite:
+            Replace an existing directory at ``path``.
+        include_outs:
+            Persist activation payloads (``None`` follows the level default).
+        include_weights:
+            For runnable saves, bundle the full capture-time ``state_dict``: all
+            named parameters and persistent buffers, as state rather than a
+            reconstructed model.
+        include_grads:
+            Persist gradient payloads (``None`` follows the level default).
+        include_saved_args:
+            Persist saved call arguments (``None`` follows the level default).
+        include_rng_states:
+            Persist RNG states (``None`` follows the level default).
+        include_activations:
+            Archive exactly the capture-time ``save=``-selected payloads for
+            inspection and eligible byte-exact attestation; those payloads never
+            seed execution.
+        include_source:
+            Embed the captured model source code (default ``True``); ``False``
+            strips verbatim source, docstrings, and source-file references.
+            Absolute source paths are always relativized to a bare basename.
+        include_custom_attributes:
+            Persist user-set custom attributes.
+        include_buffer_values:
+            Persist buffer values (``None`` follows the level default).
+        strict:
+            Refuse typed on any field the level cannot persist.
 
         Warning
         -------
@@ -2893,7 +2927,22 @@ class Trace(
 
         from .._io.bundle import save as save_bundle
 
-        save_bundle(self, path, **kwargs)
+        save_bundle(
+            self,
+            path,
+            level=level,
+            overwrite=overwrite,
+            include_outs=include_outs,
+            include_weights=include_weights,
+            include_grads=include_grads,
+            include_saved_args=include_saved_args,
+            include_rng_states=include_rng_states,
+            include_activations=include_activations,
+            include_source=include_source,
+            include_custom_attributes=include_custom_attributes,
+            include_buffer_values=include_buffer_values,
+            strict=strict,
+        )
 
     def reconstruct_output(self, values: Literal["out", "transformed"] = "out") -> Any:
         """Reconstruct the traced model's final Python output object.
@@ -2972,14 +3021,14 @@ class Trace(
         # Lazy influence-geometry caches (FieldPolicy.DROP) hold
         # mappingproxy-bearing solution objects after any receptive-field
         # access, so carrying them made pickle.dumps/copy.deepcopy crash with
-        # "cannot pickle 'mappingproxy' object" while tl.save succeeded on
+        # "cannot pickle 'mappingproxy' object" while Trace.save succeeded on
         # the same trace. They rebuild on first access after restore.
         state.pop("_receptive_field_solution", None)
         state.pop("_rf_directional_solutions", None)
         # Render diagnostic from the last draw(): its EncodingChannelSpec can
         # hold the RAW user callable a `color_by=lambda ...` passed in, so
         # carrying it made pickle.dumps crash after an ordinary draw while
-        # tl.save succeeded on the same trace (the R10-7 raw-callable class).
+        # Trace.save succeeded on the same trace (the R10-7 raw-callable class).
         # Runtime-only either way; it rebuilds on the next draw.
         state.pop("_last_encoding_state", None)
         # The recorded save request can hold a raw user save callable.
@@ -3004,7 +3053,7 @@ class Trace(
         # Capture-session predicate carriers (FieldPolicy.DROP) hold LIVE USER
         # CLOSURES when predicate capture/intervention/halt was used (a
         # ``tl.when(...)`` conditional is a local function), so pickling a
-        # trace that ``tl.save`` accepted failed on exactly these fields.
+        # trace that ``Trace.save`` accepted failed on exactly these fields.
         # Serialize to the loaded-artifact form instead (absent / None), which
         # every post-capture consumer already tolerates -- same belt as the
         # semantic-output scratch above.
@@ -3022,7 +3071,7 @@ class Trace(
         state.pop("_distributed_plane_p", None)
         # R10-7: the REPR is scrubbed below, but the RAW user callables stayed
         # in state, so a lambda transform= made pickle.dumps crash while
-        # tl.save succeeded on the same trace. Serialize to the loaded-artifact
+        # Trace.save succeeded on the same trace. Serialize to the loaded-artifact
         # form (None), which every post-load consumer already tolerates.
         state["activation_transform"] = None
         state["grad_transform"] = None

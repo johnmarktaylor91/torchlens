@@ -1041,7 +1041,7 @@ class Layer(_SelectionOperand):
         # R10-7 (mirroring ``Op.__getstate__``): user transform callables
         # (FieldPolicy.DROP) serialize to the loaded-artifact form (None) -- a
         # lambda transform= made pickle.dumps crash on rolled layer records
-        # while tl.save succeeded on the same trace.
+        # while Trace.save succeeded on the same trace.
         if state.get("activation_transform") is not None:
             state["activation_transform"] = None
         if state.get("grad_transform") is not None:

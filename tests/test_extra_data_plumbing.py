@@ -116,7 +116,7 @@ def test_annotations_fields_roundtrip_through_bundle_save_load(tmp_path: Path) -
     layer_log.annotations["rdm"] = {"shape": [2, 2], "label": "layer"}
 
     bundle_path = tmp_path / "annotations.tl"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path)
     loaded_layer_pass = loaded.layer_list[0]
     loaded_layer_log = loaded.layer_logs[loaded_layer_pass.layer_label]

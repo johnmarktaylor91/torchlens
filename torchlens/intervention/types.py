@@ -258,7 +258,7 @@ class Edit:
         Builtin factories are local closures derived entirely from the
         stable ``(helper_name, args, kwargs)`` identity; ``__setstate__``
         rebuilds them through the same builtin registry ``tl.load`` uses,
-        so plain ``pickle`` and ``tl.save`` agree on helper-carrying specs.
+        so plain ``pickle`` and ``Trace.save`` agree on helper-carrying specs.
         ``opaque_audit`` factories (load-time raising placeholders) drop to
         the canonical factory-less audit-only form.
         """

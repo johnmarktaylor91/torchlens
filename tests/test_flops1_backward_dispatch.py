@@ -386,7 +386,7 @@ def test_loaded_trace_reads_the_saved_count(tmp_path: Path) -> None:
     try:
         live = backward_status(trace)
         path = tmp_path / "observed.tlspec"
-        tl.save(trace, path)
+        trace.save(path)
         loaded = tl.load(path)
         status = backward_status(loaded)
         assert status.state == "backward_observed"

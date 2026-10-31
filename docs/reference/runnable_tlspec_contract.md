@@ -693,7 +693,7 @@ input-conditional at run time, not a static descriptor flag.
 The producer can emit a runnable descriptor only when the source capture recorded replay-template
 metadata. Users must capture with
 `capture=tl.options.CaptureOptions(intervention_ready=True)` (or flat
-`intervention_ready=True`) before `tl.save(..., level="runnable")`. This capture flag is required
+`intervention_ready=True`) before `trace.save(..., level="runnable")`. This capture flag is required
 even when the user intends replay without an intervention. Omitting it produces a typed
 `RunnablePreflightError` with the `MISSING_CALLABLE_REF` finding; analysis saves remain available,
 but save-time code never guesses or reconstructs missing call templates.
@@ -1163,7 +1163,7 @@ buffer_sink_routing_mutable
 preflight refusal for a HALTED capture: the taken-path DAG ends at the halt frontier, so a
 runnable descriptor would replay a truncated program while claiming faithfulness to the full
 forward. Analysis-level saves of halted captures remain allowed; the refusal surfaces as
-`RunnablePreflightError` at `tl.save(level="runnable")` entry.
+`RunnablePreflightError` at `trace.save(path, level="runnable")` entry.
 
 `user_intervention_not_replayable` is also the RUN-time ceiling diagnostic (stage
 `hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run(inputs=...,
@@ -1679,7 +1679,7 @@ persistence/trainability, and alias coherence are verified. Missing, unexpected,
 module mismatches and alias conflicts are errors. Positional/shape-only matching is forbidden.
 Strict staging never silently random-fills a missing key. Intermediates are never initialized.
 
-`tl.save(trace, path, level="runnable", include_weights=True)` is the confirmed Stage 7 spelling.
+`trace.save(path, level="runnable", include_weights=True)` is the confirmed Stage 7 spelling.
 The default is false and writes no weight entries. When true, load decodes the schema-versioned
 weight family and validates it atomically through this same strict contract before returning the
 Trace. A run that uses it reports `embedded_capture_state` with no random-filled slots. Explicitly
@@ -3022,7 +3022,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
 
 ## 12. Optional-payload API spelling and docs lockstep
 
-`include_weights` and `include_activations` are confirmed on `tl.save`/`Trace.save` with
+`include_weights` and `include_activations` are confirmed on `Trace.save`/`Trace.save` with
 `level="runnable"`. Both default false and are independent. Weights mean the full `state_dict`
 (named parameters plus persistent buffers), not only trainable weights. Activations mean exactly the
 already-retained capture-time `save=` selection, not a second selector.
@@ -3036,7 +3036,7 @@ class body (including class-level constants), `__init__`/`forward` source, docst
 kept by default. Because it is a shareable artifact, this disclosure is explicit: a default save
 ships the model source.
 
-`include_source: bool = True` on `tl.save`/`Trace.save` is the opt-out. It applies at **every** save
+`include_source: bool = True` on `Trace.save`/`Trace.save` is the opt-out. It applies at **every** save
 `level` (audit, executable_with_callables, portable, runnable) because the source blob and
 `code_context` are backend-neutral metadata scrubbed on the one shared serialization path.
 
@@ -3060,7 +3060,7 @@ Model preparation harvests every public, non-callable module instance attribute 
 `Module.custom_attributes`, and portable saves persist the whole channel by default -- arbitrary
 user values (config scalars, but equally tokens, host paths, usernames, or large containers a
 module happens to hold as public attributes) ship in the shareable artifact.
-`include_custom_attributes: bool = True` on `tl.save`/`Trace.save` is the opt-out: `False` drops
+`include_custom_attributes: bool = True` on `Trace.save`/`Trace.save` is the opt-out: `False` drops
 the entire channel from the artifact (the live `Trace` is untouched). Values are NEVER rewritten
 or partially scrubbed -- the channel ships verbatim or not at all, because a save that silently
 mutates documented metadata values is worse than the disclosure problem it would paper over.
@@ -3077,7 +3077,7 @@ caches), capture records the value the buffer held BEFORE the forward in
 `Trace._buffer_initial_values`, and every save level -- audit included -- shipped those tensors
 verbatim with no flag, warning, or manifest row. Buffer values are training-data-derived state,
 so the channel gets the same belt as custom attributes: `include_buffer_values: bool = True` on
-`tl.save`/`Trace.save` (and `tl.to_disk` for streaming) is the opt-out; `False` drops the entire
+`Trace.save`/`Trace.save` (and `tl.to_disk` for streaming) is the opt-out; `False` drops the entire
 channel from the artifact, values are never rewritten or partially scrubbed, and the live `Trace`
 is untouched. Every save writes a `buffer_values_disclosure` entry in `manifest.json` (the
 effective `included` flag, `buffer_count`, and the bounded sorted `buffer_names` -- names only,

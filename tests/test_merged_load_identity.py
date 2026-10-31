@@ -175,7 +175,7 @@ def test_non_rank_core_member_refuses_not_laundered(tmp_path: Path) -> None:
     torch.manual_seed(0)
     plain = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
     shutil.rmtree(art / "members" / "rank_0001.tlspec")
-    tl.save(plain, art / "members" / "rank_0001.tlspec")
+    plain.save(art / "members" / "rank_0001.tlspec")
     _rehash(art)
     with pytest.raises(MergedArtifactError) as excinfo:
         load_merged(art)

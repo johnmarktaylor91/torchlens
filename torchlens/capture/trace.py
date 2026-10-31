@@ -2029,7 +2029,7 @@ def run_and_log_inputs_through_model(
 
         # Fence every cpu_async D2H copy recorded this forward BEFORE any
         # host-side consumer (finalize, postprocess digests, ``op.out``,
-        # ``tl.save`` serialization) can observe partial bytes (R36-1).
+        # ``Trace.save`` serialization) can observe partial bytes (R36-1).
         synchronize_pending_cpu_async_copies()
         # Settle deferred track_nonfinite device flags here, after the forward
         # is complete, so the record costs one batch of scalar reads instead of

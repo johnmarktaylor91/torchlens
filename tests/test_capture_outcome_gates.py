@@ -52,7 +52,7 @@ def _failed_partial_trace() -> Trace:
 def test_complete_tlspec_round_trip_adopts_attestation(tmp_path) -> None:
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3))
     bundle = tmp_path / "complete.tlspec"
-    tl.save(trace, bundle, overwrite=True)
+    trace.save(bundle, overwrite=True)
     loaded = tl.load(bundle)
     assert loaded.outcome is not None
     assert loaded.outcome.status is CaptureStatus.COMPLETE
@@ -62,7 +62,7 @@ def test_complete_tlspec_round_trip_adopts_attestation(tmp_path) -> None:
 def test_halted_tlspec_round_trip_adopts_attestation(tmp_path) -> None:
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     bundle = tmp_path / "halted.tlspec"
-    tl.save(trace, bundle, overwrite=True)
+    trace.save(bundle, overwrite=True)
     loaded = tl.load(bundle)
     assert loaded.outcome.status is CaptureStatus.HALTED
     assert loaded.outcome.derived is False
@@ -135,7 +135,7 @@ def test_failed_partial_pickle_derives_failed_from_attestation() -> None:
 def test_n1_failed_capture_refuses_save(tmp_path) -> None:
     source = _failed_partial_trace()
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        tl.save(source, tmp_path / "failed.tlspec", overwrite=True)
+        source.save(tmp_path / "failed.tlspec", overwrite=True)
     assert exc_info.value.fields["code"] == "N1"
 
 
@@ -151,7 +151,7 @@ def test_n1_raw_partial_trace_object_refuses_save_not_attributeerror(tmp_path) -
         raise AssertionError("capture unexpectedly succeeded")
     assert not hasattr(partial, "_runnable")
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        tl.save(partial, tmp_path / "raw_partial.tlspec", overwrite=True)
+        partial.save(tmp_path / "raw_partial.tlspec", overwrite=True)
     assert exc_info.value.fields["code"] == "N1"
 
 
@@ -167,7 +167,7 @@ def test_n1_failed_recording_refuses_save_not_attributeerror(tmp_path) -> None:
     assert recording.failed is True
     assert not hasattr(recording, "_runnable")
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        tl.save(recording, tmp_path / "failed_recording.tlspec", overwrite=True)
+        recording.save(tmp_path / "failed_recording.tlspec", overwrite=True)
     assert exc_info.value.fields["code"] == "N1"
 
 
@@ -181,7 +181,7 @@ def test_n1_unknown_loaded_partial_refuses_save(tmp_path) -> None:
     restored.__setstate__(state)
     assert restored.outcome.status is CaptureStatus.UNKNOWN
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        tl.save(restored, tmp_path / "unknown.tlspec", overwrite=True)
+        restored.save(tmp_path / "unknown.tlspec", overwrite=True)
     assert exc_info.value.fields["code"] == "N1"
 
 
@@ -237,7 +237,7 @@ def test_complete_capture_surfaces_stay_open(tmp_path) -> None:
     # (_last_validation_failure, torchlens/validation/diagnostics.py) that is
     # absent from _PORTABLE_STATE_SPEC, so validate-then-save refuses -- a gap
     # that predates this lane and is out of its fence.
-    tl.save(trace, tmp_path / "ok.tlspec", overwrite=True)
+    trace.save(tmp_path / "ok.tlspec", overwrite=True)
     # The gate must allow ENTRY; the verdict itself is validation's business
     # (a bool or a replay-status object depending on replay coverage).
     result = trace.validate_forward_pass([model(x)])
@@ -435,7 +435,7 @@ def test_halted_arm_interrupt_settles_failed_interrupted(
 
 
 def test_hand_built_partial_wrapper_around_settled_trace_still_refuses_save(tmp_path) -> None:
-    """The outcome delegation must not open tl.save to hand-built wrappers: a
+    """The outcome delegation must not open Trace.save to hand-built wrappers: a
     PartialTrace around a COMPLETE trace previously fail-closed only by
     ACCIDENT (gate read the wrapper's empty ``__dict__`` as UNKNOWN); it must
     refuse typed, never proceed into Trace save machinery and crash."""
@@ -446,7 +446,7 @@ def test_hand_built_partial_wrapper_around_settled_trace_still_refuses_save(tmp_
     assert complete.outcome.status is CaptureStatus.COMPLETE
     wrapper = PartialTrace(trace=complete, original_exception=RuntimeError("hand-built"))
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        tl.save(wrapper, tmp_path / "wrapper.tlspec", overwrite=True)
+        wrapper.save(tmp_path / "wrapper.tlspec", overwrite=True)
     assert exc_info.value.fields["code"] == "N1"
 
 
@@ -557,7 +557,7 @@ def test_run_on_halted_analysis_load_refuses_n5(tmp_path) -> None:
     halted = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     assert halted.outcome.status is CaptureStatus.HALTED
     bundle = tmp_path / "halted_analysis"
-    tl.save(halted, bundle, level="audit", overwrite=True)
+    halted.save(bundle, level="audit", overwrite=True)
     loaded = tl.load(bundle)
     with pytest.raises(CaptureOutcomeError) as excinfo:
         loaded.run(inputs=torch.ones(1, 3))

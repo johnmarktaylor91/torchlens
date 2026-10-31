@@ -167,7 +167,7 @@ def test_backward_reason_round_trips_and_the_knob_does_not(tmp_path: Path) -> No
     trace.backward_peak_memory = None
     trace.backward_peak_memory_reason = CPU_PEAK_NOT_REQUESTED_REASON
     path = tmp_path / "backward_none.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     assert loaded.backward_peak_memory is None
     assert loaded.backward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
@@ -198,7 +198,7 @@ def test_malformed_backward_reason_refuses_at_load(
     trace.backward_peak_memory = peak
     trace.backward_peak_memory_reason = reason
     path = tmp_path / f"forged_{why}.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     with pytest.raises(TorchLensIOError) as excinfo:
         tl.load(path)

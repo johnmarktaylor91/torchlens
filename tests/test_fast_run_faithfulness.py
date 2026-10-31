@@ -419,7 +419,7 @@ def _saved_all_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> P
                 cache=False,
             ),
         )
-    tl.save(captured, path, level="runnable", include_weights=True)
+    captured.save(path, level="runnable", include_weights=True)
     return path
 
 
@@ -549,7 +549,7 @@ def test_fast_sparse_runs_post_execution_contract_checks(tmp_path: Path) -> None
             ),
         )
     path = tmp_path / "m.tlspec"
-    tl.save(captured, path, level="runnable", include_weights=True)
+    captured.save(path, level="runnable", include_weights=True)
 
     ordinary = tl.load(path)
     with pytest.raises(PathDivergenceError):

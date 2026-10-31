@@ -639,7 +639,7 @@ def _tp_worker(rank: int, world_size: int, init_file: str, out_dir: str) -> None
     torch.manual_seed(77)
     x = torch.randn(2, 4)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(distributed_witness="digest"))
-    tl.save(log, os.path.join(out_dir, f"rank{rank}.tlspec"))
+    log.save(os.path.join(out_dir, f"rank{rank}.tlspec"))
     dist.destroy_process_group()
 
 
@@ -673,7 +673,7 @@ def _asymmetric_worker(
     model = HandRolledTP()
     torch.manual_seed(77)
     log = tl.trace(model, torch.randn(2, 4))
-    tl.save(log, os.path.join(out_dir, f"rank{rank}.tlspec"))
+    log.save(os.path.join(out_dir, f"rank{rank}.tlspec"))
     dist.destroy_process_group()
 
 

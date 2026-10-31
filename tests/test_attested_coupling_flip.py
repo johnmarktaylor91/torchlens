@@ -435,7 +435,7 @@ def test_coupled_product_survives_save_load_and_loaded_replay_refuses(tmp_path):
     runner = GreedyRunner(TinyLM(), n_steps=3)
     log = _coupled(runner, _ids(), tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)), n_steps=3)
     target = tmp_path / "coupled.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     header = _header(loaded)
     assert header["intervention_digest"] == _header(log)["intervention_digest"]

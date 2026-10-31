@@ -45,7 +45,7 @@ def _save(model: nn.Module, args: Any, path: Path, **save_kwargs: Any) -> Path:
             intervention_ready=True, capture_container_structure=True, cache=False
         ),
     )
-    tl.save(trace, str(path), level="runnable", **save_kwargs)
+    trace.save(str(path), level="runnable", **save_kwargs)
     return path
 
 
@@ -237,7 +237,7 @@ def test_r35_autocast_capture_replays_outside_autocast(tmp_path: Path) -> None:
             ),
         )
     path = tmp_path / "autocast.tlspec"
-    tl.save(trace, str(path), level="runnable", include_weights=True)
+    trace.save(str(path), level="runnable", include_weights=True)
     result = tl.load(str(path)).run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.output.dtype is torch.bfloat16

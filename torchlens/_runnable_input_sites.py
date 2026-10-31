@@ -173,7 +173,7 @@ def raise_analysis_run_unavailable(trace: Any) -> None:
     raise RunCapabilityUnavailableError(
         "This loaded Trace is analysis-only and has no sparse run descriptor. "
         "Remedy: save a runnable artifact at capture time with "
-        "tl.save(trace, path, level='runnable') and load that instead.",
+        "trace.save(path, level='runnable') and load that instead.",
         code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
         readiness=readiness,
         diagnostics=diagnostics,

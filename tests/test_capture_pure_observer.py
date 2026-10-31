@@ -209,7 +209,7 @@ def test_loaded_trace_has_no_attribute_write_record(tmp_path):
     trace = tl.trace(_Stash(), torch.randn(2, 4))
     assert trace.modules["self"].attribute_writes is not None
     path = tmp_path / "stash.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(str(path))
     assert loaded.modules["self"].attribute_writes is None
     assert loaded.modules["fc"].attribute_writes is None

@@ -430,7 +430,7 @@ class TestReplayRefusals:
         model = HandRolledTP()  # held alive: the refusal under test is the
         log = tl.trace(model, torch.randn(2, 4))  # boundary one, not GC state
         with pytest.raises(RunnablePreflightError) as excinfo:
-            tl.save(log, str(tmp_path / "boundary.tlspec"), level="runnable")
+            log.save(str(tmp_path / "boundary.tlspec"), level="runnable")
         codes = {d.code for d in excinfo.value.fields["diagnostics"]}
         assert "collective_boundary_runnable_unsupported" in codes
 
@@ -455,7 +455,7 @@ class TestReplayRefusals:
         # FieldPolicy.DROP rows, so validate-then-save round-trips too. Pinned
         # in tests/test_capture_outcome_validation_side_channel.py; the order
         # here is kept only to leave this test's history untouched.)
-        tl.save(log, str(tmp_path / "plain.tlspec"), level="runnable")
+        log.save(str(tmp_path / "plain.tlspec"), level="runnable")
         status = log.validate_forward_pass([expected])
         assert status is not None
 

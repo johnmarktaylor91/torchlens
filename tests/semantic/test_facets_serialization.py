@@ -78,7 +78,7 @@ def test_facets_read_before_save_does_not_poison_tlspec(tmp_path: Any) -> None:
     assert log.modules["linear"].facets is not None
 
     path = tmp_path / "facets_touched.tlspec"
-    tl.save(log, path)
+    log.save(path)
 
     loaded = tl.load(path)
     reloaded_call = next(iter(loaded.module_calls))

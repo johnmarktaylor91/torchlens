@@ -73,7 +73,7 @@ def test_record_survives_save_load_with_stable_status(tmp_path) -> None:
         description="torchvision preset: resize=232 crop=224",
     )
     path = tmp_path / "trace.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     loaded = tl.load(str(path))
     record = loaded.input_preprocessor
     assert record is not None
@@ -100,6 +100,6 @@ def test_unverified_fallback_status_survives_save_load(tmp_path) -> None:
         description="fallback",
     )
     path = tmp_path / "trace_fallback.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.input_preprocessor.status == pp.STATUS_UNVERIFIED_FALLBACK

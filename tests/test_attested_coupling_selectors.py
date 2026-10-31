@@ -206,7 +206,7 @@ def test_stamps_survive_save_load(tmp_path):
     model = Root()
     log = _episode_trace(model, torch.randn(2, 4))
     target = tmp_path / "episode.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     assert {op.label: op.episode_step for op in loaded.layer_list} == {
         op.label: op.episode_step for op in log.layer_list

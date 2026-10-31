@@ -449,7 +449,7 @@ def test_episode_key_rides_plain_v8_artifacts(tmp_path):
     path = tmp_path / "plain.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(log, path)
+        log.save(path)
     loaded = tl.load(path)
     assert loaded.annotations["episode"] == log.annotations["episode"]
     assert "episode" in log.annotations  # live trace keeps its session ledger

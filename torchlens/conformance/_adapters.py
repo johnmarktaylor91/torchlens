@@ -92,9 +92,7 @@ class TorchReferenceAdapter:
     def save(self, trace: Any, path: Path) -> None:
         """Persist one captured trace as a portable artifact."""
 
-        import torchlens as tl
-
-        tl.save(trace, path)
+        trace.save(path)
 
     def load(self, path: Path) -> Any:
         """Reload one persisted artifact."""

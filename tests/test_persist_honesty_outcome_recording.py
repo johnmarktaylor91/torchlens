@@ -147,7 +147,7 @@ def test_loaded_log_backward_refuses_before_mutation(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
     trace = tl.trace(model, x, capture=CaptureOptions(backward_ready=True))
-    tl.save(trace, tmp_path / "bundle")
+    trace.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
     live_loss = model(x.requires_grad_(True)).sum()
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
@@ -160,7 +160,7 @@ def test_loaded_recording_backward_refuses(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
     trace = tl.trace(model, x)
-    tl.save(trace, tmp_path / "bundle")
+    trace.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
         loaded.recording_backward()

@@ -23,7 +23,7 @@ _REQUIRED_PARAMS_MAX = 6
 _EXAMPLES: dict[str, str] = {
     "trace": "log = tl.trace(model, x, save=tl.func('relu'))",
     "load": "log = tl.load('run.tlspec')",
-    "save": "tl.save(log, 'run.tlspec')",
+    "save": "trace.save('run.tlspec')",
     "record": "rec = tl.record(model, x, save=tl.func('relu'))",
     "func": "tl.trace(model, x, save=tl.func('relu'))",
     "in_module": "tl.trace(model, x, save=tl.in_module('encoder'))",

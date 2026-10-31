@@ -21,7 +21,7 @@ def test_train_mode_dropped_on_load(tmp_path: Path, two_layer_mlp: TwoLayerMlp) 
     )
     bundle_path = tmp_path / "backward_ready.tl"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path)
 
     assert trace.backward_ready is True

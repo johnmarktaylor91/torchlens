@@ -159,7 +159,7 @@ class CaptureOutcomeError(TorchLensError, ValueError):
     branch on it, never on message text.
 
     ``ValueError`` lineage (R64-4): the sibling refusals at the same public
-    doors (``tl.save`` raises ``RunnablePreflightError`` /
+    doors (``Trace.save`` raises ``RunnablePreflightError`` /
     ``InvalidArgumentError`` for its other three refusal reasons) are all
     ``ValueError``-lineage, so a caller's natural ``except ValueError`` used
     to catch three of the door's four refusals and silently miss the N-gate.
@@ -390,7 +390,7 @@ def outcome_for(trace: object) -> CaptureOutcome | None:
     fold (``Bundle``: the worst-of-members fold, COMPLETE never blessed above
     the weakest member, ``derived=True``, disclosure-only). Without it the
     gate treated every ``tl.bundle()``-built product as UNKNOWN and
-    ``tl.save`` false-refused every bundle with the same false hand-built
+    ``Trace.save`` false-refused every bundle with the same false hand-built
     warning while ``bundle.save()`` worked -- the same two-answers disease,
     instance three (foldB D9). The fold is reported beside results and never
     gates a read on a member it does not describe: capability gating stays

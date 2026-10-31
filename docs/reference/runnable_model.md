@@ -16,7 +16,7 @@ when readiness succeeds, replayed through the transactional `Trace.run()` API.
 Runnable saving requires replay-template metadata from the original capture. Opt in with
 `capture=tl.options.CaptureOptions(intervention_ready=True)` (or the equivalent flat
 `intervention_ready=True` argument) before calling
-`tl.save(trace, path, level="runnable", ...)`. A normal capture remains valid for analysis
+`trace.save(path, level="runnable", ...)`. A normal capture remains valid for analysis
 saves, but runnable preflight rejects it with `RunnablePreflightError` and the structured
 `MISSING_CALLABLE_REF` finding; saving cannot reconstruct the missing call templates later.
 

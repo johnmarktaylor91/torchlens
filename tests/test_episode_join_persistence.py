@@ -85,7 +85,7 @@ def _round_trip(log, tmp_path):
     path = tmp_path / "episode.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(log, str(path))
+        log.save(str(path))
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
         return tl.load(str(path))

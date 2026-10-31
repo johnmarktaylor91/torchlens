@@ -1351,13 +1351,13 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
         warnings.warn(
             TorchLensWarning(
                 "This runnable artifact carries no model weights (the default "
-                "tl.save(level='runnable') is weight-free), so run() filled all "
+                "trace.save(path, level='runnable') is weight-free), so run() filled all "
                 f"{len(random_slot_ids)} state slot(s) with RANDOM "
                 f"torchlens_role_init_v2 values{seed_note}. Outputs come from a "
                 "freshly initialized model, NOT the captured one; the run "
                 "report's 'verified' attests path faithfulness against this "
                 "random state and numeric attestation is not_applicable. "
-                "Remedy: re-save with tl.save(trace, path, level='runnable', "
+                "Remedy: re-save with trace.save(path, level='runnable', "
                 "include_weights=True), or bind real weights with "
                 "trace.load_state_dict(state_dict) before run()",
                 code="runnable_random_init_run",

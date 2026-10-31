@@ -90,7 +90,7 @@ def test_rollup_counts_survive_load_without_timing(tmp_path) -> None:
     live_summary = trace.grad_fn_site_summary
     path = tmp_path / "site_summary.tlspec"
     with tl._io.prerelease.activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
     loaded_summary = loaded.grad_fn_site_summary
     assert set(loaded_summary) == set(live_summary)

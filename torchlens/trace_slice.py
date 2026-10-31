@@ -17,7 +17,7 @@ honestly has:
   mixin), so a slice composes with any other region and feeds ``do()``.
 
 It deliberately offers NO save/replay/validate: those would be lies about
-a region with unresolved external inputs. ``tl.save`` refuses a slice
+a region with unresolved external inputs. ``Trace.save`` refuses a slice
 typed (``slice_save_unsupported``) — save the underlying trace and
 re-derive the view.
 

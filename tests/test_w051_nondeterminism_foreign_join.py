@@ -444,7 +444,7 @@ def test_prepool_feed_in_capture_is_not_verified(
         reason.startswith("owner_thread_waited:") for reason in seam.rng_monitor_uncertain_detail
     )
     bundle = tmp_path / "prepool.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     result = tl.load(str(bundle)).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "unverifiable"
 
@@ -511,7 +511,7 @@ def test_unjoined_flusher_capture_replays_verified(tmp_path: Path) -> None:
         assert not seam.host_rng_unreplayable
         assert not seam.rng_monitor_uncertain
         bundle = tmp_path / "flusher.tlspec"
-        tl.save(trace, str(bundle), level="runnable", include_weights=True)
+        trace.save(str(bundle), level="runnable", include_weights=True)
         assert tl.load(str(bundle)).run(inputs=x.clone()).report.path_faithfulness.value == (
             "verified"
         )

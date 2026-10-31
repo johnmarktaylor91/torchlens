@@ -248,7 +248,7 @@ def loaded_runnable_trace(tmp_path):
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        tl.save(trace, str(path), level="runnable")
+        trace.save(str(path), level="runnable")
     return tl.load(str(path))
 
 

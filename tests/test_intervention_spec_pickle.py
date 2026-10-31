@@ -1,8 +1,8 @@
-"""Pickle / ``tl.save`` parity for intervention-spec-carrying traces.
+"""Pickle / ``Trace.save`` parity for intervention-spec-carrying traces.
 
 Pre-fix, plain ``pickle`` of a Trace captured with ``intervene=`` failed
 (``zero_ablate.<locals>.factory`` and ``when.<locals>._predicate`` are local
-closures) while ``tl.save`` of the same trace succeeded -- a serialization
+closures) while ``Trace.save`` of the same trace succeeded -- a serialization
 split on one object. Two aligned fixes:
 
 * ``Edit`` pickle hooks drop the builtin factory closure and rebuild it
@@ -90,16 +90,16 @@ def test_helper_spec_deepcopy_keeps_factory_identity() -> None:
 
 
 def test_intervened_trace_pickles_like_it_saves(intervened_trace: tl.Trace, tmp_path) -> None:
-    """The RED-capable parity case: pickle succeeds where tl.save succeeds."""
+    """The RED-capable parity case: pickle succeeds where Trace.save succeeds."""
 
     blob = pickle.dumps(intervened_trace)
     restored = pickle.loads(blob)
     assert len(restored.layer_list) == len(intervened_trace.layer_list)
     # The saved (intervened) activation payload survives the round-trip.
     assert torch.equal(restored["relu_1_2"].ops[0].out, intervened_trace["relu_1_2"].ops[0].out)
-    # tl.save of the very same object keeps working (the parity claim).
+    # Trace.save of the very same object keeps working (the parity claim).
     path = str(tmp_path / "iv.tlspec")
-    tl.save(intervened_trace, path)
+    intervened_trace.save(path)
     assert tl.load(path)["relu_1_2"] is not None
 
 
@@ -127,7 +127,7 @@ def test_pickled_trace_matches_loaded_predicate_carrier_form(
 def test_add_and_replace_with_pickle_round_trip() -> None:
     """R10-1: ``add``/``replace_with`` mint portability="builtin" specs but
     were missing from the rebuild registry -- pickling (and therefore
-    tl.save/tl.load of a trace intervened with them) minted a dead artifact
+    Trace.save/tl.load of a trace intervened with them) minted a dead artifact
     that raised ``intervention_helper_unknown`` at restore."""
 
     added = pickle.loads(pickle.dumps(tl.add(1.5)))

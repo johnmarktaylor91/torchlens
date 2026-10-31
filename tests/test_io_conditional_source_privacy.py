@@ -68,7 +68,7 @@ def test_conditional_source_path_relativized_with_source_kept(tmp_path: Path) ->
 
     trace = _capture()
     spec = tmp_path / "kept.tlspec"
-    tl.save(trace, str(spec), include_source=True)
+    trace.save(str(spec), include_source=True)
     loaded = tl.load(str(spec))
     saved_paths = _conditional_source_files(loaded)
     assert saved_paths, "conditional records vanished on round-trip"
@@ -84,7 +84,7 @@ def test_conditional_source_path_dropped_with_source_excluded(tmp_path: Path) ->
 
     trace = _capture()
     spec = tmp_path / "dropped.tlspec"
-    tl.save(trace, str(spec), include_source=False)
+    trace.save(str(spec), include_source=False)
 
     # Nothing in the on-disk artifact may carry the absolute path.
     absolute_here = os.path.abspath(__file__)
@@ -117,7 +117,7 @@ def test_capture_advisory_location_honors_source_privacy(tmp_path: Path) -> None
     assert os.path.basename(__file__) in (live_rows[0]["first_location"] or "")
 
     kept = tmp_path / "advisory_kept.tlspec"
-    tl.save(trace, str(kept), include_source=True)
+    trace.save(str(kept), include_source=True)
     kept_rows = tl.load(str(kept)).annotations["capture_advisories"]
     assert kept_rows[0]["count"] >= 1
     kept_location = kept_rows[0]["first_location"]
@@ -125,7 +125,7 @@ def test_capture_advisory_location_honors_source_privacy(tmp_path: Path) -> None
     _assert_no_host_path([kept_location.rsplit(":", 1)[0]])
 
     dropped = tmp_path / "advisory_dropped.tlspec"
-    tl.save(trace, str(dropped), include_source=False)
+    trace.save(str(dropped), include_source=False)
     dropped_rows = tl.load(str(dropped)).annotations["capture_advisories"]
     assert dropped_rows and dropped_rows[0]["kind"] == "scalar_escape"
     assert dropped_rows[0]["first_location"] is None

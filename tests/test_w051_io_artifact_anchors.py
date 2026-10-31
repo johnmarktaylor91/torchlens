@@ -46,7 +46,7 @@ def source_bundle(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     trace = tl.trace(_Model(), torch.randn(1, 1, 12, 12))
     try:
         path = tmp_path_factory.mktemp("w051_anchor") / "source.tlspec"
-        tl.save(trace, path)
+        trace.save(path)
         yield path
     finally:
         trace.cleanup()
@@ -215,7 +215,7 @@ def test_genuine_edge_intervention_round_trips(tmp_path: Path) -> None:
     fork = trace.fork()
     fork.do(edge.__selection__(), trace["relu_1_2"].out.clone() * 0.5)
     path = tmp_path / "genuine_edge.tlspec"
-    tl.save(fork, path)
+    fork.save(path)
     loaded = tl.load(path)
     carriers = [op for op in loaded.layer_list if getattr(op, "edge_substitutions", None)]
     assert carriers, "the genuine tier-(ii) carrier must persist and load"

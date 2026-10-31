@@ -130,7 +130,7 @@ def test_none_and_reason_round_trip_through_save_load(
     _rss(monkeypatch, 1_000_000)
     trace = _capture()
     path = tmp_path / "zero_peak.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     loaded = tl.load(path)
     assert loaded.forward_peak_memory is None
@@ -144,7 +144,7 @@ def test_positive_value_round_trips_with_no_reason(
     _rss(monkeypatch, 1_000_000, 1_004_096)
     trace = _capture()
     path = tmp_path / "positive_peak.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     loaded = tl.load(path)
     assert int(loaded.forward_peak_memory) == 4096
@@ -187,7 +187,7 @@ def test_malformed_reason_refuses_at_load(tmp_path: Path, peak: Any, reason: Any
     trace.forward_peak_memory = peak
     trace.forward_peak_memory_reason = reason
     path = tmp_path / f"forged_{why}.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     with pytest.raises(TorchLensIOError) as excinfo:
         tl.load(path)

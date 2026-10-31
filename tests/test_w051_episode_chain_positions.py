@@ -167,7 +167,7 @@ def test_pure_chain_discloses_the_tail_positions() -> None:
 def test_chain_positions_round_trip_and_rederive(tmp_path) -> None:
     log = _trace(_ToolInject(), crossings=(1,))
     path = tmp_path / "tool_call.tlspec"
-    tl.save(log, path)
+    log.save(path)
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
         loaded = tl.load(path)

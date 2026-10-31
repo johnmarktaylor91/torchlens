@@ -76,7 +76,7 @@ def _loaded_runnable(tmp_path, model=None):
         capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
     )
     path = tmp_path / "until.tlspec"
-    tl.save(log, str(path), level="runnable", include_weights=True)
+    log.save(str(path), level="runnable", include_weights=True)
     return tl.load(str(path)), x
 
 
@@ -312,7 +312,7 @@ def test_truncated_result_refuses_all_saves(tmp_path):
     _model, _log, result = _live_until_relu()
     for level in ("analysis", "runnable"):
         with pytest.raises(Exception) as exc_info:  # noqa: PT011 - poison-gate class
-            tl.save(result.trace, str(tmp_path / f"t_{level}.tlspec"), level=level)
+            result.trace.save(str(tmp_path / f"t_{level}.tlspec"), level=level)
         assert "poison" in str(exc_info.value).lower() or "truncat" in str(exc_info.value).lower()
 
 
@@ -348,7 +348,7 @@ def test_until_requires_full_inputs(tmp_path):
         capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
     )
     path = tmp_path / "two.tlspec"
-    tl.save(log, str(path), level="runnable", include_weights=True)
+    log.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     # until= the relu: y's consumer (the add) is skipped, but the full recorded
     # input tree remains REQUIRED -- a partial-inputs surface would let omission

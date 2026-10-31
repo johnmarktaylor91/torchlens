@@ -116,7 +116,7 @@ def _loaded_run_matches_live(model: nn.Module, inputs: torch.Tensor, tmp_path: P
     """Save, load and run a runnable artifact, and compare it with the live model."""
 
     path = tmp_path / "model.tlspec"
-    tl.save(_capture(model, inputs), path, level="runnable", include_weights=True)
+    _capture(model, inputs).save(path, level="runnable", include_weights=True)
     result = tl.load(path).run(inputs=inputs, seed=0)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     torch.testing.assert_close(result.output, model(inputs))
@@ -394,7 +394,7 @@ def test_legacy_tensor_constructor_save_refuses_typed(tmp_path: Path) -> None:
     labels = _legacy_ctor_labels(trace)
     assert len(labels) == 3
     with pytest.raises(RunnablePreflightError) as excinfo:
-        tl.save(trace, tmp_path / "legacy.tlspec", level="runnable")
+        trace.save(tmp_path / "legacy.tlspec", level="runnable")
     refused = {
         label
         for diagnostic in excinfo.value.fields["diagnostics"]

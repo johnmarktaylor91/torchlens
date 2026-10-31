@@ -348,7 +348,7 @@ class ModuleCall:
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         # Lazily-populated facet-view cache: a public ``.facets`` read poked
         # it into ``__dict__``, so an undeclared row made a read-only accessor
-        # poison every later ``tl.save``. DROP like Op's slot of the same name.
+        # poison every later ``Trace.save``. DROP like Op's slot of the same name.
         "_facets_cache": FieldPolicy.DROP,
     }
     FIELD_POLICY = build_record_field_policy_table(
@@ -1268,7 +1268,7 @@ class Module:
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         # Lazily-populated facet-view cache: a public ``.facets`` read poked
         # it into ``__dict__``, so an undeclared row made a read-only accessor
-        # poison every later ``tl.save``. DROP like Op's slot of the same name.
+        # poison every later ``Trace.save``. DROP like Op's slot of the same name.
         "_facets_cache": FieldPolicy.DROP,
     }
     FIELD_POLICY = build_record_field_policy_table(

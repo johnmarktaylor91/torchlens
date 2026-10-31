@@ -71,7 +71,7 @@ assert not sentinel.exists(), "provider imported during hasattr/dir sweep"
 model = torch.nn.Sequential(torch.nn.Linear(4, 3), torch.nn.ReLU())
 trace = torchlens.trace(model, torch.randn(2, 4))
 artifact = pathlib.Path(os.environ["F35_ARTIFACT"])
-torchlens.save(trace, str(artifact))
+trace.save(str(artifact))
 loaded = torchlens.load(str(artifact))
 assert loaded is not None
 assert not sentinel.exists(), "provider imported during capture or artifact load"

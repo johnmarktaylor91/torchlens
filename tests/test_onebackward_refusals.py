@@ -92,7 +92,7 @@ class TestLivenessGate:
     def test_loaded_trace_refuses_not_live(self, tmp_path) -> None:
         trace = _trace()
         path = tmp_path / "artifact.tlspec"
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
         _read_error(
             lambda: ob.read_edge_index(loaded),

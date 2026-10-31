@@ -93,7 +93,7 @@ def test_capture_fingerprint_stable_and_discriminating(loop_trace, tmp_path) -> 
 
     fingerprint = capture_fingerprint(loop_trace)
     assert fingerprint.startswith("fc1-")
-    tl.save(loop_trace, tmp_path / "bundle.tlspec")
+    loop_trace.save(tmp_path / "bundle.tlspec")
     loaded = tl.load(tmp_path / "bundle.tlspec")
     assert capture_fingerprint(loaded) == fingerprint
     other = tl.trace(nn.Linear(4, 4).eval(), torch.randn(2, 4))
@@ -181,7 +181,7 @@ def test_health_facts_persist_and_serve_on_load(tmp_path) -> None:
     live = trace.health_facts
     assert live.verdict == "found"
     assert "health_facts" in trace.annotations
-    tl.save(trace, tmp_path / "poisoned.tlspec")
+    trace.save(tmp_path / "poisoned.tlspec")
     loaded = tl.load(tmp_path / "poisoned.tlspec")
     served = loaded.health_facts
     assert served.basis == "persisted"
@@ -252,7 +252,7 @@ def test_scope_label_on_payload_stripped_artifact(tmp_path) -> None:
     trace = tl.trace(model, torch.randn(2, 4))
     at_capture = factcore(trace).memory.at_capture_bytes
     assert at_capture > 0
-    tl.save(trace, tmp_path / "stripped.tlspec", include_outs=False)
+    trace.save(tmp_path / "stripped.tlspec", include_outs=False)
     loaded = tl.load(tmp_path / "stripped.tlspec")
 
     memory = factcore(loaded).memory

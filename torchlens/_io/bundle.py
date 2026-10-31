@@ -387,7 +387,7 @@ def save(
     >>> model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     >>> x = torch.randn(2, 4)
     >>> trace = tl.trace(model, x)
-    >>> tl.save(trace, "demo_bundle", overwrite=True)
+    >>> trace.save("demo_bundle", overwrite=True)
     >>> loaded = tl.load("demo_bundle")
     >>> loaded["linear_1_1"].out.shape
     torch.Size([2, 3])
@@ -404,7 +404,7 @@ def save(
     grant it to artifacts whose provenance you trust.
     """
 
-    # A MergedTrace is a presenter, never a Trace: tl.save() refuses it typed
+    # A MergedTrace is a presenter, never a Trace: trace.save() refuses it typed
     # (contract 2.5 "merged runnable export ... refused typed") instead of the
     # historical bare AttributeError from the poison gate. The sys.modules
     # gate keeps ordinary saves free of any merged import: a MergedTrace can
@@ -414,9 +414,9 @@ def save(
         from ..merged import MergedErrorCode, MergedSurfaceUnsupportedError
 
         raise MergedSurfaceUnsupportedError(
-            "tl.save() does not support MergedTrace. Write the merged-directory "
+            "trace.save() does not support MergedTrace. Write the merged-directory "
             "artifact with merged.save(path), or save a single rank core with "
-            "tl.save(merged.ranks[r], path).",
+            "trace.save(merged.ranks[r], path).",
             code=MergedErrorCode.MERGED_SURFACE_UNSUPPORTED,
         )
     # A TraceSlice is likewise a presenter, never a Trace: a slice has
@@ -429,9 +429,9 @@ def save(
         from ..selection import SelectionError
 
         raise SelectionError(
-            "tl.save() does not support TraceSlice: a slice is a VIEW with "
+            "trace.save() does not support TraceSlice: a slice is a VIEW with "
             "declared dangling boundary edges, not a self-contained capture. "
-            "Save the underlying trace (tl.save(slice.source_trace, path)) "
+            "Save the underlying trace (trace.save(slice.source_trace, path)) "
             "and re-derive the view after loading.",
             code="slice_save_unsupported",
         )
@@ -440,7 +440,7 @@ def save(
     # UNKNOWN and false-refused EVERY bundle tl.bundle() built (with the
     # hand-built-object warning) while bundle.save() worked -- the third
     # instance of the two-answers outcome-authority disease (foldB D9).
-    # tl.save delegates to the ONE container door before any per-trace gate;
+    # Trace.save delegates to the ONE container door before any per-trace gate;
     # each member's own save applies the N1 gate PER MEMBER inside the
     # container write (D8: a container-level status is a fold reported
     # beside results, never a gate on a member it does not describe). Same
@@ -533,7 +533,7 @@ def save(
 
         settled = outcome_for(trace)
         raise CaptureOutcomeError(
-            "tl.save() does not support PartialTrace wrappers: a partial "
+            "trace.save() does not support PartialTrace wrappers: a partial "
             "capture is an inspection product with no persistable schema. "
             "Inspect it live (draw, audit, first_nonfinite), or re-capture "
             "successfully and save the resulting Trace.",
@@ -1594,7 +1594,7 @@ def _load_trace_payload(
             raise TorchLensIOError(
                 f"Bundle metadata at {metadata_path} is not a metadata mapping "
                 f"(got {type(scrubbed_state).__name__}); the artifact is corrupt or "
-                "hand-edited. Remedy: re-save the trace with tl.save().",
+                "hand-edited. Remedy: re-save the trace with trace.save().",
                 code="metadata_payload_not_a_mapping",
             )
         # AUD-CODE 3.0b: snapshot the stamp/row-count facts from the bytes as

@@ -202,7 +202,7 @@ def test_bound_capture_save_load_persists_fact_and_marker(tmp_path) -> None:
     model = _mlp()
     log = tl.trace(model.forward, torch.randn(2, 4))
     target = tmp_path / "bound.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     assert loaded.root_entry_point == log.root_entry_point
     out_op = loaded[loaded.output_layers[0]].ops[0]

@@ -1,7 +1,7 @@
 """Provocation coverage for previously test-orphaned ``RunnableErrorCode`` members (r25-3).
 
 Every test drives a REAL production raise site through the public API (``tl.trace``,
-``tl.save``, ``tl.load``, ``Trace.run``) and asserts the frozen code string on
+``Trace.save``, ``tl.load``, ``Trace.run``) and asserts the frozen code string on
 ``exc.fields["code"]`` (or on the surfaced report/diagnostics for
 divergence-classification and producer-preflight codes). No raise site is
 monkeypatched; where physically constructing a condition is impractical the test
@@ -330,7 +330,7 @@ def test_poisoned_run_refused_on_faithful_consumers(tmp_path: Path) -> None:
     result = loaded.run(inputs=-_branch_input(), on_divergence="return_diverged")
     assert result.report.poisoned
     with pytest.raises(PoisonedRunError) as export_caught:
-        tl.save(result.trace, tmp_path / "poisoned-export.tlspec")
+        result.trace.save(tmp_path / "poisoned-export.tlspec")
     assert export_caught.value.fields["code"] == RunnableErrorCode.POISONED_RUN_REFUSED.value
     with pytest.raises(PoisonedRunError) as pandas_caught:
         result.trace.to_pandas()
@@ -347,7 +347,7 @@ def test_run_capability_unavailable_on_analysis_only_load(tmp_path: Path) -> Non
 
     path = tmp_path / "analysis.tlspec"
     trace = tl.trace(nn.Linear(4, 4).eval(), torch.randn(2, 4), capture=_capture_options())
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     with pytest.raises(RunCapabilityUnavailableError) as caught:
         loaded.run(inputs=torch.randn(2, 4))

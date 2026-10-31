@@ -140,10 +140,10 @@ class BundleStreamWriter:
             Streaming bundles are always strict. Passing ``False`` is rejected.
         include_custom_attributes:
             Whether harvested module attributes are persisted in the streamed
-            bundle (the tl.save opt-out, mirrored for streaming -- R62).
+            bundle (the Trace.save opt-out, mirrored for streaming -- R62).
         include_buffer_values:
             Whether captured pre-forward buffer values are persisted in the
-            streamed bundle (the tl.save opt-out, mirrored for streaming --
+            streamed bundle (the Trace.save opt-out, mirrored for streaming --
             R62 buffer extension).
 
         Raises
@@ -192,7 +192,7 @@ class BundleStreamWriter:
             self.tmp_path.parent.mkdir(parents=True, exist_ok=True)
             self.tmp_path.mkdir()
             self.blobs_path.mkdir()
-            # Permission parity with tl.save (B8-10): mkdir honors the ambient
+            # Permission parity with Trace.save (B8-10): mkdir honors the ambient
             # umask, so under umask 002 the streaming bundle dir and its blobs/
             # dir were left group-writable/readable while the core bundle
             # writer tightens them to 0700. The rename at finalize preserves
@@ -467,7 +467,7 @@ class BundleStreamWriter:
         trace:
             Source ``Trace`` being streamed to disk. Used to write the same
             unified ``.tlspec`` manifest fields (``kind``, ``model_signature``,
-            ``sites``, ``body_index``, ...) that ``Trace.save()``/``tl.save()``
+            ``sites``, ``body_index``, ...) that ``trace.save()``
             write, so streaming bundles are detected as ``"v2.0_unified"`` and
             go through the same ``validate_tlspec()`` schema validation.
 
@@ -585,7 +585,7 @@ class BundleStreamWriter:
         outcome_payload:
             String-only settled-outcome payload (``CaptureOutcome.to_payload``)
             injected into the persisted state as ``_capture_outcome`` -- the
-            SAME key and codec ordinary ``tl.save()`` bundles persist, so
+            SAME key and codec ordinary ``trace.save()`` bundles persist, so
             loads adopt it through the identical parse + coherence matrix.
             ``None`` persists no attestation (loads derive structurally).
 
@@ -624,7 +624,7 @@ class BundleStreamWriter:
         # the staged directories so a power/OS crash after the rename below
         # cannot publish a final-named bundle holding zero-length/partial files
         # with no PARTIAL sentinel (cleanup_tmp would never sweep it). Mirrors
-        # the tl.save writer (_io/bundle.py:568-586).
+        # the Trace.save writer (_io/bundle.py:568-586).
         try:
             fsync_tree(self.tmp_path)
         except OSError as exc:
@@ -983,7 +983,7 @@ class BundleStreamWriter:
         # Disclose the harvested module-attribute channel (R62): the documented
         # invariant is that EVERY save writes a custom_attributes_disclosure
         # entry, and the streaming path now honors the same opt-out and emits
-        # the same embedding warning as tl.save (the reopened hf_token class:
+        # the same embedding warning as Trace.save (the reopened hf_token class:
         # a canary token used to ship in the streamed bundle with zero
         # warnings and no way to withhold it).
         from .bundle import (

@@ -3440,7 +3440,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         state["grad_fn_handle"] = None
         # R10-7: user transform callables (FieldPolicy.DROP) serialize to the
         # loaded-artifact form (None) -- a lambda transform= made pickle.dumps
-        # crash on every op record while tl.save succeeded on the same trace.
+        # crash on every op record while Trace.save succeeded on the same trace.
         if state.get("activation_transform") is not None:
             state["activation_transform"] = None
         if state.get("grad_transform") is not None:

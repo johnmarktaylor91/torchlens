@@ -62,7 +62,7 @@ def _trace() -> tl.Trace:
 
 def _save(tmp_path: Path, name: str = "b.tlspec") -> Path:
     spec = tmp_path / name
-    tl.save(_trace(), str(spec))
+    _trace().save(str(spec))
     return spec
 
 
@@ -149,7 +149,7 @@ def test_overwrite_save_keeps_old_bundle_at_target_until_swap(tmp_path: Path, mo
     """
 
     spec = tmp_path / "b.tlspec"
-    tl.save(_trace(), str(spec))
+    _trace().save(str(spec))
     real_build_manifest = bundle_mod._build_manifest
     observed: dict[str, bool] = {}
 
@@ -159,7 +159,7 @@ def test_overwrite_save_keeps_old_bundle_at_target_until_swap(tmp_path: Path, mo
         return real_build_manifest(*args, **kwargs)
 
     monkeypatch.setattr(bundle_mod, "_build_manifest", observing_build_manifest)
-    tl.save(_trace(), str(spec), overwrite=True)
+    _trace().save(str(spec), overwrite=True)
     assert observed["target_exists_mid_save"], "old bundle was moved aside at save start"
     assert observed["target_loadable_mid_save"]
     # The overwrite itself still completed and left no backup debris.
@@ -268,7 +268,7 @@ def test_resave_include_source_false_does_not_reemit_loaded_provenance(
     trace = _trace()
     trace._source_bundle_provenance = _forged_provenance()
     spec = tmp_path / "resave.tlspec"
-    tl.save(trace, str(spec), include_source=False)
+    trace.save(str(spec), include_source=False)
     provenance = json.loads((spec / "manifest.json").read_text(encoding="utf-8")).get("provenance")
     assert provenance is not None
     assert provenance.get("git_commit_hash") is None, "git commit leaked despite include_source"
@@ -283,7 +283,7 @@ def test_resave_include_source_true_keeps_loaded_provenance(tmp_path: Path) -> N
     trace = _trace()
     trace._source_bundle_provenance = _forged_provenance()
     spec = tmp_path / "resave-with-source.tlspec"
-    tl.save(trace, str(spec), include_source=True)
+    trace.save(str(spec), include_source=True)
     provenance = json.loads((spec / "manifest.json").read_text(encoding="utf-8")).get("provenance")
     assert provenance is not None
     assert "forged_engine" in provenance.get("rng_state_digests", {})
@@ -454,7 +454,7 @@ def test_unverified_capture_disclosure_survives_save_and_load(tmp_path: Path) ->
     trace.capture_verified = False
     trace.capture_verification_reason = "escape_rescue_unrecovered"
     spec = tmp_path / "unverified.tlspec"
-    tl.save(trace, str(spec))
+    trace.save(str(spec))
     loaded = tl.load(str(spec))
     assert loaded.capture_verified is False
     assert loaded.capture_verification_reason == "escape_rescue_unrecovered"

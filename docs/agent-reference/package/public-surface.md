@@ -38,7 +38,7 @@ resolved sparse DAG with staged, embedded capture, or N1-a state. Analysis-only 
 Runnable descriptors are `sparse_recorded_taken_path_v2`: every call carries a REQUIRED explicit
 `CallExecutionContext` and the descriptor one `AmbientExecutionContext`, both restored at replay or
 refused typed; legacy v1 artifacts load analysis-only with a typed readiness refusal.
-Use `tl.save(trace, path, level="runnable", include_weights=True)` to opt into the full capture-time
+Use `trace.save(path, level="runnable", include_weights=True)` to opt into the full capture-time
 `state_dict` (named parameters plus persistent buffers). It is a separate `state_dict_v1` blob
 family, not part of the tensor-value-free sparse core or a reconstructed model. Used non-persistent
 buffers always ship in the REQUIRED `runnable_nonpersistent_buffer_v1` family (declared state, not

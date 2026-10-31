@@ -61,7 +61,7 @@ def _build(tmp_path: Path, name: str) -> Path:
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     bundle = tmp_path / name
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     return bundle
 
 

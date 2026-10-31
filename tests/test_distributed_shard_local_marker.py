@@ -134,7 +134,7 @@ class TestMarkerFieldSubstrate:
         log = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
         log.distributed_scope = RANK_LOCAL_SHARD
         path = tmp_path / "shard-local.tlspec"
-        tl.save(log, str(path))
+        log.save(str(path))
         loaded = tl.load(str(path))
         assert loaded.distributed_scope == RANK_LOCAL_SHARD
 
@@ -157,7 +157,7 @@ class TestErasurePreventionInvariant:
         log = self._marked_trace()
         for level in ("portable", "audit"):
             path = tmp_path / f"marked-{level}.tlspec"
-            tl.save(log, str(path), level=level)
+            log.save(str(path), level=level)
             assert tl.load(str(path)).distributed_scope == RANK_LOCAL_SHARD
 
     def test_row_e_forced_drop_refires_post_bump(self, tmp_path, monkeypatch):
@@ -180,13 +180,13 @@ class TestErasurePreventionInvariant:
         )
         monkeypatch.setattr(prerelease, "_ACTIVE", False)
         with pytest.raises(InvalidArgumentError) as excinfo:
-            tl.save(log, str(tmp_path / "regression.tlspec"))
+            log.save(str(tmp_path / "regression.tlspec"))
         assert excinfo.value.fields["code"] == "shard_local_persistence_unsupported"
 
     def test_unmarked_trace_saves_normally(self, tmp_path):
         lifecycle.disarm()
         log = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
-        tl.save(log, str(tmp_path / "plain.tlspec"))
+        log.save(str(tmp_path / "plain.tlspec"))
         assert tl.load(str(tmp_path / "plain.tlspec")).distributed_scope is None
 
 

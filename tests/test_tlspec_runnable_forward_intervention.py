@@ -76,7 +76,7 @@ def test_forward_override_intervention_refuses_runnable_save(tmp_path: Path) -> 
     )
     path = tmp_path / "ablated.tlspec"
     with pytest.raises(RunnablePreflightError) as excinfo:
-        tl.save(trace, path, level="runnable", include_weights=True)
+        trace.save(path, level="runnable", include_weights=True)
     assert "user_intervention_not_replayable" in str(excinfo.value.fields.get("diagnostics"))
 
 
@@ -98,8 +98,7 @@ def test_forward_override_with_activations_also_refuses(tmp_path: Path) -> None:
     )
     path = tmp_path / "ablated-with-acts.tlspec"
     with pytest.raises(RunnablePreflightError) as excinfo:
-        tl.save(
-            trace,
+        trace.save(
             path,
             level="runnable",
             include_weights=True,
@@ -116,7 +115,7 @@ def test_plain_capture_still_verifies(tmp_path: Path) -> None:
     value = torch.randn(2, 4)
     trace = _capture(_AblationModel().eval(), value)
     path = tmp_path / "plain.tlspec"
-    tl.save(trace, path, level="runnable", include_weights=True, include_activations=True)
+    trace.save(path, level="runnable", include_weights=True, include_activations=True)
 
     result = tl.load(path).run(inputs=value, seed=0)
 
@@ -135,7 +134,7 @@ def test_backward_grad_intervention_still_verifies(tmp_path: Path) -> None:
         intervene=tl.when(tl.func("relu"), tl.grad_scale(2.0)),
     )
     path = tmp_path / "grad.tlspec"
-    tl.save(trace, path, level="runnable", include_weights=True, include_activations=True)
+    trace.save(path, level="runnable", include_weights=True, include_activations=True)
 
     result = tl.load(path).run(inputs=value, seed=0)
 

@@ -273,7 +273,7 @@ def test_tlspec_round_trip_preserves_per_pass_op_grads(tmp_path: Path) -> None:
         op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
         expected_label = op.label
         expected_grads = [record.grad.detach().clone() for record in op.grads]
-        tl.save(trace, bundle_path)
+        trace.save(bundle_path)
     finally:
         trace.cleanup()
 

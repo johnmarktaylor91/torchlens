@@ -186,7 +186,7 @@ def test_redecode_after_load_raises_clearly_when_logits_dropped(tmp_path: Path) 
 
     trace = _trace_batch_classifier()
     bundle_path = tmp_path / "decoded.tlspec"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     restored = tl.load(bundle_path)
     for output_label in restored.output_layers:
         for output_op in restored.layers[output_label].ops.values():

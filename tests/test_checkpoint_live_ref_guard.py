@@ -170,7 +170,7 @@ def test_loaded_basis_is_absent_not_persisted_never_bare_none(tmp_path: Any) -> 
     model = _toy_model()
     trace = tl.trace(model, _toy_input())
     path = tmp_path / "one.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     param = loaded.params[_WEIGHT]
     assert param.value is None  # documented live-handle contract, unchanged
@@ -189,8 +189,8 @@ def test_refusal_survives_member_save_load_before_nan_empty_degradation(
 
     path0 = tmp_path / "ck0.tlspec"
     path1 = tmp_path / "ck64.tlspec"
-    tl.save(stepped_pair["trace_before"], path0)
-    tl.save(stepped_pair["trace_after"], path1)
+    stepped_pair["trace_before"].save(path0)
+    stepped_pair["trace_after"].save(path1)
     loaded = tl.bundle({"ck0": tl.load(path0), "ck64": tl.load(path1)})
     view = loaded.params[_WEIGHT]
     with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
@@ -344,7 +344,7 @@ def test_n_gate_precedence_unchanged_on_halted_member(
 
     halted = tl.trace(stepped_pair["model"], stepped_pair["x"], halt=tl.func("relu"))
     with pytest.raises(Exception) as excinfo:
-        tl.save(halted, tmp_path / "halted.tlspec", level="runnable")
+        halted.save(tmp_path / "halted.tlspec", level="runnable")
     fields = getattr(excinfo.value, "fields", {})
     assert fields.get("code") != _CODE
 

@@ -263,6 +263,6 @@ def test_halted_trace_with_tokenizer_saves_and_reloads(tmp_path) -> None:
         capture=tl.options.CaptureOptions(output_style="classification"),
     )
     path = tmp_path / "halted_semantic.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert _leaked(loaded) == []

@@ -231,7 +231,7 @@ def test_plain_v8_save_persists_per_fire_timing_semantics(tmp_path) -> None:
 
     trace = _backward_trace()
     path = tmp_path / "timing.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.grad_fn_timing_provenance == "perf_counter"
     live_spans = trace.grad_fn_fire_timings
@@ -257,7 +257,7 @@ def test_provenance_field_roundtrips_only_under_prerelease_switch(tmp_path) -> N
     assert trace.grad_fn_timing_provenance == "perf_counter"
     path = tmp_path / "timing_prerelease.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
         assert loaded.grad_fn_timing_provenance == "perf_counter"
     # The switched artifact carries the pre-release marker and REFUSES to
@@ -269,7 +269,7 @@ def test_provenance_field_roundtrips_only_under_prerelease_switch(tmp_path) -> N
 def test_live_accessor_refuses_typed_on_loaded_trace(tmp_path) -> None:
     trace = _backward_trace()
     path = tmp_path / "timing_loaded.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = loaded.grad_fn_fire_timings

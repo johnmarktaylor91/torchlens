@@ -99,7 +99,7 @@ def _build(
 ) -> Path:
     trace = tl.trace(model.eval(), x, **_CAPTURE, **trace_kwargs)
     bundle = tmp_path / name
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     return bundle
 
 

@@ -852,7 +852,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : Whether nothing ever intervened on the trace, read from the evidence it carries: `True`,
   `False`, or `None`. It is derived at read time from records that persist with the trace (the
   intervention audit, the operation history, mutation states, direct writes and op intervention
-  marks), never stored as a flag, so it survives `tl.save`/`tl.load`, pickle and `fork()`, and no
+  marks), never stored as a flag, so it survives `Trace.save`/`tl.load`, pickle and `fork()`, and no
   reset makes a touched trace read `True` again. `False` means some touch was recorded: a
   capture-time `intervene=` (including one that fired nowhere), a staged hook or value
   replacement (even after `clear_hooks()`), `do()`, `set()`, a region edit, a hooked rerun or run,
@@ -1203,9 +1203,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 ## Persistence, containers, and namespaces
 
 **Save / load**
-: `tl.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
+: `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
-  The staged intervention spec is session-only: `tl.save` keeps the intervened
+  The staged intervention spec is session-only: `Trace.save` keeps the intervened
   values and their per-op provenance, and every legacy rerun door of a loaded intervened trace
   (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit
   staged after loading) refuses `run_intervention_spec_not_persisted` rather than rerun without
@@ -1830,7 +1830,7 @@ deprecation shim owed*
   silently dropped, plus the region's entry/exit ops
   (`source_ops`/`sink_ops`). A slice deliberately offers NO
   save/replay/validate (a region with dangling external inputs cannot
-  honour them); `tl.save` refuses it typed (`slice_save_unsupported`).
+  honour them); `Trace.save` refuses it typed (`slice_save_unsupported`).
   `__selection__` lifts the member family back into the algebra, so a
   slice composes under `| & - ~` and feeds `do()`.
   `trace.subgraph(selection)` is the general door: any ACT region — an
@@ -1958,7 +1958,7 @@ shim owed; S2-gated*
   mask_shape_mismatch | facet_write_mask_unavailable | population_too_small |
   multipass_bare_label | value_criterion_invalid | basis_dim_mismatch`),
   `selection_apply_invalid` (stage 2), and `slice_save_unsupported`
-  (`tl.save` on a `TraceSlice` presenter). The `multipass_bare_label` reason
+  (`Trace.save` on a `TraceSlice` presenter). The `multipass_bare_label` reason
   is the `tl.units` face of the multi-pass bare-label ambiguity refusal: a
   bare layer label addresses only single-pass layers, and each pass of a
   recurrence-grouped layer must be named pass-qualified (`label:pass`); the

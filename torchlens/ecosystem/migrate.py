@@ -4,7 +4,7 @@ Accepts governed v6-current unified ``.tlspec`` directories (Trace and
 Bundle products share the unified envelope). Adjacent-step, deterministic,
 idempotent. It NEVER executes a model, replay, network action, entry point,
 provider, or foreign callable, and never implements migration as
-``tl.load(); tl.save()`` -- every v1 step is MANIFEST-LEVEL (stamp +
+``tl.load(); trace.save()`` -- every v1 step is MANIFEST-LEVEL (stamp +
 provenance + re-hash) because migration only ever creates the ABSENT-field
 direction, which the reader tolerates by declared default-fill (the memo's
 sizing argument; proven live by the deciding real-artifact test over the
@@ -202,9 +202,9 @@ def _classify_source(path: Path) -> dict[str, Any]:
     if not path.is_dir():
         raise TorchLensIOError(
             f"Migration source {path} is not a .tlspec directory. Remedy: pass "
-            "the artifact directory written by tl.save.",
+            "the artifact directory written by Trace.save.",
             code="migration_source_unsupported",
-            remedy="pass the artifact directory written by tl.save",
+            remedy="pass the artifact directory written by Trace.save",
             path=str(path),
         )
     staging = path.with_name(path.name + _STAGING_SUFFIX)
@@ -447,7 +447,7 @@ def migrate(path: str | Path) -> MigrationReport:
 
     Adjacent-step, upgrade-only, deterministic, idempotent, transactional.
     Executes nothing: no model, replay, network action, entry point,
-    provider, or foreign callable, and never ``tl.load(); tl.save()``. The
+    provider, or foreign callable, and never ``tl.load(); trace.save()``. The
     pre-migration artifact is retained beside the result as
     ``<name>.pre-migrate``.
 

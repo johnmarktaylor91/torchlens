@@ -255,7 +255,7 @@ def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
     log.run(model, torch.randn(1, 3), replay=tl.options.ReplayOptions(append=True))
 
     bundle_path = tmp_path / "append_bundle"
-    tl.save(log, bundle_path)
+    log.save(bundle_path)
     loaded = tl.load(bundle_path)
     assert loaded.is_appended is True
     assert loaded._append_sequence_id == log._append_sequence_id

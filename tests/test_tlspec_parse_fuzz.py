@@ -70,7 +70,7 @@ def seed_artifact(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     log = tl.trace(model, torch.rand(2, 4))
     try:
-        tl.save(log, str(path))
+        log.save(str(path))
         yield path
     finally:
         log.cleanup()

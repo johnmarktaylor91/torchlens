@@ -170,7 +170,7 @@ def test_save_persists_the_marker_plainly(tmp_path) -> None:
 
     log = _structure_trace()
     path = tmp_path / "structure.tlspec"
-    tl.save(log, path)
+    log.save(path)
     loaded = tl.load(path)
     assert loaded.structure_only is True
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
@@ -222,7 +222,7 @@ def test_registrar_switch_round_trips_the_marker_and_load_fails_closed(tmp_path)
     log = _structure_trace()
     artifact = tmp_path / "structure.tlspec"
     with activate_prerelease_fields():
-        tl.save(log, artifact)
+        log.save(artifact)
         reloaded = tl.load(artifact)
         assert reloaded.structure_only is True
     # Outside the switch the stamped artifact can NEVER pass as a real one.

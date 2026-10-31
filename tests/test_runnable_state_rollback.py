@@ -225,7 +225,7 @@ def test_carry_state_loaded_sparse_refuses_typed(tmp_path) -> None:
         capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
     )
     path = tmp_path / "carry.tlspec"
-    tl.save(log, str(path), level="runnable", include_weights=True)
+    log.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     with pytest.raises(ValueError) as exc_info:
         loaded.run(inputs=x, carry_state=True)
@@ -326,7 +326,7 @@ def test_restore_failure_loaded_sparse_still_legal(tmp_path) -> None:
     with pytest.raises(StateBindingError):
         log.run(inputs=x)
     path = tmp_path / "latched.tlspec"
-    tl.save(log, str(path), level="runnable", include_weights=True)
+    log.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     assert loaded._runnable.state_compromised is None
     result = loaded.run(inputs=x)

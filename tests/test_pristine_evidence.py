@@ -1,6 +1,6 @@
 """``Trace.pristine`` is derived from the evidence a trace carries, never a stored flag.
 
-A plain capture reads pristine before and after ``tl.save``/``tl.load``; any
+A plain capture reads pristine before and after ``Trace.save``/``tl.load``; any
 intervention, staged hook, value replacement or hooked run reads not pristine, and
 no reset (clearing hooks, reassigning ``Trace.state``, forking, saving) makes it
 pristine again. An artifact that cannot carry the evidence reads ``None`` (no
@@ -65,7 +65,7 @@ def _x(seed: int = 0) -> torch.Tensor:
 
 def _saved(trace: tl.Trace, tmp_path: Path, name: str = "t") -> tl.Trace:
     path = tmp_path / f"{name}.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     return tl.load(str(path))
 
 

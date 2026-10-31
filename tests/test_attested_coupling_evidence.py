@@ -264,7 +264,7 @@ def test_attestation_survives_save_load(tmp_path):
     model = Root()
     log = _episode_trace(model, torch.randn(2, 4))
     target = tmp_path / "episode.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     attestation = loaded.episode_coupling
     assert attestation is not None and attestation.bound is True

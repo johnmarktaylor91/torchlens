@@ -1421,7 +1421,7 @@ def disarm_deferred_payload_window() -> None:
 #: records one event on its source device's current stream, and
 #: ``synchronize_pending_cpu_async_copies()`` drains the list at the capture
 #: finalize seam (and on the failure-scrub arms), so no host-side read
-#: (``op.out``, ``tl.save`` serialization, dedup/attestation digests) can
+#: (``op.out``, ``Trace.save`` serialization, dedup/attestation digests) can
 #: observe partial bytes from an unfinished ``non_blocking=True`` copy.
 _CPU_ASYNC_PENDING_EVENTS: list[Any] = []
 

@@ -216,16 +216,16 @@ def test_injection_save_persists_at_analysis_level(chain, tmp_path) -> None:
 
     model, x = chain
     logged = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
-    tl.save(logged, str(tmp_path / "logged.tlspec"))
+    logged.save(str(tmp_path / "logged.tlspec"))
     loaded = tl.load(str(tmp_path / "logged.tlspec"))
     assert len(loaded.injected_ops) == len(logged.injected_ops)
     with pytest.raises(Exception) as excinfo:
-        tl.save(logged, str(tmp_path / "run.tlspec"), level="runnable")
+        logged.save(str(tmp_path / "run.tlspec"), level="runnable")
     assert excinfo.value.fields["code"] == "injection_logged_runnable_unsupported"
     # an armed-but-unfired capture (no injected ops) saves normally
     clean = tl.trace(model, x, capture=_LOGGED)
     assert len(clean.injected_ops) == 0
-    tl.save(clean, str(tmp_path / "clean.tlspec"))
+    clean.save(str(tmp_path / "clean.tlspec"))
 
 
 def test_injection_validation_tripwire_unchanged(chain) -> None:

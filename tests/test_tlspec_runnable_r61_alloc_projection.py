@@ -94,7 +94,7 @@ def _rlimit_cap(extra: int = 1 << 30) -> Iterator[None]:
 def _build(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor) -> Path:
     trace = tl.trace(model.eval(), x, **_CAPTURE)
     bundle = tmp_path / name
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     return bundle
 
 
@@ -412,7 +412,7 @@ def test_e2e_self_consistent_view_extent_tamper_refused(tmp_path: Path) -> None:
     x = torch.randn(1, 4)
     trace = tl.trace(_ExpandSum().eval(), x, save=tl.func("sum"), **_CAPTURE)
     bundle = tmp_path / "view_extent.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     assert tl.load(str(bundle)).run(inputs=x.clone()).report.path_faithfulness.value == "verified"
     assert _tamper_literal(bundle, "int", 64, 10**11) >= 1
     assert _tamper_slot_shapes(bundle, [64, 4], [10**11, 4]) >= 1
@@ -438,7 +438,7 @@ def test_e2e_literal_only_view_extent_tamper_refused_under_return_diverged(
     x = torch.randn(1, 4)
     trace = tl.trace(_ExpandSum().eval(), x, save=tl.func("sum"), **_CAPTURE)
     bundle = tmp_path / "view_literal.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     assert _tamper_literal(bundle, "int", 64, 10**11) >= 1
     with _rlimit_cap():
         loaded = tl.load(str(bundle))

@@ -165,12 +165,12 @@ def test_roofline_access_does_not_change_pickle_or_tlspec_bytes(tmp_path: Path) 
     before_pickle = pickle.dumps(trace)
     before_bundle = tmp_path / "before.tlspec"
     after_bundle = tmp_path / "after.tlspec"
-    tl.save(trace, before_bundle)
+    trace.save(before_bundle)
 
     _ = op.bytes_read, op.bytes_written, op.arithmetic_intensity
 
     after_pickle = pickle.dumps(trace)
-    tl.save(trace, after_bundle)
+    trace.save(after_bundle)
     assert before_pickle == after_pickle
     assert _bundle_bytes_sans_save_time(before_bundle) == _bundle_bytes_sans_save_time(after_bundle)
 

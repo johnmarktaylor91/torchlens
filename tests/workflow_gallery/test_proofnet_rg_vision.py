@@ -175,7 +175,7 @@ def test_rg12_runnable_save_load_rerun_verified(
     trace = tl.trace(resnet, batch, capture=tl.options.CaptureOptions(intervention_ready=True))
     try:
         path = tmp_path / "resnet-runnable.tlspec"
-        tl.save(trace, str(path), level="runnable", include_weights=True)
+        trace.save(str(path), level="runnable", include_weights=True)
         loaded = tl.load(str(path))
         result = loaded.run(inputs=batch)
         assert result.report.path_faithfulness.name == "VERIFIED"

@@ -1683,10 +1683,10 @@ def _run_model_and_save_specified_outs(
         save_outs_to: Optional portable bundle directory for streaming out save.
         stream_custom_attributes: Whether harvested module attributes are
             persisted in the streamed bundle (streaming counterpart of
-            tl.save's include_custom_attributes).
+            Trace.save's include_custom_attributes).
         stream_buffer_values: Whether captured pre-forward buffer values are
             persisted in the streamed bundle (streaming counterpart of
-            tl.save's include_buffer_values).
+            Trace.save's include_buffer_values).
         stream_async_writes: Tri-state async-write routing for the streaming
             writer (StreamingOptions.async_writes): None/True arm the bounded
             async pipeline, False keeps synchronous per-blob writes.

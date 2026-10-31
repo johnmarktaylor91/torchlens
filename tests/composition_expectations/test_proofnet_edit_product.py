@@ -79,7 +79,7 @@ def edit_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     example = torch.randn(2, 4)
     live = tl.trace(model, example, capture=tl.options.CaptureOptions(intervention_ready=True))
     save_path = tmp_path_factory.mktemp("editmx") / "live.tlspec"
-    tl.save(live, str(save_path))
+    live.save(str(save_path))
     products = {
         "trace_live_fork": live,
         "trace_live_no_fork": live,

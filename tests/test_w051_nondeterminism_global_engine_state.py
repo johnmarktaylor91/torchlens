@@ -180,7 +180,7 @@ def test_get_draw_set_capture_requires_the_capture_seed(
     assert isinstance(capture_seed, int)
 
     bundle = tmp_path / f"{model_class.__name__}.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     loaded = tl.load(str(bundle))
 
     random.seed(999)

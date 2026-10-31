@@ -42,7 +42,7 @@ def test_negative_verification_verdict_survives_save_load(tmp_path) -> None:
     trace.capture_verification_reason = "escape_rescue_unrecovered"
 
     bundle = tmp_path / "disclosed.tlspec"
-    tl.save(trace, str(bundle))
+    trace.save(str(bundle))
     loaded = tl.load(str(bundle))
 
     assert loaded.capture_verified is False, (
@@ -61,7 +61,7 @@ def test_positive_verification_claim_never_persists(tmp_path) -> None:
     trace.capture_verification_reason = "witness_verified"
 
     bundle = tmp_path / "positive.tlspec"
-    tl.save(trace, str(bundle))
+    trace.save(str(bundle))
     loaded = tl.load(str(bundle))
 
     assert loaded.capture_verified is None

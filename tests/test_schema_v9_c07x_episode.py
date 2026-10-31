@@ -319,7 +319,7 @@ def test_live_episode_writes_grammar_v2() -> None:
 def test_episode_round_trip_under_v9(tmp_path) -> None:
     log = _capture_episode()
     target = tmp_path / "episode.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     ledger = episode_ledger_for(loaded)
     assert ledger is not None
@@ -351,7 +351,7 @@ def test_root_entry_point_round_trips(tmp_path) -> None:
     model = _Greedy()
     log = tl.trace(model, torch.randn(2, 4))
     target = tmp_path / "plain.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     assert loaded.root_entry_point == log.root_entry_point
     assert loaded.root_entry_point.startswith("module_call:")
@@ -359,7 +359,7 @@ def test_root_entry_point_round_trips(tmp_path) -> None:
 
 def _roundtrip(log, tmp_path, name: str):
     target = tmp_path / f"{name}.tlspec"
-    tl.save(log, target)
+    log.save(target)
     return tl.load(target)
 
 

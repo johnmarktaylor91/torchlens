@@ -214,7 +214,7 @@ def save_intervention(
     # WT1 A-IV item 20 (lane A08): the intervention-spec door had NO settled-
     # outcome gate, so a FAILED/aborted/unknown capture could export its spec
     # (fire records, target manifest) as if nothing happened. Same N1 authority
-    # and ordering as tl.save(): outcome gate first, then the poison gate.
+    # and ordering as trace.save(): outcome gate first, then the poison gate.
     from ..capture.outcome import require_capture_capability
 
     require_capture_capability(trace, "save_analysis")

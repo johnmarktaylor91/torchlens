@@ -633,7 +633,7 @@ def test_saved_trace_round_trips_with_the_default_budget(tmp_path: Path) -> None
     assert trace.save_budget is None
 
     path = tmp_path / "trace.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     # DROP means the ceiling is not round-tripped: a loaded trace retains nothing,
     # so it is restored to the default rather than to this session's setting.

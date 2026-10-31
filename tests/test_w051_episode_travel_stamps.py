@@ -2,7 +2,7 @@
 
 Audit finding AUD-CODE 1.1: ``run()`` on an episode capture dropped the
 ledger to a travel note (capture_kind read ``plain``) but left every
-``Op.episode_step`` stamp in place, so ``tl.save`` succeeded and ``tl.load``
+``Op.episode_step`` stamp in place, so ``Trace.save`` succeeded and ``tl.load``
 refused ``artifact_episode_step_invalid`` -- an unloadable artifact minted
 from the user's own product. The fix scrubs the stamps in the travel policy;
 the load gate is deliberately UNCHANGED (a stamp without a declaration is
@@ -85,7 +85,7 @@ def test_run_product_round_trips_save_load(tmp_path) -> None:
     assert "rows" in trace.annotations["episode"]
 
     path = tmp_path / "product.tlspec"
-    tl.save(product, path)
+    product.save(path)
     loaded = tl.load(path)
     assert loaded.capture_kind == "plain"
     assert _stamped(loaded) == []
@@ -103,7 +103,7 @@ def test_guarded_fast_live_product_round_trips_save_load(tmp_path) -> None:
     assert _stamped(trace) == []
 
     path = tmp_path / "fast.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     assert loaded.capture_kind == "plain"
     assert _stamped(loaded) == []
@@ -142,7 +142,7 @@ def test_load_gate_still_refuses_stamps_without_declaration(tmp_path) -> None:
     plain = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(1, 4))
     plain.layer_list[0].episode_step = 0
     path = tmp_path / "forged.tlspec"
-    tl.save(plain, path)
+    plain.save(path)
     with pytest.raises(TorchLensError) as info:
         tl.load(path)
     assert info.value.fields["code"] == "artifact_episode_step_invalid"

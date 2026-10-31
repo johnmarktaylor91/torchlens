@@ -222,7 +222,7 @@ def test_distilgpt2_replay_refuses_both_engines_and_survives_save_load(tmp_path)
                 log.run(inputs=inputs, fast=fast)
             assert excinfo.value.fields["code"] == "episode_coupled_replay_underivable"
     target = tmp_path / "coupled_distilgpt2.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     assert loaded.episode_coupling.coupled is True and loaded.episode_coupling.bound is True
     assert _fire_counts(loaded) == _fire_counts(log)

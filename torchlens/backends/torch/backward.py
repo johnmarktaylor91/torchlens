@@ -2893,7 +2893,7 @@ def _emit_discovered_grad_fn(
 
     ``type_counter`` is rewalk-scoped scratch owned by the caller
     (grind-r6 b5 R45: parking it on ``trace.__dict__`` left an undeclared
-    private field on the Trace that broke ``tl.save`` after two
+    private field on the Trace that broke ``Trace.save`` after two
     differentiable grad passes -- ``_backward_grad_fn_type_counter``
     missing from ``_PORTABLE_STATE_SPEC``).
     """
@@ -2980,7 +2980,7 @@ def _rewalk_higher_order_grad_fns(trace: Any) -> None:
     # so a fresh discovery can never collide with an already-assigned
     # ``type_index`` (same seeding idiom as the projection rebuild path).
     # Holding this on the trace between rewalks left an undeclared private
-    # field that broke tl.save (grind-r6 b5 R45).
+    # field that broke Trace.save (grind-r6 b5 R45).
     type_counter: dict[str, int] = {}
     for existing_record in trace.grad_fn_logs.values():
         type_counter[existing_record.type] = max(

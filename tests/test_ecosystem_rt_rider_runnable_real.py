@@ -73,7 +73,7 @@ def test_gpt2_weight_free_runnable_random_run_warns(tmp_path, gpt2_and_inputs, r
 
     _, input_ids = gpt2_and_inputs
     path = tmp_path / "gpt2_runnable"
-    tl.save(runnable_trace, path, level="runnable")
+    runnable_trace.save(path, level="runnable")
     loaded = tl.load(path)
     with pytest.warns(TorchLensWarning, match="RANDOM") as record:
         result = loaded.run(inputs=input_ids, seed=0)
@@ -97,7 +97,7 @@ def test_gpt2_embedded_weights_runnable_run_settles_verified(
 
     model, input_ids = gpt2_and_inputs
     path = tmp_path / "gpt2_runnable_weights"
-    tl.save(runnable_trace, path, level="runnable", include_weights=True)
+    runnable_trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -134,7 +134,7 @@ def test_gpt2_loaded_log_backward_refuses_before_mutation(tmp_path, gpt2_and_inp
 
     model, input_ids = gpt2_and_inputs
     trace = tl.trace(model, input_ids, capture=CaptureOptions(backward_ready=True))
-    tl.save(trace, tmp_path / "gpt2_bundle")
+    trace.save(tmp_path / "gpt2_bundle")
     loaded = tl.load(tmp_path / "gpt2_bundle")
     live_loss = model(input_ids=input_ids).logits.sum()
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):

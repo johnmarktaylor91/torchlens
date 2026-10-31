@@ -94,7 +94,7 @@ def test_legit_multi_output_type_resolves_live_and_after_load(tmp_path) -> None:
     assert live_type is torch.return_types.max
 
     bundle = os.path.join(str(tmp_path), "m.tlspec")
-    tl.save(trace, bundle, level="runnable")
+    trace.save(bundle, level="runnable")
     loaded = tl.load(bundle)
     loaded_type = _multi_output_op(loaded).multi_output_type
     assert loaded_type is torch.return_types.max
@@ -159,7 +159,7 @@ def test_end_to_end_tampered_bundle_property_read_is_safe(tmp_path) -> None:
         trace = _trace_max_model()
         bundle = os.path.join(str(tmp_path / "bundle_dir"), "m.tlspec")
         os.makedirs(os.path.dirname(bundle), exist_ok=True)
-        tl.save(trace, bundle, level="runnable")
+        trace.save(bundle, level="runnable")
 
         pkl = os.path.join(bundle, "metadata.pkl")
         raw = open(pkl, "rb").read()

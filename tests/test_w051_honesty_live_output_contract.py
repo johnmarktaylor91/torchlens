@@ -233,7 +233,7 @@ def test_live_graph_change_return_diverged_policy_is_honored() -> None:
     from torchlens.errors import PoisonedRunError
 
     with pytest.raises(PoisonedRunError):
-        tl.save(result.trace, "/nonexistent/never_written.tlspec")
+        result.trace.save("/nonexistent/never_written.tlspec")
     # The SOURCE trace is untouched: a matching-input run still verifies.
     again = trace.run(inputs=x)
     assert again.report.path_faithfulness is PathFaithfulness.VERIFIED

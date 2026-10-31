@@ -144,7 +144,7 @@ def _check_entry(entry: CorpusEntry, tmp_path: Path) -> None:
     labels = [op.label for op in trace.ops]
     assert labels, f"{entry.id}: empty trace"
     spec = tmp_path / "entry.tlspec"
-    tl.save(trace, spec, level="portable")
+    trace.save(spec, level="portable")
     loaded = tl.load(spec)
     assert [op.label for op in loaded.ops] == labels, f"{entry.id}: save/load changed the ops"
     del trace, loaded

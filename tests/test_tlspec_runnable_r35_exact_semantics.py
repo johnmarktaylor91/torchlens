@@ -56,7 +56,7 @@ def test_r35_tied_nan_state_binds_and_saves(tmp_path: Path) -> None:
     x = torch.randn(2, 3)
     trace = _capture(model, x)
     path = tmp_path / "tied_nan.tlspec"
-    tl.save(trace, str(path), level="runnable", include_weights=True)
+    trace.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     # Staging the model's own state_dict must also bind (same tied storage).
     loaded.load_state_dict(model.state_dict())
@@ -131,7 +131,7 @@ def test_r35_zero_fan_in_linear_runs_random_init(tmp_path: Path) -> None:
     x = torch.randn(3, 0)
     trace = _capture(model, x)
     path = tmp_path / "zerofan.tlspec"
-    tl.save(trace, str(path), level="runnable")
+    trace.save(str(path), level="runnable")
     result = tl.load(str(path)).run(inputs=x, seed=1)
     assert result.report.state_source is StateSource.RANDOM_INITIALIZATION
     # Weight is (2, 0): the output is exactly the bias broadcast over the batch.
@@ -215,7 +215,7 @@ def test_r35_seeded_run_restores_produced_only_cuda_rng(tmp_path: Path) -> None:
     x = torch.randn(2, 3)
     trace = _capture(model, x)
     path = tmp_path / "cudadraw.tlspec"
-    tl.save(trace, str(path), level="runnable")
+    trace.save(str(path), level="runnable")
     loaded = tl.load(str(path))
 
     torch.cuda.init()
@@ -244,7 +244,7 @@ def test_r35_cpu_only_seeded_run_never_touches_cuda_lazy_seed(tmp_path: Path) ->
     x = torch.randn(2, 3)
     trace = _capture(model, x)
     path = tmp_path / "cpuonly.tlspec"
-    tl.save(trace, str(path), level="runnable")
+    trace.save(str(path), level="runnable")
     loaded = tl.load(str(path))
     from torchlens._runnable_execution import _seeded_fork_devices
 
@@ -282,7 +282,7 @@ def test_r35_large_int32_structseq_replays_verified(tmp_path: Path) -> None:
     x = torch.arange(40 * 50, dtype=torch.int32).reshape(40, 50)
     trace = _capture(model, x)
     path = tmp_path / "structseq.tlspec"
-    tl.save(trace, str(path), level="runnable")
+    trace.save(str(path), level="runnable")
     result = tl.load(str(path)).run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     live = model(x)

@@ -52,7 +52,7 @@ def test_round_trip_save_load_preserves_module_containment(tmp_path: Path) -> No
     trace = tl.trace(model, x)
     bundle_path = tmp_path / "test_bundle.tlspec"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path)
 
     op_with_modules = next((op for op in loaded.layer_list if getattr(op, "modules", [])), None)

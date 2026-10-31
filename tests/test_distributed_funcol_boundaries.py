@@ -326,7 +326,7 @@ class TestFuncolRefusalParity:
         model = WaitedFuncol()  # held alive: the refusal under test is the
         log = tl.trace(model, torch.ones(3))  # boundary one, not GC state
         with pytest.raises(RunnablePreflightError) as excinfo:
-            tl.save(log, str(tmp_path / "funcol.tlspec"), level="runnable")
+            log.save(str(tmp_path / "funcol.tlspec"), level="runnable")
         codes = {diagnostic.code for diagnostic in excinfo.value.fields["diagnostics"]}
         assert "collective_boundary_runnable_unsupported" in codes
 
@@ -371,7 +371,7 @@ class TestFuncolPersistence:
         lifecycle.arm()
         log = tl.trace(WaitedFuncol(), torch.ones(3))
         path = tmp_path / "funcol-core.tlspec"
-        tl.save(log, str(path))
+        log.save(str(path))
         loaded = tl.load(str(path))
         entries = _funcol_boundaries(loaded)
         assert len(entries) == 1

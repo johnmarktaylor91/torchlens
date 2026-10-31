@@ -32,7 +32,7 @@ def saved_trace_path(tmp_path: Path) -> Path:
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
     log = tl.trace(model, torch.randn(2, 4), save=tl.func("relu"))
     path = tmp_path / "trace.tlspec"
-    tl.save(log, str(path))
+    log.save(str(path))
     return path
 
 
@@ -74,7 +74,7 @@ def test_call_tool_refusals_teach_the_fix() -> None:
     with pytest.raises(ValueError, match="requires 'path'") as args_exc:
         tlmcp.call_tool("torchlens_dump", {})
     assert args_exc.value.fields["code"] == "agent_argument_invalid"
-    with pytest.raises(ValueError, match="tl.save") as path_exc:
+    with pytest.raises(ValueError, match="Trace.save") as path_exc:
         tlmcp.call_tool("torchlens_dump", {"path": "/nonexistent/file.tlspec"})
     assert path_exc.value.fields["code"] == "agent_artifact_unreadable"
 

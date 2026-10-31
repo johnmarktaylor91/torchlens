@@ -232,7 +232,7 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     captured.save(with_weights, level="runnable", include_weights=True)
     loaded = tl.load(with_weights)
     with pytest.raises(RunnablePreflightError) as preflight:
-        tl.save(loaded, tmp_path / "resave.tlspec", level="runnable", include_weights=True)
+        loaded.save(tmp_path / "resave.tlspec", level="runnable", include_weights=True)
     assert preflight.value.fields["code"] == "sparse_preflight_failed"
     assert preflight.value.fields["diagnostics"]
 
@@ -249,6 +249,6 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     recaptured.save(without_weights, level="runnable")
     loaded_bare = tl.load(without_weights)
     with pytest.raises(TorchLensIOError) as refusal:
-        tl.save(loaded_bare, tmp_path / "resave2.tlspec", level="runnable")
+        loaded_bare.save(tmp_path / "resave2.tlspec", level="runnable")
     assert refusal.value.fields["code"] == "run_capability_unavailable"
     assert refusal.value.fields["detection_stage"] == "runnable_resave_state_universe"

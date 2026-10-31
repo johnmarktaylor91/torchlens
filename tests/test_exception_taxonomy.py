@@ -404,7 +404,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     # ValueError lineage is load-bearing: the runnable run wrapper reports the
     # container-spec tripwire as a typed RunPreconditionError denial (R64-3).
     "ContainerReconstructionError": ("ValueError",),
-    # ValueError lineage is load-bearing (R64-4): the other three tl.save
+    # ValueError lineage is load-bearing (R64-4): the other three Trace.save
     # door refusals are ValueError-lineage; except ValueError must catch all.
     "CaptureOutcomeError": ("ValueError",),
     "CompileCountsUnavailableError": ("RuntimeError",),

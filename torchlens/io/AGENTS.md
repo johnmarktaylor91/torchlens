@@ -8,7 +8,7 @@ metadata + safetensors blobs, directory bundles); log administration delegates t
 ## Public surface
 
 - `load` / `save` — re-exported from `_io.bundle` (also top-level `tl.load` /
-  `tl.save`).
+  `Trace.save`).
 - `detect_tlspec_format(path)` / `inspect_tlspec(path)` — artifact inspection without
   full rehydration; metadata paths reject symlinks
   (`_reject_symlinked_metadata_path`).

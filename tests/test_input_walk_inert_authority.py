@@ -473,7 +473,7 @@ def test_mode_box_changed_field_diverges_runnable_replay(tmp_path):
         ),
     )
     path = tmp_path / "m.tlspec"
-    tl.save(captured, path, level="runnable", include_weights=True)
+    captured.save(path, level="runnable", include_weights=True)
 
     changed = _ModeBox({"x": tensor})
     changed.mode = "b"

@@ -4,7 +4,7 @@ Three entry-time guards that run before (or instead of) the per-trace save
 pipeline: the two PERMANENT erasure-prevention invariants (edge-substitution
 carriers and the shard-local disclosure, both keyed on the ACTIVE SCHEMA so a
 regression re-fires them), and the Bundle container-door delegation that
-routes ``tl.save(bundle, ...)`` through ``Bundle.save`` (foldB D8/D9). Split
+routes ``trace.save(bundle, ...)`` through ``Bundle.save`` (foldB D8/D9). Split
 out of ``torchlens/_io/bundle.py`` to respect its size ceiling (R43
 split-never-raise); ``bundle.py`` re-exports these names, so the monkeypatch
 surface ``torchlens._io.bundle._refuse_*`` is unchanged.
@@ -100,7 +100,7 @@ def _refuse_shard_local_erasure(trace: Any) -> None:
     )
 
 
-# tl.save() defaults for the per-trace payload options the Bundle container
+# trace.save() defaults for the per-trace payload options the Bundle container
 # door does not offer (its surface is exactly path/level/overwrite). An
 # EXPLICIT non-default value on a bundle save refuses typed below instead of
 # being silently dropped.
@@ -126,7 +126,7 @@ def _save_bundle_via_container_door(
     overwrite: bool,
     trace_only_options: dict[str, bool | None],
 ) -> None:
-    """Route ``tl.save(bundle, ...)`` through the one container door.
+    """Route ``trace.save(bundle, ...)`` through the one container door.
 
     Both public save doors resolve to ``Bundle.save`` (the container door),
     so they agree on every settled bundle by construction: the N1 capture-
@@ -137,7 +137,7 @@ def _save_bundle_via_container_door(
     Parameters
     ----------
     bundle:
-        The ``torchlens.bundle.Bundle`` instance passed to ``tl.save``.
+        The ``torchlens.bundle.Bundle`` instance passed to ``Trace.save``.
     path:
         Destination ``.tlspec`` directory path.
     level:
@@ -145,7 +145,7 @@ def _save_bundle_via_container_door(
     overwrite:
         Whether an existing destination may be replaced.
     trace_only_options:
-        The received values of every per-trace-only ``tl.save`` option,
+        The received values of every per-trace-only ``Trace.save`` option,
         keyed by parameter name.
 
     Raises
@@ -162,14 +162,14 @@ def _save_bundle_via_container_door(
     )
     if unsupported:
         raise InvalidArgumentError(
-            "tl.save(bundle, ...) routes through the Bundle container door, "
+            "trace.save(bundle, ...) routes through the Bundle container door, "
             "which supports only 'level' and 'overwrite'; it cannot honor "
             f"per-trace save options: {', '.join(unsupported)}.",
             code="bundle_save_option_unsupported",
             remedy=(
                 "Drop the per-trace options (or call bundle.save(path, "
                 "level=..., overwrite=...)); for per-member payload control, "
-                "save one member with tl.save(bundle[name], path, ...)."
+                "save one member with trace.save(bundle[name], path, ...)."
             ),
             options=tuple(unsupported),
         )

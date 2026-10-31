@@ -213,7 +213,7 @@ def test_inert_first_party_gate_discriminates() -> None:
     assert not is_inert_first_party_callable(_module_is_installed)
     # A public torchlens callable whose name marks file/serialization I/O is denied.
     assert not is_inert_first_party_callable(tl.load)
-    assert not is_inert_first_party_callable(tl.save)
+    assert not is_inert_first_party_callable(tl.Trace.save)
 
 
 # --------------------------------------------------------------------------- #

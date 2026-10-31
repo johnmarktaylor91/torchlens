@@ -259,7 +259,7 @@ def test_cpu_host_records_unavailable_views_and_drop_gated_annotation(tmp_path: 
     }
 
     default_path = tmp_path / "default.tlspec"
-    tl.save(trace, default_path)
+    trace.save(default_path)
     loaded = tl.load(default_path)
     # tlspec v8: the telemetry annotation section persists on a plain save.
     assert "_kernel_telemetry" in loaded.annotations

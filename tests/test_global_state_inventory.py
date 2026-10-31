@@ -464,7 +464,7 @@ class _PauseFromForeignThread(nn.Module):
     """Log ops before and after a NON-OWNER thread enters ``pause_logging()``.
 
     The foreign thread models the reachable-without-concurrent-capture case: a
-    thread merely ANALYZING an older Trace (``tl.save``, validation, an ``.out``
+    thread merely ANALYZING an older Trace (``Trace.save``, validation, an ``.out``
     transform) enters the same process-global pause the owner's forward relies on.
 
     The foreign pause is HELD OPEN across the owner's second op group, which is

@@ -83,7 +83,7 @@ def test_event_rows_survive_save_load_validation(tmp_path) -> None:
     _write_event(fork)
     _write_event(fork, status="error")
     path = str(tmp_path / "f03_events.tlspec")
-    tl.save(fork, path)
+    fork.save(path)
     loaded = tl.load(path)
     events = event_audit_rows(loaded)
     assert len(events) == 2

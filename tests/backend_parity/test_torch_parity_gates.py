@@ -616,7 +616,7 @@ def test_tlspec_roundtrip_and_manifest_goldens(tmp_path: Path) -> None:
 
     trace = _default_trace()
     bundle_path = tmp_path / "default_trace.tlspec"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = cast(Trace, tl.load(bundle_path))
 
     regenerated = _assert_projection_matches_golden(
@@ -700,7 +700,7 @@ def test_serialization_mutation_fails_gate(tmp_path: Path) -> None:
     _skip_during_golden_update()
     trace = _default_trace()
     bundle_path = tmp_path / "serialization_mutation.tlspec"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     projection = _manifest_projection(bundle_path)
     projection["schema_version"] = 999
     with pytest.raises(AssertionError):
@@ -713,7 +713,7 @@ def test_saved_payload_deletion_fails_gate(tmp_path: Path) -> None:
     _skip_during_golden_update()
     trace = _default_trace()
     bundle_path = tmp_path / "payload_deletion.tlspec"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     blob_dir = bundle_path / "blobs"
     first_blob = next(blob_dir.iterdir())
     first_blob.unlink()
@@ -739,7 +739,7 @@ def test_bundle_copy_preserves_manifest_gate(tmp_path: Path) -> None:
     trace = _default_trace()
     source_path = tmp_path / "source.tlspec"
     copied_path = tmp_path / "copied.tlspec"
-    tl.save(trace, source_path)
+    trace.save(source_path)
     shutil.copytree(source_path, copied_path)
     _skip_regenerated(
         _assert_projection_matches_golden(

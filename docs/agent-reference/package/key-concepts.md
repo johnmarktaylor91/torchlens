@@ -47,7 +47,7 @@ one ingest boundary (`op_record_from_event`), with `PATH_TO_FLAT` as the amendme
 guard and `_clone_op_event_for_replay` record-shape-aware, all retained-with-schedule.
 
 ### Portable Artifacts
-`tl.save()` and `tl.load()` route through `_io/bundle.py`. Unified `.tlspec` directories have
+`trace.save()` and `tl.load()` route through `_io/bundle.py`. Unified `.tlspec` directories have
 `manifest.json` plus safetensors blobs; public schema validation lives in `validation/__init__.py`.
 Runnable saves are sparse by default and produce `sparse_recorded_taken_path_v2` descriptors with
 REQUIRED explicit execution-context records (per-call `CallExecutionContext` + capture-scoped

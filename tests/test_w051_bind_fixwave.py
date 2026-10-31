@@ -133,7 +133,7 @@ def _save_tamper_load(tmp_path, trace, tamper):
     """Save, mutate the pickled metadata in place, and load back."""
 
     path = tmp_path / "forged.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     metadata_path = path / "metadata.pkl"
     with metadata_path.open("rb") as handle:
         state = pickle.load(handle)
@@ -336,7 +336,7 @@ def test_honest_artifact_still_loads_and_attests(tmp_path) -> None:
 
     logged, spec = _logged_chain()
     path = tmp_path / "honest.tlspec"
-    tl.save(logged, str(path))
+    logged.save(str(path))
     loaded = tl.load(str(path))
     records = injected_ops(loaded)
     assert records and {record.provenance.spec_rule_id for record in records} == {
@@ -534,7 +534,7 @@ def test_module_boundary_injected_ops_anchor_and_round_trip(tmp_path) -> None:
         assert record.provenance.host_site_key == host.site_key
         assert record.provenance.host_pass == host.pass_index
     path = tmp_path / "module_boundary.tlspec"
-    tl.save(logged, str(path))
+    logged.save(str(path))
     loaded = tl.load(str(path))
     reloaded = injected_ops(loaded)
     assert [(r.label, r.provenance.host_site_key) for r in reloaded] == [
@@ -552,7 +552,7 @@ def test_module_boundary_reused_block_anchors_each_call(tmp_path) -> None:
     replaced = {op.label for op in logged.ops if getattr(op, "intervention_replaced", False)}
     assert len(hosts) == 2 and hosts == replaced
     assert all(record.provenance.host_site_key for record in injected_ops(logged))
-    tl.save(logged, str(tmp_path / "blk.tlspec"))
+    logged.save(str(tmp_path / "blk.tlspec"))
 
 
 def test_module_boundary_rule_id_from_stamped_plan_entry(monkeypatch) -> None:

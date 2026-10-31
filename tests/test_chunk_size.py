@@ -445,8 +445,8 @@ def test_chunked_forward_marker_survives_tlspec(tmp_path: Path) -> None:
     chunked_path = tmp_path / "chunked.tlspec"
     plain_path = tmp_path / "plain.tlspec"
 
-    tl.save(chunked, chunked_path)
-    tl.save(plain, plain_path)
+    chunked.save(chunked_path)
+    plain.save(plain_path)
 
     assert tl.load(chunked_path).chunked_forward is True
     assert tl.load(plain_path).chunked_forward is False

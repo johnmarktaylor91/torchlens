@@ -502,7 +502,7 @@ def test_plain_pickle_preserves_in_memory_outs(tmp_path: Path) -> None:
 
 
 def test_plain_pickle_survives_a_lambda_activation_transform() -> None:
-    """R10-7: a lambda transform= must not crash pickle while tl.save works.
+    """R10-7: a lambda transform= must not crash pickle while Trace.save works.
 
     Fail-before: ``pickle.dumps`` raised ``PicklingError: Can't pickle
     <lambda>`` from the op/layer records; the raw callable fields now
@@ -527,7 +527,7 @@ def test_plain_pickle_survives_a_lambda_input_transform() -> None:
     ``grad_transform``/``_output_transform`` in ``__getstate__`` but missed
     ``_transform`` -- the field the public ``tl.trace(..., transform=...)``
     kwarg populates -- so ``pickle.dumps`` raised ``PicklingError: Can't
-    pickle <lambda>`` while ``tl.save`` succeeded on the same trace.
+    pickle <lambda>`` while ``Trace.save`` succeeded on the same trace.
     """
 
     log = trace_fn(

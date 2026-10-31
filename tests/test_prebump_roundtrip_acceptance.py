@@ -276,7 +276,7 @@ def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str) -> tl.Trace:
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(trace, str(path))
+        trace.save(str(path))
         return tl.load(str(path))
 
 
@@ -286,7 +286,7 @@ def _second_generation(loaded: tl.Trace, tmp_path, name: str) -> tl.Trace:
     path = tmp_path / f"{name}_gen2.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(loaded, str(path))
+        loaded.save(str(path))
         return tl.load(str(path))
 
 
@@ -653,7 +653,7 @@ def _tampered_refuses(
     path = tmp_path / f"{name}_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(trace, str(path))
+        trace.save(str(path))
     with pytest.raises(TorchLensIOError) as excinfo:
         tl.load(str(path))
     refusal = excinfo.value
@@ -780,7 +780,7 @@ def test_tamper_grouping_policy_validated_degrades_typed(tmp_path) -> None:
     path = tmp_path / "grouping_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(trace, str(path))
+        trace.save(str(path))
     with pytest.warns(TorchLensWarning, match="grouping_policy stamp is invalid"):
         loaded = tl.load(str(path))
     assert loaded.grouping_policy == degraded_grouping_policy_stamp("vocabulary")
@@ -884,7 +884,7 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
     # typed BEFORE any bytes land.
     save_path = tmp_path / "forged_marker.tlspec"
     with pytest.raises(TorchLensIOError, match="structure-only"):
-        tl.save(trace, str(save_path))
+        trace.save(str(save_path))
     assert not save_path.exists()
 
     # Layer 2 (load-side M-C2, unchanged): write the SAME capture honestly,
@@ -895,7 +895,7 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
     honest_path = tmp_path / "structure_only_payload_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(trace, str(honest_path))
+        trace.save(str(honest_path))
     metadata_path = honest_path / "metadata.pkl"
     state = _pickle.loads(metadata_path.read_bytes())
     state["structure_only"] = True
@@ -974,7 +974,7 @@ def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:
     state, _, _ = scrub_for_save(trace)
     assert state["tlspec_version"] == TLSPEC_VERSION == 10
     path = tmp_path / "fresh_v10.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.tlspec_version == 10
     assert [op.site_key for op in loaded.ops] == [op.site_key for op in trace.ops]

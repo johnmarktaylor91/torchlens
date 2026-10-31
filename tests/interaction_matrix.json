@@ -733,7 +733,7 @@
    "status": "asymmetry",
    "asymmetry": "A13",
    "confidence": "high",
-   "note": "tl.save(bundle) accepts only level and overwrite; per-trace payload options refuse bundle_save_option_unsupported."
+   "note": "trace.save(bundle) accepts only level and overwrite; per-trace payload options refuse bundle_save_option_unsupported."
   },
   {
    "a": "bundle",
@@ -1908,7 +1908,7 @@
     "bundle",
     "storage"
    ],
-   "summary": "tl.save on a Trace accepts per-trace payload options and streaming storage; tl.save on a Bundle accepts only level and overwrite and refuses the rest (bundle_save_option_unsupported).",
+   "summary": "Trace.save on a Trace accepts per-trace payload options and streaming storage; Trace.save on a Bundle accepts only level and overwrite and refuses the rest (bundle_save_option_unsupported).",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
    "ruling": "pending"

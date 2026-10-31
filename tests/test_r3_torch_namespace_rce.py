@@ -85,7 +85,7 @@ def _save_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> Path:
     """Capture and persist a runnable bundle with embedded weights."""
 
     log = tl.trace(model.eval(), inputs, capture=_CAP)
-    tl.save(log, path, level="runnable", include_weights=True)
+    log.save(path, level="runnable", include_weights=True)
     return path
 
 

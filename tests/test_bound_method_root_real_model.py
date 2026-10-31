@@ -143,7 +143,7 @@ def test_bound_capture_save_load(tmp_path) -> None:
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     target = tmp_path / "gpt2_generate.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     assert loaded.root_entry_point == log.root_entry_point
     with pytest.raises(ModelMismatchError):
