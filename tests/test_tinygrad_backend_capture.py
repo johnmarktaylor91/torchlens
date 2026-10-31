@@ -478,9 +478,9 @@ def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
 
 
 def test_tinygrad_preview_rejects_random_seed() -> None:
-    """tinygrad preview rejects random_seed instead of storing inert metadata."""
+    """tinygrad preview refuses an explicit seed instead of storing inert metadata."""
 
-    with pytest.raises(BackendUnsupportedError, match="random_seed"):
+    with pytest.raises(BackendUnsupportedError, match="explicit seed is refused"):
         tl.trace(
             _tiny_block,
             Tensor([1.0, -2.0, 3.0]),

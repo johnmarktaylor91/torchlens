@@ -51,9 +51,9 @@ def test_mlx_linear_mlp_smoke() -> None:
 
 @pytest.mark.optional
 def test_mlx_preview_rejects_random_seed() -> None:
-    """MLX preview rejects random_seed instead of storing inert metadata."""
+    """MLX preview refuses an explicit seed instead of storing inert metadata."""
 
-    with pytest.raises(BackendUnsupportedError, match="random_seed"):
+    with pytest.raises(BackendUnsupportedError, match="explicit seed is refused"):
         tl.trace(
             lambda x: x + 1,
             mx.array([1.0]),
