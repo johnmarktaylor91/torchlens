@@ -1459,7 +1459,7 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
     )
     if getattr(layer, "func", None) is not None and not has_own_live_replacement:
         return False
-    from .invariants import op_has_genuine_replacement_evidence
+    from ._invariants_backward_flow import op_has_genuine_replacement_evidence
 
     return op_has_genuine_replacement_evidence(layer)
 

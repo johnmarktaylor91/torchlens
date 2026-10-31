@@ -7,12 +7,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from .invariants import (
-        _expected_layer_log_child_union,
-        _fail_conditional_invariant,
-        _is_prefix_stack,
-        _strip_pass_suffix,
-    )
 
 __all__ = (
     "_check_conditional_child_labels_resolve",
@@ -534,3 +528,13 @@ def _check_conditional_branch_entry_edges(
                     f"{parent_layer.layer_label}.conditional_entry_children includes "
                     f"{bool_label!r} but conditional_branch_edges={ml.conditional_branch_edges}",
                 )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_conditional_base import (  # noqa: E402
+    _expected_layer_log_child_union,
+    _fail_conditional_invariant,
+    _is_prefix_stack,
+    _strip_pass_suffix,
+)

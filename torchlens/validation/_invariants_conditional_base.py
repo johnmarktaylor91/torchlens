@@ -8,23 +8,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .._data_classes.layer import Layer
     from .._data_classes.trace import Trace
-    from .invariants import (
-        MetadataInvariantError,
-        _check_conditional_arm_child_pass_union,
-        _check_conditional_arm_edges_match_graph,
-        _check_conditional_bool_classification,
-        _check_conditional_bool_event_backrefs,
-        _check_conditional_branch_entry_edges,
-        _check_conditional_branch_membership_records,
-        _check_conditional_branch_stack_monotonicity,
-        _check_conditional_child_labels_resolve,
-        _check_conditional_elif_key_contiguity,
-        _check_conditional_event_references,
-        _check_conditional_layer_aggregate_views,
-        _check_conditional_public_accessor_summary,
-        _check_conditional_rolled_edge_call_indices,
-        _check_conditional_transient_bool_keys_removed,
-    )
 
 __all__ = (
     "_dtype_values_match",
@@ -491,3 +474,28 @@ def _check_conditional_derived_child_views(
                 f"{layer_log.conditional_else_children} != expected projection "
                 f"{expected_else_children}",
             )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_conditional_modules import (  # noqa: E402
+    _check_conditional_arm_edges_match_graph,
+    _check_conditional_branch_membership_records,
+    _check_conditional_public_accessor_summary,
+)
+from ._invariants_conditionals import (  # noqa: E402
+    _check_conditional_arm_child_pass_union,
+    _check_conditional_bool_classification,
+    _check_conditional_bool_event_backrefs,
+    _check_conditional_branch_entry_edges,
+    _check_conditional_branch_stack_monotonicity,
+    _check_conditional_child_labels_resolve,
+    _check_conditional_elif_key_contiguity,
+    _check_conditional_event_references,
+    _check_conditional_layer_aggregate_views,
+    _check_conditional_rolled_edge_call_indices,
+    _check_conditional_transient_bool_keys_removed,
+)
+from .invariants import (  # noqa: E402
+    MetadataInvariantError,
+)

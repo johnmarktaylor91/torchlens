@@ -6,10 +6,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from .invariants import (
-        _SPECIAL_LIST_FLAG_PAIRS,
-        MetadataInvariantError,
-    )
 
 __all__ = (
     "_check_trace_self_consistency",
@@ -741,3 +737,11 @@ def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any)
                     f"Layer {report_label}: {has_flag}={getattr(lpl, has_flag)} but the "
                     f"derived {relation} list has {len(expected)} members",
                 )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from .invariants import (  # noqa: E402
+    _SPECIAL_LIST_FLAG_PAIRS,
+    MetadataInvariantError,
+)

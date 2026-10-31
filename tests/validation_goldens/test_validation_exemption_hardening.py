@@ -13,6 +13,16 @@ from torch import nn
 import torchlens as tl
 from torchlens.validation import backward as backward_validation, core
 from torchlens.validation._destination_coverage import _scatter_index_fully_overwrites_dim
+from torchlens.validation._invariants_conditional_base import _check_branching_invariants
+from torchlens.validation._invariants_conditional_modules import (
+    _check_layer_pass_to_layer_log_xrefs,
+    _check_pass_count_consistency,
+)
+from torchlens.validation._invariants_entry import (
+    _check_non_torch_backward_inert,
+    _check_receptive_field_metadata_invariants,
+)
+from torchlens.validation._invariants_payloads import _check_backend_neutral_graph_topology
 from torchlens.validation.diagnostics import get_validation_failure
 from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
@@ -28,13 +38,7 @@ from torchlens.validation.exemptions import (
 )
 from torchlens.validation.invariants import (
     MetadataInvariantError,
-    _check_backend_neutral_graph_topology,
-    _check_branching_invariants,
-    _check_layer_pass_to_layer_log_xrefs,
-    _check_non_torch_backward_inert,
     _check_non_torch_primitive_op_inert,
-    _check_pass_count_consistency,
-    _check_receptive_field_metadata_invariants,
     _check_site_key_invariants,
     check_metadata_invariants,
 )
@@ -1182,7 +1186,7 @@ def test_forged_placeholder_still_fails_func_call_id_after_save_load(
     requires it.
     """
 
-    from torchlens.validation.invariants import check_func_call_id_invariant
+    from torchlens.validation._invariants_entry import check_func_call_id_invariant
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
     trace = tl.trace(
@@ -1216,7 +1220,7 @@ def test_genuine_intervention_replacement_survives_save_load(tmp_path: Any) -> N
     ``func_call_id_consistency`` invariant after a save/load round trip.
     """
 
-    from torchlens.validation.invariants import check_func_call_id_invariant
+    from torchlens.validation._invariants_entry import check_func_call_id_invariant
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
     trace = tl.trace(
@@ -1307,7 +1311,7 @@ def test_func_name_none_string_cannot_launder_missing_func_call_id() -> None:
     flagged bookkeeping ops (outputs) and functionless internal sources.
     """
 
-    from torchlens.validation.invariants import check_func_call_id_invariant
+    from torchlens.validation._invariants_entry import check_func_call_id_invariant
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
     trace = tl.trace(

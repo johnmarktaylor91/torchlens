@@ -15,7 +15,7 @@ from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.errors import MetadataInvariantError
-from torchlens.validation.invariants import _check_loop_detection_invariants
+from torchlens.validation._invariants_equivalence import _check_loop_detection_invariants
 
 
 class _TwoLinearChain(nn.Module):

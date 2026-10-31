@@ -8,13 +8,6 @@ from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleInd
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from .invariants import (
-        MetadataInvariantError,
-        _param_address_index,
-        _param_log_list_contains_param,
-        _resolve_trace_label,
-        _strip_pass_suffix,
-    )
 
 __all__ = (
     "_check_module_call_boundary_and_tree",
@@ -577,3 +570,18 @@ def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
             f"deduped layers_with_params count {layers_with_params} != "
             f"trace.num_layers_with_params={ml.num_layers_with_params}",
         )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_buffers import (  # noqa: E402
+    _param_address_index,
+    _param_log_list_contains_param,
+    _resolve_trace_label,
+)
+from ._invariants_conditional_base import (  # noqa: E402
+    _strip_pass_suffix,
+)
+from .invariants import (  # noqa: E402
+    MetadataInvariantError,
+)

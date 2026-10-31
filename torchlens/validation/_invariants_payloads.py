@@ -8,12 +8,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from .invariants import (
-        MetadataInvariantError,
-        _dtype_values_match,
-        _resolve_trace_label,
-        op_has_genuine_replacement_evidence,
-    )
 
 __all__ = (
     "_check_backend_neutral_graph_topology",
@@ -706,3 +700,19 @@ def _payload_memory(payload: object) -> int | None:
     if not callable(nelement) or not callable(element_size):
         return None
     return int(nelement() * element_size())
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_backward_flow import (  # noqa: E402
+    op_has_genuine_replacement_evidence,
+)
+from ._invariants_buffers import (  # noqa: E402
+    _resolve_trace_label,
+)
+from ._invariants_conditional_base import (  # noqa: E402
+    _dtype_values_match,
+)
+from .invariants import (  # noqa: E402
+    MetadataInvariantError,
+)

@@ -23,25 +23,35 @@ from typing import Any
 
 import pytest
 
-from torchlens.validation.invariants import (
-    MetadataInvariantError,
-    _check_backend_identity_invariants,
-    _check_backend_neutral_accessor_refs,
-    _check_distance_invariants,
-    _check_edge_use_parent_arg_invariants,
-    _check_equivalence_symmetry,
-    _check_graph_ordering,
-    _check_graph_topology,
-    _check_lookup_key_consistency,
-    _check_loop_detection_invariants,
-    _check_module_containment_logic,
+from torchlens.validation._invariants_conditional_modules import (
     _check_module_hierarchy,
     _check_module_layer_containment,
-    _check_op_log_fields,
-    _check_param_xrefs,
-    _check_special_layer_lists,
+)
+from torchlens.validation._invariants_connectivity import (
+    _check_distance_invariants,
+    _check_lookup_key_consistency,
+    _check_module_containment_logic,
+)
+from torchlens.validation._invariants_entry import (
+    _check_backend_identity_invariants,
+    _check_backend_neutral_accessor_refs,
     check_func_call_id_invariant,
 )
+from torchlens.validation._invariants_equivalence import (
+    _check_equivalence_symmetry,
+    _check_graph_ordering,
+    _check_loop_detection_invariants,
+)
+from torchlens.validation._invariants_modules_params import _check_param_xrefs
+from torchlens.validation._invariants_payloads import (
+    _check_edge_use_parent_arg_invariants,
+    _check_op_log_fields,
+)
+from torchlens.validation._invariants_topology import (
+    _check_graph_topology,
+    _check_special_layer_lists,
+)
+from torchlens.validation.invariants import MetadataInvariantError
 
 
 class _FakeTrace(SimpleNamespace):

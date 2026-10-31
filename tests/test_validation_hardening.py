@@ -249,7 +249,7 @@ def test_w32_stale_fire_leak_in_plain_capture_stays_refused() -> None:
     """
 
     from torchlens.intervention.types import FireRecord
-    from torchlens.validation.invariants import (
+    from torchlens.validation._invariants_backward_flow import (
         _intervention_spec_is_armed,
         op_has_genuine_replacement_evidence,
     )

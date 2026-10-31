@@ -10,7 +10,7 @@ from torchlens.errors import MetadataInvariantError
 from torchlens.intervention.types import ParentRef, TupleIndex
 from torchlens.recording import RecordContext
 from torchlens.validation import check_metadata_invariants
-from torchlens.validation.invariants import check_func_call_id_invariant
+from torchlens.validation._invariants_entry import check_func_call_id_invariant
 
 
 class _SplitModel(torch.nn.Module):
