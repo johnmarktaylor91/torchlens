@@ -193,7 +193,28 @@ def rebuild_container_from_spec(spec: ContainerSpec, leaves: list[Any] | tuple[A
 
     _validate_container_spec(spec)
     leaf_iter = iter(leaves)
-    rebuilt = _rebuild_container_from_spec(spec, leaf_iter)
+    try:
+        rebuilt = _rebuild_container_from_spec(spec, leaf_iter)
+    except _LeafStreamDry as dry:
+        # Opaque-leaf arm (AUD-HONESTY H1): a declared slot with no child spec is a
+        # LEAF slot the flat leaf stream must fill. The stream is positional, so the
+        # slot where it ran dry is not necessarily the slot whose leaf is missing:
+        # name the full path where it ran out and the leaf/slot counts, and the two
+        # causes (a tensor-holding opaque object such as a HuggingFace
+        # ``DynamicCache`` under ``past_key_values``, or a capture that recorded
+        # fewer leaves than the spec declares), so the runnable consumers can settle
+        # the typed ``output_structure_mismatch`` verdict with a remedy instead of
+        # surfacing a bare arity error.
+        raise ValueError(
+            "Not enough leaves supplied for ContainerSpec: the flat leaf stream "
+            f"({len(leaves)} leaves for {declared_leaf_slots(spec)} declared leaf slots) "
+            f"ran out at leaf slot {_slot_path_text(dry.path)}, which has no captured "
+            "tensor leaf to fill it. The missing leaf belongs to that slot or an earlier "
+            "one: either the captured value there was an opaque non-tensor object (for "
+            "example a HuggingFace DynamicCache under past_key_values) that the "
+            "output-container contract cannot rebuild, or the capture recorded fewer "
+            "tensor leaves than the spec declares."
+        ) from dry.__cause__
     sentinel = object()
     if next(leaf_iter, sentinel) is not sentinel:
         raise ValueError("Too many leaves supplied for ContainerSpec.")
@@ -1142,30 +1163,47 @@ def _rebuild_child_or_leaf(
 
     Raises
     ------
-    ValueError
-        If a required leaf is missing.
+    _LeafStreamDry
+        If the flat leaf stream runs dry; ``rebuild_container_from_spec`` turns it
+        into the public ``ValueError`` naming the full slot path.
     """
 
     child_spec = child_by_key.get(component)
     if child_spec is not None:
-        return _rebuild_container_from_spec(child_spec, leaf_iter)
+        try:
+            return _rebuild_container_from_spec(child_spec, leaf_iter)
+        except _LeafStreamDry as dry:
+            raise _LeafStreamDry((component, *dry.path)) from dry.__cause__
     try:
         return next(leaf_iter)
     except StopIteration as exc:
-        # Opaque-leaf arm (AUD-HONESTY H1): a declared slot with no child spec is a
-        # LEAF slot the flat leaf stream must fill. Running dry here means the captured
-        # value at this slot was an opaque non-tensor object the contract could not
-        # represent (a tensor-holding cache such as a HuggingFace ``DynamicCache`` under
-        # ``past_key_values``), never a corrupt leaf stream -- name the slot so the
-        # runnable consumers can settle the typed ``output_structure_mismatch`` verdict
-        # with a remedy instead of surfacing a bare arity error.
-        raise ValueError(
-            "Not enough leaves supplied for ContainerSpec: declared leaf slot "
-            f"{component!r} has no captured tensor leaf to fill it. The captured value "
-            "at this slot was an opaque non-tensor object (for example a HuggingFace "
-            "DynamicCache under past_key_values) that the output-container contract "
-            "cannot rebuild."
-        ) from exc
+        # The public ValueError is raised by ``rebuild_container_from_spec`` once the
+        # full path of the dry slot is known.
+        raise _LeafStreamDry((component,)) from exc
+
+
+class _LeafStreamDry(Exception):
+    """Internal signal: the flat leaf stream ran dry at the slot ``path`` (root first)."""
+
+    def __init__(self, path: tuple[OutputPathComponent, ...]) -> None:
+        super().__init__(path)
+        self.path = path
+
+
+def _slot_path_text(path: tuple[OutputPathComponent, ...]) -> str:
+    """Render a container slot path readably, for example ``output['a'][0]``."""
+
+    parts = ["output"]
+    for component in path:
+        if isinstance(component, TupleIndex):
+            parts.append(f"[{component.index}]")
+        elif isinstance(component, (DictKey, HFKey)):
+            parts.append(f"[{component.key!r}]")
+        elif isinstance(component, (NamedField, DataclassField)):
+            parts.append(f".{component.name}")
+        else:
+            parts.append(f"[{component!r}]")
+    return "".join(parts)
 
 
 class ContainerReconstructionError(_ActionableErrorMixin, TorchLensError, ValueError):
