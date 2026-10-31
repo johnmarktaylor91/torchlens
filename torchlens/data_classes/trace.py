@@ -1369,7 +1369,7 @@ class Trace(
         "capture_cache_key": FieldPolicy.KEEP,
         "capture_cache_path": FieldPolicy.KEEP,
         "recording_kept": FieldPolicy.KEEP,
-        "facet_functions": FieldPolicy.DROP,
+        "facet_registry_snapshot": FieldPolicy.DROP,
         "_out_dedup_mode": FieldPolicy.DROP,
         "_out_identity_cache": FieldPolicy.DROP,
         "_out_hash_cache": FieldPolicy.DROP,
@@ -1876,7 +1876,7 @@ class Trace(
         # Built once per capture; ``None`` when budgeting is disabled. Charged on
         # the hot path by the activation-save paths in the torch backend.
         self._save_budget_accountant = SaveBudget.from_option(save_budget)
-        self.facet_functions = facet_registry_snapshot
+        self.facet_registry_snapshot = facet_registry_snapshot
         self.raise_on_nan: bool = False
         self.track_nonfinite: bool = False
         self.track_device_memory: bool = False
@@ -3770,7 +3770,7 @@ class Trace(
         # computed from the replaced activations and are invalidated; USER
         # ``annotate(data=...)`` blobs survive the same-shape refresh.
         self._annotation_blobs = self._user_annotation_blobs()
-        self.facet_functions = getattr(new_log, "facet_registry_snapshot", None)
+        self.facet_registry_snapshot = getattr(new_log, "facet_registry_snapshot", None)
 
     def _copy_rerun_value(self, value: Any) -> Any:
         """Copy rerun metadata while keeping tensor payload identities.

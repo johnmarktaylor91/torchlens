@@ -371,7 +371,7 @@ def test_paddle_recipes_snapshot_dispatches() -> None:
         return {"is_relu": "relu" in str(getattr(record, "label", ""))}
 
     trace = tl.trace(_mlp, _inputs(), backend="paddle", facets=[recipe])
-    snapshot = trace.facet_functions
+    snapshot = trace.facet_registry_snapshot
     assert snapshot is not None
     assert any("recipe" in entry.public.name for entry in snapshot.functions)
 

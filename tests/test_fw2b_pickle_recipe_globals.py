@@ -1,6 +1,6 @@
 """Plain pickles of a Trace must not embed builtin facet recipe function identities.
 
-FW2-B item 12-A. ``Trace.facet_functions`` is session-time state
+FW2-B item 12-A. ``Trace.facet_registry_snapshot`` is session-time state
 (``FieldPolicy.DROP``) whose ``_RegisteredRecipe.func`` entries pickle the
 builtin recipe FUNCTIONS by import identity. Carrying it through
 ``Trace.__getstate__`` coupled every earlier plain pickle to the current
@@ -53,14 +53,14 @@ def test_plain_pickle_carries_no_recipe_function_globals() -> None:
 
     trace = _tiny_trace()
     # The pin is meaningful only if the live trace really carries the snapshot.
-    assert isinstance(trace.facet_functions, FacetRegistrySnapshot)
+    assert isinstance(trace.facet_registry_snapshot, FacetRegistrySnapshot)
 
     payload = pickle.dumps(trace, protocol=pickle.HIGHEST_PROTOCOL)
     recipe_modules = sorted(m for m in _global_modules(payload) if m.startswith(_RECIPE_PREFIX))
     assert recipe_modules == [], recipe_modules
 
     loaded = pickle.loads(payload)  # noqa: S301 - bytes produced in-process just above
-    assert loaded.facet_functions is None
+    assert loaded.facet_registry_snapshot is None
     # Facet reads still serve after the round-trip (live-registry fallback).
     for label in trace.layer_labels:
         assert set(loaded[label].facets) == set(trace[label].facets)
@@ -71,6 +71,6 @@ def test_deepcopy_follows_the_same_pickle_boundary() -> None:
 
     trace = _tiny_trace()
     cloned = copy.deepcopy(trace)
-    assert cloned.facet_functions is None
+    assert cloned.facet_registry_snapshot is None
     assert len(cloned) == len(trace)
     assert set(cloned[trace.layer_labels[-1]].facets) == set(trace[trace.layer_labels[-1]].facets)

@@ -516,7 +516,7 @@ class PaddleBackend:
                 )
             from ...semantic import facets as facets_mod
 
-            trace.facet_functions = facets_mod.snapshot(recipe_tuple)
+            trace.facet_registry_snapshot = facets_mod.snapshot(recipe_tuple)
         trace.backend_runtime_version = str(getattr(self.paddle, "__version__", ""))
         trace.backend_runtime_config = {"version": trace.backend_runtime_version}
         trace.backend_runtime_device_summary = {}
