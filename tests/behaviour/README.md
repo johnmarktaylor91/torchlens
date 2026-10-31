@@ -35,6 +35,7 @@ or mark the cell to make it pass (the validation-integrity rule in
 | `harness.py` | `run_cell(case, features, tmp) -> CellResult` and the public-surface helpers |
 | `test_matrix.py` | the cell universe, one test per oracle, and the pins that tie the feature axis to `tests/interaction_matrix.json` |
 | `conftest.py` | the per-cell result cache and the xdist grouping |
+| `test_cell_tmp.py` | pins that a cell removes its temp directory when it ends |
 
 ## The cell universe
 
@@ -59,6 +60,13 @@ TORCHLENS_BEHAVIOUR_UNIVERSE=sweep pytest tests/behaviour -n 4   # every pair on
 
 `TORCHLENS_BEHAVIOUR_UNIVERSE` is `cheap`, `sweep`, `core` or `all` (the default)
 and narrows which part of the universe is collected.
+
+Each cell writes its artifacts (the saved bundle, disk-streamed payloads,
+rendered graphs) into its own temp directory and removes it as soon as the
+cell has run, pass or fail, so a long run does not fill the disk. To inspect
+a failing cell's files, set `TORCHLENS_BEHAVIOUR_KEEP_TMP=1`: the directory of
+a cell with a failing oracle (or one that crashed) is then kept under pytest's
+basetemp, named after the cell id. Passing cells are removed either way.
 
 Nothing here carries `smoke`: the smoke tier sits near its size ceiling
 (`SMOKE_TIER_SIZE_CEILING` in `tests/conftest.py`), and smoke admission is a
