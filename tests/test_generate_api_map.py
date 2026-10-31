@@ -43,7 +43,6 @@ def model(generator):  # type: ignore[no-untyped-def]
     return generator.build_model(REPO_ROOT, scope="root")
 
 
-@pytest.mark.smoke
 def test_every_root_surface_name_is_in_the_map(generator, model) -> None:  # type: ignore[no-untyped-def]
     rows = generator.read_surface_rows(REPO_ROOT)
     assert rows, "the frozen root surface table is empty"
@@ -62,7 +61,6 @@ def test_every_root_surface_name_is_in_the_map(generator, model) -> None:  # typ
         assert "f" in target, f"root name {alias['n']} has no defining file"
 
 
-@pytest.mark.smoke
 def test_generated_page_names_every_root_surface_name(generator, model) -> None:  # type: ignore[no-untyped-def]
     html = generator.render_html(model)
     assert html.count("<script") == html.count("</script"), (
@@ -75,7 +73,6 @@ def test_generated_page_names_every_root_surface_name(generator, model) -> None:
     assert "tools/generate_api_map.py" in html
 
 
-@pytest.mark.smoke
 def test_unresolvable_root_name_fails_loudly(generator, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     real_rows = generator.read_surface_rows(REPO_ROOT)
     fake = dict(real_rows[0], canonical_path="torchlens.name_that_does_not_exist_anywhere")
