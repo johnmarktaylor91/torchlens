@@ -42,8 +42,8 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `tl.in_module` selectors, op-label `layers_to_save`, the legacy `trace.run(model, x)` rerun,
   `trace.run(inputs=...)` and `trace.run(inputs=..., fast=True)`; `True` detaches on every one
   of them. `tl.extract(..., detach_saved_activations=False)` and
-  `tl.record(..., detach_saved_activations=False)` (also `tl.recording.Recorder` and
-  `RecordingOptions.detach_saved_activations`) attach on request; both keep their detached
+  `tl.record(..., capture=CaptureOptions(detach_saved_activations=False))` (also
+  `tl.recording.Recorder`) attach on request; both keep their detached
   default, and `tl.record` refuses an explicit `True` with `backward_ready=True`
   (`backward_ready_conflict`). A per-site `CaptureSpec(save_grad=True)` stays attached either
   way, and disk payloads are always detached. An escrowed deferred-selector payload spilled to
@@ -2974,10 +2974,11 @@ deprecation shim owed*
   in this release.
 
 **Recording keywords**
-: `tl.record(...)`, `Recorder(...)` and `tl.options.RecordingOptions` take `narrate=` (a
+: `tl.record(...)` and `Recorder(...)` take `narrate=` (a
   `tl.options.NarrationOptions`, with `NarrationOptions.as_dict()`,
-  `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`) and
-  `save_raw_grads=` (`RecordingOptions.save_raw_grads`). `NarrationOptions.sites` (`sites=`)
+  `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`);
+  `save_raw_grads` is a `CaptureOptions` field (`capture=CaptureOptions(save_raw_grads=...)`
+  on `tl.record`). `NarrationOptions.sites` (`sites=`)
   scopes the narration (`True` for every event, `"modules"` for structure lines only, or a
   live selector); `trace.narrate(select=...)` filters post hoc. `NarrationOptions.sink` receives the
   narrated lines, `NarrationOptions.max_lines` caps them, `NarrationOptions.on_error_only`
