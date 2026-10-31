@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import importlib.util
 import inspect
 import pkgutil
 import textwrap
@@ -172,6 +173,15 @@ def walk_module_surface(
     return tuple(entries)
 
 
+#: Private submodules that install documented members on public classes at
+#: import time. They are not in the public filesystem submodule set, but the
+#: save path imports them (``torchlens._io.field_registry`` lists
+#: ``torchlens._kernel_telemetry`` among its component-spec modules), so a
+#: session's ``dir(cls)`` depends on whether a save ran first. Importing them
+#: here keeps the walk at the same canonical maximal state.
+_PRIVATE_MEMBER_INSTALLERS: tuple[str, ...] = ("_kernel_telemetry",)
+
+
 def _normalize_import_state(namespace: types.ModuleType) -> None:
     """Import every public top-level submodule so ``dir(cls)`` is stable.
 
@@ -195,6 +205,9 @@ def _normalize_import_state(namespace: types.ModuleType) -> None:
         return
     for submodule in sorted(_filesystem_submodules(namespace)):
         importlib.import_module(f"{package_name}.{submodule}")
+    for installer in _PRIVATE_MEMBER_INSTALLERS:
+        if importlib.util.find_spec(f"{package_name}.{installer}") is not None:
+            importlib.import_module(f"{package_name}.{installer}")
 
 
 def walk_class_surface(namespace: types.ModuleType) -> tuple[tuple[str, str], ...]:
