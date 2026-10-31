@@ -131,7 +131,7 @@ class TestRenderFacade:
         """An explicit collapse= value lands in the result policy."""
 
         result = render(
-            _cnn().eval(), input_size=SIZE, collapse="none", path=str(tmp_path / "g.svg")
+            _cnn().eval(), input_shape=SIZE, collapse="none", path=str(tmp_path / "g.svg")
         )
         assert result.policy["collapse"] == "none"
 
@@ -163,7 +163,7 @@ class TestRenderFacade:
         with pytest.raises(Exception) as excinfo:
             render(
                 _cnn().eval(),
-                input_size=SIZE,
+                input_shape=SIZE,
                 path=str(tmp_path / "g.svg"),
                 color_by="magnitude",
             )

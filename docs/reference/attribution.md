@@ -1153,6 +1153,8 @@ exported = graph.to_neuronpedia(slug="tiny-graph", model_id="tiny", tokenizer=Le
 print(exported["metadata"]["prompt_tokens"], len(exported["nodes"]), len(exported["links"]))
 assert json.loads(path.read_text()) == exported
 
+from torchlens.attribution._viz import attribution_color_by
+
 color_by = attribution_color_by(trace, graph)  # each node's influence, totalled per site
 painted = [label for label in trace.layer_labels if color_by(trace[label]) is not None]
 print(painted)

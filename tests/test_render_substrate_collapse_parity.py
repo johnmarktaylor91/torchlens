@@ -189,7 +189,7 @@ def test_box_pricing_counts_per_call_units(reused_trace: tl.Trace) -> None:
     # CALL on the unrolled view. The plan realized for an explicit selection
     # must count all three calls, and the derived plan through the universe
     # must agree.
-    context = RenderContext(rolled=False)
+    context = RenderContext(vis_mode="unrolled")
 
     def collapse_block(module):  # noqa: ANN001, ANN202
         return module.address == "block"
@@ -231,7 +231,7 @@ def test_near_uncollapsed_auto_plan_is_disclosed(tmp_path) -> None:
     from torchlens.errors._base import TorchLensWarning
 
     log = tl.trace(_RootFanModel(), torch.randn(2, 4))
-    result = select_collapse_plan(log, RenderContext(rolled=False), mode="auto")
+    result = select_collapse_plan(log, RenderContext(vis_mode="unrolled"), mode="auto")
     assert result.visible_count >= 100  # nearly all 141 units visible
     with pytest.warns(TorchLensWarning, match="nearly the uncollapsed graph"):
         log.draw(
@@ -250,7 +250,7 @@ def test_floor_fallback_result_is_typed_and_visible(tmp_path, monkeypatch) -> No
 
     log = tl.trace(_RootFanModel(), torch.randn(2, 4))
     monkeypatch.setattr(co, "_select_best_decision", lambda **kwargs: None)
-    result = select_collapse_plan(log, RenderContext(rolled=False), mode="auto")
+    result = select_collapse_plan(log, RenderContext(vis_mode="unrolled"), mode="auto")
     assert result.planner == "floor_fallback"
     assert result.k_cap_exhausted is True
     assert result.root_own_units > 64

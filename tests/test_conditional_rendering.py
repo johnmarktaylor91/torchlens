@@ -163,7 +163,7 @@ class LoopRepeatedIfModel(nn.Module):
 def _render_dot_source(
     model: nn.Module,
     x: torch.Tensor,
-    vis_mode: str = "unrolled",
+    rolled: bool = False,
 ) -> tuple[str, Trace]:
     """Render a model graph and return the DOT source plus model log.
 
@@ -185,7 +185,7 @@ def _render_dot_source(
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = os.path.join(tmpdir, "conditional_render")
         dot_source = trace.draw(
-            rolled=vis_mode == "rolled",
+            rolled=rolled,
             path=outpath,
             file_format="dot",
         ).dot

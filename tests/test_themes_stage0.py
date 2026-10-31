@@ -122,7 +122,7 @@ def test_fill_spread_gates_apply_only_with_a_channel(speed_render: Any) -> None:
         file_format="svg",
     ).dot
     report = audit.run_stage0(
-        bare_graph.source, resolution=bare, checks=audit.Stage0Checks(geometry=False)
+        bare_graph, resolution=bare, checks=audit.Stage0Checks(geometry=False)
     )
     assert "distinct_fills" not in {finding.check for finding in report.findings}
 
@@ -141,7 +141,7 @@ def test_compaction_non_identity_is_checkable(speed_render: Any) -> None:
             path=svg_path.replace(".svg", "-ov"),
             file_format="svg",
         ).dot
-        assert collapsed_graph.source != graph
+        assert collapsed_graph != graph
 
 
 @pytest.mark.heavy

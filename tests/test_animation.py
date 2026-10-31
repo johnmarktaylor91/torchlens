@@ -44,7 +44,7 @@ def test_draw_animate_returns_an_html_drawing(tmp_path) -> None:
     log = tl.trace(RecurrentLinear(), torch.randn(1, 3))
     recurrent_label = next(label for label, count in log.layer_num_calls.items() if count > 1)
 
-    drawing = log.draw(animate=recurrent_label).dot
+    drawing = log.draw(animate=recurrent_label)
 
     assert isinstance(drawing, tl.viz.Drawing)
     assert drawing.file_format == "html"

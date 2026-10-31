@@ -910,7 +910,7 @@ def _capture_backward_combined(tmp_path: Path) -> dict[str, Any]:
         trace.log_backward(loss)
         _stabilize_backward_identifiers(trace)
         backward = trace.draw(
-            graph="backward", path=str(tmp_path / "backward"), file_format="svg"
+            graph="backward", rolled=True, path=str(tmp_path / "backward"), file_format="svg"
         ).dot
         combined = trace.draw(
             graph="combined", path=str(tmp_path / "combined"), file_format="svg"

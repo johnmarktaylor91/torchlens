@@ -168,7 +168,7 @@ PAIRED_OPTIONS: tuple[str, ...] = tuple(
 )
 
 #: The exact refusing combinations among the probes above, pinned as
-#: (frozen option set) -> expected typed code. ``"scale"`` refuses with EVERY
+#: (frozen option set) -> expected typed code. ``"size_scale"`` refuses with EVERY
 #: partner except ``size_by`` (its own documented dependency), so it is
 #: expressed as a rule in ``expected_refusal`` rather than 37 literal rows.
 REFUSING_COMBOS: dict[frozenset[str], str] = {
@@ -188,7 +188,7 @@ def expected_refusal(combo: frozenset[str]) -> str | None:
     alone), matching shipped precedence; the pinned pair rows cover the rest.
     """
 
-    if "scale" in combo and "size_by" not in combo:
+    if "size_scale" in combo and "size_by" not in combo:
         return "scale_requires_size_by"
     return REFUSING_COMBOS.get(combo)
 
@@ -299,7 +299,7 @@ _CORE_PAIRS = list(itertools.combinations(CORE_OPTIONS, 2))
 
 #: Every pinned-refusal combination, provoked at smoke (each raises before
 #: rendering, so the family is cheap).
-_REFUSAL_COMBOS: list[tuple[str, ...]] = [("scale",)] + [
+_REFUSAL_COMBOS: list[tuple[str, ...]] = [("size_scale",)] + [
     tuple(sorted(combo)) for combo in sorted(REFUSING_COMBOS, key=sorted)
 ]
 

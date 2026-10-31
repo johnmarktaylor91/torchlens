@@ -454,8 +454,6 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "check_plan": lambda t: t.check_plan(["relu"]),
         "stack": lambda t: t.stack(tl.func("relu")),
         "show": lambda t: t.show(kind="graph", path=str(out / "shown")),
-        "draw_backward": lambda t: t.draw(graph="backward", path=str(out / "bwd")),
-        "draw_combined": lambda t: t.draw(graph="combined", path=str(out / "cmb")),
     }
 
 

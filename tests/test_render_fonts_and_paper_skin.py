@@ -82,10 +82,11 @@ def test_backward_and_combined_graphs_declare_the_theme_font(tmp_path: Path, ent
     family = THEME_PRESETS["torchlens"].typography.family
     trace = _traced_with_grads()
     try:
-        dot = getattr(trace, entry)(
+        dot = trace.draw(
+            graph=entry.removeprefix("draw_"),
             path=str(tmp_path / entry),
             file_format="dot",
-        )
+        ).dot
     finally:
         trace.cleanup()
     fonts = _default_fontnames(dot)

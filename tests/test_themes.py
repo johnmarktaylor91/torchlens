@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -45,8 +46,8 @@ def test_visualization_options_convenience_knobs_return_graph(tmp_path: Path) ->
     graph = log.draw(**tl.options.visualization_to_render_kwargs(options)).dot
 
     assert isinstance(graph, str)
-    assert graph.graph_attr["dpi"] == "120"
-    assert graph.node_attr["fontsize"] == "14"
+    assert re.search(r'\bdpi="?120"?', graph)
+    assert re.search(r'\bfontsize="?14"?', graph)
 
     # dpi is a raster-only knob (vizmech D23): vector targets drop it so the
     # coordinate space is not silently rescaled.
@@ -59,4 +60,4 @@ def test_visualization_options_convenience_knobs_return_graph(tmp_path: Path) ->
         dpi=120,
     )
     vector_graph = log.draw(**tl.options.visualization_to_render_kwargs(vector_options)).dot
-    assert "dpi" not in vector_graph.graph_attr
+    assert not re.search(r'\bdpi="?\d', vector_graph)

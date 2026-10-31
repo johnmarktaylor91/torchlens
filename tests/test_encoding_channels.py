@@ -221,8 +221,8 @@ def test_request_hash_ignores_channel_fields() -> None:
 
     from torchlens._visualization.request import ResolvedRenderRequest
 
-    base = ResolvedRenderRequest(rolled=True)
-    with_channel = ResolvedRenderRequest(rolled=True, color_by="bytes", encoding=object())
+    base = ResolvedRenderRequest(vis_mode="rolled")
+    with_channel = ResolvedRenderRequest(vis_mode="rolled", color_by="bytes", encoding=object())
     assert hash(base) == hash(with_channel)
 
 

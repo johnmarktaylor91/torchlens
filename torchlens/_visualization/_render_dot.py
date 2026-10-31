@@ -379,7 +379,7 @@ def _resolve_collapse_request(
                 "'rank' in v1: the rank backend cannot position "
                 "segment-family chip nodes yet",
                 code="pattern_rank_layout_unsupported",
-                remedy="render with vis_node_placement='dot' (or 'auto')",
+                remedy="render with layout='dot' (or 'auto')",
             )
         from .collapse_patterns import match_patterns
 
@@ -1618,7 +1618,7 @@ def _disclose_rank_layout_omissions(trace: "Trace", context: _ForwardRenderConte
     if omitted:
         _warn_render_omission(
             f"The rank layout does not draw {' or '.join(omitted)}; they are omitted from "
-            "this render. Remedy: force Graphviz dot with vis_node_placement='dot'."
+            "this render. Remedy: force Graphviz dot with layout='dot'."
         )
 
 

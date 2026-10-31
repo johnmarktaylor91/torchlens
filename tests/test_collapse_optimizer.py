@@ -666,7 +666,7 @@ def test_collapse_adjacency_index_avoids_feed_forward_fuzzy_resolution(
         assert analysis.child_flow_graphs
 
         _clear_collapse_caches(schedule_trace)
-        schedule = collapse_schedule(schedule_trace, RenderContext(rolled=True))
+        schedule = collapse_schedule(schedule_trace, RenderContext(vis_mode="rolled"))
         assert schedule.steps
         assert schedule.steps[-1].plan.nodes
     finally:
@@ -988,7 +988,7 @@ def test_default_routes_v2_and_rolled_auto() -> None:
         v2_fn = resolve_collapse_fn(trace, "auto", "unrolled", context=RenderContext())
         assert hasattr(v2_fn, "_torchlens_v2_result")
 
-        rolled_context = RenderContext(rolled=True)
+        rolled_context = RenderContext(vis_mode="rolled")
         rolled_fn = resolve_collapse_fn(trace, "auto", "rolled", context=rolled_context)
         assert hasattr(rolled_fn, "_torchlens_v2_result")
 
@@ -1220,7 +1220,7 @@ def test_rolled_v2_memo_separates_digest_identical_different_num_calls(
 
     trace = _trace(UnevenReusedSiblings(), torch.randn(2, 4))
     try:
-        context = RenderContext(rolled=True)
+        context = RenderContext(vis_mode="rolled")
         collapse_fn = resolve_collapse_fn(trace, "auto", "rolled", context=context)
         result = getattr(collapse_fn, "_torchlens_v2_result")
         rendered_plan = collapse_plan_for_trace(trace, collapse_fn, result.repeat_folds, context)

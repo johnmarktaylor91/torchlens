@@ -271,7 +271,7 @@ def _facade(panel: Panel, outpath: Path) -> str:
     model, inputs = ALL_FIXTURES[panel.fixture]()
     if panel.call == "summary":
         return _summary_dot(str(tl.summary(model, inputs)))
-    from torchlens._quickstart import render
+    from torchlens._quickstart import draw as render
 
     result = render(model, inputs, file=str(outpath.with_suffix(".svg")), format="svg")
     return str(result.dot)

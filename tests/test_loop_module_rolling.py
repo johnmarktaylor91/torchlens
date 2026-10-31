@@ -590,7 +590,7 @@ def _normalized_title(trace: tl.Trace, layer_type: str, display_name: str) -> st
     """Return a display title normalized to the proposal's short op name."""
 
     layer = _first_layer(trace, layer_type)
-    title = compute_default_node_lines(layer, rolled=True)[0]
+    title = compute_default_node_lines(layer, vis_mode="rolled")[0]
     return re.sub(rf"^{layer_type}_\d+_\d+", display_name, title)
 
 

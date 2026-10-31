@@ -1635,7 +1635,7 @@ class TestVisualizationBugfixes:
 
             dot = draw(
                 log,
-                depth=0,
+                vis_call_depth=0,
                 vis_outpath=opj(VIS_DIR, "test_call_depth_0"),
             )
         except ImportError:

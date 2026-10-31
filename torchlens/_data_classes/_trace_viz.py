@@ -305,7 +305,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         if graph not in ("forward", "backward", "combined"):
             raise InvalidArgumentError(
                 f"graph must be 'forward', 'backward', or 'combined'; received {graph!r}",
-                code="visualization_graph_invalid",
+                code="visualization_mode_invalid",
                 remedy="pass graph='forward', 'backward', or 'combined'",
                 argument="graph",
             )

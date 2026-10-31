@@ -126,7 +126,7 @@ def test_layout_engine_silence_stays_silent() -> None:
 def test_floor_fallback_plan_discloses_typed_warning(two_block_trace: tl.Trace) -> None:
     """A published floor-fallback plan warns ``collapse_floor_fallback``."""
 
-    context = RenderContext(rolled=False)
+    context = RenderContext(vis_mode="unrolled")
     result = dataclasses.replace(
         _uncollapsed_result(two_block_trace, context),
         planner="floor_fallback",
@@ -158,7 +158,7 @@ def test_near_uncollapsed_plan_discloses_typed_warning(
     from torchlens._visualization import auto_collapse
 
     monkeypatch.setattr(auto_collapse, "_readable_band_high", lambda trace: 1)
-    context = RenderContext(rolled=False)
+    context = RenderContext(vis_mode="unrolled")
     total_units = _optimizer_total_units(two_block_trace, context)
     assert total_units > 0
     result = dataclasses.replace(
@@ -177,7 +177,7 @@ def test_collapsed_frontier_plan_stays_silent(two_block_trace: tl.Trace) -> None
 
     import warnings
 
-    context = RenderContext(rolled=False)
+    context = RenderContext(vis_mode="unrolled")
     total_units = _optimizer_total_units(two_block_trace, context)
     result = dataclasses.replace(
         _uncollapsed_result(two_block_trace, context),

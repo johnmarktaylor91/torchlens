@@ -120,7 +120,7 @@ def test_boundary_crossing_segment_discloses_spanned_modules() -> None:
     from torchlens._visualization._segment_descriptors import _make_op_segment_descriptor
 
     trace = tl.trace(_Outer(), torch.randn(1, 4))
-    context = SimpleNamespace(rolled=False)
+    context = SimpleNamespace(vis_mode="unrolled")
     labels = ("linear_1_1", "relu_1_2")
     descriptor = _make_op_segment_descriptor(trace, context, labels, labels)
     assert descriptor.owner is None, "probe expects a top-level (LCA-less) segment"
@@ -147,7 +147,7 @@ def test_within_module_segment_discloses_hidden_atomic_module_calls() -> None:
 
     deep = nn.Sequential(nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4), nn.ReLU()))
     trace = tl.trace(deep, torch.randn(1, 4))
-    context = SimpleNamespace(rolled=False)
+    context = SimpleNamespace(vis_mode="unrolled")
     labels = tuple(label for label in ("linear_1_1", "relu_1_2", "linear_2_3", "relu_2_4"))
     descriptor = _make_op_segment_descriptor(trace, context, labels, labels)
     assert "spans @0.0:1, @0.1:1, @0.2:1, +1 more" in descriptor.label, descriptor.label

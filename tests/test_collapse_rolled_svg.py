@@ -293,7 +293,7 @@ def test_rolled_svg_conservation_and_parity(fixture, level, tmp_path):
     """
 
     trace = tl.trace(FIXTURES[fixture]().eval(), torch.randn(2, 8))
-    plan = trace.collapse_plan(mode=level, context=RenderContext(rolled=True))
+    plan = trace.collapse_plan(mode=level, context=RenderContext(vis_mode="rolled"))
     svg_path = _rolled_draw(trace, tmp_path, fixture, level)
     nodes = _svg_nodes(svg_path)
 
@@ -324,7 +324,7 @@ def test_rolled_cluster_owned_child_segment_renders_labeled(tmp_path):
     """
 
     trace = tl.trace(ChildSegNet().eval(), torch.randn(2, 8))
-    result = select_collapse_plan(trace, RenderContext(rolled=True), mode="max")
+    result = select_collapse_plan(trace, RenderContext(vis_mode="rolled"), mode="max")
     owned = {
         name: descriptor
         for name, descriptor in (result.segments or {}).items()
@@ -366,7 +366,7 @@ def test_rolled_cluster_owned_op_segment_renders_labeled(tmp_path):
     """
 
     trace = tl.trace(OpSegNet().eval(), torch.randn(2, 8))
-    result = select_collapse_plan(trace, RenderContext(rolled=True), mode="max")
+    result = select_collapse_plan(trace, RenderContext(vis_mode="rolled"), mode="max")
     descriptors = result.segments or {}
     owned_op_segments = {
         name: descriptor

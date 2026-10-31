@@ -61,11 +61,15 @@ def test_draw_backward_takes_the_skin(tmp_path: Path) -> None:
     """The dark skin's page and ink reach the gradient picture."""
 
     dark = THEME_PRESETS["dark"]
-    dot = _backward_trace().draw(
-        graph="backward",
-        path=str(tmp_path / "bwd_dark"),
-        file_format="svg",
-        theme="dark",
+    dot = (
+        _backward_trace()
+        .draw(
+            graph="backward",
+            path=str(tmp_path / "bwd_dark"),
+            file_format="svg",
+            theme="dark",
+        )
+        .dot
     )
     assert f'bgcolor="{dark.graph["bgcolor"]}"' in dot
     assert f"<FONT COLOR='{dark.default_font}'>" in dot
@@ -75,7 +79,9 @@ def test_draw_backward_takes_the_skin(tmp_path: Path) -> None:
 def test_draw_backward_default_skin_is_unchanged_in_kind(tmp_path: Path) -> None:
     """The default skin keeps a white page and the pinned face."""
 
-    dot = _backward_trace().draw(graph="backward", path=str(tmp_path / "bwd"), file_format="svg")
+    dot = (
+        _backward_trace().draw(graph="backward", path=str(tmp_path / "bwd"), file_format="svg").dot
+    )
     assert "bgcolor=white" in dot
     assert "fontname=Helvetica" in dot
 

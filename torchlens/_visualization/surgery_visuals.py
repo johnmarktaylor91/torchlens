@@ -632,6 +632,8 @@ def render_surgery(trace: Trace, **user_kwargs: Any) -> Any:
     from .lenses._resolve import draw_with_lens
 
     result = draw_with_lens(trace, "surgery", **user_kwargs)
+    if hasattr(result, "dot"):
+        result = str(result)  # the DOT source, as every surgery caller reads it
     if not user_kwargs.get("return_graph", False):
         outpath = user_kwargs.get("path")
         if outpath is None:

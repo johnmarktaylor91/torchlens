@@ -236,7 +236,7 @@ def _trace(model: nn.Module) -> tl.Trace:
 def _dot(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     """Render ``trace`` and return the DOT source."""
 
-    kwargs.setdefault("vis_node_placement", "dot")
+    kwargs.setdefault("layout", "dot")
     return str(
         trace.draw(
             file_format="svg",
