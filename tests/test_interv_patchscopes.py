@@ -169,8 +169,8 @@ def test_source_site_by_label(tiny_gpt2: torch.nn.Module) -> None:
     """A pass-qualified label names the donor op as well as a selector does."""
 
     source = tl.trace(tiny_gpt2, _SOURCE)
-    (donor,) = source.resolve_sites(tl.module("transformer.h.0"), max_fanout=4)
-    edit = tl.patch_from(source, source_site=donor.label, positions={-1: 3})
+    (donor_label,) = source[tl.module("transformer.h.0")].labels
+    edit = tl.patch_from(source, source_site=donor_label, positions={-1: 3})
     target = tl.trace(tiny_gpt2, _TARGET, intervene=tl.when(tl.module("transformer.h.1"), edit))
     want = _torch_patch(
         tiny_gpt2, _SOURCE, _TARGET, source_layer=0, target_layer=1, pairs=[(-1, 3)]

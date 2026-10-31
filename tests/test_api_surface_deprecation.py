@@ -42,7 +42,6 @@ REMOVED_TOP_LEVEL_CASES = [
     ("NodeSpec", "torchlens.experimental.dagua", "NodeSpec"),
     ("Param", "torchlens.types", "Param"),
     ("TraceState", "torchlens.io", "TraceState"),
-    ("SiteTable", "torchlens.intervention.resolver", "SiteTable"),
     ("SpecCompat", "torchlens.types", "SpecCompat"),
     ("StreamingOptions", "torchlens.options", "StorageOptions"),
     ("TargetManifestDiff", "torchlens.types", "TargetManifestDiff"),
@@ -58,7 +57,6 @@ REMOVED_TOP_LEVEL_CASES = [
     ("trace_to_dagua_graph", "torchlens.experimental.dagua", "trace_to_dagua_graph"),
     ("rehydrate_nested", "torchlens.io", "materialize_nested"),
     ("reset_naming_counter", "torchlens.io", "reset_naming_counter"),
-    ("resolve_sites", "torchlens.validation", "resolve_sites"),
     ("save_intervention", "torchlens.io", "save_intervention"),
     ("suppress_mutate_warnings", "torchlens.io", "suppress_mutate_warnings"),
     ("unwrap_torch", "torchlens.backends.torch.wrappers", "unwrap_torch"),
@@ -79,6 +77,8 @@ REMOVED_SURFACE_NAMES = [
     "preview_fastlog",
     "render_lines_to_html",
     "render_trace_with_dagua",
+    "resolve_sites",
+    "SiteTable",
 ]
 
 #: Removed top-level wrapper functions whose canonical spelling lives in a

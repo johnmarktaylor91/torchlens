@@ -34,7 +34,7 @@ def test_partial_rank_unit_index_teaches_full_coordinates() -> None:
 
     log = _log()
     with pytest.raises(SelectionError) as excinfo:
-        tl.units("relu_1_2", [(1,)]).resolve(log)
+        log[tl.units("relu_1_2", [(1,)])]
     assert excinfo.value.fields["code"] == "selection_unresolvable"
     assert excinfo.value.fields["reason"] == "mask_shape_mismatch"
     message = str(excinfo.value)
@@ -51,7 +51,7 @@ def test_full_rank_out_of_range_message_unchanged() -> None:
 
     log = _log()
     with pytest.raises(SelectionError) as excinfo:
-        tl.units("relu_1_2", [(9, 9, 9, 9)]).resolve(log)
+        log[tl.units("relu_1_2", [(9, 9, 9, 9)])]
     assert excinfo.value.fields["reason"] == "mask_shape_mismatch"
     assert "outside" in str(excinfo.value)
 

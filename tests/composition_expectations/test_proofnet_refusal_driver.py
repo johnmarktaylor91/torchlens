@@ -143,7 +143,7 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
         "RF-changed-self-comparison",
         "selection_unresolvable",
         "own reference",
-        lambda: (lambda tl, tr: tl.changed(tr).resolve(tr))(_tl(), _tl().trace(_model(), _x())),
+        lambda: (lambda tl, tr: tr[tl.changed(tr)])(_tl(), _tl().trace(_model(), _x())),
     ),
     RefusalRow(
         "RF-load-missing-artifact",

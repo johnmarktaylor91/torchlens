@@ -71,7 +71,8 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
     "methods": re.compile(
         r"\.(?:replay|replay_from|rerun|record_span"
         r"|conditional_then_entry_edges|conditional_elif_entry_edges"
-        r"|conditional_else_entry_edges)\s*\("
+        r"|conditional_else_entry_edges"
+        r"|resolve_sites|by_operator|by_module|by_module_and_operator)\s*\("
     ),
     # Flat capture/save kwargs on a single-line trace() call. Grouped-option
     # reuse of the same field names is legal, so a line that spells a grouped
@@ -183,6 +184,9 @@ _NEEDLES: dict[str, tuple[str, ...]] = {
         ".conditional_then_entry_edges",
         ".conditional_elif_entry_edges",
         ".conditional_else_entry_edges",
+        ".resolve_sites",
+        ".by_operator",
+        ".by_module",
     ),
     "trace_flat": ("tl.trace", "torchlens.trace"),
     "keep_op": ("keep_op", "keep_module"),

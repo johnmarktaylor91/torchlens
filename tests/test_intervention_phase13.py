@@ -8,7 +8,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.resolver import SiteTable
 
 
 class M(nn.Module):
@@ -143,21 +142,6 @@ def test_last_run_records_returns_tuple_snapshot() -> None:
     assert isinstance(records, tuple)
     assert len(records) >= 1
     assert records[-1].engine == "replay"
-
-
-def test_find_sites_repr_empty_one_and_many() -> None:
-    """SiteTable repr is compact for empty, single, and multi-site tables."""
-
-    log = _capture()
-
-    empty = SiteTable(())
-    one = log.find_sites(tl.func("relu"))
-    many = SiteTable(tuple(log.layer_list + log.layer_list))
-
-    assert repr(empty) == "SiteTable(0 sites)"
-    assert repr(one).startswith("SiteTable(1 site: relu")
-    assert repr(many).startswith("SiteTable(")
-    assert "..." in repr(many)
 
 
 def test_bundle_default_names_derive_from_log_names_with_collision_suffix() -> None:

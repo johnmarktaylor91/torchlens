@@ -17,7 +17,6 @@ typed, so no facet edit can land on a whole home tensor; the list spelling
 from __future__ import annotations
 
 import re
-import warnings
 from collections.abc import Iterator
 
 import pytest
@@ -95,13 +94,10 @@ def test_a_latent_registered_at_a_selector_site_saves_every_home() -> None:
     tl.bridge.sae.register("both", sae, site=tl.module("fc_a") | tl.module("fc_b"))
     try:
         trace = tl.trace(model, x, save=tl.facet("both").latent(2))
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            table = trace.resolve_sites(tl.facet("both").latent(2))
         assert {trace["fc_a"].layer_label, trace["fc_b"].layer_label} <= _saved(trace)
-        for site, facet in zip(("fc_a", "fc_b"), table, strict=True):
+        for site in ("fc_a", "fc_b"):
             expected = sae.encode(trace[site].out)[..., 2].detach()
-            torch.testing.assert_close(facet.value, expected, **TOL)
+            torch.testing.assert_close(trace[site].facets["both[2]"].value, expected, **TOL)
     finally:
         tl.bridge.sae.unregister("both")
 
@@ -114,11 +110,8 @@ def test_a_structural_facet_save_keeps_every_op() -> None:
     trace = tl.trace(model, x, save=tl.facet("out"))
     full = tl.trace(model, x)
     assert _saved(trace) == _saved(full)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        table = trace.resolve_sites(tl.facet("out"), max_fanout=100)
-    for label, facet in zip(table.labels(), table, strict=True):
-        torch.testing.assert_close(facet.value, full[label].out, **TOL)
+    for op in trace.layer_list:
+        torch.testing.assert_close(op.facets["out"].value, full[op.label].out, **TOL)
 
 
 @pytest.mark.parametrize("make", [lambda: tl.head(0), lambda: tl.facet("q")], ids=["head", "facet"])

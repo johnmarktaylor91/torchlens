@@ -73,7 +73,7 @@ def test_overlay_selection_source_lowers_to_selected_counts(tmp_path):
     _, _, trace = _traced_toy()
     # grouping rule row 28: the reused relu instance is one Layer with 2 passes,
     # so the selection addresses its first pass by the pass-qualified label.
-    selection = tl.units("relu_1_2:1", [(0, 0, 0, 0), (0, 1, 1, 1)]).resolve(trace)
+    selection = trace[tl.units("relu_1_2:1", [(0, 0, 0, 0), (0, 1, 1, 1)])]
     scores = resolve_overlay_request(trace, selection)
     assert scores == {"relu_1_2": 2}  # 2 selected elements, not "member: yes"
 
@@ -116,18 +116,6 @@ def test_do_accepts_find_sites_output():
     sites = trace.find_sites("conv2d_1_1")
     fork.do(sites, tl.zero_ablate())
     assert fork.intervention_audit  # fire evidence, never silence
-
-
-@pytest.mark.smoke
-def test_do_empty_site_table_refuses():
-    from torchlens.intervention.errors import SiteResolutionError
-    from torchlens.intervention.resolver import SiteTable
-
-    _, _, trace = _traced_toy()
-    fork = trace.fork()
-    with pytest.raises(SiteResolutionError) as excinfo:
-        fork.do(SiteTable((), selector="nothing"), tl.zero_ablate())
-    assert excinfo.value.fields["code"] == "site_table_empty"
 
 
 def test_when_refuses_raw_string_at_build():

@@ -264,7 +264,7 @@ def test_brain_score_bridge_mocked_offline_fixture_matches_direct_scores() -> No
     bridge_scores = tl.bridge.brain_score.per_layer(log, benchmark, sites=sites)
     direct_scores = {
         layer.layer_label: benchmark(layer.out, layer=layer.layer_label)
-        for layer in [log.resolve_sites(site, max_fanout=1).first() for site in sites]
+        for layer in [log[log[tl.func(site)].labels[0]] for site in sites]
     }
 
     assert {label: parts.raw for label, parts in bridge_scores.items()} == direct_scores
@@ -411,7 +411,7 @@ def test_profiler_join_merges_per_op_timing(tmp_path: Path) -> None:
     """Profiler join should attach Kineto event durations to TorchLens ops."""
 
     _model, _x, log = _cnn_log()
-    conv_layer = log.resolve_sites("conv2d", max_fanout=1).first()
+    conv_layer = log[log[tl.func("conv2d")].labels[0]]
     trace_path = tmp_path / "kineto.json"
     trace_path.write_text(
         json.dumps(

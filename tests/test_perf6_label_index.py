@@ -61,14 +61,13 @@ def _spellings(log: tl.Trace) -> list[str]:
     return [*spellings, "no_such_label_1_1"]
 
 
-def _outcome(log: tl.Trace, spelling: str, max_fanout: int) -> tuple[Any, ...]:
+def _outcome(log: tl.Trace, spelling: str) -> tuple[Any, ...]:
     """Resolved site identities, or the refusal, plus the warning texts."""
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         try:
-            table = resolver.resolve_sites(log, tl.label(spelling), max_fanout=max_fanout)
-            result: Any = tuple(id(site) for site in table)
+            result: Any = (id(log[tl.label(spelling)]),)
         except Exception as exc:  # noqa: BLE001 - the refusal itself is compared
             result = (type(exc).__name__, str(exc))
     return result, tuple(str(w.message) for w in caught)
@@ -77,13 +76,12 @@ def _outcome(log: tl.Trace, spelling: str, max_fanout: int) -> tuple[Any, ...]:
 def test_label_resolution_inside_the_scope_equals_the_evaluator(trace) -> None:
     spellings = _spellings(trace)
     assert len(spellings) > len(trace.layer_list)
-    for max_fanout in (1, len(trace.layer_list)):
-        want = [_outcome(trace, spelling, max_fanout) for spelling in spellings]
-        with resolver._label_index_scope():
-            got = [_outcome(trace, spelling, max_fanout) for spelling in spellings]
-        assert got == want
+    want = [_outcome(trace, spelling) for spelling in spellings]
+    with resolver._label_index_scope():
+        got = [_outcome(trace, spelling) for spelling in spellings]
+    assert got == want
     # The bare label of the twice-run layer matches both passes: the refusal
-    # (or the fan-out) is the evaluator's, inside the scope too.
+    # is the evaluator's, inside the scope too.
     assert any(isinstance(result[0], str) for result, _warnings in want)
 
 
@@ -99,14 +97,14 @@ def test_the_index_answers_label_queries_without_evaluating_selectors(
 
     monkeypatch.setattr(resolver, "evaluate", counting)
     labels = [op.label for op in trace.layer_list]
-    outside = [resolver.resolve_sites(trace, tl.label(label)).first() for label in labels]
+    outside = [trace[tl.label(label)] for label in labels]
     assert len(calls) == len(labels) * len(trace.layer_list)
     calls.clear()
     with resolver._label_index_scope():
-        inside = [resolver.resolve_sites(trace, tl.label(label)).first() for label in labels]
+        inside = [trace[tl.label(label)] for label in labels]
         assert calls == []
         # Other selector kinds still go through the evaluator, unchanged.
-        relus = resolver.resolve_sites(trace, tl.func("relu"), max_fanout=8)
+        relus = resolver.find_sites(trace, tl.func("relu"), max_fanout=8)
         assert len(calls) == len(trace.layer_list)
     assert [id(op) for op in inside] == [id(op) for op in outside]
     assert [op.func_name for op in relus] == ["relu"] * 3
@@ -122,8 +120,8 @@ def test_each_trace_in_one_scope_gets_its_own_index(trace) -> None:
     try:
         label = trace.layer_list[3].label
         with resolver._label_index_scope():
-            mine = resolver.resolve_sites(trace, tl.label(label)).first()
-            theirs = resolver.resolve_sites(other, tl.label(label)).first()
+            mine = trace[tl.label(label)]
+            theirs = other[tl.label(label)]
         assert mine is trace.layer_list[3]
         assert theirs is other.layer_list[3]
     finally:

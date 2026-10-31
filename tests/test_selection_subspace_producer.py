@@ -79,7 +79,7 @@ def test_sparse_direction_selects_exactly_its_support(log):
     """The mask is the support set, expanded across the batch axis."""
 
     selection = tl.subspace(_RELU, _sparse_direction(), origin="hand-specified test vector")
-    resolved = selection.resolve(log)
+    resolved = log[selection]
     assert len(resolved) == 1
     entry = resolved[0]
     assert entry.shape == (2, _D)
@@ -96,7 +96,7 @@ def test_multi_vector_basis_unions_row_supports(log):
     basis = torch.zeros(2, _D)
     basis[0, 0] = 1.0
     basis[1, 5] = -2.0
-    resolved = tl.subspace(_RELU, basis, origin="two test directions").resolve(log)
+    resolved = log[tl.subspace(_RELU, basis, origin="two test directions")]
     expected = torch.zeros(2, _D, dtype=torch.bool)
     expected[:, [0, 5]] = True
     assert torch.equal(resolved[0].mask, expected)
@@ -105,7 +105,7 @@ def test_multi_vector_basis_unions_row_supports(log):
 def test_dense_direction_supports_the_whole_axis(log):
     """A dense direction resolves to the whole site — the documented set claim."""
 
-    resolved = tl.subspace(_RELU, torch.ones(_D), origin="dense test direction").resolve(log)
+    resolved = log[tl.subspace(_RELU, torch.ones(_D), origin="dense test direction")]
     assert resolved[0].num_selected == 2 * _D
     assert bool(resolved[0].mask.all())
 
@@ -114,7 +114,7 @@ def test_tol_is_a_strict_support_threshold(log):
     """Weights with |w| <= tol contribute no support; |w| > tol do."""
 
     direction = torch.tensor([0.25, 0.5, -0.25, -0.5, 0.25, 0.5])
-    resolved = tl.subspace(_RELU, direction, origin="tol test", atol=0.25).resolve(log)
+    resolved = log[tl.subspace(_RELU, direction, origin="tol test", atol=0.25)]
     expected = torch.zeros(2, _D, dtype=torch.bool)
     expected[:, [1, 3, 5]] = True
     assert torch.equal(resolved[0].mask, expected)
@@ -126,9 +126,7 @@ def test_resolution_is_geometry_only_unsaved_sites_resolve(model):
     trace = tl.trace(model, torch.randn(2, 8), save=tl.func("sigmoid"))
     try:
         assert not trace[_RELU].has_saved_activation
-        resolved = tl.subspace(_RELU, _sparse_direction(), origin="unsaved-site test").resolve(
-            trace
-        )
+        resolved = trace[tl.subspace(_RELU, _sparse_direction(), origin="unsaved-site test")]
         assert resolved[0].num_selected == 4
     finally:
         trace.cleanup()
@@ -149,9 +147,9 @@ def test_explicit_dim_binds_a_non_trailing_axis():
     trace = tl.trace(_Cnn(), torch.randn(1, 1, 8, 8))
     try:
         channel_direction = torch.tensor([0.0, 1.0, 0.0, 1.0])
-        resolved = tl.subspace(
-            "relu_1_2", channel_direction, origin="channel direction test", dim=1
-        ).resolve(trace)
+        resolved = trace[
+            tl.subspace("relu_1_2", channel_direction, origin="channel direction test", dim=1)
+        ]
         mask = resolved[0].mask
         assert mask[:, [1, 3]].all()
         assert not mask[:, [0, 2]].any()
@@ -168,9 +166,9 @@ def test_provenance_source_carries_origin_method_geometry_and_digest(log):
     """The resolved source string is the full reproducibility disclosure."""
 
     basis = _sparse_direction()
-    resolved = tl.subspace(
-        _RELU, basis, origin="linear probe, run 42", method="probe", atol=0.1
-    ).resolve(log)
+    resolved = log[
+        tl.subspace(_RELU, basis, origin="linear probe, run 42", method="probe", atol=0.1)
+    ]
     source = resolved[0].provenance.source
     assert "origin='linear probe, run 42'" in source
     assert "method='probe'" in source
@@ -226,7 +224,7 @@ def test_do_audit_record_carries_the_basis_origin(model):
         selection = tl.subspace(
             _RELU, _sparse_direction(), origin="imdb sentiment probe, run 7", method="probe"
         )
-        mask = selection.resolve(trace)[0].mask
+        mask = trace[selection][0].mask
         baseline = trace[_RELU].out.clone()
         fork = trace.fork()
         fork.do(selection, tl.zero_ablate())
@@ -252,7 +250,7 @@ def test_wrong_dimension_refuses_typed(log):
 
     selection = tl.subspace(_RELU, torch.ones(_D + 2), origin="wrong-width probe")
     with pytest.raises(SelectionError, match="never broadcast") as excinfo:
-        selection.resolve(log)
+        log[selection]
     assert excinfo.value.fields["code"] == "selection_unresolvable"
     assert excinfo.value.fields["reason"] == "basis_dim_mismatch"
     assert excinfo.value.fields["basis_dim"] == _D + 2
@@ -267,7 +265,7 @@ def test_population_with_one_mismatched_site_refuses(log):
     )
     selection = tl.subspace(within, torch.ones(_D), origin="mixed-population probe")
     with pytest.raises(SelectionError) as excinfo:
-        selection.resolve(log)
+        log[selection]
     assert excinfo.value.fields["reason"] == "basis_dim_mismatch"
 
 
@@ -276,7 +274,7 @@ def test_dim_out_of_range_refuses_typed(log):
 
     selection = tl.subspace(_RELU, torch.ones(_D), origin="axis test", dim=5)
     with pytest.raises(SelectionError) as excinfo:
-        selection.resolve(log)
+        log[selection]
     assert excinfo.value.fields["reason"] == "basis_dim_mismatch"
     assert excinfo.value.fields["dim"] == 5
 
@@ -346,7 +344,7 @@ def test_basis_is_canonicalized_defensively(log):
     basis = _sparse_direction()
     selection = tl.subspace(_RELU, basis, origin="mutation test")
     basis[0] = 99.0
-    resolved = selection.resolve(log)
+    resolved = log[selection]
     assert resolved[0].num_selected == 4  # still {1, 4} x batch 2
 
 
@@ -359,8 +357,8 @@ def test_composes_with_value_producers(log):
     """subspace & top_k intersects masks; relations join through the table."""
 
     support = tl.subspace(_RELU, _sparse_direction(), origin="compose test")
-    combined = (support & tl.top_k(_RELU, _D * 2)).resolve(log)
-    top = tl.top_k(_RELU, _D * 2).resolve(log)[0].mask
+    combined = log[support & tl.top_k(_RELU, _D * 2)]
+    top = log[tl.top_k(_RELU, _D * 2)][0].mask
     expected = torch.zeros(2, _D, dtype=torch.bool)
     expected[:, [1, 4]] = True
     assert torch.equal(combined[0].mask, expected & top)
@@ -370,7 +368,7 @@ def test_composes_with_value_producers(log):
 def test_complement_is_the_off_support_set(log):
     """~subspace selects the off-support elements of the touched site."""
 
-    resolved = (~tl.subspace(_RELU, _sparse_direction(), origin="complement test")).resolve(log)
+    resolved = log[~tl.subspace(_RELU, _sparse_direction(), origin="complement test")]
     expected = torch.ones(2, _D, dtype=torch.bool)
     expected[:, [1, 4]] = False
     assert torch.equal(resolved[0].mask, expected)
@@ -393,7 +391,7 @@ def test_bare_layer_label_on_multipass_layer_supports_every_pass():
     trace = tl.trace(_Recurrent(), torch.randn(1, 4))
     try:
         direction = torch.tensor([1.0, 0.0, 0.0, 1.0])
-        resolved = tl.subspace("tanh_1_2", direction, origin="recurrent probe").resolve(trace)
+        resolved = trace[tl.subspace("tanh_1_2", direction, origin="recurrent probe")]
         assert len(resolved) == 3  # one entry per pass
         assert {entry.key for entry in resolved} == {
             ("tanh_1_2", 1),
@@ -406,7 +404,7 @@ def test_bare_layer_label_on_multipass_layer_supports_every_pass():
             assert torch.equal(entry.mask, expected)
         # The dim check runs per pass: a wrong-width basis refuses on the same spelling.
         with pytest.raises(SelectionError) as excinfo:
-            tl.subspace("tanh_1_2", torch.ones(5), origin="wrong width").resolve(trace)
+            trace[tl.subspace("tanh_1_2", torch.ones(5), origin="wrong width")]
         assert excinfo.value.fields["reason"] == "basis_dim_mismatch"
     finally:
         trace.cleanup()
@@ -420,9 +418,7 @@ def test_align_to_rebinds_a_resolved_subspace_selection(model):
     torch.manual_seed(5)
     trace_b = tl.trace(model, torch.randn(2, 8))
     try:
-        resolved = tl.subspace(_RELU, _sparse_direction(), origin="cross-run probe").resolve(
-            trace_a
-        )
+        resolved = trace_a[tl.subspace(_RELU, _sparse_direction(), origin="cross-run probe")]
         rebound = resolved.align_to(trace_b)
         assert torch.equal(rebound[0].mask, resolved[0].mask)
         assert "cross-run probe" in rebound[0].provenance.source
@@ -436,9 +432,9 @@ def test_within_selection_restricts_the_population(log):
 
     row_mask = torch.zeros(2, _D, dtype=torch.bool)
     row_mask[0] = True  # batch row 0 only
-    resolved = tl.subspace(
-        tl.units(_RELU, row_mask), _sparse_direction(), origin="restricted population"
-    ).resolve(log)
+    resolved = log[
+        tl.subspace(tl.units(_RELU, row_mask), _sparse_direction(), origin="restricted population")
+    ]
     expected = torch.zeros(2, _D, dtype=torch.bool)
     expected[0, [1, 4]] = True
     assert torch.equal(resolved[0].mask, expected)

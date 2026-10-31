@@ -167,8 +167,8 @@ def test_capture_doors_still_resolve_labels(cnn) -> None:
 
     model, x = cnn
     trace = tl.trace(model, x)
-    sites = trace.resolve_sites(tl.label("relu_1_2"))
-    assert len(sites) == 1
+    site = trace[tl.label("relu_1_2")]
+    assert site.layer_label == "relu_1_2"
 
 
 def test_runtime_predicate_failure_keeps_bind_rule_runtime_error(cnn) -> None:

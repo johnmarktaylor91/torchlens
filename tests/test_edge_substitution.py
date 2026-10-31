@@ -82,7 +82,7 @@ def test_edge_algebra_rows(capture):
     model, x, trace = capture
     a = _edge(trace).__selection__()
     b = _edge(trace, parent="conv2d_2_3").__selection__()
-    union = (a | b).resolve(trace)
+    union = trace[a | b]
     assert union.kind == "EDGE" and len(union) == 2
     # complement within the trace's dataflow edge family (well-defined universe)
     complement = ~union
@@ -137,16 +137,16 @@ def test_closure_matrix_edge_totality_cells(
     left = _selection_for_kind_state(trace, "EDGE", left_state)
     right = _selection_for_kind_state(trace, "EDGE", right_state)
     if level == "resolved":
-        left = left.resolve(trace)
-        right = right.resolve(trace)
+        left = trace[left]
+        right = trace[right]
     composed = {
         "or": lambda: left | right,
         "and": lambda: left & right,
         "sub": lambda: left - right,
     }[operator]()
-    resolved = composed.resolve(trace) if level == "query" else composed
-    resolved_left = left.resolve(trace) if level == "query" else left
-    resolved_right = right.resolve(trace) if level == "query" else right
+    resolved = trace[composed] if level == "query" else composed
+    resolved_left = trace[left] if level == "query" else left
+    resolved_right = trace[right] if level == "query" else right
     expected_family = {
         "or": _selection_family(resolved_left) | _selection_family(resolved_right),
         "and": _selection_family(resolved_left) & _selection_family(resolved_right),
@@ -184,8 +184,8 @@ def test_closure_matrix_all_mixed_kind_cells_refuse(
     left = _selection_for_kind_state(trace, left_kind, state)
     right = _selection_for_kind_state(trace, right_kind, state)
     if level == "resolved":
-        left = left.resolve(trace)
-        right = right.resolve(trace)
+        left = trace[left]
+        right = trace[right]
     with pytest.raises(SelectionError) as excinfo:
         {
             "or": lambda: left | right,
@@ -447,7 +447,7 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
 
 def test_tap_masked_values(capture):
     model, x, trace = capture
-    selection = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)]).resolve(trace)
+    selection = trace[tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)])]
     observer = tl.observers.tap(selection)
     fork = trace.fork()
     fork.attach_hooks("relu_1_2", observer, confirm_mutation=True)

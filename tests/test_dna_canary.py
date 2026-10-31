@@ -111,11 +111,11 @@ def test_demo_2_same_run_patch_identity():
 
     model, x, trace = _fresh_capture()
     selection = tl.units("relu_1_2", IDX)
-    resolved = selection.resolve(trace)
+    resolved = trace[selection]
 
     patched = trace.fork()
     del resolved  # the resolve() spelling below is the memo's exact demo shape
-    patched.do(selection.resolve(patched), tl.patch_from(trace))
+    patched.do(patched[selection], tl.patch_from(trace))
 
     # exact-identity output under the deterministic demo model
     assert torch.equal(patched["output_1"].out, trace["output_1"].out)
@@ -136,7 +136,7 @@ def test_demo_2_same_run_patch_discriminating_twin():
 
     model, x, trace = _fresh_capture()
     selection = tl.units("relu_1_2", IDX)
-    mask = selection.resolve(trace)[0].mask
+    mask = trace[selection][0].mask
 
     source = trace.fork()
     perturbed = source["relu_1_2"].out.clone()
@@ -144,7 +144,7 @@ def test_demo_2_same_run_patch_discriminating_twin():
     _replay_module._commit_replay_updates(source, {"relu_1_2": perturbed}, {})
 
     patched = trace.fork()
-    patched.do(selection.resolve(patched), tl.patch_from(source))
+    patched.do(patched[selection], tl.patch_from(source))
 
     # the patched element carries the perturbed value; the rest is intact
     assert torch.isclose(patched["relu_1_2"].out[0, 0, 1, 1], perturbed[0, 0, 1, 1])

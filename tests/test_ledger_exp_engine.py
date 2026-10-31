@@ -305,9 +305,9 @@ def test_effects_selection_tier_c_conversion_in_session() -> None:
         x=x,
     )
     selection = bundle.effects().top(1).to_selection()
-    resolved = selection.resolve(baseline) if hasattr(selection, "resolve") else None
     assert selection is not None
-    assert resolved is None or len(resolved.entries) >= 1
+    resolved = selection if isinstance(selection, tl.Selection) else baseline[selection]
+    assert len(resolved) >= 1
 
 
 def test_site_sweep_engine_vocabulary_closed() -> None:

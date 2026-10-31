@@ -10,7 +10,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.op import Op
-from torchlens.intervention.resolver import SiteTable
 
 
 class _TwoRelus(nn.Module):
@@ -108,11 +107,11 @@ def test_stack_sorts_by_recorded_ordinal_even_if_resolver_order_is_adversarial(
     trace = tl.trace(_ReusedRelu(), torch.randn(2, 4))
     original_find_sites = type(trace).find_sites
 
-    def reversed_find_sites(self: Any, query: Any, **kwargs: Any) -> SiteTable:
+    def reversed_find_sites(self: Any, query: Any, **kwargs: Any) -> Any:
         """Return the real selector result in deliberately reversed order."""
 
         resolved = original_find_sites(self, query, **kwargs)
-        return SiteTable(tuple(reversed(tuple(resolved))), selector=query)
+        return type(resolved)(tuple(reversed(tuple(resolved))), selector=query)
 
     monkeypatch.setattr(type(trace), "find_sites", reversed_find_sites)
     expected_ops = sorted(

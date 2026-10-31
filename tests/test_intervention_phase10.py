@@ -258,12 +258,16 @@ def test_target_spec_selector_rehydration_covers_path_and_pattern_selectors() ->
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
 
-    with pytest.warns(MultiMatchWarning):
-        output_labels = log.resolve_sites(output_at(0).to_target_spec()).labels()
-    assert "chunk_1_2" in output_labels
-    with pytest.warns(MultiMatchWarning):
-        regex_labels = log.resolve_sites(tl.label_matches("chunk_[12]").to_target_spec()).labels()
-    assert regex_labels == ("chunk_1_2", "chunk_2_3")
+    output_spec = output_at(0).to_target_spec()
+    output_labels = log[
+        selector_from_spec(output_spec.selector_kind, output_spec.selector_value, {})
+    ].labels
+    assert "chunk_1_2:1" in output_labels
+    regex_spec = tl.label_matches("chunk_[12]").to_target_spec()
+    regex_labels = log[
+        selector_from_spec(regex_spec.selector_kind, regex_spec.selector_value, {})
+    ].labels
+    assert regex_labels == ("chunk_1_2:1", "chunk_2_3:1")
     assert repr(selector_from_spec("input_at", (0,), {})) == "tl.model_input((0,))"
 
 

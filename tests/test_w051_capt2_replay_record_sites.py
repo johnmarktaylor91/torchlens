@@ -2,7 +2,7 @@
 
 Lane W051-REPLAY lowered ``Op``/``Layer`` records at HOOK-PLAN normalization,
 so ``do(record, helper)`` worked, but the ``set()`` door (``do(record,
-tensor)``), ``resolve_sites(record)`` and the mutator-site validation still
+tensor)``), ``find_sites(record)`` and the mutator-site validation still
 refused a record ("Unsupported site query"), and ``_target_spec_from_site``
 would have lowered an ``Op`` to its BARE ``layer_label`` -- the LAST pass of
 a multi-pass layer. Records now lower to their PASS-QUALIFIED ``Op.label``
@@ -117,9 +117,9 @@ def test_target_spec_from_op_record_is_its_own_pass(loop) -> None:
     assert passthrough.strict is True
 
 
-def test_resolve_sites_accepts_records_pass_qualified(loop) -> None:
+def test_find_sites_accepts_records_pass_qualified(loop) -> None:
     _model, _x, trace = loop
-    resolved = trace.resolve_sites(trace["relu_1_2:2"].ops[0])
+    resolved = trace.find_sites(trace["relu_1_2:2"].ops[0])
     labels = {getattr(site, "label", None) or str(site) for site in resolved}
     assert any("relu_1_2:2" in label for label in labels), labels
     assert not any("relu_1_2:1" in label or "relu_1_2:3" in label for label in labels), labels

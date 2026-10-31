@@ -175,18 +175,18 @@ def test_selection_operand_hides_the_selected_site(glue_log: Any) -> None:
     silent no-op: the resolved site labels must reach the match fn)."""
 
     target = next(op for op in glue_log.ops if not (op.is_input or op.is_final_output))
-    resolved = target.__selection__().resolve(glue_log)
+    resolved = glue_log[target.__selection__()]
     compiled = lenses.compile_display_filter(glue_log, lenses.DisplayFilter(exclude=resolved))
     assert compiled.filtered >= 1
 
 
 def test_foreign_resolved_selection_refuses_typed(glue_log: Any) -> None:
-    """A ResolvedSelection bound to another trace refuses; align_to is the door."""
+    """A Selection bound to another trace refuses; align_to is the door."""
 
     model, x = _member("filtered_chain").build()
     other = tl.trace(model, x)
     try:
-        foreign = other.ops[0].__selection__().resolve(other)
+        foreign = other[other.ops[0].__selection__()]
         with pytest.raises(Exception) as excinfo:
             lenses.compile_display_filter(glue_log, lenses.DisplayFilter(exclude=foreign))
         assert excinfo.value.fields["code"] == "display_filter_selection_foreign"
