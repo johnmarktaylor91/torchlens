@@ -48,6 +48,7 @@ from ._tl import (
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from ..._save_budget import RetainedPayload
 
 from .ops import (
     _RetainedLookbackPayload,
@@ -252,6 +253,20 @@ def _uncharged_parameter_aliases(*roots: Any) -> set[int]:
         }
 
 
+def _iter_tree_storages(*roots: Any) -> Iterator[torch.UntypedStorage | torch.TypedStorage]:
+    """Yield every storage leaf (a ``Tensor.set_`` storage argument) through builtin containers."""
+
+    stack: list[Any] = list(roots)
+    while stack:
+        value = stack.pop()
+        if isinstance(value, (torch.UntypedStorage, torch.TypedStorage)):
+            yield value
+        elif isinstance(value, dict):
+            stack.extend(value.values())
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            stack.extend(value)
+
+
 def _iter_tree_tensors(*roots: Any) -> Iterator[torch.Tensor]:
     """Yield every tensor leaf reachable through builtin containers."""
 
@@ -282,14 +297,20 @@ def _admit_saved_args_budget(
     graph are available before the clone: project alias-deduped physical
     bytes per device and admit them through the standard ``primary`` site
     (rolling back sibling reservations if one device refuses); the
-    post-clone commit reconciles the estimate alias-aware as usual.
+    post-clone commit reconciles the estimate alias-aware as usual. A
+    storage argument (``Tensor.set_(storage, ...)``) is cloned for the saved
+    arguments like a tensor, so its bytes are projected the same way.
     """
 
     budget = getattr(trace, "_save_budget_accountant", None)
     if budget is None:
         return None
     from ..._save_budget import _retained_storage_identities
-    from ._ops_retention import _saved_arg_retention_devices, _uncharged_parameter_aliases
+    from ._ops_retention import (
+        _iter_tree_storages,
+        _saved_arg_retention_devices,
+        _uncharged_parameter_aliases,
+    )
 
     # Offloaded copies (validation with an ``output_device``) are charged to
     # the device they will live on, not the device the op consumed them on;
@@ -307,6 +328,12 @@ def _admit_saved_args_budget(
                 continue
             seen_identities.add(identity)
             per_device[device] = per_device.get(device, 0) + num_bytes
+    for storage in _iter_tree_storages(t_args, t_kwargs):
+        for identity, num_bytes in _retained_storage_identities(storage):
+            if identity in seen_identities:
+                continue
+            seen_identities.add(identity)
+            per_device[storage.device] = per_device.get(storage.device, 0) + num_bytes
     if not per_device:
         return []
     label = fields_dict.get("_layer_label_raw") or fields_dict.get("_label_raw") or "<unlabeled>"
@@ -335,14 +362,17 @@ def _commit_saved_args_budget(
     budget = getattr(trace, "_save_budget_accountant", None)
     if budget is None or reservations is None:
         return
-    from ._ops_retention import _uncharged_parameter_aliases
+    from ._ops_retention import _iter_tree_storages, _uncharged_parameter_aliases
 
     saved = (fields_dict.get("saved_args"), fields_dict.get("saved_kwargs"))
     aliases = _uncharged_parameter_aliases(*saved)
-    cloned = tuple(tensor for tensor in _iter_tree_tensors(*saved) if id(tensor) not in aliases)
-    by_device: dict[str, list[torch.Tensor]] = {}
-    for tensor in cloned:
-        by_device.setdefault(str(tensor.device), []).append(tensor)
+    cloned: list[RetainedPayload] = [
+        tensor for tensor in _iter_tree_tensors(*saved) if id(tensor) not in aliases
+    ]
+    cloned.extend(_iter_tree_storages(*saved))
+    by_device: dict[str, list[RetainedPayload]] = {}
+    for payload in cloned:
+        by_device.setdefault(str(payload.device), []).append(payload)
     committed_devices: set[str] = set()
     for reservation in reservations:
         device_key = str(reservation.device)

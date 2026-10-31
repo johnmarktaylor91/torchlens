@@ -252,8 +252,8 @@ def _captured_slot_grad_flags(
 def _deep_clone_tensors(val: Any) -> Any:
     """Recursively clone all tensors in a nested structure of lists/tuples/dicts.
 
-    Non-tensor leaves are returned as-is (shared reference).  Tensor leaves
-    are detached and cloned so that in-place ops during validation replay
+    Non-tensor leaves other than storages are returned as-is (shared
+    reference); storages are cloned.  Tensor leaves are detached and cloned so that in-place ops during validation replay
     don't corrupt the original saved data, then given the snapshot's
     ``requires_grad`` (see ``_mirror_captured_requires_grad``) so the replay
     reaches the same kernel the captured call did.
@@ -262,6 +262,10 @@ def _deep_clone_tensors(val: Any) -> Any:
     """
     if isinstance(val, torch.Tensor):
         return _mirror_captured_requires_grad(val.detach().clone(), *_snapshot_grad_flags(val))
+    elif isinstance(val, (torch.UntypedStorage, torch.TypedStorage)):
+        # ``Tensor.set_(storage, ...)`` makes the replayed output a view of the
+        # storage; a fresh copy keeps the saved snapshot out of its reach.
+        return val.clone()
     elif isinstance(val, (list, tuple)):
         cloned = [_deep_clone_tensors(v) for v in val]
         # Preserve the original container type (list vs tuple vs namedtuple).
