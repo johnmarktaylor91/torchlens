@@ -42,7 +42,7 @@ Both are top-level lazy names routed here. Contract of record:
   and byte-identical rank cores.
 - `load_merged(path)` (exported as `load`) reruns the derivation and requires EXACT
   cache equality; tamper refuses `MergedArtifactError`, never degrades to a gap.
-  An unparseable member enters `load_degradations` and caps effective alignment at
+  An unparseable member enters `degradations` and caps effective alignment at
   `partial`.
 
 ## Gotchas

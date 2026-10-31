@@ -72,7 +72,7 @@ def register_prerelease_field(
     Parameters
     ----------
     owner:
-        Record class whose ``PORTABLE_STATE_SPEC`` declares the field.
+        Record class whose ``_PORTABLE_STATE_SPEC`` declares the field.
     field_name:
         Declared field name. Its declared policy MUST be ``FieldPolicy.DROP``
         -- that is the whole discipline: the field never persists under the
@@ -90,7 +90,7 @@ def register_prerelease_field(
 
     from . import FieldPolicy
 
-    spec = getattr(owner, "PORTABLE_STATE_SPEC", None)
+    spec = getattr(owner, "_PORTABLE_STATE_SPEC", None)
     if not isinstance(spec, dict) or field_name not in spec:
         raise ValueError(
             f"{owner.__name__}.{field_name} is not a declared portable field; "
@@ -223,7 +223,7 @@ def effective_policy(owner_type: type, field_name: str, declared: FieldPolicy) -
     field_name:
         Declared field name.
     declared:
-        The field's declared policy from ``PORTABLE_STATE_SPEC``.
+        The field's declared policy from ``_PORTABLE_STATE_SPEC``.
 
     Returns
     -------

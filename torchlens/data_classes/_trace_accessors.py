@@ -616,7 +616,7 @@ class TraceGradFnCallAccessor(Accessor[Any]):
 # during ``run()`` pinned the entire result fork, payloads included, for the
 # process lifetime. An instance attribute makes the same edge an ordinary
 # intra-object cycle that ``gc`` collects normally. All three attrs are
-# registered ``FieldPolicy.DROP`` in ``Trace.PORTABLE_STATE_SPEC``, like the
+# registered ``FieldPolicy.DROP`` in ``Trace._PORTABLE_STATE_SPEC``, like the
 # other lazy per-instance solutions. Do NOT reintroduce a module-global
 # weak-keyed cache whose value holds records.
 _TRACE_OP_ACCESSOR_ATTR = "_op_accessor_cache"

@@ -205,7 +205,7 @@ def test_halted_trace_has_no_transient_attribution_leak() -> None:
 
     The P0 characterization pinned the leak (an unpopped
     ``_output_attribution_input_tensors`` refused every halted ``tl.save``
-    via PORTABLE_STATE_SPEC); the settlement phase fixed it so the halted
+    via _PORTABLE_STATE_SPEC); the settlement phase fixed it so the halted
     finalizer mirrors the completed paths. The positive save round-trip
     lives in test_capture_settlement.py.
     """

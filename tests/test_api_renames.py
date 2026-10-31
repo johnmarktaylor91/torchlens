@@ -177,27 +177,6 @@ def test_get_model_activations_is_not_advertised_as_a_legacy_api() -> None:
         getattr(tl, "get_model_activations")
 
 
-def test_log_model_metadata_new_name_has_no_warning(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The namespaced metadata helper should not emit deprecation warnings."""
-
-    sentinel = object()
-
-    def fake_trace(*args: Any, **kwargs: Any) -> object:
-        """Return a stable sentinel without running real logging."""
-
-        del args, kwargs
-        return sentinel
-
-    monkeypatch.setattr(user_funcs, "trace", fake_trace)
-
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
-        result = tl.io.log_model_metadata(_TinyModel(), _tiny_input())
-
-    assert result is sentinel
-    assert _deprecation_messages(records) == []
-
-
 def test_save_options_activation_transform_alias_warns() -> None:
     """SaveOptions activation_transform should set the canonical field."""
 

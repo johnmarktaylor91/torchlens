@@ -151,8 +151,8 @@ torchlens._io.sidecar:attach_sidecar:SidecarError::1	CONTRACTED	sidecar_budget_e
 torchlens._io.sidecar:read_sidecar:SidecarError::1	CONTRACTED	sidecar_absent	sidecar read on a trace without that family (C01 item 14); typed + code + remedy
 torchlens._io.sidecar:read_sidecar:SidecarError::2	CONTRACTED	sidecar_envelope_invalid	sidecar malformed-envelope refusal (C01 item 14); typed + code + remedy
 torchlens._io.sidecar:read_sidecar:SidecarError::3	CONTRACTED	sidecar_version_unsupported	sidecar newer-envelope-version refusal, provider too old (C01 item 14); typed + code + remedy
-torchlens.export._registry:register_export_target:RegistryError::1	CONTRACTED	export_target_not_callable	export-target door callable gate (C01 item 17); typed + code + remedy
-torchlens.export._registry:register_export_target:RegistryError::2	CONTRACTED	export_target_tier_invalid	export-target per-member tier vocabulary gate (C01 item 17); typed + code + remedy
+torchlens.export._registry:register_target:RegistryError::1	CONTRACTED	export_target_not_callable	export-target door callable gate (C01 item 17); typed + code + remedy
+torchlens.export._registry:register_target:RegistryError::2	CONTRACTED	export_target_tier_invalid	export-target per-member tier vocabulary gate (C01 item 17); typed + code + remedy
 torchlens.visualization.renderer_registry:require_renderer_capabilities:UnsupportedRendererCapabilityError::1	CONTRACTED	renderer_capability_unsupported	row-based renderer capability gate at the draw entry (C01 item 16); code spelled inline at the site (class-default code unchanged); typed + code + remedy
 torchlens.intervention.selectors:SiteSelector.__init__:ArgumentTypeError::1	CONTRACTED	site_selector_empty	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.selectors:SiteSelector.__init__:ArgumentTypeError::2	CONTRACTED	site_selector_key_conflict	C03 intervention substrate: typed + code + contract-doc row, classified in its own change

@@ -1813,7 +1813,7 @@ def escalation_spec(
     header = ledger.header
     return _EpisodeSpec(
         stepped_module=stepped_module,
-        n_steps=n_steps if n_steps is not None else header.n_steps_declared,
+        num_steps=n_steps if n_steps is not None else header.n_steps_declared,
         step_axis=(
             step_axis
             if step_axis is not None

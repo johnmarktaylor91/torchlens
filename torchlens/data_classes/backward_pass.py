@@ -103,7 +103,7 @@ class BackwardPass:
         _PORTABLE_STATE_POLICY,
         schema_key="backward_pass",
     )
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = portable_state_spec_from_policy(
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = portable_state_spec_from_policy(
         FIELD_POLICY
     )
 

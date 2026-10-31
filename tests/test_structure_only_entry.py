@@ -219,6 +219,6 @@ def test_mode_marker_persists_and_left_the_prerelease_registrar() -> None:
     the marker persists, and nothing still gates it.
     """
 
-    assert Trace.PORTABLE_STATE_SPEC["structure_only"] is FieldPolicy.KEEP
+    assert Trace._PORTABLE_STATE_SPEC["structure_only"] is FieldPolicy.KEEP
     inventory = registered_prerelease_fields()
     assert "structure_only" not in inventory.get("Trace", ())

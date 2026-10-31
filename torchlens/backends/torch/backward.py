@@ -2895,7 +2895,7 @@ def _emit_discovered_grad_fn(
     (grind-r6 b5 R45: parking it on ``trace.__dict__`` left an undeclared
     private field on the Trace that broke ``tl.save`` after two
     differentiable grad passes -- ``_backward_grad_fn_type_counter``
-    missing from ``PORTABLE_STATE_SPEC``).
+    missing from ``_PORTABLE_STATE_SPEC``).
     """
 
     grad_fn_object_id = id(grad_fn_handle)

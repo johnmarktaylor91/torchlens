@@ -19,7 +19,7 @@ class OpRef:
     op_label: str
     func_call_id: int
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "op_row_index": FieldPolicy.KEEP,
         "op_label": FieldPolicy.KEEP,
         "func_call_id": FieldPolicy.KEEP,
@@ -38,7 +38,7 @@ class _ModePausedInteriorGap:
     parent_op_refs: tuple[OpRef, ...]
     reason: str
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "kind": FieldPolicy.KEEP,
         "capture_phase": FieldPolicy.KEEP,
         "sequence_before": FieldPolicy.KEEP,
@@ -58,7 +58,7 @@ class _PrimitiveOpProfile:
     aten_event_watermark: int = 0
     _event_owner_evidence: tuple[tuple[int, int | None], ...] = ()
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "primitive_ops": FieldPolicy.KEEP,
         "mode_paused_interior": FieldPolicy.KEEP,
         "aten_event_watermark": FieldPolicy.KEEP,
@@ -111,7 +111,7 @@ class AtenOp:
         _PORTABLE_STATE_POLICY,
         schema_key="primitive_op",
     )
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = portable_state_spec_from_policy(
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = portable_state_spec_from_policy(
         FIELD_POLICY
     )
 

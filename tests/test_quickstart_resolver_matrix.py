@@ -20,9 +20,9 @@ from torchlens.quickstart import (
     RenderResult,
     provenance_to_record,
     resolve_inputs,
-    state_dict_hash,
     trace_input_provenance,
 )
+from torchlens.quickstart._primitive import state_dict_hash
 from torchlens.user_funcs import render
 
 

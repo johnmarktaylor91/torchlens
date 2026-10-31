@@ -238,7 +238,7 @@ def _probe_suppressed(trace: Trace) -> Iterator[None]:
     The flag's ``FieldPolicy.DROP`` scrub policy is declared statically on
     ``Trace``, alongside the other lazily-populated receptive-field state. It is
     deliberately not registered from here: mutating the class-level
-    ``PORTABLE_STATE_SPEC`` per probe is a process-global side effect of a
+    ``_PORTABLE_STATE_SPEC`` per probe is a process-global side effect of a
     per-instance operation, and it desynchronizes that spec from the
     ``FIELD_POLICY`` table it is generated from.
 
@@ -253,7 +253,7 @@ def _probe_suppressed(trace: Trace) -> Iterator[None]:
         Control while both backward-capture gates are suppressed.
     """
 
-    # "_tl_rf_probe_active" is declared statically in Trace.PORTABLE_STATE_SPEC
+    # "_tl_rf_probe_active" is declared statically in Trace._PORTABLE_STATE_SPEC
     # (FieldPolicy.DROP): registering it here at call time gave a Trace
     # serialized before any RF probe a different class spec than one after.
     trace_dict = trace.__dict__

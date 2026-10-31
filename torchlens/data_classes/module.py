@@ -154,7 +154,7 @@ def _module_log_to_row(module_log: "Module") -> dict[str, Any]:
 class ModuleCallAccessor(Accessor["ModuleCall"]):
     """Scoped dict-like accessor for ModuleCall entries owned by a Module."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
         "_source_ref": FieldPolicy.WEAKREF_STRIP,
@@ -308,7 +308,7 @@ class ModuleCall:
     that resolve to individual Op entries.
     """
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "address": FieldPolicy.KEEP,
         "all_addresses": FieldPolicy.KEEP,
         "class_name": FieldPolicy.KEEP,
@@ -352,9 +352,9 @@ class ModuleCall:
         "_facets_cache": FieldPolicy.DROP,
     }
     FIELD_POLICY = build_record_field_policy_table(
-        MODULE_PASS_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC, schema_key="module_call"
+        MODULE_PASS_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="module_call"
     )
-    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     address: str
     all_addresses: list[str]
@@ -1213,7 +1213,7 @@ class Module:
     directly via ``_single_pass_or_error()`` delegation to ``ops[0]``.
     """
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "address": FieldPolicy.KEEP,
         "all_addresses": FieldPolicy.KEEP,
         "cls": FieldPolicy.DROP,
@@ -1272,9 +1272,9 @@ class Module:
         "_facets_cache": FieldPolicy.DROP,
     }
     FIELD_POLICY = build_record_field_policy_table(
-        MODULE_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC, schema_key="module"
+        MODULE_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="module"
     )
-    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     address: str
     all_addresses: list[str]
@@ -2548,7 +2548,7 @@ class ModuleAccessor(Accessor["Module"]):
     Available as ``trace.modules``.
     """
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
         "_pass_dict": FieldPolicy.KEEP,

@@ -215,7 +215,7 @@ def test_every_family_activated_and_registrar_retired() -> None:
             owner_name, field_name = row.rsplit(".", 1)
             module = importlib.import_module(_OWNER_CLASSES[owner_name])
             owner = getattr(module, owner_name)
-            if owner.PORTABLE_STATE_SPEC[field_name] is FieldPolicy.DROP:
+            if owner._PORTABLE_STATE_SPEC[field_name] is FieldPolicy.DROP:
                 still_dropped.append(row)
     assert not still_dropped, f"families left inactive by the bump: {sorted(still_dropped)}"
     # The v8 bump retired every v8 registration and the v9 bump (C07)
@@ -234,7 +234,7 @@ def test_every_family_activated_and_registrar_retired() -> None:
 def _persisted_eq(a: object, b: object) -> bool:
     """Deep equality over the PERSISTED surface: bitwise tensors, exact scalars.
 
-    Objects declaring ``PORTABLE_STATE_SPEC`` compare field-wise over the
+    Objects declaring ``_PORTABLE_STATE_SPEC`` compare field-wise over the
     declared non-DROP fields; session-time DROP fields are excluded.
     """
 
@@ -246,7 +246,7 @@ def _persisted_eq(a: object, b: object) -> bool:
             and a.shape == b.shape
             and torch.equal(a, b)
         )
-    spec = getattr(type(a), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(a), "_PORTABLE_STATE_SPEC", None)
     if isinstance(spec, dict) and type(a) is type(b):
         for name, policy in spec.items():
             if policy is FieldPolicy.DROP:

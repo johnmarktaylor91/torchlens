@@ -484,7 +484,7 @@ def _portable_surviving_fields(spec: dict[str, FieldPolicy]) -> list[str]:
     Parameters
     ----------
     spec:
-        ``PORTABLE_STATE_SPEC`` policy mapping for one record class.
+        ``_PORTABLE_STATE_SPEC`` policy mapping for one record class.
 
     Returns
     -------
@@ -532,8 +532,8 @@ def _dataframe_projection(trace: Trace) -> dict[str, Any]:
     return {
         "model_field_order": list(MODEL_LOG_FIELD_ORDER),
         "op_field_order": list(LAYER_PASS_LOG_FIELD_ORDER),
-        "trace_portable_fields": sorted(_portable_surviving_fields(Trace.PORTABLE_STATE_SPEC)),
-        "op_portable_fields": sorted(_portable_surviving_fields(Op.PORTABLE_STATE_SPEC)),
+        "trace_portable_fields": sorted(_portable_surviving_fields(Trace._PORTABLE_STATE_SPEC)),
+        "op_portable_fields": sorted(_portable_surviving_fields(Op._PORTABLE_STATE_SPEC)),
         "dataframe_columns": [column for column in frame.columns if column != "output_role"],
         "stable_rows": rows,
     }

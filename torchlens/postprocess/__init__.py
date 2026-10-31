@@ -763,7 +763,7 @@ def _postprocess_body(
             if capture_session is not None
             else list(capture_events.amended_op_records())
         )
-        working_events = capture_events.copy_for_replay(projected_op_events=sealed_op_events)
+        working_events = capture_events._copy_for_replay(projected_op_events=sealed_op_events)
         self._capture_events = working_events
         with _vtimed(self, "  Step 0: Materialize capture events"):
             materialize_from_events(self, working_events)

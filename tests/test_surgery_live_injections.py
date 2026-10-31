@@ -285,7 +285,7 @@ def test_intervene_fire_counter_is_a_declared_session_transient() -> None:
     """FIX-2 enrollment pin: the intervene fire counter has a real scrub policy.
 
     ``_tl_intervene_selector_fire_count`` sat in the external-write ledger
-    with NO ``PORTABLE_STATE_SPEC`` row, so any save reached while the
+    with NO ``_PORTABLE_STATE_SPEC`` row, so any save reached while the
     counter was live (streamed ``to_disk`` finalize runs before the settle
     epilogue pops it; deferred backward selectors keep it past ``trace()``)
     refused with ``TorchLensIOError`` and downgraded runnable honesty
@@ -303,7 +303,7 @@ def test_intervene_fire_counter_is_a_declared_session_transient() -> None:
     from torchlens.data_classes.trace import Trace
 
     name = "_tl_intervene_selector_fire_count"
-    assert Trace.PORTABLE_STATE_SPEC[name] is FieldPolicy.DROP
+    assert Trace._PORTABLE_STATE_SPEC[name] is FieldPolicy.DROP
     assert TRACE_FIELD_OWNERSHIP[name] == "session"
     assert name not in TRACE_EXTERNAL_WRITE_EXEMPTIONS
 

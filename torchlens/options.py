@@ -1960,7 +1960,6 @@ __all__ = [
     "SaveOptions",
     "StreamingOptions",
     "option_receipt",
-    "to_disk",
     "VisualizationOptions",
     "suppress_mutate_warnings",
 ]

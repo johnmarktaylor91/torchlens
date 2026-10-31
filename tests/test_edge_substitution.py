@@ -423,8 +423,8 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
             field_name,
             replace(Op.FIELD_POLICY[field_name], portable_policy=FieldPolicy.DROP),
         )
-    monkeypatch.setitem(Op.PORTABLE_STATE_SPEC, "edge_substitutions", FieldPolicy.DROP)
-    monkeypatch.setitem(Op.PORTABLE_STATE_SPEC, "edge_replacement_stamps", FieldPolicy.DROP)
+    monkeypatch.setitem(Op._PORTABLE_STATE_SPEC, "edge_substitutions", FieldPolicy.DROP)
+    monkeypatch.setitem(Op._PORTABLE_STATE_SPEC, "edge_replacement_stamps", FieldPolicy.DROP)
     path = tmp_path / "forced_edge.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

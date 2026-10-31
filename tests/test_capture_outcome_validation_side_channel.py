@@ -4,12 +4,12 @@
 user-held Trace, and validation ENTRY unconditionally writes the failure side
 channel: ``reset_validation_failure`` sets ``_last_validation_failure = None``
 on every run (``validation/core.py``), and non-failing diagnostics accumulate
-in ``_validation_diagnostics``. Neither name had a ``PORTABLE_STATE_SPEC`` /
+in ``_validation_diagnostics``. Neither name had a ``_PORTABLE_STATE_SPEC`` /
 ``FIELD_POLICY`` row, so the portable scrub's undeclared-field audit rejected
 them and a plain validate-then-save sequence died with
 
     TorchLensIOError: Trace._last_validation_failure is missing from
-    PORTABLE_STATE_SPEC
+    _PORTABLE_STATE_SPEC
 
 Both are session-time diagnostics carried on the trace as a side channel --
 the ``_fast_run_session`` class -- so they are declared ``FieldPolicy.DROP``.

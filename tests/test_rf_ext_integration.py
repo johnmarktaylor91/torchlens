@@ -397,7 +397,7 @@ def test_source_target_caches_reuse_and_drop_across_portable_round_trip(
     first_target_solution = target_cache[target_key][2]
     source.projective_field.at((3, 3), target=target)  # type: ignore[union-attr]
     assert target_cache[target_key][2] is first_target_solution
-    assert type(trace).PORTABLE_STATE_SPEC["_rf_directional_solutions"] is FieldPolicy.DROP
+    assert type(trace)._PORTABLE_STATE_SPEC["_rf_directional_solutions"] is FieldPolicy.DROP
 
     path = tmp_path / "rf-endpoint-caches.tlspec"
     trace.save(path)

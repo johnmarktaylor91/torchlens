@@ -549,7 +549,7 @@
   `docs/reference/merged_trace_contract.md`. `merged.save(path)` writes the `merged-directory`
   artifact (canonical-JSON descriptor CACHE + per-member tree hashes + byte-identical rank
   cores); every load reruns the derivation and requires EXACT cache equality (tamper refuses
-  typed, never degrades to a gap); an unparseable member enters `load_degradations` and caps the
+  typed, never degrades to a gap); an unparseable member enters `degradations` and caps the
   effective alignment at `partial`. Refused typed in C1: p2p/pipeline boundaries (C3), DTensor
   dual geometry (C2), merged-level selectors, merged replay/runnable export/validate.
   `distributed_witness="payload"` remains a typed construction refusal (digest witnesses only).

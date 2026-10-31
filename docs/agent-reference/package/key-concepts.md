@@ -34,7 +34,7 @@ the typed `OpAmendment` lane (nine exact-set families, `append_amendment` the si
 writer) and every amended-state read folds through `CaptureEvents.amended_op_records()`.
 ONE sanctioned in-place carve-out exists: the fastlog ancestry-closure backfill
 (`fastlog/types.py::_backfill_cooked_ancestry`) replaces op-lane cells on the
-`copy_for_replay` projection a cook owns — never the sealed Recording stream — and nulls
+`_copy_for_replay` projection a cook owns — never the sealed Recording stream — and nulls
 `_amended_fold_cache` afterwards. Every in-place op-lane writer (this one included) is
 pinned by the closed reason-bearing ledger in
 `tests/producer_parity/test_op_lane_inplace_writers.py`, whose package-wide AST scan sees

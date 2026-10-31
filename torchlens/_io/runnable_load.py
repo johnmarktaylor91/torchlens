@@ -549,7 +549,7 @@ def _validate_required_witness_inventory(
     """
 
     from .._runnable_execution import _decode_literal
-    from ._runnable import (
+    from .runnable import (
         EMPTY_CONTAINER_PATH_MARKER,
         required_witness_family_members,
         witness_family_of,
@@ -1463,7 +1463,7 @@ def required_witness_family_members_shared(
 ) -> dict[str, list[str]]:
     """Resolve the shared witness->present-member derivation (single source)."""
 
-    from ._runnable import required_witness_family_members
+    from .runnable import required_witness_family_members
 
     return required_witness_family_members(witnesses)
 
@@ -2042,7 +2042,7 @@ def attach_sparse_run_readiness(
         # REHYDRATED trace's own container records imply (the replay consumes those
         # records for input binding and output reconstruction), so a lockstep
         # witness+member strip fails closed here, analysis-only.
-        from ._runnable import _container_structure_witnesses
+        from .runnable import _container_structure_witnesses
 
         container_members = tuple(
             witness.site_label for witness in _container_structure_witnesses(trace, start_order=0)

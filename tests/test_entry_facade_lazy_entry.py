@@ -179,7 +179,7 @@ def test_materialized_lazy_param_trace_round_trips_through_save_load(tmp_path) -
     declared portable policy; before it got one, ``tl.save`` on ANY trace of
     a model holding a lazy module (``nn.LazyLinear`` et al.) raised
     ``TorchLensIOError: Param._lazy_at_prep is missing from
-    PORTABLE_STATE_SPEC`` -- exactly the shape of model nightly.yml's
+    _PORTABLE_STATE_SPEC`` -- exactly the shape of model nightly.yml's
     platform-canary step traces with a predicate ``save=``.
     """
 

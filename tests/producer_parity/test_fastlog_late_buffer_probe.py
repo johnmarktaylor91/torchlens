@@ -3,7 +3,7 @@
 Design-of-record section 4.5 predicted an accidental data loss on the fastlog
 ``to_trace`` path (a pre-0 late-buffer append invisible to materialization
 because the capture-end seal cache predates it). The probe shows the loss
-does NOT exist at the migration base (main 890a3cb5): the ``copy_for_replay``
+does NOT exist at the migration base (main 890a3cb5): the ``_copy_for_replay``
 working stream that ``to_trace`` rebinds onto the cooked trace is
 session-detached (``capture_session_for_events`` returns ``None``), so
 postprocess falls back to the live op list — which already contains the

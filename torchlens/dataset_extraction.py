@@ -42,7 +42,6 @@ from torch import nn
 
 from ._data_substrate import (
     MANIFEST_SCHEMA_V1,
-    MANIFEST_SCHEMA_V2,
     migrate_v1_artifact,
     shard_filename as _shard_filename,  # noqa: F401 - engine-internal alias
     stimulus_ids_digest,
@@ -850,8 +849,6 @@ def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, An
 __all__ = [
     "INPUT_PREPROCESSING_SCHEMA",
     "MANIFEST_FILENAME",
-    "MANIFEST_SCHEMA",
-    "MANIFEST_SCHEMA_V2",
     "NATIVE_FORMAT",
     "BatchEnvelope",
     "DatasetExtractionResumeError",

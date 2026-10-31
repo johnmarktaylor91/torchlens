@@ -985,7 +985,7 @@ def _untyped_storage_key(t: torch.Tensor) -> tuple[int, int, str] | None:
 
 # Per-trace cache for the clone-on-write eligibility decision. Keyed weakly:
 # a Trace attribute would trip the portable-state completeness scrub
-# (PORTABLE_STATE_SPEC), and the decision is wrapper-internal state anyway.
+# (_PORTABLE_STATE_SPEC), and the decision is wrapper-internal state anyway.
 _COW_STATE_PTRS_CACHE: "weakref.WeakKeyDictionary[Any, Any]" = weakref.WeakKeyDictionary()
 _COW_UNSET = object()
 

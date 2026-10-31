@@ -188,7 +188,7 @@ def test_all_four_fields_are_declared_drop_on_trace() -> None:
 def test_declared_rows_are_the_single_scrub_authority() -> None:
     """The names left the pre-spec runtime-only allowance in `_io/scrub.py`.
 
-    That allowance is consulted BEFORE ``PORTABLE_STATE_SPEC``, so an entry
+    That allowance is consulted BEFORE ``_PORTABLE_STATE_SPEC``, so an entry
     there would make the declared policy dead code.
     """
 

@@ -578,7 +578,7 @@ def test_save_succeeds_for_multi_pass_recurrent_trace(tmp_path: Path) -> None:
     """Saving a trace with a multi-pass Layer must not trip the scrub probe.
 
     Regression: the identity scrub probed ``record.parent_param_ops`` before
-    its PORTABLE_STATE_SPEC gate; a multi-pass Layer's per-pass delegation
+    its _PORTABLE_STATE_SPEC gate; a multi-pass Layer's per-pass delegation
     raises InvalidArgumentError (a ValueError getattr does not swallow), so
     EVERY ``tl.save`` of a recurrent model died at the bundle writer.
     """

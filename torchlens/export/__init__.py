@@ -27,7 +27,7 @@ from ..capture.structure_only import (
 )
 from ..utils.display import atomic_write_text
 from ._common import _iter_layers, _scalarize_cell, _static_graph_data
-from ._graphs import NETRON_DISCLAIMER, netron
+from ._graphs import netron
 from ._registry import (
     describe_target,
     list_targets,
@@ -1270,7 +1270,6 @@ for _name, _fn, _tier, _caps in _BUILTIN_EXPORT_TARGETS:
 del _name, _fn, _tier, _caps
 
 __all__ = [
-    "NETRON_DISCLAIMER",
     "ReportOptions",
     "aim",
     "chrome_trace",

@@ -61,9 +61,9 @@ def test_facets_read_before_save_does_not_poison_tlspec(tmp_path: Any) -> None:
     """Reading ``.facets`` pre-save must leave the trace saveable and loadable.
 
     Fail-before: the ModuleCall/Module ``.facets`` getters cached a FacetView
-    in ``__dict__["_facets_cache"]`` with no PORTABLE_STATE_SPEC row, so this
+    in ``__dict__["_facets_cache"]`` with no _PORTABLE_STATE_SPEC row, so this
     exact sequence refused with ``ModuleCall._facets_cache is missing from
-    PORTABLE_STATE_SPEC`` -- a read-only documented accessor poisoned the
+    _PORTABLE_STATE_SPEC`` -- a read-only documented accessor poisoned the
     artifact path. The suite's other tests only read facets on LOADED traces,
     which is why the gap shipped.
     """

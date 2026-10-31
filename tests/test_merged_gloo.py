@@ -182,7 +182,7 @@ class TestArtifact:
         assert loaded.alignment.value == "aligned"
         assert loaded.value_status.value == "attested_complete"
         assert len(loaded.joins) == 1
-        assert loaded.load_degradations == ()
+        assert loaded.degradations == ()
         # Rank cores are ordinary bundles inside members/, fully loadable.
         assert loaded.ranks[0]["linear_1_1"] is not None
 
@@ -338,7 +338,7 @@ def _append_unparseable_member(art: Path) -> Path:
     """Add a hash-valid but bundle-unparseable rank-1 member to a saved artifact.
 
     The member's tree hashes are CORRECT in both records, so it passes
-    integrity and enters ``load_degradations`` at bundle-load time -- the
+    integrity and enters ``degradations`` at bundle-load time -- the
     degraded-environment branch, where exact cache equality is skipped.
     """
 
@@ -387,7 +387,7 @@ class TestDegradedLoadCoherence:
         """Fail-before: value_status presented ATTESTED_COMPLETE under degradation."""
 
         loaded = tl.load(self._degraded(tmp_path))
-        assert loaded.load_degradations
+        assert loaded.degradations
         assert loaded.stored_value_status.value == "attested_complete"
         assert loaded.value_status.value == "attested_partial"
         assert loaded.alignment.value == "partial"
@@ -478,7 +478,7 @@ class TestDegradedLoadCoherence:
         """The coherence checks refuse forgery, never the honest degraded load."""
 
         loaded = tl.load(self._degraded_unwitnessed(tmp_path))
-        assert loaded.load_degradations
+        assert loaded.degradations
         assert loaded.stored_value_status.value == "unwitnessed"
         assert loaded.alignment.value == "partial"
 

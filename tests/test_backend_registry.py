@@ -24,7 +24,6 @@ from torchlens.backends import (
     BackendSpec,
     BackendUnsupportedError,
     CaptureBackend,
-    SerializationPolicy,
     UnknownBackendError,
     get_backend_spec,
     register_backend_spec,
@@ -43,7 +42,7 @@ from torchlens.backends.default_specs import (
 from torchlens.backends.jax import capabilities as jax_capabilities
 from torchlens.backends.mlx import capabilities as mlx_capabilities
 from torchlens.backends.paddle import capabilities as paddle_capabilities
-from torchlens.backends.registry import _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES
+from torchlens.backends.registry import _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES, SerializationPolicy
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.capture.trace import _capture_backend_from_registry

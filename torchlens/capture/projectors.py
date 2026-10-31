@@ -992,7 +992,7 @@ class RecordingProjector:
                 and source_core.amendment_watermark is not None
             ):
                 capture_events.core_seal_watermark = source_core.amendment_watermark
-            capture_events = capture_events.copy_for_replay(projected_op_events=all_events)
+            capture_events = capture_events._copy_for_replay(projected_op_events=all_events)
             capture_events.raw_layer_counter = max(
                 (event.raw_index for event in all_events), default=0
             )

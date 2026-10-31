@@ -1981,7 +1981,7 @@ default-keep); mask-application semantics documented-unstable*
   `compatible_with_append` (an edit that may change the output shape is
   refused on an append rerun unless this is true) and `selection_recipe`
   (the selection recipe a selection-targeted `do()` attaches; `None`
-  otherwise). The hook `factory` is session-side. `Edit.PORTABLE_STATE_SPEC`
+  otherwise). The hook `factory` is session-side. `Edit._PORTABLE_STATE_SPEC`
   is the class-level table of how a saved spec keeps each field: `factory`
   is dropped, `selection_recipe` is saved as a recursive blob, every other
   field is kept. `trace.do(selection, edit)`

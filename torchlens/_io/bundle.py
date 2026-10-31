@@ -603,7 +603,7 @@ def save(
             arguments=("include_activations", "level"),
         )
     if save_level == "runnable":
-        from ._runnable import (
+        from .runnable import (
             require_sparse_run_descriptor,
             sparse_descriptor_to_json,
             with_activation_payload,
@@ -687,7 +687,7 @@ def save(
             sparse_runnable=sparse_run_descriptor is not None,
         )
         if sparse_run_descriptor is not None:
-            from ._runnable import assert_sparse_core_has_no_tensor_payload
+            from .runnable import assert_sparse_core_has_no_tensor_payload
 
             scrubbed_state["_buffer_initial_values"] = {}
             assert_sparse_core_has_no_tensor_payload(scrubbed_state)
@@ -3812,7 +3812,7 @@ def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
             value[key] = _replace_skipped_blob_refs(item, skipped_blob_ids)
         return value
 
-    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
     if spec is None:
         return value
 
@@ -3935,7 +3935,7 @@ def _contains_nested_blob_refs(
     if kind == _NESTED_BLOB_SEQUENCE:
         return any(_contains_nested_blob_refs(item, seen, allowed_blob_ids) for item in value)
 
-    spec = getattr(value_type, "PORTABLE_STATE_SPEC", None)
+    spec = getattr(value_type, "_PORTABLE_STATE_SPEC", None)
     if spec is None:
         return False
 

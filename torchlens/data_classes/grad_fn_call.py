@@ -92,7 +92,7 @@ def _grad_fn_payload_equal(left: Any, right: Any, _depth: int = 0) -> bool:
 class GradFnCall:
     """Runtime data for one execution of an autograd ``grad_fn_handle`` node."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "call_index": FieldPolicy.KEEP,
         "ordinal": FieldPolicy.KEEP,
         "backward_pass_index": FieldPolicy.KEEP,
@@ -108,12 +108,12 @@ class GradFnCall:
     FIELD_POLICY = build_record_field_policy_table(
         GRAD_FN_PASS_LOG_FIELD_ORDER,
         {
-            **PORTABLE_STATE_SPEC,
-            "call_label": PORTABLE_STATE_SPEC["label"],
+            **_PORTABLE_STATE_SPEC,
+            "call_label": _PORTABLE_STATE_SPEC["label"],
         },
         schema_key="grad_fn_call",
     )
-    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     call_index: int
     ordinal: int | None = None

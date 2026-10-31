@@ -20,7 +20,6 @@ from .._io.sidecar import (
     register_sidecar_family,
     unregister_sidecar_family,
 )
-from .._io.state_contract import inspect_state_contract
 from .._trace_state import TraceState
 from ..intervention.save import save_intervention
 from ..intervention.types import InterventionSpec
@@ -41,14 +40,6 @@ def reset_naming_counter(class_name: str | None = None) -> None:
     from .. import user_funcs
 
     user_funcs.reset_naming_counter(class_name)
-
-
-def log_model_metadata(*args: Any, **kwargs: Any) -> Any:
-    """Run metadata-only model capture through the public user_funcs surface."""
-
-    from .. import user_funcs
-
-    return user_funcs.log_model_metadata(*args, **kwargs)
 
 
 def detect_tlspec_format(path: str | Path) -> str:
@@ -295,7 +286,8 @@ def load_intervention_spec(
 #: Removed public names: each raises the typed ``facade_redirect`` error naming
 #: its replacement (clean break, no alias).
 _REDIRECTS: dict[str, str] = {
-    "get_model_metadata": ("use torchlens.io.log_model_metadata -- get_model_metadata was renamed"),
+    "get_model_metadata": "use torchlens.trace(model, x, save='none') -- a metadata-only capture is a trace that saves no payloads",
+    "log_model_metadata": "use torchlens.trace(model, x, save='none') -- a metadata-only capture is a trace that saves no payloads",
 }
 
 
@@ -323,13 +315,11 @@ __all__ = [
     "attach_sidecar",
     "cleanup_tmp",
     "detect_tlspec_format",
-    "inspect_state_contract",
     "inspect_tlspec",
     "list_traces",
     "load",
     "list_sidecar_families",
     "load_intervention_spec",
-    "log_model_metadata",
     "read_safetensors",
     "read_sidecar",
     "register_sidecar_family",

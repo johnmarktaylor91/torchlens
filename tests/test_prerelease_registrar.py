@@ -78,7 +78,7 @@ def _tiny_trace() -> Trace:
 @pytest.mark.smoke
 def test_registration_requires_declared_drop_policy() -> None:
     keep_field = next(
-        name for name, policy in Trace.PORTABLE_STATE_SPEC.items() if policy is FieldPolicy.KEEP
+        name for name, policy in Trace._PORTABLE_STATE_SPEC.items() if policy is FieldPolicy.KEEP
     )
     with pytest.raises(ValueError, match="not 'drop'"):
         register_prerelease_field(Trace, keep_field)

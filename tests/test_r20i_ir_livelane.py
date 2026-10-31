@@ -7,7 +7,7 @@ Covers hardening findings on ``torchlens/ir``:
 * N9  -- ``CaptureEvents.release_runtime_sidecars`` retained runtime handles
   (``backend_session``, ``grad_fn_handles_by_label_raw``, ``recent_events``)
   its docstring said it detaches.
-* N10 -- ``CaptureEvents.copy_for_replay`` shared the mutable per-event dicts
+* N10 -- ``CaptureEvents._copy_for_replay`` shared the mutable per-event dicts
   (``transform_config``, ``parent_arg_positions``) of "frozen" ``OpEvent``
   objects, so a replay projection could mutate the sealed source stream.
 """
@@ -175,7 +175,7 @@ def test_copy_for_replay_does_not_share_mutable_event_dicts() -> None:
     """A replay projection must not mutate the sealed source event dicts (N10)."""
 
     source, op = _seeded_capture_events()
-    projection = source.copy_for_replay()
+    projection = source._copy_for_replay()
 
     # Mutate every mutable projection event field across all three lanes.
     projection.op_events[0].transform_config["INJECTED"] = 999
@@ -196,7 +196,7 @@ def test_copy_for_replay_projection_lanes_reference_same_event() -> None:
     """All projection lanes must reference one independent cloned event (N10)."""
 
     source, op = _seeded_capture_events()
-    projection = source.copy_for_replay()
+    projection = source._copy_for_replay()
 
     cloned = projection.op_events[0]
     assert projection.op_event_by_label_raw[op.label_raw] is cloned
@@ -209,8 +209,8 @@ def test_copy_for_replay_projections_are_mutually_independent() -> None:
     """Two projections of one source must not affect each other (N10)."""
 
     source, _op = _seeded_capture_events()
-    first = source.copy_for_replay()
-    second = source.copy_for_replay()
+    first = source._copy_for_replay()
+    second = source._copy_for_replay()
 
     first.op_events[0].transform_config["X"] = 1
 

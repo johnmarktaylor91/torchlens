@@ -207,11 +207,11 @@ def test_activation_imports_commits_and_registers(on_path: Path) -> None:
         assert report.failed == ()
         assert report.declaration_digest is None
         assert "fakeprov_eco_rt" in sys.modules
-        assert "eco_rt_demo_target" in export_registry.export_targets()
+        assert "eco_rt_demo_target" in export_registry.list_targets()
         states = {record.candidate.distribution: record.state for record in plugin_status()}
         assert states["eco-rt-good"] == "loaded"
     finally:
-        export_registry.unregister_export_target("eco_rt_demo_target")
+        export_registry.unregister_target("eco_rt_demo_target")
 
 
 def test_activation_not_installed_refuses_with_signpost(on_path: Path) -> None:
@@ -338,7 +338,7 @@ def test_activate_configured_reports_declaration_digest(on_path: Path) -> None:
         assert [report.declaration_digest for report in reports] == [expected]
         assert [candidate.name for report in reports for candidate in report.loaded] == ["demo"]
     finally:
-        export_registry.unregister_export_target("eco_rt_demo_target")
+        export_registry.unregister_target("eco_rt_demo_target")
 
 
 @pytest.mark.smoke
@@ -355,7 +355,7 @@ def test_activate_configured_consumes_env_declaration(
         assert len(reports) == 1
         assert reports[0].declaration_digest == hashlib.sha256(b"eco-rt-good").hexdigest()
     finally:
-        export_registry.unregister_export_target("eco_rt_demo_target")
+        export_registry.unregister_target("eco_rt_demo_target")
 
 
 @pytest.mark.smoke

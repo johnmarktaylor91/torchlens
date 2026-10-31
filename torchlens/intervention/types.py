@@ -172,7 +172,7 @@ HelperPortability: TypeAlias = Literal["builtin", "import_ref", "opaque_audit"]
 class Edit:
     """Portable identity and hook factory for helper-built interventions."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "helper_name": FieldPolicy.KEEP,
         "args": FieldPolicy.KEEP,
         "kwargs": FieldPolicy.KEEP,
@@ -437,7 +437,7 @@ REPLAY_TEMPLATE_TYPES: frozenset[type] = frozenset(
 class FireRecord:
     """Runtime record for one intervention firing."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "target_label": FieldPolicy.KEEP,
         "call_label": FieldPolicy.KEEP,
         "func_call_id": FieldPolicy.KEEP,

@@ -46,7 +46,7 @@ class KernelLaunch:
     runtime_correlation: int | str | None
     attribution_status: str
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "launch_name": FieldPolicy.KEEP,
         "device": FieldPolicy.KEEP,
         "stream": FieldPolicy.KEEP,
@@ -64,7 +64,7 @@ class _TelemetryPayload:
     _launches: tuple[KernelLaunch, ...]
     _relations: tuple[tuple[int, int], ...]
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_available": FieldPolicy.KEEP,
         "_launches": FieldPolicy.KEEP,
         "_relations": FieldPolicy.KEEP,
@@ -191,7 +191,7 @@ def _coerce_launch(value: Any) -> KernelLaunch:
     if isinstance(value, KernelLaunch):
         return value
     if isinstance(value, Mapping):
-        return KernelLaunch(**{name: value[name] for name in KernelLaunch.PORTABLE_STATE_SPEC})
+        return KernelLaunch(**{name: value[name] for name in KernelLaunch._PORTABLE_STATE_SPEC})
     raise TypeError("kernel telemetry launch row has an invalid representation")
 
 
@@ -403,7 +403,7 @@ def _attach_payload(trace: Any, payload: _TelemetryPayload) -> None:
         "_launches": tuple(
             {
                 field_name: getattr(launch, field_name)
-                for field_name in KernelLaunch.PORTABLE_STATE_SPEC
+                for field_name in KernelLaunch._PORTABLE_STATE_SPEC
             }
             for launch in payload._launches
         ),

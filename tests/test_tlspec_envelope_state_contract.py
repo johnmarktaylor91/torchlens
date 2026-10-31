@@ -247,7 +247,7 @@ def test_inert_inventory_reports_without_loading(
 ) -> None:
     """inspect_state_contract sees everything and refuses nothing."""
 
-    from torchlens.io import inspect_state_contract
+    from torchlens._io.state_contract import inspect_state_contract
 
     pristine = inspect_state_contract(corpus_dir / "art_main_portable")
     assert pristine["unknown_field_total"] == 0

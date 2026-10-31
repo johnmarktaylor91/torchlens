@@ -2,7 +2,7 @@
 
 ``Trace.conditional_records`` holds ``ConditionalEvent`` objects whose
 ``source_file`` is the ABSOLUTE path of the user's ``forward``-defining module.
-Those dataclasses had no ``PORTABLE_STATE_SPEC``, so the scrubber returned them
+Those dataclasses had no ``_PORTABLE_STATE_SPEC``, so the scrubber returned them
 verbatim and the source-path relativizer never ran -- the absolute path (with its
 ``$HOME``, OS username, and filesystem layout) persisted into ``metadata.pkl`` at
 EVERY save level, INCLUDING ``include_source=False``. That is a direct regression

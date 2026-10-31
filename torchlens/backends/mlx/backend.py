@@ -1274,7 +1274,7 @@ class MLXBackend:
                 trace.halt_frontier = signal.reason
             # Forward-time-only state: the emit path reads these during the
             # model call; leaving them on the trace breaks the portable-state
-            # scrub (they are not in PORTABLE_STATE_SPEC by design).
+            # scrub (they are not in _PORTABLE_STATE_SPEC by design).
             del trace._mlx_intervention_plan
             del trace._mlx_halt_selector
             # Zero-match disclosure (preview half of the torch-side fix): a

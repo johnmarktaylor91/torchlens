@@ -272,7 +272,7 @@ def test_honest_two_rank_round_trip_still_loads(tmp_path: Path) -> None:
     assert loaded.alignment.value == "aligned"
     assert loaded.value_status.value == "attested_complete"
     assert loaded.rank_ids == (0, 1)
-    assert loaded.load_degradations == ()
+    assert loaded.degradations == ()
 
 
 @pytest.mark.parametrize("resource_exc", [MemoryError, OSError])
@@ -286,7 +286,7 @@ def test_member_load_resource_failure_surfaces_not_laundered(
     actively misleading description of an I/O failure -- and it silently capped
     the merge at ``partial`` off the remaining members. A ``MemoryError`` or
     ``OSError`` escaping the member bundle load must propagate raw as the
-    environment error it is, never enter ``load_degradations``.
+    environment error it is, never enter ``degradations``.
     """
 
     art = _saved_two_rank(tmp_path)

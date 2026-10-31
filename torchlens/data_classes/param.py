@@ -166,7 +166,7 @@ class Param:
     itself -- only a ``_param_ref`` reference for lazy grad access.
     """
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "module_address": FieldPolicy.KEEP,
         "name": FieldPolicy.KEEP,
         "shape": FieldPolicy.KEEP,
@@ -205,9 +205,9 @@ class Param:
         "_derived_grad_record_path": FieldPolicy.KEEP,
     }
     FIELD_POLICY = build_record_field_policy_table(
-        PARAM_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC, schema_key="param"
+        PARAM_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="param"
     )
-    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     def __init__(
         self,
@@ -890,7 +890,7 @@ class Param:
 
 
 # The M8 facade: every declared stored field becomes a row-cell descriptor
-# (the literal ``PORTABLE_STATE_SPEC`` keys above, in declared order); the
+# (the literal ``_PORTABLE_STATE_SPEC`` keys above, in declared order); the
 # instance ``__dict__`` keeps only the store binding and user extras.
 _PARAM_STORED_FIELDS: tuple[str, ...] = (
     "module_address",
@@ -948,7 +948,7 @@ class ParamAccessor(Accessor["Param"]):
     Available as ``trace.params``, ``layer_log.params``, ``module_log.params``.
     """
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
         "_rehydrate_on_iter": FieldPolicy.DROP,

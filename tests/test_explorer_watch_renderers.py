@@ -15,7 +15,6 @@ import pytest
 import torch
 
 from torchlens.observability import (
-    CommittedBlock,
     Histogram,
     HistoryCollector,
     HistoryView,
@@ -37,6 +36,7 @@ from torchlens.observability import (
     render_fan,
     render_waterfall,
 )
+from torchlens.observability._artifact import CommittedBlock
 
 
 def _observed(

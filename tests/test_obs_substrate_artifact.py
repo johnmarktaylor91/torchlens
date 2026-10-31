@@ -10,19 +10,16 @@ import pytest
 import torch
 
 from torchlens.observability import (
-    CommittedBlock,
     Histogram,
     HistoryArtifactError,
     HistoryReader,
-    HistoryWriter,
     ObservationRecord,
-    RamRing,
     RunRecord,
     SiteRecord,
     Spine,
     StepBlockRecord,
-    coarsen_pair,
 )
+from torchlens.observability._artifact import CommittedBlock, HistoryWriter, RamRing, coarsen_pair
 
 
 def _run(run_id: str = "run-a", segment_id: str = "seg-a") -> RunRecord:

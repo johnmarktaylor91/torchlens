@@ -1093,7 +1093,7 @@ class GradientRecord:
         Event timestamp.
     """
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "owner": FieldPolicy.WEAKREF_STRIP,
         "ordinal": FieldPolicy.KEEP,
         "backward_pass_index": FieldPolicy.KEEP,
@@ -1595,7 +1595,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         _arg_expressions_cache: Any
         _is_in_conditional_body: Any
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_label_raw": FieldPolicy.KEEP,
         "_layer_label_raw": FieldPolicy.KEEP,
         "raw_label": FieldPolicy.DROP,
@@ -1816,12 +1816,12 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     }
     FIELD_POLICY = build_record_field_policy_table(
         LAYER_PASS_LOG_FIELD_ORDER,
-        PORTABLE_STATE_SPEC,
+        _PORTABLE_STATE_SPEC,
         fork_policy=LAYER_PASS_LOG_FIELD_FORK_POLICY,
         default_fill_state=_LAYER_PASS_LOG_DEFAULT_FILL,
         schema_key="op",
     )
-    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
     FIELD_FORK_POLICY = fork_policy_from_policy(FIELD_POLICY)
     DEFAULT_FILL_STATE = default_fill_state_from_policy(FIELD_POLICY)
 

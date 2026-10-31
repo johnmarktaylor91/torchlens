@@ -16,11 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.quickstart import (
-    SynthesizedValueReadWarning,
-    state_dict_hash,
-    trace_input_provenance,
-)
+from torchlens.quickstart import SynthesizedValueReadWarning, trace_input_provenance
+from torchlens.quickstart._primitive import state_dict_hash
 from torchlens.user_funcs import render
 
 pytestmark = pytest.mark.heavy

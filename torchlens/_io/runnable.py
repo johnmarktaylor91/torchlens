@@ -1090,11 +1090,11 @@ def detach_sparse_core_nested_trace_backrefs(value: Any) -> None:
     A conditional arm records a private ``_trace`` back-reference to its owning
     ``Trace`` (bound in postprocess finalization to serve the ``evaluation_ops`` /
     ``execution_ops`` convenience accessors). ``ConditionalAccessor`` has no
-    ``PORTABLE_STATE_SPEC``, so the bundle scrub returns it verbatim and the arm's
+    ``_PORTABLE_STATE_SPEC``, so the bundle scrub returns it verbatim and the arm's
     ``_trace`` still points at the LIVE trace -- dragging that trace's
     ``_runnable_capture_state`` (and every other live tensor field) into the value-free
     sparse core through ``conditionals._list.<i>.arms.<j>._trace``. The top-level
-    capture-state is dropped by ``Trace.PORTABLE_STATE_SPEC`` (``FieldPolicy.DROP``) and
+    capture-state is dropped by ``Trace._PORTABLE_STATE_SPEC`` (``FieldPolicy.DROP``) and
     routed to the separate ``state_dict_v1`` blob; the arm back-reference must get the
     SAME treatment. Arm replay is driven entirely by the descriptor's recorded
     ``conditional_arm_entry_edges`` control witnesses and top-level state, never by this

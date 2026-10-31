@@ -194,7 +194,7 @@ def _first_state_difference(
         return f"{path}: type {type(left)!r} != {type(right)!r}"
     if isinstance(left, weakref.ReferenceType):
         return None
-    if getattr(type(left), "PORTABLE_STATE_SPEC", None) is not None:
+    if getattr(type(left), "_PORTABLE_STATE_SPEC", None) is not None:
         left_state = dict(state_items(left))
         right_state = dict(state_items(right))
         left_keys = set(left_state)

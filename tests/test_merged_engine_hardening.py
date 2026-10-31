@@ -737,7 +737,7 @@ class TestHaltedMemberArtifactRoundTrip:
         art = tmp_path / "halted_member.tlspec"
         merged.save(art)
         loaded = load_merged(art)
-        assert loaded.load_degradations == ()
+        assert loaded.degradations == ()
         assert loaded.member_outcomes == {0: "halted", 1: "complete"}
         assert "halted" in loaded.summary()
         assert loaded.value_status is merged.value_status

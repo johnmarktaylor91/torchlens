@@ -544,7 +544,7 @@ class ConditionalEvent:
     # (B8-18). The scrubber applies the source-privacy policy to ``source_file`` via
     # ``_apply_conditional_source_policy``; every other field is portable structural
     # metadata. Declared ``ClassVar`` so ``@dataclass`` does not treat it as a field.
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "id": FieldPolicy.KEEP,
         "kind": FieldPolicy.KEEP,
         "source_file": FieldPolicy.KEEP,
@@ -694,7 +694,7 @@ class Conditional:
     # Declared so the scrubber walks this record and applies the source-privacy
     # policy to ``source_file`` (the absolute forward-module path) instead of
     # persisting it verbatim (B8-18). ``ClassVar`` so ``@dataclass`` ignores it.
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "id": FieldPolicy.KEEP,
         "arms": FieldPolicy.KEEP,
         "fired_arm_index": FieldPolicy.KEEP,
@@ -760,7 +760,7 @@ class ConditionalAccessor:
     # ``Conditional`` (whose ``source_file`` must be privacy-scrubbed) rather than
     # persisting the whole accessor subtree verbatim (B8-18). ``_list`` and ``_dict``
     # share the same ``Conditional`` objects, so the scrub memo keeps them identical.
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_list": FieldPolicy.KEEP,
         "_dict": FieldPolicy.KEEP,
     }
@@ -1172,9 +1172,9 @@ class Trace(
     #: the writer contract as the record's alias rules (alias-or-fail,
     #: ecosystem MEMO 3.3). The reasoned ledger lives in
     #: ``_trace_legacy_state.py``.
-    PORTABLE_STATE_ALIASES: ClassVar[frozenset[str]] = TRACE_PORTABLE_STATE_ALIASES
+    _PORTABLE_STATE_ALIASES: ClassVar[frozenset[str]] = TRACE_PORTABLE_STATE_ALIASES
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "trace_label": FieldPolicy.KEEP,
         "model_class_name": FieldPolicy.KEEP,
         "model_label": FieldPolicy.KEEP,
@@ -1635,7 +1635,7 @@ class Trace(
         # (`reset_validation_failure` writes None on every run), so a plain
         # validate-then-save sequence hit
         # `TorchLensIOError: Trace._last_validation_failure is missing from
-        # PORTABLE_STATE_SPEC` -- a hard refusal on a completely ordinary
+        # _PORTABLE_STATE_SPEC` -- a hard refusal on a completely ordinary
         # workflow. Both attrs are session-time diagnostics carried on the
         # trace as a side channel, exactly the `_fast_run_session` class, and
         # `ValidationFailure`/`ValidationDiagnostic` are not portable records.
@@ -1658,12 +1658,12 @@ class Trace(
     }
     FIELD_POLICY = build_record_field_policy_table(
         MODEL_LOG_FIELD_ORDER,
-        PORTABLE_STATE_SPEC,
+        _PORTABLE_STATE_SPEC,
         fork_policy=MODEL_LOG_FIELD_FORK_POLICY,
         default_fill_state=_MODEL_LOG_DEFAULT_FILL,
         schema_key="trace",
     )
-    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     def __init__(
         self,

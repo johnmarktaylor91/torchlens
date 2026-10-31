@@ -45,7 +45,7 @@ class Phase(Enum):
 class FuncSite:
     """Function-call boundary where a container was observed."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "func_call_id": FieldPolicy.KEEP,
         "position": FieldPolicy.BLOB_RECURSIVE,
     }
@@ -58,7 +58,7 @@ class FuncSite:
 class ModuleSite:
     """Module-call boundary where a container was observed."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "module_call_label": FieldPolicy.KEEP,
         "position": FieldPolicy.BLOB_RECURSIVE,
     }
@@ -71,7 +71,7 @@ class ModuleSite:
 class ModelSite:
     """Model boundary where a container was observed."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "model_ref": FieldPolicy.KEEP,
         "position": FieldPolicy.BLOB_RECURSIVE,
     }
@@ -87,7 +87,7 @@ Site = FuncSite | ModuleSite | ModelSite
 class ContainerLeafOccurrence:
     """One tensor occurrence at one container path."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "path": FieldPolicy.BLOB_RECURSIVE,
         "producer_op_label": FieldPolicy.KEEP,
         "tensor_identity": FieldPolicy.KEEP,
@@ -104,7 +104,7 @@ class ContainerLeafOccurrence:
 class ContainerSnapshot:
     """Portable snapshot of one container observation."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "site": FieldPolicy.BLOB_RECURSIVE,
         "role": FieldPolicy.KEEP,
         "phase": FieldPolicy.KEEP,
@@ -183,7 +183,7 @@ class ContainerSnapshot:
 class ContainerRecord:
     """Portable record for one container identity ordinal."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "ordinal": FieldPolicy.KEEP,
         "object_kind": FieldPolicy.KEEP,
         "label": FieldPolicy.KEEP,

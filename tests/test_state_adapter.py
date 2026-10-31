@@ -59,7 +59,7 @@ class _MixedState:
 class _IncompletePortableState:
     """Portable-state object with an intentionally missing field policy."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"covered": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"covered": FieldPolicy.KEEP}
 
     def __init__(self) -> None:
         """Populate a missing field to exercise the scrub tripwire."""
@@ -145,7 +145,7 @@ def test_scrub_completeness_tripwire_uses_adapter_enumeration() -> None:
         include_rng_states=True,
     )
 
-    with pytest.raises(TorchLensIOError, match="missing from PORTABLE_STATE_SPEC"):
+    with pytest.raises(TorchLensIOError, match="missing from _PORTABLE_STATE_SPEC"):
         _scrub_value(
             _IncompletePortableState(),
             options,

@@ -35,7 +35,7 @@ class DerivedGradRecord:
         Backend-owned validation and fingerprint metadata.
     """
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "path": FieldPolicy.KEEP,
         "source": FieldPolicy.KEEP,
         "argnum": FieldPolicy.KEEP,
@@ -59,7 +59,7 @@ class DerivedGradRecord:
 class DerivedGradAccessor(Accessor[DerivedGradRecord]):
     """Dict-like accessor for leaf-level derived gradient records."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
     }
@@ -96,7 +96,7 @@ class IntermediateDerivedGradRecord:
         Backend-owned mechanism, loss, save predicate, and status metadata.
     """
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "op_label": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
         "aval": FieldPolicy.KEEP,
@@ -116,7 +116,7 @@ class IntermediateDerivedGradRecord:
 class IntermediateDerivedGradAccessor(Accessor[IntermediateDerivedGradRecord]):
     """Dict-like accessor for op-level derived gradient records."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
     }

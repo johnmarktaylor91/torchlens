@@ -79,7 +79,7 @@ class FuncCallLocation:
     with no lazy loading.
     """
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "file": FieldPolicy.KEEP,
         "line_number": FieldPolicy.KEEP,
         "func_name": FieldPolicy.KEEP,
@@ -102,7 +102,7 @@ class FuncCallLocation:
 
     FIELD_POLICY = build_record_field_policy_table(
         FUNC_CALL_LOCATION_FIELD_ORDER,
-        PORTABLE_STATE_SPEC,
+        _PORTABLE_STATE_SPEC,
         schema_key="func_call_location",
     )
 
@@ -516,7 +516,7 @@ class FuncCallLocation:
         record_state_restore(self, state)
 
 
-# The M8 facade: the declared stored fields (the literal PORTABLE_STATE_SPEC
+# The M8 facade: the declared stored fields (the literal _PORTABLE_STATE_SPEC
 # keys) become row-cell descriptors; the instance dict keeps only the store
 # binding + user extras. FuncCallLocation records are per-trace (cached in
 # ``Trace._code_context_cache``), so cell storage is trace-scoped like every

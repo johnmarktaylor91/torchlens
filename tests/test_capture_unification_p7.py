@@ -602,7 +602,7 @@ def test_recording_to_trace_rejects_multi_pass_recordings() -> None:
 def test_recording_to_trace_reuse_survives_output_tensor_label_undecoration() -> None:
     """cert9 BLOCKER-1: repeat to_trace() must survive Step 12 undecorating shared outputs.
 
-    ``copy_for_replay()`` (cert8 BLOCKER-1 fix) protects the frozen Recording's
+    ``_copy_for_replay()`` (cert8 BLOCKER-1 fix) protects the frozen Recording's
     ``CaptureEvents``/``LiveIndex`` containers from ``_postprocess()``'s
     destructive draining, but structurally cannot protect a sibling side
     channel: the model's real output tensor OBJECTS, which ``to_trace()``

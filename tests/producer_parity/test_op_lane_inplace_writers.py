@@ -2,7 +2,7 @@
 
 The producer contract says the op lane is append-only with post-commit
 knowledge riding the typed amendment lane -- but the fastlog ancestry-closure
-backfill legitimately REPLACES op-lane cells in place on the ``copy_for_replay``
+backfill legitimately REPLACES op-lane cells in place on the ``_copy_for_replay``
 projection a cook owns. That carve-out lived in exactly one function docstring:
 no contract named it, and a subscript assignment (``op_events[i] = ...``) is
 invisible to the name-based P4 AST guard that pins the amendment call sites. A
@@ -43,7 +43,7 @@ SANCTIONED_INPLACE_OP_LANE_WRITERS = frozenset(
         ("ir/capture_events.py", "CaptureEvents.release_working_projection", "clear"),
         # THE cook-owned-projection carve-out (r7 R03-1): the fastlog
         # ancestry-closure backfill replaces op-lane cells in place, ONLY on
-        # the ``copy_for_replay`` projection a cook owns (never the sealed
+        # the ``_copy_for_replay`` projection a cook owns (never the sealed
         # Recording stream) and explicitly nulls ``_amended_fold_cache``
         # afterwards. Named in torchlens/CLAUDE.md ("Journal Producer").
         ("fastlog/types.py", "_backfill_cooked_ancestry", "subscript_write"),

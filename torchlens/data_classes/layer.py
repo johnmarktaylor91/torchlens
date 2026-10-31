@@ -476,7 +476,7 @@ class Layer(_SelectionOperand):
         buffer_pass: Any
         is_atomic_module: Any
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_is_in_conditional_body": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
         "layer_label_short": FieldPolicy.KEEP,
@@ -579,16 +579,16 @@ class Layer(_SelectionOperand):
         "call_labels": FieldPolicy.KEEP,
     }
     FIELD_POLICY = build_record_field_policy_table(
-        LAYER_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC, schema_key="layer"
+        LAYER_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="layer"
     )
-    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     #: Aggregate-facade mirror contract (state-contract service): a pickled
     #: Layer's state carries the Op-shaped mirror fields the facade reads
     #: through to ``ops[0]``, so the known/unknown partition for Layer folds
     #: in the Op record contract. Resolved lazily by module path (the Op
     #: import above is TYPE_CHECKING-only).
-    PORTABLE_STATE_MIRROR_CONTRACT: ClassVar[tuple[str, str]] = (
+    _PORTABLE_STATE_MIRROR_CONTRACT: ClassVar[tuple[str, str]] = (
         "torchlens.data_classes.op",
         "Op",
     )

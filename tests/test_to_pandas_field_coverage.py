@@ -4,7 +4,7 @@ Two independent bug classes were found and fixed in the field-order-sync sprint
 (cert3/cert4/cert5), and both must be gated so neither can silently reappear:
 
 1. **FIELD_ORDER incompleteness** -- a field is genuinely set at construction and
-   marked ``FieldPolicy.KEEP`` in a record class's own ``PORTABLE_STATE_SPEC``,
+   marked ``FieldPolicy.KEEP`` in a record class's own ``_PORTABLE_STATE_SPEC``,
    yet the class's public ``*_FIELD_ORDER`` constant in ``constants.py`` never
    picked it up (e.g. ``Layer.is_in_conditional_body``, ``Buffer.module_address``
    before this fix). ``build_record_field_policy_table`` marks any such field
@@ -34,7 +34,7 @@ self-consistency check that can never catch a field missing from
 the same blind spot. ``Buffer`` had also never been added to
 ``test_field_order_has_no_keep_field_desync``'s parametrize list below (the
 one check in this file that DOES compare against the ground-truth
-``PORTABLE_STATE_SPEC``), so the class was never actually exercised despite the
+``_PORTABLE_STATE_SPEC``), so the class was never actually exercised despite the
 docstring here previously claiming it already had "equivalent coverage".
 
 ``Trace`` is ALSO covered here (cert8 BLOCKER-1): ``Trace._grad_fn_param_refs``
@@ -121,7 +121,7 @@ _KEEP_FIELD_DESYNC_EXCLUSIONS: dict[type[Any], frozenset[str]] = {
             # Computed @property (data_classes/_trace_stats.py); never stored
             # in self.__dict__, so there is no state for FIELD_ORDER to lose.
             # Its sibling `num_ops_with_params` (also computed) correctly has
-            # no PORTABLE_STATE_SPEC entry at all -- this KEEP declaration is
+            # no _PORTABLE_STATE_SPEC entry at all -- this KEEP declaration is
             # confirmed-vestigial, not a live desync (cert7/cert8 MINOR-2).
             "ops_with_params",
             # tlspec v8 bump: three unordered runtime rows made portable BY
@@ -238,13 +238,13 @@ def test_field_order_has_no_keep_field_desync(cls: type[Any]) -> None:
 
     Regression gate for the cert3/cert4/cert6/cert8 desync class: a field is
     set at construction and marked ``FieldPolicy.KEEP`` in the class's
-    PORTABLE_STATE_SPEC, yet the FIELD_ORDER constant in ``constants.py``
+    _PORTABLE_STATE_SPEC, yet the FIELD_ORDER constant in ``constants.py``
     never picked it up, so it silently vanished from every ``to_pandas()``
     export built on that constant (e.g. ``Layer.is_in_conditional_body``,
     ``Buffer.module_address``, ``Buffer.initial_value`` -- all fixed by this
     same change). ``Buffer`` is included here specifically because it was
     the cert6/cert7 MAJOR-1 gap: the class was never added to this
-    parametrize list even though its own ``PORTABLE_STATE_SPEC`` had a real
+    parametrize list even though its own ``_PORTABLE_STATE_SPEC`` had a real
     KEEP-and-missing field (``_initial_value``) the whole time.
 
     ``Trace`` is included here for the cert8 BLOCKER-1 gap: unlike the other

@@ -21,12 +21,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_substrate import ExtractionArtifactError
+from torchlens._data_substrate.artifact import MANIFEST_SCHEMA_V2
 from torchlens._errors import InvalidArgumentError
-from torchlens.dataset_extraction import (
-    MANIFEST_SCHEMA_V2,
-    DatasetExtractionResumeError,
-    load_extraction,
-)
+from torchlens.dataset_extraction import DatasetExtractionResumeError, load_extraction
 from torchlens.transforms import (
     DEFAULT,
     PlannedStep,

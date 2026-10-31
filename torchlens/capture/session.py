@@ -788,7 +788,7 @@ class CaptureSession:
         self.projection_facts.update(
             {
                 "capture_events": (
-                    None if capture_events is None else capture_events.copy_for_replay()
+                    None if capture_events is None else capture_events._copy_for_replay()
                 ),
                 "records": records,
                 "output_tensors": tuple(output_tensors or ()),

@@ -23,15 +23,7 @@ here is DOCUMENTED-UNSTABLE pending naming-session ratification.
 from __future__ import annotations
 
 from ..ir.summary_role import SummaryTransform, is_summary_transform, summary
-from ._artifact import (
-    DEFAULT_RING_CAPACITY,
-    RAM_POLICIES,
-    CommittedBlock,
-    HistoryReader,
-    HistoryWriter,
-    RamRing,
-    coarsen_pair,
-)
+from ._artifact import HistoryReader
 from ._chassis import EventStream, ObserverEvent
 from ._collector import HistoryCollector, StepTruth, WatchPlan, WatchSettings
 from ._errors import (
@@ -135,20 +127,17 @@ __all__ = [
     "DEFAULT_DESCRIPTOR",
     "EMITTED_CATEGORIES",
     "NEVER_EMITTED_CATEGORIES",
-    "DEFAULT_RING_CAPACITY",
     "GRAD_SCALE_PROVENANCE",
     "HISTORY_SCHEMA_VERSION",
     "MIN_PUBLISHABLE_REPEATS",
     "OPTIMIZER_STATUS",
     "PHASES",
     "PRESENCE",
-    "RAM_POLICIES",
     "RANKING_SCORE",
     "STEP_PROVENANCE",
     "STREAMS",
     "ABMeasurement",
     "ArmSpec",
-    "CommittedBlock",
     "DerivedQuantile",
     "EventStream",
     "ExtractionResult",
@@ -160,7 +149,6 @@ __all__ = [
     "HistoryReader",
     "HistorySchemaError",
     "HistoryView",
-    "HistoryWriter",
     "FacetSplitter",
     "JoinCoverage",
     "KinetoJoinResult",
@@ -176,7 +164,6 @@ __all__ = [
     "OpTierCollector",
     "ProfilerSession",
     "ProfilerSessionError",
-    "RamRing",
     "RefusalPredicate",
     "RegionRecord",
     "RunRecord",
@@ -199,7 +186,6 @@ __all__ = [
     "WatchSettings",
     "categorized_key_counts",
     "category_vocabulary_report",
-    "coarsen_pair",
     "color_by_watch",
     "contact_sheet_pages",
     "derived_quantile",

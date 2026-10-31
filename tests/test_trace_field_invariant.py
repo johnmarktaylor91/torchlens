@@ -54,12 +54,12 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_capture_events",
         "_tl_backward_hooked_tensor_keys",
         # One-gradient-owner-per-label bookkeeping (FieldPolicy.DROP,
-        # trace.py PORTABLE_STATE_SPEC): session-only, stripped from pickle
+        # trace.py _PORTABLE_STATE_SPEC): session-only, stripped from pickle
         # state, reset by refresh rebind and replay resets.
         "_tl_grad_hook_owner_by_label",
         "_backward_gradfn_refs",
         # Backward projection guard trio: session-only fold watermark, all
-        # declared FieldPolicy.DROP in Trace.PORTABLE_STATE_SPEC and stripped
+        # declared FieldPolicy.DROP in Trace._PORTABLE_STATE_SPEC and stripped
         # by __getstate__/__setstate__ (never pickled, never portable).
         "_backward_projection_event_count",
         "_backward_projection_revision",

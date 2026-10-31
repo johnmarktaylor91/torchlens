@@ -18,7 +18,17 @@ from ._base import (
     TraceNotReproducibleWarning,
     ValidationError,
 )
-from ._runnable import (
+from .episode import (
+    BundleExperimentError,
+    BundleRelationError,
+    CheckpointSeriesLiveParamsError,
+    EpisodeCaptureError,
+    EpisodeDeclarationError,
+    EpisodeErrorCode as EpisodeErrorCode,
+    EpisodeJoinError,
+    EpisodeLedgerError,
+)
+from .runnable import (
     BufferSinkRoutingError,
     CollectiveBoundaryReplayError,
     NumericAttestationError,
@@ -31,16 +41,6 @@ from ._runnable import (
     RunPreconditionError,
     RuntimeSignatureDriftError,
     StateBindingError,
-)
-from .episode import (
-    BundleExperimentError,
-    BundleRelationError,
-    CheckpointSeriesLiveParamsError,
-    EpisodeCaptureError,
-    EpisodeDeclarationError,
-    EpisodeErrorCode as EpisodeErrorCode,
-    EpisodeJoinError,
-    EpisodeLedgerError,
 )
 
 _LEGACY_EXCEPTION_PATHS = {

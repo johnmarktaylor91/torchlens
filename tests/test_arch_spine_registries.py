@@ -39,12 +39,12 @@ class TestExportTargetDoor:
     def test_all_seventeen_builtins_registered_with_tiers(self) -> None:
         import torchlens.export as ex
 
-        assert len(ex.export_targets()) >= 17
-        assert ex.export_target_info("netron").capabilities["tier"] == "bridge"
-        assert ex.export_target_info("model_explorer").capabilities["tier"] == "bridge"
-        assert ex.export_target_info("tensorboard").capabilities["tier"] == "bridge"
-        assert ex.export_target_info("csv").capabilities["tier"] == "present"
-        assert ex.export_target_info("svg").capabilities["tier"] == "present"
+        assert len(ex.list_targets()) >= 17
+        assert ex.describe_target("netron").capabilities["tier"] == "bridge"
+        assert ex.describe_target("model_explorer").capabilities["tier"] == "bridge"
+        assert ex.describe_target("tensorboard").capabilities["tier"] == "bridge"
+        assert ex.describe_target("csv").capabilities["tier"] == "present"
+        assert ex.describe_target("svg").capabilities["tier"] == "present"
 
     def test_out_of_tree_target_registers_and_runs(self, traced, tmp_path) -> None:
         import torchlens.export as ex
@@ -55,7 +55,7 @@ class TestExportTargetDoor:
             target.write_text("\n".join(str(layer.layer_label) for layer in log.layer_list))
             return target
 
-        ex.register_export_target(
+        ex.register_target(
             "test_labels",
             _write_labels,
             tier="present",
@@ -63,32 +63,32 @@ class TestExportTargetDoor:
             provider=ProviderInfo(provider_id="testorg", version="1.0"),
         )
         try:
-            assert "test_labels" in ex.export_targets()
-            written = ex.resolve_export_target("test_labels")(traced, "labels.txt")
+            assert "test_labels" in ex.list_targets()
+            written = ex.resolve_target("test_labels")(traced, "labels.txt")
             assert written.read_text().strip()
         finally:
-            ex.unregister_export_target("test_labels")
+            ex.unregister_target("test_labels")
 
     def test_door_always_supplies_the_tier_capability_row(self) -> None:
         """The export door can never register capability-less: tier always rides."""
 
         import torchlens.export as ex
 
-        ex.register_export_target("test_tier_row_only", lambda log: None, tier="present")
+        ex.register_target("test_tier_row_only", lambda log: None, tier="present")
         try:
-            rows = ex.export_target_info("test_tier_row_only").capabilities
+            rows = ex.describe_target("test_tier_row_only").capabilities
             assert rows["tier"] == "present"
         finally:
-            ex.unregister_export_target("test_tier_row_only")
+            ex.unregister_target("test_tier_row_only")
 
     def test_non_callable_and_bad_tier_refuse(self) -> None:
         import torchlens.export as ex
 
         with pytest.raises(RegistryError) as excinfo:
-            ex.register_export_target("bad", "not-a-function", tier="present")
+            ex.register_target("bad", "not-a-function", tier="present")
         assert excinfo.value.fields["code"] == "export_target_not_callable"
         with pytest.raises(RegistryError) as excinfo:
-            ex.register_export_target("bad", lambda log: None, tier="appliance")
+            ex.register_target("bad", lambda log: None, tier="appliance")
         assert excinfo.value.fields["code"] == "export_target_tier_invalid"
 
     def test_builtin_exports_still_work_through_plain_spellings(self, traced, tmp_path) -> None:

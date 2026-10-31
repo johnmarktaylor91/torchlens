@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 class GradFnCallAccessor(Accessor[GradFnCall]):
     """Scoped dict-like accessor for GradFnCall entries owned by a GradFn."""
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
         "_source_ref": FieldPolicy.WEAKREF_STRIP,
@@ -280,7 +280,7 @@ def _paired_pass_op(trace: Any, op_label: str | None, grad_fn_object_id: int | N
 class GradFn:
     """Metadata and runtime ops for one autograd ``grad_fn_handle`` node."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "grad_fn_object_id": FieldPolicy.KEEP,
         "class_name": FieldPolicy.KEEP,
         "class_qualname": FieldPolicy.KEEP,
@@ -323,9 +323,9 @@ class GradFn:
         "backward_docstring": FieldPolicy.KEEP,
     }
     FIELD_POLICY = build_record_field_policy_table(
-        GRAD_FN_LOG_FIELD_ORDER, PORTABLE_STATE_SPEC, schema_key="grad_fn"
+        GRAD_FN_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="grad_fn"
     )
-    PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
 
     grad_fn_object_id: int
     class_name: str
@@ -727,7 +727,7 @@ class GradFn:
         return pd.DataFrame([row], columns=GRAD_FN_LOG_FIELD_ORDER)
 
 
-# The M9 facade: the declared stored fields (the literal PORTABLE_STATE_SPEC
+# The M9 facade: the declared stored fields (the literal _PORTABLE_STATE_SPEC
 # keys) become row-cell descriptors; dataclass defaults are baked into the
 # generated __init__, so replacing the class-attribute defaults is
 # behavior-preserving. Rows adopt into the owning backward epoch's stores.

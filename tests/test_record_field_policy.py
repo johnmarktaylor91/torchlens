@@ -208,7 +208,7 @@ def test_record_field_policy_is_field_order_source(case: RecordCase) -> None:
 def test_record_portable_spec_is_generated_from_policy(case: RecordCase) -> None:
     """Class portable specs are generated views over FIELD_POLICY."""
 
-    assert portable_state_spec_from_policy(case.cls.FIELD_POLICY) == case.cls.PORTABLE_STATE_SPEC
+    assert portable_state_spec_from_policy(case.cls.FIELD_POLICY) == case.cls._PORTABLE_STATE_SPEC
 
 
 def test_trace_and_op_generated_policy_views_match_old_names() -> None:

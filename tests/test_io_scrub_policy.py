@@ -228,7 +228,7 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
     missing_by_class = {}
     for cls, instance in instances.items():
         missing = sorted(
-            {field_name for field_name, _ in state_items(instance)} - set(cls.PORTABLE_STATE_SPEC)
+            {field_name for field_name, _ in state_items(instance)} - set(cls._PORTABLE_STATE_SPEC)
         )
         if missing:
             missing_by_class[cls.__name__] = missing
@@ -275,7 +275,7 @@ def test_public_accessor_reads_never_poison_save(tmp_path: Path) -> None:
     """A read-only public accessor sweep must leave the trace saveable.
 
     Fail-before: ``ModuleCall.facets`` / ``Module.facets`` cached a FacetView
-    in ``__dict__["_facets_cache"]`` with no PORTABLE_STATE_SPEC row, so one
+    in ``__dict__["_facets_cache"]`` with no _PORTABLE_STATE_SPEC row, so one
     documented read made every later ``tl.save`` refuse with an error naming
     an internal cache the user never touched. The sibling completeness test
     above checks live state straight after capture, which is exactly why the
@@ -289,7 +289,7 @@ def test_public_accessor_reads_never_poison_save(tmp_path: Path) -> None:
 
     undeclared_by_class: dict[str, list[str]] = {}
     for record in records:
-        spec = getattr(type(record), "PORTABLE_STATE_SPEC", None)
+        spec = getattr(type(record), "_PORTABLE_STATE_SPEC", None)
         if spec is None:
             continue
         undeclared = sorted(
@@ -683,7 +683,7 @@ def test_public_method_reads_never_poison_save(tmp_path: Path) -> None:
 
     undeclared_by_class: dict[str, list[str]] = {}
     for record in _all_record_instances(live_log):
-        spec = getattr(type(record), "PORTABLE_STATE_SPEC", None)
+        spec = getattr(type(record), "_PORTABLE_STATE_SPEC", None)
         if spec is None:
             continue
         undeclared = sorted(
@@ -742,7 +742,7 @@ def test_ledgered_undeclared_trace_field_refusal_teaches(tmp_path: Path) -> None
     field_name = next(
         name
         for name in TRACE_EXTERNAL_WRITE_EXEMPTIONS
-        if name not in Trace.PORTABLE_STATE_SPEC and not _is_runtime_only_trace_field(name)
+        if name not in Trace._PORTABLE_STATE_SPEC and not _is_runtime_only_trace_field(name)
     )
     log = trace_fn(_TinyIOModel(), torch.randn(2, 4))
     setattr(log, field_name, "still-live-at-save-time")
