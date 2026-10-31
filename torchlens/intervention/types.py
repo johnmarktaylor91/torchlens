@@ -173,8 +173,8 @@ class Edit:
     """Portable identity and hook factory for helper-built interventions."""
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
-        "helper_name": FieldPolicy.KEEP,
-        "args": FieldPolicy.KEEP,
+        "name": FieldPolicy.KEEP,
+        "args": FieldPolicy.BLOB_RECURSIVE,
         "kwargs": FieldPolicy.KEEP,
         "kind": FieldPolicy.KEEP,
         "portability": FieldPolicy.KEEP,
@@ -203,18 +203,6 @@ class Edit:
     is_batch_independent: bool = False
     is_compatible_with_append: bool = False
     selection_recipe: Any = field(default=None, compare=False)
-
-    @property
-    def name(self) -> str:
-        """Return this helper's public name.
-
-        Returns
-        -------
-        str
-            Stable helper name.
-        """
-
-        return self.name
 
     def __repr__(self) -> str:
         """Render the public spelling of this edit (``tl.Edit`` is its public name).
@@ -447,7 +435,7 @@ class FireRecord:
         "site_label": FieldPolicy.KEEP,
         "timing": FieldPolicy.KEEP,
         "direction": FieldPolicy.KEEP,
-        "helper_name": FieldPolicy.KEEP,
+        "edit_name": FieldPolicy.KEEP,
         "seed": FieldPolicy.KEEP,
         "determinism_note": FieldPolicy.KEEP,
         "timestamp": FieldPolicy.KEEP,

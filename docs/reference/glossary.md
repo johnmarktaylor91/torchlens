@@ -2040,7 +2040,7 @@ default-keep); mask-application semantics documented-unstable*
   (`tl.scale_grad(2.0)`, default-valued keywords omitted; evaluating it
   rebuilds an equal edit), any other edit as `tl.Edit('name', kind=...,
   portability=...)`. An `Edit` is a frozen record of its identity:
-  `helper_name` (also read as `name`), positional `args`, keyword `kwargs`
+  `name`, positional `args`, keyword `kwargs`
   (a tuple of name and value pairs), `kind`, `portability`, `metadata`
   (name and value pairs, such as `("keep_grad", True)` or the selection
   disclosure a masked `do()` adds), `direction`, `is_batch_independent`,

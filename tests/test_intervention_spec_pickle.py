@@ -171,7 +171,7 @@ def test_every_minted_builtin_helper_name_is_rebuildable() -> None:
                 if isinstance(first, ast.Constant) and isinstance(first.value, str):
                     minted.add(first.value)
             if func_name == "Edit":
-                name_kw = next((kw.value for kw in node.keywords if kw.arg == "helper_name"), None)
+                name_kw = next((kw.value for kw in node.keywords if kw.arg == "name"), None)
                 if isinstance(name_kw, ast.Constant) and isinstance(name_kw.value, str):
                     minted.add(name_kw.value)
 

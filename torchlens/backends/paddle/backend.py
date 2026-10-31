@@ -1109,7 +1109,7 @@ class PaddleBackend:
                     raw_by_path[path] = tensor
                     record = fire_result.fire_record
                     if helper_name is None and record is not None:
-                        helper_name = cast(Any, record).helper_name
+                        helper_name = cast(Any, record).edit_name
             if replacements:
                 final_output = _replace_paddle_tensors_at_paths(output, replacements)
                 final_outputs = tuple(
