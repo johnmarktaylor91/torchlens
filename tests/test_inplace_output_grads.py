@@ -331,3 +331,21 @@ def test_refresh_projection_records_each_in_place_version_gradient(func_name: st
     assert len(sites) == 1
     assert sites[0].grad is not None
     assert torch.allclose(sites[0].grad, reference[func_name])
+
+
+def test_refresh_projection_records_out_of_place_gradients_beside_an_in_place_output() -> None:
+    """After ``save_new_outs``, the out-of-place op after the in-place one keeps its gradient."""
+
+    torch.manual_seed(0)
+    model = _Wrapper(_EndsInPlace("relu_")).eval()
+    x = torch.randn(2, 6)
+    eager = copy.deepcopy(model)
+    hidden = torch.tanh(eager.inner(x))
+    hidden.retain_grad()
+    eager.head(hidden).sum().backward()
+    assert hidden.grad is not None
+    trace = _refreshed_trace(model, x, True)
+    sites = [op for op in trace if getattr(op, "func_name", None) == "tanh"]
+    assert len(sites) == 1
+    assert sites[0].grad is not None
+    assert torch.allclose(sites[0].grad, hidden.grad)
