@@ -2521,7 +2521,7 @@ shim owed*
   activation checkpointing (`None` when the evidence cannot separate replay
   from backward, as in a `create_graph` pass that checkpoints). Empty or
   `None` in the other two states. The record's constructor keyword is
-  `attributions=`.
+  `flops_attributions=`.
 
 **DispatchedOp.grad_enabled** — *unstable — no deprecation shim owed*
 : Whether autograd grad mode was on when the call dispatched during a
@@ -2945,7 +2945,7 @@ deprecation shim owed*
 : `tl.fastlog.GradRecord` (`GradRecord.ctx`, `GradRecord.ram_payload`,
   `GradRecord.transformed_ram_payload`, `GradRecord.disk_payload`,
   `GradRecord.transformed_disk_payload`), `tl.fastlog.DryRun` (`DryRun.events`,
-  `DryRun.contexts`, `DryRun.decisions`, `DryRun.predicate_failures`, `DryRun.repredicate(...)`,
+  `DryRun.contexts`, `DryRun.decisions`, `DryRun.predicate_failures`, `DryRun.filter(...)`,
   `DryRun.print_tree()`, `DryRun.timeline_html()`, `DryRun.to_pandas()`), `tl.fastlog.stop()` and `tl.fastlog.StopSignal`. `GradRecordContext.kind`
   names the record kind and `CaptureSpec.save_grad` keeps a payload attached to autograd.
   `tl.types.TraceLike` is the read protocol shared by `Trace` and `Recording`
