@@ -16,6 +16,11 @@ what that helper does with it), never from a name:
   node whose kind is in :data:`METADATA_READ_NODE_KINDS` (enumerated, no wildcard);
 - every call slot the perturbed parent fills must map to such an input, so a parent that
   also feeds a value-bearing argument stays perturbation-tested;
+- the call's slot map must be complete: capture records a parent's slots only at the top
+  level and one container level down (``args[i]`` and ``args[i][j]``), so a function with
+  an argument that can hold a tensor deeper (``List[List[Tensor]]``) or opaquely (a
+  scripted class, ``Any``, a union) gives no proof, since the perturbed parent could sit
+  there unrecorded and feed values;
 - an unreadable graph, a schema/graph arity mismatch, a container slot, or any other use
   (a value op, a block or graph return, ``prim::PythonOp``, a call left un-inlined, ...)
   gives no proof and the perturbation check runs as before.
@@ -69,6 +74,74 @@ def _named_graph_inputs(function: Any) -> list[tuple[str, Any]] | None:
     if len(names) != len(inputs):
         return None
     return list(zip(names, inputs))
+
+
+_TENSOR_FREE_TYPE_KINDS: frozenset[str] = frozenset(
+    {
+        "BoolType",
+        "ComplexType",
+        "DeviceObjType",
+        "FloatType",
+        "GeneratorType",
+        "IntType",
+        "NoneType",
+        "NumberType",
+        "StringType",
+    }
+)
+"""Graph input type kinds that can never hold a tensor."""
+
+_CONTAINER_TYPE_KINDS = frozenset({"ListType", "TupleType", "DictType"})
+_OPAQUE_TENSOR_DEPTH = 99
+
+
+def _tensor_depth(type_: Any) -> int | None:
+    """Return how many container levels deep a value of ``type_`` can hold a tensor.
+
+    Parameters
+    ----------
+    type_:
+        A TorchScript type.
+
+    Returns
+    -------
+    int | None
+        0 for a tensor (``Optional`` is transparent), one more per list, tuple or dict
+        level, ``None`` when no tensor can occur, and a large depth for any other kind
+        (a scripted class, ``Any``, a union), whose tensors capture cannot locate.
+    """
+
+    kind = type_.kind()
+    if kind == "TensorType":
+        return 0
+    if kind == "OptionalType":
+        return _tensor_depth(type_.getElementType())
+    if kind in _CONTAINER_TYPE_KINDS:
+        depths = [d for d in map(_tensor_depth, type_.containedTypes()) if d is not None]
+        return 1 + max(depths) if depths else None
+    return None if kind in _TENSOR_FREE_TYPE_KINDS else _OPAQUE_TENSOR_DEPTH
+
+
+def _slot_map_is_complete(pairs: list[tuple[str, Any]]) -> bool:
+    """Return whether capture's slot map can locate every tensor the call can receive.
+
+    Parameters
+    ----------
+    pairs:
+        ``(name, graph input)`` pairs of the scripted function.
+
+    Returns
+    -------
+    bool
+        True when no argument can hold a tensor more than one container level deep
+        (the deepest level ``parent_arg_positions`` records).
+    """
+
+    try:
+        depths = [_tensor_depth(value.type()) for _, value in pairs]
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+    return all(depth is None or depth <= 1 for depth in depths)
 
 
 def _metadata_read_kinds(value: Any) -> frozenset[str] | None:
@@ -182,7 +255,7 @@ def script_metadata_only_proof(layer: Any, layers_to_perturb: list[str]) -> str 
     if function is None or len(layers_to_perturb) != 1:
         return None
     pairs = _named_graph_inputs(function)
-    if pairs is None:
+    if pairs is None or not _slot_map_is_complete(pairs):
         return None
     slots = _perturbed_argument_names(layer, layers_to_perturb[0], [name for name, _ in pairs])
     proven = metadata_only_arguments(function)

@@ -391,9 +391,14 @@ def passthrough(x: torch.Tensor) -> torch.Tensor:
     return x
 
 
-@torch.jit.ignore
-def _python_peek(x: torch.Tensor) -> float:
+def _python_peek(x):
     return float(x.sum())
+
+
+# Real annotation objects: TorchScript cannot resolve this module's postponed (string)
+# annotations on an ignored Python function.
+_python_peek.__annotations__ = {"x": torch.Tensor, "return": float}
+_python_peek = torch.jit.ignore(_python_peek)
 
 
 @torch.jit.script
@@ -599,3 +604,60 @@ def test_attack_aliased_element_read_still_fails_perturbation() -> None:
 
     trace, result = _trace_and_validate(_HelperModel(view_alias_read), torch.randn(3, 4))
     _assert_boundary_perturbation_failure(trace, result)
+
+
+@torch.jit.script
+def size_then_nested_list_value(x: torch.Tensor, xss: list[list[torch.Tensor]]) -> torch.Tensor:
+    """``x`` is read for its size; a member two container levels down is read for values."""
+
+    return xss[0][0] * x.size(-1)
+
+
+@torch.jit.script
+def size_then_dict_of_lists_value(
+    x: torch.Tensor, d: dict[str, list[torch.Tensor]]
+) -> torch.Tensor:
+    """``x`` is read for its size; a list member inside a dict is read for values."""
+
+    return d["a"][0] * x.size(-1)
+
+
+@torch.jit.script
+def size_with_shallow_list(x: torch.Tensor, xs: list[torch.Tensor]) -> torch.Tensor:
+    """``x`` is read for its size; a one-level list (fully slot-mapped) is read for values."""
+
+    return xs[0] * x.size(-1)
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda h, g: size_then_nested_list_value(h, [[h]]),
+        lambda h, g: size_then_dict_of_lists_value(h, {"a": [h]}),
+    ],
+    ids=["list-of-lists", "dict-of-lists"],
+)
+def test_attack_parent_hidden_below_the_slot_map_gets_no_proof(call) -> None:
+    """A parent nested deeper than capture's slot map records is never proven size-only.
+
+    Perturbing the recorded size slot alone cannot reach the unrecorded nested copy, so the
+    check fails there: the slot-map gap stays visible instead of being excused.
+    """
+
+    trace, result = _trace_and_validate(_CallModel(call), torch.randn(3, 4))
+    op = _boundary_op(trace)
+    h_label = _parent_label(trace, op, "linear")
+    assert script_metadata_only_proof(op, [h_label]) is None
+    _assert_boundary_perturbation_failure(trace, result)
+
+
+def test_attack_shallow_container_keeps_the_proof_for_the_size_argument() -> None:
+    """A one-level container argument is fully slot-mapped, so the size argument stays provable."""
+
+    trace, result = _trace_and_validate(
+        _CallModel(lambda h, g: size_with_shallow_list(h, [g])), torch.randn(3, 4)
+    )
+    op = _boundary_op(trace)
+    assert script_metadata_only_proof(op, [_parent_label(trace, op, "linear")]) is not None
+    assert script_metadata_only_proof(op, [_parent_label(trace, op, "tanh")]) is None
+    assert result is True
