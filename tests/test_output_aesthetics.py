@@ -438,7 +438,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_section("F.2 Op field dump", level=3))
     tensor_for_dump = None
     for entry in log.layer_list:
-        if entry.uses_params:
+        if entry.has_params:
             tensor_for_dump = entry
             break
     if tensor_for_dump is None:
@@ -544,8 +544,8 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     out.write(_capture("has_grad", pl.has_grad))
                     out.write(_capture("grad_shape", pl.grad_shape))
                     out.write(_capture("grad_dtype", pl.grad_dtype))
-                    out.write(_capture("gradient_memory", pl.gradient_memory))
-                    out.write(_capture("gradient_memory", str(pl.gradient_memory)))
+                    out.write(_capture("grad_memory", pl.grad_memory))
+                    out.write(_capture("grad_memory", str(pl.grad_memory)))
                     break
 
             # Show frozen param without grad (if applicable)
@@ -1145,7 +1145,7 @@ def _build_latex_report() -> str:
         # Op field dump — pick a layer with params
         tensor_for_dump = None
         for entry in log.layer_list:
-            if entry.uses_params:
+            if entry.has_params:
                 tensor_for_dump = entry
                 break
         if tensor_for_dump is None:

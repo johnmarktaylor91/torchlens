@@ -42,7 +42,7 @@ from ._runtime_handles import source_model_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from .op import GradientRecord, GradientRecordAccessor
 
-#: Per-accessor id -> position maps for ``Param.ordinal_index`` (weakly keyed
+#: Per-accessor id -> position maps for ``Param.index`` (weakly keyed
 #: so a dropped accessor releases its map). Entries are verified by identity
 #: against the accessor's current ``_list`` before use, so a stale map can
 #: only trigger a rebuild, never a wrong answer.
@@ -334,26 +334,20 @@ class Param:
         return len(self.used_by_layers)
 
     @property
-    def source_trace(self) -> Any:
+    def trace(self) -> Any:
         """Owning Trace, if still alive."""
 
         ref = self._source_trace_ref
         return None if ref is None else ref()
 
-    @source_trace.setter
-    def source_trace(self, value: Any) -> None:
+    @trace.setter
+    def trace(self, value: Any) -> None:
         """Set the owning Trace weakref."""
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
 
     @property
-    def trace(self) -> Any:
-        """Alias for the owning Trace."""
-
-        return self.source_trace
-
-    @property
-    def ordinal_index(self) -> int:
+    def index(self) -> int:
         """Return this Param's 0-based position in ``trace.params``.
 
         Amortized O(1): the historical ``list(trace.params).index(self)``
@@ -364,7 +358,7 @@ class Param:
         so results are exactly the historical identity semantics.
         """
 
-        trace = self.source_trace
+        trace = self.trace
         if trace is None:
             return -1
         accessor = trace.params
@@ -387,7 +381,7 @@ class Param:
     def module(self) -> Any:
         """Primary owning Module."""
 
-        trace = self.source_trace
+        trace = self.trace
         if trace is None:
             return None
         return trace.modules[self.module_address]
@@ -421,7 +415,7 @@ class Param:
     def modules(self) -> list[Any]:
         """All owning ModuleLogs."""
 
-        trace = self.source_trace
+        trace = self.trace
         if trace is None:
             return []
         return [trace.modules[address] for address in self.all_module_addresses]
@@ -623,7 +617,7 @@ class Param:
         if self._param_ref is not None:
             return self._param_ref
 
-        trace = self.source_trace
+        trace = self.trace
         if getattr(trace, "_source_model_ref", None) is None:
             return None
 
@@ -740,7 +734,7 @@ class Param:
         self._grad_dtype = value
 
     @property
-    def gradient_memory(self) -> Bytes:
+    def grad_memory(self) -> Bytes:
         """Return the grad tensor size in bytes.
 
         Returns
@@ -751,8 +745,8 @@ class Param:
         self._check_param_grad()
         return self._grad_memory
 
-    @gradient_memory.setter
-    def gradient_memory(self, value: int) -> None:
+    @grad_memory.setter
+    def grad_memory(self, value: int) -> None:
         """Set cached grad tensor size in bytes.
 
         Parameters

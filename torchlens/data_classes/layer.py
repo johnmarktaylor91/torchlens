@@ -746,7 +746,7 @@ class Layer(_SelectionOperand):
         return [param.dtype for param in self._param_logs]
 
     @property
-    def uses_params(self) -> bool:
+    def has_params(self) -> bool:
         """Whether this layer uses model parameters."""
         return len(self._param_barcodes) > 0
 

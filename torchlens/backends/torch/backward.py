@@ -1655,7 +1655,7 @@ def _materialize_backward_projections_impl(
             next_grad_fn_ids=list(latest_topology.get(object_id, event.topology)),
             **source_fields,
         )
-        grad_fn_record.source_trace = trace
+        grad_fn_record.trace = trace
         prior_record = prior_grad_fn_logs.get(object_id)
         if prior_record is not None:
             # A rediscovered node predating the detach keeps its at-or-below-
@@ -2758,12 +2758,12 @@ def _walk_and_hook_backward_graph(
                 next_grad_fn_ids=[id(next_fn) for next_fn in next_grad_fns],
                 **source_metadata,
             )
-            grad_fn_record.source_trace = trace
+            grad_fn_record.trace = trace
             trace.grad_fn_logs[grad_fn_object_id] = grad_fn_record
             trace.grad_fn_order.append(grad_fn_object_id)
         else:
             grad_fn_record.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
-            grad_fn_record.source_trace = trace
+            grad_fn_record.trace = trace
         is_accumulate_grad = _is_accumulate_grad(grad_fn_handle)
         if is_accumulate_grad:
             param = getattr(grad_fn_handle, "variable", None)
@@ -2931,12 +2931,12 @@ def _emit_discovered_grad_fn(
             next_grad_fn_ids=[id(next_fn) for next_fn in next_grad_fns],
             **_grad_fn_source_metadata(grad_fn_cls),
         )
-        grad_fn_record.source_trace = trace
+        grad_fn_record.trace = trace
         trace.grad_fn_logs[grad_fn_object_id] = grad_fn_record
         trace.grad_fn_order.append(grad_fn_object_id)
     else:
         grad_fn_record.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
-        grad_fn_record.source_trace = trace
+        grad_fn_record.trace = trace
 
     source_fields = {
         key: getattr(grad_fn_record, key)

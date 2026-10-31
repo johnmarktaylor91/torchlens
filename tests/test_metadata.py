@@ -371,7 +371,7 @@ def test_param_fields_with_params(small_input):
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.uses_params:
+        if entry.has_params:
             assert entry.num_params > 0
             found = True
             break
@@ -383,7 +383,7 @@ def test_param_fields_without_params(small_input):
     mh = trace_fn(model, small_input)
     for label in mh.layer_labels:
         entry = mh[label]
-        assert entry.uses_params is False
+        assert entry.has_params is False
 
 
 def test_module_fields(small_input):

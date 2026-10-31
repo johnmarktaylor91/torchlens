@@ -736,7 +736,7 @@ PARAM_LOG_FIELD_ORDER = [
     "has_grad",
     "grad_shape",
     "grad_dtype",
-    "gradient_memory",
+    "grad_memory",
     "_derived_grad_record_path",
 ]
 
@@ -745,8 +745,7 @@ BUFFER_LOG_FIELD_ORDER = [
     "address",
     "module_address",
     "name",
-    "buffer_overwrite_index",
-    "buffer_pass",
+    "overwrite_index",
     "layer_label",
     "call_index",
     "versions",
@@ -758,8 +757,8 @@ BUFFER_LOG_FIELD_ORDER = [
     "has_grad",
     "grad_shape",
     "grad_dtype",
-    "gradient_memory",
-    "buffer_source",
+    "grad_memory",
+    "writer_label",
     "module",
     "modules",
 ]

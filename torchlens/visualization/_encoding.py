@@ -272,7 +272,7 @@ _NON_NUMERIC_FIELDS = frozenset(
         "is_in_conditional_evaluation",
         "is_module_input",
         "is_orphan",
-        "uses_params",
+        "has_params",
         # Dtypes / devices / addresses / roles (marker-only family included).
         "dtype",
         "dtype_ref",

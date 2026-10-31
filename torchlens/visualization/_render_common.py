@@ -271,7 +271,7 @@ class BoundaryNode:
     is_input: bool = False
     is_output: bool = False
     is_terminal_bool: bool = False
-    uses_params: bool = False
+    has_params: bool = False
     num_param_tensors: int = 0
     _param_logs: list[Any] = field(default_factory=list)
     param_shapes: list[tuple[Any, ...]] = field(default_factory=list)

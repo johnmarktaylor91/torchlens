@@ -151,8 +151,8 @@ def test_save_scrub_remaps_process_local_identity_tokens(tmp_path: Path) -> None
     first = _save_seeded_trace(first_path, random_seed=1)
     second = _save_seeded_trace(second_path, random_seed=2)
 
-    first_param_ops = [op for op in first.layer_list if op.uses_params]
-    second_param_ops = [op for op in second.layer_list if op.uses_params]
+    first_param_ops = [op for op in first.layer_list if op.has_params]
+    second_param_ops = [op for op in second.layer_list if op.has_params]
     assert [op._param_barcodes for op in first_param_ops] == [
         op._param_barcodes for op in second_param_ops
     ]

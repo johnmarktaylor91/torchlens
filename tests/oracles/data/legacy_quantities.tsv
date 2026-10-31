@@ -6,10 +6,9 @@
 # report aliases (params_total, total_params, ...) name the trace quantity.
 door	value_type	kind	quantity_id	status	oracle_ref	note
 Buffer.activation_memory	Bytes	quantity	activation_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_buffer_activation_bytes_on_the_buffer_door (I2)	-
-Buffer.buffer_overwrite_index	int	identifier	-	-	-	id/index/line
-Buffer.buffer_pass	int	identifier	-	-	-	pass ordinal
+Buffer.overwrite_index	int	identifier	-	-	-	pass ordinal
 Buffer.call_index	int	identifier	-	-	-	id/index/line
-Buffer.gradient_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers (I2)	-
+Buffer.grad_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers (I2)	-
 Buffer.num_overwrites	int	quantity	num_overwrites	green	tests/test_buffer_datamodel.py::test_recurrent_cell_reassignment_does_not_break_loop_detection (I2)	-
 CaptureFacts.advisories	int	quantity	advisories	green	tests/oracles/test_legacy_advisories_and_grad_storage.py::test_capture_advisories_match_the_planted_kinds_and_counts (I2)	-
 Layer.activation_memory	Bytes	quantity	activation_memory	green	tests/test_bug_fixes_phase14.py::test_view_mutation_output_recomputes_transformed_payload_metadata (I1)	-
@@ -157,12 +156,12 @@ Op.pass_index	int	identifier	-	-	-	id/index/line
 Op.raw_index	int	identifier	-	-	-	id/index/line
 Op.step_index	int	identifier	-	-	-	id/index/line
 Op.type_index	int	identifier	-	-	-	id/index/line
-Param.gradient_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass (I2)	-
+Param.grad_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass (I2)	-
 Param.num_calls	int	quantity	num_calls	green	tests/oracles/test_legacy_module_counts.py::test_param_call_counts (I2)	-
 Param.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Param.num_uses_by_layers	int	quantity	num_uses_by_layers	green	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses (I2)	-
 Param.num_uses_by_ops	int	quantity	num_uses_by_ops	green	tests/oracles/test_legacy_closed_forms.py::test_layer_op_count_and_parameter_uses (I2)	-
-Param.ordinal_index	int	identifier	-	-	-	id/index/line
+Param.index	int	identifier	-	-	-	id/index/line
 Param.param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
 SummaryReport.executed_params	int	quantity	num_params_executed	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 SummaryReport.frozen_params	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-

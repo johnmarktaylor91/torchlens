@@ -426,7 +426,7 @@ def _assert_grad_case_bytes(model, trace, passes: int) -> None:
     assert raw == {"a.weight": 128, "a.bias": 32, "b.weight": 64, "b.bias": 8}
     params = {param.address: param for param in trace.param_logs}
     for address, nbytes in raw.items():
-        assert int(params[address].gradient_memory) == nbytes, address
+        assert int(params[address].grad_memory) == nbytes, address
     assert int(trace.total_param_gradient_memory) == sum(raw.values())
     for label, pair in (("a:1", (96, 0)), ("b:1", (24, 0)), ("self:1", (24, 96 + 96 + 24))):
         call = calls[label]

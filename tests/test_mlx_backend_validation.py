@@ -53,7 +53,7 @@ def test_mlx_validation_fails_corrupted_saved_output() -> None:
     """Fail validation when a saved MLX op output payload is corrupted."""
 
     trace = _healthy_trace()
-    victim = next(op for op in trace.layer_list if op.out is not None and op.uses_params)
+    victim = next(op for op in trace.layer_list if op.out is not None and op.has_params)
     with pytest.warns(UserWarning):
         victim.out = victim.out + 1.0
 

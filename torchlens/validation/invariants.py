@@ -14,7 +14,7 @@ and raises ``MetadataInvariantError`` on the first failure.
   G. Op <-> Layer cross-references (pass numbering, back-pointers)
   H. Module <-> Layer containment (layers, module pass layers, reverse check)
   I. Module hierarchy (address parent-child bidirectionality, pass consistency)
-  J. Param cross-references (Param -> layer, uses_params flag)
+  J. Param cross-references (Param -> layer, has_params flag)
   K. Buffer cross-references (buffer_layers list, Buffer module references)
   L. Equivalence group symmetry (op_equivalence_classes labels are valid)
 

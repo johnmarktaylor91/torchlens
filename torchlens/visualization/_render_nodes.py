@@ -1873,7 +1873,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
         bg_color = BOOL_NODE_COLOR
     elif node.is_buffer:
         bg_color = BUFFER_NODE_COLOR
-    elif node.uses_params:
+    elif node.has_params:
         param_logs = getattr(node, "_param_logs", [])
         if param_logs:
             trainable_flags = [pl.is_trainable for pl in param_logs]

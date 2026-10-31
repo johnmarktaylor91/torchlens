@@ -154,10 +154,10 @@ BND-Q-B1-021	OBL-Q-NUM-POS-ARGS	torchlens.Op.num_pos_args	CR1	declared	untouched
 BND-Q-B1-022	OBL-Q-NUM-KWARGS	torchlens.Op.num_kwargs	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts
 BND-Q-B1-023	OBL-Q-NUM-ARGS-TOTAL	torchlens.Op.num_args_total	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts
 BND-Q-B1-024	OBL-Q-GRADIENT-MEMORY	torchlens.Op.gradient_memory	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass
-BND-Q-B1-025	OBL-Q-GRADIENT-MEMORY	torchlens.data_classes.param.Param.gradient_memory	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass
+BND-Q-B1-025	OBL-Q-GRADIENT-MEMORY	torchlens.data_classes.param.Param.grad_memory	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass
 BND-Q-B1-026	OBL-Q-GRADIENT-MEMORY	torchlens.Trace.total_gradient_memory	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_two_backward_passes
 BND-Q-B1-027	OBL-Q-GRADIENT-MEMORY	torchlens.Layer.total_gradient_memory	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers
-BND-Q-B1-028	OBL-Q-GRADIENT-MEMORY	torchlens.data_classes.buffer.Buffer.gradient_memory	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers
+BND-Q-B1-028	OBL-Q-GRADIENT-MEMORY	torchlens.data_classes.buffer.Buffer.grad_memory	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers
 BND-Q-B1-029	OBL-Q-PARAM-GRADIENT-MEMORY	torchlens.Trace.total_param_gradient_memory	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass
 BND-Q-B1-030	OBL-Q-SAVED-GRADIENT-MEMORY	torchlens.Trace.saved_gradient_memory	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_two_backward_passes
 BND-Q-B1-031	OBL-Q-OUTPUT-GRADIENT-MEMORY	torchlens.data_classes.module.ModuleCall.output_gradient_memory	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass

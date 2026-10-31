@@ -156,7 +156,7 @@ def _build_preview_recurrence_graph(
             or not data_parents_by_label[label]
         ):
             source_labels.append(label)
-        uses_params = bool(getattr(op_log, "uses_params", False))
+        uses_params = bool(getattr(op_log, "has_params", False))
         nodes[label] = RecurrenceNode(
             label=label,
             raw_order=raw_order,
@@ -250,7 +250,7 @@ def _preview_equivalence_key(op_log: Any, label: str, backend_name: str) -> str:
     )
     arg_signature = _structural_arg_signature(op_log)
     param_barcodes = tuple(getattr(op_log, "_param_barcodes", ()) or ())
-    if getattr(op_log, "uses_params", False) and param_barcodes:
+    if getattr(op_log, "has_params", False) and param_barcodes:
         param_key = "_".join(sorted(param_barcodes))
         return (
             f"{backend_name}:param:{func_name}:{param_key}:slot{slot}"

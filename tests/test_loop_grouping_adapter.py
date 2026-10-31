@@ -111,7 +111,7 @@ def _neutral_graph_from_torch_recurrent_fixture(trace: Any) -> RecurrenceGroupin
             ),
             layer_label=raw_label,
             recurrent_labels=(),
-            uses_params=bool(op.uses_params),
+            uses_params=bool(op.has_params),
             func_name=op.func_name,
             param_barcodes=tuple(op._param_barcodes),
             retain=raw_label in raw_label_set,

@@ -562,7 +562,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # not evidence, rows 18, 19, 25, 59); see the docstring.
     param_groups: dict[tuple[str, tuple[str, ...], str], list[Op]] = defaultdict(list)
     for lpl in [] if call_site_grouped else ml.layer_list:
-        if lpl.uses_params and lpl._param_barcodes:
+        if lpl.has_params and lpl._param_barcodes:
             key = (lpl.func_name, tuple(sorted(lpl._param_barcodes)), lpl.equivalence_class)
             param_groups[key].append(lpl)
 

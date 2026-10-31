@@ -139,7 +139,7 @@ def test_record_trace_aliases_and_ordinal_indexes_round_trip() -> None:
     assert grad_fn.trace is trace
     assert grad_fn_call.trace is trace
 
-    assert trace.params[param.ordinal_index] is param
+    assert trace.params[param.index] is param
     assert trace.grad_fns[grad_fn.ordinal_index] is grad_fn
     assert trace.grad_fn_calls[grad_fn_call.ordinal_index] is grad_fn_call
     assert trace.num_grad_fns_with_op == sum(1 for record in trace.grad_fns if record.has_op)

@@ -508,7 +508,7 @@ def equinox_param_logs(tree: EquinoxModuleTree, trace: Any) -> dict[str, Param]:
         param.backend_address = f"pytree:{address}"
         param.resolver_status = "metadata_only"
         param._param_ref = None
-        param.source_trace = trace
+        param.trace = trace
         param.all_module_addresses = list(
             tree.metadata.get(module_address, {}).get("all_addresses", [module_address])
         )
@@ -567,7 +567,7 @@ def nnx_param_logs(tree: NnxModuleTree, trace: Any) -> dict[str, Param]:
         param.backend_address = f"pytree:{address}"
         param.resolver_status = "metadata_only"
         param._param_ref = None
-        param.source_trace = trace
+        param.trace = trace
         param.all_module_addresses = list(
             tree.metadata.get(module_address, {}).get("all_addresses", [module_address])
         )

@@ -1532,7 +1532,7 @@ class JAXBackend:
             param.backend_address = f"pytree:{address}"
             param.resolver_status = "metadata_only"
             param._param_ref = None
-            param.source_trace = trace
+            param.trace = trace
             param_logs[address] = param
         trace.param_logs = ParamAccessor(param_logs)
         trace.num_param_tensors = len(param_logs)
@@ -2077,7 +2077,7 @@ class JAXBackend:
             # takes the param as an operand). Matching on it directly (as
             # the old code did) attaches params to the input-echo op
             # instead of the op that genuinely uses them, so
-            # ``uses_params``/``used_by_ops``/``num_layers_with_params``
+            # ``has_params``/``used_by_ops``/``num_layers_with_params``
             # never reflect real param usage. Mirror
             # ``_attach_pytree_op_params`` above (and the equivalent
             # ``torch``/``mlx``/``paddle`` param attribution): resolve each
@@ -2145,7 +2145,7 @@ class JAXBackend:
             # ``trace_self_consistency`` check (which independently
             # recomputes the same dedup-by-layer sum from ``layer_list``).
             trace.num_layers_with_params = len(
-                {op.layer_label for op in trace.layer_list if op.uses_params}
+                {op.layer_label for op in trace.layer_list if op.has_params}
             )
             # Parameter-identity basis, not a per-layer-label dedup sum: a
             # param reused across more than one op/layer (a tied weight, or a
@@ -2273,7 +2273,7 @@ class JAXBackend:
             # O(m^2) for a param consumed by m ops).
             _attach_param_usage(trace, op_log, usage_membership)
         trace.num_layers_with_params = len(
-            {op.layer_label for op in trace.layer_list if op.uses_params}
+            {op.layer_label for op in trace.layer_list if op.has_params}
         )
         # Parameter-identity basis (see the identical note in
         # ``_jax_recurrence_assignments``'s sibling counter block above):
@@ -2506,7 +2506,7 @@ class JAXBackend:
                 data_children=tuple(data_children_by_label[label]),
                 layer_label=op_log._layer_label_raw,
                 recurrent_labels=(label,),
-                uses_params=bool(op_log.uses_params),
+                uses_params=bool(op_log.has_params),
                 func_name=op_log.func_name,
                 param_barcodes=tuple(op_log._param_barcodes),
                 retain=retain,

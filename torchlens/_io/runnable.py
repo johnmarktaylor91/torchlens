@@ -4397,7 +4397,7 @@ def _parameter_role(param: Any) -> StateSlotRole:
 
     name = str(getattr(param, "name", ""))
     module_address = str(getattr(param, "module_address", ""))
-    trace = getattr(param, "source_trace", None)
+    trace = getattr(param, "trace", None)
     modules = getattr(trace, "modules", {}) if trace is not None else {}
     module = modules.get(module_address) if isinstance(modules, Mapping) else None
     class_name = str(getattr(module, "class_name", module_address)).lower()

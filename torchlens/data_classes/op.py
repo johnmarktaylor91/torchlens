@@ -2849,7 +2849,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         return len({role.conditional_id for role in self.in_conditionals or []})
 
     @property
-    def uses_params(self) -> bool:
+    def has_params(self) -> bool:
         """Whether this operation used model parameters."""
         return len(self._param_barcodes) > 0
 
@@ -3075,7 +3075,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         return bool(self.is_buffer)
 
     @property
-    def has_saved_gradient(self) -> bool:
+    def has_saved_grad(self) -> bool:
         """Whether this Op's gradient was saved.
 
         Glossary name for the backward-side saved predicate; mirrors
@@ -4390,7 +4390,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         s = f"Tensor {self._label_raw} (layer {self._layer_label_raw}) (PASS NOT FINISHED):"
         s += f"\n\tPass: {self.pass_index}"
         s += f"\n\tTensor info: shape {self.shape}, dtype {self.dtype}"
-        s += f"\n\tComputed from params: {self.uses_params}"
+        s += f"\n\tComputed from params: {self.has_params}"
         s += f"\n\tComputed in modules: {self.modules}"
         s += f"\n\tOutput of modules: {self.output_of_module_calls}"
         if self.is_atomic_module:

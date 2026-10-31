@@ -249,7 +249,7 @@ def _differentiated_param_equivalence_classes(self: "Trace") -> dict[str, str]:
         node = self[label]
         if getattr(node, "is_orphan", False):
             continue
-        if node.uses_params and node._param_barcodes:
+        if node.has_params and node._param_barcodes:
             cohorts[node.equivalence_class].append((label, _structural_arg_signature(node)))
 
     effective: dict[str, str] = {}
@@ -316,7 +316,7 @@ def _group_by_shared_params(self: "Trace") -> None:
         node = self[label]
         if getattr(node, "is_orphan", False):
             continue
-        if node.uses_params and node._param_barcodes:
+        if node.has_params and node._param_barcodes:
             # Key on the FULL call identity, not bare parameter identity. Output
             # slot: co-outputs of one multi-output call (h and c of an LSTMCell)
             # share function and parameters but are distinct layers, never
@@ -593,7 +593,7 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
             data_children=tuple(child for child in node.children if child in raw_label_set),
             layer_label=node._layer_label_raw,
             recurrent_labels=recurrent_labels,
-            uses_params=bool(node.uses_params),
+            uses_params=bool(node.has_params),
             func_name=node.func_name,
             param_barcodes=tuple(node._param_barcodes),
             output_slot=getattr(node, "multi_output_index", None),
@@ -603,7 +603,7 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
                 bool(getattr(node, "modules", None)) or bool(getattr(node, "is_buffer", False))
             ),
             module_site=_module_site(node),
-            arg_signature=_structural_arg_signature(node) if node.uses_params else None,
+            arg_signature=_structural_arg_signature(node) if node.has_params else None,
             site_key=getattr(node, "site_key", None),
         )
 
