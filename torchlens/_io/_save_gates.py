@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 
 
@@ -38,7 +39,9 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
         # cannot carry edge substitutions; its own refusal fires later.
         return
     carriers = [
-        op.label for op in trace._layer_list or () if getattr(op, "edge_substitutions", None)
+        op.label
+        for op in (trace._layer_list if is_live_trace(trace) else ()) or ()
+        if getattr(op, "edge_substitutions", None)
     ]
     if not carriers:
         return

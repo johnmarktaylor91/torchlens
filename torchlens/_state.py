@@ -813,10 +813,12 @@ def _reentrant_refusal() -> ReentrantTraceError:
         Refusal naming the active model when one is identifiable.
     """
 
-    from ._data_classes._trace_missing_attrs import is_live_trace
-
     active_model = getattr(_active_trace, "model_name", None)
-    if active_model is None and _active_trace is not None and is_live_trace(_active_trace):
+    if (
+        active_model is None
+        and _active_trace is not None
+        and not _active_trace.__dict__.get("_tl_cleaned_up", False)
+    ):
         active_model = _active_trace._source_class_name
     active_model_text = f" for active model {active_model!r}" if active_model else ""
     return ReentrantTraceError(

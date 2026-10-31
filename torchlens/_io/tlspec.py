@@ -18,6 +18,7 @@ import torch
 from safetensors.torch import save_file
 
 from .. import __version__ as TORCHLENS_VERSION
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from ..backends.registry import get_backend_spec
 from . import TLSPEC_VERSION, ArtifactError
@@ -143,7 +144,7 @@ class _TlSpecWriter:
         # which of two same-named keys wins.
         unified_fields.pop("tlspec_version", None)
         manifest.update(unified_fields)
-        backend_name = str(trace._provenance_backend)
+        backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
         if backend_name != "torch" or sparse_run is not None:
             spec = get_backend_spec(backend_name)
             manifest.update(

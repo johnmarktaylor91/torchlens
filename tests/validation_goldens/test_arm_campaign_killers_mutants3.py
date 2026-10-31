@@ -1151,7 +1151,7 @@ def test_op_log_fields_fires_on_pass_index_below_one() -> None:
         layer_label="relu_1", has_saved_activation=False, out=None, pass_number=0, num_passes=1
     )
     fake_trace = SimpleNamespace(_layer_list=[layer], _loaded_from_bundle=False)
-    with pytest.raises(MetadataInvariantError, match="pass_number=0"):
+    with pytest.raises(MetadataInvariantError, match="pass_index=0"):
         _check_op_log_fields(fake_trace)  # type: ignore[arg-type]
 
 
@@ -1303,7 +1303,7 @@ def test_pass_count_consistency_fires_on_op_pass_index_mismatch() -> None:
     op = SimpleNamespace(pass_number=2, num_passes=1, label="relu_1:1")
     layer_log = SimpleNamespace(ops={1: op}, num_passes=1)
     fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer_log}, _layer_num_calls={})
-    with pytest.raises(MetadataInvariantError, match="stores op with pass_number=2"):
+    with pytest.raises(MetadataInvariantError, match="stores op with pass_index=2"):
         _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
 
 
@@ -1552,6 +1552,8 @@ def test_trace_self_consistency_fires_on_num_tensors_below_saved_ops() -> None:
         output_layers=["relu_1"],
         capture_duration=0,
         _provenance_duration=0,
+        _provenance_start_time=0.0,
+        _provenance_end_time=0.0,
         capture_start_time=0,
         capture_end_time=1,
         size=0,
