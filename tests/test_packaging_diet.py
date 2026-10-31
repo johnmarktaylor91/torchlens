@@ -231,13 +231,10 @@ def test_ci_workflows_pin_torch_and_scope_lint_to_owned_paths() -> None:
     # a ruff rewrite would make that gate permanently red. That half is pinned to
     # the self-declaring generated set by
     # test_schema_lockstep.py::test_ruff_excludes_every_generated_artifact.
-    # tests/release_goldens is the harvested-corpus provenance dir (P05 request,
-    # landed by the A12 packaging batch) and tests/classics_corpus/models holds
-    # the vendored classics sources, sha256-pinned in the corpus manifest: the
-    # provenance is the authority, not ruff.
+    # tests/classics_corpus/models holds the vendored classics sources,
+    # sha256-pinned in the corpus manifest: the provenance is the authority, not ruff.
     assert excluded == {
         "tests/classics_corpus/models",
-        "tests/release_goldens",
         "torchlens/_data_classes/_schema_bindings.py",
         "torchlens/_ir/op_record_manifest.py",
     }

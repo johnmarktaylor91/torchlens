@@ -384,7 +384,6 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "AppendStreamingUnsupportedError": ("ValueError",),
     "ArgumentConflictError": ("ValueError",),
     "ArgumentTypeError": ("TypeError",),
-    "ArtifactSchemaAgeWarning": ("Warning",),
     "ArtifactTooOldError": ("RuntimeError",),
     "AmbiguousAxisError": ("ValueError",),
     "AmbiguousBackendError": ("ValueError",),
@@ -1298,11 +1297,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens._io.format_errors.UnknownPersistedFieldError": (
         "registered in torchlens.errors under the preserved runtime home "
         "torchlens._io; this row records the post-split defining file"
-    ),
-    "torchlens._io.format_errors.ArtifactSchemaAgeWarning": (
-        "warning category defined in the C01 _io split's L0 error module "
-        "with __module__ preserved as torchlens._io; surfaced through "
-        "torchlens.errors at that runtime home"
     ),
     "torchlens._registry.kernel.RegistryError": (
         "private registry-kernel refusal (C01); surfaced through typed "

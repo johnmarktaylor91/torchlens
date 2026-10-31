@@ -33,8 +33,9 @@ TABLE = TESTS_DIR / "test_arch_spine_surface_table.tsv"
 #: only go down through a decided surface change. 975 -> 974: the option
 #: receipt removal (e7449cd47) took tl.options.OptionReceiptEntry off the surface.
 #: 974 -> 967: round 2 (module moves) made the visualization (5 names) and
-#: semantic (2 names) packages private.
-DEEP_WALK_FLOOR = 967
+#: semantic (2 names) packages private. 967 -> 965: the 2.x saved-file cut
+#: removed ``tl.report.CompatWindow`` and ``tl.errors.ArtifactSchemaAgeWarning``.
+DEEP_WALK_FLOOR = 965
 
 _HEADER = (
     "canonical_path\thome_module\timplementation_layer\tproduct_role\tin_all\tlegacy_top_level"

@@ -199,7 +199,6 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens.distributed._lifecycle",
         "AmbiguousGroupLifetimeError",
     ),
-    "ArtifactSchemaAgeWarning": ("torchlens._io", "ArtifactSchemaAgeWarning"),
     "ArtifactTooOldError": ("torchlens._io", "ArtifactTooOldError"),
     "ArtifactTooNewError": ("torchlens._io", "ArtifactTooNewError"),
     "ArtifactRuntimeIncompatibleError": ("torchlens._io", "ArtifactRuntimeIncompatibleError"),

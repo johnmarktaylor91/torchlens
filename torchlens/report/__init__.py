@@ -82,7 +82,6 @@ __all__ = [
     "kernel_profile",
     "KernelProfileReport",
     "MergeReport",
-    "CompatWindow",
     "diff",
     "DiffReport",
     "doctor",
@@ -135,7 +134,6 @@ __all__ = [
 
 
 if TYPE_CHECKING:
-    from torchlens._ecosystem.compat import CompatWindow
     from torchlens._merged._presenter import MergeReport
     from torchlens._observability._native_profile import KernelProfileReport, kernel_profile
     from torchlens._utils import doctor
@@ -156,7 +154,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "kernel_profile": ("torchlens._observability._native_profile", "kernel_profile"),
     "KernelProfileReport": ("torchlens._observability._native_profile", "KernelProfileReport"),
     "MergeReport": ("torchlens._merged._presenter", "MergeReport"),
-    "CompatWindow": ("torchlens._ecosystem.compat", "CompatWindow"),
     "diff": ("torchlens.differential", "diff"),
     "DiffReport": ("torchlens.differential", "DiffReport"),
 }

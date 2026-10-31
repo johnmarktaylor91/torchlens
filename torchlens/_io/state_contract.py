@@ -127,10 +127,8 @@ def partition_state_keys(
 def _unknown_field_remedy(declared_version: int | None) -> str:
     """Derive the direction-aware remedy for an unknown-field refusal.
 
-    The ledger-derived remedy service (MEMO 3.1 G6) will supersede these
-    texts with exact release names once the compatibility ledger lands; the
-    direction split is already the ledger's: newer writer -> upgrade, same
-    stamp -> writer drift, older writer -> reader regression.
+    The direction split: newer writer -> upgrade, same stamp -> writer drift,
+    older writer -> reader regression.
     """
 
     if declared_version is not None and declared_version > TLSPEC_VERSION:

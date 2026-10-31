@@ -180,12 +180,6 @@ def test_v216_erratum_names_the_live_floor_refusal() -> None:
     assert f"`tlspec_version`\n{format_contract.MIN_TLSPEC_VERSION}" in compat
     assert "artifact_version_below_floor" in compat
     assert "torchlens==2.17.0" in compat
-    from torchlens._io.compat_ledger import ledger_rows
-
-    row = next(
-        r for r in ledger_rows() if r.artifact_kind == "modellog" and r.writer_release == "2.16.0"
-    )
-    assert row.bridge_reader == "2.17.0"
 
 
 def test_lovely_sd_divergence_note_is_true() -> None:

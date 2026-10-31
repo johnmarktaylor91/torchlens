@@ -22,8 +22,6 @@ Deliberately NOT covered (they are not API deprecation shims):
 - artifact-format compatibility (the tlspec version floor, legacy-save
   loading, the load-path folding of legacy conditional edge keys, legacy
   2.16 intervention-spec loading) — load-bearing for artifacts in the wild;
-- the ``ArtifactSchemaAgeWarning`` advisory (a UserWarning about artifact
-  age, not an API deprecation; pinned by tests/test_rehydration_floor.py).
 """
 
 from __future__ import annotations

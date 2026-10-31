@@ -297,13 +297,15 @@ def test_explicit_unknown_resolver_status_is_not_upgraded() -> None:
 def test_rehydrated_trace_retains_source_tlspec_version() -> None:
     """Trace pickle state preserves its validated source artifact version."""
 
+    from torchlens._io import TLSPEC_VERSION
+
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
     state = trace.__getstate__()
-    state["tlspec_version"] = 6
+    state["tlspec_version"] = TLSPEC_VERSION
     restored = tl.Trace.__new__(tl.Trace)
     restored.__setstate__(state)
 
-    assert restored.tlspec_version == 6
+    assert restored.tlspec_version == TLSPEC_VERSION
 
 
 def test_backup_cleanup_failure_does_not_fail_completed_save(

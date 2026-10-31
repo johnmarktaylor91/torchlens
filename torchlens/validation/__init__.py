@@ -56,7 +56,7 @@ def validate_tlspec(
     FileNotFoundError
         If a unified manifest file is missing.
     torchlens.errors.ArtifactTooOldError
-        If the artifact is a pre-floor (pre-2.33) model-log bundle.
+        If the artifact is a portable ModelLog bundle of torchlens 2.16.
     """
 
     from ..io import detect_tlspec_format, inspect_tlspec
@@ -86,13 +86,10 @@ def validate_tlspec(
         "v2.16_intervention",
     }:
         return
-    # Ledger-derived remedy (gates G6/G7): the ONE v2.16 construction lives in
-    # the compat ledger beside its bridge_reader evidence (ecosystem MEMO 3.5).
-    from .._io.compat_ledger import raise_if_modellog_portable
+    if tlspec_format == "v2.16_modellog_portable":
+        from .._io._pre3_module_paths import modellog_216_error
 
-    raise_if_modellog_portable(
-        tlspec_format, f"Model-log bundle at {tlspec_path}", str(tlspec_path)
-    )
+        raise modellog_216_error(str(tlspec_path), code="artifact_version_below_floor")
     if tlspec_format != "v2.0_unified":
         raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")
 

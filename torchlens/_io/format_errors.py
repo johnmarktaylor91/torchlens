@@ -10,7 +10,7 @@ historical spelling unchanged.
 
 from __future__ import annotations
 
-from ..errors._base import CompatibilityError, TorchLensWarning
+from ..errors._base import CompatibilityError
 
 __tl_layer__ = "L0"
 __tl_vocabulary__ = True
@@ -21,13 +21,11 @@ class ArtifactError(CompatibilityError, RuntimeError):
 
 
 class ArtifactTooOldError(ArtifactError):
-    """Raised when an artifact predates the supported rehydration floor.
+    """Raised when an artifact was saved by torchlens 2.x, which this release does not read.
 
-    TorchLens loads artifacts stamped ``tlspec_version >= 6`` (the first
-    tlspec-6 writer was released torchlens ``2.31.0``; the floor is the stamp,
-    never a release name). Older artifacts refuse with this error rather than
-    being partially reconstructed; re-save them with a torchlens release the
-    compat ledger proves able to read them.
+    Any stamp older than the current ``tlspec_version``, any pickled 2.x module path and the
+    2.16 ModelLog format refuse with this error rather than being partially reconstructed;
+    the remedy is to save the file again with torchlens 2.36.x or capture the model again.
     """
 
 
@@ -51,8 +49,7 @@ class ArtifactRuntimeIncompatibleError(ArtifactError):
     A runtime-axis refusal (torch major-version mismatch, unparseable torch
     version), never a schema-calendar one: the artifact stays valid and loads
     under a runtime with the recorded major version. Distinct class so
-    callers and the compatibility ledger can tell runtime policy apart from
-    the version window (ecosystem MEMO 3.1/3.2).
+    callers can tell runtime policy apart from the version window.
     """
 
 
@@ -84,20 +81,6 @@ class PreReleaseArtifactError(ArtifactError):
     """
 
 
-class ArtifactSchemaAgeWarning(TorchLensWarning):
-    """Warning emitted when a loaded artifact predates the runtime schema.
-
-    The artifact is between the rehydration floor and the current
-    ``tlspec_version``: it loads at its own recorded schema, and fields
-    introduced by later schema versions are absent rather than default-filled.
-
-    This is deliberately a ``UserWarning`` subclass, not a
-    ``DeprecationWarning``. It deprecates no API -- it reports the AGE of one
-    artifact -- and ``DeprecationWarning`` is hidden from end users by default,
-    which made the advisory effectively invisible at the one moment it matters.
-    """
-
-
 # Pickle-visible identity stays the historical facade path: persisted bundle
 # metadata references these classes by (module, qualname), and the guarded
 # unpickler allowlists exactly those paths -- the physical split must not
@@ -109,7 +92,6 @@ for _cls in (
     ArtifactRuntimeIncompatibleError,
     UnknownPersistedFieldError,
     PreReleaseArtifactError,
-    ArtifactSchemaAgeWarning,
 ):
     _cls.__module__ = "torchlens._io"
 del _cls

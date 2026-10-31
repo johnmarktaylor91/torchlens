@@ -171,8 +171,8 @@ class FakeProviderAdapter:
         self._delegate.save(trace, path)
         self._last_saved = trace
         if self.plant == "tamper_tripwire":
-            # Forge the writer identity to an UNGOVERNED release after the
-            # bytes land: the compat-ledger pair gate must refuse the reload
+            # Forge the writer identity to an earlier MAJOR release after the
+            # bytes land: the load door must refuse the reload
             # (c2_roundtrip_completes goes red), proving load-side tamper
             # detection rather than trusting the adapter's own report.
             import json
@@ -181,7 +181,7 @@ class FakeProviderAdapter:
 
             manifest_path = Path(path) / "manifest.json"
             manifest = read_bounded(manifest_path)
-            manifest["torchlens_version"] = "2.30.0"
+            manifest["torchlens_version"] = "1.0.0"
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     def load(self, path: Path) -> Any:

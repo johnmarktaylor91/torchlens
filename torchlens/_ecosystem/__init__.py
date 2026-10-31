@@ -1,32 +1,18 @@
-"""TorchLens ecosystem runtime: compat window, migration, providers.
+"""TorchLens ecosystem runtime: provider discovery.
 
-The ecosystem surface (workstream F32; ecosystem MEMO build items
-B1-B3) packages the artifact-compatibility promise machinery for users:
+The ecosystem surface packages the entry-point provider machinery:
+:mod:`torchlens._ecosystem.plugins` is the entry-point provider surface, with
+metadata-only discovery and explicit distribution-scoped activation.
 
-- :func:`compat_window` renders the governed compatibility ledger
-  (``torchlens._io.compat_ledger``) as a structured, dated report.
-- :func:`migrate` is the transactional, upgrade-only artifact migration
-  tool (v1: manifest-level steps; never executes a model, plugin, or
-  foreign callable).
-- :mod:`torchlens._ecosystem.plugins` is the entry-point provider surface:
-  metadata-only discovery, explicit distribution-scoped activation.
-
-Every spelling here is DOCUMENTED-UNSTABLE pending naming-session
-ratification; the memo's ``tl.migrate`` / ``tl.compat_window`` /
-``tl.plugins`` placeholders route through this subpackage until the naming
-sprint and the surface lane (F35) assign facade rows.
+The artifact compatibility window and ``tl.migrate`` left with the 2.x saved-file
+readers: torchlens 3 reads no file saved by torchlens 2.x.
 """
 
 from __future__ import annotations
 
 from . import plugins
-from .compat import compat_window
-from .migrate import MigrationStep, migrate
 
 __all__ = [
-    "MigrationStep",
-    "compat_window",
-    "migrate",
     "plugins",
 ]
 

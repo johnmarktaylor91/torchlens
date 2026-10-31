@@ -350,6 +350,7 @@ _GOLDEN_ROOTS = (
     "golden",
     "surface_oracle/goldens",
     "godobject_oracle/goldens",
+    "goldens/legacy",
     "backend_parity/goldens",
     "capture_oracle/goldens",
     "fixtures/exports",
@@ -440,17 +441,10 @@ GOLDEN_LEDGER: dict[str, tuple[str, str]] = {
         "(TORCHLENS_REFRESH_PRODUCER_LEDGER; b10 R78 round 4)",
     ),
     # --- frozen input artifacts -------------------------------------------
-    "golden/io_v3_sample.tlspec/**": (
+    "goldens/legacy/**": (
         "frozen-input",
-        "committed v3 artifact exercising the load path; never regenerated",
-    ),
-    "godobject_oracle/goldens/legacy_baseline_cnn.tlspec/**": (
-        "frozen-input",
-        "pre-columnar baseline artifact (tree db2bc7a5); it IS the old format",
-    ),
-    "godobject_oracle/goldens/legacy_baseline_cnn_runnable.tlspec/**": (
-        "frozen-input",
-        "pre-columnar runnable baseline artifact; it IS the old format",
+        "committed artifacts saved by torchlens 2.x, one small file per family; they ARE the "
+        "old formats, input to the refusal test (tests/test_load_refuses_saved_by_2x.py)",
     ),
 }
 
@@ -570,7 +564,6 @@ _EMITTER_PACKAGE_CENSUS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("test_viz_render_identity_oracle.py", "golden", ("graphviz", "pydot")),
     ("test_rank_render_ir_semantic_goldens.py", "golden", ("graphviz", "pydot")),
     ("godobject_oracle/test_viz_identity.py", "godobject_oracle/goldens", ("graphviz",)),
-    ("godobject_oracle/test_legacy_artifact.py", "godobject_oracle/goldens", ()),
     ("test_state_keyset_contract.py", "godobject_oracle/goldens", ()),
     ("surface_oracle/test_surface_oracle.py", "surface_oracle/goldens", ()),
 )

@@ -8,7 +8,7 @@ repos:
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # v6.0.0 (git sha, not a secret)  # pragma: allowlist secret
     hooks:
       - id: check-added-large-files
-        exclude: ^(benchmarks/perf_baselines/.*\.json|tests/release_goldens/genuine_release_artifacts\.tar\.gz|tests/test_modelexplorer_assets/worker\.js)$
+        exclude: ^(benchmarks/perf_baselines/.*\.json|tests/test_modelexplorer_assets/worker\.js)$
   - repo: https://github.com/gitleaks/gitleaks
     rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # v8.30.1 (git sha, not a secret)  # pragma: allowlist secret
     hooks:

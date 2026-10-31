@@ -632,12 +632,11 @@
   `docs/migration/scoped_detached_patching.md`.
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers. Manifest
   schema v2 is backend-aware; non-torch preview bundles may be audit-only or metadata-only.
-  Rehydration floor: artifacts stamped `tlspec_version` < 6 refuse to load with the typed
-  `tl.errors.ArtifactTooOldError` (drop-not-resurrect; the legacy field-alias
-  ladders are deleted). The first tlspec-6 writer was released torchlens 2.31.0, so 2.31.0 /
-  2.32.4 artifacts LOAD (the compat ledger's governed producer windows are the authority;
-  the floor is the STAMP, never a release name). Legacy 2.16 intervention specs remain
-  loadable — the floor covers Trace rehydration only. WRITE/READ SYMMETRY (W051-IO): the
+  Files saved by torchlens 2.x: a manifest stamp or Trace state stamp older than the current
+  `tlspec_version`, a pickled 2.x module path, or the 2.16 ModelLog format refuses at
+  `tl.load` with the typed `tl.errors.ArtifactTooOldError` ("saved by torchlens 2.x"; the
+  remedy names 2.36.x and re-capture). There is no reader, ledger or migration. Legacy 2.16
+  intervention specs remain loadable — the refusal covers Trace rehydration only. WRITE/READ SYMMETRY (W051-IO): the
   save path dry-runs the exact `metadata.pkl` bytes through the loader's default-deny
   unpickler before writing — an unportable value refuses typed (`annotation_value_unportable`
   naming the key path / `metadata_value_unportable`), tensors under annotations (incl.
@@ -665,7 +664,7 @@
   fail-closed load validation so their Phase-3 writers need no further bump:
   `Op.injection_provenance` (F01 log_injections), `Trace.source_snapshots` (F30),
   `Trace.structure_evidence` (F33). Contract of record:
-  `torchlens/schemas/writer_contract_v9.json` (v8 pinned under `tests/release_goldens/`);
+  `torchlens/schemas/writer_contract_v10.json` (the v9 and v8 contracts left with the 2.x readers);
   the C07-adjudicated field-intent census is maintained privately. The C07X
   AMENDMENT rides the SAME v9 window (TLSPEC_VERSION stays 9; JF-9 ratified): bundle
   relation grammar v2 (required/optional split; `successor_of` admits the optional
@@ -1250,9 +1249,9 @@
   `hot_path(by="device_time")`; `tl.region` correlation). `torchlens._observe`
   is the user-facing verbs door.
 - ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens._ecosystem` --
-  `compat_window(...)` (dated support-window ledger; would have caught the
-  v2.33.0-cannot-load-v2.34.1 class), `migrate` (tl.migrate v1), and `plugins` (entry-point discovery
-  that NEVER executes third-party code at discovery; kill switch).
+  `plugins` (entry-point discovery that NEVER executes third-party code at discovery; kill
+  switch). The compatibility window and `tl.migrate` left with the 2.x saved-file readers:
+  a file saved by torchlens 2.x refuses at `tl.load` with one typed error.
   `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
   scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`,
   `ScorecardCell`, `PREVIEW_BACKENDS`, and `RosterModel.expected_op_kinds`
@@ -1801,7 +1800,6 @@ object's docstring):
 - `tl.options.HtmlReportOptions`: Emission plumbing for the offline HTML report (C06 house pattern).
 - `tl.preprocessing.PreprocessingComparison`: The field-level audit report.
 - `tl.receptive_field.GradReceptiveField`: Empirical receptive-field influence set measured by autograd.
-- `tl.report.CompatWindow`: Frozen compatibility-window report.
 - `tl.report.DiffReport`: The settled two-capture differential: rows plus honest totals.
 - `tl.report.InterventionValidationReport`: Five-axis intervention validation result.
 - `tl.report.KernelProfileReport`: One door call: one execution, one trace, one joined result.

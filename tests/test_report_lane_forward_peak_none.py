@@ -157,7 +157,7 @@ def test_legacy_artifact_refuses_as_2x() -> None:
 
     from _refuses_as_2x import assert_refuses_as_2x
 
-    fixture = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
+    fixture = Path(__file__).parent / "goldens" / "legacy" / "tlspec_v7.tlspec"
     assert_refuses_as_2x(fixture)
 
 

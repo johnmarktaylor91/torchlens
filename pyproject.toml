@@ -450,10 +450,6 @@ filterwarnings = [
     # torch-internal suffix exempts the whole third-party class without listing messages;
     # genuine TorchLens-originated UserWarnings still error.
     "default:(?s).*\\(Triggered internally at :UserWarning:torchlens(\\.|$)",
-    # Between-floor artifact-age advisory. It is the visible ArtifactSchemaAgeWarning
-    # (a UserWarning subclass), not a DeprecationWarning, because it deprecates no API; legacy-bundle tests exercise it
-    # broadly, so it stays visible-not-fatal and is asserted locally.
-    "default:Bundle tlspec_version=.* is older than runtime tlspec_version=.*:UserWarning",
     # External: torchvision model init deprecations
     "ignore:The default weight initialization of.*:FutureWarning",
     # External: torch.meshgrid indexing argument
@@ -523,9 +519,6 @@ line-length = 100
 # without its exclusion, and a stale exclusion cannot outlive its generator.
 extend-exclude = [
     "tests/classics_corpus/models",
-    # Harvested-corpus provenance dir: same vendored-data doctrine as the
-    # classics corpus row.
-    "tests/release_goldens",
     "torchlens/_data_classes/_schema_bindings.py",
     "torchlens/_ir/op_record_manifest.py",
 ]

@@ -319,7 +319,6 @@ def test_kernel_telemetry_lane_is_detachable_from_package_and_other_tests() -> N
         if path.name
         not in {
             Path(__file__).name,
-            "test_legacy_artifact.py",
             "test_prebump_roundtrip_acceptance.py",
             "test_prerelease_registrar.py",
         }
