@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError, edge_address_of
+from torchlens._selection import SelectionError, edge_address_of
 from torchlens.validation.core import _check_edge_intervention_boundary
 
 
@@ -99,8 +99,8 @@ def _selection_for_kind_state(trace: tl.Trace, kind: str, state: str) -> Any:
         first = tl.units("relu_1_2", [(0, 0, 0, 0)])
         second = trace["conv2d_1_1"].__selection__()
     elif kind == "PARAM":
-        first = tl.params("c1.weight")
-        second = tl.params("c2.weight")
+        first = tl.param("c1.weight")
+        second = tl.param("c2.weight")
     else:
         first = _edge(trace).__selection__()
         second = _edge(trace, parent="conv2d_2_3").__selection__()
@@ -116,7 +116,7 @@ def _selection_for_kind_state(trace: tl.Trace, kind: str, state: str) -> Any:
 def _selection_family(selection: Any) -> frozenset[Any]:
     """Return the touched-site family of one resolved selection."""
 
-    return frozenset(entry.site_key for entry in selection)
+    return frozenset(entry.key for entry in selection)
 
 
 @pytest.mark.parametrize("operator", ["or", "and", "sub"])

@@ -18,9 +18,9 @@ from test_leverage_div_fixtures import (
 )
 
 import torchlens as tl
+from torchlens._selection import SelectionError
 from torchlens.differential import diff_report
 from torchlens.errors._base import TorchLensError
-from torchlens.selection import SelectionError
 
 _SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
 
@@ -68,7 +68,7 @@ def test_changed_completes_across_label_renumbering_live_edit():
     assert list(edited.op_labels) != list(baseline.op_labels)  # labels DID churn
     shared = tl.in_module("conv1") | tl.in_module("conv2")
     resolved = tl.changed(baseline, within=shared).resolve(edited)
-    by_label = {entry.site_key[0]: int(entry._mask._dense_ro().sum()) for entry in resolved}
+    by_label = {entry.key[0]: int(entry._mask._dense_ro().sum()) for entry in resolved}
     assert by_label["conv2d_1_1"] == 0  # upstream of the edit: unmoved
     assert by_label["conv2d_2_3"] == 0  # the hook replaces AFTER conv2's own output
 

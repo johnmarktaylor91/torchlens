@@ -1,31 +1,26 @@
 """Core data structures for representing a logged forward pass."""
 
-from .backward_pass import BackwardPass, BackwardPassAccessor
-from .buffer import Buffer, BufferAccessor
+from .backward_pass import BackwardPass
+from .buffer import Buffer
 from .func_call_location import FuncCallLocation
-from .grad_fn import GradFn, GradFnAccessor
+from .grad_fn import GradFn
 from .grad_fn_call import GradFnCall
 from .internal_types import (
     FuncExecutionContext as FuncExecutionContext,
     VisualizationOverrides as VisualizationOverrides,
 )
-from .module import Module, ModuleAccessor, ModuleCall
-from .param import Param, ParamAccessor
+from .module import Module, ModuleCall
+from .param import Param
 
 __all__ = [
     "BackwardPass",
-    "BackwardPassAccessor",
     "Buffer",
-    "BufferAccessor",
     "FuncCallLocation",
     "GradFn",
-    "GradFnAccessor",
     "GradFnCall",
     "Module",
-    "ModuleAccessor",
     "ModuleCall",
     "Param",
-    "ParamAccessor",
 ]
 
 # Trace, Layer, Op, and TensorLog are intentionally NOT

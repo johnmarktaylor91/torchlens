@@ -62,7 +62,7 @@ def reject_selector_outside_kinds(
     if not isinstance(predicate, BaseSelector):
         raise BackendUnsupportedError(
             f"{backend_name} backend supports trace(save=...) only for static-label selectors "
-            "tl.func, tl.label, tl.contains and boolean composites (&, |, -, ~) of those. "
+            "tl.func, tl.label, tl.label_contains and boolean composites (&, |, -, ~) of those. "
             "Value-dependent predicates need concrete activation values at predicate time. "
             "MLX lazy evaluation defers RecordContext.tensor_requires_grad, is_scalar_bool, "
             "and bool_value without per-op evaluation; use the PyTorch backend for "
@@ -80,11 +80,11 @@ def reject_selector_outside_kinds(
         raise BackendUnsupportedError(
             f"{backend_name} backend does not support value-dependent trace(save=...) "
             "predicates from tl.where. Static-label save= on this backend is limited to "
-            "tl.func, tl.label, tl.contains and boolean composites (&, |, -, ~) of those."
+            "tl.func, tl.label, tl.label_contains and boolean composites (&, |, -, ~) of those."
         )
     raise BackendUnsupportedError(
         f"{backend_name} backend supports trace(save=...) only for static-label selectors "
-        "tl.func, tl.label, tl.contains and boolean composites (&, |, -, ~) of those; "
+        "tl.func, tl.label, tl.label_contains and boolean composites (&, |, -, ~) of those; "
         f"unsupported selector kind {unsupported!r}."
     )
 
@@ -212,7 +212,7 @@ def pop_static_label_save_predicate(
     if not isinstance(save_value, BaseSelector):
         raise BackendUnsupportedError(
             f"{backend_name} backend supports trace(save=...) only for static-label selectors "
-            "(for example tl.func, tl.label, tl.module, tl.in_module, or tl.contains). "
+            "(for example tl.func, tl.label, tl.module, tl.in_module, or tl.label_contains). "
             "Value-dependent predicates need concrete activation values at predicate time, "
             "which traced/lazy non-torch captures do not expose without changing execution. "
             "Use static-label save= selectors or the PyTorch backend for value-dependent "

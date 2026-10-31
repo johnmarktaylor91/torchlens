@@ -667,7 +667,7 @@ sets of `k` (`"random"`). `rank_agreement` is the Spearman correlation of the cl
 measured per-unit effects; each set reports its claimed sum next to its measured joint effect.
 
 Every ablation runs through the intervention engine on an intervention-ready trace. The rows
-run as one `torchlens.experiment.site_sweep` with one candidate per unit,
+run as one `torchlens.experiment.sweep_sites` with one candidate per unit,
 `tl.units(<site>, <mask>)` (the replay engine, nothing retained), wherever one edit serves every
 unit: every ablation of a layer claim, and zero ablation of a table. Each row's value equals
 ablating that unit alone on its own `trace.fork().do(...)`, exactly. Sets, and a table's `"mean"`
@@ -765,7 +765,7 @@ answer and `vs` tokens; the row's claimed effect is its values summed the same w
   recomputes it.
 - The constant row has no site, so it is not ablated: `extra["constant_row"]` reports its claimed
   sum, and `extra["native_score"]` the table's native sum (rows plus constant).
-- Under zero ablation the per-row ablations run as one `torchlens.experiment.site_sweep` (one
+- Under zero ablation the per-row ablations run as one `torchlens.experiment.sweep_sites` (one
   candidate per component site, the replay engine, nothing retained); other ablations and the
   sets use one fork each. A unit is `(row,)`, the row's index in the table.
 - Direct logit attribution reads a component's direct path only; the ablation also removes what
@@ -828,7 +828,7 @@ ablates each `ACT` row's site, or each element of it, and measures the target th
 taken for; pass that target as `target=`, the same `tl.attribution.seed(...)`. A unit is
 `(row,)` at site grain or `(row, *element)` at element grain, the row being its index in
 `table.rows()` and the element indexed after the batch axis. Under zero ablation every unit,
-each element included, is one candidate of the audit's `site_sweep` (an element as
+each element included, is one candidate of the audit's `sweep_sites` (an element as
 `tl.units(<site>, <mask>)`), so the sweep's effect table holds one member per unit.
 
 - One target per audit: a table read for several targets refuses and names

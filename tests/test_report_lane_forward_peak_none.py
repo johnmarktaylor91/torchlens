@@ -20,7 +20,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import TorchLensIOError
-from torchlens._observe import format_pass_peak, pass_peak_facts
+from torchlens._observe import format_pass_peak
+from torchlens._observe._peaks import pass_peak_facts
 from torchlens.capture import peak_memory, trace as capture_trace
 from torchlens.capture.peak_memory import (
     CPU_ZERO_PEAK_REASON,

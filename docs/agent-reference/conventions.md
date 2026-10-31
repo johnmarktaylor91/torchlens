@@ -42,15 +42,15 @@
   measured. ATTESTED COUPLING (F42): `episode=` x `intervene=` runs COUPLED —
   per-row measured `fire_count` (zero and multiple fires first-class), the
   deterministic header `intervention_digest`, `fidelity_basis="perturbed"` on
-  replacing fires, the step-qualified selector `torchlens.intervention.at_step(...)`
+  replacing fires, the step-qualified selector `torchlens.at_step(...)`
   (live + post hoc via `Op.episode_step` stamps), `trace.episode_coupling`
   (recompute-and-compare capture-digest binding + per-segment facts that never span a
   measured break), and the replay law: `run()` on coupled products refuses
   `episode_coupled_replay_underivable` (both engines) and `do()` edits quarantine
   inherited episode evidence. DIAGNOSTIC-TIER: cost is superlinear
   in step count — tens of steps, never hundreds. Bundles carry the optional S6
-  member-relation table (`member_relations=`, `Bundle.relate`,
-  `Bundle.derive_episode_status`; harness bundles add the `fed_by` content-provenance kind
+  member-relation table (`relations=`, `Bundle.relate`,
+  `Bundle.episode_status`; harness bundles add the `fed_by` content-provenance kind
   with token-stream-bound spans, automatic `token_spans="auto"` matching and the strict
   `Bundle.token_pairs` read, the `selected_by` control kind (`chosen`/`candidates`/`evidence`),
   and the steer-one-call-and-re-run pair `b.add_alternative(second_run, steered=("draft",))`
@@ -69,7 +69,7 @@
   on an empty reference suffix); `bundle.vary(mapping)` names one spec or
   None identity per member with complete-coverage preflight and no-rollback
   partial disclosure; `tl.sweep(include_baseline=True)` mints the pristine
-  baseline; `torchlens.experiment.site_sweep` is the serial candidate
+  baseline; `torchlens.experiment.sweep_sites` is the serial candidate
   engine (edit=/metric=/retain= REQUIRED, undeclared multi-site candidates
   refused, complete effect table persisted incl. released/refused/failed
   rows, `bundle.effects()`/`measure_members()` reads);

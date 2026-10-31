@@ -317,7 +317,7 @@ def _load_unified_bundle_directory(
     loaded_bundle = Bundle(
         members,
         baseline=baseline_name,
-        member_relations=member_relations,
+        relations=member_relations,
         preserved_sections=preserved_sections,
         bundle_id=lineage["bundle_id"],
     )

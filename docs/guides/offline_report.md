@@ -48,7 +48,7 @@ transition. **Healthy captures embed zero array bytes by default.**
 - `arrays="flagged"` — debugging preset: every flagged op, frontier-priority
   ordered, HARD-CAPPED by the same budgets with exact `K flagged, M shown`
   disclosure.
-- `arrays=<tl.Selection>` — the general form: thumbnails for the resolved
+- `arrays=<tl.Selector>` — the general form: thumbnails for the resolved
   selection's sites.
 - `arrays="none"` — metadata only.
 - `options=tl.export.ReportOptions(share_safe=True)` — strips EVERY

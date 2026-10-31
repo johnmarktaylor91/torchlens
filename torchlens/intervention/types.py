@@ -18,7 +18,7 @@ from .._ir.container import (
     TupleIndex,
     rebuild_container_from_spec,
 )
-from ..selection import _SelectionOperand
+from .._selection import _SelectionOperand
 
 GraphShapeHash: TypeAlias = str
 InterventionAction: TypeAlias = Literal["replace", "add_hook", "scale", "transform"]
@@ -505,7 +505,7 @@ class EdgeUseRecord(_SelectionOperand):
     def __selection__(self) -> Any:
         """Lift this edge occurrence as an EDGE selection term."""
 
-        from ..selection import _selection_from_edge
+        from .._selection import _selection_from_edge
 
         return _selection_from_edge(self)
 

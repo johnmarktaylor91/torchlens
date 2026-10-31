@@ -51,7 +51,7 @@ from typing import (
 
 import torch
 
-from .._constants import ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER, RAW_LABEL_SUFFIX
+from .._constants import _RAW_LABEL_SUFFIX, ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER
 from .._errors import (
     ArgumentTypeError,
     InvalidArgumentError,
@@ -80,6 +80,7 @@ from .._quantities import (
     as_macs,
 )
 from .._save_budget import SaveBudgetExceededError
+from .._selection import _SelectionOperand
 from .._trace_core.fact_blocks import OP_FACT_FIELDS
 from .._trace_core.groups import GroupRef
 from .._trace_core.op_store import (
@@ -117,7 +118,6 @@ from ..intervention.types import (
     EdgeUseRecord,
     FunctionRegistryKey,
 )
-from ..selection import _SelectionOperand
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._op_dedup import _dedup_cached_identity_out, _dedup_saved_activation_out
@@ -3520,7 +3520,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def __selection__(self) -> object:
         """Lift this op's whole output as an ACT selection term (one pass)."""
 
-        from ..selection import _selection_from_op
+        from .._selection import _selection_from_op
 
         return _selection_from_op(self)
 
@@ -3590,8 +3590,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         """
 
         label = self._label_raw
-        if isinstance(label, str) and label.endswith(RAW_LABEL_SUFFIX):
-            return label[: -len(RAW_LABEL_SUFFIX)]
+        if isinstance(label, str) and label.endswith(_RAW_LABEL_SUFFIX):
+            return label[: -len(_RAW_LABEL_SUFFIX)]
         return str(label)
 
     @raw_label.setter

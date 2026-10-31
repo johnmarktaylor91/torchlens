@@ -35,7 +35,7 @@ Three doors live here:
   a raw node's public ``layer_label`` directly from a bare string before any
   ``Trace`` (and its step-8 identity map) exists to resolve against.
 
-This module is the one sanctioned home for ``RAW_LABEL_SUFFIX``-consuming
+This module is the one sanctioned home for ``_RAW_LABEL_SUFFIX``-consuming
 logic outside its definition (``constants.py``) and ``Op.raw_label``
 (``data_classes/op.py``); see ``tests/test_observe_kit_labels.py``.
 """
@@ -45,7 +45,7 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
-from .._constants import RAW_LABEL_SUFFIX
+from .._constants import _RAW_LABEL_SUFFIX
 from .._utils._exception_notes import annotate_guarded
 
 if TYPE_CHECKING:
@@ -114,8 +114,8 @@ def strip_raw_label_suffix(label: str) -> str:
     :func:`resolve_raw_label` guards against: see the module docstring.
     """
 
-    if label.endswith(RAW_LABEL_SUFFIX):
-        return label[: -len(RAW_LABEL_SUFFIX)]
+    if label.endswith(_RAW_LABEL_SUFFIX):
+        return label[: -len(_RAW_LABEL_SUFFIX)]
     return label
 
 

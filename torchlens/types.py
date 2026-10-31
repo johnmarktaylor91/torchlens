@@ -11,6 +11,7 @@ __tl_role__ = "FACADE"
 
 import torch
 
+from ._data_classes._accessor_base import Accessor
 from ._data_classes.aten_op import AtenOp, OpRef
 from ._data_classes.attribute_write import AttributeWrite
 from ._data_classes.backward_pass import BackwardPass
@@ -23,9 +24,11 @@ from ._data_classes.param import Param
 from ._data_classes.prehook import ModuleInputSnapshot, PreHookEffect, TensorInputObservation
 from ._quantities import Bytes, Duration, Flops, Macs, Quantity
 from ._runnable import NumericAttestationStatus, PathFaithfulness, ReadinessStatus, RunProvider
+from ._selection import Site
+from ._selection_subspace import BasisProvenance
 from .capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
 from .captured_run import TraceLike
-from .intervention import SiteTable, SpecCompat, TargetManifestDiff
+from .intervention import SpecCompat, TargetManifestDiff
 
 if TYPE_CHECKING:
     from ._data_classes.container import Container
@@ -42,10 +45,12 @@ _ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
 _GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 __all__ = [
+    "Accessor",
     "TraceLike",
     "AtenOp",
     "AttributeWrite",
     "BackwardPass",
+    "BasisProvenance",
     "Buffer",
     "Bytes",
     "CaptureOutcome",
@@ -78,7 +83,7 @@ __all__ = [
     "Quantity",
     "ReadinessStatus",
     "RunProvider",
-    "SiteTable",
+    "Site",
     "SpecCompat",
     "TargetManifestDiff",
     "TensorInputObservation",

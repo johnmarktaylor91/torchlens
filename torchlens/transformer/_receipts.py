@@ -247,8 +247,8 @@ def _kv_group_lines(receipt: CausalReceipt) -> list[str]:
         return []
     lines = [
         KV_GROUP_RECEIPT_WORDING.format(
-            per_group=gqa.n_query_heads // gqa.n_kv_heads,
-            n_query=gqa.n_query_heads,
+            per_group=gqa.num_query_heads // gqa.n_kv_heads,
+            n_query=gqa.num_query_heads,
             n_groups=gqa.n_kv_heads,
         )
     ]

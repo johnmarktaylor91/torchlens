@@ -492,7 +492,7 @@ def test_bundle_member_error_raised_for_missing_bundle_site() -> None:
     x = torch.randn(1, 3)
     first = _capture(_ReluAdd(), x)
     second = _capture(_ReluAdd(), x)
-    bundle = tl.bundle({"first": first, "second": second})
+    bundle = tl.Bundle({"first": first, "second": second})
 
     with pytest.raises(terrors.BundleMemberError, match="failed to resolve"):
         bundle.node(tl.func("missing"))
@@ -619,7 +619,7 @@ def test_selection_error_kind_matrix_refusal() -> None:
     """
 
     act = tl.units("relu_1_2", [(0, 0, 1, 1)])
-    param = tl.params("weight")
+    param = tl.param("weight")
     with pytest.raises(terrors.SelectionError) as excinfo:
         act & param
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"

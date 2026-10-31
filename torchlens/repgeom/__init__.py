@@ -18,11 +18,11 @@ from ._geometry import (  # noqa: F401 -- public type aliases re-exported
     ScreeEvolution,
     activation_distance_matrix,
     classical_mds,
+    compare_rdms,
     effective_dimensionality,
     procrustes_align,
     rank_transform_rdm,
     rdm,
-    rdm_compare,
     scree,
 )
 from ._node_visuals import (
@@ -35,7 +35,7 @@ from ._trace_views import (
     rdm_evolution,
     scree_evolution,
 )
-from ._uncertainty import ScoreInterval, cka_interval, rdm_compare_interval
+from ._uncertainty import ScoreInterval, cka_interval, compare_rdms_interval
 
 __tl_layer__ = "FACADE"
 
@@ -53,8 +53,8 @@ __all__ = [
     "procrustes_align",
     "rank_transform_rdm",
     "rdm",
-    "rdm_compare",
-    "rdm_compare_interval",
+    "compare_rdms",
+    "compare_rdms_interval",
     "rdm_evolution",
     "rdm_node_spec",
     "scree",

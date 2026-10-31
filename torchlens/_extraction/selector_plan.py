@@ -152,16 +152,16 @@ def is_selector_request(layers: Any) -> bool:
         door).
     """
 
-    from ..selection import Selection
+    from .._selection import Selector
 
-    if isinstance(layers, Selection):
+    if isinstance(layers, Selector):
         _refuse_partial_units(layers)
     if _is_selector(layers):
         return True
     if isinstance(layers, Mapping):
         kinds = set()
         for value in layers.values():
-            if isinstance(value, Selection):
+            if isinstance(value, Selector):
                 _refuse_partial_units(value)
             kinds.add("selector" if _is_selector(value) else "string")
         if kinds == {"selector"}:

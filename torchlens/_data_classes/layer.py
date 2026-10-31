@@ -52,7 +52,7 @@ from .._io import (
 )
 from .._ir.refs import DtypeRef
 from .._quantities import Bytes, Duration, Flops, Macs
-from ..selection import _SelectionOperand
+from .._selection import _SelectionOperand
 
 # LayerAccessor is re-exported (not used here) so every historical
 # ``from .layer import ...`` site and pickle qualname keeps resolving.
@@ -1128,7 +1128,7 @@ class Layer(_SelectionOperand):
     def __selection__(self) -> object:
         """Lift this layer's whole output as an ACT selection term (ALL passes)."""
 
-        from ..selection import _selection_from_layer
+        from .._selection import _selection_from_layer
 
         return _selection_from_layer(self)
 

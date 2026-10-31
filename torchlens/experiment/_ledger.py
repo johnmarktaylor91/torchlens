@@ -248,7 +248,7 @@ class LedgerEntry:
     quarantine_reason: str | None = None
 
     @property
-    def draft(self) -> bool:
+    def is_draft(self) -> bool:
         """Visibly DRAFT until a hypothesis is declared."""
 
         return self.hypothesis is None
@@ -264,7 +264,7 @@ class LedgerEntry:
         finalized = sum(1 for step in self.steps.values() if step.get("finalized"))
         interrupted = len(self.steps) - finalized
         quarantine = " QUARANTINED" if self.status == "quarantined" else ""
-        draft = " DRAFT" if self.draft else ""
+        draft = " DRAFT" if self.is_draft else ""
         return (
             f"[{self.entry_id}]{quarantine}{draft} status={self.status} {verdict} "
             f"steps={finalized}+{interrupted}i obs={len(self.observations)} "
@@ -488,7 +488,7 @@ class ExperimentLedger:
                 active_path=str(current.path),
             )
         self._token = _ACTIVE.set(self)
-        self.entry(question=question, hypothesis=hypothesis, metric=metric)
+        self.open_entry(question=question, hypothesis=hypothesis, metric=metric)
 
     # ---- file plumbing ----------------------------------------------------
 
@@ -616,7 +616,7 @@ class ExperimentLedger:
 
     # ---- public semantic surface (INTERPRETIVE fields, actor-stamped) ----
 
-    def entry(
+    def open_entry(
         self,
         *,
         question: str | None = None,
@@ -720,7 +720,7 @@ class ExperimentLedger:
 
     # ---- material emission (MECHANICAL fields; used by verbs and 9b) ------
 
-    def material_step(
+    def begin_step(
         self,
         operation: str,
         *,
@@ -739,7 +739,7 @@ class ExperimentLedger:
         )
         return step_id
 
-    def finalize_step(
+    def end_step(
         self,
         step_id: str,
         *,
@@ -781,7 +781,7 @@ class ExperimentLedger:
 
     # ---- lifecycle ----------------------------------------------------------
 
-    def save(self) -> None:
+    def flush(self) -> None:
         """Explicit durability check — RAISES on a dead sink (D4g rule 4)."""
 
         if self._handle is None or self._handle.closed:
@@ -806,7 +806,7 @@ class ExperimentLedger:
         """
 
         try:
-            self.save()
+            self.flush()
         finally:
             if self._token is not None:
                 with contextlib.suppress(ValueError):

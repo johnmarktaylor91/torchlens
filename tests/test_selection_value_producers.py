@@ -21,8 +21,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._selection import _FLIP, SelectionError, SelectionProvenance
 from torchlens.bundle import Bundle
-from torchlens.selection import _FLIP, SelectionError, SelectionProvenance
 
 
 class _Probe(nn.Module):
@@ -102,7 +102,7 @@ def test_top_k_mask_matches_manual_ranking(log):
     expected[torch.argsort(value, descending=True, stable=True)[:7]] = True
     assert torch.equal(resolved[0].mask.reshape(-1), expected)
     assert _relations(resolved) == ["exact"]
-    assert resolved[0].selected_count == 7
+    assert resolved[0].num_selected == 7
 
 
 def test_top_k_bottom_and_abs_variants(log):
@@ -149,8 +149,8 @@ def test_top_fraction_ceil_rule_pinned(log):
 
     numel = log[_RELU].out.numel()
     resolved = tl.top_fraction(_RELU, 0.01).resolve(log)
-    assert resolved[0].selected_count == math.ceil(0.01 * numel)
-    assert tl.top_fraction(_RELU, 0.0).resolve(log).empty
+    assert resolved[0].num_selected == math.ceil(0.01 * numel)
+    assert tl.top_fraction(_RELU, 0.0).resolve(log).is_empty
 
 
 def test_threshold_band_and_abs(log):
@@ -176,9 +176,9 @@ def test_sign_classes_partition_the_site(log):
     nonzero = tl.sign(_RELU, "nonzero").resolve(log)
     assert torch.equal(zero[0].mask, value == 0)
     assert torch.equal(positive[0].mask, value > 0)
-    assert negative[0].selected_count == 0  # ReLU output has no negatives
+    assert negative[0].num_selected == 0  # ReLU output has no negatives
     assert torch.equal(nonzero[0].mask, ~zero[0].mask)
-    total = zero[0].selected_count + positive[0].selected_count
+    total = zero[0].num_selected + positive[0].num_selected
     assert total == value.numel()
     # the engineered dead channel is all-zero on this capture
     assert zero[0].mask[0, 3].all()
@@ -215,7 +215,7 @@ def test_global_default_population_spans_saved_sites(log):
 
     resolved = tl.top_k(None, 10).resolve(log)
     assert len(resolved) > 1  # touched family: all saved sites
-    assert sum(entry.selected_count for entry in resolved) == 10
+    assert sum(entry.num_selected for entry in resolved) == 10
 
 
 def test_value_producer_restricted_by_selection_population(log):
@@ -224,8 +224,8 @@ def test_value_producer_restricted_by_selection_population(log):
     zeros = tl.sign(_RELU, "zero")
     ranked = tl.top_k(zeros, 4, largest=False).resolve(log)
     value = log[_RELU].out
-    relu_entry = [entry for entry in ranked if entry.site_key == (_RELU, 1)][0]
-    assert relu_entry.selected_count == 4
+    relu_entry = [entry for entry in ranked if entry.key == (_RELU, 1)][0]
+    assert relu_entry.num_selected == 4
     assert (value[relu_entry.mask] == 0).all()
 
 
@@ -257,10 +257,10 @@ def test_dead_composes_with_module_selector(log, log_b):
 
     composed = tl.dead([log, log_b]) & tl.in_module("encoder")
     resolved = composed.resolve(log)
-    site_keys = {entry.site_key for entry in resolved}
+    site_keys = {entry.key for entry in resolved}
     assert (_RELU, 1) in site_keys
     assert (_SIGMOID, 1) not in site_keys  # head is outside the encoder
-    relu_entry = [entry for entry in resolved if entry.site_key == (_RELU, 1)][0]
+    relu_entry = [entry for entry in resolved if entry.key == (_RELU, 1)][0]
     assert relu_entry.mask[0, 3].all()
     assert relu_entry.provenance.relation == "upper_bound"  # join(upper, exact)
 
@@ -268,7 +268,9 @@ def test_dead_composes_with_module_selector(log, log_b):
 def test_saturated_detects_pinned_sigmoid_channel(log, log_b):
     """Units within tol of a declared bound in every sample are saturated."""
 
-    resolved = tl.saturated([log, log_b], low=0.0, high=1.0, tol=1e-4, within=_SIGMOID).resolve(log)
+    resolved = tl.saturated([log, log_b], low=0.0, high=1.0, atol=1e-4, within=_SIGMOID).resolve(
+        log
+    )
     assert resolved[0].mask[0, 0].all()  # bias=100 channel pinned at 1
     expected = ((log[_SIGMOID].out - 1.0).abs() <= 1e-4) & (
         (log_b[_SIGMOID].out - 1.0).abs() <= 1e-4
@@ -392,7 +394,7 @@ def test_complement_of_top_k_counts(log):
     """~top_k keeps the touched family and complements within the site."""
 
     resolved = (~tl.top_k(_RELU, 5)).resolve(log)
-    assert resolved[0].selected_count == log[_RELU].out.numel() - 5
+    assert resolved[0].num_selected == log[_RELU].out.numel() - 5
 
 
 # ---------------------------------------------------------------------------
@@ -404,7 +406,7 @@ def test_param_population_refuses_kind(log):
     """Value producers read ACT payloads; a PARAM population refuses typed."""
 
     with pytest.raises(SelectionError) as excinfo:
-        tl.top_k(tl.params("encoder.0.weight"), 3)
+        tl.top_k(tl.param("encoder.0.weight"), 3)
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 
@@ -426,7 +428,7 @@ def test_unsaved_payload_refuses_value_not_saved(model):
         assert excinfo.value.fields["reason"] == "value_not_saved"
         # the DEFAULT population is the retained sites, so it still resolves
         resolved = tl.threshold(above=0.0).resolve(trace)
-        labels = {entry.site_key[0] for entry in resolved}
+        labels = {entry.key[0] for entry in resolved}
         assert labels and all(label.startswith("conv2d") for label in labels)
     finally:
         trace.cleanup()
@@ -455,9 +457,9 @@ def test_complex_ordered_comparison_refuses_value_criterion_invalid():
             tl.top_k(site, 2).resolve(trace)
         assert excinfo.value.fields["reason"] == "value_criterion_invalid"
         resolved = tl.top_k(site, 2, by="abs").resolve(trace)
-        assert resolved[0].selected_count == 2
+        assert resolved[0].num_selected == 2
         zero = tl.sign(site, "zero").resolve(trace)  # magnitude classes allowed
-        assert zero[0].selected_count == 0
+        assert zero[0].num_selected == 0
         with pytest.raises(SelectionError):
             tl.sign(site, "positive").resolve(trace)
     finally:
@@ -488,7 +490,7 @@ def test_repr_stability_pins(log, log_b):
         "Selection[ACT](top_k(k=5, by='value', largest=True, "
         f"within=Selection[ACT](site({_RELU!r}))))"
     )
-    assert repr(tl.dead([log, log_b], tol=0.0)) == (
+    assert repr(tl.dead([log, log_b], atol=0.0)) == (
         "Selection[ACT](dead(n_samples=2, tol=0.0, within=saved_sites))"
     )
 

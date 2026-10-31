@@ -891,7 +891,7 @@ def test_paddle_preview_applies_static_label_save_selector() -> None:
         model,
         paddle.to_tensor([-1.0, 2.0]),
         backend="paddle",
-        save=tl.contains("relu"),
+        save=tl.label_contains("relu"),
     )
 
     saved_ops = [op for op in trace.layer_list if op.has_saved_activation]

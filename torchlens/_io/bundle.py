@@ -427,7 +427,7 @@ def save(
     # (owners disjoint; a slice can only exist after its module imported).
     slice_presenter = sys.modules.get("torchlens._trace_slice")
     if slice_presenter is not None and isinstance(trace, slice_presenter.TraceSlice):
-        from ..selection import SelectionError
+        from .._selection import SelectionError
 
         raise SelectionError(
             "trace.save() does not support TraceSlice: a slice is a VIEW with "
@@ -438,7 +438,7 @@ def save(
         )
     # A Bundle is a CONTAINER product, never a Trace: applying the per-trace
     # N1 gate below to it read the container's empty outcome sidecar as
-    # UNKNOWN and false-refused EVERY bundle tl.bundle() built (with the
+    # UNKNOWN and false-refused EVERY bundle tl.Bundle() built (with the
     # hand-built-object warning) while bundle.save() worked -- the third
     # instance of the two-answers outcome-authority disease (foldB D9).
     # Trace.save delegates to the ONE container door before any per-trace gate;

@@ -437,7 +437,7 @@ def test_chrome_trace_diff_places_members_on_separate_timelines(tmp_path: Path) 
     capture = tl.options.CaptureOptions(intervention_ready=True)
     first = tl.trace(model, x, capture=capture)
     second = tl.trace(model, x, capture=capture)
-    bundle = tl.bundle({"first": first, "second": second})
+    bundle = tl.Bundle({"first": first, "second": second})
 
     destination = tl.export.chrome_trace_diff(bundle, tmp_path / "diff.json")
     payload = json.loads(destination.read_text(encoding="utf-8"))

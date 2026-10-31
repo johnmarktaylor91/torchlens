@@ -16,8 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import site
 from torchlens._errors import ArgumentTypeError
-from torchlens.intervention import site
 from torchlens.intervention.errors import SelectorCapabilityError
 from torchlens.intervention.site_keys import mint_keys_in_execution_order
 

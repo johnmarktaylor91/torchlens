@@ -7,7 +7,8 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
-from torchlens._data_classes import ModuleAccessor, ParamAccessor
+from torchlens._data_classes.module import ModuleAccessor
+from torchlens._data_classes.param import ParamAccessor
 from torchlens.types import Module, ModuleCall
 
 # ---------------------------------------------------------------------------

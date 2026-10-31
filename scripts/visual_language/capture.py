@@ -112,7 +112,7 @@ def _bundle(trace: Any) -> Any:
         ablated.do(tl.func("relu"), tl.zero_ablate())
         successor = ablated.fork("successor")
         successor.do(tl.func("add"), tl.zero_ablate())
-    return tl.bundle({"clean": trace, "ablated": ablated, "successor": successor}, baseline="clean")
+    return tl.Bundle({"clean": trace, "ablated": ablated, "successor": successor}, baseline="clean")
 
 
 def _summary_dot(text: str) -> str:
@@ -211,7 +211,7 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)
     if panel.call == "bundle_graph":
-        return str(tl.show_bundle_graph(_bundle(trace), **kwargs))
+        return str(tl.visualization.show_bundle_graph(_bundle(trace), **kwargs))
     if panel.call == "bundle_diff":
         return str(tl.viz.bundle_diff(_bundle(trace), **kwargs))
     raise ValueError(f"unknown call {panel.call!r}")

@@ -257,7 +257,7 @@ def m1_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     trace = products["trace_live"]
     products["trace_slice"] = trace.between([trace.layer_labels[0]], [trace.layer_labels[-1]])
     products["bundle"] = tl.sweep(
-        model, example, at=tl.func("relu"), values=[0.0, 0.5], include_baseline=True
+        model, example, site=tl.func("relu"), values=[0.0, 0.5], include_baseline=True
     )
     assert set(products) >= set(PRODUCT_NAMES)
     try:

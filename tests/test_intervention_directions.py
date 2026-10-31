@@ -23,8 +23,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
+from torchlens._selection_subspace import BasisProvenance
 from torchlens.intervention import Direction, _directions, fit_direction
-from torchlens.selection_subspace import BasisProvenance
 
 _HIDDEN = 8
 _SITE = "layers.1"
@@ -184,7 +184,7 @@ def test_provenance_reuses_the_basis_record(stack: dict[str, Any]) -> None:
     digest.update(canonical.numpy().tobytes())
     assert isinstance(record, BasisProvenance)
     assert record.sha256 == digest.hexdigest()
-    assert (record.method, record.n_vectors, record.space_dim, record.dim) == ("pca", 1, 8, -1)
+    assert (record.method, record.num_vectors, record.space_dim, record.dim) == ("pca", 1, 8, -1)
     assert f"site={_SITE!r}" in record.origin and "num_pairs=6" in record.origin
     assert "pairs_sha256=" in record.origin
     assert "sha256=" in repr(direction) and "tensor" not in repr(direction)

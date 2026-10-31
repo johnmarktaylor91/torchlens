@@ -4,7 +4,7 @@
 ledger geometry) into an `EpisodeFoldResult` -- a DERIVATION, never a settled
 `CaptureOutcome` (the R06 discipline; Bundle has no outcome authority). Split
 from `_episode_ledger.py` at the C07X amendment (R43 size discipline); the
-ledger module re-exports both names, and `Bundle.derive_episode_status` is
+ledger module re-exports both names, and `Bundle.episode_status` is
 the public consumer.
 """
 

@@ -10,7 +10,7 @@ nothing mutates a trace or the capture pipeline.
   subclass it without importing this package): `report_type`, `subject`,
   `status`, `to_dict()`, `to_pandas()`, and `str()` = a bounded card (lead line,
   at most five findings, exact remainder, exits). Results with a house-voice
-  `__repr__` (`TraceAudit`, `DTypeRangeAudit`, `FindNanResult`, `ParamAudit`) keep
+  `__repr__` (`TraceAudit`, `DTypeRangeAudit`, `FindNanReport`, `ParamAudit`) keep
   printing it (`_prints_repr = True`; the card is `report.card()`).
 - Subclasses state the lead through `_report_subject` / `_report_status` /
   `_report_findings` (optionally `_report_coverage`, `_report_severity_counts`,
@@ -29,7 +29,7 @@ nothing mutates a trace or the capture pipeline.
 - `find_nan(model, x, **trace_kwargs)` captures fresh and localizes the first
   nonfinite value; `find_nan_in_trace(trace)` / `bisect_nan(trace)` work on an
   existing trace.
-- Results are `FindNanResult` / `BisectNanReport`; unsaved ancestors become an
+- Results are `FindNanReport` / `BisectNanReport`; unsaved ancestors become an
   explicit `uncertainty_zone`, never a silent guess.
 
 ## _precision.py

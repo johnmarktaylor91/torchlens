@@ -173,16 +173,16 @@ def _selection_sites(log: Any, selection: Any) -> list[tuple[str, str]]:
     """Resolve an ``arrays=<Selection>`` value to op labels (row X15)."""
 
     resolved = selection.resolve(log)
-    # SiteEntry rows live on ``_entries`` today (the public spelling is an
+    # Site rows live on ``_entries`` today (the public spelling is an
     # L6 naming-session item); prefer a public ``entries`` once it exists.
     entries = getattr(resolved, "entries", None) or getattr(resolved, "_entries", ()) or ()
-    site_keys = {entry.site_key for entry in entries}
+    site_keys = {entry.key for entry in entries}
     sites: list[tuple[str, str]] = []
     for label in _op_labels(log):
         op = _op_or_none(log, label)
         if op is None:
             continue
-        # SiteEntry keys are (layer_label, pass_index) pairs today; ops also
+        # Site keys are (layer_label, pass_index) pairs today; ops also
         # carry the L1 structural string -- match either spelling.
         base, _, pass_text = label.rpartition(":")
         pair = (base, int(pass_text)) if base and pass_text.isdigit() else None
@@ -233,7 +233,7 @@ def _array_plan(log: Any, arrays: Any, share_safe: bool) -> _ArrayPlan:
     raise InvalidArgumentError(
         f"arrays= must be 'frontier', 'flagged', 'none', or a Selection; received {arrays!r}",
         code="report_arrays_invalid",
-        remedy="pass one of the documented presets or a tl.Selection instance",
+        remedy="pass one of the documented presets or a tl.Selector instance",
     )
 
 
@@ -572,7 +572,7 @@ def write_report(
         Destination ``.html`` path.
     arrays:
         ``"frontier"`` (default) / ``"flagged"`` / ``"none"`` / a
-        ``tl.Selection``.
+        ``tl.Selector``.
     graph:
         ``"collapsed"`` (default: module-collapsed real graph, depth
         disclosed) / ``"flat"`` / ``"none"``.

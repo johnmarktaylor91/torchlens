@@ -253,7 +253,7 @@
   `intervention_digest` (`episode_intervention_digest_v1`; identical re-runs mint
   identical digests — compare digests, never output equality alone) +
   `fidelity_basis="perturbed"` when a fired edit replaced a value (outranks
-  forced/escalation bases). `torchlens.intervention.at_step(*steps)` is the
+  forced/escalation bases). `torchlens.at_step(*steps)` is the
   step-qualified selector (live via the armed join session; post hoc via the persisted
   `Op.episode_step` stamps written at settlement; composes with pass-qualified labels;
   no-steps-to-qualify doors refuse `episode_step_selector_without_episode` /
@@ -269,7 +269,7 @@
   wrapped with `escalated_from`/`reason`/`fidelity_basis` disclosed (E-A3: mismatch records
   `diverged`, never a settlement input); declared unsnapshotable state refuses at declaration
   time (`episode_state_unsnapshotable`). Bundles gain the optional S6 member-relation table
-  (`member_relations=`, `Bundle.relate`, `Bundle.derive_episode_status` — a derived fold,
+  (`relations=`, `Bundle.relate`, `Bundle.episode_status` — a derived fold,
   never Bundle-level settlement; mutators cascade explicitly or refuse typed). Doc of record:
   `docs/reference/episode_capture.md`.
 - HARNESS BUNDLES (phases 1 and 2; every spelling DOCUMENTED-UNSTABLE; doc of record
@@ -316,8 +316,8 @@
   `.reader_positions`, `.coverage`, `.excluded` (dicts with side/start/end/reason/row_index);
   only re-verified one-to-one positions pair, declared/retokenized spans stay correspondences.
   Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
-  `tl.show_bundle_graph(b, nodes="members")` draws members and relation rows;
-  `tl.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
+  `tl.visualization.show_bundle_graph(b, nodes="members")` draws members and relation rows;
+  `tl.visualization.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
   and key (member lists only where members differ), and `trace.draw_backward(theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
@@ -340,7 +340,7 @@
   (`vary_partial_failure` + `material_action_completed`).
   `tl.sweep(include_baseline=True)` mints the PRISTINE baseline member (the
   legacy default discloses `sweep_baseline_absent` at construction).
-  `torchlens.experiment.site_sweep(baseline, candidates=, edit=, metric=,
+  `torchlens.experiment.sweep_sites(baseline, candidates=, edit=, metric=,
   retain=, engine="live_hook", model=, x=)` is the ONE candidate engine
   (serial, extract-before-cleanup, rolling `top_k` retention, byte
   preflight via `retention_projection_over_budget`); candidates execute in
@@ -348,7 +348,7 @@
   unscoped `tl.head(i)` broadcast) become REFUSED effect rows; the complete
   per-candidate `member_effect_table_v1` (released/refused/failed included)
   persists and `bundle.effects()`/`measure_members()` serve it (member-axis
-  `most_changed`, explicit session-only tier-c `.selection()`).
+  `rank_changes`, explicit session-only tier-c `.to_selection()`).
   `head_ablation_candidates` is the module-scoped v-facet sugar (GQA/MQA
   refuses typed; hand-written-hook oracle beside it). The experiment LEDGER
   (`torchlens.experiment.ledger(path, hypothesis=, metric=)`) is the opt-in
@@ -763,9 +763,9 @@
   backend switch). Doc of record: `docs/reference/weightsfree_capture.md`.
 - SELECTION ALGEBRA (L6 stage 1; Selection/ResolvedSelection/resolve/
   `__selection__`/operators slate-ratified subject to D7, producer
-  constructors + members DOCUMENTED-UNSTABLE): `tl.Selection` is the
+  constructors + members DOCUMENTED-UNSTABLE): `tl.Selector` is the
   composable trace-independent query AST; `selection.resolve(trace)` returns
-  the frozen trace-bound `tl.ResolvedSelection` (ordered `SiteEntry(site_key,
+  the frozen trace-bound `tl.Selection` (ordered `Site(site_key,
   mask, provenance)` tuple; SESSION-ONLY, never persisted). TWO-LEVEL
   denotation: (touched-site family, selected-element set) — zero-mask entries
   stay first-class, `.empty`/`__bool__` are element-level, and `bool()` on
@@ -782,21 +782,21 @@
   normative). Kinds `ACT|PARAM|EDGE` are closed; mixed kinds refuse
   `selection_kind_incompatible`; resolution refusals ride
   `SelectionError` with `selection_unresolvable` + a closed reason set.
-  Producers: `tl.units(site, indices)`, `tl.params(name, mask=None)`,
-  `tl.random_selection(like=, within=, seed=)` (seeded size-matched control).
+  Producers: `tl.units(site, indices)`, `tl.param(name, mask=None)`,
+  `tl.random_like(like=, within=, seed=)` (seeded size-matched control).
   VALUE + STATISTICAL PRODUCERS (producer wave; DOCUMENTED-UNSTABLE):
   `tl.top_k(within, k, by=, largest=)` / `tl.top_fraction(within, fraction)`
   (global deterministic ranking over the population; too-few rankable
   elements refuse `population_too_small`), `tl.threshold(within, above=,
   below=, by=)`, `tl.sign(within, 'positive'|'negative'|'zero'|'nonzero',
-  tol=)` (`'zero'` = the sparsity mask / single-capture "didn't fire") read
+  atol=)` (`'zero'` = the sparsity mask / single-capture "didn't fire") read
   the RESOLUTION trace's retained activations at resolve time — exact-as-set
   claims about THIS capture (`relation="exact"`); `within=None` means every
   retained tensor site, PARAM/EDGE populations refuse
   `selection_kind_incompatible`, unsaved payloads refuse `value_not_saved`,
   NaN never satisfies a criterion, complex ordered comparisons refuse
-  `value_criterion_invalid`. `tl.dead(samples, tol=)` / `tl.saturated(
-  samples, low=, high=, tol=)` / `tl.low_variance(samples, threshold=)` are
+  `value_criterion_invalid`. `tl.dead(samples, atol=)` / `tl.saturated(
+  samples, low=, high=, atol=)` / `tl.low_variance(samples, threshold=)` are
   explicitly MULTI-SAMPLE (`samples=` iterable of >= 2 Traces; Bundle
   iterates; the single-capture form is deliberately the different spelling
   `sign(site,'zero')`): the resolution trace supplies geometry/population
@@ -817,7 +817,7 @@
   architectures is caught), and self-comparison refuses (vacuous). PARAM
   populations refuse — Param records hold live refs, never capture-time
   payloads, so checkpoint weight diffs are not claimable from Traces.
-  `tl.stable_across_passes(within=None, tol=, passes=)` /
+  `tl.stable_across_passes(within=None, atol=, passes=)` /
   `tl.pass_variance(within=None, above=, below=, passes=)` select by
   behaviour ACROSS a recurrent layer's passes (range-within-tol / variance
   bounds, float64, pass-qualified throughout): windows are explicit >= 2
@@ -828,7 +828,7 @@
   EVERY window pass-site (`do()` edits every window pass);
   `relation="exact"`.
   SUBSPACE PRODUCER (subspace wave; DOCUMENTED-UNSTABLE):
-  `tl.subspace(within, basis, *, origin=, method=None, dim=-1, tol=0.0)`
+  `tl.subspace(within, basis, *, origin=, method=None, dim=-1, atol=0.0)`
   selects the elements a DIRECTION in activation space lives on (probe
   directions, steering vectors, PCA components, SAE decoder rows; basis
   `[d]` or `[k, d]`, canonicalized float64). PROJECTION UNDER do():
@@ -841,7 +841,7 @@
   signs kept; set-combined or resolved subspaces refuse
   `subspace_projection_composed`; a partial-axis `within=` refuses
   `subspace_projection_partial_axis`). SUPPORT UNDER resolve(): the basis
-  SUPPORT SET (`|w| > tol` on the bound axis, union over rows, expanded
+  SUPPORT SET (`|w| > atol` on the bound axis, union over rows, expanded
   across other axes; a dense direction supports the WHOLE axis). GRADIENT
   CONTRACT: `tl.intervention.keep_grad(edit)` (and
   `InterventionDecision(keep_grad=True)`) raise `edit_detached_from_graph`
@@ -885,7 +885,7 @@
   refuse at construction; resolution is geometry-only (unsaved sites
   resolve); relation `exact`; PARAM/EDGE refuse
   `selection_kind_incompatible`. New extension seam:
-  `torchlens.selection.register_term_resolver` (producer modules register
+  `torchlens._selection.register_term_resolver` (producer modules register
   frozen AST terms at import; `torchlens/selection_values.py`,
   `torchlens/selection_graph.py`, `torchlens/selection_subspace.py`).
   GRAPH-STRUCTURAL PRODUCERS + SLICE VIEW (graph wave; DOCUMENTED-UNSTABLE):
@@ -913,7 +913,7 @@
   `torchlens/selection_compare.py`).
   CROSS-RUN (L6 stage 4a; DOCUMENTED-UNSTABLE): `resolved.align_to(target)`
   re-binds an ACT selection onto another trace keyed on the L1 structural
-  site keys each `SiteEntry` records (`structural_site_key`, now live data),
+  site keys each `Site` records (`structural_site_key`, now live data),
   SAME-POLICY captures only per the L1 cross-stamp rule (healthy agreeing
   grouping stamps both sides); refusals ride `selection_alignment_invalid`
   with a closed six-reason set, `do()` keeps refusing foreign resolved
@@ -946,7 +946,7 @@
   masked copies.
 - PARAMETER SUBSTITUTION (param-operand, decided 2026-08-17, supersedes the
   D3 typed-refusal default on the replay path; DOCUMENTED-UNSTABLE):
-  `fork.do(tl.params(name, mask=None), edit)` applies the edit "AS IF" the
+  `fork.do(tl.param(name, mask=None), edit)` applies the edit "AS IF" the
   parameter were changed, for replay only — the value each consuming op sees
   is substituted at its derived occurrence address and the live
   `nn.Parameter` is NEVER written (bit-identical pinned). Parameters are NOT
@@ -1374,7 +1374,7 @@
   peaks; by default it is `None` with `resident_basis="not_requested"`. `tl.repgeom.rdm` gains keyword-only `metric="manhattan"`,
   `compute_device=`, `row_chunk_size=`, `output_device=`, `dtype=`,
   `output="condensed"`, `input_kind="batched"` (the no-new-keyword call is
-  bit-identical); `tl.repgeom.rdm_compare(a, b, method=)` is the DESCRIPTIVE
+  bit-identical); `tl.repgeom.compare_rdms(a, b, method=)` is the DESCRIPTIVE
   Pearson/Spearman/Kendall tau-a over aligned strict upper triangles (diagonal
   excluded; inference points at rsatoolbox); geometry evolution verbs read TRANSFORMED
   payloads when raw is dropped and disclose `result.payload_basis`; `tl.stats.cka`/
@@ -1520,7 +1520,7 @@
   and returns descriptive RSA, a cross-validated ridge score (seeded folds, per-fold
   exact leave-one-out penalty, mean Pearson r over target columns) and linear CKA,
   with `table()`/`disagreement()`/`to_dict()`; `num_resamples=` adds stimulus-bootstrap
-  `tl.repgeom.ScoreInterval`s (standalone: `tl.repgeom.rdm_compare_interval`,
+  `tl.repgeom.ScoreInterval`s (standalone: `tl.repgeom.compare_rdms_interval`,
   `tl.repgeom.cka_interval`); `tl.repgeom.metric_disagreement(scores)` ranks sites per
   metric and flags opposite orders. The neuro `compare` refusal row is gone; the
   `bootstrap`, `ridge` and `encoding_model` refusals keep inference with rsatoolbox /
@@ -1622,7 +1622,7 @@
   `torchlens.mechinterp.patch_edges`, `M(patched) - M(clean)`; pass the `corrupted=` and `metric=` it was
   scored with, `edges=` audits a subset; every set is patched in one call, into one receiver or
   several, and replays from its per-receiver pairs): each unit ablated (or patched) alone (one
-  `torchlens.experiment.site_sweep` member per unit where one edit serves every unit), then the
+  `torchlens.experiment.sweep_sites` member per unit where one edit serves every unit), then the
   top-k claimed units together beside bottom-k and seeded random-k controls, one
   `trace.fork().do(...)` each; returns `tl.attribution.CausalAuditResult` (`units`, `sets`,
   `rank_agreement` (Spearman), `original_score`, `site`) whose `tl.attribution.CausalAuditUnit`

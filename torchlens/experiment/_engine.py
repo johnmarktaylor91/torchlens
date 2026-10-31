@@ -1,7 +1,7 @@
 """The private candidate engine + the ``site_sweep`` face (F03 items 6-8).
 
 ONE engine, three customers (ledger memo D3a): the ``site_sweep`` face, the
-tier-c selector conversion (:meth:`EffectsView.selection`), and the shipped
+tier-c selector conversion (:meth:`EffectsView.to_selection`), and the shipped
 occlusion attribution loop it generalizes. Given a baseline trace, an
 ordered candidate plan, a lane, a metric, and a retention policy, the engine
 preflights ONCE, executes candidates SERIALLY in stable order ("batched"
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from .._data_classes.trace import Trace
 
-__all__ = ["EffectsView", "TopK", "site_sweep", "top_k"]
+__all__ = ["EffectsView", "TopK", "sweep_sites", "top_k"]
 
 _ENGINE_LANES = ("live_hook", "replay")
 
@@ -130,8 +130,8 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
     never as one.
     """
 
+    from .._selection import Selection, Selector
     from ..intervention.selectors import FacetSelector
-    from ..selection import ResolvedSelection, Selection
 
     if isinstance(where, FacetSelector):
         # Checked BEFORE the Selection lift: facet selectors resolve through
@@ -152,14 +152,14 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
         )
     lifted = where
     converter = getattr(lifted, "__selection__", None)
-    if not isinstance(lifted, (Selection, ResolvedSelection)) and callable(converter):
+    if not isinstance(lifted, (Selector, Selection)) and callable(converter):
         lifted = converter()
-    if isinstance(lifted, (Selection, ResolvedSelection)):
-        resolved = lifted.resolve(baseline) if isinstance(lifted, Selection) else lifted
-        # ResolvedSelection is a Sequence of SiteEntry rows. Entry site keys
+    if isinstance(lifted, (Selector, Selection)):
+        resolved = lifted.resolve(baseline) if isinstance(lifted, Selector) else lifted
+        # ResolvedSelection is a Sequence of Site rows. Entry site keys
         # are (layer_label, pass_index) tuples; the structural L1 key rides
         # structural_site_key and the label backstop derives it.
-        labels = tuple(str(entry.site_key[0]) for entry in resolved)
+        labels = tuple(str(entry.key[0]) for entry in resolved)
         parts = tuple(_unit_digest_part(entry) for entry in resolved)
         units_selected = any(isinstance(part, tuple) for part in parts)
         return _Candidate(
@@ -218,7 +218,7 @@ def _candidate_spec(baseline: Trace, candidate: _Candidate, edit: Any) -> Any:
 
     rules: list[Any] = []
     for entry in candidate.unit_entries:
-        label = str(entry.site_key[0])
+        label = str(entry.key[0])
         term = _site_key_term(baseline, candidate.candidate_id, (label,))
         op_label = str(baseline.ops[label].label)
         masked = _derive_masked_edit(edit, entry, candidate.unit_digest, op_label)
@@ -235,7 +235,7 @@ def _unit_digest_part(entry: Any) -> Any:
     site are distinct candidates and identical units are still duplicates.
     """
 
-    label = str(entry.site_key[0])
+    label = str(entry.key[0])
     mask = entry.mask
     if bool(mask.all()):
         return label
@@ -678,21 +678,21 @@ def _finalize_ledger_step(armed: Any, step_id: Any, bundle: Bundle, operation: A
         return
     from ._ledger import EvidenceRef
 
-    armed.finalize_step(
+    armed.end_step(
         step_id,
         outcome="completed",
         refs=[
             EvidenceRef(
                 kind="bundle",
-                uri=f"live://{bundle.bundle_id}",
-                object_id=f"{bundle.bundle_id}:{operation.operation_id}",
+                uri=f"live://{bundle.id}",
+                object_id=f"{bundle.id}:{operation.operation_id}",
             )
         ],
         material_result=bundle,
     )
 
 
-def site_sweep(
+def sweep_sites(
     baseline: Trace,
     *,
     candidates: Any,
@@ -766,7 +766,7 @@ def site_sweep(
     from ._ledger import active_ledger
 
     armed = active_ledger()
-    step_id = armed.material_step("site_sweep") if armed is not None else None
+    step_id = armed.begin_step("site_sweep") if armed is not None else None
 
     # ---- preflight (once, before any candidate runs) ----------------------
     pairs = _candidate_pairs(candidates)
@@ -837,7 +837,7 @@ class EffectsView:
     """Read view over one persisted MemberEffectTable (item 8).
 
     ``most_changed()`` here is the MEMBER axis ("which candidate mattered"),
-    unambiguous because rows are per candidate; ``Bundle.most_changed`` keeps
+    unambiguous because rows are per candidate; ``Bundle.rank_changes`` keeps
     its SITE axis. ``selection()`` is the EXPLICIT tier-c conversion: the
     union of the top candidates' WHERE regions, session-only (a loaded
     artifact carries no Selection objects and refuses typed).
@@ -871,7 +871,7 @@ class EffectsView:
                 return row.value
         return None
 
-    def most_changed(self, top_n: int | None = None) -> list[tuple[str, float]]:
+    def rank_changes(self, k: int | None = None) -> list[tuple[str, float]]:
         """Rank candidates by |value - baseline| descending (member axis)."""
 
         base = self.baseline_value or 0.0
@@ -881,12 +881,12 @@ class EffectsView:
             if row.candidate_id != "__baseline__" and row.value is not None
         ]
         scored.sort(key=lambda item: item[1], reverse=True)
-        return scored if top_n is None else scored[:top_n]
+        return scored if k is None else scored[:k]
 
     def top(self, k: int) -> EffectsView:
         """Sub-view holding the k largest-effect measured candidates."""
 
-        keep = {name for name, _ in self.most_changed(top_n=k)}
+        keep = {name for name, _ in self.rank_changes(k=k)}
         rows = tuple(
             row
             for row in self.table.rows
@@ -903,7 +903,7 @@ class EffectsView:
         )
         return EffectsView(table=sub_table, _selections=self._selections)
 
-    def selection(self) -> Any:
+    def to_selection(self) -> Any:
         """EXPLICIT tier-c conversion: the union of this view's WHERE regions.
 
         Session-only: Selection objects are never persisted, so a view over
@@ -1016,7 +1016,7 @@ def _chain_keyed_values(bundle: Bundle, values: Mapping[str, Any]) -> dict[str, 
 
     from ..bundle._lineage import validate_operation_chain
 
-    operations = bundle.operations
+    operations = bundle.history
     validate_operation_chain(operations)
     by_id = {operation.operation_id: operation for operation in operations}
     construction = bundle.member_construction

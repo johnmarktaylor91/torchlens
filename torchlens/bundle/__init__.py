@@ -21,6 +21,7 @@ from ..intervention._super.super_logs import (
     SuperParamAccessor,
 )
 from ..intervention._super.super_op import (
+    SuperAtenOp,
     SuperLayerAccessor,
     SuperOp,
     SuperOpAccessor,
@@ -192,6 +193,17 @@ class _BundleStructuralProperty:
         return self._getter(instance)
 
 
+#: Per-kind name readers behind ``bundle.<kind>.shared`` / ``bundle.<kind>.divergent``.
+_KIND_NAME_GETTERS: dict[str, Callable[[Any], Any]] = {
+    "ops": lambda trace: getattr(trace, "op_labels", ()),
+    "layers": lambda trace: getattr(trace, "layer_labels", ()),
+    "modules": lambda trace: trace.modules.keys(),
+    "params": lambda trace: trace.params.keys(),
+    "buffers": lambda trace: trace.buffers.keys(),
+    "grad_fns": lambda trace: trace.grad_fns.keys(),
+}
+
+
 #: Public Bundle methods removed by the 2026-10-01 shim removal (no alias kept).
 _REMOVED_BUNDLE_MEMBERS: dict[str, str] = {
     "replay": "use bundle.push(...) -- Bundle.replay was renamed",
@@ -255,7 +267,7 @@ class Bundle:
         *,
         names: Sequence[str] | None = None,
         baseline: str | Trace | None = None,
-        member_relations: (
+        relations: (
             Sequence[MemberRelationRow | OpaqueRelationRow | Mapping[str, Any]] | None
         ) = None,
         preserved_sections: Mapping[str, Any] | None = None,
@@ -269,7 +281,7 @@ class Bundle:
         self._capacity: int | None = None
         self._baseline_name: str | None = self._resolve_baseline_name(baseline)
         self._member_relations: MemberRelationTable = self._build_relation_table(
-            (), member_relations or ()
+            (), relations or ()
         )
         self._preserved_sections: dict[str, Any] = dict(preserved_sections or {})
         # F03 lineage (ledger memo 0b): one random container identity, minted
@@ -570,152 +582,29 @@ class Bundle:
         hashes = {getattr(member, "graph_shape_hash", None) for member in self._members.values()}
         return len(hashes) == 1
 
-    @_BundleStructuralProperty
-    def shared_op_labels(self) -> list[str]:
-        """Return op labels present in every member.
+    def _kind_names(self, kind: str, *, shared: bool) -> list[str]:
+        """Return the names of one kind present in every member, or in some but not all.
+
+        Parameters
+        ----------
+        kind:
+            Accessor kind: ``ops``, ``layers``, ``modules``, ``params``, ``buffers`` or
+            ``grad_fns``.
+        shared:
+            ``True`` for names in every member (ordered by the first member), ``False``
+            for names present in some but not all members.
 
         Returns
         -------
         list[str]
-            Shared pass-qualified op labels, ordered by the first member.
+            The names. Read through ``bundle.<kind>.shared`` and ``bundle.<kind>.divergent``.
         """
 
-        return self._shared(lambda trace: getattr(trace, "op_labels", ()))
-
-    @_BundleStructuralProperty
-    def divergent_op_labels(self) -> list[str]:
-        """Return op labels not present in every member.
-
-        Returns
-        -------
-        list[str]
-            Pass-qualified op labels present in some but not all members.
-        """
-
-        return self._divergent(lambda trace: getattr(trace, "op_labels", ()))
-
-    @_BundleStructuralProperty
-    def shared_layer_labels(self) -> list[str]:
-        """Return layer labels present in every member.
-
-        Returns
-        -------
-        list[str]
-            Shared aggregate layer labels, ordered by the first member.
-        """
-
-        return self._shared(lambda trace: getattr(trace, "layer_labels", ()))
-
-    @_BundleStructuralProperty
-    def divergent_layer_labels(self) -> list[str]:
-        """Return layer labels not present in every member.
-
-        Returns
-        -------
-        list[str]
-            Aggregate layer labels present in some but not all members.
-        """
-
-        return self._divergent(lambda trace: getattr(trace, "layer_labels", ()))
-
-    @_BundleStructuralProperty
-    def shared_module_addresses(self) -> list[str]:
-        """Return module addresses present in every member.
-
-        Returns
-        -------
-        list[str]
-            Shared module addresses, ordered by the first member.
-        """
-
-        return self._shared(lambda trace: trace.modules.keys())
-
-    @_BundleStructuralProperty
-    def divergent_module_addresses(self) -> list[str]:
-        """Return module addresses not present in every member.
-
-        Returns
-        -------
-        list[str]
-            Module addresses present in some but not all members.
-        """
-
-        return self._divergent(lambda trace: trace.modules.keys())
-
-    @_BundleStructuralProperty
-    def shared_param_names(self) -> list[str]:
-        """Return parameter paths present in every member.
-
-        Returns
-        -------
-        list[str]
-            Shared parameter name paths, ordered by the first member.
-        """
-
-        return self._shared(lambda trace: trace.params.keys())
-
-    @_BundleStructuralProperty
-    def divergent_param_names(self) -> list[str]:
-        """Return parameter paths not present in every member.
-
-        Returns
-        -------
-        list[str]
-            Parameter name paths present in some but not all members.
-        """
-
-        return self._divergent(lambda trace: trace.params.keys())
-
-    @_BundleStructuralProperty
-    def shared_buffer_names(self) -> list[str]:
-        """Return buffer paths present in every member.
-
-        Returns
-        -------
-        list[str]
-            Shared buffer name paths, ordered by the first member.
-        """
-
-        return self._shared(lambda trace: trace.buffers.keys())
-
-    @_BundleStructuralProperty
-    def divergent_buffer_names(self) -> list[str]:
-        """Return buffer paths not present in every member.
-
-        Returns
-        -------
-        list[str]
-            Buffer name paths present in some but not all members.
-        """
-
-        return self._divergent(lambda trace: trace.buffers.keys())
-
-    @_BundleStructuralProperty
-    def shared_grad_fn_labels(self) -> list[str]:
-        """Return grad-fn labels present in every member.
-
-        Returns
-        -------
-        list[str]
-            Shared grad-fn labels, ordered by the first member.
-        """
-
-        return self._shared(lambda trace: trace.grad_fns.keys())
-
-    @_BundleStructuralProperty
-    def divergent_grad_fn_labels(self) -> list[str]:
-        """Return grad-fn labels not present in every member.
-
-        Returns
-        -------
-        list[str]
-            Grad-fn labels present in some but not all members.
-        """
-
-        return self._divergent(lambda trace: trace.grad_fns.keys())
+        getter = _KIND_NAME_GETTERS[kind]
+        return self._shared(getter) if shared else self._divergent(getter)
 
     @property
-    def bundle_id(self) -> str:
+    def id(self) -> str:
         """This container's persisted random identity (F03 lineage, D1a law).
 
         Minted at construction (never a content hash), restored verbatim on
@@ -727,7 +616,7 @@ class Bundle:
         return self._bundle_id
 
     @property
-    def operations(self) -> tuple[BundleOperation, ...]:
+    def history(self) -> tuple[BundleOperation, ...]:
         """The container-side chronology: hash-chained BundleOperation rows.
 
         One row per top-level bundle action (fork / sweep / vary / ...),
@@ -789,7 +678,7 @@ class Bundle:
         return self._baseline_name
 
     @_BundleStructuralProperty
-    def member_relations(self) -> tuple[MemberRelationRow | OpaqueRelationRow, ...]:
+    def relations(self) -> tuple[MemberRelationRow | OpaqueRelationRow, ...]:
         """Return the immutable S6 member-relation view (R4).
 
         Returns
@@ -807,7 +696,7 @@ class Bundle:
     # Real class methods (ledger memo item 0: reachable by hasattr/IDE
     # completion, no longer __getattr__-only dynamic lookups).
     relate = _bundle_relate
-    derive_episode_status = _bundle_derive_episode_status
+    episode_status = _bundle_derive_episode_status
     # The provenance join (F03 item 4): pure derived views, never stored.
     why = _bundle_why
     provenance = _bundle_provenance
@@ -815,7 +704,7 @@ class Bundle:
     # is untouched forever.
     vary = _bundle_vary
 
-    def effects(self, operation_id: str | None = None) -> Any:
+    def effects(self, history_id: str | None = None) -> Any:
         """Serve the stored per-candidate effect table (F03 item 8).
 
         The table is DATA the engine wrote once (released/refused/failed
@@ -825,7 +714,7 @@ class Bundle:
 
         from ..experiment._engine import bundle_effects
 
-        return bundle_effects(self, operation_id)
+        return bundle_effects(self, history_id)
 
     def measure_members(
         self, *, metric: Callable[[Trace], Any], order: str = "member"
@@ -1011,12 +900,12 @@ class Bundle:
             raise BundleMemberError(f"site {site!r} failed to resolve for bundle members: {detail}")
         return SuperOp.from_members(site, layer_members)
 
-    def at(self, label: str) -> Any:
-        """Return the matching cross-member Super view for ``label``.
+    def at(self, site: str) -> Any:
+        """Return the matching cross-member Super view for ``site``.
 
         Parameters
         ----------
-        label:
+        site:
             Label from any Bundle accessor family.
 
         Returns
@@ -1031,16 +920,16 @@ class Bundle:
         KeyError
             If the label is absent from every accessor.
         TypeError
-            If ``label`` is not a string.
+            If ``site`` is not a string.
         """
 
-        if not isinstance(label, str):
-            raise TypeError(f"Bundle.at labels must be strings, got {type(label).__name__}.")
+        if not isinstance(site, str):
+            raise TypeError(f"Bundle.at labels must be strings, got {type(site).__name__}.")
 
-        preferred_names = self._preferred_accessor_names(label)
+        preferred_names = self._preferred_accessor_names(site)
         for accessor_name in preferred_names:
             try:
-                return self._accessor_by_name(accessor_name)[label]
+                return self._accessor_by_name(accessor_name)[site]
             except KeyError:
                 continue
 
@@ -1049,12 +938,12 @@ class Bundle:
             for accessor_name in _BUNDLE_ACCESSOR_NAMES
             if accessor_name not in preferred_names
         ]
-        matches = self._matching_accessor_names(label, remaining_names)
+        matches = self._matching_accessor_names(site, remaining_names)
         if len(matches) == 1:
-            return self._accessor_by_name(matches[0])[label]
+            return self._accessor_by_name(matches[0])[site]
         if len(matches) > 1:
-            raise AmbiguousLabelError(self._ambiguous_label_message(label, matches))
-        raise KeyError(self._missing_label_message(label))
+            raise AmbiguousLabelError(self._ambiguous_label_message(site, matches))
+        raise KeyError(self._missing_label_message(site))
 
     def _accessor_by_name(self, accessor_name: str) -> Any:
         """Return one label accessor by public Bundle attribute name.
@@ -1310,7 +1199,7 @@ class Bundle:
 
     def add(
         self,
-        log_or_logs: Trace | Sequence[Trace],
+        traces: Trace | Sequence[Trace],
         names: str | Sequence[str] | None = None,
     ) -> Bundle:
         """Add one or more member logs and invalidate the cached supergraph.
@@ -1328,7 +1217,7 @@ class Bundle:
             This bundle.
         """
 
-        logs = self._coerce_trace_list(log_or_logs, arg_name="log_or_logs")
+        logs = self._coerce_trace_list(traces, arg_name="log_or_logs")
         member_names = self._coerce_optional_name_list(names, count=len(logs))
         for index, log in enumerate(logs):
             member_name = self._derive_name(
@@ -1346,7 +1235,7 @@ class Bundle:
 
     def remove(
         self,
-        name_or_names: str | Trace | Sequence[str | Trace],
+        names: str | Trace | Sequence[str | Trace],
         *,
         cascade_relations: bool = False,
     ) -> Trace | list[Trace]:
@@ -1373,8 +1262,8 @@ class Bundle:
             relation rows and ``cascade_relations`` is ``False`` (S6 R5).
         """
 
-        is_many = self._is_list_like(name_or_names)
-        names = self._coerce_member_name_list(name_or_names)
+        is_many = self._is_list_like(names)
+        names = self._coerce_member_name_list(names)
         unknown = [name for name in names if name not in self._members]
         if unknown:
             raise KeyError(f"Unknown bundle member(s): {sorted(unknown)}")
@@ -1570,7 +1459,7 @@ class Bundle:
         child = Bundle(
             forked,
             baseline=self._baseline_name,
-            member_relations=self._member_relations.rows,
+            relations=self._member_relations.rows,
             preserved_sections=self._preserved_sections,
         )
         child._forked_from_bundle_id = self._bundle_id
@@ -1641,7 +1530,7 @@ class Bundle:
             member.run(model, x, **kwargs)
         return self
 
-    def apply(self, fn: Callable[..., Any]) -> dict[str, Any]:
+    def map(self, fn: Callable[..., Any]) -> dict[str, Any]:
         """Apply a function independently to each member.
 
         Parameters
@@ -1650,7 +1539,7 @@ class Bundle:
             Callable receiving one member log. A callable that accepts a
             second positional parameter additionally receives the member's
             NAME (the per-member idiom the ledger memo item 0 unblocks:
-            ``bundle.apply(lambda log, name: ...)``); single-parameter
+            ``bundle.map(lambda log, name: ...)``); single-parameter
             callables keep the historical contract unchanged.
 
         Returns
@@ -1760,9 +1649,9 @@ class Bundle:
         """
 
         self._require_comparable("compare_at")
-        return self.node(site).diff_pair()
+        return self.node(site).compare()
 
-    def most_changed(
+    def rank_changes(
         self,
         baseline: str | Trace | None = None,
         *,
@@ -1870,7 +1759,7 @@ class Bundle:
             return self._diff_members(a, b)
         self._require_comparable("diff")
         view = self.node(a)
-        return view.diff_pair(other=b if isinstance(b, str) else None)
+        return view.compare(other=b if isinstance(b, str) else None)
 
     def cluster(self, *args: Any, **kwargs: Any) -> None:
         """Placeholder for future bundle clustering.
@@ -1906,7 +1795,7 @@ class Bundle:
             lines.append(f"  - {name}: {', '.join(parts)}")
         return "\n".join(lines)
 
-    def relationship(self, a: str, b: str) -> Relationship:
+    def comparability(self, a: str, b: str) -> Relationship:
         """Return the derived relationship for a pair of members.
 
         Parameters
@@ -1974,7 +1863,7 @@ class Bundle:
         return rows
 
     @property
-    def relationships(self) -> dict[tuple[str, str], Relationship]:
+    def comparability_table(self) -> dict[tuple[str, str], Relationship]:
         """Return pairwise relationships for all member pairs.
 
         Returns
@@ -1986,7 +1875,7 @@ class Bundle:
         matrix: dict[tuple[str, str], Relationship] = {}
         for left in self._members:
             for right in self._members:
-                matrix[(left, right)] = self.relationship(left, right)
+                matrix[(left, right)] = self.comparability(left, right)
         return matrix
 
     @classmethod
@@ -2543,4 +2432,4 @@ class Bundle:
             return None
 
 
-__all__ = ["AmbiguousLabelError", "Bundle"]
+__all__ = ["AmbiguousLabelError", "SuperAtenOp", "SuperOp"]

@@ -20,10 +20,10 @@ The working surfaces behind the "we supply" column:
 - `tl.repgeom.rdm` -- euclidean / manhattan / cosine / correlation RDMs,
   GPU compute device, row-blocked memory-bounded computation, condensed
   output, explicit batched `[B, N, D]` input.
-- `tl.repgeom.rdm_compare` -- DESCRIPTIVE Pearson/Spearman/Kendall tau-a
+- `tl.repgeom.compare_rdms` -- DESCRIPTIVE Pearson/Spearman/Kendall tau-a
   over aligned strict upper triangles (diagonal excluded). No p-values, no
   noise ceilings: asking for them refuses naming rsatoolbox.
-- `tl.repgeom.rdm_compare_interval` / `tl.repgeom.cka_interval` -- the same
+- `tl.repgeom.compare_rdms_interval` / `tl.repgeom.cka_interval` -- the same
   scores with a DESCRIPTIVE percentile bootstrap interval over stimuli
   beside them (`ScoreInterval`: seeded, resample count a parameter). Not a
   test and not rsatoolbox's corrected bootstrap.
@@ -46,7 +46,7 @@ The working surfaces behind the "we supply" column:
 
 | # | Net2Brain method | We supply | We refuse and point |
 |---|---|---|---|
-| 1 | RSA | Per-site/per-time RDMs at scale, stimulus alignment, square/condensed npz + rsatoolbox export, descriptive `rdm_compare` | Brain-RDM acquisition, subject aggregation, t-tests, correction, noise ceilings, %R2, ranking -> Net2Brain `RSA.evaluate` / rsatoolbox |
+| 1 | RSA | Per-site/per-time RDMs at scale, stimulus alignment, square/condensed npz + rsatoolbox export, descriptive `compare_rdms` | Brain-RDM acquisition, subject aggregation, t-tests, correction, noise ceilings, %R2, ranking -> Net2Brain `RSA.evaluate` / rsatoolbox |
 | 2 | Weighted RSA | Ordered multi-site RDM stacks with stable site identity | Weight fitting, regularization, folds, ceilings -> rsatoolbox `ModelWeighted` / Net2Brain `WRSA` |
 | 3 | Cross-temporal RSA | Pass-qualified per-timestep RDMs from ANY recurrent model with zero per-model configuration (Net2Brain needs hand-written per-network cleaners); frame/time pooling | Cross-temporal orchestration and inference -> Net2Brain CT-RSA |
 | 4 | Searchlight RSA | Model RDMs with stimulus identity; npz interchange | Brain-space neighborhoods, maps, tests -> Net2Brain `Searchlight` / rsatoolbox / nilearn |
@@ -99,7 +99,7 @@ descriptor spellings are DOCUMENTED-UNSTABLE.
 | `tl.repgeom.rdm(metric="correlation")` | `rdm/*/correlation` |
 | `tl.repgeom.rdm(metric="gaussian")` | `rdm/*/gaussian` |
 | `tl.repgeom.rdm(metric="manhattan")` | - |
-| `rdm_compare` over `rdm(metric=M)` RDMs, `method="pearson"` | `measure/*/rsa-rdm=M-compare=pearson` (M = euclidean, cosine, correlation, gaussian; - for manhattan) |
-| `rdm_compare` over `rdm(metric=M)` RDMs, `method="spearman"` | `measure/*/rsa-rdm=M-compare=spearman` (same M; - for manhattan) |
-| `rdm_compare` over `rdm(metric="correlation")` RDMs, `method="kendall"` | `measure/*/rsa-rdm=correlation-compare=tau_a` |
-| `rdm_compare` over euclidean, cosine, gaussian or manhattan RDMs, `method="kendall"` | - |
+| `compare_rdms` over `rdm(metric=M)` RDMs, `method="pearson"` | `measure/*/rsa-rdm=M-compare=pearson` (M = euclidean, cosine, correlation, gaussian; - for manhattan) |
+| `compare_rdms` over `rdm(metric=M)` RDMs, `method="spearman"` | `measure/*/rsa-rdm=M-compare=spearman` (same M; - for manhattan) |
+| `compare_rdms` over `rdm(metric="correlation")` RDMs, `method="kendall"` | `measure/*/rsa-rdm=correlation-compare=tau_a` |
+| `compare_rdms` over euclidean, cosine, gaussian or manhattan RDMs, `method="kendall"` | - |

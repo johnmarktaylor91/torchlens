@@ -63,10 +63,10 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..selection import (
-    ResolvedSelection,
+from .._selection import (
+    Selection,
     SelectionError,
-    SiteEntry,
+    Site,
     _apply_invalid,
 )
 from .masked_edit import _derive_masked_edit, _validate_edited
@@ -95,7 +95,7 @@ def _engine_refusal(engine: str) -> SelectionError:
         f"written. engine={engine!r} is unsupported (on rerun the capture "
         "pipeline would snapshot the substituted value into captured "
         "consumed-value fields; set_only has no consumption to substitute). "
-        "Use fork.do(tl.params(...), edit) with engine='replay' (the "
+        "Use fork.do(tl.param(...), edit) with engine='replay' (the "
         "default when no model/x is passed).",
         code="param_substitution_engine_unsupported",
         engine=engine,
@@ -114,10 +114,10 @@ def _underivable(message: str, **fields: Any) -> SelectionError:
     )
 
 
-def _param_for_entry(trace: Trace, entry: SiteEntry) -> Param:
+def _param_for_entry(trace: Trace, entry: Site) -> Param:
     """Return the Param record addressed by one resolved PARAM entry."""
 
-    address = entry.site_key[0]
+    address = entry.key[0]
     for param in getattr(trace, "params", ()):
         if getattr(param, "address", None) == address or param.name == address:
             return param
@@ -223,7 +223,7 @@ def _param_occurrences_for_op(
 
 
 def _substituted_value(
-    entry: SiteEntry,
+    entry: Site,
     edit: Any,
     resolve_digest: str,
     consumed: torch.Tensor,
@@ -269,7 +269,7 @@ class _Staging:
 
 def apply_param_substitution_do(
     trace: Trace,
-    resolved: ResolvedSelection,
+    resolved: Selection,
     edit: Any,
     *,
     engine: str,
@@ -324,9 +324,9 @@ def apply_param_substitution_do(
     staging = _Staging()
     try:
         for entry in resolved:
-            if entry.selected_count == 0:
+            if entry.num_selected == 0:
                 continue
-            _stage_param_entry(trace, entry, edit, resolved.resolve_digest, staging)
+            _stage_param_entry(trace, entry, edit, resolved.digest, staging)
         _propagate_staged(trace, staging, strict=strict)
     except Exception:
         _rollback_param_substitutions(staging.committed)
@@ -341,14 +341,14 @@ def apply_param_substitution_do(
 
 def _stage_param_entry(
     trace: Trace,
-    entry: SiteEntry,
+    entry: Site,
     edit: Any,
     resolve_digest: str,
     staging: _Staging,
 ) -> None:
     """Derive one entry's occurrences, compute its value, stage the stores."""
 
-    param_address = entry.site_key[0]
+    param_address = entry.key[0]
     occurrences_by_op = _derive_entry_occurrences(trace, entry)
     matched_values = [
         value for _, _, occurrences in occurrences_by_op for _, _, value in occurrences
@@ -363,7 +363,7 @@ def _stage_param_entry(
     staged = _existing_param_substitution(occurrences_by_op, param_address)
     with torch.no_grad():
         # Edits COMPOSE like replay hooks (AUD-CODE 4.10): a second
-        # ``do(tl.params(p), scale(0.5))`` derives from the value the
+        # ``do(tl.param(p), scale(0.5))`` derives from the value the
         # consumers currently see (the staged "as if" value), so it yields a
         # quarter, never a fresh half computed from the untouched live param.
         consumed = (staged if staged is not None else first_value).detach().clone()
@@ -439,7 +439,7 @@ def _staged_param_value(payload: Any, param_address: str) -> torch.Tensor | None
 
 
 def _derive_entry_occurrences(
-    trace: Trace, entry: SiteEntry
+    trace: Trace, entry: Site
 ) -> list[tuple[Any, str, list[tuple[str, tuple[Any, ...], torch.Tensor]]]]:
     """Resolve one PARAM entry to ``(op, consumer_label, occurrences)`` rows."""
 
@@ -447,7 +447,7 @@ def _derive_entry_occurrences(
 
     replay_module = importlib.import_module("torchlens.intervention.replay")
     param = _param_for_entry(trace, entry)
-    param_address = entry.site_key[0]
+    param_address = entry.key[0]
     live_param, barcode = _live_param_identity(param)
     if live_param is None and barcode is None:
         raise _underivable(
@@ -671,7 +671,7 @@ def _rollback_param_substitutions(committed: list[tuple[Any, tuple[Any, ...]]]) 
 
 
 def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
-    """Lower a ``tl.params(name)`` selection naming a registered BUFFER (N-IV-9).
+    """Lower a ``tl.param(name)`` selection naming a registered BUFFER (N-IV-9).
 
     Buffers are not parameters: they are versioned graph nodes (one plain op
     per observed version, ``docs/buffers.md``), so the operand a buffer
@@ -701,7 +701,7 @@ def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
         the mask does not match the buffer's shape.
     """
 
-    from ..selection import _ParamTerm, units
+    from .._selection import _ParamTerm, units
 
     node = getattr(selection, "_node", None)
     if not isinstance(node, _ParamTerm):

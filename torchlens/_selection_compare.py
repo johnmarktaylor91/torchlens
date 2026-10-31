@@ -1,7 +1,7 @@
 """Comparative selection producers: differential and cross-pass (L6 producer wave).
 
 Selects by HOW VALUES DIFFER, across runs or across passes. Two producer
-families, both returning :class:`~torchlens.selection.Selection` queries that
+families, both returning :class:`~torchlens._selection.Selection` queries that
 compose with the full ``| & - ~`` algebra and resolve explicitly against one
 trace:
 
@@ -63,18 +63,17 @@ from typing import Any
 
 import torch
 
-from .errors._base import TorchLensWarning
-from .selection import (
-    ResolvedSelection,
+from ._selection import (
     Selection,
     SelectionProvenance,
-    SiteEntry,
+    Selector,
+    Site,
     _join_relation,
     _mask_from_dense,
     _unresolvable,
     register_term_resolver,
 )
-from .selection_values import (
+from ._selection_values import (
     _entry_with_mask,
     _lift_within,
     _op_for_entry,
@@ -82,6 +81,7 @@ from .selection_values import (
     _resolve_population,
     _validate_real_number,
 )
+from .errors._base import TorchLensWarning
 
 __all__ = [
     "changed",
@@ -211,7 +211,7 @@ class _JoinGuard:
             subject_coords=occurrence_coordinates(subject, subject_profile.keys),
         )
 
-    def reference_op(self, node: _CompareTerm, trace: Any, entry: SiteEntry) -> Any:
+    def reference_op(self, node: _CompareTerm, trace: Any, entry: Site) -> Any:
         """Resolve one subject entry's reference op through the join verdict."""
 
         key = entry.structural_site_key
@@ -219,20 +219,20 @@ class _JoinGuard:
         if row is None:
             raise _unresolvable(
                 "site_join_refused",
-                f"site {entry.site_key!r} (structural key {key!r}) is present "
+                f"site {entry.key!r} (structural key {key!r}) is present "
                 "on the SUBJECT capture only: under the guarded site join it "
                 "is a DECLARED addition relative to the reference, and deltas "
                 "for one-sided sites are never guessed. Restrict `within=` to "
                 "shared structure, or read the addition from the differential "
                 "report.",
                 code="selection_unresolvable",
-                site=repr(entry.site_key),
+                site=repr(entry.key),
                 join_verdict="one_sided_subject",
             )
         if not row.joined:
             raise _unresolvable(
                 "site_join_refused",
-                f"the guarded site join REFUSED to pair site {entry.site_key!r} "
+                f"the guarded site join REFUSED to pair site {entry.key!r} "
                 f"(structural key {key!r}) across these two captures "
                 f"(verdict: {row.verdict.value}): its structural cohort does "
                 "not correspond one-to-one between the runs (an insertion, "
@@ -241,7 +241,7 @@ class _JoinGuard:
                 "the unaffected cohorts, or re-capture without the structural "
                 "change.",
                 code="selection_unresolvable",
-                site=repr(entry.site_key),
+                site=repr(entry.key),
                 join_verdict=row.verdict.value,
             )
         subject_op = _op_for_entry(trace, entry)
@@ -255,13 +255,13 @@ class _JoinGuard:
                 "reference; occurrence pairing is exact under the cardinality "
                 "guard and never guessed.",
                 code="selection_unresolvable",
-                site=repr(entry.site_key),
+                site=repr(entry.key),
                 join_verdict="occurrence_absent_on_reference",
             )
         return node.reference.ops[reference_label]
 
 
-def _reference_op_for_entry(node: _CompareTerm, trace: Any, entry: SiteEntry, guard: Any) -> Any:
+def _reference_op_for_entry(node: _CompareTerm, trace: Any, entry: Site, guard: Any) -> Any:
     """Resolve the reference-side op: join-guarded where keyed, address belt otherwise."""
 
     if guard is not None and entry.structural_site_key is not None:
@@ -272,20 +272,20 @@ def _reference_op_for_entry(node: _CompareTerm, trace: Any, entry: SiteEntry, gu
     if subject_key is not None and reference_key is not None and subject_key != reference_key:
         raise _unresolvable(
             "site_not_in_trace",
-            f"the reference trace's op at address {entry.site_key!r} is a "
+            f"the reference trace's op at address {entry.key!r} is a "
             f"structurally DIFFERENT site (structural site key {reference_key!r} "
             f"vs subject {subject_key!r}): the traces do not share this "
             "position, and a delta between structurally different sites would "
             "be a false comparison. Restrict `within=` to genuinely shared "
             "structure.",
-            site=repr(entry.site_key),
+            site=repr(entry.key),
             sample="reference",
         )
     return reference_op
 
 
 def _delta_for_entry(
-    node: _CompareTerm, trace: Any, entry: SiteEntry, guard: Any = None
+    node: _CompareTerm, trace: Any, entry: Site, guard: Any = None
 ) -> torch.Tensor:
     """Compute one entry's subject-minus-reference delta with typed refusals.
 
@@ -307,7 +307,7 @@ def _delta_for_entry(
     return subject_value.to(torch.float64) - reference_value.to(torch.float64)
 
 
-def _read_reference_value(node: _CompareTerm, entry: SiteEntry, reference_op: Any) -> torch.Tensor:
+def _read_reference_value(node: _CompareTerm, entry: Site, reference_op: Any) -> torch.Tensor:
     """Read the reference op's retained activation with the shared typed refusals."""
 
     from .errors._base import TorchLensError
@@ -354,14 +354,14 @@ def _read_reference_value(node: _CompareTerm, entry: SiteEntry, reference_op: An
     return value.detach().cpu()
 
 
-def _machinery_entry(entry: SiteEntry, source: str) -> SiteEntry:
+def _machinery_entry(entry: Site, source: str) -> Site:
     """Return one machinery site as a touched-but-unselected (zero-mask) entry."""
 
     dense = torch.zeros(entry.shape, dtype=torch.bool)
     return _entry_with_mask(entry, dense, "exact", source + " [machinery_excluded]")
 
 
-def _is_machinery_entry(trace: Any, entry: SiteEntry) -> bool:
+def _is_machinery_entry(trace: Any, entry: Site) -> bool:
     """Whether one subject entry is an engine-inserted machinery op (D-7)."""
 
     op = _op_for_entry(trace, entry)
@@ -433,7 +433,7 @@ def _refuse_self_comparison(node: _CompareTerm, trace: Any) -> None:
         )
 
 
-def _resolve_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
+def _resolve_changed(node: _CompareTerm, trace: Any) -> Selection:
     """Resolve the elementwise delta-bound criterion exactly."""
 
     _refuse_self_comparison(node, trace)
@@ -443,13 +443,13 @@ def _resolve_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
         f"changed(above={node.above}, below={node.below}, by={node.by!r}, "
         f"vs={_reference_display(node.reference)!r})"
     )
-    entries: list[SiteEntry] = []
+    entries: list[Site] = []
     for entry in population:
         if _is_machinery_entry(trace, entry):
             entries.append(_machinery_entry(entry, source))
             continue
         delta = _delta_for_entry(node, trace, entry, guard)
-        compared = _compared_delta(delta, node.by, "changed", entry.site_key)
+        compared = _compared_delta(delta, node.by, "changed", entry.key)
         dense = torch.ones(entry.shape, dtype=torch.bool)
         if node.above is not None:
             dense &= compared > node.above
@@ -457,10 +457,10 @@ def _resolve_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
             dense &= compared < node.below
         dense &= entry._mask._dense_ro()
         entries.append(_entry_with_mask(entry, dense, "exact", source))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
-def _resolve_top_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
+def _resolve_top_changed(node: _CompareTerm, trace: Any) -> Selection:
     """Resolve the global delta-rank criterion exactly.
 
     Ranking is GLOBAL across the population with a deterministic tie-break:
@@ -472,7 +472,7 @@ def _resolve_top_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
     _refuse_self_comparison(node, trace)
     population = _resolve_population(node.within, trace)
     guard = _JoinGuard.build(trace, node.reference)
-    per_entry: list[tuple[SiteEntry, torch.Tensor, torch.Tensor]] = []
+    per_entry: list[tuple[Site, torch.Tensor, torch.Tensor]] = []
     for entry in population:
         if _is_machinery_entry(trace, entry):
             span = math.prod(entry.shape)
@@ -480,7 +480,7 @@ def _resolve_top_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
             per_entry.append((entry, zeros, torch.zeros(span, dtype=torch.bool)))
             continue
         delta = _delta_for_entry(node, trace, entry, guard)
-        keys = _compared_delta(delta, node.by, "top_changed", entry.site_key)
+        keys = _compared_delta(delta, node.by, "top_changed", entry.key)
         keys = keys.to(torch.float64)
         valid = entry._mask._dense_ro() & ~torch.isnan(keys)
         per_entry.append((entry, keys.reshape(-1), valid.reshape(-1)))
@@ -519,17 +519,17 @@ def _resolve_top_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
     order = torch.argsort(flat_keys, descending=node.largest, stable=True)[:k]
     selected_flat = torch.zeros(flat_keys.shape[0], dtype=torch.bool)
     selected_flat[order] = True
-    entries: list[SiteEntry] = []
+    entries: list[Site] = []
     offset = 0
     for entry, keys, _ in per_entry:
         span = keys.shape[0]
         dense = selected_flat[offset : offset + span].reshape(entry.shape)
         offset += span
         entries.append(_entry_with_mask(entry, dense, "exact", source))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
-def _resolve_compare_term(node: _CompareTerm, trace: Any) -> ResolvedSelection:
+def _resolve_compare_term(node: _CompareTerm, trace: Any) -> Selection:
     """Resolve one differential term against the subject trace's payloads."""
 
     if node.criterion == "changed":
@@ -544,7 +544,7 @@ def changed(
     above: float | None = None,
     below: float | None = None,
     by: str = "abs",
-) -> Selection:
+) -> Selector:
     """Select elements whose value differs from a reference run's ("what moved?").
 
     The delta is DIRECTIONAL — ``subject - reference``, where the SUBJECT is
@@ -575,7 +575,7 @@ def changed(
         above = _validate_real_number(above, "above", "changed")
     if below is not None:
         below = _validate_real_number(below, "below", "changed")
-    return Selection(
+    return Selector(
         _CompareTerm(
             criterion="changed",
             reference=reference,
@@ -596,7 +596,7 @@ def top_changed(
     fraction: float | None = None,
     by: str = "abs",
     largest: bool = True,
-) -> Selection:
+) -> Selector:
     """Select the elements that changed most (or least) versus a reference run.
 
     Globally ranks ``subject - reference`` deltas across the whole population
@@ -628,7 +628,7 @@ def top_changed(
         fraction = _validate_real_number(fraction, "fraction", "top_changed")
         if not 0.0 <= fraction <= 1.0:
             raise ValueError(f"top_changed `fraction` must be in [0, 1]; got {fraction!r}.")
-    return Selection(
+    return Selector(
         _CompareTerm(
             criterion="top_changed",
             reference=reference,
@@ -671,8 +671,8 @@ class _PassTerm:
 
 
 def _pass_groups(
-    node: _PassTerm, population: ResolvedSelection, producer: str
-) -> list[tuple[str, list[SiteEntry]]]:
+    node: _PassTerm, population: Selection, producer: str
+) -> list[tuple[str, list[Site]]]:
     """Group population entries per layer and select each layer's pass window.
 
     Enforces the cross-pass honesty floor (>= 2 window passes per layer, else
@@ -683,15 +683,15 @@ def _pass_groups(
     constant-shape window).
     """
 
-    by_layer: dict[str, dict[int, SiteEntry]] = {}
+    by_layer: dict[str, dict[int, Site]] = {}
     layer_order: list[str] = []
     for entry in population:
-        layer_label, pass_index = entry.site_key
+        layer_label, pass_index = entry.key
         if layer_label not in by_layer:
             by_layer[layer_label] = {}
             layer_order.append(layer_label)
         by_layer[layer_label][int(pass_index)] = entry
-    groups: list[tuple[str, list[SiteEntry]]] = []
+    groups: list[tuple[str, list[Site]]] = []
     for layer_label in layer_order:
         passes_present = by_layer[layer_label]
         if node.passes is None:
@@ -727,7 +727,7 @@ def _pass_groups(
                     "mask_shape_mismatch",
                     f"layer {layer_label!r} changes shape across the pass window "
                     f"({first_shape!r} vs {entry.shape!r} at pass "
-                    f"{entry.site_key[1]}): elementwise cross-pass statistics "
+                    f"{entry.key[1]}): elementwise cross-pass statistics "
                     "need one index space. Restrict `passes=` to a "
                     "constant-shape window.",
                     site=layer_label,
@@ -791,7 +791,7 @@ def _disclose_episode_pass_axis(trace: Any, producer: str, layer_labels: list[st
     )
 
 
-def _resolve_pass_term(node: _PassTerm, trace: Any) -> ResolvedSelection:
+def _resolve_pass_term(node: _PassTerm, trace: Any) -> Selection:
     """Resolve one cross-pass statistic against a capture's per-pass payloads.
 
     The element population per layer is the INTERSECTION of the window
@@ -804,7 +804,7 @@ def _resolve_pass_term(node: _PassTerm, trace: Any) -> ResolvedSelection:
 
     producer = "stable_across_passes" if node.stat == "stable" else "pass_variance"
     population = _resolve_population(node.within, trace)
-    entries: list[SiteEntry] = []
+    entries: list[Site] = []
     resolved_layers: list[str] = []
     for layer_label, window_entries in _pass_groups(node, population, producer):
         values = []
@@ -842,9 +842,9 @@ def _resolve_pass_term(node: _PassTerm, trace: Any) -> ResolvedSelection:
         resolved_layers.append(layer_label)
         for entry in window_entries:
             entries.append(
-                SiteEntry(
+                Site(
                     kind=entry.kind,
-                    site_key=entry.site_key,
+                    key=entry.key,
                     provenance=SelectionProvenance(
                         relation=_join_relation(relation, "exact"), source=source
                     ),
@@ -854,15 +854,15 @@ def _resolve_pass_term(node: _PassTerm, trace: Any) -> ResolvedSelection:
             )
     if resolved_layers:
         _disclose_episode_pass_axis(trace, producer, resolved_layers)
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
 def stable_across_passes(
     within: Any = None,
     *,
-    tol: float = 0.0,
+    atol: float = 0.0,
     passes: Any = None,
-) -> Selection:
+) -> Selector:
     """Select units stable across a recurrent layer's passes (its occurrences).
 
     Per element of each multi-pass layer in the population, computes the
@@ -888,14 +888,14 @@ def stable_across_passes(
     complement ``~stable_across_passes(...)``. DOCUMENTED-UNSTABLE spelling.
     """
 
-    tol = _validate_real_number(tol, "tol", "stable_across_passes")
-    if tol < 0:
-        raise ValueError(f"stable_across_passes `tol` must be non-negative; got {tol!r}.")
-    return Selection(
+    atol = _validate_real_number(atol, "tol", "stable_across_passes")
+    if atol < 0:
+        raise ValueError(f"stable_across_passes `tol` must be non-negative; got {atol!r}.")
+    return Selector(
         _PassTerm(
             stat="stable",
             within=_lift_within(within, "stable_across_passes"),
-            tol=tol,
+            tol=atol,
             passes=_validate_passes(passes, "stable_across_passes"),
         ),
         kind="ACT",
@@ -908,7 +908,7 @@ def pass_variance(
     above: float | None = None,
     below: float | None = None,
     passes: Any = None,
-) -> Selection:
+) -> Selector:
     """Select units by their variance across a recurrent layer's passes.
 
     Per element, computes the unbiased (n-1) variance in float64 of the
@@ -940,7 +940,7 @@ def pass_variance(
         above = _validate_real_number(above, "above", "pass_variance")
     if below is not None:
         below = _validate_real_number(below, "below", "pass_variance")
-    return Selection(
+    return Selector(
         _PassTerm(
             stat="variance",
             within=_lift_within(within, "pass_variance"),

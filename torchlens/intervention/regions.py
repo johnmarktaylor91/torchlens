@@ -413,7 +413,7 @@ def region(slice_: Any, *, exits: Any = None) -> RegionTarget:
     trace = slice_.source_trace
 
     # Convexity: between(R, R) <= R, in the shipped address algebra.
-    from ..selection_graph import _between_label_set
+    from .._selection_graph import _between_label_set
 
     closure = _between_label_set(graph, members, members)
     if not (closure <= members):

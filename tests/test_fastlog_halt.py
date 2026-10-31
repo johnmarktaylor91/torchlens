@@ -317,7 +317,7 @@ def test_halt_does_not_propagate_as_predicate_failure() -> None:
     )
 
     assert recording.predicate_failures == []
-    assert recording.predicate_failure_overflow_count == 0
+    assert recording.num_predicate_failure_overflows == 0
 
 
 def test_halt_multi_call_recorder_first_halt_wins() -> None:

@@ -15,7 +15,7 @@ importable (gated by ``tests/test_module_import_isolation.py``) while leaving th
 public surface, ``__all__``, and static types unchanged.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from ._affine_source import set_affine_coordinates
 from ._directions import Direction, fit_direction
@@ -27,10 +27,8 @@ from ._metrics import (
 )
 from ._subspace_edits import subspace_ablate, subspace_interchange
 from ._super.super_op import (
-    SuperAtenOp,
     SuperLayer as SuperLayer,
     SuperLayerAccessor as SuperLayerAccessor,
-    SuperOp,
     SuperOpAccessor as SuperOpAccessor,
     TraceAccessor as TraceAccessor,
 )
@@ -39,7 +37,6 @@ from ._topology.topology import (
     SupergraphNode as SupergraphNode,
     TopologyDiff as TopologyDiff,
     build_supergraph as build_supergraph,
-    compare_topology,
 )
 
 # F01 surgery live lanes: the capture-free bound executor, the bind-side
@@ -101,16 +98,17 @@ from .hooks import (
 )
 from .population import Reference, population
 from .regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget
-from .resolver import SiteTable
 from .save import (
     SpecCompat,
     TargetManifestDiff,
     check_spec_compat,
 )
 from .selectors import (
-    at_step,
     facet,
-    site,
+    label_contains,
+    label_matches,
+    model_input,
+    model_output,
 )
 from .sites import SiteSpec as SiteSpec
 
@@ -135,21 +133,16 @@ from .types import (
     Relationship,
 )
 
-if TYPE_CHECKING:  # typing-only mirror of the lazy names below
-    from .bundle import Bundle
-
 __all__ = [
     "AppendBatchDependenceError",
     "AppendMismatchError",
     "AppendStateValidationWarning",
     "AppendStreamingNotSupportedError",
-    "at_step",
     "AxisAmbiguityError",
     "BaselineUndeterminedError",
     "BatchNormTrainModeWarning",
     "BindReport",
     "BoundModel",
-    "Bundle",
     "BundleMemberError",
     "BundleRelationshipError",
     "ControlFlowDivergenceError",
@@ -189,22 +182,22 @@ __all__ = [
     "SpecCompat",
     "SpecMutationError",
     "SpecPortabilityError",
-    "SuperAtenOp",
-    "SiteTable",
     "SpliceModuleDeviceError",
     "SpliceModuleDtypeError",
-    "SuperOp",
     "TargetManifestDiff",
     "check_spec_compat",
-    "compare_topology",
     "compose",
+    "label_contains",
     "Direction",
     "fit_direction",
     "facet",
+    "model_input",
+    "label_matches",
     "permute_batch",
     "Reference",
     "population",
     "SamplingPlan",
+    "model_output",
     "resample_rows_from",
     "sample_from",
     "set_direction_mean",
@@ -213,7 +206,6 @@ __all__ = [
     "subspace_ablate",
     "subspace_interchange",
     "scramble_elements",
-    "site",
     "UnclassifiedSelectorError",
     "UntrustedCallableError",
 ]
@@ -222,9 +214,7 @@ __all__ = [
 # package; see the module docstring. Resolved on first attribute access, after
 # this ``__init__`` has finished executing, so no partially-initialized module is
 # ever observed.
-_LAZY_NAMES: dict[str, str] = {
-    "Bundle": ".bundle",
-}
+_LAZY_NAMES: dict[str, str] = {}
 
 #: Removed spellings: each raises the typed ``facade_redirect`` error naming
 #: its replacement (clean break, no alias).

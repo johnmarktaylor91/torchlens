@@ -85,7 +85,7 @@ def test_accessors_point_never_dump(deep_trace) -> None:
     for accessor in (deep_trace.layers, deep_trace.params, deep_trace.modules, deep_trace.buffers):
         line = repr(accessor)
         assert "\n" not in line
-        assert ".head()" in line and ".find()" in line
+        assert ".head()" in line and ".search()" in line
     assert "buffers" in repr(deep_trace.layers)  # composition note names buffers
     view = str(deep_trace.layers)
     assert len(view.splitlines()) <= 24  # voice rule 9 collection budget
@@ -98,7 +98,7 @@ def test_accessor_head_and_find(deep_trace) -> None:
 
     head = deep_trace.layers.head(3)
     assert len(head) == 3
-    found = deep_trace.params.find("weight")
+    found = deep_trace.params.search("weight")
     assert found and all("weight" in p.address for p in found)
 
 

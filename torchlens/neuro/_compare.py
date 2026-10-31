@@ -356,11 +356,11 @@ def _analysis_runners(
     """Build one scorer per analysis over a site matrix (target work done once)."""
 
     from ..repgeom import rdm
-    from ..repgeom._geometry import rdm_compare
+    from ..repgeom._geometry import compare_rdms
     from ..repgeom._uncertainty import (
         _gram_cka,
         bootstrap_interval,
-        rdm_compare_interval,
+        compare_rdms_interval,
     )
 
     target_rdm = rdm(target, settings["rdm_metric"])
@@ -371,8 +371,8 @@ def _analysis_runners(
 
         site_rdm = rdm(matrix, settings["rdm_metric"])
         if bootstrap is None:
-            return rdm_compare(site_rdm, target_rdm, method=settings["rsa_method"]), None
-        return rdm_compare_interval(
+            return compare_rdms(site_rdm, target_rdm, method=settings["rsa_method"]), None
+        return compare_rdms_interval(
             site_rdm,
             target_rdm,
             settings["rsa_method"],
@@ -453,7 +453,7 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
     the model is never re-run. All scores are descriptive similarities on
     these stimuli, not tests.
 
-    - ``"rsa"``: ``tl.repgeom.rdm_compare(rdm(site, rdm_metric),
+    - ``"rsa"``: ``tl.repgeom.compare_rdms(rdm(site, rdm_metric),
       rdm(target, rdm_metric), rsa_method)``.
     - ``"ridge"``: the cross-validated ridge score of the module docstring
       (seeded ``n_folds`` split, penalty per fold by exact leave-one-out on

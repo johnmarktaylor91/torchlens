@@ -214,7 +214,7 @@ every spelling here is DOCUMENTED-UNSTABLE pending the naming session):
   positive "this ledger belongs to this product" claim. A mismatch refuses
   typed (`episode_coupling_unbound`); a pre-binding artifact refuses
   `episode_coupling_unmintable`.
-- **Step-qualified selectors.** `torchlens.intervention.at_step(*steps)`
+- **Step-qualified selectors.** `torchlens.at_step(*steps)`
   matches ops recorded inside the named 0-based episode steps — live (the
   armed join session's step position) and post hoc (the persisted
   `Op.episode_step` stamps, written at settlement on every episode
@@ -512,7 +512,7 @@ size evidence only) is N per-step captures composed in a `Bundle` with S6
 `episode_member` relation rows, under OBSERVER DISCIPLINE: the driver's
 native forward owns the live carried state; each capture observes an isolated
 copy; a capture product is never the source of carried episode state.
-`Bundle.derive_episode_status(episode_id, ledger=...)` folds member outcomes
+`Bundle.episode_status(episode_id, ledger=...)` folds member outcomes
 into a DERIVED episode status (`episode_complete` /
 `episode_halted_at_step` / `episode_aborted_at_step` /
 `episode_failed_at_step` / `episode_unknown`) — a total, fail-closed

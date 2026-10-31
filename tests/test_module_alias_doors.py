@@ -34,7 +34,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention import site
+from torchlens import site
 from torchlens.intervention.errors import MultiMatchWarning
 
 _X = torch.tensor([[1.0, -2.0, 0.5]])

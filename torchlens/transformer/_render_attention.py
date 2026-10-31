@@ -147,7 +147,7 @@ def _disclosure_lines(view: AttentionView, annotation: Annotation | None) -> lis
         lines.append(view.crop.disclosure())
     if view.gqa is not None:
         lines.append(
-            f"grouped-query attention: {view.gqa.n_query_heads} query heads share "
+            f"grouped-query attention: {view.gqa.num_query_heads} query heads share "
             f"{view.gqa.n_kv_heads} kv groups; each panel header names its kv group "
             "(shared storage is never presented as independent heads)"
         )

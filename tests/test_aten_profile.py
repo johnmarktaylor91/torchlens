@@ -19,7 +19,7 @@ from torchlens._io.prerelease import activate_prerelease_fields
 from torchlens._ir.events import _AtenExecutionContext, _AtenTensorFact
 from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-from torchlens.intervention import SuperAtenOp
+from torchlens.bundle import SuperAtenOp
 from torchlens.validation._invariants_primitive_ops import _check_primitive_op_invariants
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 

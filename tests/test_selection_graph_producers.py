@@ -21,7 +21,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._io.bundle import save as _save_bundle
-from torchlens.selection import SelectionError
+from torchlens._selection import SelectionError
 
 
 class _Branchy(nn.Module):
@@ -105,7 +105,7 @@ def _labels(resolved) -> set[str]:
 
     return {
         f"{layer_label}:{pass_index}"
-        for layer_label, pass_index in (entry.site_key for entry in resolved)
+        for layer_label, pass_index in (entry.key for entry in resolved)
     }
 
 
@@ -150,7 +150,7 @@ def test_neighborhood_masks_are_whole_site_exact(log) -> None:
     resolved = tl.neighborhood("relu_1_2", hops=1).resolve(log)
     for entry in resolved:
         assert entry.provenance.relation == "exact"
-        assert entry.selected_count == entry.mask.numel()
+        assert entry.num_selected == entry.mask.numel()
         assert "neighborhood(hops=1" in entry.provenance.source
 
 
@@ -160,7 +160,7 @@ def test_neighborhood_family_semantics_ignore_element_masks(log) -> None:
     seed = tl.units(_RELU, [(0, 0)])
     resolved = tl.neighborhood(seed, hops=0).resolve(log)
     assert _labels(resolved) == {_RELU}
-    assert resolved[0].selected_count == resolved[0].mask.numel()
+    assert resolved[0].num_selected == resolved[0].mask.numel()
 
 
 def test_neighborhood_accepts_op_and_layer_seeds(log) -> None:
@@ -181,7 +181,7 @@ def test_neighborhood_composes_with_the_algebra(log) -> None:
     restricted = tl.neighborhood("relu_1_2", hops=1) & tl.units(_ADD, [(0, 0)])
     resolved = restricted.resolve(log)
     assert _labels(resolved) == {_ADD}
-    assert resolved[0].selected_count == 1
+    assert resolved[0].num_selected == 1
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +208,7 @@ def test_neighborhood_refuses_param_seed_typed() -> None:
     """PARAM operands refuse selection_kind_incompatible at construction."""
 
     with pytest.raises(SelectionError) as excinfo:
-        tl.neighborhood(tl.params("lin1.weight"))
+        tl.neighborhood(tl.param("lin1.weight"))
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 
@@ -292,7 +292,7 @@ def test_between_refusal_matrix(log) -> None:
     with pytest.raises(ValueError, match="at least one region"):
         tl.between([], "add_1_5")
     with pytest.raises(SelectionError) as excinfo:
-        tl.between(tl.params("lin1.weight"), "add_1_5")
+        tl.between(tl.param("lin1.weight"), "add_1_5")
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
     with pytest.raises(SelectionError) as unresolved:
         tl.between("nonexistent_9_9", "add_1_5").resolve(log)
@@ -445,7 +445,7 @@ def test_slice_lifts_back_into_the_algebra(log, loopy_log) -> None:
 
     view = log.between("linear_1_1", "add_1_5")
     lifted = view.__selection__()
-    assert isinstance(lifted, tl.Selection)  # a QUERY, like Op/Layer lifts
+    assert isinstance(lifted, tl.Selector)  # a QUERY, like Op/Layer lifts
     assert _labels(lifted.resolve(log)) == set(view.labels)
     composed = (view & tl.units(_RELU, [(0, 0)])).resolve(log)
     assert _labels(composed) == {_RELU}
@@ -474,7 +474,7 @@ def test_subgraph_refusal_matrix(log) -> None:
     """Non-ACT regions and non-selection garbage refuse typed."""
 
     with pytest.raises(SelectionError) as excinfo:
-        log.subgraph(tl.params("lin1.weight"))
+        log.subgraph(tl.param("lin1.weight"))
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
     with pytest.raises(ValueError, match="selection-shaped"):
         log.subgraph(42)

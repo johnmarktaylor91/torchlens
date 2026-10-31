@@ -162,7 +162,7 @@ def resolve_mlx_intervention_plan(
         if not isinstance(halt, BaseSelector):
             raise BackendUnsupportedError(
                 "MLX backend supports trace(halt=...) only for static-label "
-                "selectors (tl.func, tl.label, tl.contains, tl.in_module and "
+                "selectors (tl.func, tl.label, tl.label_contains, tl.in_module and "
                 "boolean composites). Value-dependent halt predicates need "
                 "concrete values at predicate time; use the PyTorch backend."
             )
@@ -189,7 +189,7 @@ def _reject_non_static_selector(selector: BaseSelector, *, surface: str) -> None
         return
     raise BackendUnsupportedError(
         f"MLX backend supports trace({surface}=...) only for static-label "
-        "selectors tl.func, tl.label, tl.contains, tl.module, tl.in_module and "
+        "selectors tl.func, tl.label, tl.label_contains, tl.module, tl.in_module and "
         f"boolean composites (&, |, ~) of those; unsupported selector kind "
         f"{unsupported!r}. Value-dependent predicates need concrete activation "
         "values at predicate time, which MLX lazy evaluation does not expose "

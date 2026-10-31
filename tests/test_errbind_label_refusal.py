@@ -58,14 +58,14 @@ REFUSED = {
     "label_pass": lambda: tl.label("conv2d_2_3:1"),
     "label_short_pass": lambda: tl.label("relu_1:1"),
     "label_unknown": lambda: tl.label("nonexistent"),
-    "contains_final": lambda: tl.contains("relu_1_2"),
-    "regex_final": lambda: tl.regex("relu_1_2"),
+    "contains_final": lambda: tl.label_contains("relu_1_2"),
+    "regex_final": lambda: tl.label_matches("relu_1_2"),
     "negated_label": lambda: ~tl.label("relu_1_2"),
     "label_and_func": lambda: tl.func("relu") & tl.label("relu_1_2"),
     "label_or_func": lambda: tl.label("tanh_1_4") | tl.func("relu"),
     "followed_by": lambda: tl.followed_by(tl.func("relu")),
     "preceded_by": lambda: tl.preceded_by(tl.func("relu")),
-    "input_at": lambda: tl.input_at(0),
+    "input_at": lambda: tl.model_input(0),
 }
 
 
@@ -131,8 +131,8 @@ def test_narrowed_remedy_spelling_runs(cnn) -> None:
     "selector",
     [
         pytest.param(lambda: tl.label("relu_1_2_raw"), id="label_raw"),
-        pytest.param(lambda: tl.contains("relu"), id="contains_plain"),
-        pytest.param(lambda: tl.regex("^relu"), id="regex_plain"),
+        pytest.param(lambda: tl.label_contains("relu"), id="contains_plain"),
+        pytest.param(lambda: tl.label_matches("^relu"), id="regex_plain"),
         pytest.param(lambda: tl.func("relu") & tl.in_module("1"), id="func_in_module"),
     ],
 )

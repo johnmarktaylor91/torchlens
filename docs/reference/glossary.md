@@ -153,7 +153,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   COUPLED (attested coupling): `trace.episode_coupling` recomputes and
   compares the capture digest (the positive ledger-to-product binding) and
   serves fire counts plus per-segment facts that never span a measured break;
-  `torchlens.intervention.at_step(*steps)` is the step-qualified selector
+  `torchlens.at_step(*steps)` is the step-qualified selector
   (live and post hoc via the persisted `Op.episode_step` stamps); replay
   derives a fresh ledger or refuses (`episode_coupled_replay_underivable` on
   both `run()` engines; `do()` edits quarantine inherited episode evidence). A diagnostic-tier product for tens of steps
@@ -504,7 +504,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   only a firing report (`.last_report`), and supports HF `generate` with the KV cache on or off.
   It is not an `nn.Module` and bindings never nest; a rule that never fires is recorded on
   `.last_report` and settles by `on_zero_fire` (see **Zero-fire policy**). Decode steps: the binding counts root forwards, so
-  `torchlens.intervention.at_step(k)` on a bound call or `generate` names the k-th forward
+  `torchlens.at_step(k)` on a bound call or `generate` names the k-th forward
   (step 0 is the prefill), on op-level rules and as `tl.module(address) & at_step(...)`
   boundary rules, capture-free; outside a binding or an episode capture the qualifier still
   refuses `episode_step_selector_without_episode`. Gradient edits (`tl.zero_grad`,
@@ -546,7 +546,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `trace.last_run["replayed_with_changed_params"]`. Not detected: an in-place write through
   `param.data` or through a numpy or raw-storage alias. A replaced parameter object
   (`module.weight = nn.Parameter(t)`) is not used by replay at all: the template keeps the
-  captured object. For an as-if weight edit use `fork.do(tl.params(name), edit)`. The rerun
+  captured object. For an as-if weight edit use `fork.do(tl.param(name), edit)`. The rerun
   engine runs the live model and ignores the option.
 
 **torchlens.intervention.subspace_ablate(basis, *, mode="zero", dim=-1, mean=None, seed=None)** — *documented-unstable*
@@ -618,7 +618,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : The frozen result of `fit_direction`: `vector` (1-D, the rows' dtype), `site`,
   `method`, `num_pairs`, `read_token_index`, `model_type` (the traced model's
   `config.model_type`, or `None`) and `provenance`, a
-  `torchlens.selection_subspace.BasisProvenance` whose origin records the site, method, pair
+  `torchlens._selection_subspace.BasisProvenance` whose origin records the site, method, pair
   count, read position and a sha256 digest of the rows, and whose `sha256` is the digest of
   the canonical float64 vector. `direction.steer(m)` is `tl.steer(vector, m, dim=-1)`;
   place it with `tl.when(tl.module(direction.site), ...)`. `direction.to_steering_vectors()`,
@@ -641,11 +641,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   enters a message.
 
 **Bundle**
-: A named collection of aligned Traces, constructed with `tl.bundle(...)` or `tl.Bundle(...)`, for
+: A named collection of aligned Traces, constructed with `tl.Bundle(...)` or `tl.Bundle(...)`, for
   cross-run comparison. `tl.Bundle()` with no members builds an empty bundle to fill later with
   `add`; an empty bundle saves and loads like any other.
 
-**Bundle.member_relations** *(spelling documented-unstable)*
+**Bundle.relations** *(spelling documented-unstable)*
 : The bundle's typed, directed relation rows between members, read as an immutable tuple of
   `MemberRelationRow` (plus `OpaqueRelationRow` for unknown namespaced kinds loaded from an
   artifact). Pair kinds: `alternative_of` (peers; still comparable), `forked_from`,
@@ -811,8 +811,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   predicates as `compare_at`: no ordering path between them, a shared graph, and proven-equal
   input values; otherwise the read refuses with the gate's `bundle_gate_*` code.
 
-**Bundle.derive_episode_status** *(spelling documented-unstable)*
-: `b.derive_episode_status(episode_id, *, ledger=None)` folds the outcomes of the members named by
+**Bundle.episode_status** *(spelling documented-unstable)*
+: `b.episode_status(episode_id, *, ledger=None)` folds the outcomes of the members named by
   `episode_member` rows into a derived episode status (`EpisodeFoldResult`). A derivation, never
   a stored Bundle outcome; without a ledger the ledger-only arms degrade to `episode_unknown`.
 
@@ -1002,7 +1002,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 ## Site selectors
 
 **Label selectors**
-: `tl.label` (exact final label), `tl.contains` (label substring), and `tl.regex` (label
+: `tl.label` (exact final label), `tl.label_contains` (label substring), and `tl.label_matches` (label
   regex pattern) select ops by their public labels. `tl.where` filters a table with a
   predicate callable.
 
@@ -1025,15 +1025,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   whose forward left torch through a numpy or dlpack round trip, with
   `transform_kind="autograd.Function"`, and `jitscript`, one call to a
   `torch.jit.ScriptFunction` from an eager forward, with `transform_kind="jit.script"`);
-  `tl.output` selects model outputs, and
-  `tl.output_at` / `tl.input_at` select a nested output or model-input path.
+  `tl.model_output` selects model outputs, and
+  `tl.intervention.output_at` / `tl.model_input` select a nested output or model-input path.
 
 **Temporal composition**
 : `tl.followed_by` (retroactive successor) and `tl.preceded_by` (lookback predecessor)
   compose with boolean operators to form temporal predicates over the op stream.
 
 **Backward selectors**
-: `tl.grad_fn` (backward grad_fn), `tl.grad_fn_label` (exact grad_fn label),
+: `tl.grad_fn` (backward grad_fn), `tl.intervention.grad_fn_label` (exact grad_fn label),
   `tl.grad_input` / `tl.grad_output` (backward event tensors), `tl.in_backward_pass`
   (one backward pass number), and `tl.without_op` (grad_fns without a paired forward op;
   the former `intervening` alias is removed).
@@ -1256,15 +1256,13 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   output container.
 
 **Capture-product bases**
-: `tl.types.TraceLike` is the shared base for uncooked and cooked capture projections;
-  `tl.ActivationLookup` is the protocol for raw-label/pass/address activation lookup
-  consumers.
+: `tl.types.TraceLike` is the shared base for uncooked and cooked capture projections.
 
 **Namespaces**
 : `tl.fastlog` is the sparse predicate-recording namespace behind `tl.record`;
   `tl.facets` is the semantic facet namespace (canonical home `torchlens.semantic`);
-  `tl.export` holds static export helpers; `tl.bundle(...)` / `tl.Bundle` build aligned
-  Trace collections and `tl.show_bundle_graph` renders a bundle's graph:
+  `tl.export` holds static export helpers; `tl.Bundle(...)` / `tl.Bundle` build aligned
+  Trace collections and `tl.visualization.show_bundle_graph` renders a bundle's graph:
   `nodes="ops"` (default) the union op graph, `nodes="members"` (spelling documented-unstable)
   one node per member and one edge per relation row, from the earlier member to the later one,
   labelled with the kind, the row's `label`, on `fed_by` its basis and coverage, and on
@@ -1278,9 +1276,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   kit, whose methods return exactly what the matching `torchlens.mechinterp` functions return).
   Appliances hang off this one door instead of adding methods to `Trace`; TorchLens's own and
   outside packages register the same way, with
-  `torchlens.accessors.register_appliance(name, factory, summary="", replace=False)`, where
+  `torchlens.appliances.register(name, factory, summary="", replace=False)`, where
   `factory` is a callable taking the trace or a lazily imported `"module:attribute"` path.
-  `torchlens.accessors.registered_appliances()` lists the names with their summaries. An
+  `torchlens.appliances.names()` lists the names with their summaries. An
   unknown name refuses `appliance_unknown` and lists the registered names; re-registering a
   name without `replace=True` refuses `appliance_name_taken`; a malformed name or factory
   refuses `appliance_registration_invalid`. The word clashes with `torchlens.semantic.using(*recipes)`
@@ -1528,17 +1526,17 @@ shims, by declared contract. Each carries the same tag at its definition.
   is the serialized form that keeps the identifier
   (`{"score": ..., "similarity_repository_id": ...}`); pickling keeps it too.
 
-**ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.rdm_compare_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
+**ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.compare_rdms_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
 : A TorchLens score with a descriptive uncertainty interval beside it:
   `score` (the unchanged estimator on all stimuli), `low` and `high` (a
   percentile bootstrap over stimuli), `confidence`, `num_resamples`, `num_valid_resamples`
   (resamples with a finite score), `seed`, `basis` (how the interval was
   made, in words) and `similarity_repository_id` (the measure variant `score`
   computes: the linear CKA identifier from `cka_interval`, `None` from
-  `rdm_compare_interval`, whose precomputed RDMs do not name their metric),
+  `compare_rdms_interval`, whose precomputed RDMs do not name their metric),
   plus `width` and `to_dict()` (every field). `rdm_compare_interval(rdm_a,
   rdm_b, method, num_resamples=1000, seed=0, confidence=0.95)` resamples
-  stimuli and recomputes `rdm_compare`, dropping self-pairs; `cka_interval(a,
+  stimuli and recomputes `compare_rdms`, dropping self-pairs; `cka_interval(a,
   b, ...)` does the same for linear CKA. Descriptive, not a test; inference
   stays with rsatoolbox.
 
@@ -1572,7 +1570,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   analyses=("rsa", "ridge", "cka"))`. Each site's activations are read once
   from what `source` (a Trace with saved activations, an extraction, or a
   `{site: array}` mapping) already holds; the model is never re-run. `"rsa"`
-  is `rdm_compare` over `rdm(site)` and `rdm(target)` (`rdm_metric`,
+  is `compare_rdms` over `rdm(site)` and `rdm(target)` (`rdm_metric`,
   `rsa_method`); `"ridge"` is a cross-validated ridge score (a seeded
   `n_folds` split, the penalty per fold chosen from `ridge_alphas` by exact
   leave-one-out on the training fold, then the mean over target columns of
@@ -1742,15 +1740,15 @@ S2-gated*
 
 **Selection / ResolvedSelection / `__selection__`** — *unstable — no
 deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
-: `tl.Selection` is the composable selection QUERY — a frozen AST over leaf
+: `tl.Selector` is the composable selection QUERY — a frozen AST over leaf
   terms (selector / receptive-field box / gradient-RF / facet / param / unit)
   and boolean combinators, trace-independent; `selection.resolve(trace)`
-  returns a `tl.ResolvedSelection` — frozen, trace-bound, an ordered tuple of
-  `SiteEntry(site_key, mask, provenance)` rows. TWO-LEVEL DENOTATION:
+  returns a `tl.Selection` — frozen, trace-bound, an ordered tuple of
+  `Site(site_key, mask, provenance)` rows. TWO-LEVEL DENOTATION:
   (touched-site family, selected-element set); zero-mask entries are retained
   first-class; `.empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
   type refuses typed (`selection_bool_ambiguous`). Anything region-shaped
-  implements `__selection__`; `SiteEntry.mask` returns a FRESH materialization
+  implements `__selection__`; `Site.mask` returns a FRESH materialization
   (mutation cannot alter the selection). Masks are exact AS SETS; producer
   inexactness rides the closed `provenance.relation` lattice
   (`exact | upper_bound | lower_bound | unknown`). `ResolvedSelection` is
@@ -1767,7 +1765,7 @@ semantics unstable-documented*
   desugars to `and(a, not(b))`; a selector composed with a region producer
   defers to the Selection algebra.
 
-**tl.units / tl.params / tl.random_selection** — *unstable — no deprecation
+**tl.units / tl.param / tl.random_like** — *unstable — no deprecation
 shim owed*
 : Stage-1 producer constructors: `units(site, indices)` (explicit site +
   index set), `params(name, mask=None)` (named-parameter element region),
@@ -1783,7 +1781,7 @@ shim owed*
   then flat index; too-few rankable elements refuse `population_too_small`),
   `top_fraction(within, fraction)` (`k = ceil(fraction * population)`),
   `threshold(within, above=, below=, by=)` (strict open bounds; both = band),
-  `sign(within, 'positive'|'negative'|'zero'|'nonzero', tol=)` (`'zero'` is
+  `sign(within, 'positive'|'negative'|'zero'|'nonzero', atol=)` (`'zero'` is
   the sparsity mask and the single-capture "didn't fire on this input"
   spelling). `within` is `None` (default population: every retained tensor
   site — value claims exist only about retained values), a site label
@@ -1801,9 +1799,9 @@ shim owed*
   at least TWO — the single-capture form is deliberately a different
   spelling (`sign(site, 'zero')`), so one name never means two things. The
   resolution trace supplies geometry and population only; include it in
-  `samples` to count it as evidence. `dead(samples, tol=)` selects elements
-  with `|v| <= tol` in EVERY sample; `saturated(samples, low=, high=, tol=)`
-  selects elements pinned within `tol` of the same declared bound in every
+  `samples` to count it as evidence. `dead(samples, atol=)` selects elements
+  with `|v| <= atol` in EVERY sample; `saturated(samples, low=, high=, atol=)`
+  selects elements pinned within `atol` of the same declared bound in every
   sample (a bound is required — saturation is relative to the
   nonlinearity's range); both make dispositional claims from finite
   evidence and declare `provenance.relation="upper_bound"` (observed-silent
@@ -1836,7 +1834,7 @@ no deprecation shim owed*
   `selection_kind_incompatible`; unknown sites refuse `site_not_in_trace`;
   member sites with no output index space refuse `non_tensor_site` /
   `no_index_space`. Both producers are pure functions over the ONE
-  executed-DAG graph substrate (`torchlens.selection_graph._TraceGraph`,
+  executed-DAG graph substrate (`torchlens._selection_graph._TraceGraph`,
   shared with the influence-geometry path machinery), the seam a future
   graph-MOTIF producer plugs into.
 
@@ -1894,9 +1892,9 @@ deprecation shim owed*
 *unstable — no deprecation shim owed*
 : Select by behaviour ACROSS a recurrent layer's passes, pass-qualified
   throughout (one capture is the evidence; population entries group per
-  layer). `stable_across_passes(within=None, tol=, passes=)` selects
+  layer). `stable_across_passes(within=None, atol=, passes=)` selects
   elements whose range (max - min, float64) across the pass window is
-  `<= tol`; `pass_variance(within=None, above=, below=, passes=)` applies
+  `<= atol`; `pass_variance(within=None, above=, below=, passes=)` applies
   strict bounds on the unbiased (n-1) cross-pass variance (at least one
   bound; "variance explodes late" = `above=` on a late window).
   `passes=None` uses every population pass; an explicit window is an
@@ -1918,7 +1916,7 @@ deprecation shim owed*
 : Select the elements a DIRECTION (or small subspace) in activation space
   lives on — probe directions, steering vectors, PCA components, SAE
   decoder rows. `subspace(within, basis, *, origin=, method=None, dim=-1,
-  tol=0.0)` takes one direction `[d]` or a stack `[k, d]` (canonicalized to
+  atol=0.0)` takes one direction `[d]` or a stack `[k, d]` (canonicalized to
   float64). Under `do()` the edit acts on the COMPONENT along the span of the
   basis rows: with `Q` the rows, on the coordinates `c = Q x`, written back as
   `x + Q^T (edit(c) - c)`; the orthogonal complement is unchanged. Coordinate
@@ -1931,7 +1929,7 @@ deprecation shim owed*
   `do()` (`subspace_projection_composed`); `within=` restricts positions
   (a partial-axis mask refuses `subspace_projection_partial_axis`).
   `resolve()` reports the basis's SUPPORT SET: every element whose coordinate
-  on the bound axis carries weight `|w| > tol` in at least one basis vector,
+  on the bound axis carries weight `|w| > atol` in at least one basis vector,
   expanded across the site's other axes (a dense direction supports the WHOLE
   axis) (docs/intervention_explainers.md, "Subspace edits: the component along
   a basis"). BASIS PROVENANCE IS MANDATORY: `origin=` is
@@ -1939,13 +1937,13 @@ deprecation shim owed*
   optional `method=`, geometry, and the basis's sha256 content digest are
   stamped into every resolved entry's `provenance.source` (and therefore
   `do()` audit records); the frozen
-  `torchlens.selection_subspace.BasisProvenance` record is the programmatic
+  `torchlens._selection_subspace.BasisProvenance` record is the programmatic
   face. DIMENSION HONESTY: `dim=` names the bound site axis (default `-1`,
   the trailing feature axis; conv channel directions are `dim=1`); a site
   whose extent there differs from `d` refuses `selection_unresolvable` /
   `basis_dim_mismatch` — never a silent broadcast, truncation, or padding.
   `within=` is REQUIRED (a direction is minted for one representation
-  space). Non-finite bases and rows entirely at-or-below `tol` refuse at
+  space). Non-finite bases and rows entirely at-or-below `atol` refuse at
   construction (vacuous direction). Resolution is geometry-only (no payload
   reads — unsaved sites resolve); relation is `exact`; PARAM/EDGE
   populations refuse `selection_kind_incompatible` (a parameter-space
@@ -1973,7 +1971,7 @@ deprecation shim owed*
 
 **SelectionError / selection refusal codes** — *unstable — no deprecation
 shim owed; S2-gated*
-: One carrier class (`torchlens.selection.SelectionError`, catalogued in the
+: One carrier class (`torchlens._selection.SelectionError`, catalogued in the
   intervention error catalog) for the closed codes
   `selection_trace_mismatch`, `selection_bool_ambiguous`,
   `selection_kind_incompatible`, `selection_unresolvable` (closed reason set
@@ -2093,7 +2091,7 @@ S2/S3-gated*
 
 **parameter substitution (do over PARAM selections)** — *unstable — no
 deprecation shim owed*
-: `fork.do(tl.params(name, mask=None), edit)` applies the edit "as if" the
+: `fork.do(tl.param(name, mask=None), edit)` applies the edit "as if" the
   parameter were changed, FOR REPLAY ONLY: the value each consuming op sees
   is substituted at its derived occurrence address, and the live
   `nn.Parameter` object is NEVER written (bit-identical before and after —
@@ -2115,7 +2113,7 @@ deprecation shim owed*
   index space, one replay pass over all consumer origins (cone
   recomputation RE-SPLICES every tier-(ii) entry — param, region, AND
   edge kinds — so later pushes never silently revert any edit; a chained
-  `do(tl.params(p), scale(0.5))` COMPOSES on the staged "as if" value,
+  `do(tl.param(p), scale(0.5))` COMPOSES on the staged "as if" value,
   0.25, keeping both FireRecords), and the same validation boundary
   (`edge_intervention_boundary` — a different check, never no check;
   uncorroborated entries FAIL). Replay/push engine ONLY:
@@ -2123,7 +2121,7 @@ deprecation shim owed*
   record (kind `PARAM`) discloses "substituted at consumption … live
   parameters unchanged" — the product is DERIVED-class, never a blessed
   VERIFIED reproduction of the original weights. BUFFER OPERANDS
-  (documented-unstable): `do(tl.params("<buffer address>", mask), edit)` on a
+  (documented-unstable): `do(tl.param("<buffer address>", mask), edit)` on a
   registered buffer (BatchNorm running stats, a rotary cache, recurrent state)
   substitutes the buffer's INITIAL version node, the value its consumers read,
   and replays the cone through the leaf-site path (needs an
@@ -2190,7 +2188,7 @@ shim owed*
   `VisualizationOptions.theme`.
 
 **theme / show_legend (show_bundle_graph kwargs)** — *unstable — no deprecation shim owed*
-: `tl.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
+: `tl.visualization.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
   `Trace.draw`: the skin's page, ink and Helvetica face, `draw`'s node shapes and fills (oval for
   one function call, box for a leaf module, cylinder for a buffer; grey fill for weights), and with
   `show_legend=True` the key under the header. Member lists appear only on nodes and arrows that
@@ -2718,7 +2716,7 @@ deprecation shim owed*
   inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:
   lead line, at most five findings, the exact remainder, the exits). The
   typed results (`TraceAudit`, `DeterminismReport`, `NanReport`,
-  `FindNanResult`, `ParamAudit`, ...) subclass it; those with a house-voice
+  `FindNanReport`, `ParamAudit`, ...) subclass it; those with a house-voice
   `__repr__` keep printing it and serve the card as `report.card()`. The
   table helpers `compare`, `compare_params`, `dead_neurons`,
   `gradient_flow_audit`, `hot_path` and `recompute_candidates` return a

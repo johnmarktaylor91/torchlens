@@ -4,7 +4,7 @@ An appliance is an analysis toolkit bound to one :class:`~torchlens.Trace`
 (for example ``trace.using("mi").head_scores(...)``). Appliances hang off this
 single door instead of adding methods to ``Trace``; TorchLens's own appliances
 and outside packages register the same way, through
-:func:`register_appliance`. Spellings are DOCUMENTED-UNSTABLE.
+:func:`register`. Spellings are DOCUMENTED-UNSTABLE.
 
 A factory is either a callable taking the trace, or a ``"module:attribute"``
 string naming one; the string form defers the import until the first
@@ -40,7 +40,7 @@ class ApplianceEntry:
     factory:
         Callable taking the trace, or a ``"module:attribute"`` path to one.
     summary:
-        One-line description shown by :func:`registered_appliances`.
+        One-line description shown by :func:`names`.
     """
 
     name: str
@@ -49,7 +49,7 @@ class ApplianceEntry:
 
 
 #: The one appliance registry (kernel-enrolled at import). TorchLens-owned
-#: appliances register through :func:`register_appliance` like any outside package.
+#: appliances register through :func:`register` like any outside package.
 _APPLIANCES: Registry[ApplianceEntry] = create_registry("appliances", kind_label="appliance")
 
 
@@ -70,14 +70,14 @@ def _validated_name(name: object) -> str:
             code="appliance_registration_invalid",
             remedy=(
                 "use a name that starts with a letter and contains only letters, digits, "
-                "'_', '.' or '-', e.g. register_appliance('my_pkg', factory)"
+                "'_', '.' or '-', e.g. register('my_pkg', factory)"
             ),
             argument="name",
         )
     return name
 
 
-def register_appliance(
+def register(
     name: str,
     factory: ApplianceFactory | str,
     *,
@@ -141,7 +141,7 @@ def register_appliance(
             code="appliance_name_taken",
             remedy=(
                 f"choose another name, or pass replace=True to "
-                f"register_appliance({checked!r}, factory, replace=True)"
+                f"register({checked!r}, factory, replace=True)"
             ),
             argument="name",
         )
@@ -154,7 +154,7 @@ def register_appliance(
     )
 
 
-def registered_appliances() -> dict[str, str]:
+def names() -> dict[str, str]:
     """Return the registered appliance names with their summaries, sorted by name.
 
     Returns
@@ -183,7 +183,7 @@ def _entry_for(name: object) -> ApplianceEntry:
         listed = "none"
         remedy = (
             "no appliance is registered in this process; register one with "
-            "torchlens.accessors.register_appliance(name, factory) and call trace.using(name)"
+            "torchlens.appliances.register(name, factory) and call trace.using(name)"
         )
     raise InvalidArgumentError(
         f"no appliance named {checked!r}; registered appliances: {listed}",
@@ -224,7 +224,7 @@ def open_appliance(trace: Any, name: str) -> Any:
     return _resolve_factory(_entry_for(name))(trace)
 
 
-register_appliance(
+register(
     "mi",
     "torchlens.mechinterp._appliance:MechInterpAppliance",
     summary="mechinterp kit: head_scores, qk_circuit, ov_circuit",

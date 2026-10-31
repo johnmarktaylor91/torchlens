@@ -13,7 +13,7 @@ historical spelling + pickle-visible identity):
 
 PUBLISHED-CLOSURE HANDOFF (move not executed in C01): the intervention
 triple (``intervention/types`` + ``errors`` + ``selectors``) drags
-``SelectionError`` and ``_SelectionOperand`` out of ``torchlens.selection``
+``SelectionError`` and ``_SelectionOperand`` out of ``torchlens._selection``
 -- "six modules move" vs "drag the selection substrate too" is exactly the
 decision Rule V2 requires publishing, and lane C03 is concurrently
 rewriting those same modules (immutable InterventionSpec). The move rides a
@@ -126,7 +126,7 @@ class TestInterventionTripleHandoff:
     """The published-closure facts for the deferred intervention-triple move."""
 
     def test_closure_still_drags_the_selection_substrate(self) -> None:
-        """The blocker is real: types/errors eagerly import torchlens.selection.
+        """The blocker is real: types/errors eagerly import torchlens._selection.
 
         If this test starts failing, the closure shrank (C03 or a later lane
         broke the selection dependency) and the triple move is unblocked --
@@ -135,8 +135,8 @@ class TestInterventionTripleHandoff:
 
         types_source = (REPO / "torchlens/intervention/types.py").read_text()
         errors_source = (REPO / "torchlens/intervention/errors.py").read_text()
-        assert "from ..selection import" in types_source
-        assert "from ..selection import" in errors_source
+        assert "from .._selection import" in types_source
+        assert "from .._selection import" in errors_source
 
     def test_selectors_depend_on_types(self) -> None:
         selectors_source = (REPO / "torchlens/intervention/selectors.py").read_text()

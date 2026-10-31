@@ -73,7 +73,7 @@ def test_finalized_label_selector_refuses_before_execution() -> None:
             return torch.relu(x)
 
     with pytest.raises(EchoConfigError) as excinfo:
-        tl.trace(Spy(), torch.randn(2, 4), narrate=tl.output(0))
+        tl.trace(Spy(), torch.randn(2, 4), narrate=tl.model_output(0))
     assert _code(excinfo) == "echo_selector_not_live"
     assert ran == []
 

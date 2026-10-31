@@ -29,8 +29,8 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from ..selection import _Mask
-from ..selection_subspace import _basis_digest
+from .._selection import _Mask
+from .._selection_subspace import _basis_digest
 from ._subspace_projection import (
     _ORTHONORMAL_TOL,
     SubspaceProjection,

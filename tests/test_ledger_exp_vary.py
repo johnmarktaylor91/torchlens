@@ -54,7 +54,7 @@ def test_vary_applies_one_spec_per_member_and_returns_self() -> None:
     # The experiment layer wrote the canonical EVENT row on the varied member.
     events = event_audit_rows(bundle["b"])
     assert events and events[-1]["door"] == "do"
-    operation = bundle.operations[-1]
+    operation = bundle.history[-1]
     assert operation.kind == "vary"
     assert operation.params["outcomes"] == {"a": "identity", "b": "completed"}
     assert operation.params["spec_digests"]["b"]
@@ -65,7 +65,7 @@ def test_vary_applies_one_spec_per_member_and_returns_self() -> None:
 def test_vary_sugar_pair_normalizes_to_spec() -> None:
     bundle = _pair()
     bundle.vary({"a": None, "b": (tl.func("relu"), tl.scale(2.0))})
-    assert bundle.operations[-1].params["outcomes"]["b"] == "completed"
+    assert bundle.history[-1].params["outcomes"]["b"] == "completed"
 
 
 def test_vary_coverage_refusals_fire_before_any_mutation() -> None:
@@ -76,7 +76,7 @@ def test_vary_coverage_refusals_fire_before_any_mutation() -> None:
     assert excinfo.value.fields["missing_members"] == ["b"]
     # Nothing mutated, nothing recorded.
     assert bundle["a"].intervention_audit == []
-    assert bundle.operations == ()
+    assert bundle.history == ()
 
     with pytest.raises(BundleExperimentError) as excinfo:
         bundle.vary({"ghost": None, "a": None, "b": None})
@@ -85,13 +85,13 @@ def test_vary_coverage_refusals_fire_before_any_mutation() -> None:
     with pytest.raises(BundleExperimentError) as excinfo:
         bundle.vary({"a": None, "b": "not a spec"})
     assert excinfo.value.fields["code"] == "vary_mapping_invalid"
-    assert bundle.operations == ()
+    assert bundle.history == ()
 
 
 def test_vary_subset_requires_explicit_unmentioned() -> None:
     bundle = _pair()
     bundle.vary({"b": tl.when(tl.func("relu"), tl.scale(0.5))}, unmentioned="unchanged")
-    operation = bundle.operations[-1]
+    operation = bundle.history[-1]
     # Explicit None identity and unmentioned are distinguishable records.
     assert operation.params["outcomes"] == {"a": "unmentioned", "b": "completed"}
     assert operation.params["unmentioned"] == "unchanged"
@@ -120,7 +120,7 @@ def test_vary_partial_failure_disclosed_no_rollback() -> None:
     # The completed member keeps its edit (no rollback claimed) and the
     # chronology row records the partial outcome.
     assert bundle["a"].intervention_audit
-    assert bundle.operations[-1].params["outcomes"]["b"] == "failed"
+    assert bundle.history[-1].params["outcomes"]["b"] == "failed"
 
 
 @pytest.mark.smoke

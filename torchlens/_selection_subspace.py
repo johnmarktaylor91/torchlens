@@ -3,7 +3,7 @@
 Selects the elements a DIRECTION (or small subspace) in activation space
 lives on — the spelling for probe directions, steering vectors, PCA
 components, and SAE feature directions. One producer,
-:func:`subspace`, returning a :class:`~torchlens.selection.Selection` query
+:func:`subspace`, returning a :class:`~torchlens._selection.Selection` query
 that composes with the full ``| & - ~`` algebra and resolves explicitly
 against one trace.
 
@@ -61,14 +61,14 @@ from typing import Any
 
 import torch
 
-from .selection import (
-    ResolvedSelection,
+from ._selection import (
     Selection,
-    SiteEntry,
+    Selector,
+    Site,
     _unresolvable,
     register_term_resolver,
 )
-from .selection_values import (
+from ._selection_values import (
     _entry_with_mask,
     _lift_within,
     _resolve_population,
@@ -100,10 +100,10 @@ class BasisProvenance:
     origin: str
     method: str | None
     sha256: str
-    n_vectors: int
+    num_vectors: int
     space_dim: int
     dim: int
-    tol: float
+    atol: float
     source_dtype: str = "float64"
 
     def summary(self) -> str:
@@ -111,8 +111,8 @@ class BasisProvenance:
 
         method_part = "" if self.method is None else f", method={self.method!r}"
         return (
-            f"subspace(origin={self.origin!r}{method_part}, k={self.n_vectors}, "
-            f"d={self.space_dim}, dim={self.dim}, tol={self.tol}, "
+            f"subspace(origin={self.origin!r}{method_part}, k={self.num_vectors}, "
+            f"d={self.space_dim}, dim={self.dim}, tol={self.atol}, "
             f"basis_sha256={self.sha256})"
         )
 
@@ -190,7 +190,7 @@ def _support_vector(canonical: torch.Tensor, tol: float) -> torch.Tensor:
     return (canonical.abs() > tol).any(dim=0)
 
 
-def _resolve_subspace_term(node: _SubspaceTerm, trace: Any) -> ResolvedSelection:
+def _resolve_subspace_term(node: _SubspaceTerm, trace: Any) -> Selection:
     """Resolve one subspace term to its support set over the population.
 
     Pure geometry: no payload is read, so unsaved sites resolve. Every
@@ -200,11 +200,11 @@ def _resolve_subspace_term(node: _SubspaceTerm, trace: Any) -> ResolvedSelection
 
     record = node.provenance
     population = _resolve_population(node.within, trace)
-    support = _support_vector(node.basis, record.tol)
+    support = _support_vector(node.basis, record.atol)
     source = record.summary()
     if support.numel() > 1 and bool(support.all()):
         source += DENSE_SUPPORT_NOTE
-    entries: list[SiteEntry] = []
+    entries: list[Site] = []
     for entry in population:
         shape = entry.shape
         axis = record.dim if record.dim >= 0 else len(shape) + record.dim
@@ -212,9 +212,9 @@ def _resolve_subspace_term(node: _SubspaceTerm, trace: Any) -> ResolvedSelection
             raise _unresolvable(
                 "basis_dim_mismatch",
                 f"subspace binds basis axis dim={record.dim}, but site "
-                f"{entry.site_key!r} has only {len(shape)} output axes "
+                f"{entry.key!r} has only {len(shape)} output axes "
                 f"(shape {shape!r}). Name an axis of the site's output space.",
-                site=repr(entry.site_key),
+                site=repr(entry.key),
                 dim=record.dim,
                 site_ndim=len(shape),
             )
@@ -222,12 +222,12 @@ def _resolve_subspace_term(node: _SubspaceTerm, trace: Any) -> ResolvedSelection
             raise _unresolvable(
                 "basis_dim_mismatch",
                 f"subspace basis {record.origin!r} is {record.space_dim}-dimensional, "
-                f"but site {entry.site_key!r} has extent {shape[axis]} on axis "
+                f"but site {entry.key!r} has extent {shape[axis]} on axis "
                 f"{axis} (shape {shape!r}). A direction is minted for one "
                 "representation space: it is never broadcast, truncated, or "
                 "padded onto another. Restrict `within=` to sites with a "
                 f"{record.space_dim}-wide axis, or bind a different `dim=`.",
-                site=repr(entry.site_key),
+                site=repr(entry.key),
                 basis_dim=record.space_dim,
                 site_extent=shape[axis],
                 axis=axis,
@@ -236,7 +236,7 @@ def _resolve_subspace_term(node: _SubspaceTerm, trace: Any) -> ResolvedSelection
         view[axis] = record.space_dim
         dense = support.reshape(view).expand(shape) & entry._mask._dense_ro()
         entries.append(_entry_with_mask(entry, dense, "exact", source))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
 def subspace(
@@ -246,8 +246,8 @@ def subspace(
     origin: str,
     method: str | None = None,
     dim: int = -1,
-    tol: float = 0.0,
-) -> Selection:
+    atol: float = 0.0,
+) -> Selector:
     """Select the elements a direction (or subspace) in activation space lives on.
 
     ``basis`` is one direction ``[d]`` or a stack ``[k, d]`` (probe
@@ -300,16 +300,16 @@ def subspace(
         raise ValueError(f"subspace `method` must be None or a non-empty string; got {method!r}.")
     if isinstance(dim, bool) or not isinstance(dim, int):
         raise ValueError(f"subspace `dim` must be an int axis index; got {dim!r}.")
-    tol = _validate_real_number(tol, "tol", "subspace")
-    if tol < 0:
-        raise ValueError(f"subspace `tol` must be non-negative; got {tol!r}.")
+    atol = _validate_real_number(atol, "tol", "subspace")
+    if atol < 0:
+        raise ValueError(f"subspace `tol` must be non-negative; got {atol!r}.")
     canonical = _canonicalize_basis(basis)
     row_max = canonical.abs().max(dim=1).values
-    if (row_max <= tol).any():
-        silent = int((row_max <= tol).sum().item())
+    if (row_max <= atol).any():
+        silent = int((row_max <= atol).sum().item())
         raise ValueError(
             f"subspace `basis` has {silent} direction(s) with every weight "
-            f"<= tol ({tol}): a direction that contributes no support is "
+            f"<= tol ({atol}): a direction that contributes no support is "
             "vacuous by construction. Drop the zero/sub-tol rows or lower "
             "`tol`."
         )
@@ -317,13 +317,13 @@ def subspace(
         origin=origin,
         method=method,
         sha256=_basis_digest(canonical),
-        n_vectors=int(canonical.shape[0]),
+        num_vectors=int(canonical.shape[0]),
         space_dim=int(canonical.shape[1]),
         dim=dim,
-        tol=tol,
+        atol=atol,
         source_dtype=str(basis.dtype).removeprefix("torch."),
     )
-    return Selection(
+    return Selector(
         _SubspaceTerm(
             within=_lift_within(within, "subspace"),
             basis=canonical,

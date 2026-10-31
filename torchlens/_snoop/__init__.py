@@ -20,7 +20,7 @@ from ._errors import EchoConfigError, EchoStatsError
 from ._event import NARRATION_KINDS, NarrationEvent, NarrationStats
 from ._format import render_line, render_stats_segment
 from ._narrate import narrate_partial, narrate_recording, narrate_trace
-from ._normalize import normalize_echo, refuse_echo_shaped_predicate
+from ._normalize import normalize_echo
 from ._session import EchoSession, active_echo_session
 from ._sink import EchoSink
 from ._stats import EXACT_NUMEL_BUDGET, SAMPLED_BUDGET
@@ -42,7 +42,6 @@ __all__ = [
     "narrate_recording",
     "narrate_trace",
     "normalize_echo",
-    "refuse_echo_shaped_predicate",
     "render_line",
     "render_stats_segment",
 ]

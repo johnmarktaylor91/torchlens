@@ -1,6 +1,6 @@
 """Decode-step selector on the capture-free bound and steer_generate path (R2-25, N-IV-12).
 
-``torchlens.intervention.at_step(k)`` on a bound ``generate`` fires only during
+``torchlens.at_step(k)`` on a bound ``generate`` fires only during
 the k-th forward of the generation (step 0 is the prefill), capture-free. Each
 row is checked against plain PyTorch forward hooks that count the model's
 forward calls and apply the same edit at the same step, comparing the per-step
@@ -16,7 +16,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.intervention import at_step
+from torchlens import at_step
 from torchlens.intervention.errors import SelectorCapabilityError
 from torchlens.intervention.steering import steer_generate
 

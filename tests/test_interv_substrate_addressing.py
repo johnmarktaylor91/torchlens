@@ -200,7 +200,7 @@ def test_align_to_survives_label_renumbering_via_corroborated_join() -> None:
     fc2_selection = tl.units("linear_2_3", [(0, 0)]).resolve(base)
     aligned = fc2_selection.align_to(inserted)
     (entry,) = tuple(aligned)
-    assert entry.site_key[0] == "linear_2_4"
+    assert entry.key[0] == "linear_2_4"
     # The unchanged-address path still aligns identically (fast path).
     same = selection.align_to(inserted)
-    assert tuple(same)[0].site_key[0] == "linear_1_1"
+    assert tuple(same)[0].key[0] == "linear_1_1"

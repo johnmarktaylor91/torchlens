@@ -311,11 +311,11 @@ def test_decoded_output_roundtrips_tlspec_and_decode_output_is_bounded(tmp_path:
     restored = tl.load(bundle_path)
 
     assert restored.decoded_output == trace.decoded_output
-    assert restored.decode_output(top_n=1) == {
+    assert restored.decode_output(k=1) == {
         "kind": "batch_topk",
         "rows": [trace.decoded_output["rows"][0]],
     }
-    assert len(restored.decode_output(top_n=10)["rows"]) == 3
+    assert len(restored.decode_output(k=10)["rows"]) == 3
 
 
 def test_cache_key_changes_when_only_id2label_changes(tmp_path: Path) -> None:

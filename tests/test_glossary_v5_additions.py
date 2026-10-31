@@ -7,10 +7,10 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._data_classes import ParamAccessor
 from torchlens._data_classes.layer import OpAccessor
 from torchlens._data_classes.module import Module, ModuleCall
 from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import ParamAccessor
 from torchlens.options import CaptureOptions
 
 

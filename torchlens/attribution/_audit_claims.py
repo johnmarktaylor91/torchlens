@@ -96,7 +96,7 @@ class _AuditPlan:
         return None
 
     def unit_scores(self) -> dict[tuple[int, ...], float]:
-        """Score every unit ablated alone, in one ``torchlens.experiment.site_sweep``.
+        """Score every unit ablated alone, in one ``torchlens.experiment.sweep_sites``.
 
         One candidate per unit, ``tl.units(label, mask)``, all with the one
         edit of this site (zero, mean or baseline); a candidate the sweep did
@@ -119,7 +119,7 @@ class _AuditPlan:
     def intervention(self, units: tuple[tuple[int, ...], ...]) -> tuple[tuple[Any, Any], ...]:
         """Return the ``(tl.units(label, mask), edit)`` pair ablating ``units``."""
 
-        from torchlens.selection import units as unit_selection
+        from torchlens._selection import units as unit_selection
 
         return ((unit_selection(self.label, _unit_mask(self.shape, units)), self.edit()),)
 

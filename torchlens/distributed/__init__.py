@@ -32,11 +32,8 @@ from ._audit import (
     audit_membership_lineages,
 )
 from ._ledger import (
-    GroupLifecycleEvent,
-    GroupLifecycleLedger,
     LineageEntry as LineageEntry,
     LineageVector as LineageVector,
-    membership_digest_for_ranks,
 )
 from ._lifecycle import (
     AmbiguousGroupLifetimeError,
@@ -57,13 +54,10 @@ __all__ = [
     "AmbiguousGroupLifetimeError",
     "ArmingRecord",
     "GroupIdentity",
-    "GroupLifecycleEvent",
-    "GroupLifecycleLedger",
     "UncapturedCollectiveOpError",
     "arm",
     "audit_membership_lineages",
     "disarm",
     "is_vetted_build",
     "is_armed",
-    "membership_digest_for_ranks",
 ]

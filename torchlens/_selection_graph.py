@@ -1,7 +1,7 @@
 """Graph-structural selection producers (L6 producer wave, graph slice).
 
 Selects by WHERE OPS SIT IN THE EXECUTED DAG, not by value or by name. Two
-producers, both returning :class:`~torchlens.selection.Selection` queries
+producers, both returning :class:`~torchlens._selection.Selection` queries
 that compose with the full ``| & - ~`` algebra and resolve explicitly
 against one trace:
 
@@ -48,10 +48,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from .selection import (
-    ResolvedSelection,
+from ._selection import (
     Selection,
     SelectionError,
+    Selector,
     _act_entry,
     _lift,
     _mask_whole,
@@ -228,7 +228,7 @@ def _lift_region(value: Any, producer: str, operand: str) -> Any:
     if isinstance(value, str):
         if not value:
             raise ValueError(f"{producer} `{operand}` site label must be a non-empty string.")
-        return Selection(_WholeSiteTerm(site_label=value, pass_index=None), kind="ACT")
+        return Selector(_WholeSiteTerm(site_label=value, pass_index=None), kind="ACT")
     lifted = _lift(value)
     if lifted is None:
         raise ValueError(
@@ -265,10 +265,10 @@ def _lift_region_group(value: Any, producer: str, operand: str) -> tuple[Any, ..
     return (_lift_region(value, producer, operand),)
 
 
-def _resolve_region(operand: Any, trace: Any) -> ResolvedSelection:
+def _resolve_region(operand: Any, trace: Any) -> Selection:
     """Resolve one lifted endpoint operand against the resolution trace."""
 
-    if isinstance(operand, ResolvedSelection):
+    if isinstance(operand, Selection):
         if operand._trace is not trace:
             raise SelectionError(
                 "a graph-producer endpoint is bound to a different trace; "
@@ -279,9 +279,7 @@ def _resolve_region(operand: Any, trace: Any) -> ResolvedSelection:
     return operand.resolve(trace)
 
 
-def _region_labels(
-    graph: _TraceGraph, resolved: ResolvedSelection, producer: str
-) -> frozenset[str]:
+def _region_labels(graph: _TraceGraph, resolved: Selection, producer: str) -> frozenset[str]:
     """Map a resolved region's touched-site family to graph node labels.
 
     Family semantics: element masks never shrink a graph region — a
@@ -291,10 +289,10 @@ def _region_labels(
 
     labels: set[str] = set()
     for entry in resolved:
-        label = graph.by_site.get(entry.site_key)
+        label = graph.by_site.get(entry.key)
         if label is None:
             raise RuntimeError(
-                f"{producer} resolved site {entry.site_key!r} on this trace but "
+                f"{producer} resolved site {entry.key!r} on this trace but "
                 "the executed-DAG index has no such node; the site and graph "
                 "universes drifted (internal invariant)."
             )
@@ -304,7 +302,7 @@ def _region_labels(
 
 def _materialize_labels(
     graph: _TraceGraph, trace: Any, labels: frozenset[str], source: str
-) -> ResolvedSelection:
+) -> Selection:
     """Materialize a node-label set as whole-site ACT entries (exact).
 
     The ONE door from substrate label sets to the selection algebra —
@@ -318,7 +316,7 @@ def _materialize_labels(
         _act_entry(graph.ops[label], _mask_whole(_site_shape(graph.ops[label])), "exact", source)
         for label in graph.execution_ordered(labels)
     ]
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
 # ---------------------------------------------------------------------------
@@ -346,7 +344,7 @@ class _SliceMembersTerm:
         return f"slice_members(n={len(self.sites)}, from={self.display})"
 
 
-def _resolve_slice_members_term(node: _SliceMembersTerm, trace: Any) -> ResolvedSelection:
+def _resolve_slice_members_term(node: _SliceMembersTerm, trace: Any) -> Selection:
     """Resolve a slice's member family against one trace (whole-site exact)."""
 
     graph = _TraceGraph.from_trace(trace)
@@ -392,7 +390,7 @@ class _BetweenTerm:
         return f"between(sources=[{sources}], sinks=[{sinks}])"
 
 
-def _resolve_neighborhood_term(node: _NeighborhoodTerm, trace: Any) -> ResolvedSelection:
+def _resolve_neighborhood_term(node: _NeighborhoodTerm, trace: Any) -> Selection:
     """Resolve one n-hop neighborhood against the trace's executed DAG."""
 
     graph = _TraceGraph.from_trace(trace)
@@ -402,7 +400,7 @@ def _resolve_neighborhood_term(node: _NeighborhoodTerm, trace: Any) -> ResolvedS
     return _materialize_labels(graph, trace, labels, source)
 
 
-def _resolve_between_term(node: _BetweenTerm, trace: Any) -> ResolvedSelection:
+def _resolve_between_term(node: _BetweenTerm, trace: Any) -> Selection:
     """Resolve one influence region against the trace's executed DAG."""
 
     labels, graph = resolve_between_labels(trace, node.sources, node.sinks)
@@ -435,11 +433,11 @@ def resolve_between_labels(
 
 
 def neighborhood(
-    of: Any,
+    selector: Any,
     hops: int = 1,
     *,
     direction: str = "both",
-) -> Selection:
+) -> Selector:
     """Select every op within N dataflow hops of a seed region.
 
     Bounded traversal over THIS capture's executed DAG from the seed's
@@ -463,15 +461,15 @@ def neighborhood(
         raise ValueError(
             f"neighborhood `direction` must be one of {_DIRECTIONS}; got {direction!r}."
         )
-    return Selection(
+    return Selector(
         _NeighborhoodTerm(
-            seed=_lift_region(of, "neighborhood", "of"), hops=hops, direction=direction
+            seed=_lift_region(selector, "neighborhood", "of"), hops=hops, direction=direction
         ),
         kind="ACT",
     )
 
 
-def between(sources: Any, sinks: Any) -> Selection:
+def between(sources: Any, sinks: Any) -> Selector:
     """Select the executed sub-DAG carrying influence from sources to sinks.
 
     Exactly the ops lying on at least one directed source-to-sink dataflow
@@ -488,7 +486,7 @@ def between(sources: Any, sinks: Any) -> Selection:
     DOCUMENTED-UNSTABLE spelling.
     """
 
-    return Selection(
+    return Selector(
         _BetweenTerm(
             sources=_lift_region_group(sources, "between", "sources"),
             sinks=_lift_region_group(sinks, "between", "sinks"),

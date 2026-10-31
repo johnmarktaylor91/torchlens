@@ -140,7 +140,7 @@ def test_session_vs_floor_full_surface_differential():
             next_token = model(current).argmax(-1, keepdim=True)
         driver_tokens.append(int(next_token))
         current = torch.cat([current, next_token], dim=1)
-    bundle = tl.Bundle(members, member_relations=relations)
+    bundle = tl.Bundle(members, relations=relations)
 
     # Token identity across all three sources of truth.
     assert session_tokens == native_tokens == driver_tokens
@@ -151,8 +151,8 @@ def test_session_vs_floor_full_surface_differential():
     # ledger-witnessed; without a re-supplied ledger the all-COMPLETE prefix
     # degrades fail-closed to episode_unknown — the disclosed pre-bump truth
     # loss). Supplying the ledger re-derives the full verdict.
-    assert bundle.derive_episode_status(ledger.header.episode_id).status == "episode_unknown"
-    fold = bundle.derive_episode_status(ledger.header.episode_id, ledger=ledger)
+    assert bundle.episode_status(ledger.header.episode_id).status == "episode_unknown"
+    fold = bundle.episode_status(ledger.header.episode_id, ledger=ledger)
     assert fold.status == "episode_complete"
     assert fold.provenance_tier == "exact"
 

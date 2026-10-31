@@ -16,9 +16,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._selection_subspace import DENSE_SUPPORT_NOTE
 from torchlens.errors._base import TorchLensWarning
 from torchlens.intervention._subspace_projection import PROJECTION_NOTE
-from torchlens.selection_subspace import DENSE_SUPPORT_NOTE
 
 _D = 8
 

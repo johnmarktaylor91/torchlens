@@ -45,6 +45,18 @@ SelectorKind: TypeAlias = Literal[
 ]
 
 
+#: Public ``tl.*`` spelling of each selector kind whose stored value predates its rename
+#: (the stored ``selector_kind`` stays, so persisted specs keep loading).
+_KIND_SPELLINGS: dict[str, str] = {
+    "contains": "label_contains",
+    "input_at": "model_input",
+    "output": "model_output",
+    "regex": "label_matches",
+    "grad_fn_label": "intervention.grad_fn_label",
+    "output_at": "intervention.output_at",
+}
+
+
 @dataclass(frozen=True)
 class BaseSelector:
     """Base class for typed TorchLens site selectors."""
@@ -170,7 +182,7 @@ class BaseSelector:
         BEFORE lifting (``~lift(s) != lift(~s)``, pinned non-law).
         """
 
-        from ..selection import _selection_from_selector
+        from .._selection import _selection_from_selector
 
         return _selection_from_selector(self)
 
@@ -220,7 +232,8 @@ class BaseSelector:
             Repr containing the selector kind and payload.
         """
 
-        return f"tl.{self.selector_kind}({self.selector_value!r})"
+        spelling = _KIND_SPELLINGS.get(self.selector_kind, self.selector_kind)
+        return f"tl.{spelling}({self.selector_value!r})"
 
     def __call__(self, ctx: Any) -> bool:
         """Return whether this selector matches a predicate record context.
@@ -1373,7 +1386,7 @@ def preceded_by(selector: SelectorLike, /) -> PrecededBySelector:
     return PrecededBySelector(selector)
 
 
-def output(target: int | str) -> OutputSelector:
+def model_output(target: int | str) -> OutputSelector:
     """Create an output selector.
 
     Parameters
@@ -1408,7 +1421,7 @@ def output_at(path: Any) -> OutputPathSelector:
     return OutputPathSelector(normalized)
 
 
-def input_at(*path: Any) -> InputPathSelector:
+def model_input(*path: Any) -> InputPathSelector:
     """Create a nested model-input path selector.
 
     Parameters
@@ -1442,7 +1455,7 @@ def module(address: str) -> ModuleSelector:
     return ModuleSelector(address)
 
 
-def contains(substring: str) -> ContainsSelector:
+def label_contains(substring: str) -> ContainsSelector:
     """Create a label-substring selector.
 
     Parameters
@@ -1459,7 +1472,7 @@ def contains(substring: str) -> ContainsSelector:
     return ContainsSelector(substring)
 
 
-def regex(pattern: str) -> RegexSelector:
+def label_matches(pattern: str) -> RegexSelector:
     """Create a label regex-pattern selector.
 
     Parameters
@@ -1914,7 +1927,7 @@ __all__ = [
     "SiteSelector",
     "WhereSelector",
     "at_step",
-    "contains",
+    "label_contains",
     "facet",
     "func",
     "func_transform",
@@ -1928,12 +1941,12 @@ __all__ = [
     "grad_fn_label",
     "head",
     "module",
-    "output",
+    "model_output",
     "output_at",
-    "input_at",
+    "model_input",
     "site",
     "preceded_by",
-    "regex",
+    "label_matches",
     "where",
     "without_op",
 ]

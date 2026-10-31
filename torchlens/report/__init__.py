@@ -7,13 +7,15 @@ from ..debug._cost import hot_path, hot_path_rows
 from ..debug._first_bad import FirstBadThing, amp_scaled_grads_hint
 from ..debug._flops_vs_dispatch import flops_vs_dispatch
 from ..debug._grad_fn_walk import GradFnNode, GradFnSketch, sketch_grad_fn, walk_grad_fn
-from ..debug._graph import LineageReport, first_divergence, lineage
+from ..debug._graph import LineageReport, compare, first_divergence, lineage
 from ..debug._graph_breaks import graph_breaks
 from ..debug._infer_input_shape import GuessInputShapeReport, guess_input_shape
-from ..debug._nan import BisectNanReport, bisect_nan
+from ..debug._nan import BisectNanReport, FindNanReport, bisect_nan, find_nan
 from ..debug._nan_backward import BackwardNanReport, BackwardTransition, bisect_nan_backward
+from ..debug._params import compare_params
 from ..debug._precision import BisectPrecisionReport, bisect_precision
 from ..debug._recompute import recompute_candidates
+from ..intervention._topology.topology import compare_topology
 from ._compute_truth import ComputeAggregation, ComputeRow, RatioFact, compute_aggregation
 from ._cost_backward import (
     BACKWARD_STATES,
@@ -115,6 +117,11 @@ from ._summary_report import (
 
 __all__ = [
     "isolated_capture",
+    "FindNanReport",
+    "compare",
+    "compare_params",
+    "compare_topology",
+    "find_nan",
     "BACKWARD_STATES",
     "CACHE_RESIDENT_BYTES_DEFAULT",
     "COST_CLASSES",

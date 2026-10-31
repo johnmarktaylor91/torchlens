@@ -25,7 +25,7 @@ stages = tl.extract(backbone, torch.randn(1, 4), ["layer1", "layer2"])
 stage_log = tl.trace(backbone, torch.randn(1, 4), save=["layer1", "layer2"])  # list form
 stage_log["layer2"].out
 # Appliances hang off one door: trace.using(name), registered with
-# torchlens.accessors.register_appliance(name, factory) (spellings DOCUMENTED-UNSTABLE).
+# torchlens.appliances.register(name, factory) (spellings DOCUMENTED-UNSTABLE).
 print(log.summary())
 print(tl.report.explain(log))
 log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs
@@ -114,7 +114,7 @@ fork.do(inter, tl.zero_ablate())           # edit-then-scatter: only masked elem
 fork2 = log.fork()
 fork2.do(tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(fork2), tl.patch_from(log))
 fork3 = log.fork()
-fork3.do(tl.params("head.weight"), tl.scale(0.5))  # "as if" the weight changed, replay-only:
+fork3.do(tl.param("head.weight"), tl.scale(0.5))  # "as if" the weight changed, replay-only:
 # every consumption is substituted; the live nn.Parameter is NEVER written.
 print(fork.intervention_audit[-1])         # query repr + resolve digest + relations
 ```
@@ -236,7 +236,7 @@ comments name the exports that need one.
 
 ```python
 # trace.using(name) appliances, with a one-line summary each.
-appliances = tl.accessors.registered_appliances()  # {name: summary}, sorted by name
+appliances = tl.appliances.names()  # {name: summary}, sorted by name
 # Subspace and position edits are plain tl.Edit objects; apply them with do() or fork.do().
 basis = torch.eye(4)[:1]  # [k, d]: one direction over a 4-wide feature axis
 ablate = tl.intervention.subspace_ablate(basis, dim=1)  # x - P x on the span

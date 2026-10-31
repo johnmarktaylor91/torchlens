@@ -87,7 +87,7 @@ def stepped_pair() -> Any:
 
 @pytest.fixture()
 def ckpt_bundle(stepped_pair: dict[str, Any]) -> Any:
-    return tl.bundle({"ck0": stepped_pair["trace_before"], "ck64": stepped_pair["trace_after"]})
+    return tl.Bundle({"ck0": stepped_pair["trace_before"], "ck64": stepped_pair["trace_after"]})
 
 
 def _assert_checkpoint_refusal(excinfo: pytest.ExceptionInfo[Any], *members: str) -> None:
@@ -191,13 +191,13 @@ def test_refusal_survives_member_save_load_before_nan_empty_degradation(
     path1 = tmp_path / "ck64.tlspec"
     stepped_pair["trace_before"].save(path0)
     stepped_pair["trace_after"].save(path1)
-    loaded = tl.bundle({"ck0": tl.load(path0), "ck64": tl.load(path1)})
+    loaded = tl.Bundle({"ck0": tl.load(path0), "ck64": tl.load(path1)})
     view = loaded.params[_WEIGHT]
     with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
         _ = view.weight_norm_diff
     _assert_checkpoint_refusal(excinfo, "ck0", "ck64")
     with pytest.raises(CheckpointSeriesLiveParamsError):
-        view.diff_pair()
+        view.compare()
     # The absent leg names the degradation shape the refusal replaces.
     assert "nothing to compare" in str(excinfo.value)
 
@@ -224,11 +224,11 @@ def test_ordinary_bundle_activation_reads_do_not_trigger() -> None:
 
     model = _toy_model()
     x = _toy_input()
-    bundle = tl.bundle({"a": tl.trace(model, x), "b": tl.trace(model, x)})
+    bundle = tl.Bundle({"a": tl.trace(model, x), "b": tl.trace(model, x)})
     matrix = bundle.compare_at("relu_1_2")
     assert tuple(matrix.shape) == (2, 2)
     view = bundle.node("relu_1_2")
-    assert tuple(view.diff_pair().shape) == (2, 2)
+    assert tuple(view.compare().shape) == (2, 2)
     assert view.aggregate("mean").shape == view.members["a"].out.shape
     assert bundle.diff_pair("a", "b")
 
@@ -239,7 +239,7 @@ def test_version_row_still_orders_members(ckpt_bundle: Any) -> None:
     related = ckpt_bundle.relate(
         {"kind": "successor_of", "from": "ck64", "to": "ck0", "params": {}}
     )
-    rows = related.member_relations
+    rows = related.relations
     assert len(rows) == 1
     assert rows[0].kind == "successor_of"
     assert rows[0].named_members() == ("ck64", "ck0")
@@ -254,7 +254,7 @@ def test_single_member_param_view_keeps_live_handle_contract(
 ) -> None:
     """One resolved member is not a cross-member claim: the live read stands."""
 
-    bundle = tl.bundle({"only": stepped_pair["trace_before"]})
+    bundle = tl.Bundle({"only": stepped_pair["trace_before"]})
     view = bundle.params[_WEIGHT]
     out = view.out
     assert isinstance(out, torch.Tensor)
@@ -277,8 +277,8 @@ def test_direct_param_value_read_contract_untouched(stepped_pair: dict[str, Any]
     "read",
     [
         pytest.param(lambda view: view.weight_norm_diff, id="weight_norm_diff"),
-        pytest.param(lambda view: view.diff_pair(), id="diff_pair"),
-        pytest.param(lambda view: view.diff_pair(other="ck0"), id="diff_pair_row"),
+        pytest.param(lambda view: view.compare(), id="diff_pair"),
+        pytest.param(lambda view: view.compare(other="ck0"), id="diff_pair_row"),
         pytest.param(lambda view: view.aggregate("mean"), id="aggregate_mean"),
         pytest.param(lambda view: view.aggregate("std"), id="aggregate_std"),
         pytest.param(lambda view: view.out, id="out"),
@@ -331,7 +331,7 @@ def test_halted_member_still_refuses_param_claim(stepped_pair: dict[str, Any]) -
     x = stepped_pair["x"]
     halted = tl.trace(model, x, halt=tl.func("relu"))
     assert halted.outcome.status.name == "STOPPED"
-    bundle = tl.bundle({"h": halted, "c": stepped_pair["trace_before"]})
+    bundle = tl.Bundle({"h": halted, "c": stepped_pair["trace_before"]})
     with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
         _ = bundle.params[_WEIGHT].weight_norm_diff
     _assert_checkpoint_refusal(excinfo, "h", "c")
@@ -371,7 +371,7 @@ def test_until_r8b_the_public_read_still_refuses(ckpt_bundle: Any) -> None:
     related = ckpt_bundle.relate(
         {"kind": "forked_from", "from": "ck64", "to": "ck0", "params": {"at_step": 64}}
     )
-    row_payload = related.member_relations[0].to_payload()
+    row_payload = related.relations[0].to_payload()
     assert set(row_payload) == {"kind", "from", "to", "params"}  # no evidence key minted here
     with pytest.raises(CheckpointSeriesLiveParamsError):
         _ = related.params[_WEIGHT].out

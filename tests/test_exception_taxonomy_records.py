@@ -106,7 +106,7 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
     (
         "top_n_invalid",
         ValueError,
-        lambda log: log.output_table(top_n=0),
+        lambda log: log.output_table(k=0),
     ),
 )
 

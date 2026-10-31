@@ -765,7 +765,7 @@ class ModuleCall:
         return self.module.internal_param_memory
 
     @property
-    def call_parent_label(self) -> str | None:
+    def parent_label(self) -> str | None:
         """Parent ModuleCall label in the dynamic call tree (glossary stored-form name)."""
 
         return cast("str | None", self.call_parent)

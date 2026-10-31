@@ -86,7 +86,7 @@ class UserFunctionNanModel(nn.Module):
 def test_find_nan_live_reports_op_module_and_test_location() -> None:
     """Live find_nan stops at the non-finite operation with a user location."""
 
-    result = tl.debug.find_nan(nn.Sequential(NanModel()), torch.ones(2, 3))
+    result = tl.report.find_nan(nn.Sequential(NanModel()), torch.ones(2, 3))
 
     assert result.found is True
     assert result.op is not None
@@ -95,13 +95,13 @@ def test_find_nan_live_reports_op_module_and_test_location() -> None:
     assert result.bad_tensors == ("output",)
     assert result.source_line is not None
     assert __file__ in result.source_line
-    assert "FindNanResult(found=True" in repr(result)
+    assert "FindNanReport(found=True" in repr(result)
 
 
 def test_find_nan_live_reports_nearest_user_function_location() -> None:
     """Live find_nan reports the function containing the offending operation."""
 
-    result = tl.debug.find_nan(UserFunctionNanModel(), torch.ones(2, 3))
+    result = tl.report.find_nan(UserFunctionNanModel(), torch.ones(2, 3))
     source, start_line = inspect.getsourcelines(_user_nan_function)
     expected_line = start_line + source.index("    return zero / zero\n")
 
@@ -113,7 +113,7 @@ def test_trace_find_nan_agrees_with_live_capture() -> None:
     """Post-hoc full-save find_nan agrees with live detection."""
 
     model = NanModel()
-    live = tl.debug.find_nan(model, torch.ones(2, 3))
+    live = tl.report.find_nan(model, torch.ones(2, 3))
     post_hoc = tl.trace(model, torch.ones(2, 3)).find_nan()
 
     assert post_hoc.found is True
@@ -138,7 +138,7 @@ def test_trace_find_nan_names_sparse_uncertainty_zone() -> None:
 def test_find_nan_live_clean_model_returns_clear_result() -> None:
     """Live find_nan returns a no-finding result without raising."""
 
-    result = tl.debug.find_nan(nn.ReLU(), torch.ones(2, 3))
+    result = tl.report.find_nan(nn.ReLU(), torch.ones(2, 3))
 
     assert result.found is False
     assert result.kind == "none"

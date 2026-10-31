@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.debug._graph import _compare_rows
 from torchlens.options import CaptureOptions
 from torchlens.report._report_protocol import REPORT_MAX_FINDINGS, BoundedReport
 
@@ -77,19 +78,19 @@ def _helper_calls() -> dict[str, Callable[[dict[str, Any]], Any]]:
         "graph_breaks": lambda f: debug.graph_breaks(f["model"], f["x"]),
         "guess_input_shape": lambda f: debug.guess_input_shape(nn.Linear(4, 2)),
         "lineage": lambda f: debug.lineage(f["trace"], f["trace"].output_layers[0]),
-        "find_nan": lambda f: debug.find_nan(f["model"], f["x"]),
+        "find_nan": lambda f: tl.report.find_nan(f["model"], f["x"]),
         "bisect_nan": lambda f: debug.bisect_nan(f["trace"]),
         "nan_report": lambda f: debug.nan_report(f["model"], f["x"]),
         "bisect_nan_backward": lambda f: debug.bisect_nan_backward(f["grad_trace"]),
         "bisect_precision": lambda f: debug.bisect_precision(f["model"], f["x"]),
         "audit_params": lambda f: debug.audit_params(f["model"]),
-        "first_bad_thing": lambda f: debug.find_nan(f["model"], f["x"]).first_bad_thing,
+        "first_bad_thing": lambda f: tl.report.find_nan(f["model"], f["x"]).first_bad_thing,
         "hot_path": lambda f: debug.hot_path(f["trace"]),
         "dead_neurons": lambda f: debug.dead_neurons(f["trace"]),
-        "compare": lambda f: debug.compare(f["trace"], f["trace"]),
+        "compare": lambda f: tl.report.compare(f["trace"], f["trace"]),
         "recompute_candidates": lambda f: debug.recompute_candidates(f["trace"]),
         "gradient_flow_audit": lambda f: debug.gradient_flow_audit(f["grad_trace"]),
-        "compare_params": lambda f: debug.compare_params(f["model"], f["model"]),
+        "compare_params": lambda f: tl.report.compare_params(f["model"], f["model"]),
     }
 
 
@@ -173,7 +174,7 @@ def test_dead_neurons_frame_is_unchanged(trace: Any) -> None:
 
 
 def test_compare_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = tl.debug.compare_rows(trace, trace)
+    rows, attrs = _compare_rows(trace, trace)
     columns = [
         "op",
         "status",
@@ -184,7 +185,7 @@ def test_compare_frame_is_unchanged(trace: Any) -> None:
         "allclose",
         "reason",
     ]
-    _assert_same(tl.debug.compare(trace, trace), _frame(rows, columns, attrs))
+    _assert_same(tl.report.compare(trace, trace), _frame(rows, columns, attrs))
 
 
 def test_gradient_flow_audit_frame_is_unchanged(grad_trace: Any) -> None:
@@ -249,4 +250,4 @@ def test_compare_params_frame_is_unchanged() -> None:
         "reason",
     ]
     expected = _frame(rows, columns, {"matched": 1, "value_diverged": 1})
-    _assert_same(tl.debug.compare_params(left, right), expected)
+    _assert_same(tl.report.compare_params(left, right), expected)

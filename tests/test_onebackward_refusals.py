@@ -321,7 +321,7 @@ class TestPopulationContract:
                 target=ob.seed("output_1", index=(0, 0)),
                 method="grad",
                 reduce="sum",
-                within=tl.params("0.weight"),
+                within=tl.param("0.weight"),
             )
         assert getattr(excinfo.value, "fields", {}).get("code") == "selection_kind_incompatible"
 
@@ -497,7 +497,7 @@ class TestTypedDoorProvocations:
                 target=ob.seed("output_1", index=(0, 0)),
                 method="grad",
                 reduce="sum",
-                frozen=tl.params("0.weight"),
+                frozen=tl.param("0.weight"),
             )
         assert excinfo.value.fields["code"] == "read_frozen_selection_invalid"
 

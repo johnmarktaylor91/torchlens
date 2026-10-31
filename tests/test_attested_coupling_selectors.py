@@ -15,9 +15,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens import at_step
 from torchlens._errors import ArgumentTypeError
 from torchlens._ir.selector_eval import normalize_selector_like
-from torchlens.intervention import at_step
 from torchlens.intervention.errors import SelectorCapabilityError, SiteResolutionError
 from torchlens.options import EpisodeOptions
 

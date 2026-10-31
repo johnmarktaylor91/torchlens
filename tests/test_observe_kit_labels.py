@@ -108,7 +108,7 @@ def test_one_label_across_every_nan_surface() -> None:
     outcome = exc.partial_log.trace.outcome
     assert outcome.boundary_label == error_label
 
-    live = tl.debug.find_nan(_FaultModel(), x)
+    live = tl.report.find_nan(_FaultModel(), x)
     assert live.found and live.label == error_label
     assert live.label_status == "final"
 
@@ -203,7 +203,7 @@ def test_no_raw_label_strip_sites_outside_the_resolver() -> None:
     """LINT: stripping the raw suffix fabricates public names; new sites refuse.
 
     The raw-to-final ordinal offset is not a constant, so ``.removesuffix``/
-    slice-stripping ``RAW_LABEL_SUFFIX`` into a user-facing spelling is always
+    slice-stripping ``_RAW_LABEL_SUFFIX`` into a user-facing spelling is always
     wrong. The ONLY sanctioned sites are the constant's definition, the
     explicitly raw-named ``Op.raw_label`` identity property, and the resolver
     door module itself (``capture/_nonfinite_prefix.py``, home of both
@@ -222,7 +222,7 @@ def test_no_raw_label_strip_sites_outside_the_resolver() -> None:
         if path in allowlist:
             continue
         text = path.read_text(encoding="utf-8")
-        if "RAW_LABEL_SUFFIX" in text:
+        if "_RAW_LABEL_SUFFIX" in text:
             offenders.append(str(path.relative_to(TORCHLENS_DIR)))
     assert not offenders, (
         "raw-label strip/consume sites outside the resolver door "

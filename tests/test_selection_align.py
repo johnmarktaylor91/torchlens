@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens._selection import SelectionError
 
 #: Committed index set for the aligned patch rows.
 IDX = ((0, 0, 1, 1), (0, 1, 2, 2))
@@ -100,13 +100,13 @@ def test_align_to_rebinds_with_masks_and_provenance(pair):
     assert aligned._trace is trace_b
     assert len(aligned) == len(resolved)
     for source_entry, aligned_entry in zip(resolved, aligned, strict=True):
-        assert aligned_entry.site_key == source_entry.site_key
+        assert aligned_entry.key == source_entry.key
         assert aligned_entry.structural_site_key == source_entry.structural_site_key
         assert torch.equal(aligned_entry.mask, source_entry.mask)
         assert aligned_entry.provenance.relation == source_entry.provenance.relation
         assert "cross-run aligned from" in aligned_entry.provenance.source
     # Content digest is mask/site-based, so a label-identical alignment agrees.
-    assert aligned.resolve_digest == resolved.resolve_digest
+    assert aligned.digest == resolved.digest
 
 
 def test_do_still_refuses_foreign_resolved_selection(pair):
@@ -146,7 +146,7 @@ def test_cross_run_patch_lands_source_values(pair):
     downstream_delta = (fork["relu_2_4"].out - trace_b["relu_2_4"].out).abs().max()
     assert float(downstream_delta) > 0.0
     audit = fork.intervention_audit[-1]
-    assert audit["resolve_digest"] == aligned.resolve_digest
+    assert audit["resolve_digest"] == aligned.digest
     assert audit["patch_source"]["source_object_id"] == str(id(trace_a))
 
 
@@ -156,18 +156,18 @@ def test_alignment_mask_stays_immutable(pair):
     trace_a, trace_b = pair
     resolved = tl.units("relu_1_2", IDX).resolve(trace_a)
     aligned = resolved.align_to(trace_b)
-    digest = aligned.resolve_digest
+    digest = aligned.digest
     mask = aligned[0].mask
     mask.zero_()
-    assert aligned.resolve_digest == digest
-    assert aligned[0].selected_count == len(IDX)
+    assert aligned.digest == digest
+    assert aligned[0].num_selected == len(IDX)
 
 
 def test_refusal_kind_unsupported(pair):
     """PARAM selections refuse alignment (addresses not run-stable)."""
 
     trace_a, trace_b = pair
-    resolved = tl.params("c1.weight").resolve(trace_a)
+    resolved = tl.param("c1.weight").resolve(trace_a)
     with pytest.raises(SelectionError) as excinfo:
         resolved.align_to(trace_b)
     assert _alignment_reason(excinfo) == "kind_unsupported"
@@ -223,11 +223,11 @@ def test_refusal_site_key_unavailable(pair):
 
     import dataclasses
 
-    from torchlens.selection import ResolvedSelection
+    from torchlens._selection import Selection
 
     trace_a, trace_b = pair
     resolved = tl.units("relu_1_2", IDX).resolve(trace_a)
-    keyless = ResolvedSelection(
+    keyless = Selection(
         trace_a,
         "ACT",
         [dataclasses.replace(entry, structural_site_key=None) for entry in resolved],

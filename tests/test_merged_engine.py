@@ -793,7 +793,7 @@ class TestReleaseContract:
         merged.release()
         self._assert_released_refusal(lambda: merged.ranks)
         self._assert_released_refusal(lambda: merged["anything"])
-        self._assert_released_refusal(lambda: merged.super_op("anything"))
+        self._assert_released_refusal(lambda: merged.at("anything"))
         self._assert_released_refusal(lambda: merged.save(tmp_path / "released"))
 
     @pytest.mark.smoke

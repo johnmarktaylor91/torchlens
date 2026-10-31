@@ -65,7 +65,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "data_classes": "L1",
     "_trace_core": "L1",
     "schemas": "L1",
-    "accessors": "L1",
+    "appliances": "L1",
     "_registry": "L1",
     "hash": "L1",
     "_io": "L1",

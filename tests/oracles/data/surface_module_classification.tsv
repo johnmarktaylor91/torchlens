@@ -1,5 +1,4 @@
 name	classification
-ActivationLookup	declared
 AmbiguousOpLookupError	declared
 AtenOp	declared
 Bundle	declared

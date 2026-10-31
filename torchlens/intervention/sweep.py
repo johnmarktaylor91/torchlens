@@ -27,7 +27,7 @@ SWEEP_NAME = "sweep"
 def sweep(
     model: nn.Module,
     x: Any,
-    at: str | BaseSelector | Callable[[Any], bool] | MissingType = MISSING,
+    site: str | BaseSelector | Callable[[Any], bool] | MissingType = MISSING,
     values: Iterable[Any] | MissingType = MISSING,
     *,
     input_kwargs: dict[Any, Any] | None = None,
@@ -99,8 +99,8 @@ def sweep(
     # C03 spec door: the ONE immutable InterventionSpec is accepted unchanged
     # as sweep values -- one member per spec, each captured with
     # intervene=<that spec>. Site and action already live inside each spec,
-    # so at= must be omitted, and mixing spec and plain values is refused
-    # (a plain value NEEDS at=, a spec FORBIDS it; guessing per-element
+    # so site= must be omitted, and mixing spec and plain values is refused
+    # (a plain value NEEDS site=, a spec FORBIDS it; guessing per-element
     # would silently re-target half the sweep).
     from collections.abc import Iterable as _EarlyIterable
     from typing import cast as _cast
@@ -113,19 +113,19 @@ def sweep(
                 f"sweep() received {spec_count} InterventionSpec values mixed "
                 f"with {len(early_values) - spec_count} plain replacement "
                 "values; a sweep is either one site swept over plain values "
-                "(at=..., values=[v1, v2]) or one member per spec "
+                "(site=..., values=[v1, v2]) or one member per spec "
                 "(values=[spec1, spec2])",
                 code="sweep_spec_values_mixed",
-                remedy="pass all-spec values without at=, or all-plain values with at=",
+                remedy="pass all-spec values without site=, or all-plain values with site=",
                 argument="values",
             )
-        if at is not MISSING:
+        if site is not MISSING:
             raise InvalidArgumentError(
-                "sweep(at=..., values=[InterventionSpec, ...]) conflicts: each "
-                "spec already names its own WHERE and action, so at= has "
+                "sweep(site=..., values=[InterventionSpec, ...]) conflicts: each "
+                "spec already names its own WHERE and action, so site= has "
                 "nothing sound to address",
                 code="sweep_spec_at_conflict",
-                remedy="drop at= when sweeping over InterventionSpec values",
+                remedy="drop site= when sweeping over InterventionSpec values",
                 argument="at",
             )
         return _sweep_over_specs(
@@ -138,15 +138,15 @@ def sweep(
             **trace_kwargs,
         )
 
-    if at is MISSING:
+    if site is MISSING:
         raise ArgumentTypeError(
-            "sweep() is missing its required at site target",
+            "sweep() is missing its required site target",
             code="sweep_site_missing",
-            remedy="pass at as a label, selector, or predicate callable",
+            remedy="pass site as a label, selector, or predicate callable",
             argument="at",
         )
     else:
-        resolved_at = at
+        resolved_at = site
 
     # At this point both resolved_at and values are fully resolved (not MISSING).
     from typing import cast

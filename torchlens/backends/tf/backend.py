@@ -1034,7 +1034,7 @@ def _pop_tf_save_predicate(kwargs: dict[str, Any]) -> BaseSelector | None:
     if not isinstance(save_value, BaseSelector):
         raise BackendUnsupportedError(
             "tf backend supports trace(save=...) for static selectors such as tl.func, "
-            "tl.label, tl.in_module, tl.contains, and boolean composites; use save='all' "
+            "tl.label, tl.in_module, tl.label_contains, and boolean composites; use save='all' "
             "or omit save to retain every payload."
         )
     reject_selector_outside_kinds(

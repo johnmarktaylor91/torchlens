@@ -22,7 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import errors
-from torchlens.accessors import _appliances
+from torchlens.appliances import _appliances
 
 
 class _Net(nn.Module):
@@ -111,7 +111,7 @@ def empty_registry() -> Any:
     for name in set(_appliances._APPLIANCES.list_ids()):
         _appliances._APPLIANCES.unregister(name)
     for name, entry in hidden.items():
-        tl.accessors.register_appliance(name, entry.factory, summary=entry.summary)
+        tl.appliances.register(name, entry.factory, summary=entry.summary)
 
 
 class _OutsideAppliance:
@@ -127,12 +127,12 @@ class _OutsideAppliance:
 def test_using_returns_registered_appliances(net, empty_registry) -> None:
     model, x = net
     trace = tl.trace(model, x)
-    tl.accessors.register_appliance("outside", _OutsideAppliance, summary="op counter")
-    tl.accessors.register_appliance("lazy", "builtins:id")
+    tl.appliances.register("outside", _OutsideAppliance, summary="op counter")
+    tl.appliances.register("lazy", "builtins:id")
     assert trace.using("outside").op_count() == len(trace.layer_list)
     assert trace.using("outside").trace is trace
     assert trace.using("lazy") == id(trace)
-    assert tl.accessors.registered_appliances() == {"lazy": "", "outside": "op counter"}
+    assert tl.appliances.names() == {"lazy": "", "outside": "op counter"}
 
 
 def test_using_unknown_name_refuses_with_registered_names(net, empty_registry) -> None:
@@ -141,8 +141,8 @@ def test_using_unknown_name_refuses_with_registered_names(net, empty_registry) -
     with pytest.raises(errors.InvalidArgumentError) as empty_info:
         trace.using("mi")
     assert empty_info.value.fields["code"] == "appliance_unknown"
-    assert "register_appliance(name, factory)" in empty_info.value.fields["remedy"]
-    tl.accessors.register_appliance("outside", _OutsideAppliance)
+    assert "register(name, factory)" in empty_info.value.fields["remedy"]
+    tl.appliances.register("outside", _OutsideAppliance)
     with pytest.raises(errors.InvalidArgumentError) as exc_info:
         trace.using("mi")
     assert exc_info.value.fields["registered"] == ("outside",)
@@ -152,11 +152,11 @@ def test_using_unknown_name_refuses_with_registered_names(net, empty_registry) -
 
 
 def test_register_appliance_refusals(empty_registry) -> None:
-    tl.accessors.register_appliance("outside", _OutsideAppliance)
+    tl.appliances.register("outside", _OutsideAppliance)
     with pytest.raises(errors.ArgumentConflictError) as taken:
-        tl.accessors.register_appliance("outside", _OutsideAppliance)
+        tl.appliances.register("outside", _OutsideAppliance)
     assert taken.value.fields["code"] == "appliance_name_taken"
-    tl.accessors.register_appliance("outside", _OutsideAppliance, replace=True)
+    tl.appliances.register("outside", _OutsideAppliance, replace=True)
     for name, factory, error_type in [
         (3, _OutsideAppliance, errors.ArgumentTypeError),
         ("9lives", _OutsideAppliance, errors.InvalidArgumentError),
@@ -164,7 +164,7 @@ def test_register_appliance_refusals(empty_registry) -> None:
         ("ok", "no_colon_path", errors.InvalidArgumentError),
     ]:
         with pytest.raises(error_type) as exc_info:
-            tl.accessors.register_appliance(name, factory)  # type: ignore[arg-type]
+            tl.appliances.register(name, factory)  # type: ignore[arg-type]
         assert exc_info.value.fields["code"] == "appliance_registration_invalid"
 
 

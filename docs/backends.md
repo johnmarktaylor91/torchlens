@@ -114,7 +114,7 @@ section). TensorFlow supports static-label `intervene=` for eager entries throug
 wrap layer with fail-closed site reachability; TF `halt=` keeps its typed refusal (capture-path
 scope). Value-dependent predicates stay rejected on all three — predicate-time values would
 require eager materialization that poisons their execution models. MLX supports static-label
-`save=` for `tl.func`, `tl.label`, `tl.module`, `tl.in_module`, `tl.contains`, and boolean
+`save=` for `tl.func`, `tl.label`, `tl.module`, `tl.in_module`, `tl.label_contains`, and boolean
 composites of those.
 
 ## TensorFlow Preview
@@ -192,7 +192,7 @@ ablated = tl.trace(model, x, backend="tf",
 ```
 
 `tl.module(...)`/`tl.in_module(...)` conditions substitute Keras/`tf.Module` call outputs at the
-module boundary (object-module attribution required); `tl.func`/`tl.label`/`tl.contains`
+module boundary (object-module attribution required); `tl.func`/`tl.label`/`tl.label_contains`
 conditions substitute returns of a curated registry of python entry points (`tf.nn`/`tf.math`
 core) that Keras-3 eager execution flows through. Replacement values are produced by real ops the
 callback records, so the trace stays honest by construction: downstream records consume the
@@ -219,7 +219,7 @@ modules are attributed at addresses such as `layers.0`; TorchLens does not inven
 container modules for non-module list objects.
 
 MLX supports static-label `save=` for `tl.func(...)`, `tl.label(...)`, `tl.module(...)`,
-`tl.in_module(...)`, `tl.contains(...)`, and safe boolean composites with `&`, `|`, and `~`.
+`tl.in_module(...)`, `tl.label_contains(...)`, and safe boolean composites with `&`, `|`, and `~`.
 Selective save is applied after full graph finalization: unsaved ops keep graph metadata but drop
 public activation payloads, while saved payloads remain live MLX arrays in memory and round-trip
 through portable `.tlspec` saves with `payload_policy="array_payloads"`.
@@ -257,7 +257,7 @@ action))` substitutes matched output arrays at the wrapper boundary — the repl
 flows into downstream ops — and `trace(halt=static_selector)` finalizes an honest partial trace at
 the matched frontier (`trace.halted`, `trace.stop_reason`; parameter accounting is restricted to
 the captured ops). Static selectors are `tl.func`, `tl.label`, `tl.module`, `tl.in_module`,
-`tl.contains`, and boolean composites. Supported actions are `tl.zero_ablate()`, `tl.scale(...)`,
+`tl.label_contains`, and boolean composites. Supported actions are `tl.zero_ablate()`, `tl.scale(...)`,
 `tl.add(scalar | mx.array)`, `tl.clamp(...)`, `tl.mean_ablate()` (self form), `tl.replace_with(...)`,
 and callable transforms written against `mx.array`; other helpers build torch-only hooks and refuse
 by name. Hooks must preserve shape and dtype; violations refuse typed at fire time. Replay
@@ -267,7 +267,7 @@ declaration fails coverage against the emit-time inventory fingerprint. `mx.comp
 `mx.vmap` traced-transform wrappers refuse at capture entry, and a compiled attribute on the model
 ceilings the capture with `capture_verified=False` (`mlx_compiled_attribute_not_logged`).
 
-MLX rejects `tl.output(...)`, `tl.where(...)`,
+MLX rejects `tl.model_output(...)`, `tl.where(...)`,
 `tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates, `recipes=`,
 backward-direction interventions, streaming, `save_grads=`, `backward_ready=True`, and
 `tl.record(backend="mlx")`. Portable MLX saves
@@ -409,7 +409,7 @@ capture from inside those transforms, unsupported nested-jaxpr primitives, callb
 closed-over array constants for raw function-root callables, value-dependent `save=` predicates,
 `followed_by`/`preceded_by` window selectors, `intervene=`, `halt=`, streaming, `save_grads=`, and
 `tl.record(backend="jax")`. Static-label `save=` selectors such as `tl.func(...)`,
-`tl.label(...)`, `tl.contains(...)`, and module selectors are applied after full graph
+`tl.label(...)`, `tl.label_contains(...)`, and module selectors are applied after full graph
 finalization: unsaved ops keep metadata but drop public activation payloads. `lax.scan`,
 `lax.cond`, and capped `lax.while_loop` are unrolled by default with
 `jax_control_flow="unroll"` and guarded by `jax_max_control_flow_unroll`. Over-cap
@@ -509,7 +509,7 @@ The tinygrad backend rejects mid-capture `Tensor.realize()`, `Tensor.assign()`,
 `Tensor.replace()`, setitem input mutation, TinyJit execution, value-dependent `save=`
 predicates, `followed_by`/`preceded_by` window selectors, `intervene=`, `halt=`, streaming,
 `save_grads=`, `backward_ready=True`, and `tl.record(backend="tinygrad")`. Static-label `save=`
-selectors such as `tl.func(...)`, `tl.label(...)`, `tl.contains(...)`, and module selectors are
+selectors such as `tl.func(...)`, `tl.label(...)`, `tl.label_contains(...)`, and module selectors are
 applied after full graph finalization: unsaved ops keep metadata but drop public activation
 payloads. Workarounds are to return a pure lazy tinygrad expression from a raw callable and use
 `tl.trace(..., backend="tinygrad")`, or use the PyTorch backend for value-dependent predicate

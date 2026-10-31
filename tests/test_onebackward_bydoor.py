@@ -16,9 +16,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._selection import SelectionError
 from torchlens._utils._torch_compat import get_gradient_edge_support
 from torchlens.attribution import onebackward as ob
-from torchlens.selection import SelectionError
 
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
@@ -53,7 +53,7 @@ class TestSiteGrainRanking:
         trace = _trace()
         table = _site_table(trace)
         resolved = tl.top_k(k=2, by=table).resolve(trace)
-        selected = {entry.site_key for entry in resolved if entry.selected_count}
+        selected = {entry.key for entry in resolved if entry.num_selected}
         # Contract tie-break: stable sort by score, ties resolve by CANONICAL
         # SITE ORDER (alias twins share a score; the earlier site wins).
         rows = list(table.rows())
@@ -61,7 +61,7 @@ class TestSiteGrainRanking:
         expected = {rows[i].address for i in order[:2]}
         assert selected == expected
         for entry in resolved:
-            assert entry.selected_count == math.prod(entry.shape), (
+            assert entry.num_selected == math.prod(entry.shape), (
                 "a site-grain win must select the complete site mask"
             )
 
@@ -71,11 +71,11 @@ class TestSiteGrainRanking:
         trace = _trace()
         table = _site_table(trace)
         half = tl.top_fraction(fraction=0.5, by=table).resolve(trace)
-        assert len([entry for entry in half if entry.selected_count]) == 2
+        assert len([entry for entry in half if entry.num_selected]) == 2
         bottom = tl.top_k(k=1, by=table, largest=False).resolve(trace)
         lowest = min((row.score, row.address) for row in table.rows())
-        (winner,) = [entry for entry in bottom if entry.selected_count]
-        assert winner.site_key == lowest[1]
+        (winner,) = [entry for entry in bottom if entry.num_selected]
+        assert winner.key == lowest[1]
 
     @pytest.mark.smoke
     @_requires_gradient_edge
@@ -84,7 +84,7 @@ class TestSiteGrainRanking:
         table = _site_table(trace)
         cut = sorted(row.score for row in table.rows())[1]
         resolved = tl.threshold(above=cut, by=table).resolve(trace)
-        assert {entry.site_key for entry in resolved} == {
+        assert {entry.key for entry in resolved} == {
             row.address for row in table.rows() if row.score > cut
         }
 
@@ -115,7 +115,7 @@ class TestElementGrainRanking:
         trace = _trace()
         table = ob.read(trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce=None)
         resolved = tl.top_k(k=3, by=table).resolve(trace)
-        assert sum(entry.selected_count for entry in resolved) == 3
+        assert sum(entry.num_selected for entry in resolved) == 3
 
     @pytest.mark.smoke
     @_requires_gradient_edge
@@ -124,7 +124,7 @@ class TestElementGrainRanking:
         table = ob.read(trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce=None)
         resolved = tl.threshold(above=0.0, by=table).resolve(trace)
         expected = sum(int((row.value > 0).sum()) for row in table.rows())
-        assert sum(entry.selected_count for entry in resolved) == expected
+        assert sum(entry.num_selected for entry in resolved) == expected
 
 
 class TestByDoorContract:
@@ -166,10 +166,10 @@ class TestByDoorContract:
             tl.top_k(k=1, by=table).resolve(trace)
         assert excinfo.value.fields["reason"] == "by_table_multi_target"
         narrowed = tl.top_k(k=1, by=table.for_target("t0")).resolve(trace)
-        assert any(entry.selected_count for entry in narrowed)
+        assert any(entry.num_selected for entry in narrowed)
         folded_table = table.aggregate_targets(lambda scores: max(scores), name="max")
         folded = tl.top_k(k=1, by=folded_table).resolve(trace)
-        assert any(entry.selected_count for entry in folded)
+        assert any(entry.num_selected for entry in folded)
 
     @pytest.mark.smoke
     @_requires_gradient_edge
@@ -194,7 +194,7 @@ class TestByDoorContract:
 
         trace = _trace()
         resolved = tl.top_k(k=2, by="abs").resolve(trace)
-        assert sum(entry.selected_count for entry in resolved) == 2
+        assert sum(entry.num_selected for entry in resolved) == 2
         with pytest.raises(ValueError):
             tl.top_k(k=1, by="magnitude")
 

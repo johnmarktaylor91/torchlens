@@ -163,7 +163,7 @@ def _cross_kind_pairs(fork: tl.Trace, order: tuple[str, ...], bad: str = "") -> 
     edge = next(e for e in fork.edges if e.parent_label == "relu_1_2")
     pairs = {
         "ACT": (fork["relu_1_2"].__selection__(), _refuse if bad == "ACT" else tl.scale(2.0)),
-        "PARAM": (tl.params("b.weight"), _wrong_shape if bad == "PARAM" else tl.scale(0.25)),
+        "PARAM": (tl.param("b.weight"), _wrong_shape if bad == "PARAM" else tl.scale(0.25)),
         "EDGE": (edge.__selection__(), _wrong_shape if bad == "EDGE" else tl.add(0.25)),
     }
     return [pairs[kind] for kind in order]

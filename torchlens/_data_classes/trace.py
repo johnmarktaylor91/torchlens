@@ -980,7 +980,7 @@ class Trace(
 
         Returns
         -------
-        FindNanResult
+        FindNanReport
             Structured non-finite diagnostic. Source locations are surfaced
             from the operation's existing recorded code context when available.
         """
@@ -1010,11 +1010,11 @@ class Trace(
         """Return the appliance registered as ``name``, bound to this trace.
 
         The one accessor door for appliances (DOCUMENTED-UNSTABLE); register with
-        ``torchlens.accessors.register_appliance``. An unknown name refuses typed
+        ``torchlens.appliances.register``. An unknown name refuses typed
         (``appliance_unknown``) and lists the registered names.
         """
 
-        from ..accessors._appliances import open_appliance
+        from ..appliances._appliances import open_appliance
 
         return open_appliance(self, name)
 

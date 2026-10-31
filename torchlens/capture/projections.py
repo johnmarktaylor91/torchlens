@@ -147,7 +147,7 @@ def _empty_recording(options: RecordingOptions) -> Recording:
         by_label={},
         by_address={},
         orphan_records=[],
-        bundle_path=(
+        path=(
             None
             if options.streaming is None or options.streaming.bundle_path is None
             else Path(options.streaming.bundle_path)
@@ -156,7 +156,7 @@ def _empty_recording(options: RecordingOptions) -> Recording:
         start_times=[],
         end_times=[],
         predicate_failures=[],
-        predicate_failure_overflow_count=0,
+        num_predicate_failure_overflows=0,
         is_stopped=False,
         stop_reason=None,
         stops_by_pass={},

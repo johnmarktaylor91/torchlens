@@ -217,7 +217,7 @@ def _gqa_info(module: Any, n_heads: int) -> GqaInfo | None:
         return None
     n_kv = int(k_value.shape[2])
     if 0 < n_kv < n_heads and n_heads % n_kv == 0:
-        return GqaInfo(n_query_heads=n_heads, n_kv_heads=n_kv)
+        return GqaInfo(num_query_heads=n_heads, n_kv_heads=n_kv)
     return None
 
 

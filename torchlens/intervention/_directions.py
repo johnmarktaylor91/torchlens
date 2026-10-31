@@ -19,7 +19,7 @@ Methods (rows are ``[n_pairs, hidden]``, ``D = positive - negative``):
   (steering-vectors' ``logistic_aggregator`` with its scikit-learn defaults).
 
 The provenance record is the subspace producer's
-:class:`~torchlens.selection_subspace.BasisProvenance` (origin, method,
+:class:`~torchlens._selection_subspace.BasisProvenance` (origin, method,
 geometry and the sha256 content digest of the canonical float64 vector); the
 origin also records the site, pair count, read position and a digest of the
 rows the direction was fitted on.
@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
-from ..selection_subspace import BasisProvenance, _basis_digest
+from .._selection_subspace import BasisProvenance, _basis_digest
 
 if TYPE_CHECKING:
     from .types import Edit
@@ -360,10 +360,10 @@ def fit_direction(
         origin=origin,
         method=method,
         sha256=_basis_digest(canonical),
-        n_vectors=1,
+        num_vectors=1,
         space_dim=int(canonical.shape[1]),
         dim=-1,
-        tol=0.0,
+        atol=0.0,
     )
     return Direction(
         vector=vector,

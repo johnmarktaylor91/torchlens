@@ -19,8 +19,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._selection import SelectionError
 from torchlens.intervention.types import Edit
-from torchlens.selection import SelectionError
 
 _replay_module = importlib.import_module("torchlens.intervention.replay")
 
@@ -162,7 +162,7 @@ def test_param_and_mixed_plan_refusals(log):
 
     with pytest.raises(SelectionError) as excinfo:
         log.fork().do(
-            tl.params("c1.weight"),
+            tl.param("c1.weight"),
             tl.zero_ablate(),
             intervention=tl.options.InterventionOptions(engine="set_only"),
         )
@@ -194,7 +194,7 @@ def test_audit_record_contents(log):
     fork.do(selection, tl.zero_ablate())
     record = fork.intervention_audit[-1]
     assert record["kind"] == "ACT"
-    assert record["resolve_digest"] == resolved.resolve_digest
+    assert record["resolve_digest"] == resolved.digest
     assert record["edit"] == "zero_ablate"
     assert record["sites"][0]["relation"] == "exact"
     assert record["sites"][0]["selected"] == 1

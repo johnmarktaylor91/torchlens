@@ -632,7 +632,7 @@ def _kendall_tau_a(a: np.ndarray, b: np.ndarray) -> float:
     return concordance / n_pairs if n_pairs else math.nan
 
 
-def rdm_compare(rdm_a: Any, rdm_b: Any, method: str = "spearman") -> float:
+def compare_rdms(rdm_a: Any, rdm_b: Any, method: str = "spearman") -> float:
     """Return a descriptive rank correlation between two model RDMs.
 
     F20, brainpipe memo D-6 (spelling DOCUMENTED-UNSTABLE): the same class

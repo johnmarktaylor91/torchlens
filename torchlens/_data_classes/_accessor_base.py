@@ -238,7 +238,7 @@ class Accessor(Generic[T]):
             len(self),
             noun,
             composition=self._composition_note(),
-            exits=(".head()", ".find()", ".to_pandas()"),
+            exits=(".head()", ".search()", ".to_pandas()"),
         )
 
     def __str__(self) -> str:
@@ -257,7 +257,7 @@ class Accessor(Generic[T]):
 
         return list(self._list[: max(int(n), 0)])
 
-    def find(self, needle: str) -> list[T]:
+    def search(self, needle: str) -> list[T]:
         """Return records whose lookup key contains ``needle`` (substring).
 
         Parameters

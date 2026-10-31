@@ -30,7 +30,7 @@ from torchlens.neuro._compare import (
     loo_errors,
     ridge_folds,
 )
-from torchlens.repgeom import MetricDisagreement, ScoreInterval, rdm, rdm_compare
+from torchlens.repgeom import MetricDisagreement, ScoreInterval, compare_rdms, rdm
 from torchlens.stats import cka
 
 
@@ -76,7 +76,7 @@ def test_each_analysis_equals_its_standalone_computation() -> None:
     site = rng.normal(size=(20, 7))
     target = site[:, :3] @ rng.normal(size=(3, 4)) + rng.normal(size=(20, 4))
     result = tl.neuro.compare({"s": site}, target, analyses=("rsa", "ridge", "cka"))
-    assert result.scores["rsa"]["s"] == rdm_compare(
+    assert result.scores["rsa"]["s"] == compare_rdms(
         rdm(site, "correlation"), rdm(target, "correlation"), method="spearman"
     )
     assert result.scores["cka"]["s"] == pytest.approx(cka(site, target), abs=1e-12)

@@ -28,8 +28,8 @@ from .._ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
+from .._selection import _SelectionOperand
 from .._utils._callable_safety import FACET_RECIPE_MARKER_ATTR
-from ..selection import _SelectionOperand
 from ._families import family_entries, family_spec
 
 RecordScope = Literal["op", "module", "any"]
@@ -594,7 +594,7 @@ class FacetSpec(_SelectionOperand):
     def __selection__(self) -> object:
         """Lift this facet's write region as an ACT selection term."""
 
-        from ..selection import _selection_from_facet
+        from .._selection import _selection_from_facet
 
         return _selection_from_facet(self)
 

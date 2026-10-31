@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from ._accessor_base import SuperAccessor
+from ._accessor_base import SharedNamesMixin, SuperAccessor
 from ._base import Super, _TensorBearing
 
 if TYPE_CHECKING:
@@ -166,8 +166,10 @@ class SuperAtenOp(Super["AtenOp"]):
         )
 
 
-class SuperOpAccessor(SuperAccessor["Op", SuperOp]):
+class SuperOpAccessor(SharedNamesMixin, SuperAccessor["Op", SuperOp]):
     """Dict-like Bundle accessor returning SuperOp objects."""
+
+    _names_kind = "ops"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize an op accessor for ``bundle``.
@@ -206,8 +208,10 @@ class SuperOpAccessor(SuperAccessor["Op", SuperOp]):
         return None
 
 
-class SuperLayerAccessor(SuperAccessor["Layer", SuperLayer]):
+class SuperLayerAccessor(SharedNamesMixin, SuperAccessor["Layer", SuperLayer]):
     """Dict-like Bundle accessor returning SuperLayer objects."""
+
+    _names_kind = "layers"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize a layer accessor for ``bundle``.

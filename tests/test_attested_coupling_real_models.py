@@ -21,8 +21,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchlens as tl
+from torchlens import at_step
 from torchlens.errors.episode import EpisodeCaptureError, EpisodeDeclarationError, EpisodeJoinError
-from torchlens.intervention import at_step
 from torchlens.options import EpisodeOptions
 
 pytest.importorskip("transformers")

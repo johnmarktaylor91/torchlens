@@ -46,7 +46,7 @@ def _rich_bundle() -> tl.Bundle:
     bundle = _pair()
     bundle.relate({"kind": "alternative_of", "from": "changed", "to": "baseline", "params": {}})
     child = bundle.fork()
-    operation = child.operations[0]
+    operation = child.history[0]
     child._effect_tables[operation.operation_id] = MemberEffectTable(
         operation_id=operation.operation_id,
         rows=(
@@ -75,14 +75,14 @@ def test_lineage_round_trips_through_tlspec(tmp_path: Path) -> None:
     child.save(str(path))
     loaded = tl.load(str(path))
 
-    assert loaded.bundle_id == child.bundle_id
+    assert loaded.id == child.id
     assert loaded._forked_from_bundle_id == child._forked_from_bundle_id
     assert loaded.member_construction == child.member_construction
-    assert [row.to_payload() for row in loaded.operations] == [
-        row.to_payload() for row in child.operations
+    assert [row.to_payload() for row in loaded.history] == [
+        row.to_payload() for row in child.history
     ]
-    table = loaded._effect_tables[child.operations[0].operation_id]
-    assert table == child._effect_tables[child.operations[0].operation_id]
+    table = loaded._effect_tables[child.history[0].operation_id]
+    assert table == child._effect_tables[child.history[0].operation_id]
     # Released candidates stay table rows on the loaded artifact (D3c).
     assert table.rows[1].status == "released"
     assert table.rows[1].member_name is None
@@ -106,12 +106,12 @@ def test_pre_f03_artifact_loads_with_loaded_anchors(tmp_path: Path) -> None:
 
     loaded = tl.load(str(path))
     # A fresh identity is minted; anchors disclose no construction evidence.
-    assert loaded.bundle_id
+    assert loaded.id
     assert loaded.member_construction == {
         "baseline": {"origin": "loaded"},
         "changed": {"origin": "loaded"},
     }
-    assert loaded.operations == ()
+    assert loaded.history == ()
 
 
 def _tamper(path: Path, mutate) -> None:

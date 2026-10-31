@@ -6,7 +6,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._constants import RAW_LABEL_SUFFIX
+from torchlens._constants import _RAW_LABEL_SUFFIX
 
 pd_types = pytest.importorskip("pandas.api.types")
 is_bool_dtype = pd_types.is_bool_dtype
@@ -37,7 +37,7 @@ def test_raw_label_round_trip_via_trace_getitem() -> None:
 
     assert trace[op.raw_label] is op
     assert trace[op._label_raw] is op
-    assert op._label_raw == f"{op.raw_label}{RAW_LABEL_SUFFIX}"
+    assert op._label_raw == f"{op.raw_label}{_RAW_LABEL_SUFFIX}"
 
 
 def test_raw_label_round_trip_via_ops_accessor() -> None:

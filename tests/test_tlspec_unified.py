@@ -703,7 +703,7 @@ def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -
     """Bundle.save writes unified manifests that load as Bundle objects."""
 
     log = _captured_log()
-    bundle = tl.bundle({"baseline": log}, baseline="baseline")
+    bundle = tl.Bundle({"baseline": log}, baseline="baseline")
     path = tmp_path / f"bundle_{level}.tlspec"
 
     bundle.save(path, level=level)

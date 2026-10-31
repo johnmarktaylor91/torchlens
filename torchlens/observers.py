@@ -141,7 +141,7 @@ class TapObserver:
                 else getattr(layer_log, "layer_label", None)
             )
         for entry in entries:
-            if entry.kind == "ACT" and entry.site_key[0] == layer_label:
+            if entry.kind == "ACT" and entry.key[0] == layer_label:
                 mask = entry.mask
                 if tuple(mask.shape) == tuple(value.shape):
                     return mask

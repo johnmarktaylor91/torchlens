@@ -85,7 +85,7 @@ def test_diff_pair_members_multi_element_uses_vector_metric_no_truncation() -> N
     x = torch.randn(2, 8)
     log_a = tl.trace(nn.Linear(8, 8), x, capture=tl.options.CaptureOptions(intervention_ready=True))
     log_b = tl.trace(nn.Linear(8, 8), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    bundle = tl.bundle({"a": log_a, "b": log_b}, baseline="a")
+    bundle = tl.Bundle({"a": log_a, "b": log_b}, baseline="a")
 
     rows = dict(bundle.diff_pair("a", "b"))
     assert rows, "diff_pair returned no rows"
@@ -113,10 +113,10 @@ def test_diff_pair_node_multi_element_uses_vector_metric() -> None:
     x = torch.randn(2, 6)
     log_a = tl.trace(nn.Linear(6, 6), x, capture=tl.options.CaptureOptions(intervention_ready=True))
     log_b = tl.trace(nn.Linear(6, 6), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    bundle = tl.bundle({"a": log_a, "b": log_b}, baseline="a")
+    bundle = tl.Bundle({"a": log_a, "b": log_b}, baseline="a")
 
     linear_site = next(s.layer_label for s in log_a.layer_list if "linear" in str(s.layer_label))
-    matrix = bundle.node(linear_site).diff_pair()
+    matrix = bundle.node(linear_site).compare()
     # A 2x2 distance matrix with finite, non-truncated off-diagonal entries.
     assert matrix.shape == (2, 2)
     assert torch.isfinite(matrix).all()

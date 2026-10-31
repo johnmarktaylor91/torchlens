@@ -22,6 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import debug as dbg
+from torchlens.debug._graph import _compare_rows
 
 
 @pytest.fixture(scope="module")
@@ -77,7 +78,7 @@ def test_dead_neurons_rows_runs_without_pandas(grad_trace: tl.Trace) -> None:
 def test_compare_rows_runs_without_pandas(grad_trace: tl.Trace) -> None:
     """compare_rows returns matched row dicts + per-trace honesty, no pandas."""
 
-    rows, attrs = dbg.compare_rows(grad_trace, grad_trace)
+    rows, attrs = _compare_rows(grad_trace, grad_trace)
     assert rows, "expected one row per pass-qualified op"
     assert attrs["torchlens_capture_honesty"]["trace_a"]["capture_status"] == "complete"
     assert attrs["torchlens_capture_honesty"]["trace_b"]["capture_status"] == "complete"
@@ -104,7 +105,7 @@ def test_dataframe_views_teach_the_tabular_extra(grad_trace: tl.Trace) -> None:
         with pytest.raises(ImportError, match=r"torchlens\[tabular\]"):
             view(grad_trace)
     with pytest.raises(ImportError, match=r"torchlens\[tabular\]"):
-        dbg.compare(grad_trace, grad_trace)
+        tl.report.compare(grad_trace, grad_trace)
 
 
 def test_view_attrs_match_core_attrs(grad_trace: tl.Trace) -> None:

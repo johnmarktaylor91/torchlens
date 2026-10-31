@@ -175,15 +175,15 @@ def _resolve_explicit(
     masks freeze exactly the masked elements of the slot).
     """
 
-    from ...selection import ResolvedSelection, Selection
+    from ..._selection import Selection, Selector
 
     sites: dict[str, SiteEdge] = {}
     masks: dict[str, torch.Tensor | None] = {}
     selection = None
-    if isinstance(frozen, ResolvedSelection):
+    if isinstance(frozen, Selection):
         selection = frozen
-    elif isinstance(frozen, Selection) or hasattr(frozen, "__selection__"):
-        lifted = frozen if isinstance(frozen, Selection) else frozen.__selection__()
+    elif isinstance(frozen, Selector) or hasattr(frozen, "__selection__"):
+        lifted = frozen if isinstance(frozen, Selector) else frozen.__selection__()
         if getattr(lifted, "kind", "ACT") != "ACT":
             raise ReadError(
                 f"frozen= must be an ACT selection; got kind "
@@ -202,7 +202,7 @@ def _resolve_explicit(
                 kind=selection.kind,
             )
         for entry in selection:
-            site_key = entry.site_key
+            site_key = entry.key
             if len(site_key) != 2:
                 raise ReadError(
                     f"frozen= selection entry {site_key!r} is not an ACT "

@@ -391,7 +391,7 @@ class DryRun:
 
         return timeline_html(self)
 
-    def repredicate(
+    def filter(
         self,
         other_keep_op: Callable[[RecordContext], PredicateDecision] | None = None,
     ) -> DryRun:
@@ -486,12 +486,12 @@ class Recording(TraceLike):
     by_pass: dict[int, list[int]]
     by_label: dict[str, list[tuple[int, int]]]
     by_address: dict[str, list[int]]
-    bundle_path: Path | None
+    path: Path | None
     num_ops: int
     start_times: list[float]
     end_times: list[float]
     predicate_failures: list[PredicateFailure]
-    predicate_failure_overflow_count: int
+    num_predicate_failure_overflows: int
     keep_op_repr: str | None
     history_size: int
     orphan_records: list[dict[str, Any]] = field(default_factory=list)
@@ -630,7 +630,7 @@ class Recording(TraceLike):
         return (
             f"Recording(status={self.status}, records={records}, "
             f"passes={self.num_passes}, grad_records={grads}, "
-            f"bundle={str(self.bundle_path) if self.bundle_path else 'none'})"
+            f"bundle={str(self.path) if self.path else 'none'})"
         )
 
     def __str__(self) -> str:

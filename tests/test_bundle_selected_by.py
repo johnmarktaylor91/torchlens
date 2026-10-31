@@ -67,7 +67,7 @@ def test_direction_pin_and_params(model: _TinyLM) -> None:
     bundle = _routed(model).relate(
         "selected_by", "writer", "router", chosen=1, candidates=[0, 1], evidence=_evidence()
     )
-    row = bundle.member_relations[0]
+    row = bundle.relations[0]
     assert (row.kind, row.from_member, row.to_member) == ("selected_by", "writer", "router")
     payload = row.to_payload()
     assert (payload["from"], payload["to"]) == ("writer", "router")
@@ -95,7 +95,7 @@ def test_round_trip_keeps_the_row(tmp_path: Path, model: _TinyLM) -> None:
     manifest = json.loads((tmp_path / "routed.tlspec" / "manifest.json").read_text())
     assert manifest["tlspec_version"] == 10
     loaded = tl.load(tmp_path / "routed.tlspec")
-    assert loaded.member_relations == bundle.member_relations
+    assert loaded.relations == bundle.relations
     assert loaded.upstream("writer") == ("router",)
 
 
@@ -121,7 +121,7 @@ def test_malformed_params_refuse_typed(model: _TinyLM, params: dict[str, object]
     with pytest.raises(BundleRelationError) as excinfo:
         bundle.relate("selected_by", "writer", "router", **params)
     assert _code(excinfo) == "bundle_relation_schema_invalid"
-    assert bundle.member_relations == (), "a refused relate leaves the table unchanged"
+    assert bundle.relations == (), "a refused relate leaves the table unchanged"
 
 
 def test_tampered_artifact_param_refuses_at_load(tmp_path: Path, model: _TinyLM) -> None:

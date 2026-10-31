@@ -22,7 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.selection_subspace import _basis_digest
+from torchlens._selection_subspace import _basis_digest
 
 _SITE = "linear_1_1"
 _D = 6

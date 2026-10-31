@@ -25,6 +25,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Module
 
+from torchlens._selection import Selection, Selector
 from torchlens.attribution._core import (
     AttributionError,
     AttributionResult,
@@ -37,7 +38,6 @@ from torchlens.attribution._core import (
     _temporarily_eval,
 )
 from torchlens.intervention.helpers import mean_ablate, zero_ablate
-from torchlens.selection import ResolvedSelection, Selection
 
 # Deterministic per-engine pass budgets (attrib memo D9), sized by the
 # measured 16.6x direct-vs-replay per-pass ratio (13.4 ms direct vs 222 ms
@@ -142,7 +142,7 @@ def _occlusion_edit(baseline: _OcclusionBaseline, blur_kernel_size: int) -> Any:
     raise AttributionError("baseline must be 'zeros', 'mean', or 'blur'")
 
 
-def _resolve_selection(trace: Any, selection: Any) -> ResolvedSelection:
+def _resolve_selection(trace: Any, selection: Any) -> Selection:
     """Resolve a Selection or region producer against ``trace``.
 
     Parameters
@@ -164,14 +164,14 @@ def _resolve_selection(trace: Any, selection: Any) -> ResolvedSelection:
     """
 
     lifted = selection
-    if not isinstance(lifted, (Selection, ResolvedSelection)):
+    if not isinstance(lifted, (Selector, Selection)):
         converter = getattr(lifted, "__selection__", None)
         if not callable(converter):
             raise AttributionError("occlusion selection must implement __selection__()")
         lifted = converter()
-    if isinstance(lifted, ResolvedSelection):
-        return lifted if lifted._trace is trace else lifted.align_to(trace)
     if isinstance(lifted, Selection):
+        return lifted if lifted._trace is trace else lifted.align_to(trace)
+    if isinstance(lifted, Selector):
         return lifted.resolve(trace)
     raise AttributionError("occlusion selection did not produce a Selection")
 
@@ -227,7 +227,7 @@ def occlusion(
     resolved = _resolve_selection(trace, selection)
     if resolved._kind != "ACT":
         raise AttributionError("occlusion currently supports ACT selections only")
-    if resolved.empty:
+    if resolved.is_empty:
         # occluding nothing scores exactly zero, which reads as a
         # confident "no effect"; the resolved selection already knows it.
         raise AttributionError(
@@ -258,7 +258,7 @@ def occlusion(
             "blur_kernel_size": blur_kernel_size if baseline == "blur" else None,
             "original_score": original_score,
             "occluded_score": occluded_score,
-            "selection_digest": resolved.resolve_digest,
+            "selection_digest": resolved.digest,
         },
     )
 

@@ -198,7 +198,7 @@ def test_sweep_members_carry_distinguishable_values() -> None:
     from torchlens.intervention.sweep import sweep
 
     model = _TinyModel()
-    bundle = sweep(model, torch.randn(2, 4), at="relu", values=[0.0, 1.5])
+    bundle = sweep(model, torch.randn(2, 4), site="relu", values=[0.0, 1.5])
     digests = []
     for member in bundle.members.values():
         rows = _event_rows(member)

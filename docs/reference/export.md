@@ -144,7 +144,7 @@ from torch import nn
 import torchlens as tl
 
 x = torch.ones(1, 2)
-bundle = tl.bundle({"first": tl.trace(nn.ReLU(), x), "second": tl.trace(nn.ReLU(), x)})
+bundle = tl.Bundle({"first": tl.trace(nn.ReLU(), x), "second": tl.trace(nn.ReLU(), x)})
 path = tl.export.chrome_trace_diff(bundle, Path(globals().get("DOCS_TMPDIR", "/tmp")) / "diff.json")
 print(path.name, path.exists())
 ```

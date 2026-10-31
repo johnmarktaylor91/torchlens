@@ -60,8 +60,8 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from ..selection import ResolvedSelection, Selection, SiteEntry, _Combinator, _lift, _Mask
-from ..selection_subspace import _basis_digest, _SubspaceTerm
+from .._selection import Selection, Selector, Site, _Combinator, _lift, _Mask
+from .._selection_subspace import _basis_digest, _SubspaceTerm
 from ._affine_source import AFFINE_SOURCE_NAME, SourceCall, check_source_shape
 from ._subspace_edits import _orthonormal_rows
 from .types import Edit
@@ -272,7 +272,7 @@ class SubspaceProjection:
 
         # Weights at or below tol= are outside the resolved support, so the
         # edit acts through the basis restricted to that support.
-        support = node.basis.abs() > node.provenance.tol
+        support = node.basis.abs() > node.provenance.atol
         basis = node.basis * support
         gram = basis @ basis.T
         identity = torch.eye(int(basis.shape[0]), dtype=basis.dtype)
@@ -301,7 +301,7 @@ class SubspaceProjection:
 
         return PROJECTION_NOTE + (_ORTHONORMALISED_NOTE if self.orthonormalised else "")
 
-    def check_population(self, entry: SiteEntry, site_label: str) -> None:
+    def check_population(self, entry: Site, site_label: str) -> None:
         """Refuse a population that keeps only part of the support along the axis."""
 
         dense = entry._mask._dense_ro()
@@ -337,7 +337,7 @@ class SubspaceProjection:
             raise _refusal_for(edit.helper_name, code="subspace_edit_unsupported")
         return edit.factory
 
-    def derive(self, edit: Any, entry: SiteEntry, site_label: str) -> Any:
+    def derive(self, edit: Any, entry: Site, site_label: str) -> Any:
         """Return ``edit`` rewritten to act on this site's subspace component."""
 
         self.check_population(entry, site_label)
@@ -500,7 +500,7 @@ def subspace_projection_of(selection_like: Any) -> SubspaceProjection | None:
     """
 
     lifted = _lift(selection_like)
-    if isinstance(lifted, Selection):
+    if isinstance(lifted, Selector):
         if isinstance(lifted._node, _SubspaceTerm):
             return SubspaceProjection.from_term(lifted._node)
         if _contains_subspace(lifted._node):
@@ -515,7 +515,7 @@ def subspace_projection_of(selection_like: Any) -> SubspaceProjection | None:
                 ),
                 argument="target",
             )
-    if isinstance(lifted, ResolvedSelection) and any(
+    if isinstance(lifted, Selection) and any(
         entry.provenance.source.startswith("subspace(origin=") for entry in lifted
     ):
         raise InvalidArgumentError(

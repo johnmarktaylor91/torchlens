@@ -3,6 +3,7 @@
 from typing import Literal
 
 from .._errors import KeywordConflictError
+from .._selection import SelectionError
 from ..errors._base import (
     CaptureError,
     CompatibilityError,
@@ -11,7 +12,6 @@ from ..errors._base import (
     TorchLensWarning,
     ValidationError,
 )
-from ..selection import SelectionError
 
 Severity = Literal["recoverable", "informational", "fatal"]
 """Public severity tag values for the intervention error catalog."""
@@ -334,7 +334,7 @@ class SelectorCapabilityError(SiteResolutionError):
 
     The one typed refusal for unsupported ``(kind, lifecycle)`` pairs: for
     example ``tl.followed_by(...)`` in post-hoc ``find_sites`` (no retroactive
-    window exists on a finished trace) or ``tl.input_at(...)`` as a live hook
+    window exists on a finished trace) or ``tl.model_input(...)`` as a live hook
     application site.
     """
 

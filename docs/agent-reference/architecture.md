@@ -104,7 +104,7 @@ Key entry points:
   ungated and numpy-only, reads each site once (never re-runs the model),
   and returns descriptive scores plus `table()`/`disagreement()`/`to_dict()`;
   `num_resamples=` adds `tl.repgeom.ScoreInterval`s (stimulus bootstrap, also
-  standalone as `tl.repgeom.rdm_compare_interval` / `cka_interval`);
+  standalone as `tl.repgeom.compare_rdms_interval` / `cka_interval`);
   `tl.repgeom.metric_disagreement(scores)` ranks sites per metric and flags
   opposite orders. Doc: `docs/reference/neuro.md`.
 - Transformer pictures (`torchlens.transformer`; every spelling DOCUMENTED-UNSTABLE
@@ -141,14 +141,14 @@ Key entry points:
   `Trace.check_plan(plan)` are the facade + audit verbs. Doc:
   `docs/reference/weightsfree_capture.md`.
 - Selection algebra (L6; core spellings slate-ratified subject to D7, rest
-  DOCUMENTED-UNSTABLE): `tl.Selection` (composable query AST) /
-  `selection.resolve(trace)` -> `tl.ResolvedSelection` (frozen, trace-bound,
+  DOCUMENTED-UNSTABLE): `tl.Selector` (composable query AST) /
+  `selection.resolve(trace)` -> `tl.Selection` (frozen, trace-bound,
   session-only). Operators `| & - ~` + reflected, no `__xor__`; two-level
   denotation (family + elements, zero-mask entries retained); region
   producers (BaseSelector, RF box/gradient, FacetSpec, Op, Layer) implement
   `__selection__`; kinds ACT|PARAM|EDGE closed; refusals ride
-  `SelectionError` (`selection_*` codes). Producers `tl.units`/`tl.params`/
-  `tl.random_selection`; value producers `tl.top_k`/`tl.top_fraction`/
+  `SelectionError` (`selection_*` codes). Producers `tl.units`/`tl.param`/
+  `tl.random_like`; value producers `tl.top_k`/`tl.top_fraction`/
   `tl.threshold`/`tl.sign` (read the resolution trace's retained
   activations at resolve time, exact-as-set, `within=None` = every retained
   tensor site, unsaved payloads refuse `value_not_saved`, complex ordered
@@ -176,7 +176,7 @@ Key entry points:
   (cross-pass range/variance on recurrent layers, pass-qualified, >= 2
   window passes per layer or `population_too_small`, masks land on every
   window pass-site); subspace producer `tl.subspace(within, basis, *,
-  origin=, method=, dim=, tol=)` (do() edits the COMPONENT along the basis
+  origin=, method=, dim=, atol=)` (do() edits the COMPONENT along the basis
   span, resolve() reports the SUPPORT SET; mandatory basis provenance with sha256 digest riding
   `provenance.source` and do() audits; extent mismatch on the bound axis
   refuses `basis_dim_mismatch`, never broadcast/truncate; geometry-only
@@ -188,7 +188,7 @@ Key entry points:
   re-binds ACT selections across runs on L1 site keys, same-policy captures
   only (`selection_alignment_invalid`, closed six-reason set); `do()` still
   refuses foreign resolved selections typed. Parameter substitution
-  (DOCUMENTED-UNSTABLE): `fork.do(tl.params(name, mask=None), edit)` applies
+  (DOCUMENTED-UNSTABLE): `fork.do(tl.param(name, mask=None), edit)` applies
   the edit "as if" the parameter were changed, replay engine only — the value
   each consumer sees is substituted at its derived occurrence address via the
   tier-(ii) edge-substitution store (`substitution_kind="param"`; cone

@@ -58,9 +58,7 @@ def test_using_mi_returns_the_bound_appliance(gpt2_trace):
     appliance = gpt2_trace.using("mi")
     assert isinstance(appliance, MechInterpAppliance)
     assert appliance.trace is gpt2_trace
-    assert tl.accessors.registered_appliances()["mi"] == (
-        "mechinterp kit: head_scores, qk_circuit, ov_circuit"
-    )
+    assert tl.appliances.names()["mi"] == ("mechinterp kit: head_scores, qk_circuit, ov_circuit")
     # The registration is a lazy string: a fresh ``import torchlens`` lists "mi"
     # without importing the kit, and the first ``trace.using("mi")`` imports it.
     script = textwrap.dedent(
@@ -72,7 +70,7 @@ def test_using_mi_returns_the_bound_appliance(gpt2_trace):
         import torchlens as tl
 
         assert "torchlens.mechinterp" not in sys.modules, "kit imported eagerly"
-        assert "mi" in tl.accessors.registered_appliances()
+        assert "mi" in tl.appliances.names()
         trace = tl.trace(torch.nn.Linear(3, 2), torch.ones(1, 3))
         appliance = trace.using("mi")
         assert type(appliance).__name__ == "MechInterpAppliance"

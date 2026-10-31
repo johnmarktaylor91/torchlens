@@ -94,7 +94,7 @@ def test_bundle_show_accepts_vis_mode_none() -> None:
     log = _interventions()
     clean = tl.trace(_ReluAdd(), torch.randn(2, 3))
     try:
-        bundle = tl.bundle({"intervened": log, "clean": clean})
+        bundle = tl.Bundle({"intervened": log, "clean": clean})
         assert bundle.show(vis_mode="none") == {"intervened": None, "clean": None}
     finally:
         log.cleanup()

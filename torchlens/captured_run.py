@@ -34,7 +34,7 @@ def forget_event_stream(run: object) -> None:
 
 
 @runtime_checkable
-class ActivationLookup(Protocol[ActivationT]):
+class _ActivationLookup(Protocol[ActivationT]):
     """Protocol for raw-label/pass/address activation lookup consumers."""
 
     by_pass: dict[int, list[int]]
@@ -282,4 +282,4 @@ class TraceLike:
         return getattr(activation, "out", None)
 
 
-__all__ = ["ActivationLookup"]
+__all__: list[str] = []
