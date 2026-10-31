@@ -75,8 +75,7 @@ def _reject_symlink_path(path: Path, *, context: str) -> None:
 
 
 TLSPEC_FORMAT_VERSION = "2"
-#: The intervention spec format torchlens 2.16 to 2.28 wrote; this release does not read it.
-_PRE_3_FORMAT_VERSION = "1"
+_PRE_3_FORMAT_VERSION = "1"  # the spec format torchlens 2.16 to 2.28 wrote; not read here
 _SPEC_FILE = "spec.json"
 _MANIFEST_FILE = "manifest.json"
 _README_FILE = "README.md"
@@ -454,23 +453,9 @@ def _validate_spec_json_structure(data: dict[str, Any], spec_path: Path) -> None
 
 
 def _validate_format_version(format_version: Any, *, path: Path | None = None) -> None:
-    """Validate an intervention spec format version.
-
-    Parameters
-    ----------
-    format_version:
-        Format version value read from ``spec.json``.
-    path:
-        The spec directory, when the caller has it, for the refusal's structured fields.
-
-    Raises
-    ------
-    ArtifactTooOldError
-        For ``format_version`` 1, the spec format torchlens 2.x wrote: this release reads
-        no file saved by torchlens 2.x.
-    InvalidArgumentError
-        For any other format version than the current one.
-    """
+    """Refuse ``format_version`` 1 (the spec format torchlens 2.x wrote) with the one 2.x
+    error, and any other non-current format version as ``spec_format_version_unsupported``.
+    ``path`` is the spec directory when the caller has it, for the refusal's fields."""
 
     if str(format_version) == _PRE_3_FORMAT_VERSION:
         from .._io._pre3_module_paths import pre_3_artifact_error
