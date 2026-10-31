@@ -47,7 +47,7 @@ canon is ruled, as a new group in the R1 scanner)
 - layer's three referents; op/operation/node; label/name/address/key;
   Bundle-vs-artifact; hook/edit/helper/spec/recipe; the save= four senses.
 - retired-verb teaching (replay/rerun in prose) is already enforced
-  repo-wide by tests/test_removed_spelling_lint.py and is deliberately not
+  repo-wide by scripts/checks/removed_spelling_lint.py and is deliberately not
   duplicated here.
 """
 
@@ -55,11 +55,12 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
-import pytest
+from _harness import REPO_ROOT, run_checks
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = REPO_ROOT
 
 _SCAN_SUFFIXES = (".py", ".md", ".ipynb", ".rst", ".txt")
 
@@ -91,7 +92,7 @@ _R1_FORBIDDEN: dict[str, re.Pattern[str]] = {
 }
 
 #: Plain-substring prefilter needles (C-level ``in`` scans keep the lint
-#: inside the smoke budget; the red-capability test routes through the same
+#: inside the time budget; the red-capability test routes through the same
 #: filter so needle/regex drift fails loudly).
 _R1_NEEDLES: dict[str, tuple[str, ...]] = {
     "execution_claimed_absent": ("skipped", "deleted", "removed"),
@@ -107,7 +108,7 @@ _R1_ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         "trace-record scrub (orphan/dedup removal), not an intervention "
         "claiming execution did not happen",
     ),
-    "tests/test_punchlist_terminology_lint.py": (
+    "scripts/checks/terminology_lint.py": (
         frozenset({"ALL"}),
         "this lint's own spec and ledger",
     ),
@@ -135,7 +136,7 @@ def _in_r1_scope(rel: str) -> bool:
         return False
     return (
         any(rel == scope or rel.startswith(scope) for scope in _R1_SCOPES)
-        or rel == "tests/test_punchlist_terminology_lint.py"
+        or rel == "scripts/checks/terminology_lint.py"
     )
 
 
@@ -151,7 +152,7 @@ def _tracked_r1_files() -> list[Path]:
             check=True,
         ).stdout
     except (OSError, subprocess.CalledProcessError):  # pragma: no cover - non-checkout run
-        pytest.skip("terminology lint requires a git checkout")
+        raise AssertionError("terminology lint requires a git checkout")  # noqa: B904
     return [_REPO_ROOT / rel for rel in listing.splitlines() if _in_r1_scope(rel)]
 
 
@@ -171,7 +172,7 @@ def _scan_text(text: str) -> list[tuple[str, int, str]]:
     return violations
 
 
-def test_no_banned_execution_verbs() -> None:
+def check_no_banned_execution_verbs() -> None:
     """R1: no shipped doc/audit/caption text claims execution was removed."""
 
     offenders: list[str] = []
@@ -201,7 +202,7 @@ def test_no_banned_execution_verbs() -> None:
     stale = [
         f"{rel} (reason: {_R1_ALLOWED[rel][1]})"
         for rel in _R1_ALLOWED
-        if rel not in matched and rel != "tests/test_punchlist_terminology_lint.py"
+        if rel not in matched and rel != "scripts/checks/terminology_lint.py"
     ]
     assert not stale, (
         "stale terminology-lint allowlist rows; prune them so the ledger "
@@ -209,7 +210,7 @@ def test_no_banned_execution_verbs() -> None:
     )
 
 
-def test_banned_execution_verb_scanner_is_red_capable(tmp_path: Path) -> None:
+def check_banned_execution_verb_scanner_is_red_capable() -> None:
     """R1 scanner actually detects a planted violation per group shape."""
 
     planted = {
@@ -228,7 +229,7 @@ def test_banned_execution_verb_scanner_is_red_capable(tmp_path: Path) -> None:
     assert not _scan_text(clean), "substitution vocabulary must not false-positive"
 
 
-def test_three_axes_stay_apart() -> None:
+def check_three_axes_stay_apart() -> None:
     """R2: settlement, relation grade, and protocol scope never trade members."""
 
     from torchlens.bundle._relations import RELATION_CLAIM_GRADES
@@ -250,7 +251,7 @@ def test_three_axes_stay_apart() -> None:
     assert not _RELATION_CLAIM_GRADE_VALUES & _PROTOCOL_SCOPE_VALUES
 
 
-def test_merged_trace_vocabulary_stays_domain_specific() -> None:
+def check_merged_trace_vocabulary_stays_domain_specific() -> None:
     """R2: MergedTrace's frozen enums are pinned, never re-graded."""
 
     from torchlens.merged import (
@@ -288,7 +289,7 @@ def test_merged_trace_vocabulary_stays_domain_specific() -> None:
     assert not merged_values >= _RELATION_CLAIM_GRADE_VALUES
 
 
-def test_execution_effect_vocabulary_closed_when_shipped() -> None:
+def check_execution_effect_vocabulary_closed_when_shipped() -> None:
     """R3: the execution-effect disclosure ships whole or not at all."""
 
     import torchlens.intervention as intervention
@@ -309,3 +310,22 @@ def test_execution_effect_vocabulary_closed_when_shipped() -> None:
             f"torchlens.intervention.{attr} must carry exactly the two ruled "
             f"execution_effect members, got {sorted(values)!r}"
         )
+
+
+CHECKS = (
+    check_no_banned_execution_verbs,
+    check_banned_execution_verb_scanner_is_red_capable,
+    check_three_axes_stay_apart,
+    check_merged_trace_vocabulary_stays_domain_specific,
+    check_execution_effect_vocabulary_closed_when_shipped,
+)
+
+
+def main() -> int:
+    """Run every terminology_lint check and return the exit status."""
+
+    return run_checks("terminology_lint", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
