@@ -1235,8 +1235,7 @@
   is the user-facing verbs door.
 - ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens.ecosystem` --
   `compat_window(...)` (dated support-window ledger; would have caught the
-  v2.33.0-cannot-load-v2.34.1 class), `migrate` (tl.migrate v1,
-  `MigrationReport`/`MigrationStep`), and `plugins` (entry-point discovery
+  v2.33.0-cannot-load-v2.34.1 class), `migrate` (tl.migrate v1), and `plugins` (entry-point discovery
   that NEVER executes third-party code at discovery; kill switch).
   `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
   scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`,
@@ -1245,8 +1244,8 @@
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `echo=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens.snoop` owns
-  `NarrationEvent`/`EchoSession`/sinks and post-hoc `narrate_trace` /
-  `narrate_recording` / `narrate_partial`; `Trace.narrate` replays a finished
+  `EchoSession` and the sinks (the event record is `tl.types.NarrationEvent`);
+  `Trace.narrate` replays a finished
   capture as narration.
 - `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
   the submodule is imported as `tl.debug` and is deliberately not in `__all__`.
