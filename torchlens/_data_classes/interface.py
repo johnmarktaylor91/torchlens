@@ -141,10 +141,13 @@ def _getitem_selector(self: "Trace", ix: Any) -> Any:
     table = _resolve_sites(self, ix, max_fanout=max(1, len(self.layer_list)))
     if len(table) != 1:
         raise AmbiguousSiteError(
-            f"{ix!r} names one site but matched {len(table)} on this trace; address one "
-            "site exactly, or use a set-naming selector (tl.func, tl.in_module, "
-            "tl.label_contains) to get every match as a Selection.",
+            f"{ix!r} names one site but matched {len(table)} on this trace.",
             code="site_spelling_not_unique",
+            remedy=(
+                "address one site exactly (a pass-qualified label), or use a set-naming "
+                "selector (tl.func, tl.in_module, tl.label_contains) to get every match "
+                "as a Selection"
+            ),
             matched=len(table),
         )
     return table[0]

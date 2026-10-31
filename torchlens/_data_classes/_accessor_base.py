@@ -158,7 +158,7 @@ class Accessor(Generic[T]):
 
     #: Public key -> reader for the fields a user may ``count_by``; subclasses
     #: declare theirs. Any other string or int field of the record also counts.
-    _COUNTABLE_FIELDS: ClassVar[dict[str, Callable[[Any], Any]]] = {}
+    _COUNTABLE_FIELDS: ClassVar[Mapping[str, Callable[[Any], Any]]] = {}
 
     def count_by(self, *keys: str) -> dict[Any, int]:
         """Count records by one or more record fields.
@@ -187,6 +187,10 @@ class Accessor(Generic[T]):
             raise InvalidArgumentError(
                 "count_by needs at least one field name; len(accessor) is the total.",
                 code="accessor_count_by_key_required",
+                remedy=(
+                    "pass the field to count by, for example count_by('module') or "
+                    "count_by('module', 'kind')"
+                ),
                 countable=tuple(self._COUNTABLE_FIELDS),
             )
         readers = [self._countable_reader(key) for key in keys]
@@ -209,9 +213,12 @@ class Accessor(Generic[T]):
             return lambda record: getattr(record, key)
         declared = ", ".join(repr(name) for name in self._COUNTABLE_FIELDS) or "none declared"
         raise InvalidArgumentError(
-            f"{key!r} is not a countable field of {self._item_kind} records; countable "
-            f"fields: {declared}, or any string or int field every record carries.",
+            f"{key!r} is not a countable field of {self._item_kind} records.",
             code="accessor_count_by_key_unknown",
+            remedy=(
+                f"count by one of the countable fields ({declared}) or any string or int "
+                "field every record carries"
+            ),
             key=key,
             countable=tuple(self._COUNTABLE_FIELDS),
         )

@@ -11,7 +11,8 @@ qualname resolution working.
 
 import weakref
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Optional
+from collections.abc import Callable, Mapping
+from typing import TYPE_CHECKING, Any, Optional
 
 from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
@@ -39,7 +40,10 @@ def _record_kind(record: object) -> str:
 
 
 #: ``count_by`` fields shared by the layer and op accessors.
-_LAYER_COUNTABLE_FIELDS = {"module": _record_module, "kind": _record_kind}
+_LAYER_COUNTABLE_FIELDS: Mapping[str, Callable[[Any], Any]] = {
+    "module": _record_module,
+    "kind": _record_kind,
+}
 
 
 class OpAccessor(Accessor["Op"]):
