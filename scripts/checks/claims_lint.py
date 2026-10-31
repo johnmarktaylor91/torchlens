@@ -27,13 +27,12 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from functools import cache
-from pathlib import Path
 from typing import Any
 
-import pytest
+from _harness import REPO_ROOT, run_checks
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 CLAIMS = REPO_ROOT / "docs" / "migration" / "_claims.json"
 UNRELEASED_SUFFIX = "#unreleased"
 RELEASED_HEADING = re.compile(r"^## v?\d", re.MULTILINE)
@@ -340,7 +339,7 @@ def _violated_rules(check: dict[str, Any], paragraph: str) -> list[int]:
     return [index for index, rule in enumerate(check["rules"]) if _rule_hits(rule, paragraph)]
 
 
-def test_rows_added_after_the_seed_are_executable() -> None:
+def check_rows_added_after_the_seed_are_executable() -> None:
     lint_ids = {row["id"] for row in _claims()["lints"]}
     missing_seed = SEED_PROSE_LINTS - lint_ids
     assert not missing_seed, f"seed lint rows were deleted: {sorted(missing_seed)}"
@@ -349,7 +348,7 @@ def test_rows_added_after_the_seed_are_executable() -> None:
     assert not unexpected, f"lint rows without an executable check: {sorted(unexpected)}"
 
 
-def test_every_check_is_well_formed_and_planted() -> None:
+def check_every_check_is_well_formed_and_planted() -> None:
     checked = {row["id"]: row["check"] for row in _checked_rows()}
     missing = sorted(set(checked) - set(PLANTED))
     stale = sorted(set(PLANTED) - set(checked))
@@ -366,8 +365,25 @@ def test_every_check_is_well_formed_and_planted() -> None:
                 re.compile(regex, FLAGS)
 
 
-@pytest.mark.parametrize("row_id", sorted(PLANTED))
-def test_planted_violations_are_caught(row_id: str) -> None:
+def _for_every_row(body: Any) -> None:
+    """Run ``body(row_id)`` for every planted row, then fail with every failure at once."""
+
+    failures = []
+    for row_id in sorted(PLANTED):
+        try:
+            body(row_id)
+        except AssertionError as error:
+            failures.append(f"[{row_id}] {error}")
+    assert not failures, "\n".join(failures)
+
+
+def check_planted_violations_are_caught() -> None:
+    """Every executable row catches its planted violations and spares its allowed forms."""
+
+    _for_every_row(_check_planted_violations_are_caught)
+
+
+def _check_planted_violations_are_caught(row_id: str) -> None:
     check = next(row["check"] for row in _checked_rows() if row["id"] == row_id)
     violations, passes = PLANTED[row_id]
     assert violations and passes, row_id
@@ -385,8 +401,13 @@ def test_planted_violations_are_caught(row_id: str) -> None:
         assert not hits, f"{row_id} flagged its allowed form (rules {hits}): {text!r}"
 
 
-@pytest.mark.parametrize("row_id", sorted(PLANTED))
-def test_public_copy_passes_the_row(row_id: str) -> None:
+def check_public_copy_passes_the_row() -> None:
+    """The public copy passes every executable row."""
+
+    _for_every_row(_check_public_copy_passes_the_row)
+
+
+def _check_public_copy_passes_the_row(row_id: str) -> None:
     check = next(row["check"] for row in _checked_rows() if row["id"] == row_id)
     found = []
     for pattern in check["scope"]:
@@ -396,7 +417,7 @@ def test_public_copy_passes_the_row(row_id: str) -> None:
     assert not found, f"{row_id} violations:\n" + "\n".join(found)
 
 
-def test_completeness_dividend_copy_cites_only_backed_instances() -> None:
+def check_completeness_dividend_copy_cites_only_backed_instances() -> None:
     """Each backed instance names executed tests that exist; pending ones stay out of copy."""
 
     row = next(r for r in _claims()["claims"] if r["id"] == "claim-6-completeness-dividend")
@@ -417,3 +438,22 @@ def test_completeness_dividend_copy_cites_only_backed_instances() -> None:
             source = (REPO_ROOT / path).read_text(encoding="utf-8")
             test_name = name.split("::")[-1]
             assert re.search(rf"^\s*def {re.escape(test_name)}\(", source, re.MULTILINE), node
+
+
+CHECKS = (
+    check_rows_added_after_the_seed_are_executable,
+    check_every_check_is_well_formed_and_planted,
+    check_planted_violations_are_caught,
+    check_public_copy_passes_the_row,
+    check_completeness_dividend_copy_cites_only_backed_instances,
+)
+
+
+def main() -> int:
+    """Run every claims_lint check and return the exit status."""
+
+    return run_checks("claims_lint", CHECKS)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
