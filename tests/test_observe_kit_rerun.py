@@ -10,13 +10,18 @@ from __future__ import annotations
 
 import random
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import bisect_precision, first_divergence, isolated_capture
+from torchlens.debug import (
+    bisect_precision,
+    first_divergence,
+    isolated_capture,
+    preserved_rng_state,
+)
 from torchlens.debug._graph import _compare_rows
-from torchlens.debug._rerun import preserved_rng_state
 
 
 class _TanhThenAdd(nn.Module):
@@ -162,3 +167,64 @@ def test_preserved_rng_state_round_trips() -> None:
         random.random()
     assert torch.equal(torch.get_rng_state(), expected_torch)
     assert random.getstate() == expected_python
+
+
+def test_rerun_helpers_are_public_in_tl_debug() -> None:
+    """``clone_input_tree`` and ``preserved_rng_state`` are ``tl.debug`` exports."""
+
+    from torchlens.debug import _rerun
+
+    for name in ("clone_input_tree", "preserved_rng_state"):
+        assert name in tl.debug.__all__
+        assert getattr(tl.debug, name) is getattr(_rerun, name)
+
+
+def test_clone_input_tree_copies_tensors_and_containers() -> None:
+    """The clone shares no tensor or container with the input tree."""
+
+    weight = torch.randn(3, requires_grad=True)
+    tag = object()
+    tree = {"a": [torch.ones(2), (weight, 4)], "b": tag}
+
+    cloned = tl.debug.clone_input_tree(tree)
+
+    assert cloned is not tree and cloned["a"] is not tree["a"]
+    assert cloned["a"][1] is not tree["a"][1]
+    assert isinstance(cloned["a"], list) and isinstance(cloned["a"][1], tuple)
+    assert cloned["b"] is tag and cloned["a"][1][1] == 4
+    cloned_weight = cloned["a"][1][0]
+    assert cloned_weight is not weight
+    assert cloned_weight.data_ptr() != weight.data_ptr()
+    assert torch.equal(cloned_weight, weight)
+    assert cloned_weight.requires_grad and cloned_weight.grad_fn is None
+    cloned["a"][0].add_(5.0)
+    cloned["a"].append("extra")
+    assert torch.equal(tree["a"][0], torch.ones(2))
+    assert len(tree["a"]) == 2
+
+
+def test_preserved_rng_state_restores_every_stream_on_exit_and_on_error() -> None:
+    """Python, NumPy and torch streams come back after a normal or failing block."""
+
+    np = pytest.importorskip("numpy")
+    torch.manual_seed(11)
+    random.seed(11)
+    np.random.seed(11)
+    expected_torch = torch.get_rng_state()
+    expected_python = random.getstate()
+    expected_numpy = np.random.get_state()[1].copy()
+
+    with tl.debug.preserved_rng_state():
+        torch.randn(8)
+        random.random()
+        np.random.rand(8)
+    assert torch.equal(torch.get_rng_state(), expected_torch)
+    assert random.getstate() == expected_python
+    assert (np.random.get_state()[1] == expected_numpy).all()
+
+    with pytest.raises(RuntimeError, match="inside"), tl.debug.preserved_rng_state():
+        torch.randn(8)
+        np.random.rand(8)
+        raise RuntimeError("inside")
+    assert torch.equal(torch.get_rng_state(), expected_torch)
+    assert (np.random.get_state()[1] == expected_numpy).all()

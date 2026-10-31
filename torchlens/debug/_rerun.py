@@ -1,14 +1,13 @@
-"""Shared isolated-rerun harness for double-run diagnostics.
+"""Isolated reruns: run the same forward more than once under controlled state.
 
-One harness, several consumers (observe memo item 3): ``bisect_precision``,
-``check_determinism``, and any future tool that must run the SAME forward more
-than once under controlled state. Every run executes on a FRESH deep copy of
-the model that is explicitly released from TorchLens preparation first (a
-no-op on a never-traced copy; a capture leaves no forward wrapper behind, so
-the release only normalizes plain attributes holding torch functions). Caller-visible RNG state
-(Python, NumPy, torch CPU, initialized CUDA devices) is preserved around every
-run, so diagnostics never perturb the experiment that called them. Every
-spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
+``tl.debug.isolated_capture`` is the harness behind ``tl.debug.bisect_precision`` and
+``tl.debug.check_determinism``. Every run executes on a fresh deep copy of the model,
+released from any TorchLens preparation it inherited first (a no-op on a never-traced
+copy; a capture leaves no forward wrapper behind, so the release only normalizes plain
+attributes holding torch functions), with inputs cloned by ``tl.debug.clone_input_tree``.
+``tl.debug.preserved_rng_state`` saves and restores the caller's RNG streams (Python,
+NumPy, torch CPU and initialized CUDA devices) around every run, so a diagnostic never
+perturbs the experiment that called it. All three spellings are DOCUMENTED-UNSTABLE.
 """
 
 from __future__ import annotations
@@ -51,9 +50,20 @@ def preserved_rng_state() -> Iterator[None]:
     """Preserve and restore every host RNG a diagnostic rerun may consume.
 
     Covers the Python ``random`` module, NumPy's legacy global generator when
-    NumPy is importable, the torch CPU generator, and every INITIALIZED CUDA
-    device generator. The caller's RNG streams observe no consumption from
-    anything executed inside the context.
+    NumPy is importable, the torch CPU generator, and every initialized CUDA
+    device generator. The states are restored when the block exits, normally or
+    by an exception, so the caller's RNG streams observe no consumption from
+    anything executed inside it.
+
+    Examples
+    --------
+    >>> import torch
+    >>> import torchlens as tl
+    >>> before = torch.get_rng_state()
+    >>> with tl.debug.preserved_rng_state():
+    ...     _ = torch.randn(4)
+    >>> torch.equal(torch.get_rng_state(), before)
+    True
 
     Yields
     ------
@@ -88,9 +98,20 @@ def preserved_rng_state() -> Iterator[None]:
 def clone_input_tree(value: Any) -> Any:
     """Return a detached clone of an input tree for one isolated run.
 
-    Tensors are detached and cloned so per-run in-place mutation by the model
-    cannot leak between runs or back to the caller; containers rebuild with
-    their own identity; other leaves pass through unchanged.
+    Tensors are detached and cloned (keeping ``requires_grad``) so in-place
+    mutation by the model during one run cannot leak into another run or back to
+    the caller. Dicts, lists and tuples are rebuilt recursively as new
+    containers; any other leaf passes through as the same object.
+
+    Examples
+    --------
+    >>> import torch
+    >>> import torchlens as tl
+    >>> inputs = {"x": torch.zeros(2), "scale": 2.0}
+    >>> copied = tl.debug.clone_input_tree(inputs)
+    >>> _ = copied["x"].add_(1.0)
+    >>> inputs["x"].tolist()
+    [0.0, 0.0]
 
     Parameters
     ----------
