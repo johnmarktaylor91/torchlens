@@ -15,9 +15,8 @@ import torch
 
 import torchlens
 from torchlens._registry.kernel import kernel_universe_rows
+from torchlens.errors import ProfilerSessionError, SpanError
 from torchlens.observability import (
-    ProfilerSessionError,
-    SpanError,
     SpanRegistry,
     region,
     session,

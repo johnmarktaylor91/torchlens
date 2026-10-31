@@ -202,7 +202,7 @@ def test_both_validator_captures_receive_the_save_options() -> None:
 def test_non_torch_backend_refuses_non_default_save_options() -> None:
     """Only the torch validator capture honors the save options."""
 
-    from torchlens.backends import BackendUnsupportedError
+    from torchlens.errors import BackendUnsupportedError
 
     fake_spec = mock.Mock()
     fake_spec.name = "jax"

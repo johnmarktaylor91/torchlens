@@ -50,7 +50,7 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
             return overlay
         overlay = selection_hook().resolve(trace)
     if overlay._trace is not trace:
-        from ..selection import SelectionError
+        from torchlens.selection import SelectionError
 
         raise SelectionError(
             "the node_overlay selection is resolved against a DIFFERENT "

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import importlib
+from typing import TYPE_CHECKING, Any
+
 from ._compute_truth import ComputeAggregation, ComputeRow, RatioFact, compute_aggregation
 from ._cost_backward import (
     BACKWARD_STATES,
@@ -102,6 +105,18 @@ from ._summary_report import (
 )
 
 __all__ = [
+    "ValidationStatus",
+    "ValidationFailure",
+    "ValidationDiagnostic",
+    "InterventionValidationReport",
+    "kernel_profile",
+    "KernelProfileReport",
+    "MergeReport",
+    "CompatWindow",
+    "diff",
+    "DiffReport",
+    "param_health",
+    "ParamHealthReport",
     "BACKWARD_STATES",
     "CACHE_RESIDENT_BYTES_DEFAULT",
     "COST_CLASSES",
@@ -194,3 +209,59 @@ __all__ = [
     "time_clean_step",
     "which_do_i_use",
 ]
+
+
+if TYPE_CHECKING:
+    from torchlens.checks._audit import ParamHealthReport, param_health
+    from torchlens.differential import DiffReport, diff
+    from torchlens.ecosystem.compat import CompatWindow
+    from torchlens.merged._presenter import MergeReport
+    from torchlens.observability._native_profile import KernelProfileReport, kernel_profile
+    from torchlens.validation.consolidated import InterventionValidationReport
+    from torchlens.validation.diagnostics import ValidationDiagnostic, ValidationFailure
+    from torchlens.validation.status import ValidationStatus
+
+_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    "ValidationStatus": ("torchlens.validation.status", "ValidationStatus"),
+    "ValidationFailure": ("torchlens.validation.diagnostics", "ValidationFailure"),
+    "ValidationDiagnostic": ("torchlens.validation.diagnostics", "ValidationDiagnostic"),
+    "InterventionValidationReport": (
+        "torchlens.validation.consolidated",
+        "InterventionValidationReport",
+    ),
+    "kernel_profile": ("torchlens.observability._native_profile", "kernel_profile"),
+    "KernelProfileReport": ("torchlens.observability._native_profile", "KernelProfileReport"),
+    "MergeReport": ("torchlens.merged._presenter", "MergeReport"),
+    "CompatWindow": ("torchlens.ecosystem.compat", "CompatWindow"),
+    "diff": ("torchlens.differential", "diff"),
+    "DiffReport": ("torchlens.differential", "DiffReport"),
+    "param_health": ("torchlens.checks._audit", "param_health"),
+    "ParamHealthReport": ("torchlens.checks._audit", "ParamHealthReport"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve exports whose defining modules would import-cycle if loaded eagerly.
+
+    Parameters
+    ----------
+    name:
+        Attribute requested from this namespace.
+
+    Returns
+    -------
+    Any
+        The exported object.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not an export of this namespace.
+    """
+
+    if name in _LAZY_EXPORTS:
+        module_name, attr_name = _LAZY_EXPORTS[name]
+        value = getattr(importlib.import_module(module_name), attr_name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -467,7 +467,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         refusals, pool/dtype geometry refusals, and id validation.
     DatasetExtractionResumeError
         When the artifact in ``output_dir`` cannot be safely continued.
-    torchlens.transforms.TransformContractError
+    torchlens.errors.TransformContractError
         When the transform slot cannot be coerced or violates its plan.
 
     Notes
@@ -855,7 +855,6 @@ __all__ = [
     "MANIFEST_SCHEMA_V2",
     "NATIVE_FORMAT",
     "BatchEnvelope",
-    "DatasetExtractionResumeError",
     "LoadedExtraction",
     "RaggedBatch",
     "TokenRows",

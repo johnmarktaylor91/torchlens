@@ -7,6 +7,8 @@ from typing import Any
 
 from torch import nn
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING, MissingType
 from .._errors import KeywordConflictError
@@ -15,7 +17,6 @@ from .._robustness import check_model_and_input_variants
 from ..backends import (
     TORCH_BACKEND_NAME,
     BackendName,
-    BackendUnsupportedError,
     get_backend_spec,
     require_capability_implementation,
 )

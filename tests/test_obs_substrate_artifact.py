@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 import torch
 
+from torchlens.errors import HistoryArtifactError
 from torchlens.observability import (
     CommittedBlock,
     Histogram,
-    HistoryArtifactError,
     HistoryReader,
     HistoryWriter,
     ObservationRecord,

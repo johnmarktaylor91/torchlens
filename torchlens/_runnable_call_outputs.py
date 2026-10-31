@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens.runnable import ContractCheck
+
 from ._runnable_retention import _check_unretained_extent
 from ._runnable_state import (
     RunResourceCeiling,
@@ -25,7 +27,6 @@ from .ir.container import (
     resolve_container_type,
 )
 from .runnable import (
-    ContractCheck,
     RunnableCallDescriptor,
     RunnableErrorCode,
     SparseRunDescriptor,

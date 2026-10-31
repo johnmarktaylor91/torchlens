@@ -25,9 +25,9 @@ from torchlens._data_substrate import ExtractionArtifactError, read_trusted_rows
 from torchlens.dataset_extraction import (
     MANIFEST_FILENAME,
     MANIFEST_SCHEMA_V2,
-    DatasetExtractionResumeError,
     load_extraction,
 )
+from torchlens.errors import DatasetExtractionResumeError
 
 
 def _interrupt_after(tmp_path: Path, n_shards: int) -> None:

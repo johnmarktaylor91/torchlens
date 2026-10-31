@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 import torch
 
+from torchlens.errors import HistorySchemaError
 from torchlens.observability import (
     PHASES,
     PRESENCE,
     STREAMS,
-    HistorySchemaError,
     ObservationRecord,
     RunRecord,
     SiteRecord,

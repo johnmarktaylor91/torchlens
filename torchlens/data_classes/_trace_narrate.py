@@ -28,7 +28,7 @@ class TraceNarrateMixin:
             Keep only the last ``last`` rows (the crash-tail idiom).
         select:
             Optional filter: a substring, or a callable over
-            :class:`torchlens.snoop.NarrationEvent` rows.
+            :class:`torchlens.types.NarrationEvent` rows.
 
         Returns
         -------

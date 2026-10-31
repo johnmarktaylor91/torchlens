@@ -7,7 +7,6 @@ from typing import Any, cast
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
 from torchlens.backends.jax import GradOptions
 from torchlens.backends.jax.backend import (
     _experimental_per_op_boundary_vjp_oracle,
@@ -19,6 +18,7 @@ from torchlens.data_classes.derived_grad import (
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
 )
+from torchlens.errors import BackendUnsupportedError
 from torchlens.ir.refs import DtypeRef
 
 jax = pytest.importorskip("jax")

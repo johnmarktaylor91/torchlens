@@ -173,7 +173,8 @@ def test_mlx_end_to_end_bare_streaming_flip_refuses_typed() -> None:
     the option. (Interventions are genuinely lifted on MLX now, so the probe
     uses streaming, which remains gated.)"""
 
-    from torchlens.backends import BackendCapabilityConformanceError, get_backend_spec
+    from torchlens.backends import get_backend_spec
+    from torchlens.errors import BackendCapabilityConformanceError
 
     spec = get_backend_spec("mlx")
     object.__setattr__(spec.capabilities, "streaming", True)

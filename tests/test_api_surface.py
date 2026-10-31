@@ -229,7 +229,7 @@ def test_phase_b_exports_are_top_level_importable() -> None:
     """Phase B public names should resolve from the top-level namespace."""
 
     assert torchlens.export is importlib.import_module("torchlens.export")
-    assert torchlens.AmbiguousOpLookupError.__name__ == "AmbiguousOpLookupError"
+    assert torchlens.errors.AmbiguousOpLookupError.__name__ == "AmbiguousOpLookupError"
     assert importlib.import_module("torchlens.facets") is importlib.import_module(
         "torchlens.semantic.facets"
     )

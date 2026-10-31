@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens.runnable import ContractCheck
+
 from . import _state
 from ._runnable_state import (
     RunResourceCeiling,
@@ -14,7 +16,6 @@ from ._runnable_state import (
     runnable_tensor_byte_digest,
 )
 from .runnable import (
-    ContractCheck,
     InputAttestationFingerprint,
     RunnableErrorCode,
     SparseRunDescriptor,

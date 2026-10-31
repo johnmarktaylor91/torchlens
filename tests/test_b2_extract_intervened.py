@@ -23,10 +23,10 @@ from torchlens._errors import InvalidArgumentError
 from torchlens._extraction.harvest_schema import HARVEST_BLOCK_KEY, validate_harvest_block
 from torchlens.dataset_extraction import (
     MANIFEST_FILENAME,
-    DatasetExtractionResumeError,
     extract_dataset,
     open_extraction,
 )
+from torchlens.errors import DatasetExtractionResumeError
 
 _LAYERS = {"a": "fc1", "b": "act", "c": "fc2", "d": "fc3"}
 

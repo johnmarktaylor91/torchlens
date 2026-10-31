@@ -1283,7 +1283,9 @@ class TraceValidationMixin(_TraceMixinBase):
         Trace
             This model log, for chaining.
         """
-        from ..backends import BackendUnsupportedError, get_backend_spec
+        from torchlens.backends.registry import BackendUnsupportedError
+
+        from ..backends import get_backend_spec
         from ..capture.outcome import require_capture_capability
 
         # N3: the backward projection assumes a structurally complete captured
@@ -1332,7 +1334,9 @@ class TraceValidationMixin(_TraceMixinBase):
         Any
             Backward recording context manager.
         """
-        from ..backends import BackendUnsupportedError, get_backend_spec
+        from torchlens.backends.registry import BackendUnsupportedError
+
+        from ..backends import get_backend_spec
         from ..capture.outcome import require_capture_capability
 
         require_capture_capability(self, "backward")

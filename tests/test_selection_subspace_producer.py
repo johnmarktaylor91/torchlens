@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens.errors import SelectionError
 from torchlens.selection_subspace import BasisProvenance
 
 _RELU = "relu_1_2"

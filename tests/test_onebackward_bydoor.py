@@ -17,7 +17,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.attribution import onebackward as ob
-from torchlens.selection import SelectionError
+from torchlens.errors import SelectionError
 from torchlens.utils._torch_compat import get_gradient_edge_support
 
 _requires_gradient_edge = pytest.mark.skipif(

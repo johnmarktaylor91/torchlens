@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 
+from torchlens.runnable import ContractCheck, ReadinessReport, RunnableDiagnostic
+
 from . import _state
 from ._runnable_state import (
     RunResourceCeiling,
@@ -19,12 +21,9 @@ from .errors import (
 )
 from .runnable import (
     ActivationPayloadLayerDescriptor,
-    ContractCheck,
     DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
-    ReadinessReport,
-    RunnableDiagnostic,
     RunnableErrorCode,
     RunResult,
     SparseRunDescriptor,

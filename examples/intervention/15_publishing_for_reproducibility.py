@@ -53,7 +53,7 @@ def main() -> None:
         log.save_intervention(path, level="portable")
         spec = tl.io.load_intervention_spec(path)
         fresh = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-        compat = tl.validation.check_spec_compat(spec, fresh)
+        compat = tl.intervention.check_spec_compat(spec, fresh)
 
     assert spec.metadata["save_level"] == "portable"
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}

@@ -26,7 +26,7 @@ from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
     has_vetted_snapshot,
 )
-from torchlens.merged import (  # noqa: E402
+from torchlens.errors import (  # noqa: E402
     MergeConflictError,
     MergedArtifactError,
     MergedSurfaceUnsupportedError,

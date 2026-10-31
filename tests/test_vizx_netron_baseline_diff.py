@@ -1,7 +1,7 @@
 """Per-node diff facts in the Netron baseline slot (ruling U09.5).
 
 ``tl.export.netron(subject, path, baseline=reference)`` must carry, per
-exported node, exactly the facts ``torchlens.differential.diff``
+exported node, exactly the facts ``torchlens.report.diff``
 settles for the same pair -- checked here row by row against the diff's own
 output, in the artifact's node metadata and in the sidecar.
 """
@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.differential import diff
+from torchlens.report import diff
 
 _PREFIX = "torchlens.diff."
 
@@ -163,7 +163,7 @@ def test_baseline_slot_holds_the_diff_summary(
     props = _model_props(_export(subject, reference, tmp_path / "m.json"))
     summary = json.loads(props["torchlens.baseline"])
     assert summary["schema"] == "torchlens.netron_baseline.v1"
-    assert summary["source"] == "torchlens.differential.diff"
+    assert summary["source"] == "torchlens.report.diff"
     assert summary["direction"] == "subject - reference"
     assert summary["row_counts"] == dict(sorted(report.counts.items()))
     assert summary["removed_count"] == len(report.rows_with_status("removed"))

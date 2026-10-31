@@ -90,12 +90,12 @@ def test_r35_report_constructor_rejects_attested_nonverified() -> None:
 
     from torchlens._runnable_execution import _run_report
     from torchlens.runnable import (
-        ReadinessReport,
         ReadinessStatus,
         RunProvider,
         StateSource,
         WitnessCompleteness,
     )
+    from torchlens.types import ReadinessReport
 
     readiness = ReadinessReport(
         status=ReadinessStatus.READY,

@@ -10,7 +10,7 @@ import pytest
 import torch
 
 import torchlens.trackers as trk
-from torchlens.observability import HistorySchemaError
+from torchlens.errors import HistorySchemaError
 from torchlens.trackers._errors import WatchConfigError, WatchRuntimeError
 from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 

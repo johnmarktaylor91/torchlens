@@ -12,7 +12,8 @@ from torch import nn
 import torchlens as tl
 import torchlens._state as torchlens_state
 import torchlens.capture.projections as fastlog_state
-from torchlens.fastlog import HaltSignal, PredicateError, RecordContext, RecorderStateError
+from torchlens.errors import PredicateError, RecorderStateError
+from torchlens.fastlog import HaltSignal, RecordContext
 
 
 class FiveOpModel(nn.Module):

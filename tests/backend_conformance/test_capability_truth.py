@@ -28,8 +28,6 @@ import torchlens as tl
 from torchlens.backends import (
     GATED_CAPABILITY_FLAGS,
     BackendCapabilities,
-    BackendCapabilityConformanceError,
-    BackendUnsupportedError,
     get_backend_spec,
     register_backend_spec,
     registered_backend_specs,
@@ -51,6 +49,7 @@ from torchlens.backends._options import (
     reject_unsupported_trace_options,
 )
 from torchlens.data_classes._backend_capability_guards import raise_if_no_backward_capture
+from torchlens.errors import BackendCapabilityConformanceError, BackendUnsupportedError
 
 pytestmark = pytest.mark.backend_parity
 

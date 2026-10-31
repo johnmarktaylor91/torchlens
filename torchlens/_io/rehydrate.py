@@ -21,7 +21,8 @@ import torch
 from safetensors import SafetensorError
 from safetensors.torch import load_file
 
-from ..backends import BackendRuntimeCompatibilityError
+from torchlens.backends.registry import BackendRuntimeCompatibilityError
+
 from ..data_classes._state_adapter import state_items
 from ..data_classes.trace import Trace
 from ..ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS

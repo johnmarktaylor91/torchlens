@@ -18,11 +18,10 @@ from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends import (
-    BackendRuntimeCompatibilityError,
-    BackendUnsupportedError,
     get_backend_spec,
 )
 from torchlens.backends.jax import capabilities
+from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -1298,7 +1297,8 @@ def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
 
     import jax.numpy as jnp
 
-    from torchlens.backends import BackendCapabilityConformanceError, get_backend_spec
+    from torchlens.backends import get_backend_spec
+    from torchlens.errors import BackendCapabilityConformanceError
 
     def model(x: Any) -> Any:
         """Return a tanh-projected input.

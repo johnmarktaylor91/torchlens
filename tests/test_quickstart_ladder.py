@@ -12,9 +12,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import SynthesizedValueReadWarning
 from torchlens.quickstart import (
     InputSpec,
-    SynthesizedValueReadWarning,
     internal_read,
     is_gold,
     parse_input_size,

@@ -12,7 +12,6 @@ from .._io import ArtifactError, JaxPayloadLoadHint, PayloadLoadHints, _json, re
 from .._io.bundle import cleanup_tmp, load, save
 from .._io.sidecar import (
     AnalysisOnlySidecar,
-    SidecarError,
     SidecarFamily,
     attach_sidecar,
     list_sidecar_families,
@@ -315,7 +314,6 @@ if not TYPE_CHECKING:
 
 __all__ = [
     "AnalysisOnlySidecar",
-    "SidecarError",
     "SidecarFamily",
     "TraceState",
     "JaxPayloadLoadHint",

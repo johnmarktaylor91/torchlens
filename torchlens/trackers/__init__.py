@@ -42,14 +42,6 @@ from ._amp import (
 )
 from ._callbacks import HFTrainerWatchCallback, LightningWatchCallback, derived_cadence
 from ._comet import CometSink
-from ._errors import (
-    SinkDeliveryError,
-    SinkProtocolError,
-    TagGrammarError,
-    TrackersError,
-    WatchConfigError,
-    WatchRuntimeError,
-)
 from ._graph import (
     TIMING_EVIDENCE,
     GraphIR,
@@ -121,17 +113,11 @@ __all__ = [
     "MemorySink",
     "ScalarPoint",
     "Sink",
-    "SinkDeliveryError",
-    "SinkProtocolError",
     "StepEmission",
     "TagGrammar",
-    "TagGrammarError",
     "TensorBoardSink",
     "TextPoint",
-    "TrackersError",
     "WandbSink",
-    "WatchConfigError",
-    "WatchRuntimeError",
     "WatchSession",
     "architecture_fingerprint",
     "assert_tag_safe",

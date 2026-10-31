@@ -11,13 +11,11 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens.errors import HistoryArtifactError, WatchLifecycleError, WatchPlanError
 from torchlens.observability import (
     EventStream,
-    HistoryArtifactError,
     HistoryCollector,
     StepTruth,
-    WatchLifecycleError,
-    WatchPlanError,
     WatchSettings,
 )
 

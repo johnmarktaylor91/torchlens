@@ -12,13 +12,13 @@ from typing import Any, cast
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
 from torchlens.backends.jax.backend import (
     _control_parent_labels,
     _data_parent_arg_positions,
     _data_parent_labels,
 )
 from torchlens.data_classes._compaction import _COMPACTED_TRACES
+from torchlens.errors import BackendUnsupportedError
 from torchlens.intervention.types import EdgeUseRecord
 from torchlens.postprocess.graph_traversal import _remove_orphan_nodes
 from torchlens.validation.invariants import MetadataInvariantError

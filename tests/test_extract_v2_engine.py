@@ -21,10 +21,10 @@ from torchlens._data_substrate import read_trusted_rows
 from torchlens._errors import InvalidArgumentError
 from torchlens.dataset_extraction import (
     BatchEnvelope,
-    DatasetExtractionResumeError,
     extract_dataset,
     open_extraction,
 )
+from torchlens.errors import DatasetExtractionResumeError
 from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
 

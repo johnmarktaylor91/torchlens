@@ -16,6 +16,8 @@ from typing import Any, cast
 import numpy as np
 import torch
 
+from torchlens.runnable import RunnableCompatibility, RunnableDiagnostic
+
 from .. import __version__ as TORCHLENS_VERSION
 from .._runnable_state import runnable_tensor_byte_digest
 from ..backends.registry import BackendRegistryError, get_backend_spec
@@ -72,8 +74,6 @@ from ..runnable import (
     RequiredWitnessFamily,
     RequiredWitnessInventory,
     RunnableCallDescriptor,
-    RunnableCompatibility,
-    RunnableDiagnostic,
     RunnableErrorCode,
     RunnableRngProfile,
     SlotByteDigest,

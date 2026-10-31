@@ -34,9 +34,9 @@ from torchlens.errors import (
 from torchlens.fastlog import RecordContext
 from torchlens.intervention.types import DictKey
 from torchlens.options import SaveOptions
+from torchlens.report import ValidationDiagnostic
 from torchlens.utils.tensor_utils import tensor_nanequal
 from torchlens.validation import (
-    ValidationDiagnostic,
     check_metadata_invariants,
     get_validation_diagnostics,
     get_validation_failure,

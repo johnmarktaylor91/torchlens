@@ -13,11 +13,12 @@ from typing import Any, cast
 
 import numpy as np
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from ... import _state
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends import (
     BackendName,
-    BackendUnsupportedError,
     get_backend_spec,
     require_capability_implementation,
 )

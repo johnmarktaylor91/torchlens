@@ -7,13 +7,13 @@ from typing import Any
 
 import pytest
 
-from torchlens.backends import BackendUnsupportedError
 from torchlens.backends._options import (
     MLX_EXTRA_KWARG_POLICY,
     MLX_PREVIEW_TRACE_OPTION_POLICY,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
 )
+from torchlens.errors import BackendUnsupportedError
 
 
 def _valid_mlx_options() -> dict[str, Any]:

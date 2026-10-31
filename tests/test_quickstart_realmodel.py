@@ -16,8 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import SynthesizedValueReadWarning
 from torchlens.quickstart import (
-    SynthesizedValueReadWarning,
     state_dict_hash,
     trace_input_provenance,
 )

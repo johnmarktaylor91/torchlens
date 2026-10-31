@@ -16,7 +16,8 @@ import torch
 from torch import nn
 
 import torchlens.trackers as trk
-from torchlens.observability import HistoryArtifactError, HistoryCollector, HistoryReader
+from torchlens.errors import HistoryArtifactError
+from torchlens.observability import HistoryCollector, HistoryReader
 from torchlens.observability._collector import (
     DEFAULT_ARTIFACT_BUDGET_BYTES,
     EMBEDDING_SKETCH_CAP_NUMEL,

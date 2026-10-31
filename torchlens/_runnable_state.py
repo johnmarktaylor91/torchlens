@@ -16,6 +16,8 @@ from typing import Any
 
 import torch
 
+from torchlens.runnable import RunnableDiagnostic
+
 from . import _state
 from ._transport import digest_byte_view
 from .errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
@@ -24,7 +26,6 @@ from .runnable import (
     RUNNABLE_INITIALIZER_POLICY_VERSION,
     ControlWitnessKind,
     InitializerPolicy,
-    RunnableDiagnostic,
     RunnableErrorCode,
     SparseRunDescriptor,
     StateSlotRole,

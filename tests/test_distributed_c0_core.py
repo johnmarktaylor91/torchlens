@@ -17,10 +17,8 @@ pytestmark = pytest.mark.skipif(
 )
 
 from torchlens.distributed import (  # noqa: E402
-    AmbiguousGroupLifetimeError,
     GroupLifecycleEvent,
     GroupLifecycleLedger,
-    UncapturedCollectiveOpError,
     _lifecycle as lifecycle,  # noqa: E402
     _recognizer as recognizer_mod,  # noqa: E402
     derive_collective_recognizer,
@@ -28,6 +26,7 @@ from torchlens.distributed import (  # noqa: E402
     membership_digest_for_ranks,
     verify_membership_lineages,
 )
+from torchlens.errors import AmbiguousGroupLifetimeError, UncapturedCollectiveOpError  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # ledger helpers

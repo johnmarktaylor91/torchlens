@@ -14,9 +14,8 @@ import torch
 from example_models import TinyReluAdd as _ReluAdd
 
 import torchlens as tl
-from torchlens.intervention import errors as terrors
+from torchlens.intervention import check_spec_compat, errors as terrors
 from torchlens.io import TraceState, list_logs, load_intervention_spec
-from torchlens.validation import check_spec_compat
 
 SeverityClass = type[BaseException]
 WarningClass = type[Warning]

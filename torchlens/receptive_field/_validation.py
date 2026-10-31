@@ -19,7 +19,8 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 
-from ..backends import BackendUnsupportedError
+from torchlens.backends.registry import BackendUnsupportedError
+
 from . import _engine
 from ._engine_forward import solve_projective
 from ._errors import (

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1951,6 +1952,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
 
 
 __all__ = [
+    "HtmlReportOptions",
     "CaptureOptions",
     "EchoOptions",
     "EpisodeSpec",
@@ -1964,3 +1966,38 @@ __all__ = [
     "VisualizationOptions",
     "suppress_mutate_warnings",
 ]
+
+
+if TYPE_CHECKING:
+    from torchlens.export._report import HtmlReportOptions
+
+_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    "HtmlReportOptions": ("torchlens.export._report", "HtmlReportOptions"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve exports whose defining modules would import-cycle if loaded eagerly.
+
+    Parameters
+    ----------
+    name:
+        Attribute requested from this namespace.
+
+    Returns
+    -------
+    Any
+        The exported object.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not an export of this namespace.
+    """
+
+    if name in _LAZY_EXPORTS:
+        module_name, attr_name = _LAZY_EXPORTS[name]
+        value = getattr(importlib.import_module(module_name), attr_name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

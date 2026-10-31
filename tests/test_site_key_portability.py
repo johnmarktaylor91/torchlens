@@ -13,8 +13,9 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._io import PreReleaseArtifactError
 from torchlens._io.prerelease import activate_prerelease_fields
+from torchlens.errors import MetadataInvariantError
 from torchlens.postprocess._site_key import SiteKeyMinter
-from torchlens.validation import MetadataInvariantError, check_metadata_invariants
+from torchlens.validation import check_metadata_invariants
 
 
 class _Tied(nn.Module):

@@ -49,11 +49,12 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
+    from torchlens.runnable import ReadinessReport
+
     from .._io.streaming import BundleStreamWriter
     from ..debug._audit import TraceAudit
     from ..runnable import (
         ArchivedActivation,
-        ReadinessReport,
         SparseRunDescriptor,
     )
     from ._op_dedup import IdentityCacheEntry

@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+from torchlens.errors import TransformContractError
 from torchlens.transforms import (
     BTD,
     NCHW,
@@ -20,7 +21,6 @@ from torchlens.transforms import (
     SpecialTokenFacts,
     TensorSpec,
     TransformContext,
-    TransformContractError,
     chain,
     channel_mean,
     cls_token,

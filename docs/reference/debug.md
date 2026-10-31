@@ -107,7 +107,7 @@ True
 `tl.debug.param_health(target, *, include_buffers=True, within=None,
 bounds=None, max_fraction=0.9, subnormal_fraction_threshold=0.1)` is the
 one-shot parameter/buffer-space scan (the checks-kit door; canonical home
-`torchlens.checks.param_health`, spelling DOCUMENTED-UNSTABLE). `target` is an
+`torchlens.report.param_health`, spelling DOCUMENTED-UNSTABLE). `target` is an
 `nn.Module` or ANY name->tensor `Mapping` — a `state_dict`, flattened
 optimizer state, EMA shadow weights, a loaded checkpoint: same door, same
 batched scan kernel. Returns a `ParamHealthReport` (findings / rows / checks_run /

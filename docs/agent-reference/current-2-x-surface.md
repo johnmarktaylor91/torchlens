@@ -1059,7 +1059,7 @@
   named `module`), the `netron:attachment` companion (four fail-closed vendor guards;
   written beside every file export by default, ruling U09.3; `attachment=False` opts out,
   `attachment=True` refuses the memory-only serve), `baseline=<reference Trace>` per-node
-  `torchlens.diff.*` facts from `torchlens.differential.diff` in node metadataProps
+  `torchlens.diff.*` facts from `torchlens.report.diff` in node metadataProps
   and the companion plus the diff summary in the `torchlens.baseline` slot (ruling U09.5;
   a string stays a bare identifier), serve/widget one-liner (`open=True`, extra `torchlens[netron]`), and
   an extent-budget WARN past ~27 ranks. Every artifact stays green under strict

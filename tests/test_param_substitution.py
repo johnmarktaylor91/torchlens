@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens.errors import SelectionError
 from torchlens.validation.core import _check_edge_intervention_boundary
 
 

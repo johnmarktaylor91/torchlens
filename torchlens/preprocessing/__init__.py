@@ -31,7 +31,6 @@ from __future__ import annotations
 from ._attached import attach_authority
 from ._audit import (
     AuditFinding,
-    PreprocessingAuditError,
     PreprocessingComparison,
     compare,
 )
@@ -73,7 +72,6 @@ __all__ = [
     "DiagnosticFinding",
     "InputDiagnostics",
     "PreprocessingComparison",
-    "PreprocessingAuditError",
     "Resolution",
     "attach_authority",
     "compare",

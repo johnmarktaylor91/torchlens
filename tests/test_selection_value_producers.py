@@ -22,7 +22,8 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.bundle import Bundle
-from torchlens.selection import _FLIP, SelectionError, SelectionProvenance
+from torchlens.errors import SelectionError
+from torchlens.selection import _FLIP, SelectionProvenance
 
 
 class _Probe(nn.Module):

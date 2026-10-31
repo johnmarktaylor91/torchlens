@@ -12,12 +12,12 @@ from conftest import tensorflow_backend_modules
 
 import torchlens as tl
 from torchlens.backends import (
-    BackendMismatchError,
     get_backend_spec,
     resolve_backend_spec,
 )
 from torchlens.backends.default_specs import _tf_can_handle
 from torchlens.backends.tf import TFBackend, capabilities as tf_capabilities
+from torchlens.errors import BackendMismatchError
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 

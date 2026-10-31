@@ -54,7 +54,7 @@ class CompatRow:
     label: str
     status: Status
     severity: Severity
-    detected: bool
+    is_detected: bool
     details: str
     suggestion: str = ""
 
@@ -75,9 +75,9 @@ class CompatReport:
 
     model_type: str
     torch_version: str
-    rows: tuple[CompatRow, ...]
+    checks: tuple[CompatRow, ...]
 
-    def row(self, key: str) -> CompatRow:
+    def check(self, key: str) -> CompatRow:
         """Return one report row by stable key.
 
         Parameters
@@ -96,7 +96,7 @@ class CompatReport:
             If ``key`` is not present in this report.
         """
 
-        for report_row in self.rows:
+        for report_row in self.checks:
             if report_row.key == key:
                 return report_row
         raise KeyError(key)
@@ -114,12 +114,12 @@ class CompatReport:
             f"### TorchLens compatibility report for `{self.model_type}`",
             "",
             f"- PyTorch: `{self.torch_version}`",
-            f"- Rows: {len(self.rows)}",
+            f"- Rows: {len(self.checks)}",
             "",
             "| Row | Status | Severity | Detected | Details | Suggestion |",
             "| --- | --- | --- | --- | --- | --- |",
         ]
-        for row in self.rows:
+        for row in self.checks:
             lines.append(
                 "| "
                 + " | ".join(
@@ -159,7 +159,7 @@ class CompatReport:
                 row.details,
                 row.suggestion,
             )
-            for row in self.rows
+            for row in self.checks
         ]
         widths = tuple(
             min(width, _SHOW_CELL_WIDTH_CAP) for width in _column_widths([headers, *body])
@@ -187,14 +187,14 @@ class CompatReport:
 
         severity_rank = {"error": 0, "warning": 1, "info": 2, "ok": 3}
         findings = sorted(
-            (row for row in self.rows if row.detected or row.severity != "ok"),
+            (row for row in self.checks if row.detected or row.severity != "ok"),
             key=lambda row: severity_rank.get(row.severity, 3),
         )
-        clean = [row for row in self.rows if not (row.detected or row.severity != "ok")]
+        clean = [row for row in self.checks if not (row.detected or row.severity != "ok")]
         lines = [
             f"TorchLens compatibility report for {self.model_type}",
             (
-                f"PyTorch {self.torch_version}; {len(self.rows)} rows: "
+                f"PyTorch {self.torch_version}; {len(self.checks)} rows: "
                 f"{len(findings)} finding(s), {len(clean)} clean"
             ),
         ]
@@ -286,7 +286,7 @@ def report(model: nn.Module, input: Any) -> CompatReport:  # noqa: A002
     return CompatReport(
         model_type=_qualified_type_name(model),
         torch_version=str(torch.__version__),
-        rows=rows,
+        checks=rows,
     )
 
 

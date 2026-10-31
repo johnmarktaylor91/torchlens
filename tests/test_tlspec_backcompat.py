@@ -10,9 +10,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention import check_spec_compat
 from torchlens.intervention.types import Edit, InterventionSpec
 from torchlens.options import CaptureOptions
-from torchlens.validation import check_spec_compat
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "tlspec_v2_16"
 

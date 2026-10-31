@@ -15,11 +15,11 @@ import torch.nn.functional as F
 import torchlens as tl
 from torchlens.capture.arg_positions import FUNC_ARG_SPECS, extract_tensors_and_params
 from torchlens.data_classes.func_call_location import FuncCallLocation
+from torchlens.errors import MetadataInvariantError
 from torchlens.options import SaveOptions
 from torchlens.utils.hashing import make_short_barcode_from_input
 from torchlens.utils.tensor_utils import tensor_nanequal
 from torchlens.validation import (
-    MetadataInvariantError,
     check_metadata_invariants,
     validate_forward_pass,
 )

@@ -7,16 +7,16 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens.runnable import ContractCheck, ReadinessReport
+
 from .errors import (
     ReattachError,
     RunCapabilityUnavailableError,
     RunPreconditionError,
 )
 from .runnable import (
-    ContractCheck,
     ControlWitness,
     ControlWitnessKind,
-    ReadinessReport,
     ReadinessStatus,
     RunnableErrorCode,
     SparseRunDescriptor,

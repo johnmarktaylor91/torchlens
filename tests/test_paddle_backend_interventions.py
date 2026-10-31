@@ -21,11 +21,11 @@ import numpy as np  # noqa: E402
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends import (  # noqa: E402
-    BackendUnsupportedError,
     get_backend_spec,
     require_capability_implementation,
 )
 from torchlens.backends.paddle import PaddleBackend  # noqa: E402
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 

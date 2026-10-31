@@ -20,11 +20,10 @@ sprint and the surface lane (F35) assign facade rows.
 from __future__ import annotations
 
 from . import plugins
-from .compat import CompatWindow, compat_window
+from .compat import compat_window
 from .migrate import MigrationReport, MigrationStep, migrate
 
 __all__ = [
-    "CompatWindow",
     "MigrationReport",
     "MigrationStep",
     "compat_window",

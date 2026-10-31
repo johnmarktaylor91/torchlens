@@ -15,7 +15,7 @@ from _source_corpus import package_ast, package_files
 
 from torchlens import errors, user_funcs
 from torchlens._io.tlspec import coerce_tlspec_save_level
-from torchlens.backends import (
+from torchlens.errors import (
     AmbiguousBackendError,
     BackendMismatchError,
     BackendPayloadUnsupportedError,
@@ -1433,7 +1433,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "public home is the torchlens.attribution surface; a TorchLensWarning "
         "subclass carrying the S-18 coded metric/text disclosures (F06)"
     ),
-    "torchlens.bundle.AmbiguousLabelError": (
+    "torchlens.errors.AmbiguousLabelError": (
         "public home is torchlens.bundle/torchlens.intervention.bundle __all__; plain "
         "KeyError outside the taxonomy — rebase/registration is that surface's decision"
     ),

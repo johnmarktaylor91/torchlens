@@ -19,8 +19,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.errors import SelectionError
 from torchlens.intervention.types import Edit
-from torchlens.selection import SelectionError
 
 _replay_module = importlib.import_module("torchlens.intervention.replay")
 

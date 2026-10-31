@@ -16,6 +16,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens.errors import TransformContractError
 from torchlens.transforms import (
     BTD,
     DEFAULT,
@@ -24,7 +25,6 @@ from torchlens.transforms import (
     RoleDeclaration,
     TensorSpec,
     TransformContext,
-    TransformContractError,
     TransformDefinition,
     TransformPipeline,
     TransformSpec,

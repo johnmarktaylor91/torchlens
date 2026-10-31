@@ -4,7 +4,7 @@ Split out of ``save.py`` (C03 fix cycle): the compat preview owns the
 site-key-first join (surgery Build 0b) -- the structural key is the join
 identity, labels stay display-only disclosure. ``save.py`` re-exports the
 public names, so ``torchlens.intervention.save.check_spec_compat`` and
-``torchlens.validation.check_spec_compat`` keep resolving.
+``torchlens.intervention.check_spec_compat`` keep resolving.
 """
 
 from __future__ import annotations

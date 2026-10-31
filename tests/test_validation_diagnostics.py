@@ -18,8 +18,9 @@ from typing import Any
 import torch
 import torch.nn as nn
 
+from torchlens.report import ValidationFailure
 from torchlens.user_funcs import _run_model_and_save_specified_outs
-from torchlens.validation import ValidationFailure, get_validation_failure
+from torchlens.validation import get_validation_failure
 from torchlens.validation.core import validate_saved_outs
 from torchlens.validation.diagnostics import (
     CHECK_GROUND_TRUTH,

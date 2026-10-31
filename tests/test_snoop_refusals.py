@@ -13,9 +13,10 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.errors import NarrationConfigError
 from torchlens.fastlog.options import RecordingOptions
 from torchlens.options import EchoOptions
-from torchlens.snoop import NarrationConfigError, normalize_echo
+from torchlens.snoop import normalize_echo
 
 
 class OneOp(nn.Module):

@@ -18,14 +18,10 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends import (
-    AmbiguousBackendError,
     BackendCapabilities,
-    BackendMismatchError,
     BackendSpec,
-    BackendUnsupportedError,
     CaptureBackend,
     SerializationPolicy,
-    UnknownBackendError,
     get_backend_spec,
     register_backend_spec,
     registered_backend_specs,
@@ -47,6 +43,12 @@ from torchlens.backends.registry import _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.capture.trace import _capture_backend_from_registry
+from torchlens.errors import (
+    AmbiguousBackendError,
+    BackendMismatchError,
+    BackendUnsupportedError,
+    UnknownBackendError,
+)
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import MetadataInvariantError
 

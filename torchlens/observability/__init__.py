@@ -34,17 +34,6 @@ from ._artifact import (
 )
 from ._chassis import EventStream, ObserverEvent
 from ._collector import HistoryCollector, StepTruth, WatchPlan, WatchSettings
-from ._errors import (
-    HistoryArtifactError,
-    HistorySchemaError,
-    ObservabilityError,
-    ObserverEventError,
-    ProfilerSessionError,
-    SpanError,
-    StatKernelError,
-    WatchLifecycleError,
-    WatchPlanError,
-)
 from ._join import (
     JoinCoverage,
     KinetoJoinResult,
@@ -74,10 +63,8 @@ from ._memory_totals import (
     total_transformed_gradient_memory,
 )
 from ._native_profile import (
-    KernelProfileReport,
     join_result_for,
     join_session,
-    kernel_profile,
     register_join_result,
 )
 from ._op_tier import FacetSplitter, OpTierCollector, split_heads
@@ -155,10 +142,8 @@ __all__ = [
     "Histogram",
     "HistogramDescriptor",
     "HistogramResult",
-    "HistoryArtifactError",
     "HistoryCollector",
     "HistoryReader",
-    "HistorySchemaError",
     "HistoryView",
     "HistoryWriter",
     "FacetSplitter",
@@ -166,16 +151,12 @@ __all__ = [
     "KinetoJoinResult",
     "LaunchRow",
     "MarkerSpan",
-    "KernelProfileReport",
     "NormalizedEvent",
-    "ObservabilityError",
     "ObservationRecord",
     "OverheadMeasurement",
     "ObserverEvent",
-    "ObserverEventError",
     "OpTierCollector",
     "ProfilerSession",
-    "ProfilerSessionError",
     "RamRing",
     "RefusalPredicate",
     "RegionRecord",
@@ -183,18 +164,14 @@ __all__ = [
     "SeriesPoint",
     "SessionResult",
     "SiteRecord",
-    "SpanError",
     "SpanRecord",
     "SpanRegistry",
     "Spine",
     "SpineResult",
-    "StatKernelError",
     "StepBlockRecord",
     "StepTruth",
     "SummaryTransform",
-    "WatchLifecycleError",
     "WatchPlan",
-    "WatchPlanError",
     "WatchRenderError",
     "WatchSettings",
     "categorized_key_counts",
@@ -217,7 +194,6 @@ __all__ = [
     "merge_observations",
     "measure_overhead",
     "merge_spine_results",
-    "kernel_profile",
     "observation_row",
     "pinned_parity_scenario",
     "rank_sites",

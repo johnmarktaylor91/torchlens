@@ -25,11 +25,10 @@ import torchlens as tl  # noqa: E402
 import torchlens.backends.mlx.backend as mlx_backend  # noqa: E402
 import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
 from torchlens.backends import (  # noqa: E402
-    BackendRuntimeCompatibilityError,
-    BackendUnsupportedError,
     get_backend_spec,
 )
 from torchlens.backends.mlx import GradOptions  # noqa: E402
+from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError  # noqa: E402
 
 
 class TinyMLP(nn.Module):

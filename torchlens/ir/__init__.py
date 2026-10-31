@@ -53,10 +53,9 @@ from .events import (
     is_value_edge_use,
 )
 from .intervention import FireResult, FunctionEventInput, InterventionTemplateRef
-from .live_index import LiveIndex, LiveIndexWindowError
+from .live_index import LiveIndex
 from .predicate import (
     _DEFERRED_VALUE,
-    MLXValueUnavailableError,
     RecordContext,
     coerce_deferred_value as coerce_deferred_value,
     is_deferred_value as is_deferred_value,
@@ -101,8 +100,6 @@ __all__ = [
     "GradFnDiscovered",
     "GradFnFired",
     "LiveIndex",
-    "LiveIndexWindowError",
-    "MLXValueUnavailableError",
     "ModuleEnterEvent",
     "ModuleExitEvent",
     "ModuleFrame",

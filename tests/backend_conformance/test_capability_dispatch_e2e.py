@@ -35,7 +35,8 @@ def _spec_flipped_true(name: str, flag: str):
 def test_jax_interventions_flip_with_binding_refuses_at_trace() -> None:
     jnp = pytest.importorskip("jax.numpy")
     import torchlens as tl
-    from torchlens.backends import BackendCapabilityConformanceError, register_backend_spec
+    from torchlens.backends import register_backend_spec
+    from torchlens.errors import BackendCapabilityConformanceError
 
     original, opened = _spec_flipped_true("jax", "interventions")
     register_backend_spec(opened, replace=True)
@@ -56,7 +57,8 @@ def test_tinygrad_backward_flip_with_binding_refuses_at_trace() -> None:
     from tinygrad import Tensor
 
     import torchlens as tl
-    from torchlens.backends import BackendCapabilityConformanceError, register_backend_spec
+    from torchlens.backends import register_backend_spec
+    from torchlens.errors import BackendCapabilityConformanceError
 
     original, opened = _spec_flipped_true("tinygrad", "backward_capture")
     register_backend_spec(opened, replace=True)

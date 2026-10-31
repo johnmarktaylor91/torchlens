@@ -1057,7 +1057,7 @@ def check_layout_coherence(manifest: Mapping[str, Any], rows: list[dict[str, Any
 
     Raises
     ------
-    torchlens.dataset_extraction.DatasetExtractionResumeError
+    torchlens.errors.DatasetExtractionResumeError
         ``extraction_manifest_invalid`` naming the key, the offending shard,
         and both layouts.
     """
@@ -1102,11 +1102,11 @@ def _raise_mixed_layout(problem: str, **fields: Any) -> None:
 
     Raises
     ------
-    torchlens.dataset_extraction.DatasetExtractionResumeError
+    torchlens.errors.DatasetExtractionResumeError
         ``extraction_manifest_invalid``, always.
     """
 
-    from ..dataset_extraction import DatasetExtractionResumeError
+    from torchlens._extraction.resume import DatasetExtractionResumeError
 
     raise DatasetExtractionResumeError(
         problem,
@@ -1220,7 +1220,7 @@ def open_extraction(
 
     Raises
     ------
-    torchlens.dataset_extraction.DatasetExtractionResumeError
+    torchlens.errors.DatasetExtractionResumeError
         On a missing/invalid manifest or an incomplete artifact opened
         without ``in_progress=True``.
     torchlens.errors.InvalidArgumentError
@@ -1237,10 +1237,11 @@ def open_extraction(
             remedy="pass verify='structural' or verify='first_access'",
             value=repr(verify),
         )
+    from torchlens._extraction.resume import DatasetExtractionResumeError
+
     from ..dataset_extraction import (
         MANIFEST_FILENAME,
         MANIFEST_SCHEMA_V2,
-        DatasetExtractionResumeError,
         _load_manifest,
     )
 

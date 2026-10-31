@@ -10,9 +10,11 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from .._literals import OutputDeviceLiteral
 from .._save_budget import SaveBudgetOption
-from ..backends import BackendName, BackendUnsupportedError, resolve_backend_spec
+from ..backends import BackendName, resolve_backend_spec
 from ..errors import TorchLensWarning
 from ..options import CaptureOptions
 from ..utils.display import user_stacklevel

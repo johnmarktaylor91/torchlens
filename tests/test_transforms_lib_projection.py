@@ -16,10 +16,10 @@ from pathlib import Path
 import pytest
 import torch
 
+from torchlens.errors import TransformContractError
 from torchlens.stats import PCA, FittedArtifactError, FittedPCA, load_fitted, save_fitted
 from torchlens.transforms import (
     TensorSpec,
-    TransformContractError,
     chain,
     pca_apply,
     pipeline_from_record,

@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+from torchlens.selection import SelectionError
+
 from .._errors import KeywordConflictError
 from ..errors._base import (
     CaptureError,
@@ -11,7 +13,6 @@ from ..errors._base import (
     TorchLensWarning,
     ValidationError,
 )
-from ..selection import SelectionError
 
 Severity = Literal["recoverable", "informational", "fatal"]
 """Public severity tag values for the intervention error catalog."""

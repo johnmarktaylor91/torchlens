@@ -22,8 +22,7 @@ The honestly-redefined flagship checks (memo section 1, all measured):
   are the mechanism working) and RAISE at S-B before the weights are
   written -- the only pre-write tripwire under fp32 and bf16.
 
-One-shot parameter-space auditing is ``param_health`` (also served as
-``tl.debug.param_health``). Access spelling is ``import torchlens.checks``
+One-shot parameter-space auditing is ``tl.report.param_health``. Access spelling is ``import torchlens.checks``
 for now; root-facade routing is an F35 registration fragment. Every
 spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -31,14 +30,12 @@ spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
 from __future__ import annotations
 
 from ._adapters import OptimizerFacts, optimizer_facts
-from ._audit import ParamHealthReport, param_health
 from ._constants import (
     MAX_FRACTION_DEFAULT,
     SUBNORMAL_FRACTION_THRESHOLD_DEFAULT,
     WARN_WINDOW_DEFAULT,
     WATCHDOG_FACTOR,
 )
-from ._errors import CheckConfigError, CheckLifecycleError, CheckViolationError
 from ._ledgers import (
     ClipLedger,
     ClipLedgerSnapshot,
@@ -76,24 +73,19 @@ __all__ = [
     "SUBNORMAL_FRACTION_THRESHOLD_DEFAULT",
     "WARN_WINDOW_DEFAULT",
     "WATCHDOG_FACTOR",
-    "CheckConfigError",
     "CheckFinding",
-    "CheckLifecycleError",
     "CheckReport",
-    "CheckViolationError",
     "ChecksSession",
     "ClipLedger",
     "ClipLedgerSnapshot",
     "LivenessProbe",
     "OptimizerFacts",
-    "ParamHealthReport",
     "RangeProbe",
     "ScaleLedger",
     "ScaleLedgerSnapshot",
     "ScanRow",
     "Watchdog",
     "WatchdogSnapshot",
-    "param_health",
     "named_entries_from_target",
     "optimizer_facts",
     "scan_named_tensors",

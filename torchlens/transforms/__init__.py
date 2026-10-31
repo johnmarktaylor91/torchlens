@@ -29,7 +29,6 @@ from ._context import (
     wants_context,
     with_context,
 )
-from ._errors import TransformContractError
 from ._helpers import ProbeReport, SrpSizing, srp_dims_for, srp_fidelity_probe
 from ._kernels import cast, flatten, magnitude, reduce, take_index, unit_norm
 from ._pipeline import (
@@ -72,7 +71,6 @@ __all__ = [
     "SrpSizing",
     "TensorSpec",
     "TransformContext",
-    "TransformContractError",
     "TransformDefinition",
     "TransformPipeline",
     "TransformSpec",

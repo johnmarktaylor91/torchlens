@@ -33,6 +33,8 @@ from typing import Any, Literal, cast
 import torch
 from torch import nn
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from . import _state
 from ._capture_honesty import record_host_tensor_source_advisory
 from ._capture_intervention import (
@@ -116,7 +118,6 @@ from .autoroute._builtin_output import (
 from .backends import (
     BackendName,
     BackendSpec,
-    BackendUnsupportedError,
     get_backend_spec,
     resolve_backend_spec,
 )
@@ -4354,7 +4355,6 @@ def validate_batch_of_models_and_inputs(*args: Any, **kwargs: Any) -> Any:
 
 
 _PUBLIC_IMPL_WRAPPER_NAMES = (
-    "summary",
     "show_model_graph",
     "draw_backward",
     "draw_combined",

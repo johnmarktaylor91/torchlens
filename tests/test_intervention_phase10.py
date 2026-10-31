@@ -15,6 +15,7 @@ from example_models import TinyReluAdd as _ReluModel
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention import check_spec_compat
 from torchlens.intervention.errors import (
     MultiMatchWarning,
     OpaqueCallableError,
@@ -39,7 +40,6 @@ from torchlens.intervention.types import (
 from torchlens.io import load_intervention_spec
 from torchlens.ir.container import TupleIndex
 from torchlens.ir.selector_eval import selector_from_spec
-from torchlens.validation import check_spec_compat
 
 _INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention.resolver")
 

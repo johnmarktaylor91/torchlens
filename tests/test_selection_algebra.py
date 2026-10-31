@@ -24,13 +24,13 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.errors import SelectionError
 from torchlens.intervention.selectors import CompositeSelector, NotSelector
 from torchlens.selection import (
     _FLIP,
     _RELATIONS,
     ResolvedSelection,
     Selection,
-    SelectionError,
     SiteEntry,
     _difference_relation,
     _join_relation,
@@ -777,7 +777,7 @@ def test_selection_is_frozen(log):
 def test_selection_error_is_catalogued():
     """SelectionError rides the intervention error catalog surface."""
 
-    from torchlens.intervention import SelectionError as catalogued
+    from torchlens.errors import SelectionError as catalogued
 
     assert catalogued is SelectionError
     assert issubclass(SelectionError, ValueError)

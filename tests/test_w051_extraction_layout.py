@@ -23,10 +23,10 @@ from torchlens._errors import InvalidArgumentError
 from torchlens._extraction.ragged import RaggedBatch
 from torchlens._extraction.reader import open_extraction
 from torchlens.dataset_extraction import (
-    DatasetExtractionResumeError,
     extract_dataset,
     load_extraction,
 )
+from torchlens.errors import DatasetExtractionResumeError
 
 
 class _Tok(nn.Module):

@@ -17,11 +17,10 @@ from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends import (
-    BackendRuntimeCompatibilityError,
-    BackendUnsupportedError,
     get_backend_spec,
 )
 from torchlens.backends.tinygrad import GradOptions, TinygradBackend, capabilities
+from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
 
 tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor

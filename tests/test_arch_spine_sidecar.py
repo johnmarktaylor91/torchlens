@@ -16,9 +16,9 @@ from torch import nn
 import torchlens as tl
 from torchlens._io.prerelease import gated_annotations_keys
 from torchlens._io.sidecar import SIDECAR_ANNOTATIONS_KEY
+from torchlens.errors import SidecarError
 from torchlens.io import (
     AnalysisOnlySidecar,
-    SidecarError,
     SidecarFamily,
     attach_sidecar,
     list_sidecar_families,

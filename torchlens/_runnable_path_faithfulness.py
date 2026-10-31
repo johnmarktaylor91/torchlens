@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from torchlens.runnable import ContractCheck, ReadinessReport, RunnableDiagnostic, RunReport
+
 from ._runnable_state import (
     PreparedRunnableState,
     runnable_tensor_byte_digest,
@@ -17,14 +19,10 @@ from .runnable import (
     RUN_TRUNCATION_REGIME_VOCABULARY,
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
-    ContractCheck,
     InputAttestationFingerprint,
     NumericAttestationStatus,
     PathFaithfulness,
-    ReadinessReport,
-    RunnableDiagnostic,
     RunnableErrorCode,
-    RunReport,
     RunTruncation,
     SparseRunDescriptor,
     StateSource,

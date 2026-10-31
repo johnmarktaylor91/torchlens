@@ -125,10 +125,10 @@ def test_v1_in_progress_acknowledgment_flows_to_export_contract(tmp_path: Path) 
 
     from torchlens._data_substrate import MANIFEST_SCHEMA_V1
     from torchlens.dataset_extraction import (
-        DatasetExtractionResumeError,
         _shard_filename,
         _stimuli_signature,
     )
+    from torchlens.errors import DatasetExtractionResumeError
 
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(3, 4), nn.ReLU()).eval()

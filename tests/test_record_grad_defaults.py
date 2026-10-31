@@ -12,8 +12,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import ConfigurationError
-from torchlens.fastlog import Recorder, RecorderStateError
+from torchlens.errors import ConfigurationError, RecorderStateError
+from torchlens.fastlog import Recorder
 
 
 class _TinyMlp(nn.Module):

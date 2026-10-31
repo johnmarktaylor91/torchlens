@@ -55,7 +55,6 @@ if TYPE_CHECKING:
 __all__ = [
     "ResolvedSelection",
     "Selection",
-    "SelectionError",
     "SiteEntry",
     "params",
     "random_selection",

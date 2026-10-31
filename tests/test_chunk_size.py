@@ -14,10 +14,10 @@ import torchlens as tl
 from torchlens.backends import (
     BackendCapabilities,
     BackendSpec,
-    BackendUnsupportedError,
     register_backend_spec,
     unregister_backend_spec,
 )
+from torchlens.errors import BackendUnsupportedError
 from torchlens.intervention.errors import AmbiguousBatchInputError, ChunkedForwardConfigError
 
 

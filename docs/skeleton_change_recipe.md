@@ -135,7 +135,7 @@ checker whether the recipe still targets this graph.
 ```python
 edited_log = tl.trace(edited, input_ids)
 spec = tl.io.load_intervention_spec("recipe.tlspec")
-compat = tl.validation.check_spec_compat(spec, edited_log)
+compat = tl.intervention.check_spec_compat(spec, edited_log)
 print(compat.outcome)
 print(compat.site_diff)
 ```
@@ -197,8 +197,8 @@ spec = tl.io.load_intervention_spec("recipe.tlspec")
 
 refusal = None
 try:
-    tl.validation.check_spec_compat(spec, edited_log)
-except tl.intervention.GraphShapeMismatchError as exc:
+    tl.intervention.check_spec_compat(spec, edited_log)
+except tl.errors.GraphShapeMismatchError as exc:
     refusal = exc
 print("refused:", refusal)
 ```
@@ -272,7 +272,7 @@ recipe_v2 = tl.when(
 edited_log.attach_hooks(recipe_v2, confirm_mutation=True)
 tl.io.save_intervention(edited_log, "recipe_v2.tlspec")
 spec_v2 = tl.io.load_intervention_spec("recipe_v2.tlspec")
-compat_v2 = tl.validation.check_spec_compat(spec_v2, edited_log)
+compat_v2 = tl.intervention.check_spec_compat(spec_v2, edited_log)
 print(compat_v2.outcome)
 ```
 

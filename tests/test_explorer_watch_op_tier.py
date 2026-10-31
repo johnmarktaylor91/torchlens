@@ -13,11 +13,10 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens.errors import WatchLifecycleError, WatchPlanError
 from torchlens.observability import (
     HistoryView,
     StepTruth,
-    WatchLifecycleError,
-    WatchPlanError,
     render_contact_sheet,
     render_fan,
 )

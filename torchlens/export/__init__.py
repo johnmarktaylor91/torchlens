@@ -259,7 +259,7 @@ def html(
     graph:
         ``"collapsed"`` (default) / ``"flat"`` / ``"none"``.
     options:
-        ``tl.export.HtmlReportOptions`` emission plumbing: ``share_safe``
+        ``tl.options.HtmlReportOptions`` emission plumbing: ``share_safe``
         (strip every embedded value including the frontier),
         ``deterministic`` (suppress the manifest timestamp for byte-exact
         regeneration), ``vis_call_depth`` (graph-depth knob, forwarded
@@ -1265,7 +1265,6 @@ del _name, _fn, _tier, _caps
 
 __all__ = [
     "NETRON_DISCLAIMER",
-    "HtmlReportOptions",
     "aim",
     "chrome_trace",
     "chrome_trace_diff",

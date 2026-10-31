@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens.errors import SelectionError
 
 #: Committed index set for the aligned patch rows.
 IDX = ((0, 0, 1, 1), (0, 1, 2, 2))

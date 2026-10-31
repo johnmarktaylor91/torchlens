@@ -10,9 +10,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import Any, cast
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from ..._deprecations import MISSING, MissingType
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendUnsupportedError, get_backend_spec
+from ...backends import get_backend_spec
 from ...capture.outcome import stamp_backend_finalized
 from ...data_classes.derived_grad import (
     DerivedGradAccessor,

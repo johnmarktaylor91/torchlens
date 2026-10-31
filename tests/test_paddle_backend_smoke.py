@@ -7,7 +7,7 @@ import pytest
 paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError  # noqa: E402
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 

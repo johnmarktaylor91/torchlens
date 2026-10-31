@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens.runnable import ContractCheck
+
 from ._io._torch_symbols import torch_attr
 from ._runnable_state import (
     _OUTPUT_COUNT_FLOOR,
@@ -19,7 +21,6 @@ from .errors import (
     RunPreconditionError,
 )
 from .runnable import (
-    ContractCheck,
     RunnableCallDescriptor,
     RunnableErrorCode,
     SparseRunDescriptor,

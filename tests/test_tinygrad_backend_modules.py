@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
+from torchlens.errors import BackendUnsupportedError
 from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import MetadataInvariantError

@@ -1504,7 +1504,9 @@ class TraceInterventionMixin(_TraceMixinBase):
     ) -> str:
         """Apply one EDGE-kind selection edit through the edge-substitution path."""
 
-        from ..selection import ResolvedSelection, SelectionError
+        from torchlens.selection import SelectionError
+
+        from ..selection import ResolvedSelection
 
         if edit is None:
             raise ValueError(
@@ -1554,7 +1556,9 @@ class TraceInterventionMixin(_TraceMixinBase):
         default on the replay path; rerun/set_only keep refusing typed).
         """
 
-        from ..selection import ResolvedSelection, SelectionError
+        from torchlens.selection import SelectionError
+
+        from ..selection import ResolvedSelection
 
         if edit is None:
             raise ValueError(

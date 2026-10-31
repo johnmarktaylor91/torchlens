@@ -12,9 +12,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import Any, Final, cast
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from ..._deprecations import MISSING, MissingType
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendName, BackendUnsupportedError, get_backend_spec
+from ...backends import BackendName, get_backend_spec
 from ...backends._finalize import (
     attach_function_root_module,
     mirror_param_derived_grads,

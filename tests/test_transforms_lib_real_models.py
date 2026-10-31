@@ -26,12 +26,12 @@ from tests.transforms_corpus.loader import (
     load_vendored,
     resnet50_checkpoint_cached,
 )
+from torchlens.errors import TransformContractError
 from torchlens.stats import PCA, load_fitted, save_fitted
 from torchlens.transforms import (
     BTD,
     SpecialTokenFacts,
     TransformContext,
-    TransformContractError,
     cast,
     chain,
     cls_token,

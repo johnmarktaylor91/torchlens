@@ -223,7 +223,7 @@ def _baseline_slot(
     """Resolve ``baseline=`` into the slot text and the per-node diff.
 
     A ``Trace`` is diffed against the exported trace through
-    ``torchlens.differential.diff`` and its per-node facts are
+    ``torchlens.report.diff`` and its per-node facts are
     attached to the projection's nodes; a string is recorded verbatim as a
     baseline identifier with no per-node facts.
     """
@@ -344,7 +344,7 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
     baseline:
         Optional reference for the ``torchlens.baseline`` diff slot
         (netron #1544). A ``Trace`` is diffed against ``log``
-        through ``torchlens.differential.diff`` (``log - baseline``):
+        through ``torchlens.report.diff`` (``log - baseline``):
         each exported node carries its ``torchlens.diff.*`` facts (status,
         largest value delta, reference label, join verdict; row counts for
         module-call and rolled nodes) in its ``metadataProps`` and in the

@@ -292,7 +292,8 @@ def test_resume_compares_the_stored_ids_flag(tmp_path: Path) -> None:
 
     import json
 
-    from torchlens.dataset_extraction import MANIFEST_FILENAME, DatasetExtractionResumeError
+    from torchlens.dataset_extraction import MANIFEST_FILENAME
+    from torchlens.errors import DatasetExtractionResumeError
 
     _extract(tmp_path)
     full = open_extraction(tmp_path).token_rows()

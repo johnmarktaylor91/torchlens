@@ -13,6 +13,8 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from . import _validation_argument_references as _arg_references, user_funcs as _user_funcs
 from ._capture_state_helpers import (
     _model_for_ground_truth_validation,
@@ -47,7 +49,7 @@ from ._validation_state_snapshot import (
     snapshot_state_for_restore,
     state_matches_snapshot,
 )
-from .backends import BackendName, BackendUnsupportedError, resolve_backend_spec
+from .backends import BackendName, resolve_backend_spec
 from .data_classes.trace import Trace
 from .errors import TraceNotReproducibleWarning
 from .options import (

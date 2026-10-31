@@ -35,14 +35,12 @@ _LAZY_ATTRS = {
     # and their transitive chains) is fully deferred behind these rows -- the
     # marginal-import guard in tests/test_import_hygiene.py holds the line.
     "ActivationLookup": ("torchlens.captured_run", "ActivationLookup"),
-    "AmbiguousOpLookupError": ("torchlens._errors", "AmbiguousOpLookupError"),
     "Bytes": ("torchlens.quantities", "Bytes"),
     "CapturedRun": ("torchlens.captured_run", "CapturedRun"),
     "Duration": ("torchlens.quantities", "Duration"),
     "Flops": ("torchlens.quantities", "Flops"),
     "Macs": ("torchlens.quantities", "Macs"),
     "Quantity": ("torchlens.quantities", "Quantity"),
-    "ReentrantTraceError": ("torchlens._state", "ReentrantTraceError"),
     # Agent surface (F29): the read-only inspection core. Deliberately NOT in
     # __all__ (frozen root budget); reachable as tl.agent per the docs.
     "agent": ("torchlens.agent", None),
@@ -259,7 +257,7 @@ _REDIRECTS: dict[str, str] = {
     "Buffer": "use torchlens.types.Buffer",
     "build_render_audit": "use torchlens.experimental.dagua.build_render_audit",
     "check_metadata_invariants": "use torchlens.validation.check_metadata_invariants",
-    "check_spec_compat": "use torchlens.validation.check_spec_compat",
+    "check_spec_compat": "use torchlens.intervention.check_spec_compat",
     "cleanup_tmp": "use torchlens.io.cleanup_tmp",
     "draw_backward": "use torchlens.visualization.draw_backward",
     "draw_combined": "use torchlens.visualization.draw_combined",
@@ -799,8 +797,6 @@ __all__ = [
     "summary",
     "options",
     "to_disk",
-    "AmbiguousOpLookupError",
-    "ReentrantTraceError",
     "Trace",
     "Layer",
     "Container",

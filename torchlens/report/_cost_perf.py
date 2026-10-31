@@ -820,7 +820,7 @@ class CostReportResult:
     """Measured capture costs on the USER'S model and host (D27)."""
 
     tiers: tuple[CostTierMeasurement, ...]
-    n_forwards_run: int
+    num_forward_runs: int
     environment: dict[str, str]
 
     def __repr__(self) -> str:
@@ -829,7 +829,7 @@ class CostReportResult:
         tiers = ", ".join(tier.tier for tier in self.tiers)
         return (
             f"CostReportResult({len(self.tiers)} tier(s): {tiers}; measured over "
-            f"{self.n_forwards_run} forwards; print() for the report, read .tiers)"
+            f"{self.num_forward_runs} forwards; print() for the report, read .tiers)"
         )
 
     def __str__(self) -> str:
@@ -847,7 +847,7 @@ class CostReportResult:
         lines.append(
             "  environment: " + ", ".join(f"{k}={v}" for k, v in sorted(self.environment.items()))
         )
-        lines.append(f"  disclosure: this measurement ran {self.n_forwards_run} forward passes")
+        lines.append(f"  disclosure: this measurement ran {self.num_forward_runs} forward passes")
         return "\n".join(lines)
 
 
@@ -945,6 +945,6 @@ def cost_report(
     }
     return CostReportResult(
         tiers=tuple(measurements),
-        n_forwards_run=n_forwards,
+        num_forward_runs=n_forwards,
         environment=environment,
     )

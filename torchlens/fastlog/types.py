@@ -1050,7 +1050,7 @@ class Recording(CapturedRun):
             Keep only the last ``last`` rows.
         select:
             Optional filter: a substring, or a callable over
-            :class:`torchlens.snoop.NarrationEvent` rows.
+            :class:`torchlens.types.NarrationEvent` rows.
 
         Returns
         -------

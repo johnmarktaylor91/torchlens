@@ -9,10 +9,12 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from ... import _state
 from ..._deprecations import MISSING, MissingType
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendName, BackendUnsupportedError, get_backend_spec
+from ...backends import BackendName, get_backend_spec
 from ...capture.outcome import StopRequest, stamp_backend_finalized
 from ...data_classes.derived_grad import (
     DerivedGradAccessor,

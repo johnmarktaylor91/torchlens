@@ -18,6 +18,8 @@ from typing import Any, cast
 
 import torch
 
+from torchlens.runnable import ReadinessReport, RunnableCompatibility, RunnableDiagnostic
+
 from .. import _state
 from .._errors import _ActionableErrorMixin
 from .._input_walk import INPUT_CONTAINER_KINDS
@@ -64,7 +66,6 @@ from ..runnable import (
     PayloadLayerDescriptor,
     PayloadLayersDescriptor,
     ProducerPreflight,
-    ReadinessReport,
     ReadinessStatus,
     ReplayWitnessStructure,
     RequiredWitnessFamily,
@@ -72,8 +73,6 @@ from ..runnable import (
     ResolverRecord,
     ResolverStatus,
     RunnableCallDescriptor,
-    RunnableCompatibility,
-    RunnableDiagnostic,
     RunnableErrorCode,
     RunnableRngProfile,
     RunProvider,

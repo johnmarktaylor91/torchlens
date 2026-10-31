@@ -14,7 +14,7 @@ failure report is the artifact for "it broke on the cluster".
 
 The content doors are the flat keywords `arrays=` and `graph=`; emission
 plumbing (redaction, byte-stability, renderer depth, thumbnail budgets)
-rides the frozen `options=tl.export.HtmlReportOptions(...)` bundle.
+rides the frozen `options=tl.options.HtmlReportOptions(...)` bundle.
 
 ## Anatomy
 
@@ -51,7 +51,7 @@ transition. **Healthy captures embed zero array bytes by default.**
 - `arrays=<tl.Selection>` — the general form: thumbnails for the resolved
   selection's sites.
 - `arrays="none"` — metadata only.
-- `options=tl.export.HtmlReportOptions(share_safe=True)` — strips EVERY
+- `options=tl.options.HtmlReportOptions(share_safe=True)` — strips EVERY
   embedded value including the frontier.
 
 Budgets (`HtmlReportOptions(max_array_sites=..., max_array_bytes=...)`, plus

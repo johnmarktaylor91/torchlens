@@ -14,7 +14,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.intervention import MultiMatchWarning
+from torchlens.errors import MultiMatchWarning
 from torchlens.visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"

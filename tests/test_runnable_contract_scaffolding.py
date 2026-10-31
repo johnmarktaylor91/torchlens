@@ -20,15 +20,14 @@ from torchlens.runnable import (
     CallExecutionContext,
     InitializerPolicy,
     InputAttestationFingerprint,
-    ReadinessReport,
     RunnableCallDescriptor,
     RunnableErrorCode,
     RunnableTraceProtocol,
-    RunReport,
     SparseRunDescriptor,
     StateSlotRole,
     WitnessCompleteness,
 )
+from torchlens.types import ReadinessReport, RunReport
 
 
 @pytest.mark.smoke

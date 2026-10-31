@@ -18,8 +18,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.errors import NarrationStatsError
 from torchlens.options import EchoOptions
-from torchlens.snoop import NarrationStatsError
 from torchlens.snoop._stats import exact_stats, reuse_stats, sampled_stats
 
 

@@ -33,9 +33,11 @@ import torch
 from safetensors import SafetensorError
 from safetensors.torch import load_file, save_file
 
+from torchlens.backends.registry import BackendPayloadUnsupportedError
+
 from .. import __version__ as TORCHLENS_VERSION
 from .._errors import InvalidArgumentError
-from ..backends import BackendPayloadUnsupportedError, BackendSpec, get_backend_spec
+from ..backends import BackendSpec, get_backend_spec
 from ..data_classes._state_adapter import state_items
 from ..data_classes.trace import Trace
 from ..errors import TorchLensWarning
@@ -411,7 +413,9 @@ def save(
     # only exist after its module was imported.
     merged_presenter = sys.modules.get("torchlens.merged._presenter")
     if merged_presenter is not None and isinstance(trace, merged_presenter.MergedTrace):
-        from ..merged import MergedErrorCode, MergedSurfaceUnsupportedError
+        from torchlens.merged._errors import MergedSurfaceUnsupportedError
+
+        from ..merged import MergedErrorCode
 
         raise MergedSurfaceUnsupportedError(
             "tl.save() does not support MergedTrace. Write the merged-directory "
@@ -426,7 +430,7 @@ def save(
     # (owners disjoint; a slice can only exist after its module imported).
     slice_presenter = sys.modules.get("torchlens.trace_slice")
     if slice_presenter is not None and isinstance(trace, slice_presenter.TraceSlice):
-        from ..selection import SelectionError
+        from torchlens.selection import SelectionError
 
         raise SelectionError(
             "tl.save() does not support TraceSlice: a slice is a VIEW with "
@@ -2333,7 +2337,7 @@ def _preflight_schema_v2_runtime(
 ) -> None:
     """Fail closed for schema-v2 TensorFlow runtime fingerprint mismatches."""
 
-    from ..backends import BackendRuntimeCompatibilityError
+    from torchlens.backends.registry import BackendRuntimeCompatibilityError
 
     runtime = manifest["backend_runtime"]
     spec = get_backend_spec(backend_name)

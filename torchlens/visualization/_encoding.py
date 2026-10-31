@@ -1155,7 +1155,7 @@ def _resolve_device_time(
             "owned profiler session).",
             code="device_time_unavailable",
             remedy=(
-                "capture through torchlens.observability.kernel_profile on a "
+                "capture through torchlens.report.kernel_profile on a "
                 "CUDA host, then draw the returned result.trace"
             ),
         )

@@ -175,7 +175,7 @@ def test_page_states_no_torchlens_verb_edits_the_model() -> None:
         "attach_hooks(",
         "tl.io.save_intervention(",
         "tl.io.load_intervention_spec(",
-        "tl.validation.check_spec_compat(",
+        "tl.intervention.check_spec_compat(",
         "site_key",
     ):
         assert spelling in text, f"recipe page lost its {spelling!r} step"

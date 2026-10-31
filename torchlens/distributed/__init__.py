@@ -40,7 +40,6 @@ from ._ledger import (
 )
 from ._lifecycle import (
     AMBIGUOUS_GROUP_LIFETIME,
-    AmbiguousGroupLifetimeError,
     ArmingRecord,
     GroupIdentity,
     arm,
@@ -52,7 +51,6 @@ from ._recognizer import (
     COLLECTIVE_NAMESPACES,
     UNCAPTURED_COLLECTIVE_OP,
     CollectiveRecognizer as CollectiveRecognizer,
-    UncapturedCollectiveOpError,
     derive_collective_recognizer,
     has_vetted_snapshot,
 )
@@ -62,12 +60,10 @@ __all__ = [
     "COLLECTIVE_NAMESPACES",
     "GROUP_LIFETIME_EVIDENCE_CONFLICT",
     "UNCAPTURED_COLLECTIVE_OP",
-    "AmbiguousGroupLifetimeError",
     "ArmingRecord",
     "GroupIdentity",
     "GroupLifecycleEvent",
     "GroupLifecycleLedger",
-    "UncapturedCollectiveOpError",
     "arm",
     "verify_membership_lineages",
     "auto_arm_degradation",

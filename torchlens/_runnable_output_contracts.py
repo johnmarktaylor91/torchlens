@@ -8,11 +8,12 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens.runnable import ContractCheck
+
 from .errors import (
     RunPreconditionError,
 )
 from .runnable import (
-    ContractCheck,
     ControlWitness,
     ControlWitnessKind,
     RunnableCallDescriptor,

@@ -22,9 +22,9 @@ import torchlens as tl  # noqa: E402
 import torchlens.preprocessing as pp  # noqa: E402
 from torchlens.dataset_extraction import (  # noqa: E402
     INPUT_PREPROCESSING_SCHEMA,
-    DatasetExtractionResumeError,
     input_preprocessing_of,
 )
+from torchlens.errors import DatasetExtractionResumeError  # noqa: E402
 
 
 class _SmallCNN(nn.Module):

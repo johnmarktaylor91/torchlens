@@ -777,7 +777,8 @@ def test_nonempty_box_slices_match_support_hull() -> None:
 def test_multi_target_projective_raises_target_error() -> None:
     """Projective convenience properties speak target vocabulary, not input."""
 
-    from torchlens.receptive_field import AmbiguousInputError, AmbiguousTargetError
+    from torchlens.errors import AmbiguousTargetError
+    from torchlens.receptive_field import AmbiguousInputError
 
     class TwoOut(nn.Module):
         def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -1059,7 +1060,7 @@ def test_geometry_refuses_typed_for_underivable_rearrangements(
 ) -> None:
     """grid_sample / unfold+fold / pixel_shuffle refuse per-unit geometry typed."""
 
-    from torchlens.receptive_field import ReceptiveFieldError
+    from torchlens.errors import ReceptiveFieldError
 
     trace = capture(model_type().eval(), torch.randn(1, 1, 8, 8))
     target = op_named(trace, fragment)

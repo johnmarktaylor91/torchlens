@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from torchlens.runnable import ContractCheck, RunnableDiagnostic
+
 from . import _state
 from ._io._torch_symbols import torch_attr
 from ._runnable_state import (
@@ -21,7 +23,6 @@ from .errors import (
 )
 from .runnable import (
     CallableRegistryEntry,
-    ContractCheck,
     DivergencePolicy,
     InputAttestationFingerprint,
     LiteralAtom,
@@ -36,7 +37,6 @@ from .runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     RunnableCallDescriptor,
-    RunnableDiagnostic,
     RunnableErrorCode,
     SparseRunDescriptor,
     StateSource,

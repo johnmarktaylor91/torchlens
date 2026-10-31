@@ -12,12 +12,12 @@ import math
 import pytest
 import torch
 
+from torchlens.errors import StatKernelError
 from torchlens.observability import (
     DEFAULT_DESCRIPTOR,
     Histogram,
     HistogramDescriptor,
     Spine,
-    StatKernelError,
     merge_histogram_results,
     merge_spine_results,
 )

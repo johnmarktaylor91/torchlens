@@ -22,7 +22,8 @@ from torchlens._extraction.callable_identity import classify_callable
 from torchlens._extraction.dtype_policy import tensor_payload_bytes
 from torchlens._extraction.reader import open_extraction
 from torchlens._extraction.resume import model_structure_record
-from torchlens.dataset_extraction import DatasetExtractionResumeError, extract_dataset
+from torchlens.dataset_extraction import extract_dataset
+from torchlens.errors import DatasetExtractionResumeError
 from torchlens.utils._torch_compat import (
     get_cpu_float8_deterministic_fill_support,
     get_cpu_half_kernels_support,

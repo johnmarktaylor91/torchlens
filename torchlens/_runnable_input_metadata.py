@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from torchlens.runnable import ContractCheck, RunnableDiagnostic
+
 from . import _state
 from ._runnable_state import (
     RunResourceCeiling,
@@ -16,9 +18,7 @@ from .errors import (
     PathDivergenceError,
 )
 from .runnable import (
-    ContractCheck,
     PathFaithfulness,
-    RunnableDiagnostic,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,

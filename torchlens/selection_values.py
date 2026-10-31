@@ -47,11 +47,12 @@ from typing import Any
 
 import torch
 
+from torchlens.selection import SelectionError
+
 from .errors._base import TorchLensError
 from .selection import (
     ResolvedSelection,
     Selection,
-    SelectionError,
     SelectionProvenance,
     SiteEntry,
     _act_entry,

@@ -9,16 +9,10 @@ import torch
 
 from ..utils.tensor_utils import layer_grad_tolerances_for_dtype
 from ._errors import (
-    AmbiguousCallError,
     AmbiguousInputError,
-    AmbiguousPassError,
-    AmbiguousTargetError,
     BackendUnsupportedError,
-    NoInfluencePathError,
     ReceptiveFieldConfigurationError,
     ReceptiveFieldError,
-    ReceptiveFieldUnavailableError,
-    ReceptiveFieldValidationError,
 )
 from ._rules import (
     ReceptiveFieldRule,
@@ -389,11 +383,7 @@ def self_check(
 
 
 __all__ = [
-    "AmbiguousCallError",
     "AmbiguousInputError",
-    "AmbiguousTargetError",
-    "AmbiguousPassError",
-    "BackendUnsupportedError",
     "EmpiricalAdjointCheck",
     "GradientReceptiveField",
     "GridLayout",
@@ -402,17 +392,12 @@ __all__ = [
     "ReceptiveFieldAxis",
     "ReceptiveFieldBox",
     "ReceptiveFieldBoxAxis",
-    "ReceptiveFieldConfigurationError",
     "ReceptiveFieldDirection",
-    "ReceptiveFieldError",
-    "NoInfluencePathError",
     "ReceptiveFieldProfile",
     "ReceptiveFieldRule",
     "ReceptiveFieldRuleContext",
     "ReceptiveFieldStatus",
-    "ReceptiveFieldUnavailableError",
     "ReceptiveFieldValidation",
-    "ReceptiveFieldValidationError",
     "ReceptiveFieldValidationStatus",
     "ReceptiveFieldVerification",
     "ReceptiveFieldView",

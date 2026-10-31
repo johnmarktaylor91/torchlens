@@ -24,14 +24,13 @@ from torchlens._data_substrate import ExtractionArtifactError
 from torchlens._errors import InvalidArgumentError
 from torchlens.dataset_extraction import (
     MANIFEST_SCHEMA_V2,
-    DatasetExtractionResumeError,
     load_extraction,
 )
+from torchlens.errors import DatasetExtractionResumeError, TransformContractError
 from torchlens.transforms import (
     DEFAULT,
     PlannedStep,
     TransformContext,
-    TransformContractError,
     TransformDefinition,
     chain,
     register_transform,

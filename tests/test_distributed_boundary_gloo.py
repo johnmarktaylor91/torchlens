@@ -27,10 +27,10 @@ from torchlens.backends.torch.collectives import (  # noqa: E402
     remove_collective_wraps,
 )
 from torchlens.distributed import (  # noqa: E402
-    UncapturedCollectiveOpError,
     _lifecycle as lifecycle,
     has_vetted_snapshot,
 )
+from torchlens.errors import UncapturedCollectiveOpError  # noqa: E402
 from torchlens.errors._base import CompatibilityError  # noqa: E402
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a

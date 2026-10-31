@@ -24,12 +24,12 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.errors import SelectionError
 from torchlens.intervention.errors import (
     AmbiguousSiteError,
     ControlFlowDivergenceWarning,
 )
 from torchlens.intervention.replay import cone_of_effect
-from torchlens.selection import SelectionError
 
 _N_PASSES = 3
 _ALL_UNITS = [(batch, unit) for batch in range(2) for unit in range(4)]

@@ -13,7 +13,7 @@ instead of paraphrasing it. This page is that map.
 
 | Question | Authority | What TorchLens adds / does instead |
 |---|---|---|
-| Device kernel timing | `torch.profiler` (Kineto/CUPTI) | The correlation-ID join lands kernel time on *your named ops and module calls* (`torchlens.observability.kernel_profile`); every device number still comes from Kineto's instrumentation |
+| Device kernel timing | `torch.profiler` (Kineto/CUPTI) | The correlation-ID join lands kernel time on *your named ops and module calls* (`torchlens.report.kernel_profile`); every device number still comes from Kineto's instrumentation |
 | Clean micro-benchmarks | `torch.utils.benchmark.Timer` | We locate the hotspot (`tl.debug.hot_path`); torch times it clean — whole-model recipe below |
 | OOM autopsy / allocator forensics | `torch.cuda.memory._dump_snapshot` + memory_viz | Tested recipe in [memory_debugging.md](memory_debugging.md); TorchLens never parses the snapshot |
 | Backward-born NaNs, custom-autograd exceptions | `torch.autograd.set_detect_anomaly` | `tl.debug.nan_report` names the forward ORIGIN op free on an existing capture, and prints the detect_anomaly recipe verbatim for the cases it does not cover |

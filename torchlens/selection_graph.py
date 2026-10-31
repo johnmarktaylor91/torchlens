@@ -48,10 +48,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from torchlens.selection import SelectionError
+
 from .selection import (
     ResolvedSelection,
     Selection,
-    SelectionError,
     _act_entry,
     _lift,
     _mask_whole,

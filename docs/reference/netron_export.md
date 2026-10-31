@@ -71,7 +71,7 @@ row Netron would silently drop.
 
 `baseline=` takes the reference `Trace` and fills the `torchlens.baseline`
 slot from TorchLens' own guarded differential
-(`torchlens.differential.diff(log, baseline)`, `log - baseline`).
+(`torchlens.report.diff(log, baseline)`, `log - baseline`).
 Netron has no diff view, so the facts ride the channels it renders: each
 exported node whose ops settled into a diff row carries `torchlens.diff.*`
 rows in its node metadata and in the companion (`status`, `max_abs_delta`,

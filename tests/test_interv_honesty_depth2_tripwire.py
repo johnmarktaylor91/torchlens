@@ -24,12 +24,12 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.errors import SelectionError
 from torchlens.intervention.edge_substitution import (
     _reexecute_child_with_substitution,
     require_depth1_arg_path,
 )
 from torchlens.intervention.replay import _splice_param_substitutions
-from torchlens.selection import SelectionError
 from torchlens.validation.core import _check_edge_intervention_boundary
 
 

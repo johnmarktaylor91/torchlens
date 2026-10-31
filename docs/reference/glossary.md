@@ -1354,8 +1354,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `len(conditional_branch_stack)`.
 
 **Lookup and reentrancy errors**
-: `tl.AmbiguousOpLookupError` is raised when a bare Op lookup matches multiple
-  pass-qualified Ops; `tl.ReentrantTraceError` when a trace is started while another
+: `tl.errors.AmbiguousOpLookupError` is raised when a bare Op lookup matches multiple
+  pass-qualified Ops; `tl.errors.ReentrantTraceError` when a trace is started while another
   trace is active.
 
 ## Distributed capture and cross-rank merging
@@ -1950,7 +1950,7 @@ deprecation shim owed*
 
 **SelectionError / selection refusal codes** — *unstable — no deprecation
 shim owed; S2-gated*
-: One carrier class (`torchlens.selection.SelectionError`, catalogued in the
+: One carrier class (`torchlens.errors.SelectionError`, catalogued in the
   intervention error catalog) for the closed codes
   `selection_trace_mismatch`, `selection_bool_ambiguous`,
   `selection_kind_incompatible`, `selection_unresolvable` (closed reason set

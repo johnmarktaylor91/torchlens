@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import ArtifactError
-from torchlens.fastlog import RecoveryError
+from torchlens.errors import RecoveryError
 
 
 class PersistenceModel(nn.Module):
