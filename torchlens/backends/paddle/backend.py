@@ -45,7 +45,7 @@ from ...postprocess._selective_save import (
     pop_static_label_save_predicate,
 )
 from ...quantities import Duration
-from ...validation.status import ValidationReplaySource, ValidationReplayStatus
+from ...validation.status import ValidationReplaySource, ValidationStatus
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -640,7 +640,7 @@ class PaddleBackend:
         validate_metadata = bool(kwargs.pop("validate_metadata", True))
         trace = self.capture_trace(*args, **kwargs)
         result = self.validate_trace(trace, validate_metadata=validate_metadata)
-        if isinstance(result, ValidationReplayStatus):
+        if isinstance(result, ValidationStatus):
             return result.passed
         return result
 
@@ -889,7 +889,7 @@ class PaddleBackend:
         trace: Trace,
         *_args: Any,
         **kwargs: Any,
-    ) -> bool | ValidationReplayStatus:
+    ) -> bool | ValidationStatus:
         """Validate a Paddle trace with coverage oracle, replay, and perturbation.
 
         Parameters
@@ -904,14 +904,14 @@ class PaddleBackend:
 
         Returns
         -------
-        bool or ValidationReplayStatus
+        bool or ValidationStatus
             True for a verified live pass, False for a verified live failure,
             or an explicit unavailable status for loaded payload-stripped traces.
         """
 
         status = trace.validation_replay_status
         if not status.available or _paddle_loaded_replay_unavailable(trace):
-            status_result = ValidationReplayStatus.unavailable_loaded_runtime_stripped(
+            status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=self.name,
                 payload_load_status=getattr(trace, "payload_load_status", None),
             )
@@ -934,7 +934,7 @@ class PaddleBackend:
                 replayed_count, failed_count = self._validate_paddle_captures(trace)
             if failed_count == 0 and replayed_count < 1:
                 failed_count = 1
-            status_result = ValidationReplayStatus.from_replay_counts(
+            status_result = ValidationStatus.from_replay_counts(
                 backend=self.name,
                 source=_validation_source(trace),
                 replayed_node_count=replayed_count,
@@ -945,7 +945,7 @@ class PaddleBackend:
                 payload_load_status=getattr(trace, "payload_load_status", None),
             )
         except Exception:
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend=self.name,
                 source=_validation_source(trace),

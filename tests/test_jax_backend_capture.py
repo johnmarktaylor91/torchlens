@@ -27,7 +27,7 @@ from torchlens.validation.status import (
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
-    ValidationReplayStatus,
+    ValidationStatus,
 )
 
 jax = pytest.importorskip("jax")
@@ -1057,7 +1057,7 @@ def test_jax_validation_reports_synthetic_importer_region_as_unverified() -> Non
 
     result = trace.validate_forward_pass([], validate_metadata=False)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     assert result.available is True
     assert result.replayed_node_count > 0

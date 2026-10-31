@@ -6,11 +6,11 @@ nothing mutates a trace or the capture pipeline.
 
 ## The report object (U42.2; DOCUMENTED-UNSTABLE)
 - Every report-shaped result is a `tl.debug.DebugReport` (defined in
-  `torchlens/_debug_report.py`, at the package root so `checks.ParamAudit` can
+  `torchlens/_debug_report.py`, at the package root so `checks.ParamHealthReport` can
   subclass it without importing this package): `report_type`, `subject`,
   `status`, `to_dict()`, `to_pandas()`, and `str()` = a bounded card (lead line,
   at most five findings, exact remainder, exits). Results with a house-voice
-  `__repr__` (`TraceAudit`, `DTypeRangeAudit`, `FindNanResult`, `ParamAudit`) keep
+  `__repr__` (`TraceAudit`, `DTypeRangeAudit`, `FindNanResult`, `ParamHealthReport`) keep
   printing it (`_prints_repr = True`; the card is `report.card()`).
 - Subclasses state the lead through `_report_subject` / `_report_status` /
   `_report_findings` (optionally `_report_coverage`, `_report_severity_counts`,

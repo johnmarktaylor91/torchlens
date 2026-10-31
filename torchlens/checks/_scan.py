@@ -1,7 +1,7 @@
 """The ONE shared batched tensor-scan kernel (checks memo item 1 / 4.4).
 
-One kernel, two spellings: ``tl.debug.audit_params`` shapes rows into a
-:class:`~torchlens.checks.ParamAudit`, and the registry's scheduled scan
+One kernel, two spellings: ``tl.debug.param_health`` shapes rows into a
+:class:`~torchlens.checks.ParamHealthReport`, and the registry's scheduled scan
 consumes the same rows with report shaping skipped. Engineering contract
 (memo 4.4): batched per ``(device, dtype)`` group with ~1 host sync per
 group, integer counts exact, extrema carried as float64 SCALARS only --
@@ -251,7 +251,7 @@ def scan_named_tensors(
     bounds:
         Optional exact-name bounds mapping ``name -> (low, high)`` with
         either side ``None`` for one-sided bounds. Unknown names REFUSE
-        (memo 4.4) at the caller (:func:`torchlens.checks.audit_params`),
+        (memo 4.4) at the caller (:func:`torchlens.checks.param_health`),
         which validates against the full inventory before dedup.
 
     Returns
@@ -407,7 +407,7 @@ def named_entries_from_target(
     if isinstance(target, Mapping):
         return [(str(name), "mapping", value) for name, value in target.items()]
     raise CheckConfigError(
-        f"audit_params target must be an nn.Module or a name->tensor Mapping, "
+        f"param_health target must be an nn.Module or a name->tensor Mapping, "
         f"got {type(target).__name__}. state_dicts, flattened optimizer "
         "state, EMA shadows, and loaded checkpoints all enter through the "
         "Mapping door.",

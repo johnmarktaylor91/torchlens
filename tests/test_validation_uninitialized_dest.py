@@ -255,7 +255,7 @@ def test_real_replay_mismatch_on_empty_like_dest_still_fails() -> None:
         # check -- the tripwire concern is unchanged.
         with pytest.warns(UserWarning, match="treating as failed validation"):
             result = validate_saved_outs(trace, [gt], validate_metadata=False)
-        # ValidationReplayStatus API (da60a76e): tripwire still fires on a real
+        # ValidationStatus API (da60a76e): tripwire still fires on a real
         # value mismatch.
         assert result.state == "failed"
         failure = get_validation_failure(trace)

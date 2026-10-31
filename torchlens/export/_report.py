@@ -48,7 +48,7 @@ from ..errors._base import TorchLensWarning
 from ..utils.display import atomic_write_text
 from ._common import _static_graph_data
 
-__all__ = ["ReportOptions", "write_report"]
+__all__ = ["HtmlReportOptions", "write_report"]
 
 #: Report artifact schema identity (manifest field).
 REPORT_SCHEMA = "torchlens.report_html.v1"
@@ -66,7 +66,7 @@ _HOME = os.path.expanduser("~")
 
 
 @dataclass(frozen=True)
-class ReportOptions:
+class HtmlReportOptions:
     """Emission plumbing for the offline HTML report (C06 house pattern).
 
     The content doors (``arrays=`` / ``graph=``) stay flat keywords on
@@ -558,7 +558,7 @@ def write_report(
     *,
     arrays: Any = "frontier",
     graph: str = "collapsed",
-    options: ReportOptions | None = None,
+    options: HtmlReportOptions | None = None,
 ) -> Path:
     """Write the single-file offline HTML report for one capture.
 
@@ -577,7 +577,7 @@ def write_report(
         ``"collapsed"`` (default: module-collapsed real graph, depth
         disclosed) / ``"flat"`` / ``"none"``.
     options:
-        Emission plumbing (``ReportOptions``): redaction, byte-stability,
+        Emission plumbing (``HtmlReportOptions``): redaction, byte-stability,
         renderer depth, thumbnail budgets.
 
     Returns
@@ -586,7 +586,7 @@ def write_report(
         The written report path.
     """
 
-    opts = options if options is not None else ReportOptions()
+    opts = options if options is not None else HtmlReportOptions()
     share_safe = opts.share_safe
     deterministic = opts.deterministic
     vis_call_depth = opts.vis_call_depth

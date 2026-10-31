@@ -45,7 +45,7 @@ from ...postprocess._selective_save import (
 from ...quantities import Duration
 from ...validation.status import (
     ValidationReplaySource,
-    ValidationReplayStatus,
+    ValidationStatus,
     count_importer_region_annotations,
 )
 from .._finalize import (
@@ -557,7 +557,7 @@ class TinygradBackend:
         trace: Trace,
         *_args: Any,
         **kwargs: Any,
-    ) -> bool | ValidationReplayStatus:
+    ) -> bool | ValidationStatus:
         """Validate a tinygrad trace using UOp replay and metadata invariants.
 
         Parameters
@@ -572,7 +572,7 @@ class TinygradBackend:
 
         Returns
         -------
-        bool or ValidationReplayStatus
+        bool or ValidationStatus
             True when replayed UOp payloads match saved live payload copies.
             Loaded traces whose runtime capture was stripped return an explicit
             unavailable status.
@@ -593,7 +593,7 @@ class TinygradBackend:
             raise
         except Exception:
             passed = False
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend="tinygrad",
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
@@ -612,7 +612,7 @@ class TinygradBackend:
         trace: Trace,
         *,
         passed: bool,
-    ) -> ValidationReplayStatus:
+    ) -> ValidationStatus:
         """Build aggregate replay status from tinygrad replay and region counts.
 
         Parameters
@@ -624,7 +624,7 @@ class TinygradBackend:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Failed status when replay failed, unverified status when all
             replayed ops passed but importer-owned regions are present, and
             passed status otherwise.
@@ -636,7 +636,7 @@ class TinygradBackend:
         payload_load_status = getattr(trace, "payload_load_status", None)
         replayed_node_count = len(getattr(trace, "tinygrad_uop_captures", ())) if passed else 0
         unverified_node_count = count_importer_region_annotations(trace) if passed else 0
-        return ValidationReplayStatus.from_replay_counts(
+        return ValidationStatus.from_replay_counts(
             backend="tinygrad",
             source=source,
             replayed_node_count=replayed_node_count,

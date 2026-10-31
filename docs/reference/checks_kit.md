@@ -2,7 +2,7 @@
 
 > Every spelling on this page is DOCUMENTED-UNSTABLE pending naming-session
 > ratification. The import spelling is `import torchlens.checks`; the one-shot
-> parameter audit is also served as `tl.debug.audit_params`. The kit is
+> parameter audit is also served as `tl.debug.param_health`. The kit is
 > STANDALONE and CAPTURE-FREE: it constructs and runs with TorchLens capture
 > entirely off, and the step-check family runs on `torch.compile`'d models.
 
@@ -158,17 +158,17 @@ Boundary mode adds what hook-only mode honestly cannot know: caller
 accepted/skipped attribution per attempt. Both modes are first-class; unknown
 or inferred evidence never produces an exact pass.
 
-## One-shot parameter auditing: `audit_params`
+## One-shot parameter auditing: `param_health`
 
 ```python
 import torchlens.checks as checks
 
-audit = checks.audit_params(model)          # also: tl.debug.audit_params(model)
+audit = checks.param_health(model)          # also: tl.debug.param_health(model)
 print(audit)                                # notebook-style summary
 assert not audit.findings                    # healthy fresh model
 ```
 
-`audit_params` takes an `nn.Module` or ANY name->tensor `Mapping` -- a
+`param_health` takes an `nn.Module` or ANY name->tensor `Mapping` -- a
 `state_dict`, flattened optimizer state, EMA shadow weights, a loaded
 checkpoint: same door, same batched scan kernel the session's scheduled scan
 uses. Findings cover signed nonfinite counts, caller-declared bounds, dtype
@@ -188,7 +188,7 @@ optimizer_state = {
     if isinstance(value, torch.Tensor)
 }
 if optimizer_state:
-    print(checks.audit_params(optimizer_state))
+    print(checks.param_health(optimizer_state))
 ```
 
 ```python
@@ -196,7 +196,7 @@ if optimizer_state:
 optimizer.zero_grad()
 model(torch.randn(4, 8)).square().mean().backward()
 grads = {f"grad.{n}": p.grad for n, p in model.named_parameters() if p.grad is not None}
-grad_audit = checks.audit_params(grads)
+grad_audit = checks.param_health(grads)
 print(f"{len(grad_audit.rows)} gradient tensors scanned, {len(grad_audit.findings)} findings")
 optimizer.zero_grad()
 ```

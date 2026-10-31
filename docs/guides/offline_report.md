@@ -14,7 +14,7 @@ failure report is the artifact for "it broke on the cluster".
 
 The content doors are the flat keywords `arrays=` and `graph=`; emission
 plumbing (redaction, byte-stability, renderer depth, thumbnail budgets)
-rides the frozen `options=tl.export.ReportOptions(...)` bundle.
+rides the frozen `options=tl.export.HtmlReportOptions(...)` bundle.
 
 ## Anatomy
 
@@ -33,7 +33,7 @@ rides the frozen `options=tl.export.ReportOptions(...)` bundle.
 7. **Arrays** — see policy below.
 8. **Manifest** — schema id, TorchLens/torch versions, counts, array/graph
    ledgers (shown vs omitted), budgets, capture-honesty facts, timestamp
-   (suppressed by `ReportOptions(deterministic=True)`).
+   (suppressed by `HtmlReportOptions(deterministic=True)`).
 
 ## Array policy
 
@@ -51,10 +51,10 @@ transition. **Healthy captures embed zero array bytes by default.**
 - `arrays=<tl.Selection>` — the general form: thumbnails for the resolved
   selection's sites.
 - `arrays="none"` — metadata only.
-- `options=tl.export.ReportOptions(share_safe=True)` — strips EVERY
+- `options=tl.export.HtmlReportOptions(share_safe=True)` — strips EVERY
   embedded value including the frontier.
 
-Budgets (`ReportOptions(max_array_sites=..., max_array_bytes=...)`, plus
+Budgets (`HtmlReportOptions(max_array_sites=..., max_array_bytes=...)`, plus
 the thumbnail cell budget) are enforced BEFORE payloads are written;
 omissions land in the manifest.
 
@@ -65,7 +65,7 @@ omissions land in the manifest.
   with disclosure.
 - `graph="flat"` — try the uncollapsed layout first (same byte ladder).
 - `graph="none"` — omit, disclosed.
-- `ReportOptions(vis_call_depth=...)` — forwarded to the renderer and
+- `HtmlReportOptions(vis_call_depth=...)` — forwarded to the renderer and
   disclosed.
 
 The full flat graph is never linked as a sibling file (one-file contract);

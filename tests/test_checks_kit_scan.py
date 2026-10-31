@@ -1,4 +1,4 @@
-"""Checks kit item 1: scan kernel, audit_params, ParamAudit, JSON export.
+"""Checks kit item 1: scan kernel, param_health, ParamHealthReport, JSON export.
 
 Pins the checks memo 4.4 contract: mapping-only door, tied-alias dedup,
 skip-with-reason, unknown-name refusals, severity mapping, the versioned
@@ -43,7 +43,7 @@ def _model() -> nn.Module:
 def test_audit_params_clean_model_rows_and_export() -> None:
     """A fresh model audits with rows, coverage, and a versioned export."""
 
-    audit = tc.audit_params(_model())
+    audit = tc.param_health(_model())
 
     assert audit.schema_version == tc.CHECK_REPORT_SCHEMA_VERSION == 1
     assert len(audit.rows) == 9  # 6 params + 3 batchnorm buffers
@@ -65,7 +65,7 @@ def test_audit_params_nonfinite_named_critical() -> None:
         model[0].weight[0, 0] = float("nan")
         model[2].running_mean[0] = float("inf")
 
-    audit = tc.audit_params(model)
+    audit = tc.param_health(model)
 
     critical = {f.names[0]: f for f in audit.findings if f.severity == "critical"}
     assert set(critical) == {"0.weight", "2.running_mean"}
@@ -86,7 +86,7 @@ def test_audit_params_severity_mapping() -> None:
         "bounded": torch.linspace(-2.0, 2.0, 8),
     }
 
-    audit = tc.audit_params(mapping, bounds={"bounded": (-1.0, 1.0)})
+    audit = tc.param_health(mapping, bounds={"bounded": (-1.0, 1.0)})
 
     by_check = {(f.check, f.names[0]): f for f in audit.findings}
     assert by_check[("dtype_headroom", "near_max")].severity == "warning"
@@ -101,7 +101,7 @@ def test_audit_params_severity_mapping() -> None:
 def test_audit_params_tied_dedup_keeps_aliases() -> None:
     """Tied tensors are ONE row with every alias preserved (memo 4.4)."""
 
-    audit = tc.audit_params(_TiedNet())
+    audit = tc.param_health(_TiedNet())
 
     assert len(audit.rows) == 1
     row = audit.rows[0]
@@ -114,7 +114,7 @@ def test_audit_params_mapping_door_and_skip_reasons() -> None:
     """state_dict mapping enters the same door; meta/sparse skip with reason."""
 
     model = _model()
-    state_audit = tc.audit_params(dict(model.state_dict()))
+    state_audit = tc.param_health(dict(model.state_dict()))
     assert len(state_audit.rows) == 9
 
     mapping = {
@@ -123,7 +123,7 @@ def test_audit_params_mapping_door_and_skip_reasons() -> None:
         "not_a_tensor": 3.14,
         "fine": torch.ones(4),
     }
-    audit = tc.audit_params(mapping)
+    audit = tc.param_health(mapping)
     reasons = dict(audit.skipped)
     assert "meta" in reasons["meta_param"]
     assert "layout" in reasons["sparse"]
@@ -137,24 +137,24 @@ def test_audit_params_refusals_are_typed() -> None:
 
     model = _model()
     with pytest.raises(tc.CheckConfigError) as bounds_exc:
-        tc.audit_params(model, bounds={"nope": (0.0, 1.0)})
+        tc.param_health(model, bounds={"nope": (0.0, 1.0)})
     assert bounds_exc.value.fields["code"] == "audit_bounds_unknown_name"
     assert bounds_exc.value.fields["remedy"]
 
     with pytest.raises(tc.CheckConfigError) as within_exc:
-        tc.audit_params(model, within=["ghost.weight"])
+        tc.param_health(model, within=["ghost.weight"])
     assert within_exc.value.fields["code"] == "audit_within_unknown_name"
 
     with pytest.raises(tc.CheckConfigError) as pair_exc:
-        tc.audit_params(model, bounds={"0.weight": (1.0, -1.0)})
+        tc.param_health(model, bounds={"0.weight": (1.0, -1.0)})
     assert pair_exc.value.fields["code"] == "check_bounds_invalid"
 
     with pytest.raises(tc.CheckConfigError) as fraction_exc:
-        tc.audit_params(model, max_fraction=1.5)
+        tc.param_health(model, max_fraction=1.5)
     assert fraction_exc.value.fields["code"] == "check_fraction_invalid"
 
     with pytest.raises(tc.CheckConfigError) as target_exc:
-        tc.audit_params([1, 2, 3])
+        tc.param_health([1, 2, 3])
     assert target_exc.value.fields["code"] == "check_target_invalid"
 
 
@@ -162,19 +162,19 @@ def test_audit_params_within_filters_exact_names() -> None:
     """within= audits exactly the named tensors, day-1 exact spelling."""
 
     model = _model()
-    audit = tc.audit_params(model, within=["0.weight", "3.bias"])
+    audit = tc.param_health(model, within=["0.weight", "3.bias"])
     assert sorted(row.name for row in audit.rows) == ["0.weight", "3.bias"]
 
 
 def test_debug_door_and_knob_parity() -> None:
-    """tl.debug.audit_params is the memo door; knobs match dtype_range_audit."""
+    """tl.debug.param_health is the memo door; knobs match dtype_range_audit."""
 
     import torchlens as tl
 
-    assert tl.debug.audit_params is tc.audit_params
-    assert tl.debug.ParamAudit is tc.ParamAudit
+    assert tl.debug.param_health is tc.param_health
+    assert tl.debug.ParamHealthReport is tc.ParamHealthReport
 
-    audit_defaults = signature(tc.audit_params).parameters
+    audit_defaults = signature(tc.param_health).parameters
     range_defaults = signature(tl.debug.dtype_range_audit).parameters
     # Knob parity through the ONE constants module (memo 4.4).
     assert audit_defaults["max_fraction"].default == range_defaults["max_fraction"].default

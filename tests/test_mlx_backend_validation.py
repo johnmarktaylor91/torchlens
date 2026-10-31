@@ -12,7 +12,7 @@ import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends.mlx import MLXBackend  # noqa: E402
-from torchlens.validation.status import ValidationReplayStatus  # noqa: E402
+from torchlens.validation.status import ValidationStatus  # noqa: E402
 
 
 class _TwoLayerMLP(nn.Module):
@@ -198,7 +198,7 @@ def test_mlx_validation_loaded_payload_stripped_trace_is_unavailable() -> None:
 
     result = MLXBackend().validate_trace(trace)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unavailable"
     assert result.passed is False
 
@@ -265,7 +265,7 @@ def test_mlx_constant_producer_reports_unverified_gap() -> None:
     trace = tl.trace(_ConstantProducerNet(), mx.ones((1, 4)), backend="mlx")
     result = MLXBackend().validate_trace(trace)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     assert trace._mlx_perturbation_gaps
     assert all(label.startswith("add") for label in trace._mlx_perturbation_gaps)

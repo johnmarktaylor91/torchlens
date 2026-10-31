@@ -75,7 +75,7 @@ from ...validation.status import (
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
     ValidationReplaySource,
-    ValidationReplayStatus,
+    ValidationStatus,
     count_importer_region_annotations,
 )
 from .._options import (
@@ -630,7 +630,7 @@ class JAXBackend:
         trace: Trace,
         *_args: Any,
         **kwargs: Any,
-    ) -> bool | ValidationReplayStatus:
+    ) -> bool | ValidationStatus:
         """Validate a JAX trace with replay, perturbation, and invariants.
 
         Parameters
@@ -645,7 +645,7 @@ class JAXBackend:
 
         Returns
         -------
-        bool or ValidationReplayStatus
+        bool or ValidationStatus
             True when saved graph payloads replay and parent edges perturb.
             Loaded traces whose runtime capture was stripped return an explicit
             unavailable status.
@@ -664,7 +664,7 @@ class JAXBackend:
             status_result = self._validation_status_from_counts(trace, passed=passed)
         except Exception:
             passed = False
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend="jax",
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
@@ -683,7 +683,7 @@ class JAXBackend:
         trace: Trace,
         *,
         passed: bool,
-    ) -> ValidationReplayStatus:
+    ) -> ValidationStatus:
         """Build aggregate replay status from JAX replay and region counts.
 
         Parameters
@@ -695,7 +695,7 @@ class JAXBackend:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Failed status when replay failed, unverified status when all
             replayed ops passed but importer-owned regions are present, and
             passed status otherwise.
@@ -707,7 +707,7 @@ class JAXBackend:
         payload_load_status = getattr(trace, "payload_load_status", None)
         replayed_node_count = len(_jax_equation_ops(trace)) if passed else 0
         unverified_node_count = count_importer_region_annotations(trace) if passed else 0
-        return ValidationReplayStatus.from_replay_counts(
+        return ValidationStatus.from_replay_counts(
             backend="jax",
             source=source,
             replayed_node_count=replayed_node_count,

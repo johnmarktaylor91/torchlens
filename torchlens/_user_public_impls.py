@@ -1212,7 +1212,7 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
         Validation trace whose pristine re-trace diverged structurally.
     """
 
-    from .validation.status import ValidationReplayStatus
+    from .validation.status import ValidationStatus
 
     current_status = trace.validation_replay_status
     unverified_reason_counts = dict(current_status.unverified_reason_counts)
@@ -1222,7 +1222,7 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
     setattr(
         trace,
         "_validation_replay_status",
-        ValidationReplayStatus.unverified(
+        ValidationStatus.unverified(
             backend=current_status.backend,
             source=current_status.source,
             reason="trace_retrace_structure_mismatch",

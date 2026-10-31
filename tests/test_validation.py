@@ -80,7 +80,7 @@ from torchlens.validation.status import (
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
-    ValidationReplayStatus,
+    ValidationStatus,
 )
 
 _TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None
@@ -196,7 +196,7 @@ def test_validation_import_path():
 def test_validation_replay_unverified_status_semantics() -> None:
     """Unverified replay status is available but never bool-coerced."""
 
-    status = ValidationReplayStatus.unverified(
+    status = ValidationStatus.unverified(
         backend="jax",
         source="live",
         reason="region_not_per_op_replayable",
@@ -217,20 +217,20 @@ def test_validation_replay_unverified_status_semantics() -> None:
 def test_validation_replay_status_aggregate_fold() -> None:
     """Aggregate replay status keeps failures dominant over unverified regions."""
 
-    mixed_status = ValidationReplayStatus.from_replay_counts(
+    mixed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
         replayed_node_count=4,
         unverified_node_count=1,
     )
-    failed_status = ValidationReplayStatus.from_replay_counts(
+    failed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
         replayed_node_count=0,
         unverified_node_count=3,
         failed_node_count=2,
     )
-    passed_status = ValidationReplayStatus.from_replay_counts(
+    passed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
         replayed_node_count=4,

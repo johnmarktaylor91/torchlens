@@ -47,7 +47,7 @@ from ._infer_input_shape import InferInputShapeResult, infer_input_shape
 from ._nan import BisectNanResult, FindNanResult, NanReport, bisect_nan, find_nan, nan_report
 from ._nan_backward import BackwardNanResult, BackwardTransition, bisect_nan_backward
 from ._params import compare_params
-from ._params_audit import ParamAudit, audit_params
+from ._params_audit import ParamHealthReport, param_health
 from ._precision import BisectPrecisionResult, PrecisionRow as PrecisionRow, bisect_precision
 from ._recompute import recompute_candidates
 from ._rerun import clone_input_tree, isolated_capture, preserved_rng_state
@@ -72,10 +72,10 @@ __all__ = [
     "InferInputShapeResult",
     "LineageResult",
     "NanReport",
-    "ParamAudit",
+    "ParamHealthReport",
     "TraceAudit",
     "amp_scaled_gradients_hint",
-    "audit_params",
+    "param_health",
     "audit_trace",
     "bisect_nan",
     "bisect_nan_backward",

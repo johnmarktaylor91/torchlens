@@ -82,7 +82,7 @@ def _helper_calls() -> dict[str, Callable[[dict[str, Any]], Any]]:
         "nan_report": lambda f: debug.nan_report(f["model"], f["x"]),
         "bisect_nan_backward": lambda f: debug.bisect_nan_backward(f["grad_trace"]),
         "bisect_precision": lambda f: debug.bisect_precision(f["model"], f["x"]),
-        "audit_params": lambda f: debug.audit_params(f["model"]),
+        "param_health": lambda f: debug.param_health(f["model"]),
         "first_bad_thing": lambda f: debug.find_nan(f["model"], f["x"]).first_bad_thing,
         "hot_path": lambda f: debug.hot_path(f["trace"]),
         "dead_neurons": lambda f: debug.dead_neurons(f["trace"]),
@@ -125,12 +125,12 @@ def test_helper_returns_the_debug_report(helper: str, fixtures: dict[str, Any]) 
 
 
 def test_param_audit_prints_exactly_as_before(model: nn.Module) -> None:
-    """ParamAudit kept its house-voice summary: str() is its unchanged repr."""
+    """ParamHealthReport kept its house-voice summary: str() is its unchanged repr."""
 
-    audit = tl.debug.audit_params(model)
+    audit = tl.debug.param_health(model)
     text = str(audit)
     assert text == audit.__repr__()
-    assert text.splitlines()[0].startswith("ParamAudit: ")
+    assert text.splitlines()[0].startswith("ParamHealthReport: ")
 
 
 def test_table_report_never_is_a_dataframe(trace: Any) -> None:

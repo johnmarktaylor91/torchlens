@@ -82,7 +82,7 @@ from .exemptions import (
     posthoc_perturb_check,
     uninitialized_by_design_applies,
 )
-from .status import ValidationReplayStatus
+from .status import ValidationStatus
 
 ValidationDecisionKind = Literal[
     "validated", "failed", "unverified", "exempted", "edge_intervention_boundary"
@@ -272,7 +272,7 @@ class ValidationDecisionRecorder:
             )
         )
 
-    def as_status(self, *, backend: str = "torch") -> ValidationReplayStatus:
+    def as_status(self, *, backend: str = "torch") -> ValidationStatus:
         """Build a trace-level replay status from collected decisions.
 
         Parameters
@@ -282,11 +282,11 @@ class ValidationDecisionRecorder:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Aggregate replay-validation status.
         """
 
-        return ValidationReplayStatus.from_replay_counts(
+        return ValidationStatus.from_replay_counts(
             backend=backend,
             source="live",
             replayed_node_count=self.replay_validated_node_count(),
@@ -807,7 +807,7 @@ def validate_saved_outs(
     ground_truth_output_tensors: list[torch.Tensor],
     verbose: bool = False,
     validate_metadata: bool = True,
-) -> ValidationReplayStatus:
+) -> ValidationStatus:
     """Run the full validation pipeline on a completed Trace.
 
     The BFS traversal starts from two kinds of seed layers:
@@ -834,7 +834,7 @@ def validate_saved_outs(
 
     Returns
     -------
-    ValidationReplayStatus
+    ValidationStatus
         Aggregate replay-validation status. Fully validated pass/fail results
         remain bool-compatible through callers that unwrap completed statuses.
     """

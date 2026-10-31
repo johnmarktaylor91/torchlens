@@ -2713,7 +2713,7 @@ deprecation shim owed*
   inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:
   lead line, at most five findings, the exact remainder, the exits). The
   typed results (`TraceAudit`, `DeterminismReport`, `NanReport`,
-  `FindNanResult`, `ParamAudit`, ...) subclass it; those with a house-voice
+  `FindNanResult`, `ParamHealthReport`, ...) subclass it; those with a house-voice
   `__repr__` keep printing it and serve the card as `report.card()`. The
   table helpers `compare`, `compare_params`, `dead_neurons`,
   `gradient_flow_audit`, `hot_path` and `recompute_candidates` return a

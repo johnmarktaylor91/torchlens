@@ -183,7 +183,7 @@ def test_clean_validation_passes_and_records_no_failure() -> None:
     trace = _capture_full_trace(model, x)
     try:
         result = validate_saved_outs(trace, [gt], validate_metadata=True)
-        # validate_saved_outs returns a ValidationReplayStatus (da60a76e); a
+        # validate_saved_outs returns a ValidationStatus (da60a76e); a
         # clean capture must be an explicit "passed", not merely truthy.
         assert result.state == "passed"
         assert get_validation_failure(trace) is None

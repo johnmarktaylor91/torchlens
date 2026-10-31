@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
-    from ..validation.status import ValidationReplayStatus
+    from ..validation.status import ValidationStatus
     from .trace import Trace
 
     _TraceMixinBase = Trace
@@ -359,7 +359,7 @@ class TraceValidationMixin(_TraceMixinBase):
         ground_truth_output_tensors: list[torch.Tensor] | torch.Tensor,
         verbose: bool = False,
         validate_metadata: bool = True,
-    ) -> Union[bool, "ValidationReplayStatus"]:
+    ) -> Union[bool, "ValidationStatus"]:
         """Validate saved outs against ground-truth model outputs.
 
         Parameters
@@ -378,7 +378,7 @@ class TraceValidationMixin(_TraceMixinBase):
 
         Returns
         -------
-        bool or ValidationReplayStatus
+        bool or ValidationStatus
             ``True`` if validation succeeds. Loaded non-torch traces whose
             runtime replay captures were stripped return an explicit
             unavailable status instead of a pass/fail bool.
@@ -412,41 +412,41 @@ class TraceValidationMixin(_TraceMixinBase):
             validate_metadata=validate_metadata,
         )
         if spec.name == "torch":
-            from ..validation.status import ValidationReplayStatus
+            from ..validation.status import ValidationStatus
 
-            if isinstance(validation_result, ValidationReplayStatus):
+            if isinstance(validation_result, ValidationStatus):
                 setattr(self, "_validation_replay_status", validation_result)
                 if validation_result.state in {"passed", "failed"}:
                     return validation_result.passed
         return validation_result
 
     @property
-    def validation_replay_status(self: "Trace") -> "ValidationReplayStatus":
+    def validation_replay_status(self: "Trace") -> "ValidationStatus":
         """Return replay-validation availability or last completed result.
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Status object distinguishing live replay validation from loaded
             traces whose runtime replay captures were stripped during save.
         """
 
         from ..backends import get_backend_spec
-        from ..validation.status import ValidationReplayStatus
+        from ..validation.status import ValidationStatus
 
         cached_status = getattr(self, "_validation_replay_status", None)
-        if isinstance(cached_status, ValidationReplayStatus):
+        if isinstance(cached_status, ValidationStatus):
             return cached_status
         backend = str(getattr(self, "backend", "torch"))
         if _loaded_non_torch_validation_replay_unavailable(self):
-            return ValidationReplayStatus.unavailable_loaded_runtime_stripped(
+            return ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=backend,
                 payload_load_status=getattr(self, "payload_load_status", None),
             )
         spec = get_backend_spec(backend)
         if not spec.capabilities.validation_replay:
-            return ValidationReplayStatus.unavailable_unsupported(backend=backend)
-        return ValidationReplayStatus.available_live(backend=backend)
+            return ValidationStatus.unavailable_unsupported(backend=backend)
+        return ValidationStatus.available_live(backend=backend)
 
     @property
     def pristine(self: "Trace") -> bool | None:

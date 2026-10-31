@@ -48,7 +48,7 @@ from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...ir.workspaces import RawGraphWorkspace
 from ...postprocess._materialize import materialize_from_events
 from ...quantities import Duration
-from ...validation.status import ValidationReplaySource, ValidationReplayStatus  # noqa: TC001
+from ...validation.status import ValidationReplaySource, ValidationStatus  # noqa: TC001
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -1652,7 +1652,7 @@ class MLXBackend:
         validate_metadata = bool(kwargs.pop("validate_metadata", True))
         trace = self.capture_trace(*args, **kwargs)
         result = self.validate_trace(trace, validate_metadata=validate_metadata)
-        if isinstance(result, ValidationReplayStatus):
+        if isinstance(result, ValidationStatus):
             return result.passed
         return result
 
@@ -1661,7 +1661,7 @@ class MLXBackend:
         trace: Trace,
         *_args: Any,
         **kwargs: Any,
-    ) -> bool | ValidationReplayStatus:
+    ) -> bool | ValidationStatus:
         """Validate an MLX trace with per-op replay and perturbation.
 
         Parameters
@@ -1676,7 +1676,7 @@ class MLXBackend:
 
         Returns
         -------
-        bool or ValidationReplayStatus
+        bool or ValidationStatus
             True for a verified live pass, False for a verified live failure,
             or an explicit unavailable status for loaded payload-stripped
             traces.
@@ -1684,7 +1684,7 @@ class MLXBackend:
 
         status = trace.validation_replay_status
         if not status.available or _mlx_loaded_replay_unavailable(trace):
-            status_result = ValidationReplayStatus.unavailable_loaded_runtime_stripped(
+            status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=self.name,
                 payload_load_status=getattr(trace, "payload_load_status", None),
             )
@@ -1715,7 +1715,7 @@ class MLXBackend:
                     reason_counts = {
                         "mlx_perturbation_no_perturbable_input": len(perturbation_gaps)
                     }
-            status_result = ValidationReplayStatus.from_replay_counts(
+            status_result = ValidationStatus.from_replay_counts(
                 backend=self.name,
                 source=_mlx_validation_source(trace),
                 replayed_node_count=replayed_count,
@@ -1725,7 +1725,7 @@ class MLXBackend:
                 unverified_reason_counts=reason_counts,
             )
         except Exception:
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend=self.name,
                 source=_mlx_validation_source(trace),

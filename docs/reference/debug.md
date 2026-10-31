@@ -12,7 +12,7 @@ spelling): `report_type`, `subject` and `status` name what was examined and the 
 `to_dict()` returns a plain JSON-friendly payload, `to_pandas()` returns the table, and
 `print(report)` shows a bounded card (a lead line, at most five findings, the exact
 remainder, and the exits). The typed results (`TraceAudit`, `DeterminismReport`,
-`NanReport`, `FindNanResult`, `ParamAudit`, ...) are `DebugReport` subclasses; results
+`NanReport`, `FindNanResult`, `ParamHealthReport`, ...) are `DebugReport` subclasses; results
 that already print a house-voice summary keep it, and `report.card()` gives the card.
 The table helpers (`compare`, `compare_params`, `dead_neurons`, `gradient_flow_audit`,
 `hot_path`, `recompute_candidates`) return a tabular `DebugReport`: the report has a
@@ -102,15 +102,15 @@ True
 1/2 capabilities present; absent: HAS_B
 ```
 
-## `audit_params`
+## `param_health`
 
-`tl.debug.audit_params(target, *, include_buffers=True, within=None,
+`tl.debug.param_health(target, *, include_buffers=True, within=None,
 bounds=None, max_fraction=0.9, subnormal_fraction_threshold=0.1)` is the
 one-shot parameter/buffer-space scan (the checks-kit door; canonical home
-`torchlens.checks.audit_params`, spelling DOCUMENTED-UNSTABLE). `target` is an
+`torchlens.checks.param_health`, spelling DOCUMENTED-UNSTABLE). `target` is an
 `nn.Module` or ANY name->tensor `Mapping` — a `state_dict`, flattened
 optimizer state, EMA shadow weights, a loaded checkpoint: same door, same
-batched scan kernel. Returns a `ParamAudit` (findings / rows / checks_run /
+batched scan kernel. Returns a `ParamHealthReport` (findings / rows / checks_run /
 skipped-with-reason / coverage) with signed nonfinite counts, declared-bounds,
 dtype-headroom, subnormal, and all-same/all-zero findings. See
 [the checks kit](checks_kit.md) for the recipes.
@@ -120,7 +120,7 @@ import torch
 from torch import nn
 import torchlens as tl
 
-param_audit = tl.debug.audit_params(nn.Linear(2, 1))
+param_audit = tl.debug.param_health(nn.Linear(2, 1))
 print(len(param_audit.rows), len(param_audit.findings))
 ```
 

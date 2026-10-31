@@ -25,7 +25,7 @@ Two cross-backend honesty notes apply to every preview row above:
   capture, peak memory is unchanged. Value-dependent predicates, `followed_by`/`preceded_by`,
   lookback windows, and save shaping reject typed.
 - **Preview `tl.validate(...)` may return a status object, not a plain bool.** Partial-coverage
-  results return a `ValidationReplayStatus` whose `bool()` raises `TypeError` for non-final
+  results return a `ValidationStatus` whose `bool()` raises `TypeError` for non-final
   (`unverified`/`unavailable`) states instead of guessing; branch on `.state`/`.passed`.
 - **Auto-routing applies to every preview, not just MLX.** Each registered preview declares a
   `can_handle` detector, so `backend=None` routes a genuine framework model (framework installed,
@@ -437,7 +437,7 @@ single-device `str | torch.device` load target and does not accept JAX shardings
 Multi-host or otherwise unaddressable sharded arrays fail closed during save.
 `trace.payload_load_status` records load-time materialization state. Runtime-only
 `jax_equation_captures` are stripped from portable artifacts, so loaded JAX traces expose
-`ValidationReplayStatus` at `trace.validation_replay_status.state == "unavailable"` with reason
+`ValidationStatus` at `trace.validation_replay_status.state == "unavailable"` with reason
 `"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
 Live JAX traces, including static-label selectively saved traces, still run real replay validation
 using runtime-only replay payloads that are separate from the public saved-activation surface.
@@ -519,7 +519,7 @@ tinygrad `.tlspec` support uses `payload_policy="array_payloads"`: default porta
 forward and derived array payloads and load them back as tinygrad `Tensor` values.
 `trace.payload_load_status` records load-time materialization state. Runtime-only
 `tinygrad_uop_captures` are stripped from portable artifacts, so loaded tinygrad traces expose
-`ValidationReplayStatus` at `trace.validation_replay_status.state == "unavailable"` with reason
+`ValidationStatus` at `trace.validation_replay_status.state == "unavailable"` with reason
 `"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
 Live tinygrad traces, including static-label selectively saved traces, still run real replay
 validation using runtime-only replay payloads that are separate from the public saved-activation

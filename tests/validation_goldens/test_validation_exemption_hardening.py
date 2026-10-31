@@ -38,7 +38,7 @@ from torchlens.validation.invariants import (
     _check_site_key_invariants,
     check_metadata_invariants,
 )
-from torchlens.validation.status import ValidationReplayStatus
+from torchlens.validation.status import ValidationStatus
 
 
 def _fake_layer(**kwargs: Any) -> Any:
@@ -2024,7 +2024,7 @@ def test_missing_saved_args_yields_reason_coded_unverified() -> None:
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     assert result.unverified_reason_counts["missing_saved_args"] >= 1
 
@@ -2041,7 +2041,7 @@ def test_selective_save_interior_gap_is_unverified() -> None:
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     status = trace.validation_replay_status
     assert status.unverified_reason_counts["missing_saved_parent_payload"] >= 1
@@ -2113,7 +2113,7 @@ def test_missing_parent_payload_yields_reason_coded_unverified() -> None:
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     assert result.unverified_reason_counts["missing_saved_parent_payload"] >= 1
 
@@ -2206,7 +2206,7 @@ def test_perturbation_exception_yields_reason_coded_unverified() -> None:
     torch.manual_seed(108)
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     assert result.unverified_reason_counts["perturbation_execution_exception"] >= 1
 

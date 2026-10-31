@@ -12,7 +12,7 @@ import torchlens as tl
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tf.validation import replay_allowlist
 from torchlens.validation.invariants import check_metadata_invariants
-from torchlens.validation.status import ValidationReplayStatus
+from torchlens.validation.status import ValidationStatus
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 
@@ -85,7 +85,7 @@ class PollutingModule(tf.Module):
         return x + 1.0
 
 
-def _validate(trace: Any) -> bool | ValidationReplayStatus:
+def _validate(trace: Any) -> bool | ValidationStatus:
     """Validate a trace through the TensorFlow backend.
 
     Parameters
@@ -95,7 +95,7 @@ def _validate(trace: Any) -> bool | ValidationReplayStatus:
 
     Returns
     -------
-    bool | ValidationReplayStatus
+    bool | ValidationStatus
         Backend validation result.
     """
 
@@ -230,7 +230,7 @@ def test_tf_validation_reports_unverified_for_pure_allowlist_gap() -> None:
     trace = tl.trace(mostly_unverified, tf.constant([1.0, 2.0]), backend="tf")
     result = _validate(trace)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     assert result.pure_unverified_node_count == 1
     assert result.replayed_node_count == 0
@@ -268,7 +268,7 @@ def test_tf_validation_positive_cnn_and_transformer_report_replay_coverage() -> 
         status = trace.validation_replay_status
 
         assert result is True or (
-            isinstance(result, ValidationReplayStatus) and result.state == "unverified"
+            isinstance(result, ValidationStatus) and result.state == "unverified"
         )
         assert status.failed_node_count == 0
         assert status.replayed_node_count > 0

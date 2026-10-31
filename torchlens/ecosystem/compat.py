@@ -30,7 +30,7 @@ _PROMISE_TEXT_PENDING = (
 
 
 @dataclass(frozen=True)
-class CompatWindowReport:
+class CompatWindow:
     """Frozen compatibility-window report.
 
     Parameters
@@ -77,12 +77,12 @@ class CompatWindowReport:
         return "\n".join(lines)
 
 
-def compat_window() -> CompatWindowReport:
+def compat_window() -> CompatWindow:
     """Build the compatibility-window report from the governed ledger.
 
     Returns
     -------
-    CompatWindowReport
+    CompatWindow
         Runtime identity, promise status, and every governed row. Purely
         derived from ledger data and the live writer contract; reads no
         artifacts and executes nothing.
@@ -105,4 +105,4 @@ def compat_window() -> CompatWindowReport:
         "window_months": floor["promise_window_months"],
         "window_status": floor["promise_window_status"],
     }
-    return CompatWindowReport(runtime=runtime, promise=promise, rows=rows)
+    return CompatWindow(runtime=runtime, promise=promise, rows=rows)

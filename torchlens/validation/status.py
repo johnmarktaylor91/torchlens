@@ -16,7 +16,7 @@ REGION_REPLAY_IMPORTER_PROVENANCE = "importer"
 
 
 @dataclass(frozen=True)
-class ValidationReplayStatus:
+class ValidationStatus:
     """Machine-readable replay-validation availability or result.
 
     Parameters
@@ -87,7 +87,7 @@ class ValidationReplayStatus:
         return self.state == "passed"
 
     @classmethod
-    def available_live(cls, *, backend: str) -> ValidationReplayStatus:
+    def available_live(cls, *, backend: str) -> ValidationStatus:
         """Build the default status for a live trace with validation support.
 
         Parameters
@@ -97,7 +97,7 @@ class ValidationReplayStatus:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Available live replay-validation status.
         """
 
@@ -126,7 +126,7 @@ class ValidationReplayStatus:
         unverified_reason_counts: Mapping[str, int] | None = None,
         exempted_reason_counts: Mapping[str, int] | None = None,
         decisions: Sequence[Mapping[str, Any]] | None = None,
-    ) -> ValidationReplayStatus:
+    ) -> ValidationStatus:
         """Build a completed replay-validation result.
 
         Parameters
@@ -161,7 +161,7 @@ class ValidationReplayStatus:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Completed pass/fail status.
         """
 
@@ -201,7 +201,7 @@ class ValidationReplayStatus:
         unverified_reason_counts: Mapping[str, int] | None = None,
         exempted_reason_counts: Mapping[str, int] | None = None,
         decisions: Sequence[Mapping[str, Any]] | None = None,
-    ) -> ValidationReplayStatus:
+    ) -> ValidationStatus:
         """Build a partial replay-validation status for importer-owned regions.
 
         Parameters
@@ -237,7 +237,7 @@ class ValidationReplayStatus:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Available but non-boolean status for a trace with partial replay
             coverage.
         """
@@ -275,7 +275,7 @@ class ValidationReplayStatus:
         unverified_reason_counts: Mapping[str, int] | None = None,
         exempted_reason_counts: Mapping[str, int] | None = None,
         decisions: Sequence[Mapping[str, Any]] | None = None,
-    ) -> ValidationReplayStatus:
+    ) -> ValidationStatus:
         """Fold replay outcome counts into a trace-level status.
 
         Parameters
@@ -308,7 +308,7 @@ class ValidationReplayStatus:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             ``failed`` when any replay failure exists, otherwise ``unverified``
             when any importer-owned region is not per-op replayed or no node
             was replay-validated, otherwise ``passed``.
@@ -399,7 +399,7 @@ class ValidationReplayStatus:
         *,
         backend: str,
         payload_load_status: str | None = None,
-    ) -> ValidationReplayStatus:
+    ) -> ValidationStatus:
         """Build the loaded non-torch unavailable status.
 
         Parameters
@@ -411,7 +411,7 @@ class ValidationReplayStatus:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Explicit unavailable status for loaded traces whose runtime replay
             captures were stripped during save.
         """
@@ -430,7 +430,7 @@ class ValidationReplayStatus:
         )
 
     @classmethod
-    def unavailable_unsupported(cls, *, backend: str) -> ValidationReplayStatus:
+    def unavailable_unsupported(cls, *, backend: str) -> ValidationStatus:
         """Build an unavailable status for a backend without replay validation.
 
         Parameters
@@ -440,7 +440,7 @@ class ValidationReplayStatus:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Unsupported-backend status.
         """
 
@@ -470,7 +470,7 @@ class ValidationReplayStatus:
         if self.state in {"passed", "failed"}:
             return self.passed
         raise TypeError(
-            "ValidationReplayStatus is not a boolean pass/fail result unless "
+            "ValidationStatus is not a boolean pass/fail result unless "
             "replay validation has actually run."
         )
 
@@ -562,7 +562,7 @@ __all__ = [
     "REGION_REPLAY_CLASS_KEY",
     "REGION_REPLAY_IMPORTER_PROVENANCE",
     "REGION_REPLAY_PROVENANCE_KEY",
-    "ValidationReplayStatus",
+    "ValidationStatus",
     "ValidationReplayState",
     "ValidationReplaySource",
     "count_importer_region_annotations",

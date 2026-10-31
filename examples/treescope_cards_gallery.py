@@ -30,7 +30,7 @@ import torchlens as tl  # noqa: E402 - path bootstrap above, examples idiom
 OUT_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/tmp/treescope_cards_gallery")
 
 #: Byte-stable reports for the gallery (regeneration-friendly).
-_DETERMINISTIC = tl.export.ReportOptions(deterministic=True)
+_DETERMINISTIC = tl.export.HtmlReportOptions(deterministic=True)
 
 
 class _Recurrent(nn.Module):
@@ -100,7 +100,7 @@ def _config_built_entries(entries: list[tuple[str, str]]) -> None:
     tl.export.html(
         dirty,
         OUT_DIR / "report_share_safe.html",
-        options=tl.export.ReportOptions(share_safe=True, deterministic=True),
+        options=tl.export.HtmlReportOptions(share_safe=True, deterministic=True),
     )
     entries.append(("report_share_safe.html", "report_share_safe.html"))
 

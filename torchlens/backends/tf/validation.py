@@ -10,7 +10,7 @@ from typing import Any, Literal
 import numpy as np
 
 from ... import _state
-from ...validation.status import ValidationReplaySource, ValidationReplayStatus
+from ...validation.status import ValidationReplaySource, ValidationStatus
 from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
 from .op_callback_capture import TFOpCapture
 
@@ -163,7 +163,7 @@ class TFValidationResult:
     effect_region_histogram: Counter[str]
 
 
-def validate_tf_trace(trace: Any, *, validate_metadata: bool = True) -> ValidationReplayStatus:
+def validate_tf_trace(trace: Any, *, validate_metadata: bool = True) -> ValidationStatus:
     """Validate a TensorFlow trace with the P4 non-vacuous tripwire.
 
     Parameters
@@ -175,7 +175,7 @@ def validate_tf_trace(trace: Any, *, validate_metadata: bool = True) -> Validati
 
     Returns
     -------
-    ValidationReplayStatus
+    ValidationStatus
         Failed, passed, or honestly unverified replay-validation status.
     """
 
@@ -184,7 +184,7 @@ def validate_tf_trace(trace: Any, *, validate_metadata: bool = True) -> Validati
     source: ValidationReplaySource = (
         "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
     )
-    status = ValidationReplayStatus.from_replay_counts(
+    status = ValidationStatus.from_replay_counts(
         backend="tf",
         source=source,
         replayed_node_count=result.counts.replayed_node_count,

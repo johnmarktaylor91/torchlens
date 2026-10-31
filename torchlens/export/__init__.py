@@ -56,12 +56,6 @@ def __getattr__(name: str) -> Any:
         value = getattr(_me, name)
         globals()[name] = value
         return value
-    if name == "ReportOptions":
-        # The offline-report worker stays lazy like the html() door itself.
-        from ._report import ReportOptions
-
-        globals()[name] = ReportOptions
-        return ReportOptions
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -265,7 +259,7 @@ def html(
     graph:
         ``"collapsed"`` (default) / ``"flat"`` / ``"none"``.
     options:
-        ``tl.export.ReportOptions`` emission plumbing: ``share_safe``
+        ``tl.export.HtmlReportOptions`` emission plumbing: ``share_safe``
         (strip every embedded value including the frontier),
         ``deterministic`` (suppress the manifest timestamp for byte-exact
         regeneration), ``vis_call_depth`` (graph-depth knob, forwarded
@@ -1271,7 +1265,7 @@ del _name, _fn, _tier, _caps
 
 __all__ = [
     "NETRON_DISCLAIMER",
-    "ReportOptions",
+    "HtmlReportOptions",
     "aim",
     "chrome_trace",
     "chrome_trace_diff",

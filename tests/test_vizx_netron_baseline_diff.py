@@ -1,7 +1,7 @@
 """Per-node diff facts in the Netron baseline slot (ruling U09.5).
 
 ``tl.export.netron(subject, path, baseline=reference)`` must carry, per
-exported node, exactly the facts ``torchlens.differential.diff_report``
+exported node, exactly the facts ``torchlens.differential.diff``
 settles for the same pair -- checked here row by row against the diff's own
 output, in the artifact's node metadata and in the sidecar.
 """
@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.differential import diff_report
+from torchlens.differential import diff
 
 _PREFIX = "torchlens.diff."
 
@@ -130,10 +130,10 @@ def _model_props(payload: dict[str, Any]) -> dict[str, str]:
 def test_op_nodes_carry_exactly_the_diff_rows(
     pair: tuple[tl.Trace, tl.Trace], tmp_path: Path
 ) -> None:
-    """Every op node's diff facts equal the diff_report row for its op."""
+    """Every op node's diff facts equal the diff row for its op."""
 
     subject, reference = pair
-    report = diff_report(subject, reference)
+    report = diff(subject, reference)
     payload = _export(subject, reference, tmp_path / "op.json", granularity="op")
     nodes = _all_nodes(payload)
     checked = 0
@@ -159,11 +159,11 @@ def test_baseline_slot_holds_the_diff_summary(
     """The model-level slot carries the diff's own counts and direction."""
 
     subject, reference = pair
-    report = diff_report(subject, reference)
+    report = diff(subject, reference)
     props = _model_props(_export(subject, reference, tmp_path / "m.json"))
     summary = json.loads(props["torchlens.baseline"])
     assert summary["schema"] == "torchlens.netron_baseline.v1"
-    assert summary["source"] == "torchlens.differential.diff_report"
+    assert summary["source"] == "torchlens.differential.diff"
     assert summary["direction"] == "subject - reference"
     assert summary["row_counts"] == dict(sorted(report.counts.items()))
     assert summary["removed_count"] == len(report.rows_with_status("removed"))
@@ -184,7 +184,7 @@ def test_sidecar_carries_the_same_facts(pair: tuple[tl.Trace, tl.Trace], tmp_pat
     for name, node in _all_nodes(payload).items():
         for key, value in _diff_props(node).items():
             assert rows[(name, key.removeprefix("torchlens."))] == value
-    report = diff_report(subject, reference)
+    report = diff(subject, reference)
     input_row = next(row for row in report.rows if row.subject_label == "input_1:1")
     assert rows[("input_1", "diff.status")] == input_row.status
 
@@ -195,7 +195,7 @@ def test_module_call_nodes_aggregate_their_ops(
     """A module-call node carries row counts and the largest delta over its ops."""
 
     subject, reference = deep_pair
-    report = diff_report(subject, reference)
+    report = diff(subject, reference)
     by_label = {row.subject_label: row for row in report.rows}
     payload = _export(subject, reference, tmp_path / "mod.json", granularity="module")
     nodes = _all_nodes(payload)
@@ -279,7 +279,7 @@ def test_non_trace_baseline_refuses_typed(pair: tuple[tl.Trace, tl.Trace], tmp_p
 
 
 def test_self_baseline_refuses(pair: tuple[tl.Trace, tl.Trace], tmp_path: Path) -> None:
-    """Diffing a capture against itself refuses through diff_report's own guard."""
+    """Diffing a capture against itself refuses through diff's own guard."""
 
     subject, _reference = pair
     with pytest.raises(tl.errors.InvalidArgumentError) as excinfo:

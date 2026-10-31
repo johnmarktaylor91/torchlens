@@ -26,7 +26,7 @@ from .diagnostics import (
     last_validation_peak_memory,
 )
 from .invariants import MetadataInvariantError, check_metadata_invariants
-from .status import ValidationReplayState as ValidationReplayState, ValidationReplayStatus
+from .status import ValidationReplayState as ValidationReplayState, ValidationStatus
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -1333,7 +1333,7 @@ __all__ = [
     "InterventionValidationReport",
     "ValidationFailure",
     "ValidationDiagnostic",
-    "ValidationReplayStatus",
+    "ValidationStatus",
     "get_validation_failure",
     "get_validation_diagnostics",
     "last_validation_failure",

@@ -2,7 +2,7 @@
 
 ``tl.export.netron(subject, path, baseline=reference)`` fills the reserved
 ``torchlens.baseline`` slot (netron #1544) from TorchLens' own guarded
-differential, :func:`torchlens.differential.diff_report`, instead of
+differential, :func:`torchlens.differential.diff`, instead of
 re-deriving a join here. Netron has no diff view, so the facts ride the two
 channels it does render:
 
@@ -149,9 +149,9 @@ def build_baseline_diff(
         The model-level summary and the per-node fact rows.
     """
 
-    from ..differential import diff_report
+    from ..differential import diff
 
-    report = diff_report(subject, reference)
+    report = diff(subject, reference)
     rows_by_label: dict[str, Any] = {}
     rows_by_layer: dict[str, list[Any]] = {}
     for row in report.rows:
@@ -171,7 +171,7 @@ def build_baseline_diff(
     removed = [row.reference_label for row in report.rows if row.status == "removed"]
     summary: dict[str, Any] = {
         "schema": BASELINE_SUMMARY_SCHEMA,
-        "source": "torchlens.differential.diff_report",
+        "source": "torchlens.differential.diff",
         "direction": "subject - reference",
         "reference_model_class": str(getattr(reference, "model_class_name", "")),
         "row_counts": dict(sorted(report.counts.items())),

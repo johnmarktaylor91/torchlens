@@ -5,7 +5,7 @@ With a scaler S-B never fires and 0 parameters move; without one S-B fires
 and raises BEFORE the write with weights bitwise clean after; the clipping
 collateral count is reported; the nan case sets attribution=smeared and
 names no innocent; the unchecked control corrupts the model. Parameter-
-space nonfinites route to the scheduled scan / audit_params, never to the
+space nonfinites route to the scheduled scan / param_health, never to the
 gradient check (routing separation).
 """
 

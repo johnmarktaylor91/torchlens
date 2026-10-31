@@ -20,7 +20,7 @@ from torchlens.backends.paddle._param_writes import (  # noqa: E402
 )
 from torchlens.backends.paddle.validation import _coverage_oracle  # noqa: E402
 from torchlens.validation.invariants import check_metadata_invariants  # noqa: E402
-from torchlens.validation.status import ValidationReplayStatus  # noqa: E402
+from torchlens.validation.status import ValidationStatus  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 
@@ -161,7 +161,7 @@ def test_paddle_validation_loaded_payload_stripped_trace_is_unavailable() -> Non
 
     result = PaddleBackend().validate_trace(trace)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unavailable"
     assert result.reason == "loaded_trace_runtime_capture_stripped"
     assert result.passed is False

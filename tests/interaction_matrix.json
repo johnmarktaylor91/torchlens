@@ -2232,7 +2232,7 @@
   {
    "id": "A46",
    "pair": [],
-   "summary": "Every options class is passed through a slot named after its group (`capture=`, `save=`, `replay=`, `streaming=`, `visualization=`) except `EchoOptions`, which `EchoSession` takes as `options=`; and `RecordingOptions` and `ReportOptions` are public option classes that `tl.options` does not export.",
+   "summary": "Every options class is passed through a slot named after its group (`capture=`, `save=`, `replay=`, `streaming=`, `visualization=`) except `EchoOptions`, which `EchoSession` takes as `options=`; and `RecordingOptions` and `HtmlReportOptions` are public option classes that `tl.options` does not export.",
    "evidence": "surface inventory option heuristics",
    "recommendation": "close",
    "ruling": "pending"

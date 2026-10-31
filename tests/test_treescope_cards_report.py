@@ -59,7 +59,7 @@ def clean_log() -> object:
 def _write(log: object, path: Path, *, share_safe: bool = False, **kwargs: object) -> str:
     """Write one report and return its text."""
 
-    options = tl.export.ReportOptions(deterministic=True, share_safe=share_safe)
+    options = tl.export.HtmlReportOptions(deterministic=True, share_safe=share_safe)
     tl.export.html(log, path, options=options, **kwargs)
     return path.read_text(encoding="utf-8")
 
@@ -232,7 +232,7 @@ def test_graph_fallback_warns_and_labels(
     monkeypatch.setattr(report_module, "_draw_svg", lambda *args, **kwargs: None)
     path = tmp_path / "fb.html"
     with pytest.warns(UserWarning) as caught:
-        tl.export.html(clean_log, path, options=tl.export.ReportOptions(deterministic=True))
+        tl.export.html(clean_log, path, options=tl.export.HtmlReportOptions(deterministic=True))
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
     assert "report_graph_fallback" in codes
     text = path.read_text(encoding="utf-8")

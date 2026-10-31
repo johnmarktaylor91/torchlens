@@ -74,10 +74,10 @@ from ._memory_totals import (
     total_transformed_gradient_memory,
 )
 from ._native_profile import (
-    NativeProfileResult,
+    KernelProfileReport,
     join_result_for,
     join_session,
-    native_profile,
+    kernel_profile,
     register_join_result,
 )
 from ._op_tier import FacetSplitter, OpTierCollector, split_heads
@@ -166,7 +166,7 @@ __all__ = [
     "KinetoJoinResult",
     "LaunchRow",
     "MarkerSpan",
-    "NativeProfileResult",
+    "KernelProfileReport",
     "NormalizedEvent",
     "ObservabilityError",
     "ObservationRecord",
@@ -217,7 +217,7 @@ __all__ = [
     "merge_observations",
     "measure_overhead",
     "merge_spine_results",
-    "native_profile",
+    "kernel_profile",
     "observation_row",
     "pinned_parity_scenario",
     "rank_sites",

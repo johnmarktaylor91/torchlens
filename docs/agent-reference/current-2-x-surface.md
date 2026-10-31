@@ -1059,7 +1059,7 @@
   named `module`), the `netron:attachment` companion (four fail-closed vendor guards;
   written beside every file export by default, ruling U09.3; `attachment=False` opts out,
   `attachment=True` refuses the memory-only serve), `baseline=<reference Trace>` per-node
-  `torchlens.diff.*` facts from `torchlens.differential.diff_report` in node metadataProps
+  `torchlens.diff.*` facts from `torchlens.differential.diff` in node metadataProps
   and the companion plus the diff summary in the `torchlens.baseline` slot (ruling U09.5;
   a string stays a bare identifier), serve/widget one-liner (`open=True`, extra `torchlens[netron]`), and
   an extent-budget WARN past ~27 ranks. Every artifact stays green under strict
@@ -1230,7 +1230,7 @@
   `torchlens.observability` (~100 names) carries the L5 record schema,
   summary transforms, `HistoryView` (bounded exactly-mergeable training
   history), contact sheets, `measure_ab`, pass peaks, the categorized
-  memory-timeline v2, and the Kineto/native-profile join (`native_profile`;
+  memory-timeline v2, and the Kineto/native-profile join (`kernel_profile`;
   `hot_path(by="device_time")`; `tl.region` correlation). `torchlens.observe`
   is the user-facing verbs door.
 - ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens.ecosystem` --

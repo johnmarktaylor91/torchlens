@@ -509,7 +509,7 @@ def require_availability(result: KinetoJoinResult, *, needs: str = "device_time"
         code="device_time_unavailable",
         availability=result.availability,
         remedy=(
-            "Run the capture under torchlens.observability.native_profile "
+            "Run the capture under torchlens.observability.kernel_profile "
             "(or an owned session) on a CUDA host; on CPU-only hosts device "
             "time does not exist and host-clock columns are the honest "
             "alternative."

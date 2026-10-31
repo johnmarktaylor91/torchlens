@@ -516,9 +516,9 @@ class TFBackend:
                 validate_metadata=bool(kwargs.get("validate_metadata", True)),
             )
         except Exception:
-            from ...validation.status import ValidationReplayStatus
+            from ...validation.status import ValidationStatus
 
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend=self.name,
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",

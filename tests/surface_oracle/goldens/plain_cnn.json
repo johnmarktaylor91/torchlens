@@ -4481,7 +4481,7 @@
    "uncalled_modules": [],
    "unexecuted_param_names": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationReplayStatus>",
+   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
    "verbose": false
   }
  },
@@ -8958,7 +8958,7 @@
    "uncalled_modules": [],
    "unexecuted_param_names": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationReplayStatus>",
+   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
    "verbose": false
   }
  },
@@ -13372,7 +13372,7 @@
    "uncalled_modules": [],
    "unexecuted_param_names": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationReplayStatus>",
+   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
    "verbose": false
   }
  },
@@ -17866,7 +17866,7 @@
    "uncalled_modules": [],
    "unexecuted_param_names": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationReplayStatus>",
+   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
    "verbose": false
   }
  },
@@ -22175,7 +22175,7 @@
    "uncalled_modules": [],
    "unexecuted_param_names": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationReplayStatus>",
+   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>",
    "verbose": false
   }
  }
