@@ -239,7 +239,7 @@ def test_halt_signal_returns_partial_trace_from_predicate_capture() -> None:
         _FiveOpTraceModel(),
         torch.ones(2, 2),
         save=lambda ctx: ctx.kind == "op",
-        halt=lambda ctx: ctx.label.startswith("relu"),
+        stop_after=lambda ctx: ctx.label.startswith("relu"),
     )
 
     assert trace.halted is True

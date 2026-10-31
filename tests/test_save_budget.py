@@ -340,8 +340,11 @@ def test_aliasing_raw_and_transformed_payloads_are_charged_once() -> None:
     trace = tl.trace(
         nn.ReLU(),
         torch.randn(8),
-        save=tl.options.SaveOptions(activation_transform=lambda tensor: tensor),
-        capture=CaptureOptions(save_budget=40, layers_to_save=tl.func("relu")),
+        capture=CaptureOptions(
+            save_budget=40,
+            layers_to_save=tl.func("relu"),
+            activation_transform=lambda tensor: tensor,
+        ),
     )
     relu = next(op for op in trace.layer_list if getattr(op, "func_name", None) == "relu")
     assert relu.out is relu.transformed_out
@@ -458,9 +461,9 @@ def test_lookback_window_copies_are_budgeted() -> None:
             model,
             x,
             save=tl.func("linear") & tl.followed_by(tl.func("relu")),
-            lookback=4,
-            lookback_payload_policy="detached_raw",
-            capture=CaptureOptions(save_budget=1),
+            capture=CaptureOptions(
+                save_budget=1, lookback=4, lookback_payload_policy="detached_raw"
+            ),
         )
     assert excinfo.value.fields["accounting_phase"] == "lookback_window_admission"
     assert excinfo.value.fields["projected_bytes"] == excinfo.value.fields["accounted_bytes"]
@@ -475,9 +478,9 @@ def test_lookback_promotions_stay_charged_after_capture() -> None:
         _model(),
         _input(),
         save=tl.func("linear") & tl.followed_by(tl.func("relu")),
-        lookback=4,
-        lookback_payload_policy="detached_raw",
-        capture=CaptureOptions(save_budget=10_000_000),
+        capture=CaptureOptions(
+            save_budget=10_000_000, lookback=4, lookback_payload_policy="detached_raw"
+        ),
     )
     ledger = trace._save_budget_accountant.ledgers["cpu"]
     # linear_1 is promoted (2 KB) and linear_2's candidate is still in the
@@ -495,9 +498,9 @@ def test_lookback_window_eviction_credits_the_charge_back() -> None:
         model,
         _input(),
         save=tl.func("linear") & tl.followed_by(tl.func("relu")),
-        lookback=1,
-        lookback_payload_policy="detached_raw",
-        capture=CaptureOptions(save_budget=10_000_000),
+        capture=CaptureOptions(
+            save_budget=10_000_000, lookback=1, lookback_payload_policy="detached_raw"
+        ),
     )
     ledger = trace._save_budget_accountant.ledgers["cpu"]
     # linear_1's window copy (2 KB) was charged, then evicted by linear_2's and

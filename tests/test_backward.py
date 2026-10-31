@@ -15,7 +15,7 @@ import torchlens.validation.backward as backward_validation
 import torchlens.validation.consolidated as consolidated_validation
 from torchlens._data_classes.grad_fn import GradFn
 from torchlens._ir.events import BackwardPassStart, OpGradObserved
-from torchlens.options import CaptureOptions, SaveOptions
+from torchlens.options import CaptureOptions
 
 _NO_GRAD_AUTOGRAD_ERROR = "element 0 of tensors does not require grad and does not have a grad_fn"
 
@@ -1059,8 +1059,9 @@ def test_grad_transform_applied() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(save_grads="all"),
-        save=SaveOptions(grad_transform=lambda grad: torch.zeros_like(grad)),
+        capture=CaptureOptions(
+            save_grads="all", grad_transform=lambda grad: torch.zeros_like(grad)
+        ),
     )
     trace.log_backward(_output_loss(trace))
     assert all(
@@ -1080,9 +1081,12 @@ def test_flat_transform_kwargs_populate_transformed_payloads() -> None:
     trace = tl.trace(
         model,
         x,
-        grad_transform=lambda grad: grad.half(),
-        capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True),
-        save=tl.options.SaveOptions(activation_transform=lambda out: out.half()),
+        capture=tl.options.CaptureOptions(
+            save_grads=True,
+            backward_ready=True,
+            grad_transform=lambda grad: grad.half(),
+            activation_transform=lambda out: out.half(),
+        ),
     )
     relu_op = next(op for op in trace.ops if op.func_name == "relu")
 
@@ -1586,8 +1590,7 @@ def test_restored_trace_supports_backward_capture() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(backward_ready=True, save_grads="all"),
-        save_mode="reference",
+        capture=CaptureOptions(backward_ready=True, save_grads="all", save_mode="reference"),
     )
     loss = _output_loss(trace)
     restored = pickle.loads(pickle.dumps(trace))
@@ -1879,8 +1882,7 @@ def test_cleanup_disarms_backward_triggers() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     out = trace[trace.output_layers[0]].out
     trace.log_backward(out.sum(), retain_graph=True)

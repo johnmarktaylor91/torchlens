@@ -93,8 +93,7 @@ class TestPassOriginStamps:
         trace = tl.trace(
             model,
             torch.randn(2, 4, requires_grad=True),
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         trace.log_backward(trace["output_1"].out.sum(), retain_graph=True)
         origins = ob.backward_pass_origins(trace)

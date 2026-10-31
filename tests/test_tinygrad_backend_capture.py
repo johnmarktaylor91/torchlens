@@ -677,7 +677,7 @@ def test_tinygrad_derived_grads_match_backward_oracle() -> None:
         _tiny_square_loss,
         x,
         backend="tinygrad",
-        grad_options=GradOptions(input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(input_grad_argnums=(0,))),
     )
     oracle_x = Tensor([1.0, -2.0, 3.0])
     _tiny_square_loss(oracle_x).backward()
@@ -695,7 +695,9 @@ def test_tinygrad_derived_grads_use_loss_fn_for_vector_output() -> None:
         _tiny_vector_output,
         x,
         backend="tinygrad",
-        grad_options=GradOptions(loss_fn=_tiny_vector_loss, input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(loss_fn=_tiny_vector_loss, input_grad_argnums=(0,))
+        ),
     )
 
     assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
@@ -710,7 +712,7 @@ def test_tinygrad_derived_grads_reject_non_scalar_without_loss_fn() -> None:
             _tiny_vector_output,
             Tensor([1.0, -2.0, 3.0]),
             backend="tinygrad",
-            grad_options=GradOptions(input_grad_argnums=(0,)),
+            capture=tl.options.CaptureOptions(grad_options=GradOptions(input_grad_argnums=(0,))),
         )
 
 
@@ -725,7 +727,7 @@ def test_tinygrad_derived_grads_restore_preexisting_user_grad() -> None:
         _tiny_square_loss,
         x,
         backend="tinygrad",
-        grad_options=GradOptions(input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(input_grad_argnums=(0,))),
     )
 
     assert x.grad is original_grad
@@ -741,13 +743,13 @@ def test_tinygrad_derived_grads_repeat_without_accumulating_user_grad() -> None:
         _tiny_square_loss,
         x,
         backend="tinygrad",
-        grad_options=GradOptions(input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(input_grad_argnums=(0,))),
     )
     second = tl.trace(
         _tiny_square_loss,
         x,
         backend="tinygrad",
-        grad_options=GradOptions(input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(input_grad_argnums=(0,))),
     )
 
     assert first.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
@@ -763,7 +765,9 @@ def test_tinygrad_intermediate_derived_grads_match_retained_backward_oracle() ->
         _tiny_intermediate_loss,
         x,
         backend="tinygrad",
-        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True)
+        ),
     )
     oracle_x = Tensor([1.0, -2.0, 3.0])
     oracle_hidden = oracle_x * oracle_x
@@ -799,7 +803,7 @@ def test_tinygrad_derived_grads_are_not_backward_capture() -> None:
         _tiny_square_loss,
         Tensor([1.0, -2.0, 3.0]),
         backend="tinygrad",
-        grad_options=GradOptions(input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(input_grad_argnums=(0,))),
     )
 
     with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
@@ -837,7 +841,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
         _tiny_square_loss,
         Tensor([1.0, -2.0, 3.0]),
         backend="tinygrad",
-        grad_options=GradOptions(input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(input_grad_argnums=(0,))),
     )
 
     assert trace.backend == "tinygrad"

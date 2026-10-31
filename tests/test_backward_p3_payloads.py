@@ -181,8 +181,9 @@ def test_grad_transform_is_projected_per_backward_pass() -> None:
     trace = tl.trace(
         model,
         x,
-        grad_transform=lambda grad: grad.mean(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
+        capture=tl.options.CaptureOptions(
+            layers_to_save="all", save_grads=True, grad_transform=lambda grad: grad.mean()
+        ),
     )
     try:
         loss = trace[trace.output_layers[0]].out
@@ -206,9 +207,12 @@ def test_save_raw_gradients_false_keeps_transformed_per_pass_payload() -> None:
     trace = tl.trace(
         model,
         x,
-        grad_transform=lambda grad: grad.mean(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
-        save=tl.options.SaveOptions(save_raw_grads=False),
+        capture=tl.options.CaptureOptions(
+            layers_to_save="all",
+            save_grads=True,
+            grad_transform=lambda grad: grad.mean(),
+            save_raw_grads=False,
+        ),
     )
     try:
         loss = trace[trace.output_layers[0]].out

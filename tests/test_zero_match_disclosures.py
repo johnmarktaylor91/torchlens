@@ -32,7 +32,7 @@ def test_halt_zero_match_warns_on_completed_capture() -> None:
     """A halt selector that never fires discloses instead of staying silent."""
 
     with pytest.warns(UserWarning, match="halt selector .* matched zero sites"):
-        log = tl.trace(_model(), torch.randn(2, 3), halt=tl.func("nosuchopzzz"))
+        log = tl.trace(_model(), torch.randn(2, 3), stop_after=tl.func("nosuchopzzz"))
     assert log.outcome.status.name == "COMPLETE"
 
 
@@ -41,7 +41,7 @@ def test_halt_that_fires_does_not_warn() -> None:
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        log = tl.trace(_model(), torch.randn(2, 3), halt=tl.func("linear"))
+        log = tl.trace(_model(), torch.randn(2, 3), stop_after=tl.func("linear"))
     assert log.outcome.status.name == "STOPPED"
     assert not any("matched zero sites" in str(item.message) for item in caught)
 
@@ -51,7 +51,7 @@ def test_value_dependent_halt_callable_is_not_judged() -> None:
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.trace(_model(), torch.randn(2, 3), halt=lambda ctx: False)
+        tl.trace(_model(), torch.randn(2, 3), stop_after=lambda ctx: False)
     assert not any(
         "halt selector" in str(item.message) and "matched zero" in str(item.message)
         for item in caught
@@ -161,7 +161,7 @@ def test_zero_match_halt_and_save_record_their_slots() -> None:
             _model(),
             torch.randn(2, 3),
             save=tl.func("nosuchopzzz"),
-            halt=tl.func("nosuchopyyy"),
+            stop_after=tl.func("nosuchopyyy"),
         )
     records = log.annotations.get("unmatched_capture_selectors") or ()
     slots = {record["slot"] for record in records}

@@ -33,7 +33,7 @@ from torchlens.errors import (
     TraceNotReproducibleWarning,
 )
 from torchlens.intervention.types import DictKey
-from torchlens.options import SaveOptions
+from torchlens.options import CaptureOptions
 from torchlens.recording import RecordContext
 from torchlens.report import ValidationDiagnostic
 from torchlens.validation import (
@@ -5986,8 +5986,7 @@ def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None
     log = trace_fn(
         _SimpleFF(),
         torch.randn(2, 5),
-        save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
-        capture=tl.options.CaptureOptions(seed=42),
+        capture=CaptureOptions(activation_transform=lambda tensor: tensor.mean(), seed=42),
     )
     try:
         victim = next(layer for layer in log.layer_list if layer.transformed_out is not None)
@@ -6023,8 +6022,7 @@ def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None
     log = trace_fn(
         _SimpleFF(),
         torch.randn(2, 5),
-        save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
-        capture=tl.options.CaptureOptions(seed=42),
+        capture=CaptureOptions(activation_transform=lambda tensor: tensor.mean(), seed=42),
     )
     try:
         assert any(layer.out is not None for layer in log.layer_list)
@@ -6290,8 +6288,9 @@ def test_backward_invariants_exempt_dead_branch_layers() -> None:
         log = tl.trace(
             model_cls(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(backward_ready=True, layers_to_save="all"),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(
+                backward_ready=True, layers_to_save="all", save_mode="reference"
+            ),
         )
         try:
             log.log_backward(log.output_ops[0].out.sum())
@@ -6325,8 +6324,9 @@ def test_dead_branch_exemption_does_not_disarm_contributing_backpointers() -> No
     log = tl.trace(
         DeadBranch(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(backward_ready=True, layers_to_save="all"),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, layers_to_save="all", save_mode="reference"
+        ),
     )
     try:
         log.log_backward(log.output_ops[0].out.sum())

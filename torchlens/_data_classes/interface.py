@@ -319,7 +319,7 @@ def _honesty_header_lines(self: "Trace") -> list[str]:
         hint = (
             ""
             if getattr(self, "track_nonfinite", False)
-            else "; capture with CaptureOptions(track_nonfinite=True) to check every op"
+            else "; capture with CaptureOptions(on_nonfinite='track') to check every op"
         )
         lines.append(f"\tHealth: NOT-CHECKED (payloads unexamined{hint})")
     if getattr(self, "capture_verified", True) is False:

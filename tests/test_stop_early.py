@@ -13,7 +13,6 @@ from __future__ import annotations
 import torch
 
 import torchlens as tl
-from torchlens.options import CaptureOptions
 
 
 def test_stop_after_on_peek_is_accepted() -> None:
@@ -34,10 +33,10 @@ def test_stop_after_context_on_peek_is_accepted() -> None:
 
 
 def test_stop_after_wired_on_trace() -> None:
-    """trace(capture=CaptureOptions(stop_after=...)) halts inclusively."""
+    """trace(stop_after=...) halts inclusively."""
 
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU(), torch.nn.Linear(2, 2))
-    log = tl.trace(model, torch.ones(1, 2), capture=CaptureOptions(stop_after="relu"))
+    log = tl.trace(model, torch.ones(1, 2), stop_after="relu")
     assert log.halted is True
     labels = [op.layer_label for op in log]
     assert any(label.startswith("relu") for label in labels)

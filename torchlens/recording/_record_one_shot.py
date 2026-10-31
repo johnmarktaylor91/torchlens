@@ -10,7 +10,7 @@ from torch import nn
 from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
-from .._deprecations import MISSING, MissingType
+from .._deprecations import MISSING
 from .._errors import KeywordConflictError
 from .._input_coerce import _coerce_input_args
 from .._robustness import check_model_and_input_variants
@@ -21,55 +21,75 @@ from ..backends.registry import (
     require_capability_implementation,
 )
 from ..intervention.predicates import InterventionPredicate
-from ..options import StorageOptions
-from ..types import _ActivationPostfunc, _GradientPostfunc
+from ..options import CaptureOptions, StorageOptions
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
 from ._validation import validate_postprocess
-from .options import (
-    ForwardErrorMode,
-    GradPredicateFn,
-    HaltPredicateFn,
-    LookbackPayloadPolicy,
-    PredicateErrorMode,
-    PredicateFn,
+from .options import HaltPredicateFn, PredicateFn, RecordingOptions
+from .types import Recording
+
+_RECORDING_DOOR_FIELDS: tuple[str, ...] = (
+    "default_op",
+    "default_module",
+    "history_size",
+    "include_source_events",
+    "max_predicate_failures",
+    "on_predicate_error",
+    "on_forward_error",
+    "default_grad",
+    "postprocess",
 )
-from .types import CaptureSpec, Recording
+_CAPTURE_DOOR_FIELDS: tuple[str, ...] = (
+    "lookback",
+    "lookback_payload_policy",
+    "seed",
+    "activation_transform",
+    "save_raw_activations",
+    "save_grads",
+    "grad_transform",
+    "save_raw_grads",
+    "detach_saved_activations",
+)
+
+
+def _unfold_record_options(
+    capture: CaptureOptions | None, recording: RecordingOptions | None
+) -> dict[str, Any]:
+    """Read the former ``record`` door keywords off the two options objects.
+
+    An explicitly set field is forwarded; an unset one forwards ``MISSING`` so
+    the Recorder resolves the same defaults it always did. ``backward_ready``
+    is a plain bool on the Recorder and reads the capture value directly.
+    """
+
+    flat: dict[str, Any] = {}
+    for name in _RECORDING_DOOR_FIELDS:
+        explicit = recording is not None and recording.is_field_explicit(name)
+        flat[name] = getattr(recording, name) if explicit else MISSING
+    for name in _CAPTURE_DOOR_FIELDS:
+        explicit = capture is not None and capture.is_field_explicit(name)
+        flat[name] = getattr(capture, name) if explicit else MISSING
+    flat["backward_ready"] = bool(capture.backward_ready) if capture is not None else False
+    if flat["postprocess"] is MISSING:
+        flat["postprocess"] = "none"
+    return flat
 
 
 def record(
     model: nn.Module,
     input_args: Any,
-    input_kwargs: dict[str, Any] | None = None,
     *,
+    input_kwargs: dict[str, Any] | None = None,
     save: PredicateFn | None = None,
-    default_op: bool | CaptureSpec | MissingType = MISSING,
-    default_module: bool | CaptureSpec | MissingType = MISSING,
-    history_size: int = 8,
-    lookback: int = 0,
-    lookback_payload_policy: LookbackPayloadPolicy = "metadata_only",
-    include_source_events: bool = False,
     intervene: InterventionPredicate | None = None,
-    halt: HaltPredicateFn | None = None,
-    max_predicate_failures: int = 32,
-    on_predicate_error: PredicateErrorMode = "auto",
-    on_forward_error: ForwardErrorMode = "raise",
+    stop_after: HaltPredicateFn | None = None,
     storage: StorageOptions | None = None,
-    streaming: StorageOptions | None = None,
-    generate_kwargs: Mapping[str, Any] | None = None,
-    return_output: bool = False,
-    postprocess: str = "none",
-    seed: int | None = None,
-    activation_transform: _ActivationPostfunc | None = None,
-    save_raw_activations: bool = True,
-    save_grads: GradPredicateFn | bool | CaptureSpec | None = None,
-    default_grad: bool | CaptureSpec | MissingType = MISSING,
-    grad_transform: _GradientPostfunc | None = None,
-    save_raw_grads: bool = True,
-    backward_ready: bool = False,
+    capture: CaptureOptions | None = None,
+    recording: RecordingOptions | None = None,
     narrate: Any | None = None,
     backend: BackendName | None = None,
-    detach_saved_activations: bool | MissingType = MISSING,
+    generate_kwargs: Mapping[str, Any] | None = None,
+    return_output: bool = False,
 ) -> Recording | GenerationRecording | tuple[Any, Recording | GenerationRecording]:
     """Record one model forward pass with capture predicates.
 
@@ -84,10 +104,21 @@ def record(
         Tensor, list, or tuple of positional model inputs.
     input_kwargs:
         Optional keyword arguments for the model call.
-    save, default_op, default_module, history_size, lookback,
-    lookback_payload_policy, include_source_events, max_predicate_failures,
-    on_predicate_error, storage, streaming, seed:
-        Fastlog recording options.
+    save:
+        The one predicate spelling (matches ``trace(save=...)``).
+    storage:
+        Grouped storage options (``tl.options.StorageOptions``).
+    capture:
+        ``tl.options.CaptureOptions``. The fields ``record`` reads: ``lookback``,
+        ``lookback_payload_policy``, ``seed``, ``activation_transform``,
+        ``save_raw_activations``, ``save_grads``, ``grad_transform``,
+        ``save_raw_grads``, ``backward_ready`` and ``detach_saved_activations``
+        (meanings below).
+    recording:
+        ``tl.options.RecordingOptions``: ``default_op``, ``default_module``,
+        ``history_size``, ``include_source_events``, ``max_predicate_failures``,
+        ``on_predicate_error``, ``on_forward_error``, ``default_grad`` and
+        ``postprocess`` (meanings below).
     on_forward_error:
         Controls failed-forward handling. ``"raise"`` preserves the historical
         behavior, ``"attach_partial"`` attaches ``exc.partial_recording`` and
@@ -96,36 +127,30 @@ def record(
         valid model output exists on failure.
     intervene:
         Optional predicate-time intervention slot evaluated on operation contexts.
-    halt:
+    stop_after:
         Optional predicate evaluated after each event's save decision. Returning
-        ``True`` stops the active forward pass and marks the recording halted.
-    activation_transform:
-        Optional callable applied to each retained out copy after
-        dtype/device transforms. Errors propagate as
-        :class:`torchlens.UserTransformError`.
-    save_raw_activations:
-        When ``False`` and ``activation_transform`` is set, only transformed
-        payloads are retained. Defaults to ``True`` to mirror the slow path.
-    backward_ready:
-        If True, omitted defaults are promoted to keep-grad capture specs.
-    detach_saved_activations:
-        DOCUMENTED-UNSTABLE. Whether retained activations are detached from the
-        autograd graph. Defaults to ``True``. ``False`` keeps graph-connected
-        copies wherever the recorded tensor carries autograd history, so a
-        loss built from ``record.ram_payload`` backpropagates into the model.
-        A spec with ``save_grad=True`` stays attached either way; disk payloads
-        are always detached. ``backward_ready=True`` refuses an explicit
-        ``True``.
-    save_grads, default_grad, grad_transform, save_raw_grads:
-        Gradient capture options for a later ``Recording.backward()``.
-        Gradient hooks are installed only when ``backward_ready=True``,
-        ``save_grads=`` or ``default_grad=`` is given (``save_grads=None``
-        or ``False`` and ``default_grad=False`` do not count); without one,
-        ``log_backward()`` refuses with code ``recording_backward_not_requested``.
-        With none of them, a record made under ``torch.no_grad()`` or
-        ``torch.inference_mode()`` implies ``inference_only=True``, reported on
-        ``Recording.outcome``, and ``log_backward()`` refuses with
-        ``recording_backward_inference_only``.
+        ``True`` stops the active forward pass and marks the recording stopped.
+    CaptureOptions fields read by ``record``:
+        ``activation_transform`` is applied to each retained out copy after
+        dtype/device transforms (errors propagate as
+        :class:`torchlens.UserTransformError`); ``save_raw_activations=False``
+        with a transform keeps only transformed payloads. ``backward_ready=True``
+        promotes omitted defaults to keep-grad capture specs.
+        ``detach_saved_activations`` (DOCUMENTED-UNSTABLE; ``record`` default
+        ``True``) detaches retained activations; ``False`` keeps graph-connected
+        copies wherever the recorded tensor carries autograd history (a spec with
+        ``save_grad=True`` stays attached either way; disk payloads are always
+        detached; ``backward_ready=True`` refuses an explicit ``True``).
+        ``save_grads``, ``default_grad`` (a RecordingOptions field),
+        ``grad_transform`` and ``save_raw_grads`` configure a later
+        ``Recording.backward()``: gradient hooks are installed only when
+        ``backward_ready=True``, ``save_grads=`` or ``default_grad=`` is given;
+        without one, ``log_backward()`` refuses with code
+        ``recording_backward_not_requested``, and a record made under
+        ``torch.no_grad()`` or ``torch.inference_mode()`` implies
+        ``inference_only=True`` (``recording_backward_inference_only``).
+    RecordingOptions.postprocess:
+        Post-capture finalization pass (``"none"`` by default).
     narrate:
         Live narration scope: ``True``, ``"modules"``, a live selector, or a
         grouped ``tl.options.NarrationOptions``. Narration and retention are fully
@@ -148,8 +173,6 @@ def record(
     return_output:
         Whether to return ``(model_output, recording)``; with
         ``generate_kwargs`` the output is ``generate()``'s own return value.
-    postprocess:
-        Optional postprocess enrichment preset.
 
     Returns
     -------
@@ -183,6 +206,28 @@ def record(
             "Recorder, and backend v1 record() has no non-torch dispatch path."
         )
     model = unwrap_compiled_model(model)
+    flat = _unfold_record_options(capture, recording)
+    default_op = flat["default_op"]
+    default_module = flat["default_module"]
+    history_size = flat["history_size"]
+    lookback = flat["lookback"]
+    lookback_payload_policy = flat["lookback_payload_policy"]
+    include_source_events = flat["include_source_events"]
+    halt = stop_after
+    max_predicate_failures = flat["max_predicate_failures"]
+    on_predicate_error = flat["on_predicate_error"]
+    on_forward_error = flat["on_forward_error"]
+    streaming = None
+    seed = flat["seed"]
+    activation_transform = flat["activation_transform"]
+    save_raw_activations = flat["save_raw_activations"]
+    save_grads = flat["save_grads"]
+    default_grad = flat["default_grad"]
+    grad_transform = flat["grad_transform"]
+    save_raw_grads = flat["save_raw_grads"]
+    backward_ready = flat["backward_ready"]
+    detach_saved_activations = flat["detach_saved_activations"]
+    postprocess = flat["postprocess"]
     if storage is not None and streaming is not None:
         raise KeywordConflictError(
             "Do not pass both `storage` and `streaming`",

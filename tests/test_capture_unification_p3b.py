@@ -153,7 +153,7 @@ def test_layers_to_save_supports_disk_streaming(tmp_path: Path) -> None:
         TinyLinear(),
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
-        streaming=tl.options.StorageOptions(path=bundle_path),
+        storage=tl.options.StorageOptions(path=bundle_path),
     )
     saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
     assert saved
@@ -398,7 +398,7 @@ def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None
         model,
         x,
         capture=tl.options.CaptureOptions(layers_to_save=[-1]),
-        streaming=tl.options.StorageOptions(path=bundle_path),
+        storage=tl.options.StorageOptions(path=bundle_path),
     )
     assert bundle_path.exists()
     loaded = tl.load(bundle_path)
@@ -420,7 +420,7 @@ def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None
         model,
         x,
         capture=tl.options.CaptureOptions(layers_to_save=[-1]),
-        streaming=tl.options.StorageOptions(on_save=capture_value),
+        storage=tl.options.StorageOptions(on_save=capture_value),
     )
     expected_values = [op.out for op in callback_trace.layer_list if op.has_saved_activation]
     assert callback_values
@@ -492,7 +492,7 @@ def test_layers_to_save_supports_intervene_halt_and_save_predicate() -> None:
         TinyLinear(),
         x,
         capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
-        halt=lambda ctx: ctx.kind == "op" and ctx.layer_type == "relu",
+        stop_after=lambda ctx: ctx.kind == "op" and ctx.layer_type == "relu",
     )
 
     assert any(
@@ -537,8 +537,7 @@ def test_followed_by_trace_supported_record_rejected_and_bad_shapes_error() -> N
         TinyLinear(),
         x,
         save=selector,
-        lookback=4,
-        lookback_payload_policy="detached_raw",
+        capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
     )
     assert any(op.layer_type == "linear" and op.has_saved_activation for op in traced.layer_list)
 
@@ -563,9 +562,9 @@ def test_followed_by_intervene_and_halt_fail_at_capture_start() -> None:
             intervene=tl.when(selector, tl.add(0.0)),
         )
     with pytest.raises(PredicateError, match="trace\\(halt=.*does not support"):
-        tl.trace(TinyLinear(), x, halt=selector)
+        tl.trace(TinyLinear(), x, stop_after=selector)
     with pytest.raises(PredicateError, match="unsupported followed_by predicate shape"):
-        tl.trace(TinyLinear(), x, halt=tl.followed_by(tl.func("relu")))
+        tl.trace(TinyLinear(), x, stop_after=tl.followed_by(tl.func("relu")))
 
 
 def test_tf_trace_exercises_backend_neutral_topology_invariant() -> None:

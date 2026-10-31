@@ -43,7 +43,7 @@ def _halt_on_linear_exit(ctx: RecordContext) -> bool:
 def test_trace_halt_op_returns_partial_trace_after_save_decision() -> None:
     """trace(halt=...) returns a finalized partial graph through the matching op."""
 
-    trace = tl.trace(_ThreeStageModel(), torch.ones(1, 3), halt=_halt_on_relu)
+    trace = tl.trace(_ThreeStageModel(), torch.ones(1, 3), stop_after=_halt_on_relu)
 
     assert trace.halted is True
     assert trace.halt_frontier == trace.halt_reason
@@ -61,7 +61,7 @@ def test_trace_halt_module_exit_stops_after_module_output() -> None:
     trace = tl.trace(
         _ThreeStageModel(),
         torch.ones(1, 3),
-        halt=_halt_on_linear_exit,
+        stop_after=_halt_on_linear_exit,
     )
 
     assert trace.halted is True
@@ -76,7 +76,7 @@ def test_trace_halt_supports_selective_layers_to_save() -> None:
     trace = tl.trace(
         _ThreeStageModel(),
         torch.ones(1, 3),
-        halt=_halt_on_relu,
+        stop_after=_halt_on_relu,
         capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
     )
 
@@ -99,7 +99,7 @@ def test_halted_trace_validation_skips_full_model_output_only() -> None:
     trace = tl.trace(
         model,
         torch.ones(1, 3),
-        halt=_halt_on_relu,
+        stop_after=_halt_on_relu,
         capture=CaptureOptions(save_args=True),
     )
 

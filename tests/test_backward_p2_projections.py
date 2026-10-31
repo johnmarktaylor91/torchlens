@@ -382,8 +382,7 @@ def test_save_works_after_two_differentiable_backward_passes(tmp_path) -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     try:
         trace.log_backward(trace[-1].out.sum(), retain_graph=True, create_graph=True)

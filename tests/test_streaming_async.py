@@ -192,7 +192,7 @@ def test_record_refuses_explicit_async_writes(tmp_path: Path) -> None:
             _model(),
             torch.randn(4, 8),
             save=tl.func("relu"),
-            streaming=tl.to_disk(tmp_path / "r.tlspec", async_writes=True),
+            storage=tl.to_disk(tmp_path / "r.tlspec", async_writes=True),
         )
 
 

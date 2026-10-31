@@ -59,7 +59,7 @@ def test_fastlog_record_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
     recording = tl.record(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        backward_ready=True,
+        capture=tl.options.CaptureOptions(backward_ready=True),
     )
     payload = next(record.ram_payload for record in recording if record.ram_payload is not None)
 

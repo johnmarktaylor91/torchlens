@@ -63,7 +63,7 @@ def test_predicate_accepts_supported_return_types(result: bool | CaptureSpec | N
         PredicateApiModel(),
         torch.ones(2),
         save=keep_op,
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
     )
 
     assert recording.num_ops == 1

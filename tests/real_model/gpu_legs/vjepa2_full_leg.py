@@ -147,7 +147,9 @@ def stage_a(model: Any, inputs: dict[str, Any]) -> dict[str, Any]:
     with torch.no_grad():
         direct = model(**inputs).last_hidden_state.detach().cpu()
     start = time.monotonic()
-    trace = tl.trace(model, (), dict(inputs), capture=CaptureOptions(output_device="cpu"))
+    trace = tl.trace(
+        model, (), input_kwargs=dict(inputs), capture=CaptureOptions(output_device="cpu")
+    )
     seconds = time.monotonic() - start
     try:
         matches = [

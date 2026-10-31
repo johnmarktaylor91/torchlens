@@ -38,7 +38,7 @@ def _reduced_trace() -> object:
     return tl.trace(
         _model(),
         torch.randn(12, 32),
-        save=tl.options.SaveOptions(
+        capture=tl.options.CaptureOptions(
             activation_transform=_feature_halve, save_raw_activations=False
         ),
     )
@@ -79,7 +79,9 @@ def test_batch_consuming_transform_refuses_with_remedy() -> None:
     log = tl.trace(
         _model(),
         torch.randn(12, 32),
-        save=tl.options.SaveOptions(activation_transform=_batch_pool, save_raw_activations=False),
+        capture=tl.options.CaptureOptions(
+            activation_transform=_batch_pool, save_raw_activations=False
+        ),
     )
     with pytest.raises(ValueError, match="stimulus axis") as excinfo:
         tl.repgeom.rdm_evolution(log, min_stimuli=2)

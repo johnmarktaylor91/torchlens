@@ -79,9 +79,8 @@ def test_root_only_model_emits_root_events() -> None:
         RootOnly(),
         torch.ones(1),
         save=_options().keep_op,
-        default_module=True,
-        include_source_events=True,
         return_output=True,
+        recording=tl.options.RecordingOptions(default_module=True, include_source_events=True),
     )
     kinds = [record.ctx.kind for record in recording]
 
@@ -99,8 +98,7 @@ def test_shared_module_called_twice_has_balanced_events() -> None:
         SharedModule(),
         torch.ones(1, 3),
         save=_options().keep_op,
-        default_module=True,
-        include_source_events=True,
+        recording=tl.options.RecordingOptions(default_module=True, include_source_events=True),
     )
     child_events = [
         record.ctx
@@ -124,9 +122,8 @@ def test_identity_passthrough_has_module_events() -> None:
         IdentityModel(),
         torch.ones(1),
         save=_options().keep_op,
-        default_module=True,
-        include_source_events=True,
         return_output=True,
+        recording=tl.options.RecordingOptions(default_module=True, include_source_events=True),
     )
     labels = [record.ctx.address for record in recording]
 
@@ -142,8 +139,7 @@ def test_forward_exception_cleans_logging_state() -> None:
             RaisingModel(),
             torch.ones(1),
             save=_options().keep_op,
-            default_module=True,
-            include_source_events=True,
+            recording=tl.options.RecordingOptions(default_module=True, include_source_events=True),
         )
 
     assert torchlens_state._logging_enabled is False
@@ -163,9 +159,8 @@ def test_predicate_exception_cleans_logging_state() -> None:
         tl.record(
             RootOnly(),
             torch.ones(1),
-            halt=bad_halt,
-            default_module=True,
-            default_op=False,
+            stop_after=bad_halt,
+            recording=tl.options.RecordingOptions(default_module=True, default_op=False),
         )
 
     assert torchlens_state._logging_enabled is False

@@ -42,8 +42,9 @@ def test_accumulate_ram_raises_at_end_with_capped_failures() -> None:
             ExceptionModel(),
             torch.ones(1, 3),
             save=_raising_predicate,
-            on_predicate_error="accumulate",
-            max_predicate_failures=2,
+            recording=tl.options.RecordingOptions(
+                on_predicate_error="accumulate", max_predicate_failures=2
+            ),
         )
 
     assert len(exc_info.value.failures) == 2
@@ -68,7 +69,7 @@ def test_fail_fast_raises_on_first_failure() -> None:
             ExceptionModel(),
             torch.ones(1, 3),
             save=keep_op,
-            on_predicate_error="fail-fast",
+            recording=tl.options.RecordingOptions(on_predicate_error="fail-fast"),
         )
 
     assert calls == 1
@@ -82,8 +83,9 @@ def test_auto_maps_to_accumulate_for_ram() -> None:
             ExceptionModel(),
             torch.ones(1, 3),
             save=_raising_predicate,
-            on_predicate_error="auto",
-            max_predicate_failures=1,
+            recording=tl.options.RecordingOptions(
+                on_predicate_error="auto", max_predicate_failures=1
+            ),
         )
 
     assert len(exc_info.value.failures) == 1
@@ -107,11 +109,11 @@ def test_auto_maps_to_fail_fast_for_disk(tmp_path: Path) -> None:
             ExceptionModel(),
             torch.ones(1, 3),
             save=keep_op,
-            on_predicate_error="auto",
-            streaming=tl.options.StorageOptions(
+            storage=tl.options.StorageOptions(
                 path=tmp_path / "disk.tlfast",
                 retain_in_memory=False,
             ),
+            recording=tl.options.RecordingOptions(on_predicate_error="auto"),
         )
 
     assert calls == 1
@@ -125,8 +127,9 @@ def test_max_predicate_failures_tracks_overflow_separately() -> None:
             ExceptionModel(),
             torch.ones(1, 3),
             save=_raising_predicate,
-            on_predicate_error="accumulate",
-            max_predicate_failures=0,
+            recording=tl.options.RecordingOptions(
+                on_predicate_error="accumulate", max_predicate_failures=0
+            ),
         )
 
     assert exc_info.value.failures == []

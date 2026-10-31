@@ -39,8 +39,7 @@ def _trace(model: nn.Module, inputs: object) -> object:
     return tl.trace(
         model,
         inputs,
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
 
 

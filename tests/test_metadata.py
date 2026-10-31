@@ -694,7 +694,9 @@ def test_saved_args_not_populated(small_input):
 
 def test_transform(small_input):
     model = example_models.SimpleFF()
-    mh = trace_fn(model, small_input, save=tl.options.SaveOptions(activation_transform=torch.mean))
+    mh = trace_fn(
+        model, small_input, capture=tl.options.CaptureOptions(activation_transform=torch.mean)
+    )
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.transformed_out is not None:

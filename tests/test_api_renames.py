@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _user_funcs as user_funcs, _visualization
-from torchlens.options import CaptureOptions, SaveOptions, StorageOptions, VisualizationOptions
+from torchlens.options import CaptureOptions, StorageOptions, VisualizationOptions
 
 _VISUALIZATION_CASES = [
     ("view", "vis_mode", "rolled", "vis_mode"),
@@ -178,7 +178,7 @@ def test_get_model_activations_is_not_advertised_as_a_legacy_api() -> None:
 
 
 def test_save_options_activation_transform_alias_warns() -> None:
-    """SaveOptions activation_transform should set the canonical field."""
+    """CaptureOptions activation_transform should set the canonical field."""
 
     def transform(tensor: torch.Tensor) -> torch.Tensor:
         """Return a transformed tensor for routing assertions."""
@@ -187,7 +187,7 @@ def test_save_options_activation_transform_alias_warns() -> None:
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        options = SaveOptions(activation_transform=transform)
+        options = CaptureOptions(activation_transform=transform)
 
     assert options.activation_transform is transform
     assert _deprecation_messages(records) == []
@@ -297,7 +297,7 @@ def test_streaming_options_group_supports_every_field(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
-            streaming=StorageOptions(**option_kwargs),
+            storage=StorageOptions(**option_kwargs),
         )
 
     assert captured[captured_key] == value

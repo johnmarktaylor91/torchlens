@@ -640,7 +640,7 @@ def test_stray_session_wrapper_never_breaks_a_later_capture(door: str) -> None:
             out = later_trace[later_trace.output_layers[0]].out.detach()
         else:
             out, _recording = tl.record(
-                later, _X, save=lambda ctx: True, halt=_watch, return_output=True
+                later, _X, save=lambda ctx: True, stop_after=_watch, return_output=True
             )
             assert "lin" in entered, "the registered child went unrecorded"
     assert torch.equal(out.detach(), expected)

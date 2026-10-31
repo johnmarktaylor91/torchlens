@@ -444,7 +444,7 @@ class TestModuleAccessorSummary:
         # (it stays None with no transform), so the single-pass-vs-multi-pass
         # None-guard assertions below are meaningful rather than trivially true.
         log = trace_fn(
-            model, input_2d, save=tl.options.SaveOptions(activation_transform=lambda x: x)
+            model, input_2d, capture=tl.options.CaptureOptions(activation_transform=lambda x: x)
         )
 
         # The whole table renders without raising.

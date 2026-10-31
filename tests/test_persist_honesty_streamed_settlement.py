@@ -68,7 +68,7 @@ def test_streamed_halted_capture_loads_halted(tmp_path):
     trace = tl.trace(
         model,
         torch.randn(2, 4),
-        halt=tl.func("linear"),
+        stop_after=tl.func("linear"),
         storage=tl.to_disk(str(path)),
     )
     assert trace.outcome.status is CaptureStatus.STOPPED

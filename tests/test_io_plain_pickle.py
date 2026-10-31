@@ -513,7 +513,7 @@ def test_plain_pickle_survives_a_lambda_activation_transform() -> None:
     log = trace_fn(
         _PlainPickleModel(),
         torch.ones(1, 3),
-        save=tl.options.SaveOptions(activation_transform=lambda t: t * 2),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t * 2),
     )
     restored = pickle.loads(pickle.dumps(log))
     assert restored.activation_transform is None

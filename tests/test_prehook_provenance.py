@@ -571,7 +571,12 @@ def test_record_to_trace_ram_and_disk_preserve_provenance(tmp_path: Path) -> Non
     ):
         model = _Nested()
         model.child.register_forward_pre_hook(lambda _m, args: (args[0] + 1,))
-        recording = tl.record(model, torch.ones(1), default_op=True, streaming=streaming)
+        recording = tl.record(
+            model,
+            torch.ones(1),
+            storage=streaming,
+            recording=tl.options.RecordingOptions(default_op=True),
+        )
         trace = recording.to_trace()
         assert torch.equal(_call(trace).inputs_after_pre_hooks.args[0], torch.tensor([2.0]))
 
@@ -721,7 +726,7 @@ def test_restoration_matrix_success_forward_error_halt_and_predicate_error() -> 
     assert _interposition_state(model) == before
     model.fail = False
 
-    tl.trace(model, torch.ones(1), halt=lambda ctx: ctx.kind == "op")
+    tl.trace(model, torch.ones(1), stop_after=lambda ctx: ctx.kind == "op")
     assert _interposition_state(model) == before
 
     with pytest.raises(PredicateError):

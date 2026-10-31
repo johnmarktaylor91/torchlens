@@ -43,7 +43,11 @@ def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
     """Capture a graph-connected model suitable for repeated RF probes."""
 
     capture = tl.options.CaptureOptions(backward_ready=True)
-    return tl.trace(model, inputs, capture=capture, save_mode="reference")
+    return tl.trace(
+        model,
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
 
 
 def test_positive_conv_is_contained_and_tight() -> None:

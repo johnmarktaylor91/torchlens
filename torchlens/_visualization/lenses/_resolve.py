@@ -553,7 +553,7 @@ def _debug_stage(trace: Trace, lens: LensPreset, build: _LensBuild) -> Nonfinite
                 "nonfinite status: NOT CHECKED -- no saved payloads to "
                 "examine; the debug lens renders without per-node status "
                 "motifs. Remedy: re-capture with saved payloads or "
-                "CaptureOptions(track_nonfinite=True).",
+                "CaptureOptions(on_nonfinite='track').",
                 code="lens_nonfinite_not_checked",
             ),
             stacklevel=3,

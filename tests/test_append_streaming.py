@@ -86,7 +86,7 @@ def test_append_rerun_on_callback_streaming_trace_raises() -> None:
         model,
         torch.randn(1, 3),
         capture=CaptureOptions(layers_to_save="all", intervention_ready=True),
-        streaming=StorageOptions(on_save=_sink),
+        storage=StorageOptions(on_save=_sink),
     )
 
     assert received

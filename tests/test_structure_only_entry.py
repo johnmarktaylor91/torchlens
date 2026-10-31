@@ -120,7 +120,7 @@ def test_raise_on_nan_conflicts_at_entry() -> None:
         tl.trace(
             TwoLayer(),
             torch.randn(2, 4),
-            capture=CaptureOptions(structure_only=True, raise_on_nan=True),
+            capture=CaptureOptions(structure_only=True, on_nonfinite="raise"),
         )
     assert excinfo.value.fields["code"] == "structure_only_option_conflict"
     assert "raise_on_nan" in excinfo.value.fields["arguments"]

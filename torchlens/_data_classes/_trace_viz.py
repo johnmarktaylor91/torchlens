@@ -440,7 +440,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         DOCUMENTED-UNSTABLE spelling (pending naming-session ratification; no
         deprecation shim owed on rename). This is the queryable per-op record:
-        when this capture ran with ``CaptureOptions(track_nonfinite=True)`` it
+        when this capture ran with ``CaptureOptions(on_nonfinite='track')`` it
         serves the capture-time verdicts (covering ops that retained no
         payload); otherwise it derives the answer from the memoized
         saved-payload scan already backing ``print(trace)``, at zero

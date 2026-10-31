@@ -137,7 +137,11 @@ def test_sampled_generation_records_its_seed_and_reproduces() -> None:
     plain = model.generate(PROMPT, **settings)
 
     generation = tl.record(
-        model, PROMPT, save=tl.module("transformer.ln_f"), generate_kwargs=settings, seed=7
+        model,
+        PROMPT,
+        save=tl.module("transformer.ln_f"),
+        generate_kwargs=settings,
+        capture=tl.options.CaptureOptions(seed=7),
     )
 
     assert torch.equal(generation.sequences, plain)

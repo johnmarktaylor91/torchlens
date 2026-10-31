@@ -88,8 +88,7 @@ class TestAccessor:
         trace = tl.trace(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         before = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"
@@ -135,8 +134,7 @@ class TestSuppression:
         trace = tl.trace(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         assert trace.num_backward_passes == 0
         trace.log_backward(trace["output_1"].out.sum(), retain_graph=True)
@@ -304,8 +302,7 @@ class TestReadCore:
         trace = tl.trace(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         first = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"

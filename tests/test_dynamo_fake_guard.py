@@ -223,7 +223,7 @@ def test_fake_tensor_keyword_input_refuses() -> None:
             return x if bias is None else x + bias
 
     with pytest.raises(UnsupportedTensorVariantError) as excinfo:
-        tl.trace(TakesKwarg(), torch.randn(2, 4), {"bias": fake_x})
+        tl.trace(TakesKwarg(), torch.randn(2, 4), input_kwargs={"bias": fake_x})
     assert "keyword input" in str(excinfo.value)
 
 

@@ -492,9 +492,9 @@ def pluck(
         Layer label, module path, pass-qualified label, or unique substring.
         Resolves strictly to one result; ambiguous lookups raise ``ValueError``.
     stop_after:
-        Stop-early site, passed to the capture as
-        ``CaptureOptions(stop_after=...)``: the forward halts inclusively after
-        the site, and an unsupported spelling refuses typed. ``None`` reads the
+        Stop-early site or predicate, passed to the capture as
+        ``trace(stop_after=...)``: the forward halts inclusively after the
+        site, and an unsupported spelling refuses typed. ``None`` reads the
         ambient ``tl.experimental.stop_after`` site, if one is active.
 
     Returns
@@ -510,14 +510,10 @@ def pluck(
 
     from .options import CaptureOptions
 
-    # an explicit site rides the capture options, where the trace
+    # an explicit site rides the door's stop_after=, where the trace
     # validates it; without one the trace reads the ambient site itself.
-    capture = (
-        CaptureOptions(layers_to_save=[layer])
-        if stop_after is None
-        else CaptureOptions(layers_to_save=[layer], stop_after=stop_after)
-    )
-    trace = _resolve_top_level("trace")(model, inputs, capture=capture)
+    capture = CaptureOptions(layers_to_save=[layer])
+    trace = _resolve_top_level("trace")(model, inputs, capture=capture, stop_after=stop_after)
     return _out_from_log(trace, layer)
 
 

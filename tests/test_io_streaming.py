@@ -155,7 +155,7 @@ def test_step_19_finalizes_bundle_and_keeps_outs_in_memory(tmp_path: Path) -> No
         model,
         inputs,
         capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
     )
 
     saved_layers = _saved_layers(trace)
@@ -181,7 +181,7 @@ def test_step_20_evicts_streamed_outs_when_requested(tmp_path: Path) -> None:
         model,
         inputs,
         capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
     )
 
     saved_layers = _saved_layers(trace)
@@ -206,8 +206,9 @@ def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> N
         trace_fn(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
-            save=tl.options.SaveOptions(activation_transform=_raise_on_out),
+            capture=tl.options.CaptureOptions(
+                layers_to_save="all", activation_transform=_raise_on_out
+            ),
             streaming=tl.options.StorageOptions(path=bundle_path),
         )
 
@@ -227,9 +228,9 @@ def test_streaming_rejects_non_tensor_activation_transform_output(tmp_path: Path
         trace_fn(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
-            save=tl.options.SaveOptions(
-                activation_transform=lambda tensor: tensor.detach().cpu().numpy()
+            capture=tl.options.CaptureOptions(
+                layers_to_save="all",
+                activation_transform=lambda tensor: tensor.detach().cpu().numpy(),
             ),
             streaming=tl.options.StorageOptions(path=bundle_path),
         )
@@ -249,8 +250,9 @@ def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
         trace_fn(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
-            save=tl.options.SaveOptions(activation_transform=lambda tensor: tensor.to_sparse()),
+            capture=tl.options.CaptureOptions(
+                layers_to_save="all", activation_transform=lambda tensor: tensor.to_sparse()
+            ),
             streaming=tl.options.StorageOptions(path=bundle_path),
         )
 
@@ -417,7 +419,7 @@ def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(
         model,
         inputs,
         capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StorageOptions(on_save=_sink),
+        storage=tl.options.StorageOptions(on_save=_sink),
     )
     capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output]
 
@@ -469,7 +471,7 @@ def test_selective_out_sink_still_works() -> None:
         model,
         inputs,
         capture=tl.options.CaptureOptions(layers_to_save="linear"),
-        streaming=tl.options.StorageOptions(on_save=_sink),
+        storage=tl.options.StorageOptions(on_save=_sink),
     )
 
     capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output]
@@ -508,7 +510,7 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
         model,
         inputs,
         capture=tl.options.CaptureOptions(layers_to_save="all"),
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
     )
 
     first_saved_layer = _saved_layers(trace)[0]

@@ -28,7 +28,7 @@ def _trace(model: nn.Module, inputs: torch.Tensor, **kwargs: object) -> tl.Trace
     """
 
     return tl.trace(
-        model, inputs, **kwargs, save=tl.options.SaveOptions(save_raw_activations=False)
+        model, inputs, **kwargs, capture=tl.options.CaptureOptions(save_raw_activations=False)
     )
 
 

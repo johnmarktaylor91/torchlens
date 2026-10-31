@@ -138,7 +138,7 @@ def r0_capture(request: pytest.FixtureRequest, r0_capture_cache: dict) -> Any:
                 model = spec.build(impl)
                 input_args = spec.input_args()
                 input_kwargs = spec.input_kwargs()
-                trace = tl.trace(model, input_args, input_kwargs)
+                trace = tl.trace(model, input_args, input_kwargs=input_kwargs)
             r0_capture_cache[key] = R0Capture(
                 spec=spec,
                 impl=impl,

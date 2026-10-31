@@ -252,8 +252,7 @@ def test_show_gradient_retain_graph_supports_repeated_probes() -> None:
     armed = tl.trace(
         _Small().eval(),
         torch.randn(1, 1, 12, 12, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     op = armed["relu_1_2"]
     unit = op.receptive_field.center_unit(batch_index=0)

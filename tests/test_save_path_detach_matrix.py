@@ -258,7 +258,12 @@ def test_record_knob_returns_attached_payloads_on_request() -> None:
     default = [record.ram_payload for record in tl.record(model, x, save=tl.module(_SITE))]
     attached = [
         record.ram_payload
-        for record in tl.record(model, x, save=tl.module(_SITE), detach_saved_activations=False)
+        for record in tl.record(
+            model,
+            x,
+            save=tl.module(_SITE),
+            capture=tl.options.CaptureOptions(detach_saved_activations=False),
+        )
     ]
 
     assert default and all(payload.grad_fn is None for payload in default)
@@ -275,7 +280,6 @@ def test_record_knob_refuses_detaching_a_backward_ready_record() -> None:
             _model(),
             _inputs(5),
             save=tl.module(_SITE),
-            backward_ready=True,
-            detach_saved_activations=True,
+            capture=tl.options.CaptureOptions(backward_ready=True, detach_saved_activations=True),
         )
     assert refused.value.fields["code"] == "backward_ready_conflict"

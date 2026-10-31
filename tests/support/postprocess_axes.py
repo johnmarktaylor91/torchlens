@@ -245,8 +245,7 @@ def _axis_backward_armed() -> Any:
     return tl.trace(
         model,
         model_input.requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
 
 
@@ -311,7 +310,7 @@ def _axis_transform() -> Any:
     return tl.trace(
         model,
         model_input,
-        save=tl.options.SaveOptions(activation_transform=lambda t: t.detach().float() * 1.0),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t.detach().float() * 1.0),
     )
 
 
@@ -399,16 +398,17 @@ def _axis_lookback(tmp_dir: str, *, streaming: bool, transform: bool) -> Any:
     if streaming:
         kwargs["storage"] = tl.to_disk(Path(tmp_dir) / "lookback.tlspec")
     if transform:
-        # save= carries either the predicate or the SaveOptions bundle, so the
+        # capture= carries the activation transform (save= is the predicate), so the
         # relu selection moves to capture.layers_to_save when a transform rides.
-        kwargs["save"] = tl.options.SaveOptions(activation_transform=lambda t: t.detach() * 1.0)
+        kwargs["capture"] = tl.options.CaptureOptions(
+            activation_transform=lambda t: t.detach() * 1.0
+        )
         kwargs["capture"] = tl.options.CaptureOptions(layers_to_save=tl.func("relu"))
     return tl.trace(
         model,
         model_input,
-        lookback=2,
-        lookback_payload_policy="detached_raw",
         **kwargs,
+        capture=tl.options.CaptureOptions(lookback=2, lookback_payload_policy="detached_raw"),
     )
 
 
@@ -429,14 +429,14 @@ def _axis_transform_streaming(tmp_dir: str) -> Any:
         model,
         model_input,
         storage=tl.to_disk(Path(tmp_dir) / "transform.tlspec"),
-        save=tl.options.SaveOptions(activation_transform=lambda t: t.detach() * 1.0),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t.detach() * 1.0),
     )
 
 
 def _axis_halted() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    return tl.trace(model, model_input, halt=tl.func("relu"))
+    return tl.trace(model, model_input, stop_after=tl.func("relu"))
 
 
 def _axis_cooked_recording() -> Any:
@@ -449,7 +449,7 @@ def _axis_cooked_recording() -> Any:
 def _axis_cooked_recording_halted() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    recording = tl.record(model, model_input, save=tl.func("relu"), halt=tl.func("relu"))
+    recording = tl.record(model, model_input, save=tl.func("relu"), stop_after=tl.func("relu"))
     return recording.to_trace()
 
 

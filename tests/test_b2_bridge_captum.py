@@ -161,7 +161,7 @@ def test_keyword_only_input_refuses_instead_of_dropping_it() -> None:
     log = tl.trace(
         model,
         (torch.randn(2, 3),),
-        {"b": torch.randn(2, 3)},
+        input_kwargs={"b": torch.randn(2, 3)},
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     with pytest.raises(InvalidArgumentError) as info:

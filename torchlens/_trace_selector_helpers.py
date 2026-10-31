@@ -14,7 +14,7 @@ from ._capture.arg_positions import _normalize_func_name
 from ._errors import ArgumentTypeError
 from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
 from .intervention.selectors import BaseSelector
-from .options import SaveOptions
+from .options import _SaveTransforms
 from .recording.options import PredicateFn
 from .recording.types import RecordContext
 
@@ -23,8 +23,8 @@ if TYPE_CHECKING:
 
 
 def _split_save_options_and_predicate(
-    save_value: SaveOptions | PredicateFn | BaseSelector | None,
-) -> tuple[SaveOptions | None, PredicateFn | None]:
+    save_value: _SaveTransforms | PredicateFn | BaseSelector | None,
+) -> tuple[_SaveTransforms | None, PredicateFn | None]:
     """Separate grouped save options from ``trace(save=predicate)`` sugar.
 
     Parameters
@@ -34,13 +34,13 @@ def _split_save_options_and_predicate(
 
     Returns
     -------
-    tuple[SaveOptions | None, PredicateFn | None]
+    tuple[_SaveTransforms | None, PredicateFn | None]
         Grouped save options and optional selective-save predicate.
     """
 
     if save_value is None:
         return None, None
-    if isinstance(save_value, SaveOptions):
+    if isinstance(save_value, _SaveTransforms):
         return save_value, None
     from .intervention._facet_save import _facet_save_predicate
     from .intervention.selectors import FacetSelector
@@ -55,13 +55,13 @@ def _split_save_options_and_predicate(
     if callable(save_value):
         return None, cast(PredicateFn, save_value)
     raise ArgumentTypeError(
-        f"save must be a layer list or string, SaveOptions instance, predicate callable, "
+        f"save must be a layer list or string, predicate callable, "
         f"selector, or None; "
         f"received {type(save_value).__name__}",
         code="save_predicate_type_invalid",
         remedy=(
             "pass a list of layer names or module addresses such as save=['layer1'], "
-            "a selector such as save=tl.func('relu'), save='all', or a SaveOptions instance"
+            "a selector such as save=tl.func('relu'), save='all', or a a reduce-only save"
         ),
         argument="save",
         received_type=type(save_value).__name__,
@@ -102,7 +102,7 @@ def _route_save_label_selection(
     The list form documented on ``tl.trace`` (layer names, pass-qualified labels,
     module addresses, integer indexes, substrings, ``'all'``/``'none'``) selects
     exactly what ``capture=CaptureOptions(layers_to_save=...)`` selects;
-    ``save='stats'`` becomes the reduce-and-discard ``SaveOptions``.
+    ``save='stats'`` becomes the reduce-and-discard ``_SaveTransforms``.
 
     Parameters
     ----------
@@ -118,7 +118,7 @@ def _route_save_label_selection(
     Returns
     -------
     tuple[Any, CaptureOptions]
-        ``(save value left for predicate/SaveOptions splitting, capture options)``.
+        ``(save value left for predicate/_SaveTransforms splitting, capture options)``.
 
     Raises
     ------

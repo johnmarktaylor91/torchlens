@@ -60,7 +60,7 @@ def test_grouping_entry_refusals() -> None:
         (None, "grouping_invalid"),
     ):
         with pytest.raises(InvalidArgumentError) as excinfo:
-            tl.trace(model, torch.randn(1, 4), grouping=value)
+            tl.trace(model, torch.randn(1, 4), capture=tl.options.CaptureOptions(grouping=value))
         assert excinfo.value.fields["code"] == code
 
 

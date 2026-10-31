@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Literal, TypeVar, cast
@@ -24,6 +24,7 @@ from ._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
     FoldRepeatsLiteral,
+    OnNonfiniteLiteral,
     OutputDeviceLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -51,6 +52,7 @@ from ._options_validation import (
     _validate_visualization_flag_fields,
 )
 from ._save_budget import SaveBudgetOption
+from ._utils.tensor_utils import SaveMode
 from ._vocab.node_spec import NodeSpec
 
 if TYPE_CHECKING:
@@ -99,7 +101,6 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "cache",
     "cache_dir",
     "module_filter",
-    "stop_after",
     "jax_control_flow",
     "jax_max_control_flow_unroll",
     "module_identity_mode",
@@ -109,12 +110,23 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "measure_python_peak_memory",
     "save_budget",
     "distributed_witness",
-    "raise_on_nan",
-    "track_nonfinite",
+    "on_nonfinite",
     "track_device_memory",
     "structure_only",
     "log_injections",
     "measure_host_peak_memory",
+    "activation_transform",
+    "grad_transform",
+    "save_raw_activations",
+    "save_raw_grads",
+    "save_mode",
+    "reconstruction_ready",
+    "lookback",
+    "lookback_payload_policy",
+    "grouping",
+    "jax_static_argnums",
+    "grad_options",
+    "chunk_size",
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "activation_transform",
@@ -219,14 +231,25 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "cache": "cache",
     "cache_dir": "cache_dir",
     "module_filter": "module_filter",
-    "stop_after": "stop_after",
     "jax_control_flow": "jax_control_flow",
     "jax_max_control_flow_unroll": "jax_max_control_flow_unroll",
     "module_identity_mode": "module_identity_mode",
     "payload_policy": "payload_policy",
     "save_preview": "save_preview",
-    "raise_on_nan": "raise_on_nan",
+    "on_nonfinite": "on_nonfinite",
     "structure_only": "structure_only",
+    "activation_transform": "activation_transform",
+    "grad_transform": "grad_transform",
+    "save_raw_activations": "save_raw_activations",
+    "save_raw_grads": "save_raw_grads",
+    "save_mode": "save_mode",
+    "reconstruction_ready": "reconstruction_ready",
+    "lookback": "lookback",
+    "lookback_payload_policy": "lookback_payload_policy",
+    "grouping": "grouping",
+    "jax_static_argnums": "jax_static_argnums",
+    "grad_options": "grad_options",
+    "chunk_size": "chunk_size",
 }
 _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "activation_transform": "activation_transform",
@@ -485,21 +508,6 @@ class CaptureOptions:
             ZERO payloads. Returning ``False`` keeps metadata but skips payload
             saving; a capture whose every selected payload was suppressed by
             this gate emits a ``module_filter_zero_saved`` warning.
-        stop_after:
-            Inclusive stop-early site for torch captures (DOCUMENTED-UNSTABLE
-            spelling): capture halts immediately AFTER the named site is
-            captured, returning a partial halted trace that includes it. The
-            site compiles into the halt engine on emission identity: a string
-            halts at the first emission whose module address
-            (``"encoder.layer.4"``, at that module's exit boundary) or function
-            name (``"relu"``) matches, a live selector (``tl.func("relu")``,
-            ``tl.module(...)``) halts at its first match, and a callable
-            predicate halts when it returns True. Finalized postprocess labels
-            (``"relu_1_2"``) do not exist during capture and refuse typed
-            (``stop_after_site_not_live``). A selector-shaped site that never
-            fires refuses typed (``stop_after_never_fired``); a callable that
-            never fires warns. Cannot combine with ``halt=``
-            (``stop_after_halt_conflict``) or ``chunk_size``. Torch-only.
         jax_control_flow:
             Declared JAX control-flow policy. Backends other than torch reject
             explicit use until their implementation phase supports it.
@@ -565,14 +573,18 @@ class CaptureOptions:
             Devices whose headroom cannot be measured are left unbudgeted and
             emit a ``UserWarning`` on their first non-empty charge; use an absolute byte
             cap to enforce those devices.
-        raise_on_nan:
-            Whether capture should stop at the first NaN or Inf tensor.
-        track_nonfinite:
-            Whether torch capture records a per-op finiteness verdict
-            (DOCUMENTED-UNSTABLE), served by ``Trace.nonfinite_ops`` /
+        on_nonfinite:
+            Non-finite (NaN or Inf) policy for torch captures. ``"ignore"``
+            (the default) neither checks nor records. ``"track"`` records a
+            per-op finiteness verdict, served by ``Trace.nonfinite_ops`` /
             ``Trace.nonfinite_coverage``; covers unsaved ops, never changes
-            control flow, reads device flags in one post-forward batch. A
-            session-time knob. Doc: ``docs/reference/capture_outcomes.md``.
+            control flow, reads device flags in one post-forward batch (a
+            session-time knob; doc: ``docs/reference/capture_outcomes.md``).
+            ``"warn"`` tracks the same way and, once per capture, warns
+            ``capture_nonfinite_detected`` naming the first non-finite op when
+            any op produced one. ``"raise"`` stops the capture at the first
+            non-finite tensor and raises. Cannot combine with
+            ``structure_only=True`` except as ``"ignore"``.
         track_device_memory:
             Whether torch capture samples device allocator counters around each op call, served by
             ``torchlens._observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
@@ -599,6 +611,39 @@ class CaptureOptions:
             ``ru_maxrss`` readings and cannot be undone, so it is opt-in. The default
             ``False`` writes nothing: CPU peaks read ``None`` with a reason naming this
             option. CUDA peaks and the MPS allocator delta ignore it.
+        activation_transform:
+            Optional transform applied to each saved activation before storage
+            (``torchlens.UserTransformError`` on a transform failure).
+        grad_transform:
+            Optional transform applied to each saved gradient before storage.
+        save_raw_activations:
+            Whether raw activations remain available when transformed.
+        save_raw_grads:
+            Whether raw gradients remain available when transformed.
+        save_mode:
+            Tensor save policy: ``"copy"`` (the safe cloning default),
+            ``"reference"`` (keep the live tensor), ``"view"`` or
+            ``"cpu_async"``.
+        reconstruction_ready:
+            Whether the capture keeps what tensor reconstruction needs.
+        lookback:
+            Number of preceding ops kept in the live predicate window
+            (``tl.followed_by`` / ``tl.preceded_by`` reach); ``0`` disables it.
+        lookback_payload_policy:
+            What the lookback window retains: ``"metadata_only"`` (the default)
+            or a payload-retaining policy.
+        grouping:
+            Postprocess grouping knob (UNSTABLE, closed vocabulary); only
+            ``"structural"`` (the default) is entry-legal today.
+        jax_static_argnums:
+            Static argument positions for ``jax.make_jaxpr`` when
+            ``backend="jax"``; refused on other backends.
+        grad_options:
+            Backend gradient options (``jax``, ``mlx``, ``tinygrad``,
+            ``paddle`` and ``tf`` only); refused on torch.
+        chunk_size:
+            Chunked-forward batch size; ``None`` runs one forward. Cannot
+            combine with ``stop_after=``.
 
         Examples
         --------
@@ -642,7 +687,6 @@ class CaptureOptions:
     cache: bool = False
     cache_dir: str | Path | None = None
     module_filter: Callable[[Any], bool] | None = None
-    stop_after: Any | None = None
     jax_control_flow: Literal["reject", "unroll", "region"] = "unroll"
     jax_max_control_flow_unroll: int = 64
     module_identity_mode: str | None = None
@@ -652,12 +696,23 @@ class CaptureOptions:
     measure_python_peak_memory: bool = False
     save_budget: SaveBudgetOption = "auto"
     distributed_witness: str = "none"
-    raise_on_nan: bool = False
-    track_nonfinite: bool = False
+    on_nonfinite: OnNonfiniteLiteral = "ignore"
     track_device_memory: bool = False
     structure_only: bool = False
     log_injections: bool = False
     measure_host_peak_memory: bool = False
+    activation_transform: _ActivationPostfunc | None = None
+    grad_transform: _GradientPostfunc | None = None
+    save_raw_activations: bool = True
+    save_raw_grads: bool = True
+    save_mode: SaveMode = "copy"
+    reconstruction_ready: bool = False
+    lookback: int = 0
+    lookback_payload_policy: str = "metadata_only"
+    grouping: str = "structural"
+    jax_static_argnums: int | Sequence[int] | None = None
+    grad_options: Any | None = None
+    chunk_size: int | None = None
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -697,7 +752,6 @@ class CaptureOptions:
         cache: bool | MissingType = MISSING,
         cache_dir: str | Path | None | MissingType = MISSING,
         module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
-        stop_after: Any | None | MissingType = MISSING,
         jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
         jax_max_control_flow_unroll: int | MissingType = MISSING,
         module_identity_mode: str | None | MissingType = MISSING,
@@ -707,13 +761,24 @@ class CaptureOptions:
         measure_python_peak_memory: bool | MissingType = MISSING,
         save_budget: SaveBudgetOption | MissingType = MISSING,
         distributed_witness: str | MissingType = MISSING,
-        raise_on_nan: bool | MissingType = MISSING,
+        on_nonfinite: OnNonfiniteLiteral | MissingType = MISSING,
         *,
-        track_nonfinite: bool | MissingType = MISSING,
         track_device_memory: bool | MissingType = MISSING,
         structure_only: bool | MissingType = MISSING,
         log_injections: bool | MissingType = MISSING,
         measure_host_peak_memory: bool | MissingType = MISSING,
+        activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
+        grad_transform: _GradientPostfunc | None | MissingType = MISSING,
+        save_raw_activations: bool | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
+        save_mode: SaveMode | MissingType = MISSING,
+        reconstruction_ready: bool | MissingType = MISSING,
+        lookback: int | MissingType = MISSING,
+        lookback_payload_policy: str | MissingType = MISSING,
+        grouping: str | MissingType = MISSING,
+        jax_static_argnums: int | Sequence[int] | None | MissingType = MISSING,
+        grad_options: Any | None | MissingType = MISSING,
+        chunk_size: int | None | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
@@ -813,7 +878,6 @@ class CaptureOptions:
             "module_filter": _resolve_option_value(
                 "module_filter", module_filter, None, specified_fields
             ),
-            "stop_after": _resolve_option_value("stop_after", stop_after, None, specified_fields),
             "jax_control_flow": _resolve_option_value(
                 "jax_control_flow", jax_control_flow, "unroll", specified_fields
             ),
@@ -851,11 +915,8 @@ class CaptureOptions:
                 "none",
                 specified_fields,
             ),
-            "raise_on_nan": _resolve_option_value(
-                "raise_on_nan", raise_on_nan, False, specified_fields
-            ),
-            "track_nonfinite": _resolve_option_value(
-                "track_nonfinite", track_nonfinite, False, specified_fields
+            "on_nonfinite": _resolve_option_value(
+                "on_nonfinite", on_nonfinite, "ignore", specified_fields
             ),
             "track_device_memory": _resolve_option_value(
                 "track_device_memory", track_device_memory, False, specified_fields
@@ -869,6 +930,37 @@ class CaptureOptions:
             "measure_host_peak_memory": _resolve_option_value(
                 "measure_host_peak_memory", measure_host_peak_memory, False, specified_fields
             ),
+            "activation_transform": _resolve_option_value(
+                "activation_transform", activation_transform, None, specified_fields
+            ),
+            "grad_transform": _resolve_option_value(
+                "grad_transform", grad_transform, None, specified_fields
+            ),
+            "save_raw_activations": _resolve_option_value(
+                "save_raw_activations", save_raw_activations, True, specified_fields
+            ),
+            "save_raw_grads": _resolve_option_value(
+                "save_raw_grads", save_raw_grads, True, specified_fields
+            ),
+            "save_mode": _resolve_option_value("save_mode", save_mode, "copy", specified_fields),
+            "reconstruction_ready": _resolve_option_value(
+                "reconstruction_ready", reconstruction_ready, False, specified_fields
+            ),
+            "lookback": _resolve_option_value("lookback", lookback, 0, specified_fields),
+            "lookback_payload_policy": _resolve_option_value(
+                "lookback_payload_policy",
+                lookback_payload_policy,
+                "metadata_only",
+                specified_fields,
+            ),
+            "grouping": _resolve_option_value("grouping", grouping, "structural", specified_fields),
+            "jax_static_argnums": _resolve_option_value(
+                "jax_static_argnums", jax_static_argnums, None, specified_fields
+            ),
+            "grad_options": _resolve_option_value(
+                "grad_options", grad_options, None, specified_fields
+            ),
+            "chunk_size": _resolve_option_value("chunk_size", chunk_size, None, specified_fields),
         }
         _validate_capture_values(values)
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
@@ -904,8 +996,11 @@ class CaptureOptions:
 
 
 @dataclass(frozen=True, init=False)
-class SaveOptions:
-    """Grouped out-save options for ``trace``.
+class _SaveTransforms:
+    """Internal carrier of the save-transform fields of :class:`CaptureOptions`.
+
+    Built by :func:`_save_transforms_from_capture`; not a public option
+    class (``tl.options.SaveOptions`` was folded into ``CaptureOptions``).
 
     Parameters
     ----------
@@ -920,7 +1015,7 @@ class SaveOptions:
 
     Examples
     --------
-    >>> opts = SaveOptions(activation_transform=lambda x: x.detach())
+    >>> opts = _SaveTransforms(activation_transform=lambda x: x.detach())
     >>> opts.save_raw_activations
     True
     """
@@ -971,7 +1066,7 @@ class SaveOptions:
     @classmethod
     def from_values(
         cls, values: Mapping[str, Any], specified_fields: frozenset[str]
-    ) -> SaveOptions:
+    ) -> _SaveTransforms:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
@@ -1665,21 +1760,14 @@ def merge_capture_options(
     )
 
 
-def merge_save_options(*, save: SaveOptions | None, **flat_values: Any) -> SaveOptions:
-    """Merge individual save kwargs into a grouped options object."""
+def _save_transforms_from_capture(capture: CaptureOptions) -> _SaveTransforms:
+    """Return the save-transform carrier for a merged ``CaptureOptions``."""
 
-    return cast(
-        SaveOptions,
-        _merge_grouped_options(
-            option=save,
-            option_factory=SaveOptions,
-            flat_to_group=_SAVE_FLAT_TO_GROUP,
-            flat_values=flat_values,
-            group_name="save",
-            conflict_message=(
-                "conflicting save options: pass either SaveOptions or individual kwargs, not both"
-            ),
-        ),
+    return _SaveTransforms(
+        activation_transform=capture.activation_transform,
+        grad_transform=capture.grad_transform,
+        save_raw_activations=capture.save_raw_activations,
+        save_raw_grads=capture.save_raw_grads,
     )
 
 
@@ -1877,7 +1965,6 @@ __all__ = [
     "EpisodeOptions",
     "InterventionOptions",
     "ReplayOptions",
-    "SaveOptions",
     "StorageOptions",
     "VisualizationOptions",
     "suppress_mutate_warnings",

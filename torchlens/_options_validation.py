@@ -265,6 +265,10 @@ def _validate_output_device(output_device: Any) -> None:
         )
 
 
+#: The closed ``on_nonfinite`` vocabulary (``"ignore"`` is the default).
+ON_NONFINITE_MODES: tuple[str, ...] = ("ignore", "track", "warn", "raise")
+
+
 def _validate_capture_values(values: Mapping[str, Any]) -> None:
     """Validate resolved capture field values.
 
@@ -325,16 +329,16 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
             remedy="set distributed_witness to 'digest' for byte-exact witness digests",
             argument="distributed_witness",
         )
-    if not isinstance(values["raise_on_nan"], bool):
-        # a falsy non-bool (0.0, None, "") silently disabled the NaN
-        # tripwire; only a real boolean selects the behaviour.
-        raise ArgumentTypeError(
-            f"Capture option raise_on_nan must be a bool, got "
-            f"{type(values['raise_on_nan']).__name__} {values['raise_on_nan']!r}",
-            code="raise_on_nan_type_invalid",
-            remedy="pass raise_on_nan=True or raise_on_nan=False",
-            argument="raise_on_nan",
-            received_type=type(values["raise_on_nan"]).__name__,
+    if values["on_nonfinite"] not in ON_NONFINITE_MODES:
+        # One closed vocabulary selects the NaN/Inf policy; a bool or a
+        # misspelling never silently falls back to "ignore".
+        raise InvalidArgumentError(
+            f"Capture option on_nonfinite must be one of "
+            f"{', '.join(repr(mode) for mode in ON_NONFINITE_MODES)}, got "
+            f"{values['on_nonfinite']!r}",
+            code="on_nonfinite_invalid",
+            remedy="pass on_nonfinite='ignore', 'track', 'warn' or 'raise'",
+            argument="on_nonfinite",
         )
     if not isinstance(values["structure_only"], bool):
         raise ArgumentTypeError(

@@ -2,7 +2,7 @@
 
 Before, ``pluck`` validated nothing and discarded the argument: the forward
 always ran to the end and a bad spelling was silently ignored. The site now
-rides ``CaptureOptions(stop_after=...)``, so the forward halts after it and an
+rides ``trace(stop_after=...)``, so the forward halts after it and an
 unsupported spelling refuses typed through the trace's own check.
 """
 

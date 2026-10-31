@@ -1810,7 +1810,9 @@ def test_trace_save_arg_values(default_input1):
 def test_trace_activation_transform(default_input1):
     """Test activation_transform applies to saved tensors."""
     model = example_models.SimpleFF()
-    mh = trace(model, default_input1, save=tl.options.SaveOptions(activation_transform=torch.mean))
+    mh = trace(
+        model, default_input1, capture=tl.options.CaptureOptions(activation_transform=torch.mean)
+    )
     # All saved tensors should be scalar (mean reduces to scalar)
     for label in mh.layer_labels:
         entry = mh[label]

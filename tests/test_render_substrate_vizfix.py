@@ -91,7 +91,7 @@ def test_capture_basis_still_checks_inference_tensors() -> None:
         log = tl.trace(
             _NaNModel(),
             x,
-            capture=tl.options.CaptureOptions(track_nonfinite=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="track"),
         )
     assert any("truediv" in label for label in log.nonfinite_ops)
     coverage = log.nonfinite_coverage

@@ -195,8 +195,7 @@ def test_root_agent_receptive_gradient_and_overlay_run() -> None:
     trace = tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     target = trace.find_sites(tl.func("conv2d")).first()
     unit = target.receptive_field.center_unit(batch_index=0)

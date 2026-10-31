@@ -294,8 +294,7 @@ _BATTERY: tuple[tuple[str, Callable[[], tuple[nn.Module, Any]], Callable[..., An
             m,
             x,
             save=tl.func("linear") & tl.followed_by(tl.func("tanh")),
-            lookback=4,
-            lookback_payload_policy="detached_raw",
+            capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
         ),
     ),
     (
