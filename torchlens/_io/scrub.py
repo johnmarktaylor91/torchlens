@@ -1197,7 +1197,7 @@ def _scrub_value(
         # B8-20: a functools.partial repr embeds its bound argument VALUES, so the
         # scrubbed persistence repr redacts them.
         scrubbed_state["_activation_transform_repr"] = _scrubbed_transform_repr(
-            value.activation_transform
+            value._options_activation_transform
         )
         # P7/R10: a capture TorchLens itself refused to bless must not round-trip
         # into "no claim". The NEGATIVE disclosure persists as a string-only row

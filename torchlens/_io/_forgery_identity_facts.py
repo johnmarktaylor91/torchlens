@@ -220,13 +220,13 @@ def _validate_peak_memory_reason(trace: Trace, which: str, *, code: str) -> None
     refusal code for the forward or the backward peak.
     """
 
-    reason_value = getattr(trace, f"{which}_peak_memory_reason", None)
+    reason_value = getattr(trace, f"_cost_{which}_peak_memory_reason", None)
     if reason_value is None:
         return
     reason = None
     if not isinstance(reason_value, str) or not reason_value:
         reason = "not_a_string"
-    elif getattr(trace, f"{which}_peak_memory", None) is not None:
+    elif getattr(trace, f"_cost_{which}_peak_memory", None) is not None:
         reason = "reason_beside_a_value"
     if reason is not None:
         _refuse_identity(

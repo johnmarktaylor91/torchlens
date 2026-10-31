@@ -317,7 +317,7 @@ def _chunked_rerun(
             output_transform=output_transform,
         )
     result.append_history = [initial_record, *result.append_history]
-    result.chunked_forward = True
+    result._options_chunk_size = True
     result.last_run = dict(result.last_run or {})
     result.last_run["chunk_size"] = chunk_size
     result.last_run["chunk_paths"] = normalize_chunk_paths(chunk_paths)

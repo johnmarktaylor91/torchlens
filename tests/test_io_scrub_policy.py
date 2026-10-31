@@ -402,7 +402,6 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     out.mkdir(exist_ok=True)
     return {
         "summary": lambda t: t.summary(),
-        "provenance": lambda t: t.provenance.summary(),
         "profile": lambda t: t.profile(),
         "to_pandas": lambda t: t.to_pandas(),
         # Plain draw AND an encoding-channel draw: the channel path is the

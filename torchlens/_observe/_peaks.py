@@ -77,13 +77,13 @@ def pass_peak_facts(trace: Any, which: str = "forward") -> PassPeakFacts:
         Backend-checked facts; renderers never read the raw fields directly.
     """
 
-    backend = getattr(trace, f"{which}_memory_backend", None)
-    peak = getattr(trace, f"{which}_peak_memory", None)
+    backend = getattr(trace, f"_provenance_{which}_memory_backend", None)
+    peak = getattr(trace, f"_cost_{which}_peak_memory", None)
     if not backend or backend == "unknown" or peak is None:
         # a CPU peak that was not requested or read 0 is recorded
         # as None WITH the reason naming the opt-in; surface it verbatim.
         # The reason explains a CPU measurement only, never an unknown backend.
-        reason = getattr(trace, f"{which}_peak_memory_reason", None)
+        reason = getattr(trace, f"_cost_{which}_peak_memory_reason", None)
         explained = backend == "cpu" and isinstance(reason, str) and bool(reason)
         return PassPeakFacts(
             which=which,
