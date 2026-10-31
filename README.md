@@ -46,7 +46,7 @@ Every verb climbs the same three-rung **input ladder** ([full guide](docs/quicks
 ```python
 # API sketch; `model` is your model and `lm` any HuggingFace language model.
 log = tl.trace(model, x)                             # best: your real input
-log = tl.trace(model, input_size=(1, 3, 224, 224))   # your shape, random values; disclosed
+log = tl.trace(model, input_shape=(1, 3, 224, 224))   # your shape, random values; disclosed
 log = tl.trace(model)                                # inferred shape + random values; disclosed, or a teach
 log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a real input
 ```
