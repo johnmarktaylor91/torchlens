@@ -143,7 +143,8 @@ def _after_halt(cell: Cell) -> None:
     plain = cell.facts.func_names
     cell.expect(
         0 < len(got) < len(plain) and plain[: len(got)] == got,
-        f"halted ops are not a proper prefix of the plain capture ({len(got)}/{len(plain)})",
+        f"halted ops are not a proper prefix of the plain capture ({len(got)}/{len(plain)}): "
+        f"halted {list(got[:12])} vs plain {list(plain[:12])}",
     )
 
 
