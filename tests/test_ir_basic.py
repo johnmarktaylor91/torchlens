@@ -15,7 +15,6 @@ from torchlens.ir import (
     ArgTemplateRef,
     BackendSemantics,
     BlobRef,
-    CaptureEvents,
     CapturePolicy,
     ConditionalEvent,
     ContainerSpec,
@@ -27,7 +26,6 @@ from torchlens.ir import (
     FunctionEventInput,
     InterventionState,
     InterventionTemplateRef,
-    ModuleCaptureWorkspace,
     ModuleEnterEvent,
     ModuleExitEvent,
     ModuleFrame,
@@ -43,6 +41,8 @@ from torchlens.ir import (
     TensorRef,
     WrapperRuntimeWorkspace,
 )
+from torchlens.ir.capture_events import CaptureEvents
+from torchlens.ir.workspaces import ModuleCaptureWorkspace
 
 
 def _assert_frozen_and_slotted(instance: object) -> None:

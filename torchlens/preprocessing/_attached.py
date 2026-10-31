@@ -198,11 +198,11 @@ def record_for_transform(transform: Any) -> ResolvedPreprocessing | None:
         if adapter.probe(transform):
             return adapter.adapt(transform).preprocessing
     if probe_torchvision_preset(transform):
-        return adapt_torchvision_preset(transform).record
+        return adapt_torchvision_preset(transform).preprocessing
     if _probe_hf_processor(transform):
         from ._authorities import _adapt_hf_processor
 
-        return _adapt_hf_processor(transform).record
+        return _adapt_hf_processor(transform).preprocessing
     return None
 
 

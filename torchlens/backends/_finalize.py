@@ -1171,7 +1171,7 @@ def new_preview_function_trace(
     save_raw_input: str | bool,
     batch_render: str,
     output_transform: object | None,
-    save_raw_output: str | bool,
+    save_transformed_output: str | bool,
     param_source: str,
     compute_input_output_distances: bool = True,
 ) -> Trace:
@@ -1205,7 +1205,7 @@ def new_preview_function_trace(
         Raw-input render policy.
     output_transform:
         Optional output transform.
-    save_raw_output:
+    save_transformed_output:
         Raw-output save policy.
     param_source:
         Backend parameter provenance (``"pytree-derived"``, ``"none"``, ...).
@@ -1244,7 +1244,7 @@ def new_preview_function_trace(
         save_raw_input=save_raw_input,
         batch_render=batch_render,
         output_transform=cast("Callable[[Any], Any] | None", output_transform),
-        save_transformed_output=save_raw_output,
+        save_transformed_output=save_transformed_output,
         layer_visualizers=None,
         save_visualizations=False,
     )

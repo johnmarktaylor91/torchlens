@@ -1247,7 +1247,7 @@ class TorchBackend:
                     )
 
         if getattr(session, "capture_mode", None) == "predicate":
-            from ...ir import CaptureEvents
+            from torchlens.ir.capture_events import CaptureEvents
 
             events = getattr(session, "capture_events", None)
             if events is not None:

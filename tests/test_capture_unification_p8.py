@@ -13,12 +13,8 @@ from torchlens.backends import BackendUnsupportedError
 from torchlens.capture.projections import _record_from_record_context
 from torchlens.fastlog.storage_disk import _ctx_from_json, _ctx_to_json
 from torchlens.fastlog.types import CaptureSpec, RecordContext
-from torchlens.ir import (
-    _DEFERRED_VALUE,
-    CaptureEvents,
-    FunctionEventInput,
-    MLXValueUnavailableError,
-)
+from torchlens.ir import _DEFERRED_VALUE, FunctionEventInput, MLXValueUnavailableError
+from torchlens.ir.capture_events import CaptureEvents
 
 
 def _minimal_context(**updates: Any) -> RecordContext:

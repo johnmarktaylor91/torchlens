@@ -1131,8 +1131,8 @@ def settle_failed(
     exc: BaseException,
     *,
     interrupted: bool = False,
-    settlement_note: str | None = None,
-    n_ops_committed: int | None = None,
+    note: str | None = None,
+    num_committed_ops: int | None = None,
 ) -> CaptureOutcome:
     """Settle one failed capture (paths 5-6, 8; halted-secondary via note).
 
@@ -1142,8 +1142,8 @@ def settle_failed(
     and diagnostic origin attribution.
     """
 
-    if n_ops_committed is None:
-        n_ops_committed = count_committed_ops(trace)
+    if num_committed_ops is None:
+        num_committed_ops = count_committed_ops(trace)
     stop_request = trace.__dict__.get("_stop_requested")
     if (
         isinstance(stop_request, StopRequest)
@@ -1168,9 +1168,9 @@ def settle_failed(
                 reason=stop_request.reason,
                 boundary_kind=stop_request.boundary_kind,
                 boundary_label=stop_request.boundary_label,
-                num_committed_ops=n_ops_committed,
+                num_committed_ops=num_committed_ops,
                 inference_only=bool(getattr(trace, "inference_only", False)),
-                note=settlement_note,
+                note=note,
             ),
         )
     origin = FailureOrigin.INTERRUPT if interrupted else classify_failure_origin(exc)
@@ -1183,9 +1183,9 @@ def settle_failed(
             origin=origin,
             reason=safe_exception_str(exc),
             error_type=_qualified_type_name(exc),
-            num_committed_ops=n_ops_committed,
+            num_committed_ops=num_committed_ops,
             inference_only=bool(getattr(trace, "inference_only", False)),
-            note=settlement_note,
+            note=note,
         ),
     )
 

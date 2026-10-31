@@ -6,7 +6,7 @@ import gc
 from collections.abc import Iterable
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
-from .ir import CaptureEvents
+from torchlens.ir.capture_events import CaptureEvents
 
 ActivationT = TypeVar("ActivationT")
 

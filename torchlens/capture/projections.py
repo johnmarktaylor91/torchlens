@@ -956,7 +956,7 @@ def append_projected_event(
     """Append one lightweight predicate record to ``trace.capture_events``."""
 
     if not hasattr(trace, "capture_events"):
-        from ..ir import CaptureEvents
+        from torchlens.ir.capture_events import CaptureEvents
 
         trace.capture_events = CaptureEvents()
     label_raw = ctx.raw_label or ctx.label

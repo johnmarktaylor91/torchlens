@@ -911,7 +911,7 @@ def compile_legacy_capture_plan(
     backend_name: str,
     layers_to_save: Any,
     grad_layers_to_save: Any,
-    random_seed: int | None,
+    seed: int | None,
     postprocess: bool,
 ) -> CapturePlan:
     """Compile a no-behavior-change plan from legacy trace configuration.
@@ -1014,7 +1014,7 @@ def compile_legacy_capture_plan(
             "save_gradients": getattr(trace, "save_gradients", False),
         },
         execution_context={
-            "random_seed": random_seed,
+            "random_seed": seed,
             "inference_only": getattr(trace, "inference_only", False),
         },
         stop_policy=getattr(trace, "_stop_directive", None),
@@ -1087,7 +1087,7 @@ def attach_legacy_capture_session(
     backend_name: str,
     layers_to_save: Any,
     grad_layers_to_save: Any,
-    random_seed: int | None,
+    seed: int | None,
     postprocess: bool,
 ) -> CaptureSession:
     """Attach a new run-owned session behind the legacy trace adapter.
@@ -1115,7 +1115,7 @@ def attach_legacy_capture_session(
             backend_name=backend_name,
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
-            seed=random_seed,
+            seed=seed,
             postprocess=postprocess,
         ),
         backend_token=backend_token,

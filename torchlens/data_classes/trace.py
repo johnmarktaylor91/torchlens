@@ -3360,7 +3360,7 @@ class Trace(
         # projection's pass-index base and cumulative baselines so a new
         # backward numbers itself after the preserved passes and a full
         # rebuild keeps (never silently erases) the pre-pickle projection.
-        from ..ir import CaptureEvents
+        from torchlens.ir.capture_events import CaptureEvents
 
         self.__dict__["_capture_events"] = CaptureEvents.detached_from(self)
         # The projection guard is derived from the stream that just got

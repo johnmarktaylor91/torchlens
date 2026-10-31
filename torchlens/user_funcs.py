@@ -758,7 +758,7 @@ def _trace_mlx_model(
     output_transform: Callable[[Any], Any] | None | MissingType,
     output_style: str | None | MissingType,
     output_head: str | None | MissingType,
-    save_raw_output: str | bool | MissingType,
+    save_transformed_output: str | bool | MissingType,
     layer_visualizers: dict[Any, Callable[..., Any]] | None | MissingType,
     save_visualizations: bool | MissingType,
     keep_orphans: bool | MissingType,
@@ -766,13 +766,13 @@ def _trace_mlx_model(
     activation_transform: ActivationPostfunc | None | MissingType,
     grad_transform: GradientPostfunc | None | MissingType,
     save_raw_activations: bool | MissingType,
-    save_raw_gradients: bool | MissingType,
+    save_raw_grads: bool | MissingType,
     capture_tensor_grad_hooks: bool | MissingType,
-    save_arg_values: bool | MissingType,
+    save_args: bool | MissingType,
     save_grads: bool | str | list[Any] | PredicateFn | BaseSelector | None | MissingType,
-    save_code_context: bool | MissingType,
-    save_rng_states: bool | MissingType,
-    random_seed: int | None | MissingType,
+    save_source_context: bool | MissingType,
+    save_rng: bool | MissingType,
+    seed: int | None | MissingType,
     num_context_lines: int | MissingType,
     compute_input_output_distances: bool | MissingType,
     recurrence_detection: bool | MissingType,
@@ -815,17 +815,17 @@ def _trace_mlx_model(
         save_raw_input=save_raw_input,
         batch_render=batch_render,
         output_transform=output_transform,
-        save_transformed_output=save_raw_output,
+        save_transformed_output=save_transformed_output,
         layer_visualizers=layer_visualizers,
         save_visualizations=save_visualizations,
         keep_orphans=keep_orphans,
         output_device=output_device,
         capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-        save_args=save_arg_values,
+        save_args=save_args,
         save_grads=save_grads,
-        save_source_context=save_code_context,
-        save_rng=save_rng_states,
-        seed=random_seed,
+        save_source_context=save_source_context,
+        save_rng=save_rng,
+        seed=seed,
         source_context_lines=MISSING,
         num_context_lines=num_context_lines,
         compute_input_output_distances=compute_input_output_distances,
@@ -851,7 +851,7 @@ def _trace_mlx_model(
         activation_transform=resolved_activation_transform,
         grad_transform=grad_transform,
         save_raw_activations=save_raw_activations,
-        save_raw_grads=save_raw_gradients,
+        save_raw_grads=save_raw_grads,
     )
     if capture_options.intervention_ready:
         raise BackendUnsupportedError(
@@ -1523,7 +1523,7 @@ def _run_model_and_save_specified_outs(
     activation_transform: ActivationPostfunc | None = None,
     grad_transform: GradientPostfunc | None = None,
     save_raw_activations: bool = True,
-    save_raw_gradients: bool = True,
+    save_raw_grads: bool = True,
     save_mode: SaveMode = "copy",
     capture_tensor_grad_hooks: bool = True,
     mark_layer_depths: bool = False,
@@ -1534,8 +1534,8 @@ def _run_model_and_save_specified_outs(
     seed: int | None = None,
     num_context_lines: int = 7,
     optimizer: Any = None,
-    save_code_context: bool = False,
-    save_rng_states: bool = False,
+    save_source_context: bool = False,
+    save_rng: bool = False,
     recurrence_detection: bool = True,
     save_outs_to: str | Path | None = None,
     keep_outs_in_memory: bool = True,
@@ -1574,7 +1574,7 @@ def _run_model_and_save_specified_outs(
     output_transform: Callable[[Any], Any] | None = None,
     output_style: str | None = None,
     output_head: str | None = None,
-    save_raw_output: str | bool = "small",
+    save_transformed_output: str | bool = "small",
     layer_visualizers: dict[Any, Callable[..., Any]] | None = None,
     save_visualizations: bool = False,
     recipes: list[Callable[[Any], dict[str, Any]]]
@@ -1623,7 +1623,7 @@ def _run_model_and_save_specified_outs(
         grad_transform: Optional transform applied to each grad before storage.
         save_raw_activations: Whether raw outs are retained when ``activation_transform``
             is set. Metadata always describes the raw out.
-        save_raw_gradients: Whether raw grads are retained when ``grad_transform`` is set.
+        save_raw_grads: Whether raw grads are retained when ``grad_transform`` is set.
             Metadata always describes the raw grad.
         save_mode: Tensor retention mode for saved activation and gradient payloads.
             ``"copy"`` is the safe cloning default; ``"reference"`` preserves the
@@ -1723,7 +1723,7 @@ def _run_model_and_save_specified_outs(
             output metadata from model output.
         output_style: Optional semantic output decode style.
         output_head: Optional live-output head to decode.
-        save_raw_output: Portable save policy for the transformed raw output.
+        save_transformed_output: Portable save policy for the transformed raw output.
         layer_visualizers: Optional mapping from selectors to thumbnail visualizer callables.
         save_visualizations: Whether rendered thumbnails should persist in portable bundles.
         recipes: Per-trace additive facet recipes captured into the trace-owned
@@ -1921,7 +1921,7 @@ def _run_model_and_save_specified_outs(
             activation_transform=activation_transform,
             grad_transform=grad_transform,
             save_raw_activations=save_raw_activations,
-            save_raw_grads=save_raw_gradients,
+            save_raw_grads=save_raw_grads,
             save_mode=save_mode,
             capture_tensor_grad_hooks=capture_tensor_grad_hooks,
             keep_orphans=keep_orphans,
@@ -1931,8 +1931,8 @@ def _run_model_and_save_specified_outs(
             mark_layer_depths=mark_layer_depths,
             num_context_lines=num_context_lines,
             optimizer=optimizer,
-            save_source_context=save_code_context,
-            save_rng=save_rng_states,
+            save_source_context=save_source_context,
+            save_rng=save_rng,
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
@@ -1947,7 +1947,7 @@ def _run_model_and_save_specified_outs(
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
             facet_registry_snapshot=facets_mod.snapshot(recipes),
@@ -1984,7 +1984,7 @@ def _run_model_and_save_specified_outs(
         trace.trace_label = name
         trace.code_context = _get_code_context(
             num_context_lines,
-            source_loading_enabled=save_code_context,
+            source_loading_enabled=save_source_context,
         )
         forward_code = getattr(model.forward, "__code__", None)
         trace.forward_source_line = getattr(forward_code, "co_firstlineno", None)
@@ -2874,23 +2874,23 @@ def _trace_torch_model(
     output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
     output_style: str | None | MissingType = MISSING,
     output_head: str | None | MissingType = MISSING,
-    save_raw_output: str | bool | MissingType = MISSING,
+    save_transformed_output: str | bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
     activation_transform: ActivationPostfunc | None | MissingType = MISSING,
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
     save_raw_activations: bool | MissingType = MISSING,
-    save_raw_gradients: bool | MissingType = MISSING,
+    save_raw_grads: bool | MissingType = MISSING,
     save_mode: SaveMode | MissingType = MISSING,
     capture_tensor_grad_hooks: bool | MissingType = MISSING,
     mark_layer_depths: bool | MissingType = MISSING,
     detach_saved_activations: bool | MissingType = MISSING,
-    save_arg_values: bool | MissingType = MISSING,
+    save_args: bool | MissingType = MISSING,
     save_grads: bool | str | list[Any] | PredicateFn | BaseSelector | None | MissingType = MISSING,
-    save_code_context: bool | MissingType = MISSING,
-    save_rng_states: bool | MissingType = MISSING,
+    save_source_context: bool | MissingType = MISSING,
+    save_rng: bool | MissingType = MISSING,
     reconstruction_ready: bool | MissingType = MISSING,
-    random_seed: int | None | MissingType = MISSING,
+    seed: int | None | MissingType = MISSING,
     num_context_lines: int | MissingType = MISSING,
     optimizer: Any | MissingType = MISSING,
     save_outs_to: str | Path | None | MissingType = MISSING,
@@ -2996,8 +2996,8 @@ def _trace_torch_model(
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
     if reconstruction_ready is not MISSING and reconstruction_ready:
-        save_arg_values = True
-        save_rng_states = True
+        save_args = True
+        save_rng = True
 
     capture_options = merge_capture_options(
         capture=capture,
@@ -3008,17 +3008,17 @@ def _trace_torch_model(
         output_transform=output_transform,
         output_style=output_style,
         output_head=output_head,
-        save_transformed_output=save_raw_output,
+        save_transformed_output=save_transformed_output,
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
         keep_orphans=keep_orphans,
         output_device=output_device,
-        save_args=save_arg_values,
+        save_args=save_args,
         save_grads=save_grads,
         capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-        save_source_context=save_code_context,
-        save_rng=save_rng_states,
-        seed=random_seed,
+        save_source_context=save_source_context,
+        save_rng=save_rng,
+        seed=seed,
         source_context_lines=source_context_lines,
         num_context_lines=num_context_lines,
         optimizer=optimizer,
@@ -3209,7 +3209,7 @@ def _trace_torch_model(
         activation_transform=activation_transform,
         grad_transform=grad_transform,
         save_raw_activations=save_raw_activations,
-        save_raw_grads=save_raw_gradients,
+        save_raw_grads=save_raw_grads,
     )
     if storage is not None and streaming is not None:
         raise KeywordConflictError(
@@ -3242,7 +3242,7 @@ def _trace_torch_model(
     activation_transform = save_options.activation_transform
     grad_transform = save_options.grad_transform
     save_raw_activations = save_options.save_raw_activations
-    save_raw_gradients = save_options.save_raw_gradients
+    save_raw_grads = save_options.save_raw_gradients
     save_mode_value = "copy" if save_mode is MISSING else save_mode
     if save_mode_value not in {"copy", "reference", "view", "cpu_async"}:
         raise InvalidArgumentError(
@@ -3252,11 +3252,11 @@ def _trace_torch_model(
             argument="save_mode",
         )
     refuse_unavailable_nvtx(capture_options.emit_nvtx)
-    save_arg_values = capture_options.save_args
+    save_args = capture_options.save_args
     capture_tensor_grad_hooks = capture_options.capture_tensor_grad_hooks
-    save_code_context = capture_options.save_source_context
-    save_rng_states = capture_options.save_rng
-    random_seed = capture_options.seed
+    save_source_context = capture_options.save_source_context
+    save_rng = capture_options.save_rng
+    seed = capture_options.seed
     source_context_lines = capture_options.source_context_lines
     optimizer = capture_options.optimizer
     compute_input_output_distances = capture_options.compute_input_output_distances
@@ -3507,11 +3507,11 @@ def _trace_torch_model(
             "layers_to_save": requested_layers_to_save,
             "keep_orphans": keep_orphans,
             "output_device": output_device,
-            "save_arg_values": save_arg_values,
+            "save_arg_values": save_args,
             "capture_tensor_grad_hooks": capture_tensor_grad_hooks,
             "save_grads": repr(save_grads_policy),
-            "save_code_context": save_code_context,
-            "save_rng_states": save_rng_states,
+            "save_code_context": save_source_context,
+            "save_rng_states": save_rng,
             "source_context_lines": source_context_lines,
             "compute_input_output_distances": compute_input_output_distances,
             "detach_saved_activations": detach_saved_activations,
@@ -3555,10 +3555,10 @@ def _trace_torch_model(
             "save_raw_input": repr(save_raw_input_policy),
             "save_raw_output": repr(save_raw_output_policy),
             "save_raw_activations": save_raw_activations,
-            "save_raw_gradients": save_raw_gradients,
+            "save_raw_gradients": save_raw_grads,
             "activation_transform": _stable_cache_fragment(activation_transform),
             "grad_transform": _stable_cache_fragment(grad_transform),
-            "random_seed": random_seed,
+            "random_seed": seed,
             "module_filter": _stable_cache_fragment(capture_options.module_filter),
             "layer_visualizers": _stable_cache_fragment(layer_visualizers_value),
             "save_visualizations": _stable_cache_fragment(save_visualizations_value),
@@ -3650,12 +3650,12 @@ def _trace_torch_model(
             save_visualizations=save_visualizations_value,
             keep_orphans=keep_orphans,
             output_device=output_device,
-            save_args=save_arg_values,
+            save_args=save_args,
             save_grads=save_grads_policy,
             capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-            save_source_context=save_code_context,
-            save_rng=save_rng_states,
-            seed=random_seed,
+            save_source_context=save_source_context,
+            save_rng=save_rng,
+            seed=seed,
             source_context_lines=source_context_lines,
             optimizer=optimizer,
             compute_input_output_distances=compute_input_output_distances,
@@ -3701,7 +3701,7 @@ def _trace_torch_model(
             activation_transform=activation_transform,
             grad_transform=grad_transform,
             save_raw_activations=save_raw_activations,
-            save_raw_grads=save_raw_gradients,
+            save_raw_grads=save_raw_grads,
         )
         recursive_save_value: SaveOptions | PredicateFn | BaseSelector | None = (
             save_predicate if save_predicate is not None else recursive_save_options
@@ -3720,9 +3720,7 @@ def _trace_torch_model(
             else MISSING
         )
         recursive_save_raw_gradients: bool | MissingType = (
-            save_raw_gradients
-            if save_predicate is not None and save_raw_gradients is not True
-            else MISSING
+            save_raw_grads if save_predicate is not None and save_raw_grads is not True else MISSING
         )
         trace = _trace_torch_model(
             model=model,
@@ -3905,7 +3903,7 @@ def _trace_torch_model(
                 for op in trace.layer_list
                 if op.has_saved_activation and op.layer_type not in {"input", "output"}
             ]
-            if not save_arg_values:
+            if not save_args:
                 trace._replay_arg_version_data_complete = False
         if layer_visualizers_value:
             _render_layer_visualizers(trace, layer_visualizers_value)
@@ -3933,20 +3931,20 @@ def _trace_torch_model(
         activation_transform=activation_transform,
         grad_transform=grad_transform,
         save_raw_activations=save_raw_activations,
-        save_raw_grads=save_raw_gradients,
+        save_raw_grads=save_raw_grads,
         save_mode=cast(SaveMode, save_mode_value),
         capture_tensor_grad_hooks=capture_tensor_grad_hooks,
         mark_layer_depths=compute_input_output_distances,
         detach_saved_activations=detach_saved_activations,
-        save_args=save_arg_values,
+        save_args=save_args,
         save_grads=should_save_grads,
         grads_to_save=grads_to_save_resolved,
-        seed=random_seed,
+        seed=seed,
         num_context_lines=source_context_lines,
         optimizer=optimizer,
         echo_options=echo_options,
-        save_source_context=save_code_context,
-        save_rng=save_rng_states,
+        save_source_context=save_source_context,
+        save_rng=save_rng,
         recurrence_detection=recurrence_detection,
         save_outs_to=streaming_options.bundle_path,
         keep_outs_in_memory=streaming_options.retain_in_memory,
@@ -4151,7 +4149,7 @@ def _trace_torch_model(
             for op in trace.layer_list
             if op.has_saved_activation and op.layer_type not in {"input", "output"}
         ]
-        if not save_arg_values:
+        if not save_args:
             trace._replay_arg_version_data_complete = False
 
     # Print final summary.

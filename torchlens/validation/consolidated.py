@@ -349,7 +349,7 @@ def _validate_receptive_field_scope(
     input_args: Any,
     input_kwargs: dict[str, Any] | None,
     *,
-    random_seed: int | None,
+    seed: int | None,
     validate_metadata: bool,
     backend: BackendName | None,
 ) -> list[ReceptiveFieldValidation]:
@@ -361,7 +361,7 @@ def _validate_receptive_field_scope(
         Model to capture.
     input_args, input_kwargs:
         Model inputs.
-    random_seed:
+    seed:
         Optional deterministic capture seed.
     validate_metadata:
         Whether always-on metadata contracts should run on the captured trace.
@@ -388,7 +388,7 @@ def _validate_receptive_field_scope(
         capture=CaptureOptions(
             layers_to_save="all",
             backward_ready=True,
-            seed=random_seed,
+            seed=seed,
         ),
         backend=backend,
     )

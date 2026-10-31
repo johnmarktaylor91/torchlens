@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 from torch import nn
 
+from torchlens.ir.capture_events import CaptureEvents
+
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._errors import CaptureContextError
@@ -30,13 +32,7 @@ from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.module import HookInfo
 from ...data_classes.param import Param, ParamAccessor
 from ...fastlog._halt import StopSignal
-from ...ir import (
-    CaptureEvents,
-    ModuleEnterEvent,
-    ModuleExitEvent,
-    ModuleFrame,
-    ModulePrepEvent,
-)
+from ...ir import ModuleEnterEvent, ModuleExitEvent, ModuleFrame, ModulePrepEvent
 from ...ir.container_registry import ModuleSite, Phase, Role, walk_container
 from ...ir.op_record import (
     amend_module_boundary_retention,
@@ -772,7 +768,7 @@ def _add_shared_module_aliases(
 # ---------------------------------------------------------------------------
 
 
-def _get_class_metadata(module_class: type, save_code_context: bool = False) -> dict[str, Any]:
+def _get_class_metadata(module_class: type, save_source_context: bool = False) -> dict[str, Any]:
     """Return class-level metadata for a module class, cached across instances.
 
     When ``save_code_context`` is False (default), skips expensive
@@ -804,7 +800,7 @@ def _get_class_metadata(module_class: type, save_code_context: bool = False) -> 
             user_custom_methods.append(attr_name)
     meta["user_custom_methods"] = user_custom_methods
 
-    if save_code_context:
+    if save_source_context:
         try:
             meta["class_source_file"] = inspect.getfile(module_class)
         except (TypeError, OSError):

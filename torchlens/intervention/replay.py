@@ -10,9 +10,10 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
 
+from torchlens.ir.capture_events import CaptureEvents
+
 from .._errors import InvalidArgumentError
 from .._trace_state import TraceState
-from ..ir import CaptureEvents
 from ..ir.container import (
     DataclassField,
     DictKey,

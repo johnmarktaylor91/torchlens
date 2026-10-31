@@ -906,7 +906,7 @@ class JAXBackend:
         save_raw_input: str | bool,
         batch_render: str,
         output_transform: object | None,
-        save_raw_output: str | bool,
+        save_transformed_output: str | bool,
         compute_input_output_distances: bool = True,
     ) -> Trace:
         """Construct an empty trace shell via the shared preview constructor."""
@@ -923,7 +923,7 @@ class JAXBackend:
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             param_source="pytree-derived",
             compute_input_output_distances=compute_input_output_distances,
         )

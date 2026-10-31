@@ -12,6 +12,8 @@ from typing import Any, cast
 import torch
 from torch import nn
 
+from torchlens.ir.capture_events import CaptureEvents
+
 from .. import _state
 from .._deprecations import MISSING, MissingType
 from .._errors import CaptureContextError, KeywordConflictError
@@ -28,7 +30,6 @@ from ..capture.stop import StopDirective, stop_directive_for_trace
 from ..capture.trace import _extract_and_mark_outputs
 from ..data_classes.trace import Trace
 from ..intervention.predicates import InterventionPredicate
-from ..ir import CaptureEvents
 from ..options import StorageOptions
 from ..types import ActivationPostfunc, GradientPostfunc
 from ..utils._torch_compat import get_fsdp_wrapper_type
@@ -536,7 +537,7 @@ class Recorder:
             capture_mode="predicate",
             layers_to_save=[],
             grad_layers_to_save=[],
-            seed=self.options.seed,
+            random_seed=self.options.seed,
             postprocess=False,
             stop=trace._stop_directive,
         )
