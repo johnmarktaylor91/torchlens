@@ -388,9 +388,10 @@ def _trace(cell: Cell) -> None:
 
 
 def _plain_forward(cell: Cell) -> list[Any]:
+    """Run the model plainly, in grad mode as the capture ran, and keep detached leaves."""
+
     torch.manual_seed(SEED)
-    with torch.no_grad():
-        output = cell.model(*cell.positional_inputs(cell.fresh_inputs()))
+    output = cell.model(*cell.positional_inputs(cell.fresh_inputs()))
     return [_detached(leaf) for leaf in flatten_leaves(output)]
 
 

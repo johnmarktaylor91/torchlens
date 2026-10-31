@@ -103,7 +103,7 @@ def _after_save(cell: Cell) -> None:
         got = {op.label for op in trace.saved_ops}
         allowed = {op.label for op in trace.output_ops}
         allowed |= {op.label for op in trace.ops if op.is_buffer_source}
-        allowed |= {op.label for op in trace.ops if op.label.startswith("buffer_")}
+        allowed |= {label for label in got if label.startswith("buffer_")}
         missing, extra = sorted(want - got), sorted(got - want - allowed)
         cell.expect(not missing, f"{name}: selected ops not saved: {missing[:8]}")
         cell.expect(not extra, f"{name}: unselected ops saved: {extra[:8]}")
