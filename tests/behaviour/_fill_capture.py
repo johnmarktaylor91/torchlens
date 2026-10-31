@@ -19,6 +19,7 @@ the other while it is still loading.
 from __future__ import annotations
 
 import dataclasses
+from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -155,7 +156,7 @@ def _expect_pass_census(cell: Cell, name: str, trace: Any) -> None:
     layers = list(trace.layers)
     # ``trace.layers`` also holds the input and output layers, which ``trace.ops`` omits.
     covered = [op.label for layer in layers for op in layer.ops]
-    twice = sorted({label for label in covered if covered.count(label) > 1})
+    twice = sorted(label for label, count in Counter(covered).items() if count > 1)
     cell.expect(not twice, f"{name}: ops in more than one layer pass: {twice[:6]}")
     missing = sorted({op.label for op in trace.ops} - set(covered))
     cell.expect(not missing, f"{name}: ops in no layer: {missing[:6]}")
