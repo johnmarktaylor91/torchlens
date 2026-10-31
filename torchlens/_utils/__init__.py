@@ -437,6 +437,48 @@ def _probe_fingerprint() -> DoctorCheck:
     return DoctorCheck("model fingerprint", status, fingerprint[:16] if fingerprint else "empty")
 
 
+def _classify_capability_absences(
+    snapshot: dict[str, bool],
+) -> tuple[list[str], list[str], list[str]]:
+    """Split a capability snapshot's absent flags into degradation groups.
+
+    ONE shared classifier for ``tl.report.doctor()`` and ``tl.compat.report()``
+    so both rows read the same snapshot the same way.
+
+    Parameters
+    ----------
+    snapshot:
+        Capability flag availability, as returned by the runtime snapshot.
+
+    Returns
+    -------
+    tuple[list[str], list[str], list[str]]
+        ``(missing, unprobed, optional_absent)``. Only ``missing`` is a genuine
+        degradation (r-b4 R26-4): an absent OPTIONAL feature (interpreter-version
+        surface, upstream-removed API, an optional backend that is not
+        installed) keeps a healthy install at PASS, and a lazily probed flag
+        whose probe has never run (kineto event fields, the memory profile, ...)
+        is UNPROBED, not missing: nothing has consumed the capability yet, so
+        nothing has degraded (D04 integration fix).
+    """
+
+    from . import _torch_compat as _tc
+    from ._torch_compat import OPTIONAL_CAPABILITY_FLAGS
+
+    def _probe_latched(name: str) -> bool:
+        """Return whether a flag's lazy probe has run (eager flags always have)."""
+
+        latch = "_" + name.removeprefix("HAS_") + "_PROBED"
+        return bool(getattr(_tc, latch, True))
+
+    absent = [name for name, available in snapshot.items() if not available]
+    required = [name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS]
+    missing = [name for name in required if _probe_latched(name)]
+    unprobed = [name for name in required if not _probe_latched(name)]
+    optional_absent = [name for name in absent if name in OPTIONAL_CAPABILITY_FLAGS]
+    return missing, unprobed, optional_absent
+
+
 def _probe_torch_capabilities() -> DoctorCheck:
     """Return the runtime capability snapshot doctor row.
 
@@ -446,40 +488,8 @@ def _probe_torch_capabilities() -> DoctorCheck:
         Snapshot of probed private integration capabilities.
     """
 
-    from . import _torch_compat as _tc
-    from ._torch_compat import OPTIONAL_CAPABILITY_FLAGS
-
     snapshot = _runtime_capability_snapshot()
-    absent = [name for name, available in snapshot.items() if not available]
-
-    def _probe_latched(name: str) -> bool:
-        """Return whether a flag's lazy probe has actually run.
-
-        Lazily probed flags (kineto event fields, memory profile, ...) default
-        ``False`` with a ``_<NAME>_PROBED`` latch flipped at first use; a flag
-        with no latch is probed eagerly at import and always reads as latched.
-        """
-
-        latch = "_" + name.removeprefix("HAS_") + "_PROBED"
-        return bool(getattr(_tc, latch, True))
-
-    # r-b4 R26-4: only genuine DEGRADATIONS drive WARN. An absent optional
-    # feature (interpreter-version surface, upstream-removed API, an optional
-    # backend that is not installed) is reported with its true value but keeps
-    # a healthy install at PASS -- a permanent false alarm trains users to
-    # ignore the row. A lazily probed flag whose probe has never run is
-    # UNPROBED, not missing: nothing has consumed the capability yet, so
-    # nothing has degraded (D04 integration fix; the doctor previously read
-    # every unprobed-lazy default-False flag as a degradation WARN).
-    missing = [
-        name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS and _probe_latched(name)
-    ]
-    unprobed = [
-        name
-        for name in absent
-        if name not in OPTIONAL_CAPABILITY_FLAGS and not _probe_latched(name)
-    ]
-    optional_absent = [name for name in absent if name in OPTIONAL_CAPABILITY_FLAGS]
+    missing, unprobed, optional_absent = _classify_capability_absences(snapshot)
     # Grouped absences-first summary; the full name=value dump lives on the
     # detail accessor (tl._utils.capability_snapshot()), not in the row cell.
     detail = format_capability_summary(snapshot)

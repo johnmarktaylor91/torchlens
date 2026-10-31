@@ -307,19 +307,18 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
     # absent (healthy-old-install) flags than current dev torch. Rebuild the
     # cell's exact expected length from the same building blocks
     # _torch_capabilities_row() uses (format_capability_summary plus the
-    # missing=/optional_absent= groupings), so the check tracks any honest
+    # missing=/unprobed=/optional_absent= groupings), so the check tracks any honest
     # absence count instead of a magic number -- it still catches a
     # regression to the legacy verbose per-flag dump, which does not share
     # this structure.
-    from torchlens._utils import format_capability_summary
-    from torchlens._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
+    from torchlens._utils import _classify_capability_absences, format_capability_summary
 
-    absent = [name for name, available in snapshot.items() if not available]
-    missing = [name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS]
-    optional_absent = [name for name in absent if name in OPTIONAL_CAPABILITY_FLAGS]
+    missing, unprobed, optional_absent = _classify_capability_absences(snapshot)
     expected = "Runtime capabilities: " + format_capability_summary(snapshot)
     if missing:
         expected += "; missing=" + ", ".join(missing)
+    if unprobed:
+        expected += "; unprobed=" + ", ".join(unprobed)
     if optional_absent:
         expected += "; optional_absent=" + ", ".join(optional_absent)
     expected += "; full dump: report.capability_snapshot()"

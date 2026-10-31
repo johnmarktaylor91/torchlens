@@ -1666,15 +1666,14 @@ def _torch_capabilities_row() -> CompatRow:
         Report row summarizing private runtime capability probes.
     """
 
-    from .._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
+    from .._utils import _classify_capability_absences
 
     snapshot = _runtime_capability_snapshot()
-    absent = [name for name, available in snapshot.items() if not available]
     # r-b4 R26-4: only genuine DEGRADATIONS drive the warning severity; an
     # absent optional feature keeps its true value in the details but leaves a
-    # healthy install at pass/ok.
-    missing = [name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS]
-    optional_absent = [name for name in absent if name in OPTIONAL_CAPABILITY_FLAGS]
+    # healthy install at pass/ok, and a lazily probed flag whose probe never
+    # ran is unprobed, not missing (the same classifier the doctor row uses).
+    missing, unprobed, optional_absent = _classify_capability_absences(snapshot)
     status: Status = "not_tested" if missing else "pass"
     severity: Severity = "warning" if missing else "ok"
     # Grouped absences-first summary (ONE shared renderer with doctor); the
@@ -1685,6 +1684,8 @@ def _torch_capabilities_row() -> CompatRow:
     details = "Runtime capabilities: " + format_capability_summary(snapshot)
     if missing:
         details += "; missing=" + ", ".join(missing)
+    if unprobed:
+        details += "; unprobed=" + ", ".join(unprobed)
     if optional_absent:
         details += "; optional_absent=" + ", ".join(optional_absent)
     details += "; full dump: report.capability_snapshot()"
