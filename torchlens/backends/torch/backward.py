@@ -1234,7 +1234,15 @@ def _max_call_order(
 
 
 def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
-    """Populate resolved GradFn order values from creators and known topology."""
+    """Populate resolved GradFn order values from creators and known topology.
+
+    A creator-attributed node sits one order above its creator. A creator-less
+    node with no paired op (a forward op applied to a ``create_graph``
+    gradient, say) is inferred into the highest order among the nodes it feeds.
+    The two rules run to a fixed point: inferring a node upward re-derives the
+    orders of the nodes its own differentiation created, so every
+    creator-attributed order stays ``creator.order + 1`` (AGT-1485).
+    """
 
     for grad_fn_record in grad_fn_logs.values():
         grad_fn_record.order = _resolved_order_for_creator(
@@ -1242,23 +1250,42 @@ def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
             grad_fn_logs,
         )
 
-    changed = True
-    while changed:
-        changed = False
-        for grad_fn_record in grad_fn_logs.values():
-            if grad_fn_record.creator_object_id is not None or grad_fn_record.has_op:
-                continue
-            child_orders: list[int] = []
-            for child_id in grad_fn_record.next_grad_fn_ids:
-                child = grad_fn_logs.get(child_id)
-                if child is not None and child.order is not None:
-                    child_orders.append(child.order)
-            if not child_orders:
-                continue
-            inferred_order = max(child_orders)
-            if inferred_order > 1 and grad_fn_record.order != inferred_order:
-                grad_fn_record.order = inferred_order
+    # Orders only rise, by at least one per productive sweep, and a record's
+    # order is bounded by the number of records; the cap only guards a cyclic
+    # topology (ids reused across records), which the backward-graph
+    # invariants then report.
+    for _sweep in range(len(grad_fn_logs) + 1):
+        if not _raise_grad_fn_orders_once(grad_fn_logs):
+            break
+
+
+def _raise_grad_fn_orders_once(grad_fn_logs: dict[int, GradFn]) -> bool:
+    """Run one order sweep over ``grad_fn_logs``; return whether any order moved."""
+
+    changed = False
+    for grad_fn_record in grad_fn_logs.values():
+        if grad_fn_record.creator_object_id is not None:
+            resolved_order = _resolved_order_for_creator(
+                grad_fn_record.creator_object_id, grad_fn_logs
+            )
+            if resolved_order is not None and grad_fn_record.order != resolved_order:
+                grad_fn_record.order = resolved_order
                 changed = True
+            continue
+        if grad_fn_record.has_op:
+            continue
+        child_orders: list[int] = []
+        for child_id in grad_fn_record.next_grad_fn_ids:
+            child = grad_fn_logs.get(child_id)
+            if child is not None and child.order is not None:
+                child_orders.append(child.order)
+        if not child_orders:
+            continue
+        inferred_order = max(child_orders)
+        if inferred_order > 1 and grad_fn_record.order != inferred_order:
+            grad_fn_record.order = inferred_order
+            changed = True
+    return changed
 
 
 def _normalize_grad_fn_type(grad_fn_handle: Any) -> str:
