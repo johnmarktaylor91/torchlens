@@ -200,7 +200,7 @@ current-call event. Failed partials are not topology-complete, so `Recording.to_
 `Recording.backward()` reject them.
 
 For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
-`tl._partial.from_failed_capture(exc)`.
+the partial-trace recovery helper (it has no public spelling yet).
 
 ## Trace Mutators
 

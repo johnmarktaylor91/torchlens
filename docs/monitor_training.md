@@ -107,7 +107,7 @@ with collector.step(step):
     output.loss.backward(); optimizer.step()
 ```
 
-Route B rides fastlog: every selected OP becomes a site (567 on gpt2 vs
+Route B rides sparse recording (`tl.record()`): every selected OP becomes a site (567 on gpt2 vs
 ~125 leaf modules), reduced at the save point by a declared summary
 transform. The plumbing that makes this affordable is public:
 `torchlens._observability.summary(fn)` declares a NON-DIFFERENTIABLE reducer

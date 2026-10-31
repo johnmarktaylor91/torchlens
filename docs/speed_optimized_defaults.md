@@ -3,7 +3,7 @@
 TorchLens defaults favor complete metadata and debuggability. For high-throughput capture, use the
 smallest capture surface that answers your question.
 
-Backend note: these defaults describe torch capture. `tl.record()`/fastlog is torch-only in
+Backend note: these defaults describe torch capture. `tl.record()` (sparse recording) is torch-only in
 backend v1. JAX, tinygrad, Paddle, and TensorFlow preview `.tlspec` payloads materialize
 arrays, but loaded traces report replay validation as unavailable because runtime replay captures
 are stripped.
@@ -73,7 +73,7 @@ include a skipped/partial current-call event. Failed partials reject `Recording.
 `Recording.backward()`.
 
 Full `tl.trace(...)` failures expose a separate honest partial as `exc.partial_log`; retrieve it
-with `tl._partial.from_failed_capture(exc)`.
+with the partial-trace recovery helper (it has no public spelling yet).
 
 ## Final-Label Saves
 

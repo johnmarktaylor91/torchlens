@@ -268,7 +268,7 @@ root `tl.EpisodeOptions` spelling awaits the surface-table amendment).
 A settlement refusal (`episode_ledger_incoherent`, the declaration-mismatch
 derivation refusals) fires AFTER the capture ran and postprocessed, so the exception
 carries the settled product on `exc.partial_log` — recover it with
-`tl._partial.from_failed_capture(exc)` instead of paying the forward again.
+the partial-trace recovery helper (it has no public spelling yet) instead of paying the forward again.
 
 ## Evidence never rides a fresh execution (the travel policy)
 

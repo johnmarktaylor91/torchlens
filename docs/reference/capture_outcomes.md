@@ -18,7 +18,7 @@ the record or on the stable refusal codes below — never on exception text.
 
 `phase` is FAILED-only, not FAILED-required: a `FAILED` outcome normally
 carries a `phase`, but two writers legitimately emit `FAILED` with
-`phase=None` — the fastlog recorder fallback stamp (when the runtime trace's
+`phase=None` — the sparse-recording recorder fallback stamp (when the runtime trace's
 settled record is unavailable or non-failed) and the legacy `partial_error`
 derivation. When present, `phase` is one of (`FORWARD` — the model forward raised;
 `FINALIZE` — the forward completed but finalize/output-extraction/cleanup
@@ -120,7 +120,7 @@ Row rationales, stated once:
 - **UNKNOWN** refusals replace what was previously an ungated pass-through of
   provably-unfinished artifacts (`Trace.save` of failed partials) or an
   undefined crash on unbuilt structures. The nearest legitimate workflows
-  (partial inspection, `draw`, `tl._partial.from_failed_capture`) all remain
+  (partial inspection, `draw`, the partial-trace recovery helper) all remain
   open.
 - **N5** converted two broken behaviors into typed refusals: halted refresh
   crashed with a misleading "computational graph changed" error, and halted

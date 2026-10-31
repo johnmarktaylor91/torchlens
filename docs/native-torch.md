@@ -75,7 +75,7 @@ callable).
 ## Overhead numbers
 
 Every TorchLens overhead figure goes through the paired-ratio harness
-(`torchlens._observability.measure_overhead`): alternating arm order, a
+(the private observability package's `measure_overhead`; no public spelling yet): alternating arm order, a
 refusal predicate declared before the run, an execution-scope witness on
 both arms, and one-sided floors where point estimates are refused. Capture
 overhead ships only as a (model, shape, tier) matrix — measured floors on

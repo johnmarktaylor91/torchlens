@@ -556,8 +556,8 @@ wrong facet label is a confidently mislabelled part of someone's model.
 ## Recipe Plugins
 
 On FIRST USE of the facet-recipe subsystem (not at `import torchlens` --
-the loader is module-level in `torchlens/_semantic/recipes/__init__.py`, and
-`torchlens._semantic` is lazy), TorchLens loads installed setuptools entry
+the loader is module-level in the facet-recipes package initializer, and
+the facet subsystem is lazy), TorchLens loads installed setuptools entry
 points in the `torchlens.recipes` group. A broken entry point therefore warns
 when facets are first touched, not at import. Entry points are never scanned
 from local directories.
@@ -565,7 +565,7 @@ from local directories.
 ## Built-In Inventory
 
 TorchLens records built-in facet capabilities as data in
-`torchlens._semantic.recipes.BUILTIN_FACET_CAPABILITY_INVENTORY`. Current classes
+`BUILTIN_FACET_CAPABILITY_INVENTORY` in the private facet-recipes package (no public spelling yet). Current classes
 are:
 
 ```text

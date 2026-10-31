@@ -10,7 +10,7 @@ sites; `tl.record(model, x, save=...)` is the lighter path for tight loops where
 selected records and can materialize a `Trace` later.
 
 Backend note: these timings and sparse-recording examples are torch-oriented. `tl.record()` /
-fastlog is torch-only in the backend-v1 registry. Non-torch preview backends may have different
+sparse recording (`tl.record()`) is torch-only in the backend-v1 registry. Non-torch preview backends may have different
 capture costs; JAX, tinygrad, Paddle, and TensorFlow `.tlspec` saves materialize array payloads but
 loaded traces cannot replay-validate stripped runtime captures. Paddle preview capture has its own
 dygraph/eager replay and static-inventory audit costs; TensorFlow preview capture runs live eager
@@ -77,7 +77,7 @@ assert gelu_site.out.shape == (2, 4)
 `tl.record(save=...)` is the only torch sparse-capture spelling; the old
 `keep_op=`/`keep_module=` alias kwargs are removed.
 
-When a fastlog forward raises, the default remains `on_forward_error="raise"`. Opt into
+When a `tl.record()` forward raises, the default remains `on_forward_error="raise"`. Opt into
 `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
 `on_forward_error="return_partial"` to return a failed partial `Recording` (`return_output=True`
 returns `(None, partial)`). Failed partials set `status="partial_error"`, `failed=True`,
@@ -88,7 +88,7 @@ current-call event. Failed partials cannot be converted with `Recording.to_trace
 `"return_partial"`/`"attach_partial"`, and materializing the partial allocates *more* memory
 inside an already-exhausted heap — under genuine memory pressure keep the default
 `on_forward_error="raise"`. Full `tl.trace(...)` failures expose `exc.partial_log`, recoverable
-with `tl._partial.from_failed_capture(exc)`.
+with the partial-trace recovery helper (it has no public spelling yet).
 
 ## Speed knobs
 
@@ -468,7 +468,7 @@ table (CPU + CUDA, every model and row) lives in
 [`docs/_perf_numbers.md`](_perf_numbers.md) and the raw baseline in
 `benchmarks/perf_baselines/linux-cpu.json`.
 
-**Headline: with fastlog capture and an early halt at ~25% depth, capture runs _faster than the
+**Headline: with sparse recording and an early halt at ~25% depth, capture runs _faster than the
 raw forward pass itself_ — `fastlog_halt_25` is 0.84x raw forward on ResNet-18 (CPU) and 0.83x on
 GPT-2 (HookedTransformer, CPU).** You only pay for the layers you actually reach.
 
