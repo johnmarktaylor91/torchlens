@@ -2,9 +2,9 @@
 
 Each name in ``MOVED`` is a module here with a ``main()`` that runs its checks
 and returns an exit status. :func:`run` calls one; :func:`as_check` adapts one
-to the ``(repo) -> Outcome`` callable that ``run_all.py``'s ``CHECKS`` holds
-once the shared ``_common`` module is present. The checks read the checkout
-that contains this folder, so ``repo`` must be that checkout.
+to the ``(repo) -> Outcome`` callable that ``run_all.py``'s ``CHECKS`` holds.
+The checks read the checkout that contains this folder, so ``repo`` must be
+that checkout.
 """
 
 from __future__ import annotations
@@ -15,11 +15,12 @@ import io
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 _CHECKS_DIR = Path(__file__).resolve().parent
 if str(_CHECKS_DIR) not in sys.path:
     sys.path.insert(0, str(_CHECKS_DIR))
+
+from _common import FAIL, OK, Outcome  # noqa: E402
 
 MOVED: tuple[str, ...] = (
     "internal_id_lint",
@@ -53,12 +54,10 @@ def run(name: str) -> int:
     return int(importlib.import_module(name).main())
 
 
-def as_check(name: str) -> Callable[[Path], Any]:
+def as_check(name: str) -> Callable[[Path], Outcome]:
     """Return a ``(repo) -> Outcome`` callable for ``run_all.py``'s ``CHECKS`` list."""
 
-    def check(repo: Path) -> Any:
-        from _common import FAIL, OK, Outcome
-
+    def check(repo: Path) -> Outcome:
         if repo.resolve() != _CHECKS_DIR.parents[1]:
             return Outcome(FAIL, f"{name}: checks only the checkout that holds scripts/checks")
         buffer = io.StringIO()
