@@ -139,7 +139,7 @@ def _after_halt(cell: Cell) -> None:
     cell.expect(trace.outcome.status is CaptureStatus.HALTED, f"outcome {trace.outcome.status!r}")
     from tests.behaviour.harness import execution_order
 
-    got = [op.func_name for op in execution_order(trace)]
+    got = tuple(op.func_name for op in execution_order(trace))
     plain = cell.facts.func_names
     cell.expect(
         0 < len(got) < len(plain) and plain[: len(got)] == got,
