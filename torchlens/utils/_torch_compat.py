@@ -38,6 +38,7 @@ keeps the modern signature but changes its version string.
 from __future__ import annotations
 
 import contextlib
+import functools
 import importlib
 import inspect
 import sys
@@ -638,6 +639,25 @@ def _import_module_attr_or_none(module_name: str, attr_name: str) -> Any | None:
     return getattr(module, attr_name, None)
 
 
+@functools.cache
+def _split_attribute_path(spec: str) -> tuple[str, tuple[str, ...]]:
+    """Split a ``"module:dotted.attr"`` path once per process (pure; getters run per op).
+
+    Parameters
+    ----------
+    spec:
+        Capability-table attribute path.
+
+    Returns
+    -------
+    tuple[str, tuple[str, ...]]
+        Module name and the attribute segments to traverse from it.
+    """
+
+    module_name, _, attr_path = spec.partition(":")
+    return module_name, tuple(attr_path.split("."))
+
+
 def _resolve_attribute_path(spec: str) -> Any | None:
     """Resolve one ``"module:dotted.attr"`` capability-table path.
 
@@ -653,12 +673,11 @@ def _resolve_attribute_path(spec: str) -> Any | None:
         Resolved object, or ``None`` when the module or any segment is absent.
     """
 
-    module_name, _, attr_path = spec.partition(":")
+    module_name, attrs = _split_attribute_path(spec)
     if module_name == "torch":
-        return _nested_getattr_or_none(torch, attr_path.split("."))
-    head, _, rest = attr_path.partition(".")
-    resolved = _import_module_attr_or_none(module_name, head)
-    return _nested_getattr_or_none(resolved, rest.split(".")) if rest else resolved
+        return _nested_getattr_or_none(torch, attrs)
+    resolved = _import_module_attr_or_none(module_name, attrs[0])
+    return _nested_getattr_or_none(resolved, attrs[1:]) if resolved is not None else None
 
 
 def _probe_table_row(flag: str) -> bool:
