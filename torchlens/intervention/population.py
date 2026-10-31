@@ -13,7 +13,7 @@ ergonomic follow-up).
 Population laws implemented here:
 
 - D2: one public noun, ``origin=`` required.
-- D3: reductions are not draws -- :meth:`Reference.mean` / :meth:`Reference.std`
+- D3: reductions are not draws -- :meth:`Population.mean` / :meth:`Population.std`
   return TENSORS, never invent a seed, and accumulate reduced-precision
   members in float32.
 - D10: populations are PREPARED at construction; hooks only index, cast,
@@ -45,7 +45,7 @@ from .._errors import InvalidArgumentError
 __all__ = [
     "OneDatum",
     "PerRowDatums",
-    "Reference",
+    "Population",
     "population",
 ]
 
@@ -211,7 +211,7 @@ def _trace_payload_digest(members: Sequence[Any], address_digest: str) -> str:
 
 
 @dataclass(frozen=True)
-class Reference:
+class Population:
     """A prepared, provenance-stamped donor population (the population noun).
 
     Parameters
@@ -449,12 +449,12 @@ class Reference:
             reduced = stack.mean(dim=0)
             if dim is None:
                 return reduced
-            axes = _resolve_over_axes(dim, reduced.ndim, verb="Reference.mean")
+            axes = _resolve_over_axes(dim, reduced.ndim, verb="Population.mean")
             if axes == "all":
                 return reduced.mean()
             return reduced.mean(dim=axes, keepdim=True)
 
-        return self._reduce("Reference.mean", _mean, group_by=group_by, matching=matching)
+        return self._reduce("Population.mean", _mean, group_by=group_by, matching=matching)
 
     def std(
         self,
@@ -478,13 +478,13 @@ class Reference:
             reduced = stack.std(dim=0)
             if dim is None:
                 return reduced
-            axes = _resolve_over_axes(dim, reduced.ndim, verb="Reference.std")
+            axes = _resolve_over_axes(dim, reduced.ndim, verb="Population.std")
             if axes == "all":
                 return reduced.mean()
             return reduced.mean(dim=axes, keepdim=True)
 
         return self._reduce(
-            "Reference.std", _std, group_by=group_by, matching=matching, min_members=2
+            "Population.std", _std, group_by=group_by, matching=matching, min_members=2
         )
 
 
@@ -520,7 +520,7 @@ def population(
     origin: str,
     data: Sequence[Any] | None = None,
     digest_population: bool = False,
-) -> Reference:
+) -> Population:
     """Build the provenance-stamped donor population (the ONE public noun).
 
     DOCUMENTED-UNSTABLE spelling pending naming-session ratification
@@ -549,7 +549,7 @@ def population(
 
     Returns
     -------
-    Reference
+    Population
         The prepared population.
 
     Raises
@@ -594,7 +594,7 @@ def population(
                     argument="source",
                 )
         prepared = tuple(member.detach() for member in tensor_members)
-        return Reference(
+        return Population(
             members=prepared,
             datums=datums,
             origin=origin,
@@ -614,7 +614,7 @@ def population(
             # stamp is earned rather than asserted.
             digest = _trace_payload_digest(members, digest)
             digest_kind = "content"
-        return Reference(
+        return Population(
             members=members,
             datums=datums,
             origin=origin,

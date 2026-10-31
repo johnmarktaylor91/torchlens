@@ -18,9 +18,10 @@ from torchlens.intervention.errors import (
     ControlFlowDivergenceWarning,
 )
 from torchlens.intervention.rerun import run
-from torchlens.intervention.types import InterventionSpec, Relationship, TargetSpec
+from torchlens.intervention.types import InterventionSpec, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
+from torchlens.types import Relationship
 
 
 class BadModel(torch.nn.Module):

@@ -39,9 +39,9 @@ from ._topology.topology import (
     build_supergraph as build_supergraph,
 )
 
-# F01 surgery live lanes: the capture-free bound executor, the bind-side
-# steer wrapper (module named ``steering`` -- the ``steer`` attribute is the
-# historical helper from .helpers), and the region noun (derived
+# F01 surgery live lanes: the capture-free bound executor (``recipe.bind(model)``
+# returns a ``BoundModel`` whose ``.generate`` is the generation door; the
+# ``steer`` attribute is the helper from .helpers) and the region noun (derived
 # admissibility on the existing verbs).
 from .binding import BindReport, BoundModel
 from .compose import compose
@@ -57,7 +57,7 @@ from .hooks import (
     HookContext,
     normalize_hook as normalize_hook,
 )
-from .population import Reference, population
+from .population import Population, population
 from .regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget
 from .save import (
     SpecCompat,
@@ -90,7 +90,6 @@ from .types import (
     ArgComponent as ArgComponent,
     FireRecord,
     FrozenInterventionSpec as FrozenInterventionSpec,
-    Relationship,
 )
 
 __all__ = [
@@ -104,7 +103,6 @@ __all__ = [
     "RegionEdge",
     "RegionInstance",
     "RegionTarget",
-    "Relationship",
     "SpecCompat",
     "SpecPortabilityError",
     "TargetManifestDiff",
@@ -116,7 +114,7 @@ __all__ = [
     "model_input",
     "label_matches",
     "permute_batch",
-    "Reference",
+    "Population",
     "population",
     "SamplingPlan",
     "model_output",

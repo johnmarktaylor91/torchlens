@@ -84,7 +84,7 @@ import torch
 from .._errors import InvalidArgumentError
 from ..errors._base import TorchLensWarning
 from .hooks import HookContext
-from .population import OneDatum, PerRowDatums, Reference
+from .population import OneDatum, PerRowDatums, Population
 from .types import Edit
 
 __all__ = [
@@ -513,7 +513,7 @@ class SamplingPlan:
     clause selections so kwargs coincidence never shares a group.
     """
 
-    population: Reference
+    population: Population
     agree_on: Callable[[Any], Any] | None
     matching: Any
     seed: int | str
@@ -629,7 +629,7 @@ def _disclose_class_size(
 
 
 def sample_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D1/D7/D15): the six declared inputs ARE the plan
-    population: Reference,
+    population: Population,
     *,
     agree_on: Callable[[Any], Any] | None = None,
     matching: Any = None,
@@ -666,7 +666,7 @@ def sample_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D1/D7/D
         The immutable plan; apply it with ``tl.patch_from(plan)``.
     """
 
-    if not isinstance(population, Reference):
+    if not isinstance(population, Population):
         raise InvalidArgumentError(
             f"sample_from takes the population noun, received {type(population).__name__}",
             code="population_source_invalid",
@@ -1045,7 +1045,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
 
 
 def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D16/D24): the six declared inputs ARE the plan
-    source: Reference,
+    source: Population,
     *,
     seed: int | str,
     axis: int | None = None,
@@ -1079,7 +1079,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
         Refuse agreement classes of size 1 (D15).
     """
 
-    if not isinstance(source, Reference):
+    if not isinstance(source, Population):
         raise InvalidArgumentError(
             f"resample_rows_from takes the population noun, received {type(source).__name__}",
             code="population_source_invalid",
@@ -1233,7 +1233,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
 # deterministic reductions as edits (D3): mean_from / mean_fill
 # ----------------------------------------------------------------------
 def mean_from(
-    reference: Reference,
+    reference: Population,
     *,
     group_by: Callable[[Any], Any] | None = None,
     matching: Any = None,
@@ -1297,7 +1297,7 @@ def mean_from(
 
 
 def mean_fill(
-    reference: Reference | None = None,
+    reference: Population | None = None,
     *,
     dim: Any,
     allow_shape_change: bool = False,
@@ -1319,7 +1319,7 @@ def mean_fill(
     canonical_over = _resolve_over_axes(dim, None, verb="mean_fill")
     prepared_fill: torch.Tensor | None = None
     if reference is not None:
-        if not isinstance(reference, Reference):
+        if not isinstance(reference, Population):
             raise InvalidArgumentError(
                 f"mean_fill ref= takes the population noun, received {type(reference).__name__}",
                 code="population_source_invalid",
@@ -1412,7 +1412,7 @@ def _direction_mean_coefficient64(
 
 def set_direction_mean(
     direction: torch.Tensor,
-    reference: Reference,
+    reference: Population,
     *,
     dim: int,
 ) -> Edit:
