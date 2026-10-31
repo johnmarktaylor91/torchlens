@@ -103,8 +103,8 @@ def _draw_dot(trace: Any, tmp_path: Path, vis_mode: str) -> str:
         trace.draw(
             vis_mode=vis_mode,
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / vis_mode),
+            file_format="svg",
+            path=str(tmp_path / vis_mode),
         )
     )
 
@@ -151,8 +151,8 @@ def _rank_frame_boxes(
     trace.draw(
         vis_node_placement="rank",
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "rank"),
+        file_format="svg",
+        path=str(tmp_path / "rank"),
         **kwargs,
     )
     boxes: dict[str, str] = {}
