@@ -1017,6 +1017,10 @@ class _FastLiveSession:
         # tensor leaves, held strongly so a later same-name event is compared by
         # object identity, never by a reusable ``id()``.
         self.last_function_output: tuple[str, Any, tuple[Any, ...]] | None = None
+        # True while the session saves a payload: its own ``safe_copy`` clone
+        # and transform calls run through the wrapped torch functions and must
+        # not count as the model's events.
+        self.collection_paused = False
         self.failure: ContractCheck | None = None
         self.module_plans = build_module_plans(trace)
         self.function_plans = build_function_plans(
@@ -1157,6 +1161,7 @@ class _FastLiveSession:
 
         return (
             self.active
+            and not self.collection_paused
             and threading.get_ident() == self.owner_thread_id
             and func_name in self.function_names
         )
@@ -1211,13 +1216,17 @@ class _FastLiveSession:
                 return
             if label in plan.save_labels:
                 op = self.trace.layer_dict_all_keys[label]
-                op.save_activation(
-                    value,
-                    (),
-                    {},
-                    False,
-                    activation_transform=getattr(self.trace, "activation_transform", None),
-                )
+                self.collection_paused = True
+                try:
+                    op.save_activation(
+                        value,
+                        (),
+                        {},
+                        False,
+                        activation_transform=getattr(self.trace, "activation_transform", None),
+                    )
+                finally:
+                    self.collection_paused = False
 
     def capture_module(self, address: str, output: Any) -> None:
         """Collect and guard one atomic-module forward-hook event."""

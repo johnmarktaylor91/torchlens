@@ -248,3 +248,20 @@ def test_fast_run_names_an_opaque_output_container_as_a_capability_refusal() -> 
             trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
     assert info.value.fields["code"] == "run_capability_unavailable"
     assert "Normal" in str(info.value)
+
+
+class ClonesItsActivation(nn.Module):
+    """Clones an activation, so ``clone`` is a planned functional site."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Multiply, clone, add."""
+
+        y = x * 2
+        z = y.clone()
+        return z + 1
+
+
+def test_fast_run_ignores_its_own_payload_clone() -> None:
+    """The session's payload copy must not be counted as the model's ``clone`` event."""
+
+    _fast_matches_full(ClonesItsActivation(), torch.arange(6.0).view(2, 3))
