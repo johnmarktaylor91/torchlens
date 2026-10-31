@@ -81,7 +81,7 @@ RESULT = min(on_scores) > threshold > max(off_scores)
 
 Two rules in one spec. The first reads the condition at `CONDITION_SITE`, keeps
 the score, and leaves the activation untouched. It puts its decision in
-`hook.run_ctx`, a dictionary that every hook of one bound call shares and that
+`ctx.run_ctx`, a dictionary that every hook of one bound call shares and that
 starts empty for the next call, so no decision leaks from one prompt into the
 next. The second rule adds the behaviour direction at `STEER_SITE` only when
 that decision passed; otherwise it returns the activation object unchanged.

@@ -2,7 +2,7 @@
 
 What this demonstrates
 ----------------------
-Hooks can collect side-channel readouts through ``hook.run_ctx`` while leaving
+Hooks can collect side-channel readouts through ``ctx.run_ctx`` while leaving
 the out unchanged.
 
 How to run

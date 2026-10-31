@@ -1043,7 +1043,7 @@ def _selector_uses_only_provisional_fields(selector: Any) -> bool:
 
 
 def _helper_routes_inputs(helper: Any | None) -> bool:
-    """Return whether a helper consumes call inputs from ``hook.args``.
+    """Return whether a helper consumes call inputs from ``ctx.args``.
 
     Parameters
     ----------
