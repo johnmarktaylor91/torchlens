@@ -614,7 +614,7 @@ def test_graph_topology_fires_on_out_versions_by_child_outside_children() -> Non
 def test_layer_pass_layer_log_xrefs_fires_on_pass_index_mismatch() -> None:
     """Arm 2: an Op's pass_index must match its dict key in Layer.ops."""
 
-    op = SimpleNamespace(pass_index=2, layer_label="relu_1")
+    op = SimpleNamespace(pass_number=2, layer_label="relu_1")
     layer = SimpleNamespace(layer_label="relu_1", num_passes=1, ops={1: op})
     fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer})
     with pytest.raises(MetadataInvariantError, match=r"pass key=1 but Op.pass_number=2"):
@@ -624,7 +624,7 @@ def test_layer_pass_layer_log_xrefs_fires_on_pass_index_mismatch() -> None:
 def test_layer_pass_layer_log_xrefs_fires_on_op_layer_label_mismatch() -> None:
     """Arm 3: an Op's layer_label must match its parent Layer's layer_label."""
 
-    op = SimpleNamespace(pass_index=1, layer_label="wrong_label")
+    op = SimpleNamespace(pass_number=1, layer_label="wrong_label")
     layer = SimpleNamespace(layer_label="relu_1", num_passes=1, ops={1: op})
     fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer})
     with pytest.raises(MetadataInvariantError, match="parent Layer.layer_label"):
@@ -684,7 +684,7 @@ def test_loop_detection_invariants_fires_on_shortcut_func_mismatch() -> None:
         is_output=False,
         func_name="relu",
         num_passes=2,
-        pass_index=1,
+        pass_number=1,
     )
     layer2 = SimpleNamespace(
         label="relu_1:2",
@@ -696,7 +696,7 @@ def test_loop_detection_invariants_fires_on_shortcut_func_mismatch() -> None:
         is_output=False,
         func_name="sigmoid",
         num_passes=2,
-        pass_index=2,
+        pass_number=2,
     )
     fake_trace = SimpleNamespace(
         _options_grouping_policy=None,
@@ -723,7 +723,7 @@ def test_loop_detection_invariants_fires_on_shortcut_num_passes_mismatch() -> No
         is_output=False,
         func_name="relu",
         num_passes=2,
-        pass_index=1,
+        pass_number=1,
     )
     layer2 = SimpleNamespace(
         label="relu_1:2",
@@ -735,7 +735,7 @@ def test_loop_detection_invariants_fires_on_shortcut_num_passes_mismatch() -> No
         is_output=False,
         func_name="relu",
         num_passes=99,
-        pass_index=2,
+        pass_number=2,
     )
     fake_trace = SimpleNamespace(
         _options_grouping_policy=None,
@@ -856,7 +856,7 @@ def test_loop_detection_invariants_fires_on_cross_pass_equivalence_type_drift() 
         is_output=False,
         func_name="relu",
         num_passes=2,
-        pass_index=1,
+        pass_number=1,
         has_params=False,
     )
     other = SimpleNamespace(
@@ -865,7 +865,7 @@ def test_loop_detection_invariants_fires_on_cross_pass_equivalence_type_drift() 
         recurrent_ops=["relu_1", "relu_2"],
         equivalence_class="type_a",
         func_name="relu",
-        pass_index=2,
+        pass_number=2,
         has_params=False,
     )
     fake_trace = SimpleNamespace(
@@ -1148,10 +1148,10 @@ def test_op_log_fields_fires_on_pass_index_below_one() -> None:
     """Arm 2: pass_index must be >= 1."""
 
     layer = SimpleNamespace(
-        layer_label="relu_1", has_saved_activation=False, out=None, pass_index=0, num_passes=1
+        layer_label="relu_1", has_saved_activation=False, out=None, pass_number=0, num_passes=1
     )
     fake_trace = SimpleNamespace(_layer_list=[layer], _loaded_from_bundle=False)
-    with pytest.raises(MetadataInvariantError, match="pass_index=0"):
+    with pytest.raises(MetadataInvariantError, match="pass_number=0"):
         _check_op_log_fields(fake_trace)  # type: ignore[arg-type]
 
 
@@ -1159,7 +1159,7 @@ def test_op_log_fields_fires_on_num_passes_below_pass_index() -> None:
     """Arm 3: num_passes must be >= pass_index."""
 
     layer = SimpleNamespace(
-        layer_label="relu_1", has_saved_activation=False, out=None, pass_index=3, num_passes=1
+        layer_label="relu_1", has_saved_activation=False, out=None, pass_number=3, num_passes=1
     )
     fake_trace = SimpleNamespace(_layer_list=[layer], _loaded_from_bundle=False)
     with pytest.raises(MetadataInvariantError, match="num_passes=1"):
@@ -1173,7 +1173,7 @@ def test_op_log_fields_fires_on_empty_func_name() -> None:
         layer_label="relu_1",
         has_saved_activation=False,
         out=None,
-        pass_index=1,
+        pass_number=1,
         num_passes=1,
         func_name="",
         is_edited=False,
@@ -1195,7 +1195,7 @@ def test_op_log_fields_fires_on_raw_index_below_one() -> None:
         layer_label="relu_1",
         has_saved_activation=False,
         out=None,
-        pass_index=1,
+        pass_number=1,
         num_passes=1,
         func_name="relu",
         is_edited=False,
@@ -1224,7 +1224,7 @@ def test_op_log_fields_fires_on_multipass_label_without_colon() -> None:
         layer_label="relu_1",
         has_saved_activation=False,
         out=None,
-        pass_index=1,
+        pass_number=1,
         num_passes=2,
         func_name="relu",
         is_edited=False,
@@ -1300,17 +1300,17 @@ def test_param_xrefs_fires_on_layers_with_params_outside_layer_labels() -> None:
 def test_pass_count_consistency_fires_on_op_pass_index_mismatch() -> None:
     """Arm 1: a stored op's pass_index must match its key in Layer.ops."""
 
-    op = SimpleNamespace(pass_index=2, num_passes=1, label="relu_1:1")
+    op = SimpleNamespace(pass_number=2, num_passes=1, label="relu_1:1")
     layer_log = SimpleNamespace(ops={1: op}, num_passes=1)
     fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer_log}, _layer_num_calls={})
-    with pytest.raises(MetadataInvariantError, match="stores op with pass_index=2"):
+    with pytest.raises(MetadataInvariantError, match="stores op with pass_number=2"):
         _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
 
 
 def test_pass_count_consistency_fires_on_op_num_passes_mismatch() -> None:
     """Arm 2: a stored op's num_passes must match its Layer's num_passes."""
 
-    op = SimpleNamespace(pass_index=1, num_passes=99, label="relu_1:1")
+    op = SimpleNamespace(pass_number=1, num_passes=99, label="relu_1:1")
     layer_log = SimpleNamespace(ops={1: op}, num_passes=1)
     fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer_log}, _layer_num_calls={})
     with pytest.raises(MetadataInvariantError, match="num_passes=99"):
@@ -1551,6 +1551,7 @@ def test_trace_self_consistency_fires_on_num_tensors_below_saved_ops() -> None:
         num_params_frozen=0,
         output_layers=["relu_1"],
         capture_duration=0,
+        _provenance_duration=0,
         capture_start_time=0,
         capture_end_time=1,
         size=0,

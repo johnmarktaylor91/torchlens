@@ -356,7 +356,7 @@ def test_dropout_two_pass_rng_alignment_matches_full_trace() -> None:
         capture=tl.options.CaptureOptions(layers_to_save=["dropout"], seed=1704),
     )
 
-    assert selective.capture_mode == "exhaustive"
+    assert selective.options.mode == "exhaustive"
     assert torch.equal(_dropout_out(selective), _dropout_out(full))
 
 

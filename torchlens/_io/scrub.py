@@ -537,12 +537,8 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         if root_ids:
             pass_record.root_grad_fn_ids = [remap_grad_id(root_id) for root_id in root_ids]
 
-    state["_provenance_model_object_id"] = (
-        1 if state.get("_provenance_model_object_id") is not None else None
-    )
-    state["_provenance_input_object_id"] = (
-        1 if state.get("_provenance_input_object_id") is not None else None
-    )
+    for object_id_key in ("_provenance_model_object_id", "_provenance_input_object_id"):
+        state[object_id_key] = 1 if state.get(object_id_key) is not None else None
 
 
 def detach_conditional_trace_backrefs(value: Any) -> None:
@@ -1555,7 +1551,6 @@ def _scrub_field(
     )
 
 
-#: Stored Trace option behind each raw-value save policy (tlspec v11 group keys).
 _RAW_SAVE_POLICY_ATTR = {
     "input": "_options_save_raw_input",
     "transformed_output": "_options_save_transformed_output",
@@ -1597,8 +1592,7 @@ def _scrub_raw_value_for_save(
     """
 
     policy_name = f"save_{field_name}"
-    stored_policy_attr = _RAW_SAVE_POLICY_ATTR.get(field_name, policy_name)
-    policy = getattr(owner, stored_policy_attr, "small")
+    policy = getattr(owner, _RAW_SAVE_POLICY_ATTR.get(field_name, policy_name), "small")
     if policy is False:
         return None
     if policy is True:

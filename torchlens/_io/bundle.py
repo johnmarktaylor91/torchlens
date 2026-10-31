@@ -37,6 +37,7 @@ from torchlens.backends.registry import BackendPayloadUnsupportedError
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._data_classes._state_adapter import state_items
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
@@ -646,7 +647,7 @@ def save(
                 input_fingerprints=input_fingerprints,
             )
         sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
-    backend_name = str(trace._provenance_backend)
+    backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
     backend_spec = get_backend_spec(backend_name)
     _reject_audit_only_materialized_payload_save(
         backend_name=backend_name,

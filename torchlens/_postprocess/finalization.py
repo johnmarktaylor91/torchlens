@@ -88,12 +88,10 @@ def _log_time_elapsed(self: "Trace") -> None:
     pass times from total elapsed time. Also computes torchlens_logging overhead
     as total time minus actual function call time.
     """
-    self._provenance_end_time = time.time()
+    self._provenance_end_time = end_time = time.time()
+    elapsed = end_time - self._provenance_start_time
     self._provenance_cleanup_duration = Duration(
-        self._provenance_end_time
-        - self._provenance_start_time
-        - self._provenance_setup_duration
-        - self._cost_forward_duration
+        elapsed - self._provenance_setup_duration - self._cost_forward_duration
     )
 
 

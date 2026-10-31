@@ -307,7 +307,7 @@ def test_graph_topology_fires_on_unresolvable_child_label() -> None:
     layer = SimpleNamespace(
         layer_label="op_1_1",
         label="op_1_1",
-        pass_index=None,
+        pass_number=None,
         num_passes=None,
         parents=[],
         children=["ghost_child_9_9"],
@@ -438,7 +438,7 @@ def test_loop_detection_invariants_fires_on_noncontiguous_pass_numbering() -> No
         equivalence_class="eqA",
         func_name="relu",
         num_passes=2,
-        pass_index=1,
+        pass_number=1,
     )
     member = SimpleNamespace(
         label="op_2_1",
@@ -446,7 +446,7 @@ def test_loop_detection_invariants_fires_on_noncontiguous_pass_numbering() -> No
         recurrent_ops=slo,
         equivalence_class="eqA",
         func_name="relu",
-        pass_index=1,
+        pass_number=1,
     )
     fake_trace = SimpleNamespace(
         _options_grouping_policy=None,
@@ -589,7 +589,7 @@ def test_op_log_fields_fires_on_loaded_artifact_nonnull_func() -> None:
     layer = SimpleNamespace(
         layer_label="relu_1_1",
         has_saved_activation=False,
-        pass_index=1,
+        pass_number=1,
         num_passes=1,
         func_name="relu",
         is_edited=False,
@@ -616,7 +616,7 @@ def test_op_log_fields_fires_on_subzero_step_index() -> None:
     layer = SimpleNamespace(
         layer_label="relu_1_1",
         has_saved_activation=False,
-        pass_index=1,
+        pass_number=1,
         num_passes=1,
         func_name="relu",
         is_edited=False,
@@ -644,7 +644,7 @@ def test_op_log_fields_fires_on_module_call_depth_mismatch() -> None:
     layer = SimpleNamespace(
         layer_label="input_1_1",
         has_saved_activation=False,
-        pass_index=1,
+        pass_number=1,
         num_passes=1,
         func_name="input",
         is_edited=False,
