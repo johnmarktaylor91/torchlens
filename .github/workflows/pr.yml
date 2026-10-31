@@ -418,7 +418,7 @@ jobs:
     # Builds the wheel and sdist, installs each into a fresh venv with the
     # set's extras under tools/packaging/constraints/<set>.txt, and probes
     # import, the health call, one trace, a save and load round trip and the
-    # typed dependency refusals (tests/packaging/). The only place the matrix
+    # typed dependency refusals (tests/packaging_install/). The only place the matrix
     # resolves against the live indexes on every pull request.
     strategy:
       fail-fast: false
@@ -447,4 +447,4 @@ jobs:
           TORCHLENS_PACKAGING_SETS: ${{ matrix.set }}
         # --noconftest: tests/conftest.py imports torch and torchlens, which
         # this runner environment deliberately lacks.
-        run: python -m pytest tests/packaging -m packaging --noconftest -p no:cacheprovider --tb=short -q
+        run: python -m pytest tests/packaging_install -m packaging --noconftest -p no:cacheprovider --tb=short -q
