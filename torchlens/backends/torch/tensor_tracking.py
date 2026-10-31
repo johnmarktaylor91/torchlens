@@ -377,6 +377,85 @@ def _add_live_gradient_reference_hook(
     )
 
 
+def _add_rebound_gradient_hook(
+    trace: "Trace", logged: torch.Tensor, grad_fn_handle: Any, tensor_label: str
+) -> None:
+    """Rebind a refreshed op's gradient hook onto the projection target.
+
+    A refresh projection keeps only the logged copy of each op output, and
+    that copy is a graph dead end: its ``CloneBackward`` node was cut from the
+    live tensor the model kept using. For an in-place op the live tensor may
+    even have been written again since. The copy's clone node still points at
+    the autograd node the op produced (``grad_fn_handle``, pinned for the
+    trace's lifetime) and at the live tensor's output slot on it, so the hook
+    goes on that node's slot, the path the deferred in-place install uses
+    (``_add_live_gradient_reference_hook``). A copy without that link keeps
+    the plain tensor hook.
+
+    Parameters
+    ----------
+    trace:
+        Projection target whose gradient hooks are being rebound.
+    logged:
+        Logged copy of the op output; its id keys label ownership.
+    grad_fn_handle:
+        Autograd node the op produced, or ``None``.
+    tensor_label:
+        Raw label of the op.
+    """
+
+    from ...capture.session import LiveGradientReference
+
+    output_nr = _logged_copy_source_slot(logged, grad_fn_handle)
+    if output_nr is None or not getattr(trace, "capture_tensor_grad_hooks", True):
+        _add_tensor_backward_hook(trace, logged, tensor_label)
+        return
+    _install_tensor_grad_hook(
+        trace,
+        LiveGradientReference(
+            tensor=logged,
+            grad_fn=grad_fn_handle,
+            output_nr=output_nr,
+            owning_backward_only=False,
+        ),
+        tensor_label,
+        take_ownership=False,
+        owning_backward_only=False,
+    )
+
+
+def _logged_copy_source_slot(logged: torch.Tensor, grad_fn_handle: Any) -> int | None:
+    """Return the output slot of ``grad_fn_handle`` that ``logged`` was copied from.
+
+    Parameters
+    ----------
+    logged:
+        Logged copy of an op output.
+    grad_fn_handle:
+        Autograd node the op produced, or ``None``.
+
+    Returns
+    -------
+    int | None
+        The slot when ``logged`` is a dead-end copy whose only graph edge
+        leads to ``grad_fn_handle``; ``None`` otherwise (no node, a detached
+        copy, or the copy is itself the op's live output).
+    """
+
+    from .completeness_witness import internal_scalar_read
+
+    if grad_fn_handle is None:
+        return None
+    with pause_logging(), internal_scalar_read():
+        copy_grad_fn = logged.grad_fn
+        if copy_grad_fn is None or copy_grad_fn is grad_fn_handle:
+            return None
+        edges = [edge for edge in copy_grad_fn.next_functions if edge[0] is not None]
+    if len(edges) != 1 or edges[0][0] is not grad_fn_handle:
+        return None
+    return int(edges[0][1])
+
+
 def _install_tensor_grad_hook(
     trace: "Trace",
     site: "torch.Tensor | LiveGradientReference",
