@@ -1259,11 +1259,10 @@ def _render_dot_source(
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = f"{tmpdir}/conditional_branch_matrix"
         dot_source = trace.draw(
-            vis_mode=vis_mode,
+            rolled=vis_mode == "rolled",
             path=outpath,
-            vis_save_only=True,
             file_format="dot",
-        )
+        ).dot
     return dot_source, trace
 
 
@@ -1614,7 +1613,7 @@ def test_rolled_mixed_arm_model_records_exact_ops_and_composite_render_label() -
     dot_source, render_log = _render_dot_source(
         RolledMixedArmModel(),
         torch.ones(1, 4),
-        vis_mode="rolled",
+        rolled=True,
     )
     conditional_id = _get_root_event(trace).id
     then_edges = trace.conditional_arm_entry_edges[(conditional_id, "then")]

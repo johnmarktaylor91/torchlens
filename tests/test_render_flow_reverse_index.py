@@ -128,7 +128,7 @@ def test_render_pass_reuses_layer_label_reverse_indexes(
     _, skipped_labels = _render_flow._build_skip_filtered_edge_map(
         trace,
         entries,
-        vis_mode="unrolled",
+        rolled=False,
         show_buffer_layers="meaningful",
         skip_fn=_skip_activations,
     )
@@ -136,8 +136,8 @@ def test_render_pass_reuses_layer_label_reverse_indexes(
         trace,
         entries,
         skipped_labels=skipped_labels,
-        vis_mode="unrolled",
-        vis_call_depth=1000,
+        rolled=False,
+        depth=1000,
         show_buffer_layers="meaningful",
         collapse_fn=None,
         repeat_folds=None,

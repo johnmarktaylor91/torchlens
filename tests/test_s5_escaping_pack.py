@@ -74,7 +74,6 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,

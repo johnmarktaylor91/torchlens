@@ -666,7 +666,7 @@ def test_collapse_adjacency_index_avoids_feed_forward_fuzzy_resolution(
         assert analysis.child_flow_graphs
 
         _clear_collapse_caches(schedule_trace)
-        schedule = collapse_schedule(schedule_trace, RenderContext(vis_mode="rolled"))
+        schedule = collapse_schedule(schedule_trace, RenderContext(rolled=True))
         assert schedule.steps
         assert schedule.steps[-1].plan.nodes
     finally:
@@ -988,7 +988,7 @@ def test_default_routes_v2_and_rolled_auto() -> None:
         v2_fn = resolve_collapse_fn(trace, "auto", "unrolled", context=RenderContext())
         assert hasattr(v2_fn, "_torchlens_v2_result")
 
-        rolled_context = RenderContext(vis_mode="rolled")
+        rolled_context = RenderContext(rolled=True)
         rolled_fn = resolve_collapse_fn(trace, "auto", "rolled", context=rolled_context)
         assert hasattr(rolled_fn, "_torchlens_v2_result")
 
@@ -1010,7 +1010,7 @@ def test_float_collapse_level_validation_and_endpoints() -> None:
         with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
             trace.collapse_plan(mode=-0.1)
         with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
-            trace.draw(collapse=1.1, vis_save_only=True)
+            trace.draw(collapse=1.1)
 
         assert trace.collapse_plan(mode=0.0) == none_plan
         assert trace.collapse_plan(mode=1.0) == max_result.plan
@@ -1220,7 +1220,7 @@ def test_rolled_v2_memo_separates_digest_identical_different_num_calls(
 
     trace = _trace(UnevenReusedSiblings(), torch.randn(2, 4))
     try:
-        context = RenderContext(vis_mode="rolled")
+        context = RenderContext(rolled=True)
         collapse_fn = resolve_collapse_fn(trace, "auto", "rolled", context=context)
         result = getattr(collapse_fn, "_torchlens_v2_result")
         rendered_plan = collapse_plan_for_trace(trace, collapse_fn, result.repeat_folds, context)
@@ -1519,9 +1519,8 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
         source = str(
             trace.draw(
                 path=str(tmp_path / "max_floor_rep_stats"),
-                vis_save_only=True,
                 file_format="svg",
-                vis_node_placement="dot",
+                layout="dot",
                 collapse="max",
             )
         )
@@ -1717,10 +1716,9 @@ def test_collapse_optimizer_ops_ceiling_declines_disclosed(
     with pytest.warns(UserWarning, match="skipping smart collapse"):
         dot = fresh.draw(
             collapse="max",
-            vis_save_only=True,
             file_format="dot",
             order_siblings=False,
-        )
+        ).dot
     assert dot  # uncollapsed render still ships
 
     with warnings_module.catch_warnings():
@@ -1763,7 +1761,6 @@ def test_collapse_ceiling_warning_category_and_attribution(
         warnings_module.simplefilter("always")
         fresh.draw(
             collapse="max",
-            vis_save_only=True,
             file_format="dot",
             order_siblings=False,
         )

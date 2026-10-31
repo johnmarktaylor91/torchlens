@@ -346,7 +346,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "annotate": "user annotation writer (mutates trace annotations by contract)",
     "using": "appliance door: returns what a registered factory builds; it writes nothing "
     "on the trace (each appliance's own reads are its owner's to sweep)",
-    "add_node_overlay": "mutates the overlay table consumed by draw",
     "attach_hooks": "mutates the live model's hook registry",
     "clear_hooks": "mutates the live model's hook registry",
     "clear_edits": "mutates the live model's hook registry",
@@ -370,7 +369,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "save_intervention": "save boundary (intervention spec artifact)",
     "validate_forward_pass": "full replay validation; execution-tier compute",
     "discharge_against": "requires a second real capture as input",
-    "render_dagua_graph": "optional external dagua renderer dependency",
     "to_dagua_graph": "optional external dagua renderer dependency",
 }
 
@@ -429,7 +427,6 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "output_table": lambda t: t.output_table(),
         "reconstruct_output": lambda t: t.reconstruct_output(),
         "reconstruct_container": lambda t: t.reconstruct_container(),
-        "visualization_field_audit": lambda t: t.visualization_field_audit(),
         "attention_blocks": lambda t: list(t.attention_blocks()),
         "modules_with_facet": lambda t: list(t.modules_with_facet("query")),
         "activations_by_pass": lambda t: t.activations_by_pass(1),
@@ -457,9 +454,8 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "check_plan": lambda t: t.check_plan(["relu"]),
         "stack": lambda t: t.stack(tl.func("relu")),
         "show": lambda t: t.show(kind="graph", path=str(out / "shown")),
-        "draw_backward": lambda t: t.draw_backward(path=str(out / "bwd")),
-        "draw_combined": lambda t: t.draw_combined(path=str(out / "cmb")),
-        "animate_ops": lambda t: t.animate_ops(t.layer_list[0].layer_label),
+        "draw_backward": lambda t: t.draw(graph="backward", path=str(out / "bwd")),
+        "draw_combined": lambda t: t.draw(graph="combined", path=str(out / "cmb")),
     }
 
 

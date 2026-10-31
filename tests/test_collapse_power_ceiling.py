@@ -189,10 +189,10 @@ def test_focused_context_is_a_real_remedy(monkeypatch) -> None:
     with warnings_module.catch_warnings():
         warnings_module.simplefilter("ignore")
         unrolled = collapse_optimizer.select_collapse_plan(
-            trace, RenderContext(vis_mode="unrolled"), mode="max"
+            trace, RenderContext(rolled=False), mode="max"
         )
         rolled = collapse_optimizer.select_collapse_plan(
-            trace, RenderContext(vis_mode="rolled"), mode="max"
+            trace, RenderContext(rolled=True), mode="max"
         )
     assert unrolled.planner == "linear_fallback"  # unrolled U over the gate
     assert rolled.planner != "linear_fallback"  # rolled U re-admits

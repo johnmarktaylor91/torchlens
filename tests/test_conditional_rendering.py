@@ -185,11 +185,10 @@ def _render_dot_source(
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = os.path.join(tmpdir, "conditional_render")
         dot_source = trace.draw(
-            vis_mode=vis_mode,
+            rolled=vis_mode == "rolled",
             path=outpath,
-            vis_save_only=True,
             file_format="dot",
-        )
+        ).dot
     return dot_source, trace
 
 
@@ -397,7 +396,7 @@ def test_rolled_mixed_arm_graphviz_shows_composite_call_label() -> None:
     dot_source, trace = _render_dot_source(
         RolledMixedArmModel(),
         torch.ones(1, 4),
-        vis_mode="rolled",
+        rolled=True,
     )
 
     try:

@@ -12,33 +12,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _user_funcs as user_funcs, _visualization
-from torchlens.options import CaptureOptions, SaveOptions, StorageOptions, VisualizationOptions
+from torchlens.options import CaptureOptions, SaveOptions, StorageOptions
 
-_VISUALIZATION_CASES = [
-    ("view", "vis_mode", "rolled", "vis_mode"),
-    ("depth", "vis_call_depth", 5, "vis_call_depth"),
-    ("container_path", "vis_outpath", "custom.gv", "path"),
-    ("save_only", "vis_save_only", True, "vis_save_only"),
-    ("file_format", "vis_fileformat", "svg", "file_format"),
-    # Canonical tri-state value on purpose: the legacy bools are themselves a
-    # deprecated VALUE now (grind b4, R48-1), and these two cases assert the
-    # routing of the NAME, so a bool here would smuggle a second warning in.
-    ("show_buffers", "vis_buffers", "always", "show_buffers"),
-    ("direction", "vis_direction", "leftright", "direction"),
-    ("graph_overrides", "vis_graph_overrides", {"ranksep": "2.0"}, "vis_graph_overrides"),
-    ("edge_overrides", "vis_edge_overrides", {"color": "red"}, "vis_edge_overrides"),
-    (
-        "grad_edge_overrides",
-        "vis_grad_edge_overrides",
-        {"style": "dashed"},
-        "vis_grad_edge_overrides",
-    ),
-    ("module_overrides", "vis_module_overrides", {"color": "blue"}, "vis_module_overrides"),
-    ("layout", "vis_node_placement", "dot", "vis_node_placement"),
-    ("renderer", "vis_renderer", "dagua", "vis_renderer"),
-    ("theme", "vis_theme", "gallery", "theme"),
-    ("node_style", "vis_node_mode", "profiling", "node_mode"),
-]
 _STREAMING_CASES = [
     ("path", "save_outs_to", Path("bundle"), "save_outs_to"),
     ("retain_in_memory", "keep_outs_in_memory", False, "keep_outs_in_memory"),
@@ -221,57 +196,6 @@ def test_show_model_graph_recurrence_detection(
 
     assert captured["recurrence_detection"] is False
     assert not _deprecation_messages(records)
-
-
-@pytest.mark.parametrize(
-    ("field_name", "flat_name", "value", "render_key"),
-    _VISUALIZATION_CASES,
-)
-def test_visualization_options_group_supports_every_field(
-    stubbed_runner: tuple[dict[str, Any], _DummyLog],
-    field_name: str,
-    flat_name: str,
-    value: Any,
-    render_key: str,
-) -> None:
-    """Every visualization group field should route through the grouped object."""
-
-    del flat_name
-    _captured, dummy_log = stubbed_runner
-    option_kwargs: dict[str, Any] = {"view": "rolled"}
-    if field_name == "view":
-        option_kwargs = {"view": value}
-    else:
-        option_kwargs[field_name] = value
-
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
-        _visualization.show_model_graph(
-            _TinyModel(),
-            _tiny_input(),
-            visualization=VisualizationOptions(**option_kwargs),
-        )
-
-    assert _deprecation_messages(records) == []
-    assert dummy_log.render_calls[-1][render_key] == value
-
-
-def test_visualization_defaults_preserve_per_function_behavior(
-    stubbed_runner: tuple[dict[str, Any], _DummyLog],
-) -> None:
-    """Grouped visualization defaults must keep current per-function behavior."""
-
-    _captured, dummy_log = stubbed_runner
-
-    tl.trace(
-        _TinyModel(),
-        _tiny_input(),
-        capture=CaptureOptions(layers_to_save=None),
-    )
-    assert dummy_log.render_calls == []
-
-    _visualization.show_model_graph(_TinyModel(), _tiny_input())
-    assert dummy_log.render_calls[-1]["vis_mode"] == "unrolled"
 
 
 @pytest.mark.parametrize(

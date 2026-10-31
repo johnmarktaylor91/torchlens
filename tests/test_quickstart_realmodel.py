@@ -54,7 +54,7 @@ class TestResnet18Rungs:
         """Memo D8: the pinned surfaces leave the model bit-identical."""
 
         hash_before = state_dict_hash(resnet18_eval)
-        result = render(resnet18_eval, input_shape=(1, 3, 224, 224), file=str(tmp_path / "r18.svg"))
+        result = render(resnet18_eval, input_shape=(1, 3, 224, 224), path=str(tmp_path / "r18.svg"))
         tl.summary(resnet18_eval, input_shape=(1, 3, 224, 224))
         assert state_dict_hash(resnet18_eval) == hash_before
         assert result.receipt.state_verified is True

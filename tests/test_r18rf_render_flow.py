@@ -148,11 +148,11 @@ def test_recurrent_draw_combined_renders(tmp_path) -> None:
 
     log = _combined_trace(RecurrentLinear())
     out = str(tmp_path / "rec_combined")
-    dot = log.draw_combined(
+    dot = log.draw(
+        graph="combined",
         path=out,
-        vis_save_only=True,
         file_format="svg",
-    )
+    ).dot
     _assert_combined_render(dot, out)
 
 
@@ -161,11 +161,11 @@ def test_recurrent_nested_module_draw_combined_renders(tmp_path) -> None:
 
     log = _combined_trace(RecurrentReLU())
     out = str(tmp_path / "recrelu_combined")
-    dot = log.draw_combined(
+    dot = log.draw(
+        graph="combined",
         path=out,
-        vis_save_only=True,
         file_format="svg",
-    )
+    ).dot
     _assert_combined_render(dot, out)
 
 
@@ -174,9 +174,9 @@ def test_feedforward_draw_combined_still_renders(tmp_path) -> None:
 
     log = _combined_trace(FeedForward())
     out = str(tmp_path / "ff_combined")
-    dot = log.draw_combined(
+    dot = log.draw(
+        graph="combined",
         path=out,
-        vis_save_only=True,
         file_format="svg",
-    )
+    ).dot
     _assert_combined_render(dot, out)

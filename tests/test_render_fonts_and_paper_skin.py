@@ -84,7 +84,6 @@ def test_backward_and_combined_graphs_declare_the_theme_font(tmp_path: Path, ent
     try:
         dot = getattr(trace, entry)(
             path=str(tmp_path / entry),
-            vis_save_only=True,
             file_format="dot",
         )
     finally:
@@ -104,12 +103,11 @@ def test_paper_skin_renders_with_a_legend_without_graphviz_warnings(tmp_path: Pa
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         dot = trace.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / "paper"),
             theme="paper",
             show_legend=True,
-        )
+        ).dot
     assert "colorscheme" not in dot
     assert (tmp_path / "paper.svg").exists()
     assert [str(w.message) for w in caught if "color" in str(w.message).lower()] == []

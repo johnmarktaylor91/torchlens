@@ -21,7 +21,6 @@ def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
@@ -55,11 +54,10 @@ def test_default_nodespec_for_linear_suppresses_proven_redundant_args(tmp_path: 
     assert "out_features" not in dot
 
     dot_all = log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph_all"),
         show_redundant_args=True,
-    )
+    ).dot
     assert "in_features=16" in dot_all
     assert "out_features=32" in dot_all
 

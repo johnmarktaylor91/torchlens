@@ -1828,9 +1828,9 @@ class TestConditionalBranchDetection:
             show_model_graph(
                 model,
                 x,
-                view="unrolled",
+                rolled=False,
                 visualization=tl.options.VisualizationOptions(
-                    save_only=True, container_path=outpath, file_format="dot"
+                    container_path=outpath, file_format="dot"
                 ),
             )
             dot_file = outpath + ".dot"
@@ -1850,9 +1850,8 @@ class TestConditionalBranchDetection:
         with tempfile.TemporaryDirectory() as tmpdir:
             outpath = os.path.join(tmpdir, "cond_then_test")
             mh.draw(
-                vis_mode="unrolled",
+                rolled=False,
                 path=outpath,
-                vis_save_only=True,
                 file_format="dot",
             )
             dot_file = outpath + ".dot"
@@ -1877,9 +1876,9 @@ class TestConditionalBranchDetection:
             show_model_graph(
                 model,
                 x,
-                view="rolled",
+                rolled=True,
                 visualization=tl.options.VisualizationOptions(
-                    save_only=True, container_path=outpath, file_format="dot"
+                    container_path=outpath, file_format="dot"
                 ),
             )
             dot_file = outpath + ".dot"

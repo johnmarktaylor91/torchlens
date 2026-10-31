@@ -154,11 +154,10 @@ def _render_dot(log: Trace, tmp_path: Path, show_buffer_layers: str | bool) -> s
     """
 
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / f"buffer_visibility_{show_buffer_layers}"),
         show_buffers=show_buffer_layers,
-        vis_node_placement="dot",
+        layout="dot",
     )
 
 
@@ -185,11 +184,10 @@ def _render_collapsed_module(
     """
 
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / f"collapsed_{node_placement}"),
         collapse_fn=_collapse_batchnorm,
-        vis_node_placement=node_placement,
+        layout=node_placement,
     )
 
 
@@ -419,12 +417,11 @@ def test_collapsed_pure_op_module_omits_buffer_clause(tmp_path: Path) -> None:
     log = tl.trace(_PureOpModel(), torch.randn(2, 4), capture=CaptureOptions(layers_to_save="none"))
     try:
         dot_source = log.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / "pure_ops"),
             collapse_fn=partial(_collapse_module_at_address, address="block"),
-            vis_node_placement="dot",
-        )
+            layout="dot",
+        ).dot
     finally:
         log.cleanup()
 

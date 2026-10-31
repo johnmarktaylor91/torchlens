@@ -222,7 +222,6 @@ def test_pil_raw_input_svg_embeds_montage_data_uri(tmp_path: Path) -> None:
 
     log.draw(
         path=str(output_path),
-        vis_save_only=True,
         file_format="svg",
     )
     svg_text = output_path.read_text(encoding="utf-8")

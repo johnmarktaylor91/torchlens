@@ -199,7 +199,6 @@ def mlp_log() -> Any:
 def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
@@ -245,7 +244,7 @@ def test_non_string_non_callable_refuses() -> None:
 
 def test_rolled_mode_refuses(lockstep_log: tl.Trace, tmp_path: Path) -> None:
     with pytest.raises(Exception) as excinfo:
-        _draw(lockstep_log, tmp_path, stack_by=True, vis_mode="rolled")
+        _draw(lockstep_log, tmp_path, stack_by=True, rolled=True)
     assert excinfo.value.fields["code"] == "stack_by_requires_unrolled"
 
 

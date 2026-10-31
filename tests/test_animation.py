@@ -1,4 +1,4 @@
-"""Tests for Phase 7 temporal visualization helpers."""
+"""Tests for ``trace.draw(animate=)`` and the per-op profile."""
 
 from __future__ import annotations
 
@@ -38,17 +38,31 @@ class RecurrentLinear(nn.Module):
         return state
 
 
-def test_animate_ops_returns_static_html() -> None:
-    """animate_ops should expose pass frames for a repeated site."""
+def test_draw_animate_returns_an_html_drawing(tmp_path) -> None:
+    """``draw(animate=site)`` is an HTML Drawing with one frame per pass; save writes it."""
 
     log = tl.trace(RecurrentLinear(), torch.randn(1, 3))
     recurrent_label = next(label for label, count in log.layer_num_calls.items() if count > 1)
 
-    html = log.animate_ops(recurrent_label)
+    drawing = log.draw(animate=recurrent_label)
 
+    assert isinstance(drawing, tl.viz.Drawing)
+    assert drawing.file_format == "html"
+    html = str(drawing)
     assert "tl-pass-animation" in html
     assert "Play" in html
     assert recurrent_label in html
+    assert drawing._repr_html_() == html
+    written = drawing.save(tmp_path / "passes.html")
+    assert written.read_text(encoding="utf-8") == html
+
+
+def test_draw_animate_unknown_site_raises() -> None:
+    """An unknown site refuses with KeyError, as the old method did."""
+
+    log = tl.trace(RecurrentLinear(), torch.randn(1, 3))
+    with pytest.raises(KeyError):
+        log.draw(animate="no_such_layer_1_1")
 
 
 def test_op_profile_includes_timing_and_memory() -> None:

@@ -218,7 +218,6 @@ def test_node_spec_draws_ancestor_cone_with_tooltips(tmp_path: Any) -> None:
         trace.draw(
             node_spec_fn=node_spec(target),
             file_format="svg",
-            vis_save_only=True,
             path=str(output_path),
         )
         svg = output_path.read_text(encoding="utf-8")

@@ -67,7 +67,6 @@ def uniform_log() -> Any:
 def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
@@ -82,7 +81,7 @@ def test_rolled_varying_layer_gets_summary_row(varying_log: tl.Trace) -> None:
     layer = _varying_layer(varying_log)
     summary = layer.shape_summary
     assert isinstance(summary, str) and summary
-    lines = compute_default_node_lines(layer, vis_mode="rolled")
+    lines = compute_default_node_lines(layer, rolled=True)
     # Rendered VERBATIM, positioned directly after the title row.
     assert lines[1] == summary
 
@@ -92,7 +91,7 @@ def test_summary_row_is_escaped_at_the_choke_point(varying_log: tl.Trace, tmp_pa
 
     layer = _varying_layer(varying_log)
     summary = layer.shape_summary
-    dot = _draw(varying_log, tmp_path, vis_mode="rolled")
+    dot = _draw(varying_log, tmp_path, rolled=True)
     if ">" in summary:
         assert summary.replace(">", "&gt;") in dot
         assert f">{summary}<" not in dot
@@ -103,7 +102,7 @@ def test_summary_row_is_escaped_at_the_choke_point(varying_log: tl.Trace, tmp_pa
 def test_uniform_recurrence_has_no_summary_row(uniform_log: tl.Trace) -> None:
     layer = _varying_layer(uniform_log)
     assert layer.shape_summary is None
-    lines = compute_default_node_lines(layer, vis_mode="rolled")
+    lines = compute_default_node_lines(layer, rolled=True)
     assert all("->" not in line or "params" in line for line in lines[:2])
 
 
@@ -114,7 +113,7 @@ def test_single_pass_and_per_pass_nodes_have_no_summary_row(
     summary = layer.shape_summary
     # Per-pass Op nodes (unrolled) carry no aggregate summary row.
     for op in layer.ops.values():
-        lines = compute_default_node_lines(op, vis_mode="unrolled")
+        lines = compute_default_node_lines(op, rolled=False)
         assert summary not in lines
 
 
@@ -123,14 +122,14 @@ def test_shape_summary_selector_token(varying_log: tl.Trace, tmp_path: Path) -> 
     summary = layer.shape_summary
     lines = compute_default_node_lines(
         layer,
-        vis_mode="rolled",
+        rolled=True,
         node_label_fields=["name", "shape_summary"],
     )
     assert lines == [layer.layer_label, summary]
     # Skip-when-absent: a single-pass layer contributes no row for the token.
     single = next(lay for lay in varying_log.layer_logs.values() if len(lay.ops) == 1)
     single_lines = compute_default_node_lines(
-        single, vis_mode="rolled", node_label_fields=["name", "shape_summary"]
+        single, rolled=True, node_label_fields=["name", "shape_summary"]
     )
     assert single_lines == [single.layer_label]
 
@@ -138,5 +137,5 @@ def test_shape_summary_selector_token(varying_log: tl.Trace, tmp_path: Path) -> 
 def test_unknown_selector_still_refuses(varying_log: tl.Trace) -> None:
     layer = _varying_layer(varying_log)
     with pytest.raises(Exception) as excinfo:
-        compute_default_node_lines(layer, vis_mode="rolled", node_label_fields=["no_such_field"])
+        compute_default_node_lines(layer, rolled=True, node_label_fields=["no_such_field"])
     assert excinfo.value.fields["code"] == "node_label_field_invalid"

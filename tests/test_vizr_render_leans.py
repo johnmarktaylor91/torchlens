@@ -99,7 +99,7 @@ def test_fk3_pdf_render_embeds_bundled_font(tmp_path: Path) -> None:
     """A real PDF render embeds Liberation Sans; the DOT still names Helvetica."""
     trace = tl.trace(_Tiny(), torch.randn(2, 3))
     try:
-        dot = trace.draw(path=str(tmp_path / "fk3"), vis_save_only=True, file_format="pdf")
+        dot = trace.draw(path=str(tmp_path / "fk3"), file_format="pdf").dot
     finally:
         trace.cleanup()
     assert "fontname=Helvetica" in dot or 'fontname="Helvetica"' in dot
@@ -193,7 +193,7 @@ def _assert_render_uses_bundled_face(tmp_path: Path) -> None:
     assert _graphviz_helvetica_file(env, tmp_path).startswith(font_dir + os.sep)
     trace = tl.trace(_Tiny(), torch.randn(2, 3))
     try:
-        trace.draw(path=str(tmp_path / "fk3"), vis_save_only=True, file_format="pdf")
+        trace.draw(path=str(tmp_path / "fk3"), file_format="pdf")
     finally:
         trace.cleanup()
     assert b"LiberationSans" in _pdf_text_blobs((tmp_path / "fk3.pdf").read_bytes())
@@ -280,7 +280,7 @@ def test_fk1_oversize_vector_warns_and_obeys(
     try:
         with warnings.catch_warnings(record=True) as records:
             warnings.simplefilter("always")
-            trace.draw(path=str(tmp_path / "big"), vis_save_only=True, file_format="svg")
+            trace.draw(path=str(tmp_path / "big"), file_format="svg")
     finally:
         trace.cleanup()
     assert (tmp_path / "big.svg").stat().st_size > 0, "the oversize render was not written"
@@ -297,7 +297,7 @@ def test_fk1_ordinary_vector_render_is_quiet(tmp_path: Path) -> None:
     try:
         with warnings.catch_warnings(record=True) as records:
             warnings.simplefilter("always")
-            trace.draw(path=str(tmp_path / "small"), vis_save_only=True, file_format="pdf")
+            trace.draw(path=str(tmp_path / "small"), file_format="pdf")
     finally:
         trace.cleanup()
     assert "render_vector_oversize" not in _codes(records)
@@ -356,9 +356,8 @@ def test_fk4_pathological_trace_renders_bounded_overview_with_manifest(
             dot = trace.draw(
                 collapse="auto",
                 path=str(tmp_path / "ov"),
-                vis_save_only=True,
                 file_format="svg",
-            )
+            ).dot
     finally:
         trace.cleanup()
     codes = _codes(records)
@@ -394,7 +393,6 @@ def test_fk4_floor_residual_writes_manifest(
             trace.draw(
                 collapse="auto",
                 path=str(tmp_path / "floor"),
-                vis_save_only=True,
                 file_format="svg",
             )
     finally:
@@ -416,7 +414,6 @@ def test_fk4_ordinary_auto_render_writes_no_manifest(tmp_path: Path) -> None:
         trace.draw(
             collapse="auto",
             path=str(tmp_path / "plain"),
-            vis_save_only=True,
             file_format="svg",
         )
     finally:

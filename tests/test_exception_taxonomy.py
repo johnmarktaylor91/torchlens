@@ -833,7 +833,6 @@ TOP_REFUSAL_CASES: tuple[tuple[str, Callable[[], object]], ...] = (
     (
         "option_group_keyword_conflict",
         lambda: merge_visualization_options(
-            function_default_mode="none",
             visualization=VisualizationOptions(layout="dot"),
             layout="rank",
         ),
@@ -1119,7 +1118,6 @@ def test_option_group_conflict_doors_split_by_site_history() -> None:
 
     with pytest.raises(errors.KeywordConflictError) as keyword_info:
         merge_visualization_options(
-            function_default_mode="none",
             visualization=VisualizationOptions(layout="dot"),
             layout="rank",
         )

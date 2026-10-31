@@ -240,7 +240,7 @@ def test_show_model_graph_accepts_explicit_opt_in_overrides(
         _TinyModel(),
         _tiny_input(),
         recurrence_detection=False,
-        visualization=VisualizationOptions(view="rolled"),
+        visualization=VisualizationOptions(rolled=True),
     )
 
     assert captured_calls[-1]["recurrence_detection"] is False

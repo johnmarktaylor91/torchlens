@@ -52,22 +52,21 @@ def test_graphviz_render_phase_timings_are_recorded(tmp_path: Path) -> None:
     )
     trace.draw(
         path=str(tmp_path / "forward"),
-        vis_save_only=True,
         file_format="svg",
     )
     _assert_render_bucket(trace, "render:graphviz:forward")
 
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
-    trace.draw_backward(
+    trace.draw(
+        graph="backward",
         path=str(tmp_path / "backward"),
-        vis_save_only=True,
         file_format="svg",
     )
     _assert_render_bucket(trace, "render:graphviz:backward")
 
-    trace.draw_combined(
+    trace.draw(
+        graph="combined",
         path=str(tmp_path / "combined"),
-        vis_save_only=True,
         file_format="svg",
     )
     _assert_render_bucket(trace, "render:graphviz:combined")

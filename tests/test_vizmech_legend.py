@@ -44,7 +44,6 @@ def _draw_dot(tmp_path: Path, name: str, **kwargs: object) -> str:
 
     trace = tl.trace(_Nested(), torch.randn(1, 3))
     return trace.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / name),
         **kwargs,
@@ -180,10 +179,9 @@ def test_rank_path_key_rides_the_header(tmp_path: Path) -> None:
     dot = trace.draw(
         path=str(tmp_path / "rank_key"),
         file_format="svg",
-        vis_save_only=True,
-        vis_node_placement="rank",
+        layout="rank",
         show_legend=True,
-    )
+    ).dot
     assert LEGEND_NODE_NAME not in dot
     assert f'ID="{KEY_TABLE_ID}"' in dot
     assert ">trainable weights<" in dot

@@ -585,15 +585,14 @@ class TestOptimizerSupport:
 
 
 class TestVisualizationParams:
-    def _get_dot_source(self, model, x, vis_mode="unrolled", vis_call_depth=1000):
+    def _get_dot_source(self, model, x, rolled=False, depth=1000):
         outpath = opj(VIS_OUTPUT_DIR, "toy-networks", "_test_param_vis")
         mh = trace_fn(model, x)
         dot_source = mh.draw(
-            vis_mode=vis_mode,
+            rolled=rolled,
             path=outpath,
-            vis_save_only=True,
-            vis_call_depth=vis_call_depth,
-        )
+            depth=depth,
+        ).dot
         return dot_source, mh
 
     def test_param_label_shows_names(self):
@@ -658,29 +657,29 @@ class TestVisualizationParams:
 
     def test_collapsed_module_trainable_color(self):
         """Collapsed module with all trainable params should use trainable color."""
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), vis_call_depth=1)
+        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), depth=1)
         assert _TRAINABLE in dot
 
     def test_collapsed_module_frozen_color(self):
         """Collapsed module with all frozen params should use frozen color."""
-        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), vis_call_depth=1)
+        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), depth=1)
         assert _FROZEN in dot
 
     def test_collapsed_module_mixed_grad(self):
         """Collapsed module with mixed frozen/trainable should use grad fill."""
         model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
         model[0].weight.requires_grad = False
-        dot, mh = self._get_dot_source(model, _simple_input(), vis_call_depth=1)
+        dot, mh = self._get_dot_source(model, _simple_input(), depth=1)
         # The collapsed "0" module has mixed params
         assert _MIXED in dot or _TRAINABLE in dot  # at least one color appears
 
     def test_collapsed_module_param_detail(self):
         """Collapsed module should show trainable/frozen param breakdown."""
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), vis_call_depth=1)
+        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), depth=1)
         assert "all trainable" in dot
 
     def test_collapsed_module_param_detail_frozen(self):
-        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), vis_call_depth=1)
+        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), depth=1)
         assert "all frozen" in dot
 
 
@@ -744,7 +743,7 @@ class TestIntegration:
             model,
             _simple_input(),
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(all_trainable.with_suffix(""))
+                container_path=str(all_trainable.with_suffix(""))
             ),
         )
         _assert_generated_pdf(all_trainable)
@@ -756,7 +755,7 @@ class TestIntegration:
             model,
             _simple_input(),
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(mixed.with_suffix(""))
+                container_path=str(mixed.with_suffix(""))
             ),
         )
         _assert_generated_pdf(mixed)
@@ -768,7 +767,7 @@ class TestIntegration:
             model,
             _simple_input(),
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(all_frozen.with_suffix(""))
+                container_path=str(all_frozen.with_suffix(""))
             ),
         )
         _assert_generated_pdf(all_frozen)
@@ -783,7 +782,7 @@ class TestIntegration:
             _simple_input(),
             depth=1,
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(collapsed_trainable.with_suffix(""))
+                container_path=str(collapsed_trainable.with_suffix(""))
             ),
         )
         _assert_generated_pdf(collapsed_trainable)
@@ -795,7 +794,7 @@ class TestIntegration:
             _simple_input(),
             depth=1,
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(collapsed_mixed.with_suffix(""))
+                container_path=str(collapsed_mixed.with_suffix(""))
             ),
         )
         _assert_generated_pdf(collapsed_mixed)
@@ -807,7 +806,7 @@ class TestIntegration:
             _simple_input(),
             depth=1,
             visualization=tl.options.VisualizationOptions(
-                save_only=True, container_path=str(collapsed_frozen.with_suffix(""))
+                container_path=str(collapsed_frozen.with_suffix(""))
             ),
         )
         _assert_generated_pdf(collapsed_frozen)

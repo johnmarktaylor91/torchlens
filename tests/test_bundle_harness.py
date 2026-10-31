@@ -345,9 +345,7 @@ def test_show_diff_gates_only_the_rendered_pair(tmp_path: Path, model: _TinyLM) 
         {"clean": clean, "patched": clean.fork("patched"), "router": _trace(_Other(), [4, 5])},
         baseline="clean",
     )
-    dot = bundle.show_diff(
-        left="clean", right="patched", path=str(tmp_path / "d"), vis_save_only=True
-    )
+    dot = bundle.show_diff(left="clean", right="patched", path=str(tmp_path / "d"))
     assert "clean vs patched" in dot
     with pytest.raises(BundleComparisonError):
         bundle.delta_map("relative_l2")

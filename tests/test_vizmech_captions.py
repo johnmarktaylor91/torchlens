@@ -66,7 +66,6 @@ def _draw(tmp_path: Path, name: str, model: nn.Module, direction: str = "bottomu
     trace = tl.trace(model, torch.randn(1, 4))
     return trace.draw(
         direction=direction,  # type: ignore[arg-type]
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / name),
     )

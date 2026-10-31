@@ -46,8 +46,7 @@ def _rank_dot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     monkeypatch.setattr(layout_mod, "_run_neato_with_fallbacks", _fake_neato)
     trace = tl.trace(_LeafAndBlock(), torch.randn(1, 4))
     trace.draw(
-        vis_node_placement="rank",
-        vis_save_only=True,
+        layout="rank",
         file_format="svg",
         path=str(tmp_path / "rank_leaf_clusters"),
         show_containers=False,

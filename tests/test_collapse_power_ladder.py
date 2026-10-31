@@ -147,7 +147,7 @@ def test_band_miss_serves_disclosed_strongest_point() -> None:
     """No in-band step: the strongest point is served with the disclosure."""
 
     trace = tl.trace(_RootFan(), torch.randn(2, 4))
-    context = RenderContext(vis_mode="unrolled")
+    context = RenderContext(rolled=False)
     result = auto_from_ladder(trace, context, None)
     assert result.band_missed is True
     assert result.strongest_plan_count == result.visible_count
@@ -213,7 +213,7 @@ def test_rolled_gru_auto_identity_and_max_cut() -> None:
 
     trace = tl.trace(_GRUWrapper(), torch.randn(1, 6, 8))
     try:
-        context = RenderContext(vis_mode="rolled")
+        context = RenderContext(rolled=True)
         none_count = count(collapse_plan_for_trace(trace, None, None, context))
         collapse_fn = resolve_collapse_fn(trace, "auto", "rolled", context=context)
         result = getattr(collapse_fn, "_torchlens_v2_result")
