@@ -98,13 +98,23 @@ class TorchSnapshot:
     logging_enabled: bool
     wrappers_installed: bool
     wrapper_ids: tuple[tuple[str, int], ...]
-    rng: tuple[bytes, ...]
+
+
+def rng_state() -> tuple[bytes, ...]:
+    """Read the torch, ``random`` and NumPy global streams as comparable bytes."""
+
+    numpy_state = np.random.get_state(legacy=True)
+    return (
+        torch.random.get_rng_state().numpy().tobytes(),
+        repr(random.getstate()).encode("utf-8"),
+        repr(numpy_state[0]).encode("utf-8") + numpy_state[1].tobytes(),
+        repr(numpy_state[2:]).encode("utf-8"),
+    )
 
 
 def snapshot_torch() -> TorchSnapshot:
     """Read the process-global state the torch-clean oracle compares."""
 
-    numpy_state = np.random.get_state(legacy=True)
     return TorchSnapshot(
         global_forward_hooks=len(module_mod._global_forward_hooks),
         global_forward_pre_hooks=len(module_mod._global_forward_pre_hooks),
@@ -113,13 +123,16 @@ def snapshot_torch() -> TorchSnapshot:
         logging_enabled=bool(_state._logging_enabled),
         wrappers_installed=bool(_state._is_decorated),
         wrapper_ids=tuple((name, id(probe())) for name, probe in _WRAPPER_PROBES),
-        rng=(
-            torch.random.get_rng_state().numpy().tobytes(),
-            repr(random.getstate()).encode("utf-8"),
-            repr(numpy_state[0]).encode("utf-8") + numpy_state[1].tobytes(),
-            repr(numpy_state[2:]).encode("utf-8"),
-        ),
     )
+
+
+RNG_STREAMS = ("torch", "random", "numpy", "numpy_tail")
+
+
+def rng_difference(before: tuple[bytes, ...], after: tuple[bytes, ...]) -> list[str]:
+    """Name the global streams whose state differs between two readings."""
+
+    return [name for name, x, y in zip(RNG_STREAMS, before, after, strict=True) if x != y]
 
 
 @dataclass
@@ -130,7 +143,7 @@ class CellResult:
     memory_budget_bytes: int
     before: TorchSnapshot
     after: TorchSnapshot | None = None
-    after_trace: TorchSnapshot | None = None
+    rng_changed: dict[str, list[str]] = field(default_factory=dict)
     eager_error: BaseException | None = None
     trace_error: BaseException | None = None
     op_count: int | None = None
@@ -229,20 +242,34 @@ def _run_save_load(result: CellResult, trace: Any, tmp_path: Path) -> None:
     """Save the trace portably, load it back and compare."""
 
     bundle = tmp_path / "cell.tlspec"
+    rng_before = rng_state()
     try:
         tl.save(trace, bundle, level="portable")
-    except BaseException as error:  # noqa: BLE001 -- every error class is evidence here
+    except Exception as error:
         result.save_error = error
         return
+    finally:
+        _note_rng(result, "save", rng_before)
+    rng_before = rng_state()
     try:
         loaded = tl.load(bundle)
-    except BaseException as error:  # noqa: BLE001
+    except Exception as error:
         result.load_error = error
         return
+    finally:
+        _note_rng(result, "load", rng_before)
     try:
         _compare_loaded(result, trace, loaded)
     finally:
         del loaded
+
+
+def _note_rng(result: CellResult, stage: str, before: tuple[bytes, ...]) -> None:
+    """Record the global streams a TorchLens stage left changed."""
+
+    changed = rng_difference(before, rng_state())
+    if changed:
+        result.rng_changed[stage] = changed
 
 
 def _run_validate(result: CellResult, model: nn.Module, inputs: Inputs) -> None:
@@ -250,11 +277,14 @@ def _run_validate(result: CellResult, model: nn.Module, inputs: Inputs) -> None:
 
     args, kwargs = _trace_inputs(inputs)
     torch.manual_seed(RUN_SEED)
+    rng_before = rng_state()
     try:
         verdict = tl.validate(model, args, kwargs, scope="forward", random_seed=RUN_SEED)
-    except BaseException as error:  # noqa: BLE001
+    except Exception as error:
         result.validate_error = error
         return
+    finally:
+        _note_rng(result, "validate", rng_before)
     result.validate_verdict = bool(verdict)
     if not verdict:
         failure = last_validation_failure()
@@ -283,22 +313,23 @@ def _execute(result: CellResult, cell: Cell, tmp_path: Path) -> None:
     try:
         with torch.no_grad():
             model(*copy.deepcopy(args), **copy.deepcopy(kwargs))
-    except BaseException as error:  # noqa: BLE001
+    except Exception as error:
         result.eager_error = error
         return
 
     trace_args, trace_kwargs = _trace_inputs(inputs)
     capture = CaptureOptions(random_seed=RUN_SEED, **dict(cell.options.capture_kwargs))
     torch.manual_seed(RUN_SEED)
+    rng_before = rng_state()
     try:
         trace = tl.trace(
             model, trace_args, trace_kwargs, capture=capture, **dict(cell.options.trace_kwargs)
         )
-    except BaseException as error:  # noqa: BLE001
+    except Exception as error:
         result.trace_error = error
-        result.after_trace = snapshot_torch()
         return
-    result.after_trace = snapshot_torch()
+    finally:
+        _note_rng(result, "trace", rng_before)
     try:
         result.op_count = len(trace.ops)
         _run_save_load(result, trace, tmp_path)
@@ -337,14 +368,19 @@ def run_cell(cell: Cell, tmp_path: Path) -> CellResult:
     )
     rss_before = _maxrss_bytes()
     started = time.perf_counter()
-    tracemalloc.start()
+    started_tracing = not tracemalloc.is_tracing()
+    if started_tracing:
+        tracemalloc.start()
+    else:
+        tracemalloc.reset_peak()
     try:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("default")
             _execute(result, cell, tmp_path)
     finally:
         _, peak = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
+        if started_tracing:
+            tracemalloc.stop()
         gc.collect()
         result.wall_seconds = time.perf_counter() - started
         result.tracemalloc_peak_bytes = peak
@@ -494,12 +530,6 @@ def _snapshot_differences(before: TorchSnapshot, after: TorchSnapshot) -> list[s
         problems.append("torch wrappers were uninstalled by the cell")
     if before.wrappers_installed and after.wrapper_ids != before.wrapper_ids:
         problems.append("installed torch wrappers were swapped for new objects")
-    if after.rng != before.rng:
-        streams = ("torch", "random", "numpy", "numpy_tail")
-        changed = [
-            name for name, x, y in zip(streams, before.rng, after.rng, strict=True) if x != y
-        ]
-        problems.append(f"global RNG state changed: {changed}")
     return problems
 
 
@@ -507,17 +537,18 @@ def torch_clean_after_cell(result: CellResult) -> Verdict:
     """After the cell torch is clean: no held slots, hooks or modes; RNG restored.
 
     Capture documents that it snapshots the global RNG streams and restores
-    them on every exit path, so the streams must read the same before and
-    after the whole cell, pass or fail. Wrappers install lazily on the first
-    capture and stay installed by design, so the oracle accepts an install but
-    never an uninstall or a swap.
+    them on every exit path, so every TorchLens stage (trace, save, load,
+    validate) must leave the torch, ``random`` and NumPy streams exactly as it
+    found them, pass or fail. Wrappers install lazily on the first capture and
+    stay installed by design, so the oracle accepts an install but never an
+    uninstall or a swap.
     """
 
     if result.after is None:
         return Verdict.not_applicable("cell never finished")
     problems = _snapshot_differences(result.before, result.after)
-    if result.after_trace is not None and result.after_trace.rng != result.before.rng:
-        problems.append("capture alone changed the global RNG state before validation ran")
+    for stage, streams in result.rng_changed.items():
+        problems.append(f"{stage} changed the global RNG state of {streams}")
     if problems:
         return Verdict.failed("; ".join(problems))
     return Verdict.passed()

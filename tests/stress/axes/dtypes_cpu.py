@@ -104,7 +104,10 @@ class ComplexLinear(nn.Module):
         self.linear = nn.Linear(8, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.view_as_real(self.linear(x)).sum(dim=-1)
+        y = self.linear(x)
+        if y.is_complex():
+            y = torch.view_as_real(y)
+        return y.sum(dim=-1)
 
 
 def _vector_input(_model: nn.Module) -> Inputs:
