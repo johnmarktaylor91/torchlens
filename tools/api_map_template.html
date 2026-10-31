@@ -221,8 +221,7 @@ footer code { font-size: 12px; }
   </div>
   <div class="controls">
     <div class="search">
-      <label for="q" class="visually-hidden">Search names, argument names and summaries</label>
-      <input id="q" type="search" placeholder="Search names, argument names, summaries   ( / to focus )" autocomplete="off" spellcheck="false">
+      <input id="q" type="search" aria-label="Search names, argument names and summaries" placeholder="Search names, argument names, summaries   ( / to focus )" autocomplete="off" spellcheck="false">
       <span class="count" id="count" aria-live="polite"></span>
       <button class="clear" id="clear" type="button" aria-label="Clear search" hidden>&#x2715;</button>
     </div>
@@ -502,7 +501,7 @@ footer code { font-size: 12px; }
       var members = shown.filter(function (pair) { return !used[pair[1]] && g[1](node(pair[0])); });
       if (!members.length) return;
       var head = document.createElement("li");
-      head.className = "group"; head.setAttribute("role", "presentation"); head.textContent = g[0];
+      head.className = "group"; head.textContent = g[0];
       ul.appendChild(head);
       members.forEach(function (pair) { used[pair[1]] = true; ul.appendChild(li(pair[0], pair[1])); });
     });

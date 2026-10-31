@@ -948,14 +948,22 @@ def build_root(builder: Builder, rows: list[dict[str, str]], repo: Path) -> Node
     ranks = _entry_ranks(repo)
     root = Node(id="tl", name="tl", kind="root", public=True, doc1="import torchlens as tl")
     builder.nodes[root.id] = root
+    # Resolve every row before building anything: an unresolvable name must fail
+    # in well under a second, not after the whole package has been parsed.
+    resolved: list[tuple[dict[str, str], Resolved]] = []
     missing: list[str] = []
     for row in rows:
-        name = row["canonical_path"].split(".")[-1]
-        found = resolve(builder.modules, facade, name)
+        found = resolve(builder.modules, facade, row["canonical_path"].split(".")[-1])
         if found is None:
             missing.append(row["canonical_path"])
-            continue
-        target_mod, target_def = found
+        else:
+            resolved.append((row, found))
+    if missing:
+        raise ApiMapError(
+            "root surface names the static parse could not resolve: " + ", ".join(sorted(missing))
+        )
+    for row, (target_mod, target_def) in resolved:
+        name = row["canonical_path"].split(".")[-1]
         if target_def is None:
             target = builder.module_node(target_mod)
         else:
@@ -978,10 +986,6 @@ def build_root(builder: Builder, rows: list[dict[str, str]], repo: Path) -> Node
             alias.note = f"reached through {row['home_module']}"
         builder.nodes[alias.id] = alias
         root.children.append(alias.id)
-    if missing:
-        raise ApiMapError(
-            "root surface names the static parse could not resolve: " + ", ".join(sorted(missing))
-        )
     return root
 
 

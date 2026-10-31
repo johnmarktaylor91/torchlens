@@ -85,8 +85,9 @@ def test_unresolvable_root_name_fails_loudly(generator, monkeypatch) -> None:  #
     assert generator.main([str(Path("/nonexistent") / "out.html"), "--repo", str(REPO_ROOT)]) == 2
 
 
+@pytest.mark.heavy
 def test_cli_writes_the_full_page(generator, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """The full build (every module parsed): the backstop tiers, not smoke (about 10 s under load)."""
+    """The full build (every module parsed): heavy, not smoke (about 10 s under load)."""
 
     out = tmp_path / "map.html"
     assert generator.main([str(out), "--repo", str(REPO_ROOT)]) == 0
