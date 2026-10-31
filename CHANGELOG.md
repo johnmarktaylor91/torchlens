@@ -381,6 +381,14 @@
 
 ### Bug Fixes
 
+- **validation**: every False verdict of `tl.validate(..., scope="backward")` now records a
+  structured failure: `last_validation_failure()` returns a record with `check="backward"` and
+  `extra["reason"]` naming the refusal or mismatch (`parameter_grad_mismatch` with the parameter
+  name and max diffs, `parameter_census_mismatch`, `module_output_grads` with the first mismatched
+  or uncaptured module call, `no_module_output_evidence`, `backward_coverage_gap`,
+  `no_parameter_gradients`, `degenerate_parameter_gradients`, `non_leaf_parameter`,
+  `pristine_oracle_unavailable`, `appended_trace`). Three of these paths used to return a bare
+  False with no warning either. A True backward verdict clears any earlier record.
 - **backward**: a second-order `torch.autograd.grad` inside forward (or a forward op applied to
   a `create_graph` gradient and differentiated again) no longer fails forward validation on
   `backward_graph_invariants` ("order 2 does not match creator order + 1 (3)"). GradFn order
