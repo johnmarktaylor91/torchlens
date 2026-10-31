@@ -1,5 +1,7 @@
 """Autograd saved-tensor statistics and container snapshots."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -271,7 +273,7 @@ def _partition_output_entries_with_autograd_stats(
 
 
 def _register_call_output_container_snapshot(
-    trace: "Trace",
+    trace: Trace,
     output: Any,
     *,
     output_entries: list[_OutputTensorEntry],
@@ -316,7 +318,7 @@ def _register_call_output_container_snapshot(
 
 
 def register_call_input_container_snapshots(
-    trace: "Trace",
+    trace: Trace,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     *,

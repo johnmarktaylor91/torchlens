@@ -1,5 +1,7 @@
 """Ancestor storage, producer policy, and exhaustive record freezing."""
 
+from __future__ import annotations
+
 import contextlib
 import dataclasses
 from typing import TYPE_CHECKING, Any, cast
@@ -66,7 +68,7 @@ __all__ = (
 )
 
 
-def _get_ancestor_field(op: Op, field_name: str) -> "set[str] | frozenset[str]":
+def _get_ancestor_field(op: Op, field_name: str) -> set[str] | frozenset[str]:
     """Return one public ancestor closure view.
 
     During postprocess the cell holds the mutable staging set and is returned
@@ -125,7 +127,7 @@ def _delete_ancestor_field(op: Op, field_name: str) -> None:
     _ANCESTOR_SLOT_DESCRIPTORS[field_name].__delete__(op)
 
 
-def _compact_ancestor_sets(trace: "Trace") -> None:
+def _compact_ancestor_sets(trace: Trace) -> None:
     """Replace finished Ops' two large ancestor sets with interned integer bitmaps.
 
     The original slot descriptors remain the storage authority. Public attribute
@@ -367,7 +369,7 @@ def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPol
     return policy
 
 
-def set_capture_producer_policy(trace: "Trace", mode: CaptureProducerMode) -> None:
+def set_capture_producer_policy(trace: Trace, mode: CaptureProducerMode) -> None:
     """Attach a precomputed producer policy to ``trace``.
 
     Compiled once at session setup; the hot path only ever touches the
@@ -389,7 +391,7 @@ def set_capture_producer_policy(trace: "Trace", mode: CaptureProducerMode) -> No
     trace._capture_producer_policy = get_capture_producer_policy(mode)
 
 
-def _should_keep_alias_mutation_contract(trace: "Trace") -> bool:
+def _should_keep_alias_mutation_contract(trace: Trace) -> bool:
     """Return whether mutation-position alias contracts can be consumed.
 
     Parameters
@@ -414,7 +416,7 @@ def _should_keep_alias_mutation_contract(trace: "Trace") -> bool:
     )
 
 
-def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
+def _snapshot_exhaustive_module_stack(self: Trace) -> list[tuple[str, int]]:
     """Return the raw hook-stack module context.
 
     Parameters
@@ -711,7 +713,7 @@ def _exhaustive_output_ref(
     )
 
 
-def _exhaustive_capture_policy(trace: "Trace", fields_dict: dict[str, Any]) -> CapturePolicy:
+def _exhaustive_capture_policy(trace: Trace, fields_dict: dict[str, Any]) -> CapturePolicy:
     """Return the exhaustive freeze's capture policy (shared by both shapes)."""
 
     return CapturePolicy(

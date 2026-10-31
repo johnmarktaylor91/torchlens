@@ -1,5 +1,7 @@
 """Output logging, event emission, and live-hook dispatch."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
@@ -31,7 +33,7 @@ __all__ = (
 
 
 def _unattributed_tensor_arg_positions(
-    trace: "Trace",
+    trace: Trace,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     func_name: str,
@@ -249,7 +251,7 @@ def _unattributed_tensor_arg_positions(
 
 
 def log_function_output_tensors(
-    self: "Trace",
+    self: Trace,
     func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
@@ -320,7 +322,7 @@ def log_function_output_tensors(
 
 def _emit_operation_events(
     policy: CaptureProducerPolicy,
-    self: "Trace",
+    self: Trace,
     func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
@@ -383,7 +385,7 @@ def _emit_operation_events(
 
 
 def apply_live_hooks_to_outputs(
-    self: "Trace",
+    self: Trace,
     func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
