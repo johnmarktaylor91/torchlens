@@ -28,7 +28,6 @@ from torchlens._ir import (
     ParamRef,
     ParentEdge,
     RawGraphWorkspace,
-    RecordContext,
     ReservedLabel,
     TensorRef,
     WrapperRuntimeWorkspace,
@@ -36,6 +35,7 @@ from torchlens._ir import (
 from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.events import InterventionState, PreHookProvenanceEvent
 from torchlens._ir.intervention import FireResult, FunctionEventInput, InterventionTemplateRef
+from torchlens._ir.predicate import RecordContext
 from torchlens._ir.semantics import BackendSemantics, CapturePolicy
 from torchlens._ir.workspaces import ModuleCaptureWorkspace
 from torchlens.types import ContainerSpec

@@ -17,13 +17,15 @@ pytestmark = pytest.mark.skipif(
 )
 
 from torchlens.distributed import (  # noqa: E402
-    GroupLifecycleEvent,
-    GroupLifecycleLedger,
     _lifecycle as lifecycle,
     _recognizer as recognizer_mod,
     is_vetted_build,
-    membership_digest_for_ranks,
     verify_membership_lineages,
+)
+from torchlens.distributed._ledger import (  # noqa: E402
+    GroupLifecycleEvent,
+    GroupLifecycleLedger,
+    membership_digest_for_ranks,
 )
 from torchlens.distributed._recognizer import derive_collective_recognizer  # noqa: E402
 from torchlens.errors import AmbiguousGroupLifetimeError, UncapturedCollectiveOpError  # noqa: E402

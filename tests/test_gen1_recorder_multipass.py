@@ -15,7 +15,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import Recorder, load
+from torchlens.fastlog import Recorder
+from torchlens.fastlog.recover import load
 from torchlens.options import StorageOptions
 
 
