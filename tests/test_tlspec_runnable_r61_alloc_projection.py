@@ -267,7 +267,9 @@ def test_no_literal_amplifier_families_refused_typed(
     typed at ``op_allocation_preflight`` against a small budget -- with tiny/empty real
     operands and no real output allocation (fake tensors never allocate)."""
 
-    monkeypatch.setattr(rex, "_allocation_budget_bytes", lambda device: 8 << 20)
+    # Home (_runnable_state) plus the modules holding a from-import copy of the budget.
+    for module in (rstate, torchlens._runnable_call_arguments, rex):
+        monkeypatch.setattr(module, "_allocation_budget_bytes", lambda device: 8 << 20)
     operands = args()
     with _rlimit_cap(), pytest.raises(RunCapabilityUnavailableError) as caught:
         _preflight_call_allocation(None, func, list(operands), {}, _stub_call())

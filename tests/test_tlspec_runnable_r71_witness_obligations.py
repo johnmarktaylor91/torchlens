@@ -309,13 +309,16 @@ def test_r71_registry_closure_meta() -> None:
             assert spec.site_prefix is None, family
     # Named runtime consumers must exist (replay-consumed, never decorative).
     import torchlens._runnable_execution as execution
+    import torchlens._runnable_output_contracts as output_contracts
     import torchlens._runnable_state as state
+
+    homes = (execution, state, output_contracts)
 
     symbolic = {"terminal_slot_accounting", "strict_state_preparation"}
     for family, spec in WITNESS_FAMILY_REGISTRY.items():
         if spec.runtime_consumer in symbolic:
             continue
-        assert hasattr(execution, spec.runtime_consumer) or hasattr(state, spec.runtime_consumer), (
+        assert any(hasattr(home, spec.runtime_consumer) for home in homes), (
             f"{family}: runtime consumer {spec.runtime_consumer!r} does not exist"
         )
     # Closed gap registry: every kind registered, every source family resolvable.

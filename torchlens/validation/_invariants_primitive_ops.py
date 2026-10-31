@@ -10,7 +10,6 @@ from .._data_classes.aten_op import AtenOp, OpRef, _ModePausedInteriorGap
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from .invariants import MetadataInvariantError
 
 _CAPTURE_PHASES = frozenset({"forward", "backward", "setup"})
 _OWNER_STATUSES = frozenset({"forward_op", "backward_grad_fn_call", "orphan", "unresolved"})
@@ -35,8 +34,6 @@ def _primitive_failure(message: str) -> None:
     MetadataInvariantError
         Always.
     """
-
-    from .invariants import MetadataInvariantError
 
     raise MetadataInvariantError("primitive_op_invariants", message)
 
@@ -337,7 +334,6 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
     """
 
     from .._io import ArtifactError
-    from .invariants import MetadataInvariantError
 
     profile = getattr(trace, "_primitive_op_profile", None)
     if profile is None:
@@ -366,6 +362,9 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
             remedy="re-capture and re-save the trace; do not edit primitive profile metadata",
         ) from exc
 
+
+# Bottom import: the hub defines this error before it imports its split modules.
+from .invariants import MetadataInvariantError  # noqa: E402
 
 __all__ = [
     "_check_non_torch_primitive_op_inert",
