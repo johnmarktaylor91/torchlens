@@ -1447,10 +1447,9 @@ def _add_edges_for_node(
 
 
 def _rolled_module_path(node: Union["Op", "Layer"]) -> list[str]:
-    """Return a node's pass-stripped module path, without its atomic leaf module."""
+    """Return a node's module path with the pass suffixes stripped."""
 
-    path = [module.split(":")[0] for module in node.modules]
-    return path[:-1] if node.is_atomic_module else path
+    return [module.split(":")[0] for module in node.modules]
 
 
 def _passes_share_module_path(layer: "Layer") -> bool:

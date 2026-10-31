@@ -69,13 +69,6 @@ class _ResStack(nn.Module):
         return self.blocks(x)
 
 
-def _owner(modules: Any, is_atomic_module: bool) -> list[str]:
-    """Module path an op is drawn in: an atomic module's output sits one level up."""
-
-    path = list(modules)
-    return path[:-1] if is_atomic_module else path
-
-
 def _innermost_frames(dot_source: str) -> dict[str, str]:
     """Map each laid-out node name to the innermost cluster that holds it."""
 
@@ -93,52 +86,52 @@ def _innermost_frames(dot_source: str) -> dict[str, str]:
     return innermost
 
 
-def test_rolled_shared_child_puts_each_parents_ops_in_its_frame(tmp_path: Path) -> None:
-    """Rolled: the p2 relu sits inside the p2 frame, the p1 relu inside the p1 frame."""
+def _shared_child_trace() -> tuple[Any, str, str, str]:
+    """Trace the two-parent model; return it with its linear and its two relu labels."""
 
     torch.manual_seed(0)
     trace = tl.trace(_TwoParents(), torch.randn(2, 4))
-    dot = str(
+    layers = list(trace.layer_logs.values())
+    (linear,) = [layer.layer_label for layer in layers if layer.layer_type == "linear"]
+    first_relu, second_relu = [layer.layer_label for layer in layers if layer.layer_type == "relu"]
+    assert trace.layer_logs[linear].num_passes == 2
+    return trace, linear, first_relu, second_relu
+
+
+def _draw_dot(trace: Any, tmp_path: Path, vis_mode: str) -> str:
+    return str(
         trace.draw(
-            vis_mode="rolled",
+            vis_mode=vis_mode,
             vis_save_only=True,
             vis_fileformat="svg",
-            vis_outpath=str(tmp_path / "rolled"),
+            vis_outpath=str(tmp_path / vis_mode),
         )
     )
-    frames = _innermost_frames(dot)
-    relus = [layer for layer in trace.layer_logs.values() if layer.layer_type == "relu"]
-    assert len(relus) == 2
-    expected = {}
-    for layer in trace.layer_logs.values():
-        path = _owner([m.split(":")[0] for m in layer.modules], layer.is_atomic_module)
-        if path:
-            expected[layer.layer_label] = f"cluster_{path[-1]}"
-    assert {expected[relu.layer_label] for relu in relus} == {"cluster_p1", "cluster_p2"}
+
+
+def test_rolled_shared_child_puts_each_parents_ops_in_its_frame(tmp_path: Path) -> None:
+    """Rolled: the p2 relu sits inside the p2 frame, the p1 relu inside the p1 frame.
+
+    The rolled linear is one node for both passes, so it stays with its first pass.
+    """
+
+    trace, linear, first_relu, second_relu = _shared_child_trace()
+    frames = _innermost_frames(_draw_dot(trace, tmp_path, "rolled"))
+    expected = {linear: "cluster_p1", first_relu: "cluster_p1", second_relu: "cluster_p2"}
     assert {name: frames.get(name) for name in expected} == expected
 
 
 def test_unrolled_shared_child_puts_every_pass_in_its_frame(tmp_path: Path) -> None:
-    """Unrolled control: every pass of every op sits inside its own module-call frame."""
+    """Unrolled control: each pass of the shared linear sits in its own parent's frame."""
 
-    torch.manual_seed(0)
-    trace = tl.trace(_TwoParents(), torch.randn(2, 4))
-    dot = str(
-        trace.draw(
-            vis_mode="unrolled",
-            vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / "unrolled"),
-        )
-    )
-    frames = _innermost_frames(dot)
-    expected = {}
-    for layer in trace.layer_logs.values():
-        for pass_index, op in layer.ops.items():
-            path = _owner(op.modules, op.is_atomic_module)
-            if path:
-                name = f"{layer.layer_label}pass{pass_index}"
-                expected[name] = f"cluster_{path[-1].replace(':', '_pass')}"
+    trace, linear, first_relu, second_relu = _shared_child_trace()
+    frames = _innermost_frames(_draw_dot(trace, tmp_path, "unrolled"))
+    expected = {
+        f"{linear}pass1": "cluster_p1_pass1",
+        f"{first_relu}pass1": "cluster_p1_pass1",
+        f"{linear}pass2": "cluster_p2_pass1",
+        f"{second_relu}pass1": "cluster_p2_pass1",
+    }
     assert {name: frames.get(name) for name in expected} == expected
 
 
