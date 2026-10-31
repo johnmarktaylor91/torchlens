@@ -48,19 +48,18 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._runnable_execution as rex
+import torchlens._runnable_call_arguments
+import torchlens._runnable_call_outputs
 import torchlens._runnable_state as rstate
-from torchlens._runnable_execution import (
-    _count_bounded_fake_tensor_mode_class,
-    _preflight_call_allocation,
-    _ProjectionCountExceeded,
-)
+from torchlens._runnable_call_arguments import _preflight_call_allocation
+from torchlens._runnable_execution import _ProjectionCountExceeded
 from torchlens._runnable_state import (
     _OUTPUT_COUNT_FLOOR,
     _OUTPUT_COUNT_MARGIN,
     RunResourceCeiling,
     _torch_dtype,
 )
+from torchlens._runnable_state_context import _count_bounded_fake_tensor_mode_class
 from torchlens.errors import RunCapabilityUnavailableError
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
@@ -534,7 +533,11 @@ def test_no_raw_clone_on_op_output_bind_or_reconstruct_paths() -> None:
 
     import inspect
 
-    for fn in (rex._bind_call_outputs, rex._reconstruct_output, rex._populate_source_slots):
+    for fn in (
+        torchlens._runnable_call_outputs._bind_call_outputs,
+        torchlens._runnable_call_outputs._reconstruct_output,
+        torchlens._runnable_call_arguments._populate_source_slots,
+    ):
         src = inspect.getsource(fn)
         assert "value.detach().clone()" not in src, (
             f"{fn.__name__} has a raw op-output clone outside guarded_clone"

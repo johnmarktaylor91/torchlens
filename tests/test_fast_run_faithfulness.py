@@ -345,7 +345,7 @@ def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) ->
     guard failure was indistinguishable from inputs-match.
     """
 
-    import torchlens._runnable_execution as execution
+    import torchlens._runnable_transaction as transaction
     from torchlens.errors import RunCapabilityUnavailableError
 
     model = _PlainLinear().eval()
@@ -355,7 +355,7 @@ def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) ->
     def _boom(*args, **kwargs):
         raise RuntimeError("injected classifier failure")
 
-    monkeypatch.setattr(execution, "_live_runtime_input_leaves", _boom)
+    monkeypatch.setattr(transaction, "_live_runtime_input_leaves", _boom)
     with pytest.raises(RunCapabilityUnavailableError):
         captured.run(inputs=torch.ones(2, 3), fast=True)
 

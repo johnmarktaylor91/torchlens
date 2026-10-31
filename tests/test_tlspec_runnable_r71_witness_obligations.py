@@ -843,10 +843,11 @@ def test_r71_floor_source_scan_tripwire() -> None:
 
     import torchlens._io.runnable_load as runnable_load
     import torchlens._runnable_execution as execution
+    import torchlens._runnable_path_faithfulness
     import torchlens._runnable_state as state
 
     # The verdict gate consults ONLY the derived floor.
-    verdict_source = inspect.getsource(execution._path_faithfulness)
+    verdict_source = inspect.getsource(torchlens._runnable_path_faithfulness._path_faithfulness)
     assert "derived_witness_completeness" in verdict_source
     assert "descriptor.witness_completeness" not in verdict_source
     # The ONLY raw read left in the executor is the run-preparation equality

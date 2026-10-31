@@ -1357,7 +1357,7 @@ class TestOutputCapabilityMetaGates:
         """secB_1 adversarial pin: a hand-edited lossy_reconstruction=False is impotent."""
 
         from torchlens._ir.container import ContainerSpec
-        from torchlens._runnable_execution import _spec_node_reconstruction_lossy
+        from torchlens._runnable_call_outputs import _spec_node_reconstruction_lossy
 
         forged = ContainerSpec(
             kind="namedtuple",
@@ -1371,7 +1371,7 @@ class TestOutputCapabilityMetaGates:
 
     def test_plain_namedtuple_spec_recompute_stays_lossless(self) -> None:
         from torchlens._ir.container import ContainerSpec
-        from torchlens._runnable_execution import _spec_node_reconstruction_lossy
+        from torchlens._runnable_call_outputs import _spec_node_reconstruction_lossy
 
         plain = ContainerSpec(
             kind="namedtuple",

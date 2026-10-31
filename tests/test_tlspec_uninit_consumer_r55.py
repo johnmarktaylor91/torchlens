@@ -26,10 +26,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._runnable_execution import (
-    _nondeterministic_value_sources,
-    _uninit_taint_reaches,
-)
+from torchlens._runnable_attestation import _nondeterministic_value_sources, _uninit_taint_reaches
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
 

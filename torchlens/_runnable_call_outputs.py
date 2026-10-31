@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import torch
 
@@ -34,21 +34,6 @@ from ._utils._torch_compat import tensor_version_or_none
 from .errors import (
     RunPreconditionError,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _canonicalize_structseq_output_paths,
-        _container_from_paths,
-        _contract_check,
-        _op_for_label,
-        _op_for_slot,
-        _raw_runtime_output,
-        _recorded_structseq_output_type_matches,
-        _resolve_setter_output,
-        _tensor_leaf_paths,
-        _torch_structseq_field_names,
-        _value_at_path,
-    )
 
 __all__ = (
     "_bind_call_outputs",
@@ -603,3 +588,26 @@ def _fresh_bare_tensor_root(trace: Any) -> bool:
         and not bool(proof.get("used_fallback"))
         and not bool(proof.get("duplicate_paths"))
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_call_arguments import (  # noqa: E402
+    _resolve_setter_output,
+)
+from ._runnable_output_contracts import (  # noqa: E402
+    _container_from_paths,
+    _raw_runtime_output,
+)
+from ._runnable_verification import (  # noqa: E402
+    _contract_check,
+    _op_for_label,
+    _op_for_slot,
+    _value_at_path,
+)
+from ._runnable_witness_contracts import (  # noqa: E402
+    _canonicalize_structseq_output_paths,
+    _recorded_structseq_output_type_matches,
+    _tensor_leaf_paths,
+    _torch_structseq_field_names,
+)

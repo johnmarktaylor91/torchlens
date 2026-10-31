@@ -29,8 +29,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._runnable_input_aliases
+import torchlens._runnable_input_metadata
 from torchlens import (
-    _runnable_execution,
     _runnable_input_aliases,
     _runnable_input_metadata,
     _runnable_state,
@@ -98,8 +99,8 @@ def test_r67_defensive_materialization_source_scan() -> None:
         "snapshot_live_declared_state": _runnable_state.snapshot_live_declared_state,
     }
     defensive_execution_functions = {
-        "_runtime_mirror_clone": _runnable_execution._runtime_mirror_clone,
-        "_clone_state_values": _runnable_execution._clone_state_values,
+        "_runtime_mirror_clone": torchlens._runnable_input_metadata._runtime_mirror_clone,
+        "_clone_state_values": torchlens._runnable_input_aliases._clone_state_values,
     }
     for name, function in {**defensive_state_functions, **defensive_execution_functions}.items():
         assert f"with {helper}():" in inspect.getsource(function) or (

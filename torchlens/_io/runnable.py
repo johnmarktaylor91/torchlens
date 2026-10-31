@@ -3582,7 +3582,7 @@ def required_witness_family_members(
     typed ``context_field_invalid`` refusal.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable_verification import _decode_literal
 
     members: dict[str, list[str]] = {family: [] for family in WITNESS_FAMILY_REGISTRY}
     for witness in witnesses:

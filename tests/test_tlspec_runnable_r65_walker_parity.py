@@ -57,14 +57,14 @@ from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
 )
-from torchlens._runnable_execution import (
+from torchlens._runnable_input_aliases import _runtime_nontensor_leaf_paths
+from torchlens._runnable_seam import runnable_trace_state
+from torchlens._runnable_verification import _value_at_path
+from torchlens._runnable_witness_contracts import (
     _container_kind,
     _container_leaf_paths,
-    _runtime_nontensor_leaf_paths,
     _tensor_leaf_paths,
-    _value_at_path,
 )
-from torchlens._runnable_seam import runnable_trace_state
 from torchlens.errors import PathDivergenceError, RunnablePreflightError
 from torchlens.options import CaptureOptions
 

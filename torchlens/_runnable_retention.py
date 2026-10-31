@@ -216,7 +216,7 @@ def _view_admission_state(
 ) -> dict[str, Any]:
     """Build the producer/reader maps, the op sets and the projector for view admission."""
 
-    from ._runnable_execution import _pure_view_projector
+    from ._runnable_call_arguments import _pure_view_projector
 
     producers = {slot_id: call for call in descriptor.calls for slot_id in call.output_slot_ids}
     direct_readers: dict[str, list[Any]] = defaultdict(list)

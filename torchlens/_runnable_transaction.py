@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import torch
 
@@ -43,48 +43,6 @@ from .errors import (
     RuntimeSignatureDriftError,
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _HOST_RNG_SOURCE_KIND,
-        _INPUT_CHECK_UNAVAILABLE,
-        _ambient_execution_context_restored,
-        _bind_call_outputs,
-        _call_execution_context_entered,
-        _call_witness_checks,
-        _container_spec_reconstruction_lossy,
-        _contract_check,
-        _control_witness_source_slot_ids,
-        _declared_nondeterministic_sources,
-        _diagnose_live_output,
-        _execute_sparse_call,
-        _finalize_provider_run,
-        _first_failed_live_input_check,
-        _host_rng_unreproduced,
-        _input_derived_layout_stale,
-        _mode_sensitive_op_unwitnessed,
-        _nondeterministic_value_sources,
-        _numeric_attestation_check,
-        _output_container_spec,
-        _output_not_reproduced,
-        _path_faithfulness,
-        _populate_source_slots,
-        _post_execution_contract_checks,
-        _pre_call_contract_checks,
-        _raise_failed_contract_as_divergence,
-        _raise_numeric_attestation_failure,
-        _raw_activation_slot_ids,
-        _reconstruct_output,
-        _run_fork_name,
-        _seed_run_generators,
-        _seeded_fork_devices,
-        _split_mixed_inputs,
-        _state_contract_checks,
-        _tensor_derived_scalar_stale,
-        _tensor_derived_scalar_witness_slot_ids,
-        _unbound_state_escape_stale,
-        _uninit_taint_reaches,
-    )
 
 __all__ = (
     "_execute_loaded_sparse_transaction",
@@ -1281,3 +1239,69 @@ def _live_runtime_input_leaves(input_args: Any, input_kwargs: Any) -> list[torch
         return leaves
     except Exception:
         return None
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_attestation import (  # noqa: E402
+    _control_witness_source_slot_ids,
+    _declared_nondeterministic_sources,
+    _mode_sensitive_op_unwitnessed,
+    _nondeterministic_value_sources,
+    _raw_activation_slot_ids,
+    _uninit_taint_reaches,
+)
+from ._runnable_call_arguments import (  # noqa: E402
+    _execute_sparse_call,
+    _populate_source_slots,
+)
+from ._runnable_call_outputs import (  # noqa: E402
+    _bind_call_outputs,
+    _container_spec_reconstruction_lossy,
+    _output_container_spec,
+    _output_not_reproduced,
+    _reconstruct_output,
+)
+from ._runnable_execution import (  # noqa: E402
+    _HOST_RNG_SOURCE_KIND,
+)
+from ._runnable_input_aliases import (  # noqa: E402
+    _split_mixed_inputs,
+)
+from ._runnable_input_sites import (  # noqa: E402
+    _INPUT_CHECK_UNAVAILABLE,
+    _first_failed_live_input_check,
+    _input_derived_layout_stale,
+)
+from ._runnable_output_contracts import (  # noqa: E402
+    _call_witness_checks,
+    _diagnose_live_output,
+    _post_execution_contract_checks,
+)
+from ._runnable_path_faithfulness import (  # noqa: E402
+    _numeric_attestation_check,
+    _path_faithfulness,
+)
+from ._runnable_providers import (  # noqa: E402
+    _finalize_provider_run,
+    _host_rng_unreproduced,
+    _seed_run_generators,
+    _seeded_fork_devices,
+)
+from ._runnable_state_context import (  # noqa: E402
+    _ambient_execution_context_restored,
+    _call_execution_context_entered,
+    _pre_call_contract_checks,
+    _state_contract_checks,
+)
+from ._runnable_verification import (  # noqa: E402
+    _contract_check,
+    _raise_failed_contract_as_divergence,
+    _raise_numeric_attestation_failure,
+    _run_fork_name,
+)
+from ._runnable_witness_contracts import (  # noqa: E402
+    _tensor_derived_scalar_stale,
+    _tensor_derived_scalar_witness_slot_ids,
+    _unbound_state_escape_stale,
+)

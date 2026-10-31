@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 
@@ -24,19 +24,6 @@ from ._utils.rng import (
     qualname_is_uninitialized_alloc,
     uninit_new_call_is_size_form,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _HOST_RNG_SOURCE_KIND,
-        _MODULE_TRAINING_MODE_SITE_PREFIX,
-        _SEEDED_SOURCE_KIND,
-        _UNINIT_SANITIZER_NAMESPACES,
-        _UNINIT_SOURCE_KIND,
-        _call_consumes_seeded_rng,
-        _decode_literal,
-        _tensor_derived_scalar_witness_slot_ids,
-        _within_layout_reduction_tolerance,
-    )
 
 __all__ = (
     "_is_benign_downstream_nonreproducible",
@@ -589,3 +576,24 @@ def _mode_sensitive_op_unwitnessed(descriptor: SparseRunDescriptor) -> bool:
     return _descriptor_has_mode_sensitive_op(descriptor) and not _descriptor_declares_training_mode(
         descriptor
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_execution import (  # noqa: E402
+    _HOST_RNG_SOURCE_KIND,
+    _MODULE_TRAINING_MODE_SITE_PREFIX,
+    _SEEDED_SOURCE_KIND,
+    _UNINIT_SANITIZER_NAMESPACES,
+    _UNINIT_SOURCE_KIND,
+)
+from ._runnable_path_faithfulness import (  # noqa: E402
+    _within_layout_reduction_tolerance,
+)
+from ._runnable_verification import (  # noqa: E402
+    _call_consumes_seeded_rng,
+    _decode_literal,
+)
+from ._runnable_witness_contracts import (  # noqa: E402
+    _tensor_derived_scalar_witness_slot_ids,
+)
