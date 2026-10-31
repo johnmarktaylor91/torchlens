@@ -505,6 +505,15 @@ def test_built_wheel_manifest_is_diet(tmp_path: Path) -> None:
     ]
     assert schema_members, "expected at least one torchlens/schemas/*.json wheel member"
 
+    # Every data file the package carries ships (the importlib.resources
+    # readers fail at runtime otherwise). A stale package-data key after a
+    # package move matches nothing, so the file silently drops out of the wheel.
+    from tests.test_package_data_paths import runtime_data_files
+
+    expected_data = {f"torchlens/{rel}" for rel in runtime_data_files()}
+    missing_data = sorted(expected_data - set(members))
+    assert not missing_data, f"wheel lacks package data file(s): {missing_data}"
+
     # PEP 561: without this marker file downstream type checkers treat the
     # package as untyped and skip every annotation it ships.
     assert "torchlens/py.typed" in members, "wheel must ship the PEP 561 py.typed marker"
