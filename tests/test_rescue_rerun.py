@@ -132,8 +132,8 @@ def test_ineligible_capture_with_escape_signal_settles_disclosure() -> None:
     with pytest.warns(UserWarning, match="skipped the rescue"):
         trace = capture_with_rescue(run_capture, eligible=False)
     assert len(runs) == 1
-    assert trace.provenance.verified is False
-    assert trace.provenance.verification_reason == "escape_rescue_unrecovered"
+    assert trace._provenance_verified is False
+    assert trace._provenance_verification_reason == "escape_rescue_unrecovered"
     assert trace._rescue_rerun["skipped_reason"] == "rescue_ineligible"
 
 
@@ -146,7 +146,7 @@ def test_ineligible_clean_capture_stays_clean() -> None:
         return _stub_trace(["relu"], signal=False)
 
     trace = capture_with_rescue(run_capture, eligible=False)
-    assert trace.provenance.verification_reason is None
+    assert trace._provenance_verification_reason is None
     assert not hasattr(trace, "_rescue_rerun") or trace._rescue_rerun is None
 
 
@@ -198,7 +198,7 @@ def test_defusion_is_not_counted_as_recovery() -> None:
 
     result = capture_with_rescue(run_capture)
     assert result is primary
-    assert result.provenance.verification_reason == "escape_rescue_unrecovered"
+    assert result._provenance_verification_reason == "escape_rescue_unrecovered"
     info = result._rescue_rerun
     assert info["recovered"] is False
     assert "mha_fused" in info["lost_ops"]
@@ -220,7 +220,7 @@ def test_strict_superset_rescue_still_recovers() -> None:
 
     result = capture_with_rescue(run_capture)
     assert result is rescued
-    assert result.provenance.verification_reason == "mode_rescue_rerun"
+    assert result._provenance_verification_reason == "mode_rescue_rerun"
     assert result._rescue_rerun["recovered_ops"] == ("cos",)
 
 
@@ -246,7 +246,7 @@ def test_buffer_writing_primary_refuses_the_rescue_rerun() -> None:
     info = result._rescue_rerun
     assert info["skipped_reason"] == "buffer_writes_double_forward"
     assert info["forward_runs"] == 1
-    assert result.provenance.verification_reason == "escape_rescue_unrecovered"
+    assert result._provenance_verification_reason == "escape_rescue_unrecovered"
 
 
 def test_train_mode_batchnorm_capture_skips_rescue_end_to_end(raw_cos: Any) -> None:
@@ -312,7 +312,7 @@ def test_provably_unchanged_buffer_journal_does_not_refuse_rescue() -> None:
     result = capture_with_rescue(run_capture)
     assert len(runs) == 2, "a provably-unchanged buffer journal must not refuse the re-run"
     assert result is rescued
-    assert result.provenance.verification_reason == "mode_rescue_rerun"
+    assert result._provenance_verification_reason == "mode_rescue_rerun"
 
 
 def test_eval_mode_batchnorm_capture_still_rescues_end_to_end(raw_cos: Any) -> None:
@@ -512,7 +512,7 @@ def test_recovered_rescue_never_clobbers_dynamo_verdict() -> None:
 
     result = capture_with_rescue(run_capture)
     assert result is rescued
-    assert result.provenance.verification_reason == "dynamo_region_not_logged"
+    assert result._provenance_verification_reason == "dynamo_region_not_logged"
     assert result._rescue_rerun is not None, "the rescue attempt must stay disclosed"
 
 
@@ -660,7 +660,7 @@ def test_minted_source_nodes_do_not_refuse_a_perfect_rescue() -> None:
     result = capture_with_rescue(lambda: next(traces))
 
     assert result is rescued
-    assert result.provenance.verification_reason == "mode_rescue_rerun"
+    assert result._provenance_verification_reason == "mode_rescue_rerun"
     assert result._rescue_rerun["recovered"] is True
     assert result._rescue_rerun["recovered_ops"] == ("cos",)
     assert result._rescue_rerun["lost_ops"] == ()
@@ -866,7 +866,7 @@ def test_recovered_rescue_preserves_specific_verification_reasons() -> None:
     result = capture_with_rescue(lambda: next(traces))
 
     assert result is rescued
-    assert result.provenance.verification_reason == "owner_thread_tripwire_changed"
+    assert result._provenance_verification_reason == "owner_thread_tripwire_changed"
     assert result._rescue_rerun["recovered"] is True
 
 
@@ -918,7 +918,7 @@ def test_failed_rescue_rerun_still_restores_state_writes() -> None:
         "the failed rescue re-run's state write was not restored "
         "(double-applied mutation left on the model)"
     )
-    assert trace.provenance.verification_reason == "escape_rescue_unrecovered"
+    assert trace._provenance_verification_reason == "escape_rescue_unrecovered"
     assert "rescue died mid-forward" in trace._rescue_rerun["rescue_error"]
 
 

@@ -50,7 +50,7 @@ def test_every_capture_is_generation_stamped() -> None:
     assert wrap_generation_of(ordinary) is not None
     assert wrap_generation_of(structure) is not None
     assert wrap_generation_of(ordinary) == wrap_generation_of(structure)
-    envelope = structure.structure_evidence
+    envelope = structure.graph.structure_evidence
     assert envelope is not None
     assert envelope["wrap_generation"] == wrap_generation_of(structure)
 

@@ -350,4 +350,4 @@ def test_recurrence_detection_off_matches_its_documented_tradeoff() -> None:
 
     assert unrolled.graph.is_recurrent is True
     assert unrolled.graph.max_ops_per_layer == rolled.graph.max_ops_per_layer
-    assert int(unrolled.total_activation_memory) == int(rolled.total_activation_memory)
+    assert int(unrolled.cost.total_activation_memory) == int(rolled.cost.total_activation_memory)

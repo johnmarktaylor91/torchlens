@@ -204,7 +204,7 @@ def test_trace_text_explicit_tokenizer_end_to_end(monkeypatch: Any) -> None:
         tl, "trace", lambda *a, **k: SimpleNamespace(_provenance_input_preprocessor=None)
     )
     log = hf.trace_text(Model(), "hello", tokenizer=ExplicitCustomTokenizer())
-    record = log.provenance.input_preprocessor
+    record = log._provenance_input_preprocessor
 
     assert record.verified is False
     assert record.identifier == "unknown"

@@ -193,7 +193,7 @@ def test_respelled_dunders_do_not_refuse_a_recovery() -> None:
     result = capture_with_rescue(lambda: next(traces))
 
     assert result is rescued
-    assert result.provenance.verification_reason == "mode_rescue_rerun"
+    assert result._provenance_verification_reason == "mode_rescue_rerun"
     assert result._rescue_rerun["recovered_ops"] == ("relu",)
     assert result._rescue_rerun["lost_ops"] == ()
 
@@ -218,7 +218,7 @@ def test_genuine_loss_still_refuses_the_rescue(
     result = capture_with_rescue(lambda: next(traces))
 
     assert result is primary
-    assert result.provenance.verification_reason == "escape_rescue_unrecovered"
+    assert result._provenance_verification_reason == "escape_rescue_unrecovered"
     assert result._rescue_rerun["recovered"] is False
     assert result._rescue_rerun["lost_ops"] == lost
 

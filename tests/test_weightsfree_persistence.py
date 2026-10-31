@@ -112,7 +112,7 @@ def test_forged_envelope_fails_validation(tmp_path) -> None:
     assert excinfo.value.fields["code"] == "artifact_structure_evidence_invalid"
     # Forge 3: an envelope on a values-bearing capture is incoherent.
     ordinary = tl.trace(BufferedToy().eval(), torch.randn(2, 4))
-    ordinary.structure_evidence = trace.graph.structure_evidence
+    ordinary._graph_structure_evidence = trace.graph.structure_evidence
     with pytest.raises(Exception) as excinfo:
         _validate_structure_evidence(ordinary)
     assert excinfo.value.fields["code"] == "artifact_structure_evidence_invalid"

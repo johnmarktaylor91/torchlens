@@ -63,7 +63,7 @@ RECORD_CASES = (
     RecordCase(BackwardPass, BACKWARD_PASS_FIELD_ORDER),
 )
 OPTIONAL_LIVE_FIELDS: dict[type[Any], set[str]] = {
-    Trace: {"input_structure", "_containers"},
+    Trace: {"_provenance_input_structure", "_containers"},
 }
 
 

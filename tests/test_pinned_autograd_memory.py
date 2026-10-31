@@ -55,8 +55,8 @@ def test_detached_and_no_grad_saves_pin_nothing() -> None:
     with torch.no_grad():
         no_grad = tl.trace(model, x)
 
-    assert int(detached.pinned_autograd_memory) == 0
-    assert int(no_grad.pinned_autograd_memory) == 0
+    assert int(detached.cost.pinned_autograd_memory) == 0
+    assert int(no_grad.cost.pinned_autograd_memory) == 0
 
 
 def test_an_early_selector_pins_less_than_the_save_all_default() -> None:
@@ -67,7 +67,7 @@ def test_an_early_selector_pins_less_than_the_save_all_default() -> None:
     save_all = tl.trace(model, x)
     early = tl.trace(model, x, save=tl.module("0"))
 
-    assert 0 < int(early.pinned_autograd_memory) < int(save_all.pinned_autograd_memory)
+    assert 0 < int(early.cost.pinned_autograd_memory) < int(save_all.cost.pinned_autograd_memory)
 
 
 def test_pinned_bytes_do_not_survive_save_and_load(tmp_path: Path) -> None:
@@ -77,7 +77,7 @@ def test_pinned_bytes_do_not_survive_save_and_load(tmp_path: Path) -> None:
     path = tmp_path / "pinned"
     trace.save(path)
 
-    assert tl.load(path).pinned_autograd_memory is None
+    assert tl.load(path).cost.pinned_autograd_memory is None
 
 
 def test_pickle_and_deepcopy_read_none() -> None:
@@ -90,7 +90,7 @@ def test_pickle_and_deepcopy_read_none() -> None:
     assert trace.cost.pinned_autograd_memory is not None
 
     assert pickle.loads(pickle.dumps(trace)).cost.pinned_autograd_memory is None
-    assert copy.deepcopy(trace).pinned_autograd_memory is None
+    assert copy.deepcopy(trace).cost.pinned_autograd_memory is None
 
 
 def test_forged_restored_state_never_surfaces_a_number() -> None:

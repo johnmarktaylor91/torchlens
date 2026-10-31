@@ -198,4 +198,4 @@ def test_discharge_never_mutates_either_trace() -> None:
     structure.discharge_against(real)
     assert set(vars(structure)) == before_structure
     assert set(vars(real)) == before_real
-    assert real.structure_only is False
+    assert real.options.structure_only is False

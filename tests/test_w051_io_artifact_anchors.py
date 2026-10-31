@@ -406,7 +406,9 @@ def test_absent_root_entry_point_refuses_from_v10_and_2x_files_refuse(
         tar.extractall(tmp_path)
     assert_refuses_as_2x(tmp_path / "art_main_portable")
     path = _tampered(
-        source_bundle, tmp_path / "rep.tlspec", lambda st: st.__setitem__("root_entry_point", None)
+        source_bundle,
+        tmp_path / "rep.tlspec",
+        lambda st: st.__setitem__("_provenance_root_entry_point", None),
     )
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)

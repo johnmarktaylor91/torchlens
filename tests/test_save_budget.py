@@ -171,7 +171,9 @@ def test_default_capture_is_unchanged_by_the_budget() -> None:
 
     assert budgeted.layer_labels == unbudgeted.layer_labels
     assert len(budgeted.saved_ops) == len(unbudgeted.saved_ops)
-    assert int(budgeted.saved_activation_memory) == int(unbudgeted.saved_activation_memory)
+    assert int(budgeted.cost.saved_activation_memory) == int(
+        unbudgeted.cost.saved_activation_memory
+    )
 
 
 def test_disabled_budget_allows_what_a_tiny_budget_refuses() -> None:

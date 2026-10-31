@@ -162,7 +162,7 @@ def test_record_under_no_grad_implies_inference_only(grad_off: type) -> None:
     with grad_off():
         out, recording = tl.record(model, x, save=_keep_relu, return_output=True)
     assert recording.outcome.inference_only is True
-    assert recording._recording_state.runtime_trace.inference_only is True
+    assert recording._recording_state.runtime_trace.options.inference_only is True
     with pytest.raises(RecorderStateError) as exc_info:
         recording.backward(out.sum())
     assert exc_info.value.fields["code"] == "recording_backward_inference_only"
@@ -270,7 +270,7 @@ def test_trace_under_no_grad_keeps_saved_values() -> None:
             capture=tl.options.CaptureOptions(layers_to_save="all", inference_only=False),
         )
     try:
-        assert implied.inference_only is True
+        assert implied.options.inference_only is True
         assert plain.options.inference_only is False
         for label in plain.layer_labels:
             if plain[label].has_saved_activation:

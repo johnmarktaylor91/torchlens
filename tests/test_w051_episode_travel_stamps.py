@@ -75,7 +75,7 @@ def test_run_product_round_trips_save_load(tmp_path) -> None:
     result = trace.run(inputs=torch.tensor([[9]]))
     product = result.trace
     assert product is not trace
-    assert product.capture_kind == "plain"
+    assert product.provenance.kind == "plain"
     assert _stamped(product) == []
     note = product.annotations["episode"]
     assert note["code"] == "episode_evidence_dropped_fresh_execution"
