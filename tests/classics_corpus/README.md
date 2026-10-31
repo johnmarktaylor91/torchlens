@@ -64,7 +64,11 @@ era, year, the features the census saw, and why it was chosen.
 The two recurrence features (`trace:is_recurrent` and `feat:multipass`) are the exception: they
 were re-derived on 2026-10-31 under call-site grouping (a layer is one operation at one place in
 a module's code; adopted 2026-10-29), which changed them on 62 entries, and the end-to-end test
-checks them against every capture. Every other feature is as the census saw it.
+checks them against every capture. Re-derive them in a process whose `sys.path` holds no `.`
+entry (`python -m` from the repository root, or pytest): nine entries were first tagged recurrent
+by a process that had imported TorchLens through `.` and leaked its own frames into the
+call-site walk (`tests/test_grouping_host_independence.py`). Every other feature is as the
+census saw it.
 
 ## The behaviour net
 
