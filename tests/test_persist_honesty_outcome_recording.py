@@ -113,7 +113,7 @@ def aborted_bundle(tmp_path):
 def test_recover_carries_abort_failure_evidence(aborted_bundle):
     recovered = tl.fastlog.recover(aborted_bundle)
     assert recovered.is_recovered is True
-    assert recovered.failed is True
+    assert recovered.is_failed is True
     assert "aborted" in (recovered.error_repr or "")
     assert recovered.outcome.status is CaptureStatus.FAILED
     assert recovered.outcome.is_recovered is True

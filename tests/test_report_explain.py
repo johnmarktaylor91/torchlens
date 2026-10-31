@@ -251,10 +251,10 @@ def test_explain_surfaces_halted_capture_status() -> None:
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     assert trace.outcome.status.value == "stopped"
 
-    assert trace.to_agent_json()["capture"]["capture_status"] == "halted"
+    assert trace.to_agent_json()["capture"]["capture_status"] == "stopped"
 
     text = tl.report.explain(trace)
-    assert "Capture outcome: halted." in text
+    assert "Capture outcome: stopped." in text
 
 
 def test_explain_surfaces_unverified_capture() -> None:

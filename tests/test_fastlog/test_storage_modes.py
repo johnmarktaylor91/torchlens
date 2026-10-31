@@ -141,7 +141,7 @@ def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
 def test_disk_only_keep_grad_default_rejected_at_construction(tmp_path: Path) -> None:
     """Disk-only storage rejects static keep_grad defaults before recording."""
 
-    with pytest.raises(RecordingConfigError, match="keep_grad=True"):
+    with pytest.raises(RecordingConfigError, match="save_grad=True"):
         tl.fastlog.Recorder(
             StorageModel(),
             default_op=CaptureSpec(save_grad=True),

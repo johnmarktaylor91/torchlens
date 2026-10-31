@@ -46,12 +46,12 @@ def test_chain_halted_settle_save_load_report_doors(tmp_path: Any) -> None:
         ("summary", str(loaded.summary())),
         ("explain", tl.report.explain(loaded)),
     ):
-        assert "halt" in text.lower(), (
-            f"the {door} door on the LOADED halted trace never says halted --"
+        assert "stopped" in text.lower(), (
+            f"the {door} door on the LOADED stopped trace never says stopped --"
             " the honesty fact was laundered at a chain hop"
         )
     payload = loaded.to_agent_json()
-    assert "halted" in str(payload).lower()
+    assert "stopped" in str(payload).lower()
 
 
 def test_chain_structure_only_save_load_capability_doors(tmp_path: Any) -> None:

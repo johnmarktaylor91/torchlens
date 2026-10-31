@@ -129,7 +129,7 @@ def test_keep_grad_disk_only_default_raises_at_construction(tmp_path: Path) -> N
 
     bundle_path = tmp_path / "recording.tlfast"
 
-    with pytest.raises(RecordingConfigError, match="keep_grad=True"):
+    with pytest.raises(RecordingConfigError, match="save_grad=True"):
         tl.record(
             TinyModel(),
             torch.ones(1, 3),

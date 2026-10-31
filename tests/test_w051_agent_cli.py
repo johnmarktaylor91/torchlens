@@ -110,7 +110,7 @@ def test_incomplete_gate_trips_on_a_halted_capture(tmp_path: Path) -> None:
     path = tmp_path / "halted.tlspec"
     tl.save(log, str(path))
     envelope = call_tool("torchlens_overview", {"path": str(path)})
-    assert envelope["data"]["capture"]["capture_status"] == "halted"
+    assert envelope["data"]["capture"]["capture_status"] == "stopped"
     assert cli.main(["overview", str(path), "--json", "--fail-on", "incomplete"]) == cli.EXIT_GATE
     assert cli.main(["explain", str(path), "--json", "--fail-on", "incomplete"]) == cli.EXIT_GATE
     assert cli.main(["overview", str(path), "--json", "--fail-on", "unverified"]) == cli.EXIT_OK

@@ -209,7 +209,7 @@ def test_manual_recorder_log_return_partial_sets_recording() -> None:
     ) as recorder:
         output = recorder(torch.tensor(1.0))
         partial = recorder.recording
-        assert partial.failed is True
+        assert partial.is_failed is True
         with pytest.raises(RecorderStateError, match="Recorder is in a failed state"):
             recorder(torch.tensor(1.0))
 

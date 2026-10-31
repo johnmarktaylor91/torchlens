@@ -37,7 +37,7 @@ from torchlens.capture.outcome import (
 def test_status_vocabulary_is_frozen() -> None:
     assert {status.value for status in CaptureStatus} == {
         "complete",
-        "halted",
+        "stopped",
         "aborted_nonfinite",
         "failed",
         "unattested",

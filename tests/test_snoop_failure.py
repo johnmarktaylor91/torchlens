@@ -113,7 +113,7 @@ def test_record_tier_disposition_trio_flushes_the_tail() -> None:
                 assert getattr(exc, "partial_recording", None) is not None
         else:
             assert mode == "return_partial"
-            assert result.failed
+            assert result.is_failed
         assert "!! forward failed" in sink.getvalue()
         assert "attempted call=layer_norm" in sink.getvalue()
 

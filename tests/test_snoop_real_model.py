@@ -174,7 +174,7 @@ def test_resnet18_incompatible_add_crash_trio() -> None:
     assert "!! forward failed: RuntimeError" in transcript
     assert "attempted call=" in transcript
     partial = getattr(excinfo.value, "partial_recording", None)
-    assert partial is not None and partial.failed
+    assert partial is not None and partial.is_failed
     tail_labels = [
         line.split()[1]
         for line in transcript.split("\n")
