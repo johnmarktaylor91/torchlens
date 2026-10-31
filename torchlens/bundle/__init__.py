@@ -12,6 +12,12 @@ import torch
 
 from ..errors.episode import BundleRelationError
 from ..intervention._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
+from ..intervention._super.at import (
+    SuperLayerAccessor,
+    SuperOp,
+    SuperOpAccessor,
+    TraceAccessor,
+)
 from ..intervention._super.super_logs import (
     SuperBufferAccessor,
     SuperGradFnAccessor,
@@ -19,12 +25,6 @@ from ..intervention._super.super_logs import (
     SuperModuleAccessor,
     SuperModuleCallAccessor,
     SuperParamAccessor,
-)
-from ..intervention._super.super_op import (
-    SuperLayerAccessor,
-    SuperOp,
-    SuperOpAccessor,
-    TraceAccessor,
 )
 from ..intervention._topology.topology import Supergraph, build_supergraph
 from ..intervention.errors import (
@@ -255,7 +255,7 @@ class Bundle:
         *,
         names: Sequence[str] | None = None,
         baseline: str | Trace | None = None,
-        member_relations: (
+        relations: (
             Sequence[MemberRelationRow | OpaqueRelationRow | Mapping[str, Any]] | None
         ) = None,
         preserved_sections: Mapping[str, Any] | None = None,
@@ -269,7 +269,7 @@ class Bundle:
         self._capacity: int | None = None
         self._baseline_name: str | None = self._resolve_baseline_name(baseline)
         self._member_relations: MemberRelationTable = self._build_relation_table(
-            (), member_relations or ()
+            (), relations or ()
         )
         self._preserved_sections: dict[str, Any] = dict(preserved_sections or {})
         # F03 lineage (ledger memo 0b): one random container identity, minted
@@ -715,7 +715,7 @@ class Bundle:
         return self._divergent(lambda trace: trace.grad_fns.keys())
 
     @property
-    def bundle_id(self) -> str:
+    def id(self) -> str:
         """This container's persisted random identity (F03 lineage, D1a law).
 
         Minted at construction (never a content hash), restored verbatim on
@@ -727,7 +727,7 @@ class Bundle:
         return self._bundle_id
 
     @property
-    def operations(self) -> tuple[BundleOperation, ...]:
+    def history(self) -> tuple[BundleOperation, ...]:
         """The container-side chronology: hash-chained BundleOperation rows.
 
         One row per top-level bundle action (fork / sweep / vary / ...),
@@ -766,7 +766,7 @@ class Bundle:
 
         previous = self._operations[-1] if self._operations else None
         row = BundleOperation(
-            operation_id=mint_bundle_id(),
+            history_id=mint_bundle_id(),
             seq=(previous.seq + 1) if previous is not None else 1,
             kind=kind,
             member_names=tuple(member_names),
@@ -789,7 +789,7 @@ class Bundle:
         return self._baseline_name
 
     @_BundleStructuralProperty
-    def member_relations(self) -> tuple[MemberRelationRow | OpaqueRelationRow, ...]:
+    def relations(self) -> tuple[MemberRelationRow | OpaqueRelationRow, ...]:
         """Return the immutable S6 member-relation view (R4).
 
         Returns
@@ -807,7 +807,7 @@ class Bundle:
     # Real class methods (ledger memo item 0: reachable by hasattr/IDE
     # completion, no longer __getattr__-only dynamic lookups).
     relate = _bundle_relate
-    derive_episode_status = _bundle_derive_episode_status
+    episode_status = _bundle_derive_episode_status
     # The provenance join (F03 item 4): pure derived views, never stored.
     why = _bundle_why
     provenance = _bundle_provenance
@@ -815,7 +815,7 @@ class Bundle:
     # is untouched forever.
     vary = _bundle_vary
 
-    def effects(self, operation_id: str | None = None) -> Any:
+    def effects(self, history_id: str | None = None) -> Any:
         """Serve the stored per-candidate effect table (F03 item 8).
 
         The table is DATA the engine wrote once (released/refused/failed
@@ -825,7 +825,7 @@ class Bundle:
 
         from ..experiment._engine import bundle_effects
 
-        return bundle_effects(self, operation_id)
+        return bundle_effects(self, history_id)
 
     def measure_members(
         self, *, metric: Callable[[Trace], Any], order: str = "member"
@@ -1310,7 +1310,7 @@ class Bundle:
 
     def add(
         self,
-        log_or_logs: Trace | Sequence[Trace],
+        traces: Trace | Sequence[Trace],
         names: str | Sequence[str] | None = None,
     ) -> Bundle:
         """Add one or more member logs and invalidate the cached supergraph.
@@ -1328,7 +1328,7 @@ class Bundle:
             This bundle.
         """
 
-        logs = self._coerce_trace_list(log_or_logs, arg_name="log_or_logs")
+        logs = self._coerce_trace_list(traces, arg_name="log_or_logs")
         member_names = self._coerce_optional_name_list(names, count=len(logs))
         for index, log in enumerate(logs):
             member_name = self._derive_name(
@@ -1346,7 +1346,7 @@ class Bundle:
 
     def remove(
         self,
-        name_or_names: str | Trace | Sequence[str | Trace],
+        names: str | Trace | Sequence[str | Trace],
         *,
         cascade_relations: bool = False,
     ) -> Trace | list[Trace]:
@@ -1373,8 +1373,8 @@ class Bundle:
             relation rows and ``cascade_relations`` is ``False`` (S6 R5).
         """
 
-        is_many = self._is_list_like(name_or_names)
-        names = self._coerce_member_name_list(name_or_names)
+        is_many = self._is_list_like(names)
+        names = self._coerce_member_name_list(names)
         unknown = [name for name in names if name not in self._members]
         if unknown:
             raise KeyError(f"Unknown bundle member(s): {sorted(unknown)}")
@@ -1570,7 +1570,7 @@ class Bundle:
         child = Bundle(
             forked,
             baseline=self._baseline_name,
-            member_relations=self._member_relations.rows,
+            relations=self._member_relations.rows,
             preserved_sections=self._preserved_sections,
         )
         child._forked_from_bundle_id = self._bundle_id
@@ -1641,7 +1641,7 @@ class Bundle:
             member.run(model, x, **kwargs)
         return self
 
-    def apply(self, fn: Callable[..., Any]) -> dict[str, Any]:
+    def map(self, fn: Callable[..., Any]) -> dict[str, Any]:
         """Apply a function independently to each member.
 
         Parameters
@@ -1760,9 +1760,9 @@ class Bundle:
         """
 
         self._require_comparable("compare_at")
-        return self.node(site).diff_pair()
+        return self.node(site).compare()
 
-    def most_changed(
+    def rank_changes(
         self,
         baseline: str | Trace | None = None,
         *,
@@ -1846,7 +1846,7 @@ class Bundle:
         scored.sort(key=lambda row: row[1], reverse=True)
         return scored[:top_k]
 
-    def diff_pair(self, a: Any, b: Any) -> Any:
+    def compare(self, a: Any, b: Any) -> Any:
         """Return out differences between two members or at one site.
 
         Parameters
@@ -1870,7 +1870,7 @@ class Bundle:
             return self._diff_members(a, b)
         self._require_comparable("diff")
         view = self.node(a)
-        return view.diff_pair(other=b if isinstance(b, str) else None)
+        return view.compare(other=b if isinstance(b, str) else None)
 
     def cluster(self, *args: Any, **kwargs: Any) -> None:
         """Placeholder for future bundle clustering.
@@ -1906,7 +1906,7 @@ class Bundle:
             lines.append(f"  - {name}: {', '.join(parts)}")
         return "\n".join(lines)
 
-    def relationship(self, a: str, b: str) -> Relationship:
+    def comparability(self, a: str, b: str) -> Relationship:
         """Return the derived relationship for a pair of members.
 
         Parameters
@@ -1974,7 +1974,7 @@ class Bundle:
         return rows
 
     @property
-    def relationships(self) -> dict[tuple[str, str], Relationship]:
+    def comparability_table(self) -> dict[tuple[str, str], Relationship]:
         """Return pairwise relationships for all member pairs.
 
         Returns
@@ -1986,7 +1986,7 @@ class Bundle:
         matrix: dict[tuple[str, str], Relationship] = {}
         for left in self._members:
             for right in self._members:
-                matrix[(left, right)] = self.relationship(left, right)
+                matrix[(left, right)] = self.comparability(left, right)
         return matrix
 
     @classmethod

@@ -40,11 +40,11 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
     mapping as an honest ``0``.
     """
 
-    from ..selection import ResolvedSelection, Selection
+    from ..selection import Selection, Selector
 
-    if isinstance(overlay, Selection):
+    if isinstance(overlay, Selector):
         overlay = overlay.resolve(trace)
-    elif not isinstance(overlay, ResolvedSelection):
+    elif not isinstance(overlay, Selection):
         selection_hook = getattr(overlay, "__selection__", None)
         if selection_hook is None:
             return overlay

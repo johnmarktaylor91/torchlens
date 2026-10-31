@@ -81,7 +81,7 @@ def relative_l2(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """Return ``norm(a - b) / max(norm(a), eps)`` as a 0-d tensor.
 
     This is asymmetric on purpose -- the denominator is anchored on ``a`` so
-    that a "row" comparison `node.diff_pair(other='trace_x')` reads as relative to
+    that a "row" comparison `node.compare(other='trace_x')` reads as relative to
     that trace.
     """
 

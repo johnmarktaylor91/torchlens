@@ -1,6 +1,6 @@
 """Buffer operands for substitution (R2-25, N-IV-9): BatchNorm-stat and state what-ifs.
 
-``trace.do(tl.params("<buffer address>"), edit)`` substitutes the buffer's
+``trace.do(tl.param("<buffer address>"), edit)`` substitutes the buffer's
 initial version (the value its consumers read) and replays the cone. Each row
 is checked against a deep copy of the model whose buffer was actually changed,
 and the live buffer is checked unchanged.
@@ -48,7 +48,7 @@ def test_running_mean_what_if_matches_a_changed_model() -> None:
 
     model = _batchnorm_model()
     before = model[1].running_mean.clone()
-    got = _edited_output(model, tl.params("1.running_mean"), tl.scale(2.0))
+    got = _edited_output(model, tl.param("1.running_mean"), tl.scale(2.0))
     changed = copy.deepcopy(model)
     with torch.no_grad():
         changed[1].running_mean.mul_(2.0)
@@ -64,7 +64,7 @@ def test_masked_running_var_what_if() -> None:
 
     model = _batchnorm_model()
     mask = torch.tensor([True, False, False, True])
-    got = _edited_output(model, tl.params("1.running_var", mask), tl.scale(3.0))
+    got = _edited_output(model, tl.param("1.running_var", mask), tl.scale(3.0))
     changed = copy.deepcopy(model)
     with torch.no_grad():
         changed[1].running_var[mask] *= 3.0
@@ -95,7 +95,7 @@ def test_state_buffer_what_if_threads_through_writes() -> None:
     model = _StateCell()
     x = torch.tensor([0.1, -0.2, 0.3])
     trace = tl.trace(model, x, capture=_CAPTURE)
-    edited = trace.do(tl.params("h"), tl.replace_with(torch.ones(3)), intervention=_CONFIRM)
+    edited = trace.do(tl.param("h"), tl.replace_with(torch.ones(3)), intervention=_CONFIRM)
     got = edited[edited.output_layers[0]].out.detach()
     want = torch.tanh(torch.tanh(torch.ones(3) + x) + x) * 2.0
     torch.testing.assert_close(got, want, rtol=0.0, atol=1e-6)
@@ -107,7 +107,7 @@ def test_buffer_mask_shape_mismatch_refuses_typed() -> None:
     trace = tl.trace(_batchnorm_model(), _X, capture=_CAPTURE)
     with pytest.raises(SelectionError) as info:
         trace.do(
-            tl.params("1.running_mean", torch.ones(3, dtype=torch.bool)),
+            tl.param("1.running_mean", torch.ones(3, dtype=torch.bool)),
             tl.scale(2.0),
             intervention=_CONFIRM,
         )

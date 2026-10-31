@@ -97,14 +97,14 @@ def gallery():
     # no explicit conversion calls.
     inter = late.receptive_field.at(P) & late.receptive_field.at(Q)
     union = late.receptive_field.at(P) | late.receptive_field.at(Q)
-    ctrl = tl.random_selection(like=inter, within=~union, seed=CTRL_SEED)
+    ctrl = tl.random_like(like=inter, within=~union, seed=CTRL_SEED)
     try:
         yield trace, inter, union, ctrl
     finally:
         trace.cleanup()
 
 
-def _ablation_deltas(trace: tl.Trace, selection: tl.Selection) -> tuple[float, float, float]:
+def _ablation_deltas(trace: tl.Trace, selection: tl.Selector) -> tuple[float, float, float]:
     """Zero-ablate one selection on a fork; return (d_u1, d_u2, d_out)."""
 
     fork = trace.fork()
@@ -123,7 +123,7 @@ def test_flagship_compositions_are_selections(gallery):
 
     trace, inter, union, ctrl = gallery
     for composed in (inter, union, ctrl):
-        assert isinstance(composed, tl.Selection)
+        assert isinstance(composed, tl.Selector)
     resolved_inter = inter.resolve(trace)
     resolved_union = union.resolve(trace)
     # Both land on the trace's input site with exact-relation provenance
@@ -204,7 +204,7 @@ def test_a4_control_is_size_matched_by_construction(gallery):
     ctrl_mask = resolved_ctrl[0].mask
     assert not bool((union_mask & ctrl_mask).any())
     # Seeded determinism: same seed, same sample.
-    again = tl.random_selection(like=inter, within=~union, seed=CTRL_SEED).resolve(trace)
+    again = tl.random_like(like=inter, within=~union, seed=CTRL_SEED).resolve(trace)
     assert again == resolved_ctrl
 
 
@@ -213,7 +213,7 @@ def test_algebra_refusal_row_kind_incompatible(gallery):
 
     trace, inter, _, _ = gallery
     with pytest.raises(SelectionError) as excinfo:
-        _ = inter & tl.params("c2.weight")
+        _ = inter & tl.param("c2.weight")
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 

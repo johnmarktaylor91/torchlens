@@ -77,7 +77,7 @@ def test_param_selection_scalar_refuses_typed(capture) -> None:
 
     fork = capture.fork()
     with pytest.raises(SelectionError) as excinfo:
-        fork.do(tl.params("c1.weight"), 0.0)
+        fork.do(tl.param("c1.weight"), 0.0)
     assert excinfo.value.fields["code"] == "selection_apply_invalid"
     assert "replacement value" in str(excinfo.value)
 

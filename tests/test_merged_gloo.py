@@ -121,7 +121,7 @@ class TestLiveMerge:
         merged = tl.merge_ranks([_capture()])
         label = merged.join_ops(merged.joins[0])[0][0].label
         assert merged[f"r0/{label}"].label == label
-        assert set(merged.super_op(label)) == {0}
+        assert set(merged.at(label)) == {0}
 
     def test_selector_getitem_refuses_typed(self, gloo_world):
         merged = tl.merge_ranks([_capture()])

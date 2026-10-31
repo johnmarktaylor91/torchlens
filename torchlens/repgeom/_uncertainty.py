@@ -293,7 +293,7 @@ def _square_rdm(value: Any, name: str) -> np.ndarray:
     return array
 
 
-def rdm_compare_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, the rdm_compare method, and the three bootstrap knobs, documented one-to-one
+def compare_rdms_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, the rdm_compare method, and the three bootstrap knobs, documented one-to-one
     rdm_a: Any,
     rdm_b: Any,
     method: str = "spearman",
@@ -305,7 +305,7 @@ def rdm_compare_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, t
     """Return :func:`rdm_compare` with a stimulus-bootstrap interval beside it.
 
     DOCUMENTED-UNSTABLE. The point ``score`` is exactly
-    ``tl.repgeom.rdm_compare(rdm_a, rdm_b, method)``. Each resample draws
+    ``tl.repgeom.compare_rdms(rdm_a, rdm_b, method)``. Each resample draws
     stimuli with replacement, takes the strict upper triangle of both
     resampled RDMs, drops the entries that pair a stimulus with a copy of
     itself, and recomputes the comparison. The interval describes the
@@ -343,7 +343,7 @@ def rdm_compare_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, t
         method, or invalid bootstrap settings.
     """
 
-    from ._geometry import rdm_compare
+    from ._geometry import compare_rdms
 
     settings = BootstrapSettings(n_resamples=n_resamples, seed=seed, confidence=confidence)
     square_a = _square_rdm(rdm_a, "rdm_a")
@@ -358,7 +358,7 @@ def rdm_compare_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, t
             f"Unknown rdm_compare_interval method: {method!r} (use 'pearson', 'spearman', "
             "or 'kendall')."
         )
-    score = rdm_compare(square_a, square_b, method=method)
+    score = compare_rdms(square_a, square_b, method=method)
     n = square_a.shape[0]
     rows, cols = np.triu_indices(n, k=1)
 

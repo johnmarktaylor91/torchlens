@@ -64,7 +64,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from ..selection import (
-    ResolvedSelection,
+    Selection,
     SelectionError,
     SiteEntry,
     _apply_invalid,
@@ -95,7 +95,7 @@ def _engine_refusal(engine: str) -> SelectionError:
         f"written. engine={engine!r} is unsupported (on rerun the capture "
         "pipeline would snapshot the substituted value into captured "
         "consumed-value fields; set_only has no consumption to substitute). "
-        "Use fork.do(tl.params(...), edit) with engine='replay' (the "
+        "Use fork.do(tl.param(...), edit) with engine='replay' (the "
         "default when no model/x is passed).",
         code="param_substitution_engine_unsupported",
         engine=engine,
@@ -269,7 +269,7 @@ class _Staging:
 
 def apply_param_substitution_do(
     trace: Trace,
-    resolved: ResolvedSelection,
+    resolved: Selection,
     edit: Any,
     *,
     engine: str,
@@ -363,7 +363,7 @@ def _stage_param_entry(
     staged = _existing_param_substitution(occurrences_by_op, param_address)
     with torch.no_grad():
         # Edits COMPOSE like replay hooks (AUD-CODE 4.10): a second
-        # ``do(tl.params(p), scale(0.5))`` derives from the value the
+        # ``do(tl.param(p), scale(0.5))`` derives from the value the
         # consumers currently see (the staged "as if" value), so it yields a
         # quarter, never a fresh half computed from the untouched live param.
         consumed = (staged if staged is not None else first_value).detach().clone()
@@ -671,7 +671,7 @@ def _rollback_param_substitutions(committed: list[tuple[Any, tuple[Any, ...]]]) 
 
 
 def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
-    """Lower a ``tl.params(name)`` selection naming a registered BUFFER (N-IV-9).
+    """Lower a ``tl.param(name)`` selection naming a registered BUFFER (N-IV-9).
 
     Buffers are not parameters: they are versioned graph nodes (one plain op
     per observed version, ``docs/buffers.md``), so the operand a buffer

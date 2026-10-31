@@ -11,7 +11,7 @@ pattern where a fix closed one instance of a class but left siblings open:
   as a ``Edit`` (data corruption). The fix escapes any dict carrying a reserved
   wrapper key (the ``__dunder__`` namespace) through the general ``__dict_items__``
   encoding so a genuine user key can never be mistaken for a wrapper tag.
-* MAJOR -- ``Bundle.most_changed`` (and its sibling ``_distance_value``) reimplemented
+* MAJOR -- ``Bundle.rank_changes`` (and its sibling ``_distance_value``) reimplemented
   the round-6 scalar/vector routing guard asymmetrically (``is_scalar_like(base)``
   only), so a scalar baseline vs a genuine vector member fell into the scalar fallback
   and hard-crashed instead of routing to the intended vector metric. Both sites now use
@@ -161,7 +161,7 @@ def test_most_changed_happy_path_unbroken_by_symmetric_guard() -> None:
     log_b = tl.trace(model_b, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tl.bundle({"a": log_a, "b": log_b}, baseline="a")
 
-    rows = bundle.most_changed()
+    rows = bundle.rank_changes()
     assert isinstance(rows, list)
     # Non-empty, sorted descending, finite scores -- no crash, no truncation.
     assert rows

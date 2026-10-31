@@ -404,7 +404,7 @@ def test_param_population_refuses_kind(log):
     """Value producers read ACT payloads; a PARAM population refuses typed."""
 
     with pytest.raises(SelectionError) as excinfo:
-        tl.top_k(tl.params("encoder.0.weight"), 3)
+        tl.top_k(tl.param("encoder.0.weight"), 3)
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 

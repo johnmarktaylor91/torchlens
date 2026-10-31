@@ -304,7 +304,7 @@ def _member_row_notes(bundle: Any) -> dict[str, list[str]]:
     from ..bundle._relations import MemberRelationRow
 
     notes: dict[str, list[str]] = {}
-    for row in bundle.member_relations:
+    for row in bundle.relations:
         if isinstance(row, MemberRelationRow) and row.member is not None:
             params = row.params
             notes.setdefault(str(row.member), []).append(
@@ -381,7 +381,7 @@ def _add_bundle_member_graph(
         attrs = merge_node_style(base_node, node_styles, name, member)
         dot.node(node_ids[name], label="\n".join(line for line in lines if line), **attrs)
     opaque = 0
-    for row in bundle.member_relations:
+    for row in bundle.relations:
         if not isinstance(row, MemberRelationRow):
             opaque += 1
             continue

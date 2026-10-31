@@ -382,7 +382,7 @@ def test_loader_leg_a_end_to_end(tmp_path, two_member_bundle: Bundle) -> None:
     ]
     assert opaque_warnings, "the opaque-kinds disclosure must carry its warning code"
     assert isinstance(loaded, Bundle)
-    opaque_rows = [row for row in loaded.member_relations if isinstance(row, OpaqueRelationRow)]
+    opaque_rows = [row for row in loaded.relations if isinstance(row, OpaqueRelationRow)]
     assert [row.kind for row in opaque_rows] == ["someorg.custody_of"]
 
     resaved = tmp_path / "resaved.tlspec"
@@ -470,5 +470,5 @@ def test_unknown_evidence_schema_id_loads_opaque(tmp_path, two_member_bundle: Bu
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
     loaded = tl.load(path)
     assert isinstance(loaded, Bundle)
-    kinds = [r.kind for r in loaded.member_relations]
+    kinds = [r.kind for r in loaded.relations]
     assert "successor_of" in kinds

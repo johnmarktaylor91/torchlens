@@ -53,12 +53,12 @@ if TYPE_CHECKING:
     from .data_classes.trace import Trace
 
 __all__ = [
-    "ResolvedSelection",
     "Selection",
+    "Selector",
     "SelectionError",
     "SiteEntry",
-    "params",
-    "random_selection",
+    "param",
+    "random_like",
     "units",
 ]
 
@@ -396,7 +396,7 @@ def _graph_entry_order(trace: Any, entries: Iterable[SiteEntry]) -> tuple[SiteEn
     return tuple(entry for _, entry in sorted(enumerate(placed), key=sort_key))
 
 
-class ResolvedSelection:
+class Selection:
     """Frozen, concrete, trace-bound selection: an ordered tuple of SiteEntry.
 
     Zero-mask (element-empty) entries are retained first-class — the family
@@ -465,7 +465,7 @@ class ResolvedSelection:
 
         return self._digest
 
-    def align_to(self, target: Trace) -> ResolvedSelection:
+    def align_to(self, target: Trace) -> Selection:
         """Re-bind this resolved selection onto another trace (cross-run).
 
         The stage-4a cross-run door: alignment keys on the L1 structural
@@ -514,7 +514,7 @@ class ResolvedSelection:
     def __eq__(self, other: object) -> bool:
         """Compare BOTH denotation levels: family AND per-site masks."""
 
-        if not isinstance(other, ResolvedSelection):
+        if not isinstance(other, Selection):
             return NotImplemented
         if self._kind != other._kind or len(self._entries) != len(other._entries):
             return False
@@ -536,7 +536,7 @@ class ResolvedSelection:
         elements = sum(entry.selected_count for entry in self._entries)
         return f"ResolvedSelection[{self._kind}]({len(self._entries)} sites, {elements} elements)"
 
-    def __selection__(self) -> ResolvedSelection:
+    def __selection__(self) -> Selection:
         """Pass anywhere a selection is expected."""
 
         return self
@@ -561,7 +561,7 @@ class ResolvedSelection:
     def __rsub__(self, other: Any) -> Any:
         return _compose_any("sub", other, self)
 
-    def __invert__(self) -> ResolvedSelection:
+    def __invert__(self) -> Selection:
         """Complement per TOUCHED site (never model-universe).
 
         The complement of a no-touched-sites selection is the no-touched-sites
@@ -586,7 +586,7 @@ class ResolvedSelection:
             )
             for entry in self._entries
         )
-        return ResolvedSelection(self._trace, self._kind, entries)
+        return Selection(self._trace, self._kind, entries)
 
 
 # ---------------------------------------------------------------------------
@@ -637,7 +637,7 @@ class _FacetTerm:
 
 @dataclass(frozen=True)
 class _ParamTerm:
-    """AST leaf for ``tl.params(name, mask=...)`` (PARAM-kind producer)."""
+    """AST leaf for ``tl.param(name, mask=...)`` (PARAM-kind producer)."""
 
     name: str
     mask: torch.Tensor | None
@@ -678,7 +678,7 @@ class _WholeSiteTerm:
 
 @dataclass(frozen=True)
 class _RandomTerm:
-    """AST leaf for ``tl.random_selection`` (seeded size-matched control)."""
+    """AST leaf for ``tl.random_like`` (seeded size-matched control)."""
 
     like: Any
     within: Any
@@ -702,7 +702,7 @@ class _Combinator:
         return "(" + f" {symbol} ".join(repr(operand) for operand in self.operands) + ")"
 
 
-class Selection:
+class Selector:
     """Composable, trace-independent selection query (frozen AST).
 
     Compose with ``|  &  -  ~``; resolve explicitly with
@@ -723,7 +723,7 @@ class Selection:
         """Freeze one query AST node (internal constructor).
 
         Users build selections through producers (``__selection__`` lifts,
-        ``tl.units`` / ``tl.params`` / ``tl.random_selection``) and operators,
+        ``tl.units`` / ``tl.param`` / ``tl.random_like``) and operators,
         never by constructing AST nodes directly.
         """
 
@@ -744,7 +744,7 @@ class Selection:
 
         return self._kind
 
-    def __selection__(self) -> Selection:
+    def __selection__(self) -> Selector:
         """Pass anywhere a selection is expected."""
 
         return self
@@ -785,16 +785,16 @@ class Selection:
     def __rsub__(self, other: Any) -> Any:
         return _compose_any("sub", other, self)
 
-    def __invert__(self) -> Selection:
+    def __invert__(self) -> Selector:
         """Mask complement per touched site (uniform; never predicate negation)."""
 
-        return Selection(
+        return Selector(
             _Combinator("invert", (self._node,)), kind=self._kind, direction=self._direction
         )
 
     # Resolution ------------------------------------------------------------
 
-    def resolve(self, trace: Trace) -> ResolvedSelection:
+    def resolve(self, trace: Trace) -> Selection:
         """Resolve this query against one trace's site lifecycle.
 
         Returns
@@ -856,20 +856,20 @@ class _SelectionOperand:
     def __rsub__(self, other: Any) -> Any:
         return _compose_any("sub", other, self)
 
-    def __invert__(self) -> Selection:
+    def __invert__(self) -> Selector:
         return ~self.__selection__()
 
 
-def _lift(value: Any) -> Selection | ResolvedSelection | None:
+def _lift(value: Any) -> Selector | Selection | None:
     """Lift a composable operand, or return ``None`` when not selection-shaped."""
 
-    if isinstance(value, (Selection, ResolvedSelection)):
+    if isinstance(value, (Selector, Selection)):
         return value
     lift = getattr(value, "__selection__", None)
     if lift is None:
         return None
     lifted = lift()
-    if not isinstance(lifted, (Selection, ResolvedSelection)):
+    if not isinstance(lifted, (Selector, Selection)):
         raise TypeError(
             f"__selection__ on {type(value).__name__} must return a Selection; "
             f"got {type(lifted).__name__}."
@@ -919,22 +919,20 @@ def _compose_any(op: str, left: Any, right: Any) -> Any:
     if lifted_left is None or lifted_right is None:
         return NotImplemented
 
-    if isinstance(lifted_left, ResolvedSelection) or isinstance(lifted_right, ResolvedSelection):
+    if isinstance(lifted_left, Selection) or isinstance(lifted_right, Selection):
         resolved_left, resolved_right = _align_resolved_operands(lifted_left, lifted_right)
         _check_kinds(op, resolved_left._kind, resolved_right._kind)
         return _compose_resolved(op, resolved_left, resolved_right)
 
-    if not isinstance(lifted_left, Selection) or not isinstance(lifted_right, Selection):
+    if not isinstance(lifted_left, Selector) or not isinstance(lifted_right, Selector):
         raise RuntimeError("query composition operands must both be Selection here")
     return _compose_queries(op, lifted_left, lifted_right)
 
 
-def _align_resolved_operands(
-    lifted_left: Any, lifted_right: Any
-) -> tuple[ResolvedSelection, ResolvedSelection]:
+def _align_resolved_operands(lifted_left: Any, lifted_right: Any) -> tuple[Selection, Selection]:
     """Return both operands resolved on one shared trace (mixed sides resolve now)."""
 
-    if isinstance(lifted_left, ResolvedSelection) and isinstance(lifted_right, ResolvedSelection):
+    if isinstance(lifted_left, Selection) and isinstance(lifted_right, Selection):
         if lifted_left._trace is not lifted_right._trace:
             raise SelectionError(
                 "cannot compose resolved selections bound to different traces. "
@@ -942,16 +940,16 @@ def _align_resolved_operands(
                 code="selection_trace_mismatch",
             )
         return lifted_left, lifted_right
-    if isinstance(lifted_left, ResolvedSelection):
-        if not isinstance(lifted_right, Selection):
+    if isinstance(lifted_left, Selection):
+        if not isinstance(lifted_right, Selector):
             raise RuntimeError("mixed composition lost its Selection operand")
         return lifted_left, lifted_right.resolve(lifted_left._trace)
-    if not isinstance(lifted_left, Selection) or not isinstance(lifted_right, ResolvedSelection):
+    if not isinstance(lifted_left, Selector) or not isinstance(lifted_right, Selection):
         raise RuntimeError("mixed composition lost its Selection operand")
     return lifted_left.resolve(lifted_right._trace), lifted_right
 
 
-def _compose_queries(op: str, lifted_left: Selection, lifted_right: Selection) -> Selection:
+def _compose_queries(op: str, lifted_left: Selector, lifted_right: Selector) -> Selector:
     """Compose two query selections into one AST node (n-ary flatten for or)."""
 
     _check_kinds(op, lifted_left._kind, lifted_right._kind)
@@ -968,12 +966,10 @@ def _compose_queries(op: str, lifted_left: Selection, lifted_right: Selection) -
         node_out: Any = _Combinator("or", tuple(operands))
     else:
         node_out = _Combinator(op, (lifted_left._node, lifted_right._node))
-    return Selection(node_out, kind=lifted_left._kind, direction=lifted_left._direction)
+    return Selector(node_out, kind=lifted_left._kind, direction=lifted_left._direction)
 
 
-def _compose_resolved(
-    op: str, left: ResolvedSelection, right: ResolvedSelection
-) -> ResolvedSelection:
+def _compose_resolved(op: str, left: Selection, right: Selection) -> Selection:
     """Compose two same-trace resolved selections (family + element rules)."""
 
     left_by_key = {entry.site_key: entry for entry in left._entries}
@@ -986,7 +982,7 @@ def _compose_resolved(
         entries = _compose_entries_difference(left_by_key, right_by_key)
     else:
         raise ValueError(f"unknown operator {op!r}")
-    return ResolvedSelection(left._trace, left._kind, entries)
+    return Selection(left._trace, left._kind, entries)
 
 
 def _compose_entries_union(
@@ -1157,7 +1153,7 @@ def _find_act_ops(trace: Any, site: str) -> tuple[Any, ...]:
     return tuple(matches)
 
 
-def _resolve_node(node: Any, trace: Any, kind: str) -> ResolvedSelection:
+def _resolve_node(node: Any, trace: Any, kind: str) -> Selection:
     """Resolve one AST node against a trace."""
 
     if isinstance(node, _Combinator):
@@ -1168,7 +1164,7 @@ def _resolve_node(node: Any, trace: Any, kind: str) -> ResolvedSelection:
     raise TypeError(f"unknown selection AST node {type(node).__name__}")
 
 
-def _resolve_combinator(node: _Combinator, trace: Any, kind: str) -> ResolvedSelection:
+def _resolve_combinator(node: _Combinator, trace: Any, kind: str) -> Selection:
     """Resolve an operator node by folding its resolved operands."""
 
     if node.op == "invert":
@@ -1180,7 +1176,7 @@ def _resolve_combinator(node: _Combinator, trace: Any, kind: str) -> ResolvedSel
     return result
 
 
-def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> ResolvedSelection:
+def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> Selection:
     """Resolve a lifted selector to whole-site masks over its matched sites."""
 
     from .intervention.resolver import (
@@ -1200,10 +1196,10 @@ def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> ResolvedSelection
         _act_entry(op, _mask_whole(_site_shape(op)), "exact", f"selector {node.selector!r}")
         for op in matched
     ]
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
-def _resolve_box_term(node: _BoxTerm, trace: Any) -> ResolvedSelection:
+def _resolve_box_term(node: _BoxTerm, trace: Any) -> Selection:
     """Resolve a receptive-field interval hull to its exact-as-a-set mask."""
 
     box = node.box
@@ -1227,10 +1223,10 @@ def _resolve_box_term(node: _BoxTerm, trace: Any) -> ResolvedSelection:
     relation = "exact" if (box.exact and not box.sparse_possible) else "upper_bound"
     mask = _mask_from_slices(shape, box.slices())
     source = f"rf hull of {box.op_label!r} unit {box.unit!r}"
-    return ResolvedSelection(trace, "ACT", [_act_entry(op, mask, relation, source)])
+    return Selection(trace, "ACT", [_act_entry(op, mask, relation, source)])
 
 
-def _resolve_gradient_term(node: _GradientTerm, trace: Any) -> ResolvedSelection:
+def _resolve_gradient_term(node: _GradientTerm, trace: Any) -> Selection:
     """Resolve an empirical gradient receptive field (exact-set term)."""
 
     gradient = node.gradient_rf
@@ -1254,10 +1250,10 @@ def _resolve_gradient_term(node: _GradientTerm, trace: Any) -> ResolvedSelection
         )
     mask = _mask_from_dense(shape, support.bool())
     source = f"gradient rf of {gradient.op_label!r} unit {gradient.unit!r}"
-    return ResolvedSelection(trace, "ACT", [_act_entry(op, mask, "exact", source)])
+    return Selection(trace, "ACT", [_act_entry(op, mask, "exact", source)])
 
 
-def _resolve_facet_term(node: _FacetTerm, trace: Any) -> ResolvedSelection:
+def _resolve_facet_term(node: _FacetTerm, trace: Any) -> Selection:
     """Resolve a facet's write region over its home site."""
 
     spec = node.spec
@@ -1320,14 +1316,14 @@ def _resolve_facet_term(node: _FacetTerm, trace: Any) -> ResolvedSelection:
         )
     mask = _mask_from_dense(shape, write_mask.bool().cpu())
     source = f"facet {getattr(spec, 'recipe_id', '<unknown>')!r} write region"
-    return ResolvedSelection(trace, "ACT", [_act_entry(op, mask, "exact", source)])
+    return Selection(trace, "ACT", [_act_entry(op, mask, "exact", source)])
 
 
-def _resolve_param_term(node: _ParamTerm, trace: Any) -> ResolvedSelection:
+def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
     """Resolve a named-parameter element region."""
 
     target = None
-    for param in getattr(trace, "params", ()):
+    for param in getattr(trace, "param", ()):
         if getattr(param, "address", None) == node.name or param.name == node.name:
             target = param
             break
@@ -1362,10 +1358,10 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> ResolvedSelection:
         provenance=SelectionProvenance(relation="exact", source=f"params({node.name!r})"),
         _mask=mask,
     )
-    return ResolvedSelection(trace, "PARAM", [entry])
+    return Selection(trace, "PARAM", [entry])
 
 
-def _resolve_unit_term(node: _UnitTerm, trace: Any) -> ResolvedSelection:
+def _resolve_unit_term(node: _UnitTerm, trace: Any) -> Selection:
     """Resolve an explicit site + index set."""
 
     matches = _find_act_ops(trace, node.site)
@@ -1432,10 +1428,10 @@ def _resolve_unit_term(node: _UnitTerm, trace: Any) -> ResolvedSelection:
                 dense[coordinates] = True
             mask = _mask_from_dense(shape, dense)
         entries.append(_act_entry(op, mask, "exact", f"units({node.site!r})"))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
-def _resolve_whole_site_term(node: _WholeSiteTerm, trace: Any) -> ResolvedSelection:
+def _resolve_whole_site_term(node: _WholeSiteTerm, trace: Any) -> Selection:
     """Resolve an Op/Layer whole-output lift."""
 
     matches = _find_act_ops(trace, node.site_label)
@@ -1451,10 +1447,10 @@ def _resolve_whole_site_term(node: _WholeSiteTerm, trace: Any) -> ResolvedSelect
         _act_entry(op, _mask_whole(_site_shape(op)), "exact", f"site({node.site_label!r})")
         for op in matches
     ]
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
-def _resolve_random_term(node: _RandomTerm, trace: Any) -> ResolvedSelection:
+def _resolve_random_term(node: _RandomTerm, trace: Any) -> Selection:
     """Resolve a seeded, size-matched random control selection."""
 
     like = _resolve_operand_for_random(node.like, trace)
@@ -1496,20 +1492,20 @@ def _resolve_random_term(node: _RandomTerm, trace: Any) -> ResolvedSelection:
         )
         for entry, dense in dense_by_key.values()
     ]
-    return ResolvedSelection(trace, within._kind, entries)
+    return Selection(trace, within._kind, entries)
 
 
-def _resolve_operand_for_random(operand: Any, trace: Any) -> ResolvedSelection:
+def _resolve_operand_for_random(operand: Any, trace: Any) -> Selection:
     """Resolve one random_selection operand, honoring trace binding."""
 
-    if isinstance(operand, ResolvedSelection):
+    if isinstance(operand, Selection):
         if operand._trace is not trace:
             raise SelectionError(
                 "random_selection operand is bound to a different trace.",
                 code="selection_trace_mismatch",
             )
         return operand
-    if not isinstance(operand, Selection):
+    if not isinstance(operand, Selector):
         raise RuntimeError("random_selection operand must lift to a Selection")
     return operand.resolve(trace)
 
@@ -1522,7 +1518,7 @@ def _resolve_operand_for_random(operand: Any, trace: Any) -> ResolvedSelection:
 def units(
     site: str,
     indices: Iterable[tuple[int, ...] | int] | torch.Tensor,
-) -> Selection:
+) -> Selector:
     """Select an explicit site + index set (unit-term producer).
 
     Parameters
@@ -1545,7 +1541,7 @@ def units(
                 "units(site, indices) tensor form must be a bool mask over the "
                 f"site's output index space; got dtype {indices.dtype}."
             )
-        return Selection(_UnitTerm(site=site, indices=None, index_mask=indices.clone()), kind="ACT")
+        return Selector(_UnitTerm(site=site, indices=None, index_mask=indices.clone()), kind="ACT")
     normalized: list[tuple[int, ...]] = []
     for coordinates in indices:
         if isinstance(coordinates, int):
@@ -1554,10 +1550,10 @@ def units(
         if any(coordinate < 0 for coordinate in coordinates):
             raise ValueError(f"units indices must be non-negative; got {coordinates!r}.")
         normalized.append(coordinates)
-    return Selection(_UnitTerm(site=site, indices=tuple(normalized), index_mask=None), kind="ACT")
+    return Selector(_UnitTerm(site=site, indices=tuple(normalized), index_mask=None), kind="ACT")
 
 
-def params(name: str, mask: torch.Tensor | None = None) -> Selection:
+def param(name: str, mask: torch.Tensor | None = None) -> Selector:
     """Select a named-parameter element region (param-term producer).
 
     ``mask=None`` selects the whole parameter. Fenced from
@@ -1571,15 +1567,15 @@ def params(name: str, mask: torch.Tensor | None = None) -> Selection:
         if not isinstance(mask, torch.Tensor) or mask.dtype != torch.bool:
             raise ValueError("params mask must be a bool tensor over the parameter shape.")
         mask = mask.clone()
-    return Selection(_ParamTerm(name=name, mask=mask), kind="PARAM")
+    return Selector(_ParamTerm(name=name, mask=mask), kind="PARAM")
 
 
-def random_selection(
+def random_like(
     *,
     like: Any,
     within: Any,
     seed: int,
-) -> Selection:
+) -> Selector:
     """Seeded, size-matched random control selection.
 
     Both operands resolve at ``resolve(trace)`` time; the sampling population
@@ -1598,8 +1594,8 @@ def random_selection(
             "random_selection operands must be selections or region-shaped "
             "producers implementing __selection__."
         )
-    kind = within_lifted._kind if isinstance(within_lifted, Selection) else within_lifted._kind
-    return Selection(_RandomTerm(like=like_lifted, within=within_lifted, seed=seed), kind=kind)
+    kind = within_lifted._kind if isinstance(within_lifted, Selector) else within_lifted._kind
+    return Selector(_RandomTerm(like=like_lifted, within=within_lifted, seed=seed), kind=kind)
 
 
 # ---------------------------------------------------------------------------
@@ -1607,46 +1603,46 @@ def random_selection(
 # ---------------------------------------------------------------------------
 
 
-def _selection_from_selector(selector: Any) -> Selection:
+def _selection_from_selector(selector: Any) -> Selector:
     """Lift a BaseSelector as a selector-term (predicate meaning intact)."""
 
     from .intervention.resolver import _selector_resolution_direction
 
     direction = _selector_resolution_direction(selector)
-    return Selection(_SelectorTerm(selector=selector), kind="ACT", direction=direction)
+    return Selector(_SelectorTerm(selector=selector), kind="ACT", direction=direction)
 
 
-def _selection_from_box(box: Any) -> Selection:
+def _selection_from_box(box: Any) -> Selector:
     """Lift a ReceptiveFieldBox as an ACT hull term."""
 
-    return Selection(_BoxTerm(box=box), kind="ACT")
+    return Selector(_BoxTerm(box=box), kind="ACT")
 
 
-def _selection_from_gradient(gradient_rf: Any) -> Selection:
+def _selection_from_gradient(gradient_rf: Any) -> Selector:
     """Lift a GradientReceptiveField as an exact empirical ACT term."""
 
-    return Selection(_GradientTerm(gradient_rf=gradient_rf), kind="ACT")
+    return Selector(_GradientTerm(gradient_rf=gradient_rf), kind="ACT")
 
 
-def _selection_from_facet(spec: Any) -> Selection:
+def _selection_from_facet(spec: Any) -> Selector:
     """Lift a FacetSpec's write region as an ACT term."""
 
-    return Selection(_FacetTerm(spec=spec), kind="ACT")
+    return Selector(_FacetTerm(spec=spec), kind="ACT")
 
 
-def _selection_from_op(op: Any) -> Selection:
+def _selection_from_op(op: Any) -> Selector:
     """Lift one Op (whole-output, one pass)."""
 
     layer_label = getattr(op, "layer_label", None) or op.label
     pass_index = getattr(op, "pass_index", 1) or 1
-    return Selection(_WholeSiteTerm(site_label=layer_label, pass_index=pass_index), kind="ACT")
+    return Selector(_WholeSiteTerm(site_label=layer_label, pass_index=pass_index), kind="ACT")
 
 
-def _selection_from_layer(layer: Any) -> Selection:
+def _selection_from_layer(layer: Any) -> Selector:
     """Lift one Layer (whole-output, ALL passes)."""
 
     layer_label = getattr(layer, "layer_label", None) or layer.label
-    return Selection(_WholeSiteTerm(site_label=layer_label, pass_index=None), kind="ACT")
+    return Selector(_WholeSiteTerm(site_label=layer_label, pass_index=None), kind="ACT")
 
 
 # ---------------------------------------------------------------------------
@@ -1684,7 +1680,7 @@ def _apply_invalid(
 
 def build_selection_do_plan(
     trace: Any, selection_like: Any, edit: Any
-) -> tuple[ResolvedSelection, list[dict[str, Any]], dict[str, Any]]:
+) -> tuple[Selection, list[dict[str, Any]], dict[str, Any]]:
     """Resolve a selection target and derive the per-site edit plan.
 
     Returns ``(resolved, [{"op", "entry", "is_leaf", "edit"}, ...], audit_record)``.
@@ -1704,7 +1700,7 @@ def build_selection_do_plan(
 
 def _build_selection_do_plan(
     trace: Any, selection_like: Any, edit: Any
-) -> tuple[ResolvedSelection, list[dict[str, Any]], dict[str, Any]]:
+) -> tuple[Selection, list[dict[str, Any]], dict[str, Any]]:
     """Build :func:`build_selection_do_plan`'s result inside its label-index scope."""
 
     if edit is None:
@@ -1795,13 +1791,13 @@ def _build_selection_do_plan(
     return resolved, plan, audit
 
 
-def _resolve_do_target(trace: Any, selection_like: Any) -> ResolvedSelection:
+def _resolve_do_target(trace: Any, selection_like: Any) -> Selection:
     """Resolve the ``do()`` target on this trace, refusing PARAM/EDGE kinds."""
 
     lifted = _lift(selection_like)
     if lifted is None:
         raise RuntimeError("build_selection_do_plan requires a selection-shaped input")
-    if isinstance(lifted, ResolvedSelection):
+    if isinstance(lifted, Selection):
         if lifted._trace is not trace:
             raise SelectionError(
                 "the resolved selection is bound to a different trace; resolve "
@@ -1818,7 +1814,7 @@ def _resolve_do_target(trace: Any, selection_like: Any) -> ResolvedSelection:
             "not_maskable",
             "learned-parameter edits do not ride the node-edit plan: PARAM "
             "selections apply through parameter SUBSTITUTION on the replay "
-            "engine (do(tl.params(...), edit) substitutes the value each "
+            "engine (do(tl.param(...), edit) substitutes the value each "
             "consuming op sees; the live parameter is never written).",
         )
     if resolved.kind == "EDGE":
@@ -1893,10 +1889,10 @@ def _edge_entry(record: Any) -> SiteEntry:
     )
 
 
-def _selection_from_edge(record: Any) -> Selection:
+def _selection_from_edge(record: Any) -> Selector:
     """Lift one EdgeUseRecord as an EDGE selection term."""
 
-    return Selection(
+    return Selector(
         _EdgeTerm(
             addresses=(edge_address_of(record),),
             display=(f"{record.parent_label}->{record.child_label}",),
@@ -1905,7 +1901,7 @@ def _selection_from_edge(record: Any) -> Selection:
     )
 
 
-def _resolve_edge_term(node: _EdgeTerm, trace: Any) -> ResolvedSelection:
+def _resolve_edge_term(node: _EdgeTerm, trace: Any) -> Selection:
     """Resolve an explicit edge-occurrence set against one trace."""
 
     family = {edge_address_of(record): record for record in _trace_edge_records(trace)}
@@ -1919,10 +1915,10 @@ def _resolve_edge_term(node: _EdgeTerm, trace: Any) -> ResolvedSelection:
                 site=repr(address),
             )
         entries.append(_edge_entry(record))
-    return ResolvedSelection(trace, "EDGE", entries)
+    return Selection(trace, "EDGE", entries)
 
 
-def _edge_family_complement(resolved: ResolvedSelection) -> ResolvedSelection:
+def _edge_family_complement(resolved: Selection) -> Selection:
     """Complement an EDGE selection within the trace's dataflow edge family.
 
     The edge universe is well-defined (the trace's EdgeTable occurrences), so
@@ -1937,7 +1933,7 @@ def _edge_family_complement(resolved: ResolvedSelection) -> ResolvedSelection:
         for record in _trace_edge_records(resolved._trace)
         if edge_address_of(record) not in selected
     ]
-    return ResolvedSelection(resolved._trace, "EDGE", entries)
+    return Selection(resolved._trace, "EDGE", entries)
 
 
 #: Ordered term-type dispatch for ``_resolve_node`` (combinators handled first).

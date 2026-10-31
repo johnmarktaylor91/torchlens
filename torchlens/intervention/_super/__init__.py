@@ -15,6 +15,14 @@ This subpackage is intentionally not part of the top-level TorchLens public API.
 
 from __future__ import annotations
 
+from .at import (
+    SuperAtenOp,
+    SuperLayer,
+    SuperLayerAccessor,
+    SuperOp,
+    SuperOpAccessor,
+    TraceAccessor,
+)
 from .super_logs import (
     SuperBuffer,
     SuperBufferAccessor,
@@ -28,14 +36,6 @@ from .super_logs import (
     SuperModuleCallAccessor,
     SuperParam,
     SuperParamAccessor,
-)
-from .super_op import (
-    SuperAtenOp,
-    SuperLayer,
-    SuperLayerAccessor,
-    SuperOp,
-    SuperOpAccessor,
-    TraceAccessor,
 )
 
 __all__ = [

@@ -334,7 +334,7 @@ class SelectorCapabilityError(SiteResolutionError):
 
     The one typed refusal for unsupported ``(kind, lifecycle)`` pairs: for
     example ``tl.followed_by(...)`` in post-hoc ``find_sites`` (no retroactive
-    window exists on a finished trace) or ``tl.input_at(...)`` as a live hook
+    window exists on a finished trace) or ``tl.model_input(...)`` as a live hook
     application site.
     """
 

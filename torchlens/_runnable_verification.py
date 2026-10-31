@@ -707,5 +707,5 @@ def _op_for_slot(trace: Any, slot_id: str) -> Any | None:
 def _run_fork_name(trace: Any) -> str:
     """Return a process-unique monotonic Trace label for a run transaction."""
 
-    base_name = trace.trace_label or "trace"
+    base_name = trace.name or "trace"
     return f"{base_name}_fork_{next(_RUN_FORK_COUNTER)}"

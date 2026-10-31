@@ -465,7 +465,7 @@ def _run_predicate_forward_with_root_frame(
         address="",
         module_type=type(model).__name__,
         module_id=id(model),
-        pass_index=1,
+        pass_number=1,
     )
     skipped_spec = CaptureSpec(save_out=False, save_metadata=False)
     backend.push_existing_module_frame(trace, state.module_stack, root_frame)
@@ -862,7 +862,7 @@ def _get_op_nums_from_user_labels(
             matching_layer_passes = [
                 layer_entry
                 for layer_entry in getattr(self, "layer_list", [])
-                if layer_key in {layer_entry.layer_label, layer_entry.layer_label_short}
+                if layer_key in {layer_entry.layer_label, layer_entry.short_layer_label}
             ]
             if matching_layer_passes:
                 raw_layer_nums_to_save.update(

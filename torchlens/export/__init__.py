@@ -261,7 +261,7 @@ def html(
         Destination HTML path.
     arrays:
         ``"frontier"`` (default) / ``"flagged"`` (hard-capped debugging
-        preset) / ``"none"`` / a ``tl.Selection`` (the general form).
+        preset) / ``"none"`` / a ``tl.Selector`` (the general form).
     graph:
         ``"collapsed"`` (default) / ``"flat"`` / ``"none"``.
     options:

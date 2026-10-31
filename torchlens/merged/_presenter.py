@@ -3,7 +3,7 @@
 Composition, never inheritance (design-merge-ranks-c v5, 2.1): a merged trace
 is NOT a ``Trace`` and NOT a ``Bundle``. Rank cores stay the single truth
 (P1); the presenter only references them. Structural access is authority --
-``merged.ranks[r][label]`` and ``merged.super_op(...)``; the ``r{rank}/label``
+``merged.ranks[r][label]`` and ``merged.at(...)``; the ``r{rank}/label``
 string is validated sugar. Refused surfaces raise typed
 (:class:`MergedSurfaceUnsupportedError`); merged replay does not exist.
 """
@@ -508,7 +508,7 @@ class MergedTrace:
             raise AmbiguousOpLookupError(
                 f"Label {item!r} resolves on {len(hits)} ranks; disambiguate "
                 f"with a rank-qualified label ({spellings}) or use "
-                "merged.super_op() for the cross-rank fan."
+                "merged.at() for the cross-rank fan."
             )
         return next(iter(hits.values()))
 
@@ -523,7 +523,7 @@ class MergedTrace:
                     return rank, rest
         return None, item
 
-    def super_op(self, label: str) -> dict[int, Any]:
+    def at(self, label: str) -> dict[int, Any]:
         """Return the SPMD fan: the ops matching ``label`` on every rank.
 
         Parameters

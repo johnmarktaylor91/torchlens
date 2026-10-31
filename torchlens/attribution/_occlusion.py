@@ -37,7 +37,7 @@ from torchlens.attribution._core import (
     _temporarily_eval,
 )
 from torchlens.intervention import mean_ablate, zero_ablate
-from torchlens.selection import ResolvedSelection, Selection
+from torchlens.selection import Selection, Selector
 
 # Deterministic per-engine pass budgets (attrib memo D9), sized by the
 # measured 16.6x direct-vs-replay per-pass ratio (13.4 ms direct vs 222 ms
@@ -142,7 +142,7 @@ def _occlusion_edit(baseline: _OcclusionBaseline, blur_kernel_size: int) -> Any:
     raise AttributionError("baseline must be 'zeros', 'mean', or 'blur'")
 
 
-def _resolve_selection(trace: Any, selection: Any) -> ResolvedSelection:
+def _resolve_selection(trace: Any, selection: Any) -> Selection:
     """Resolve a Selection or region producer against ``trace``.
 
     Parameters
@@ -164,14 +164,14 @@ def _resolve_selection(trace: Any, selection: Any) -> ResolvedSelection:
     """
 
     lifted = selection
-    if not isinstance(lifted, (Selection, ResolvedSelection)):
+    if not isinstance(lifted, (Selector, Selection)):
         converter = getattr(lifted, "__selection__", None)
         if not callable(converter):
             raise AttributionError("occlusion selection must implement __selection__()")
         lifted = converter()
-    if isinstance(lifted, ResolvedSelection):
-        return lifted if lifted._trace is trace else lifted.align_to(trace)
     if isinstance(lifted, Selection):
+        return lifted if lifted._trace is trace else lifted.align_to(trace)
+    if isinstance(lifted, Selector):
         return lifted.resolve(trace)
     raise AttributionError("occlusion selection did not produce a Selection")
 

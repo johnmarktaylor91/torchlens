@@ -49,10 +49,10 @@ import torch
 
 from .errors._base import TorchLensError
 from .selection import (
-    ResolvedSelection,
     Selection,
     SelectionError,
     SelectionProvenance,
+    Selector,
     SiteEntry,
     _act_entry,
     _find_act_ops,
@@ -99,7 +99,7 @@ def _lift_within(within: Any, producer: str) -> Any:
     if isinstance(within, str):
         if not within:
             raise ValueError(f"{producer} `within` site label must be a non-empty string.")
-        return Selection(_WholeSiteTerm(site_label=within, pass_index=None), kind="ACT")
+        return Selector(_WholeSiteTerm(site_label=within, pass_index=None), kind="ACT")
     lifted = _lift(within)
     if lifted is None:
         raise ValueError(
@@ -121,12 +121,12 @@ def _lift_within(within: Any, producer: str) -> Any:
     return lifted
 
 
-def _resolve_population(within: Any, trace: Any) -> ResolvedSelection:
+def _resolve_population(within: Any, trace: Any) -> Selection:
     """Resolve the population operand against the resolution trace."""
 
     if within is None:
         return _default_population(trace)
-    if isinstance(within, ResolvedSelection):
+    if isinstance(within, Selection):
         if within._trace is not trace:
             raise SelectionError(
                 "the `within` population is bound to a different trace; "
@@ -137,7 +137,7 @@ def _resolve_population(within: Any, trace: Any) -> ResolvedSelection:
     return within.resolve(trace)
 
 
-def _default_population(trace: Any) -> ResolvedSelection:
+def _default_population(trace: Any) -> Selection:
     """Build the default population: every retained single-tensor ACT site.
 
     The population is DEFINED as the sites whose payloads this capture
@@ -154,7 +154,7 @@ def _default_population(trace: Any) -> ResolvedSelection:
         if not isinstance(shape, tuple) or not all(isinstance(extent, int) for extent in shape):
             continue
         entries.append(_act_entry(op, _mask_whole(shape), "exact", "saved_sites"))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
 def _op_for_entry(trace: Any, entry: SiteEntry, *, sample_name: str | None = None) -> Any:
@@ -312,7 +312,7 @@ def _rank_keys(value: torch.Tensor, by: str, producer: str, site: Any) -> torch.
     return keys.to(torch.float64)
 
 
-def _resolve_rank_criterion(node: _ValueTerm, trace: Any) -> ResolvedSelection:
+def _resolve_rank_criterion(node: _ValueTerm, trace: Any) -> Selection:
     """Resolve a global rank criterion (top_k / top_fraction) exactly.
 
     Ranking is GLOBAL across the population with a deterministic tie-break:
@@ -368,10 +368,10 @@ def _resolve_rank_criterion(node: _ValueTerm, trace: Any) -> ResolvedSelection:
         dense = selected_flat[offset : offset + span].reshape(entry.shape)
         offset += span
         entries.append(_entry_with_mask(entry, dense, "exact", source))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
-def _resolve_elementwise_criterion(node: _ValueTerm, trace: Any) -> ResolvedSelection:
+def _resolve_elementwise_criterion(node: _ValueTerm, trace: Any) -> Selection:
     """Resolve an elementwise value criterion (threshold / sign) exactly."""
 
     population = _resolve_population(node.within, trace)
@@ -401,10 +401,10 @@ def _resolve_elementwise_criterion(node: _ValueTerm, trace: Any) -> ResolvedSele
             source = f"sign({which!r}, tol={node.tol})"
         dense &= entry._mask._dense_ro()
         entries.append(_entry_with_mask(entry, dense, "exact", source))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
-def _resolve_value_term(node: _ValueTerm, trace: Any) -> ResolvedSelection:
+def _resolve_value_term(node: _ValueTerm, trace: Any) -> Selection:
     """Resolve one value-criterion term against the trace's saved payloads."""
 
     if node.criterion in _RANK_CRITERIA:
@@ -427,7 +427,7 @@ def top_k(
     *,
     by: str | Any = "value",
     largest: bool = True,
-) -> Selection:
+) -> Selector:
     """Select the k globally highest-valued elements of a population.
 
     Ranks the resolution trace's retained activations across the whole
@@ -449,7 +449,7 @@ def top_k(
             raise ValueError(f"top_k `largest` must be a bool; got {largest!r}.")
         return _table_scored_selection("top_k", by, within=within, k=k, largest=largest)
     _validate_rank_common(by, largest, "top_k")
-    return Selection(
+    return Selector(
         _ValueTerm(
             criterion="top_k", within=_lift_within(within, "top_k"), k=k, by=by, largest=largest
         ),
@@ -463,7 +463,7 @@ def top_fraction(
     *,
     by: str | Any = "value",
     largest: bool = True,
-) -> Selection:
+) -> Selector:
     """Select the top ``fraction`` of a population by value.
 
     Exactly :func:`top_k` with ``k = ceil(fraction * population)`` computed
@@ -482,7 +482,7 @@ def top_fraction(
             "top_fraction", by, within=within, fraction=fraction, largest=largest
         )
     _validate_rank_common(by, largest, "top_fraction")
-    return Selection(
+    return Selector(
         _ValueTerm(
             criterion="top_fraction",
             within=_lift_within(within, "top_fraction"),
@@ -500,7 +500,7 @@ def threshold(
     above: float | None = None,
     below: float | None = None,
     by: str | Any = "value",
-) -> Selection:
+) -> Selector:
     """Select elements by strict value comparison ("everything above 0.5").
 
     ``above=`` keeps elements with value strictly greater; ``below=``
@@ -520,7 +520,7 @@ def threshold(
         return _table_scored_selection("threshold", by, within=within, above=above, below=below)
     if by not in ("value", "abs"):
         raise ValueError(f"threshold `by` must be 'value' or 'abs'; got {by!r}.")
-    return Selection(
+    return Selector(
         _ValueTerm(
             criterion="threshold",
             within=_lift_within(within, "threshold"),
@@ -536,8 +536,8 @@ def sign(
     within: Any = None,
     which: str = "positive",
     *,
-    tol: float = 0.0,
-) -> Selection:
+    atol: float = 0.0,
+) -> Selector:
     """Select elements by sign class: the negatives, the zeros, the sparsity mask.
 
     ``which`` is one of ``'positive'`` (value > tol), ``'negative'``
@@ -552,11 +552,11 @@ def sign(
 
     if which not in _SIGN_CLASSES:
         raise ValueError(f"sign `which` must be one of {_SIGN_CLASSES}; got {which!r}.")
-    tol = _validate_real_number(tol, "tol", "sign")
-    if tol < 0:
-        raise ValueError(f"sign `tol` must be non-negative; got {tol!r}.")
-    return Selection(
-        _ValueTerm(criterion="sign", within=_lift_within(within, "sign"), which=which, tol=tol),
+    atol = _validate_real_number(atol, "tol", "sign")
+    if atol < 0:
+        raise ValueError(f"sign `tol` must be non-negative; got {atol!r}.")
+    return Selector(
+        _ValueTerm(criterion="sign", within=_lift_within(within, "sign"), which=which, tol=atol),
         kind="ACT",
     )
 
@@ -603,7 +603,7 @@ def _sample_values(node: _StatTerm, entry: SiteEntry) -> list[torch.Tensor]:
     return values
 
 
-def _resolve_stat_term(node: _StatTerm, trace: Any) -> ResolvedSelection:
+def _resolve_stat_term(node: _StatTerm, trace: Any) -> Selection:
     """Resolve one multi-sample statistic against the population geometry.
 
     The resolution trace supplies geometry and population; each sample must
@@ -645,7 +645,7 @@ def _resolve_stat_term(node: _StatTerm, trace: Any) -> ResolvedSelection:
             source = f"low_variance(n_samples={len(values)}, threshold={node.threshold})"
         dense &= entry._mask._dense_ro()
         entries.append(_entry_with_mask(entry, dense, relation, source))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
 def _validate_samples(samples: Any, producer: str, single_trace_hint: str) -> tuple[Any, ...]:
@@ -676,8 +676,8 @@ def dead(
     samples: Any,
     *,
     within: Any = None,
-    tol: float = 0.0,
-) -> Selection:
+    atol: float = 0.0,
+) -> Selector:
     """Select units that never fired across an explicit multi-sample evidence set.
 
     An element is selected when its magnitude is ``<= tol`` in EVERY sample
@@ -691,16 +691,16 @@ def dead(
     DOCUMENTED-UNSTABLE spelling.
     """
 
-    tol = _validate_real_number(tol, "tol", "dead")
-    if tol < 0:
-        raise ValueError(f"dead `tol` must be non-negative; got {tol!r}.")
+    atol = _validate_real_number(atol, "tol", "dead")
+    if atol < 0:
+        raise ValueError(f"dead `tol` must be non-negative; got {atol!r}.")
     collected = _validate_samples(
         samples,
         "dead",
         "For the single-capture zero-activation mask, spell it sign(site, 'zero').",
     )
-    return Selection(
-        _StatTerm(stat="dead", samples=collected, within=_lift_within(within, "dead"), tol=tol),
+    return Selector(
+        _StatTerm(stat="dead", samples=collected, within=_lift_within(within, "dead"), tol=atol),
         kind="ACT",
     )
 
@@ -710,9 +710,9 @@ def saturated(
     *,
     low: float | None = None,
     high: float | None = None,
-    tol: float = 0.0,
+    atol: float = 0.0,
     within: Any = None,
-) -> Selection:
+) -> Selector:
     """Select units always pinned at a declared bound across the evidence set.
 
     An element is selected when it sits within ``tol`` of the SAME declared
@@ -733,22 +733,22 @@ def saturated(
         low = _validate_real_number(low, "low", "saturated")
     if high is not None:
         high = _validate_real_number(high, "high", "saturated")
-    tol = _validate_real_number(tol, "tol", "saturated")
-    if tol < 0:
-        raise ValueError(f"saturated `tol` must be non-negative; got {tol!r}.")
+    atol = _validate_real_number(atol, "tol", "saturated")
+    if atol < 0:
+        raise ValueError(f"saturated `tol` must be non-negative; got {atol!r}.")
     collected = _validate_samples(
         samples,
         "saturated",
         "For a single capture, spell the pinned-band mask with threshold(...).",
     )
-    return Selection(
+    return Selector(
         _StatTerm(
             stat="saturated",
             samples=collected,
             within=_lift_within(within, "saturated"),
             low=low,
             high=high,
-            tol=tol,
+            tol=atol,
         ),
         kind="ACT",
     )
@@ -759,7 +759,7 @@ def low_variance(
     *,
     threshold: float,
     within: Any = None,
-) -> Selection:
+) -> Selector:
     """Select units whose variance across the evidence set is below a threshold.
 
     Elementwise unbiased (n-1) variance across the sample traces, computed
@@ -778,7 +778,7 @@ def low_variance(
         "low_variance",
         "Variance of one sample is identically zero and claims nothing.",
     )
-    return Selection(
+    return Selector(
         _StatTerm(
             stat="low_variance",
             samples=collected,
@@ -998,7 +998,7 @@ def _table_population(
     return pairs, excluded
 
 
-def _resolve_table_score_term(node: _TableScoreTerm, trace: Any) -> ResolvedSelection:
+def _resolve_table_score_term(node: _TableScoreTerm, trace: Any) -> Selection:
     """Resolve a ReadTable-scored criterion (rank or threshold) exactly.
 
     Site-grain tables rank SITES (``k`` counts sites; a winning site selects
@@ -1021,7 +1021,7 @@ def _resolve_table_site_grain(
     trace: Any,
     pairs: list[tuple[SiteEntry, Any]],
     source: str,
-) -> ResolvedSelection:
+) -> Selection:
     """Rank/threshold whole sites by their scalar scores."""
 
     if node.criterion == "threshold":
@@ -1034,7 +1034,7 @@ def _resolve_table_site_grain(
                 passes = passes and row.score < node.below
             if passes:
                 entries.append(_entry_with_mask(entry, entry.mask, "exact", source))
-        return ResolvedSelection(trace, "ACT", entries)
+        return Selection(trace, "ACT", entries)
     if node.criterion == "top_fraction":
         if node.fraction is None:
             raise RuntimeError("top_fraction node lost its fraction")
@@ -1060,7 +1060,7 @@ def _resolve_table_site_grain(
         for position, (entry, _) in enumerate(pairs)
         if position in winners
     ]
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
 def _resolve_table_element_grain(
@@ -1068,7 +1068,7 @@ def _resolve_table_element_grain(
     trace: Any,
     pairs: list[tuple[SiteEntry, Any]],
     source: str,
-) -> ResolvedSelection:
+) -> Selection:
     """Rank/threshold elements by the table's dense per-element values."""
 
     per_entry: list[tuple[SiteEntry, torch.Tensor, torch.Tensor]] = []
@@ -1127,7 +1127,7 @@ def _resolve_table_element_grain(
         dense = selected_flat[offset : offset + span].reshape(entry.shape)
         offset += span
         entries.append(_entry_with_mask(entry, dense, "exact", source))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
 def _table_element_threshold(
@@ -1135,7 +1135,7 @@ def _table_element_threshold(
     trace: Any,
     per_entry: list[tuple[SiteEntry, torch.Tensor, torch.Tensor]],
     source: str,
-) -> ResolvedSelection:
+) -> Selection:
     """Elementwise threshold over the table's dense per-element values."""
 
     entries = []
@@ -1146,7 +1146,7 @@ def _table_element_threshold(
         if node.below is not None:
             dense &= keys < node.below
         entries.append(_entry_with_mask(entry, dense.reshape(entry.shape), "exact", source))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
 def _table_scored_selection(  # noqa: PLR0913 -- mirrors the three public producer signatures it serves
@@ -1159,10 +1159,10 @@ def _table_scored_selection(  # noqa: PLR0913 -- mirrors the three public produc
     largest: bool = True,
     above: float | None = None,
     below: float | None = None,
-) -> Selection:
+) -> Selector:
     """Build the Selection for a ReadTable-scored criterion (the by= door)."""
 
-    return Selection(
+    return Selector(
         _TableScoreTerm(
             criterion=criterion,
             table=table,

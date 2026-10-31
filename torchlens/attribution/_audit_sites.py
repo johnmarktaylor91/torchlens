@@ -13,7 +13,7 @@ indexed after the batch axis, ablated in every example). Whole-site units are
 edited through their site label, element units through
 ``tl.units(site, mask)``; the recorded pairs are exactly what was executed.
 Under zero ablation the single-unit measurements run as one
-``torchlens.experiment.site_sweep`` with one candidate per unit.
+``torchlens.experiment.sweep_sites`` with one candidate per unit.
 """
 
 from __future__ import annotations
@@ -124,7 +124,7 @@ class _SitesPlan:
         """Score every unit ablated alone.
 
         Under zero ablation every unit runs in one
-        ``torchlens.experiment.site_sweep``: one candidate per unit (the site
+        ``torchlens.experiment.sweep_sites``: one candidate per unit (the site
         label of a whole-site row, ``tl.units(site, mask)`` of an element),
         replay engine, nothing retained. A "mean" or baseline edit is the
         site's own value, so no one edit serves every candidate: those units,
@@ -164,13 +164,13 @@ def _swept_scores(
     unit's own fork exactly; a unit the sweep did not complete is left out.
     """
 
-    from torchlens.experiment import site_sweep
+    from torchlens.experiment import sweep_sites
 
     names = {f"u{index}": key for index, key in enumerate(selections)}
     if not names:
         return {}
     with torch.no_grad():
-        bundle = site_sweep(
+        bundle = sweep_sites(
             trace,
             candidates={name: selections[key] for name, key in names.items()},
             edit=edit,

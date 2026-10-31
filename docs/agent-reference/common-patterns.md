@@ -114,7 +114,7 @@ fork.do(inter, tl.zero_ablate())           # edit-then-scatter: only masked elem
 fork2 = log.fork()
 fork2.do(tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(fork2), tl.patch_from(log))
 fork3 = log.fork()
-fork3.do(tl.params("head.weight"), tl.scale(0.5))  # "as if" the weight changed, replay-only:
+fork3.do(tl.param("head.weight"), tl.scale(0.5))  # "as if" the weight changed, replay-only:
 # every consumption is substituted; the live nn.Parameter is NEVER written.
 print(fork.intervention_audit[-1])         # query repr + resolve digest + relations
 ```

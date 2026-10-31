@@ -10,7 +10,7 @@ cert5 inspector that previously lacked coverage:
 * MAJOR-2 -- intervention-spec save/load silently stringified non-string dict keys.
 * MAJOR-3 -- ``DIRECTION_AGNOSTIC_KINDS`` omitted output/output_at/input_at, so a
   validly-composed forward-output & backward selector resolved to 0 sites.
-* MAJOR-4 -- ``SuperOp.diff_pair`` silently truncated a vector member to element 0
+* MAJOR-4 -- ``SuperOp.compare`` silently truncated a vector member to element 0
   when compared against a scalar member.
 """
 

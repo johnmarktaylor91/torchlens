@@ -381,7 +381,7 @@ def test_param_population_refuses_kind(log_b):
     """Differential producers read ACT payloads; PARAM populations refuse typed."""
 
     with pytest.raises(SelectionError) as excinfo:
-        tl.changed(log_b, tl.params("encoder.0.weight"))
+        tl.changed(log_b, tl.param("encoder.0.weight"))
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 
@@ -415,7 +415,7 @@ def test_changed_composes_with_the_algebra(log, log_b):
 def test_repr_stability_pins(log_b):
     """The constructor-shaped disclosures are pinned (readable AST spellings)."""
 
-    label = log_b.trace_label
+    label = log_b.name
     assert repr(tl.changed(log_b)) == (
         f"Selection[ACT](changed(vs={label!r}, above=0.0, below=None, by='abs', "
         "within=saved_sites))"

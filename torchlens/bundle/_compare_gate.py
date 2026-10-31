@@ -322,8 +322,8 @@ def require_comparable(
                 f"member pair {left_name}/{right_name} derives "
                 f"{relationship.value!r}. Remedy: bundle captures whose "
                 "models share the required structure (see "
-                "Bundle.relationship), or use per-member reads such as "
-                "Bundle.apply for cross-model analysis.",
+                "Bundle.comparability), or use per-member reads such as "
+                "Bundle.map for cross-model analysis.",
                 code="bundle_gate_model_axis_unmet",
                 operation=operation,
                 left_member=left_name,
@@ -345,7 +345,7 @@ def require_comparable(
                         "relationship is never accepted as proof of "
                         "input equality. Remedy: compare captures of "
                         "the same input, or use per-member reads such "
-                        "as Bundle.apply for cross-input analysis.",
+                        "as Bundle.map for cross-input analysis.",
                         code="bundle_gate_input_values_differ",
                         operation=operation,
                         left_member=left_name,

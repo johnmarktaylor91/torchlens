@@ -1585,7 +1585,7 @@ class Layer(_SelectionOperand):
         return cast(str, self._single_pass_or_error("label"))
 
     @property
-    def label_short(self) -> str:
+    def short_label(self) -> str:
         """For single-pass layers, return the short pass-qualified label."""
         return cast(str, self._single_pass_or_error("label_short"))
 

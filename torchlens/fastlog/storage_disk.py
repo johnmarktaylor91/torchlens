@@ -549,7 +549,7 @@ def _write_metadata(path: Path, recording: Recording, options: RecordingOptions)
         "n_passes": recording.n_passes,
         "start_times": recording.start_times,
         "end_times": recording.end_times,
-        "predicate_failure_overflow_count": recording.predicate_failure_overflow_count,
+        "predicate_failure_overflow_count": recording.num_predicate_failure_overflows,
         "halted": recording.halted,
         "halt_reason": recording.halt_reason,
         "halts_by_pass": recording.halts_by_pass,

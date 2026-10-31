@@ -86,7 +86,7 @@ def _code(excinfo: pytest.ExceptionInfo[BaseException]) -> str:
 
 
 def _state(bundle: Bundle) -> tuple[Any, ...]:
-    return (tuple(bundle.names), bundle.member_relations, bundle.operations)
+    return (tuple(bundle.names), bundle.relations, bundle.operations)
 
 
 def test_steering_the_draft_reaches_critique_and_revise() -> None:
@@ -104,7 +104,7 @@ def test_steering_the_draft_reaches_critique_and_revise() -> None:
         assert row.prompt_divergence == quoted_from + draft.completion_divergence
     assert b.downstream("draft") == ("critique", "revise"), "alternative_of copies stay out"
     assert b.downstream("cf_draft") == ("cf_critique", "cf_revise"), "the copy's own flow"
-    pairs = [(r.kind, r.from_member, r.to_member) for r in b.member_relations]
+    pairs = [(r.kind, r.from_member, r.to_member) for r in b.relations]
     assert ("alternative_of", "cf_draft", "draft") in pairs
     assert ("fed_by", "cf_critique", "cf_draft") in pairs
     assert b.operations[-1].kind == "add"
@@ -146,7 +146,7 @@ def test_unpaired_calls_are_added_or_dropped() -> None:
     assert (by_call["revise"].status, by_call["revise"].member) == ("dropped", None)
     assert (by_call["lookup"].status, by_call["lookup"].member) == ("added", "cf_lookup")
     assert "cf_lookup" in b.names
-    peers = {(r.from_member, r.to_member) for r in b.member_relations if r.kind == "alternative_of"}
+    peers = {(r.from_member, r.to_member) for r in b.relations if r.kind == "alternative_of"}
     assert peers == {("cf_draft", "draft"), ("cf_critique", "critique")}
 
 
@@ -250,7 +250,7 @@ def test_merged_bundle_round_trips(tmp_path: Path) -> None:
     b.add_alternative(_critique_loop({"draft": _STEER}), steered=("draft",))
     b.save(tmp_path / "harness.tlspec")
     loaded = tl.load(tmp_path / "harness.tlspec")
-    assert loaded.member_relations == b.member_relations
+    assert loaded.relations == b.relations
     assert loaded.operations[-1].params == b.operations[-1].params
     assert loaded.token_divergence("critique", "cf_critique") == b.token_divergence(
         "critique", "cf_critique"

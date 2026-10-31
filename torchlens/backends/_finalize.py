@@ -610,9 +610,9 @@ def _finalize_single_op(
     op_log._label_raw = label
     op_log._layer_label_raw = layer_label
     op_log.label = pass_label
-    op_log.label_short = pass_label
+    op_log.short_label = pass_label
     op_log.layer_label = layer_label
-    op_log.layer_label_short = layer_label
+    op_log.short_layer_label = layer_label
     op_log.lookup_keys = [label, pass_label]
     op_log.pass_index = pass_index
     op_log.num_passes = num_passes
@@ -1248,11 +1248,11 @@ def new_preview_function_trace(
         layer_visualizers=None,
         save_visualizations=False,
     )
-    trace.trace_label = name
+    trace.name = name
     trace.backend = cast(BackendName, backend_name)
     trace.module_identity_mode = "function_root"
     trace.param_source = cast("Literal['native-module', 'pytree-derived', 'none']", param_source)
-    trace.model_label = trace.model_class_name
+    trace.model_name = trace.model_class_name
     trace.model_class_qualname = getattr(model, "__qualname__", trace.model_class_name)
     # Root entry-point identity fact (C07X item (iv)): preview backends
     # capture a function/module-like root under module_identity_mode

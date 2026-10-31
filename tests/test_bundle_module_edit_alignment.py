@@ -91,10 +91,10 @@ def test_site_reads_score_the_renumbered_ops(clean_and_ablated) -> None:
     expected = _independent_cosine_distance(_head(clean).out, _head(ablated).out)
     assert expected > 0.01
 
-    ranked = dict(bundle.most_changed(top_k=len(clean.layer_list)))
+    ranked = dict(bundle.rank_changes(top_k=len(clean.layer_list)))
     assert set(ranked) == {op.layer_label for op in clean.layer_list}
     assert ranked[head_label] == pytest.approx(expected, rel=1e-4, abs=1e-6)
 
-    pair_rows = dict(bundle.diff_pair("clean", "ablated"))
+    pair_rows = dict(bundle.compare("clean", "ablated"))
     assert set(pair_rows) == {op.layer_label for op in clean.layer_list}
     assert pair_rows[head_label] == pytest.approx(expected, rel=1e-4, abs=1e-6)

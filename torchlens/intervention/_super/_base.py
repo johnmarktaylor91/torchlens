@@ -207,7 +207,7 @@ class Super(Generic[T]):
         return SuperMemberAccessor(self._members)
 
     @property
-    def traces(self) -> set[str]:
+    def names(self) -> set[str]:
         """Return names of bundle members represented by this view.
 
         Returns
@@ -219,7 +219,7 @@ class Super(Generic[T]):
         return set(self._members)
 
     @property
-    def absent_traces(self) -> set[str]:
+    def absent_names(self) -> set[str]:
         """Return bundle member names not represented by this view.
 
         Returns
@@ -240,7 +240,7 @@ class Super(Generic[T]):
             Represented member count.
         """
 
-        return len(self.traces)
+        return len(self.names)
 
     @property
     def num_absent_traces(self) -> int:
@@ -252,10 +252,10 @@ class Super(Generic[T]):
             Absent member count.
         """
 
-        return len(self.absent_traces)
+        return len(self.absent_names)
 
     @property
-    def is_complete_coverage(self) -> bool:
+    def is_complete(self) -> bool:
         """Return whether every bundle member is represented.
 
         Returns
@@ -264,7 +264,7 @@ class Super(Generic[T]):
             Whether this label resolved in every bundle member.
         """
 
-        return not self.absent_traces
+        return not self.absent_names
 
     @property
     def coverage(self) -> float:

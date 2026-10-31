@@ -240,7 +240,7 @@ def _check_layer_pass_to_layer_log_xrefs(ml: Trace) -> None:
             if lpl.pass_index != call_index:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{ll_label}' pass key={call_index} but Op.pass_index={lpl.pass_index}",
+                    f"Layer '{ll_label}' pass key={call_index} but Op.pass_number={lpl.pass_index}",
                 )
             if lpl.layer_label != ll.layer_label:
                 raise MetadataInvariantError(

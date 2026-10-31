@@ -19,8 +19,8 @@ Selectors resolve against completed `Trace.layers` records.
 | `tl.label` | `label(name: str)` | Exact final, raw, short, or pass-qualified label. |
 | `tl.func` | `func(name: str)` | Match captured function name OR normalized layer type such as `"relu"` or `"add"`. |
 | `tl.module` | `module(address: str)` | Match a module output boundary. |
-| `tl.contains` | `contains(substring: str)` | Case-insensitive label substring search. |
-| `tl.regex` | `regex(pattern: str)` | Case-sensitive `re.search` over labels. |
+| `tl.label_contains` | `contains(substring: str)` | Case-insensitive label substring search. |
+| `tl.label_matches` | `regex(pattern: str)` | Case-sensitive `re.search` over labels. |
 | `tl.where` | `where(predicate, *, name_hint=None)` | Predicate over layer pass records; non-portable. |
 | `tl.in_module` | `in_module(address: str)` | Match sites contained in a module address. |
 | `tl.grad_fn_label` | `grad_fn_label(name: str)` | Exact backward grad_fn label (backward sites only). |
@@ -229,7 +229,7 @@ this is a disclosure, never a refusal.
 `log.do([(selection, edit), ...])` applies a list of selection and edit pairs
 as one transaction with one intervention event. Activation (ACT) pairs attach
 together and push once. A batch may also carry parameter selections
-(`tl.params(...)`) and dataflow edge selections (from `log.edges`); on the
+(`tl.param(...)`) and dataflow edge selections (from `log.edges`); on the
 replay engine the pairs then run in order exactly as one `do()` per pair would
 (each run of consecutive activation pairs attaches and pushes together; each
 parameter or edge pair goes through its own substitution path), and the result

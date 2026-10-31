@@ -22,7 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors.episode import BundleExperimentError
-from torchlens.experiment import site_sweep, top_k
+from torchlens.experiment import sweep_sites, top_k
 from torchlens.experiment._engine import _member_bytes
 from torchlens.options import CaptureOptions, InterventionOptions
 
@@ -77,7 +77,7 @@ def test_all_144_heads_sweep_within_the_retention_ceiling() -> None:
     ceiling = per_member * (_K + 1)
 
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=candidates,
             edit=tl.zero_ablate(),
@@ -89,7 +89,7 @@ def test_all_144_heads_sweep_within_the_retention_ceiling() -> None:
     assert excinfo.value.fields["code"] == "retention_projection_over_budget"
     assert excinfo.value.fields["projected_bytes"] == ceiling
 
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=candidates,
         edit=tl.zero_ablate(),
@@ -105,7 +105,7 @@ def test_all_144_heads_sweep_within_the_retention_ceiling() -> None:
     retained = sorted(name for name, row in rows.items() if row.member_name is not None)
     released = [name for name, row in rows.items() if row.status == "released"]
     assert len(retained) == _K and len(released) == len(candidates) - _K
-    top = sorted(name for name, _value in view.most_changed()[:_K])
+    top = sorted(name for name, _value in view.rank_changes()[:_K])
     assert retained == top
     assert len(bundle.names) == _K + 1 and bundle.names[0] == "baseline"
     retained_bytes = sum(_member_bytes(bundle[name]) for name in bundle.names)

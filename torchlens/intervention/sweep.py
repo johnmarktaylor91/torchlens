@@ -27,7 +27,7 @@ SWEEP_NAME = "sweep"
 def sweep(
     model: nn.Module,
     x: Any,
-    at: str | BaseSelector | Callable[[Any], bool] | MissingType = MISSING,
+    site: str | BaseSelector | Callable[[Any], bool] | MissingType = MISSING,
     values: Iterable[Any] | MissingType = MISSING,
     *,
     input_kwargs: dict[Any, Any] | None = None,
@@ -119,7 +119,7 @@ def sweep(
                 remedy="pass all-spec values without at=, or all-plain values with at=",
                 argument="values",
             )
-        if at is not MISSING:
+        if site is not MISSING:
             raise InvalidArgumentError(
                 "sweep(at=..., values=[InterventionSpec, ...]) conflicts: each "
                 "spec already names its own WHERE and action, so at= has "
@@ -138,7 +138,7 @@ def sweep(
             **trace_kwargs,
         )
 
-    if at is MISSING:
+    if site is MISSING:
         raise ArgumentTypeError(
             "sweep() is missing its required at site target",
             code="sweep_site_missing",
@@ -146,7 +146,7 @@ def sweep(
             argument="at",
         )
     else:
-        resolved_at = at
+        resolved_at = site
 
     # At this point both resolved_at and values are fully resolved (not MISSING).
     from typing import cast

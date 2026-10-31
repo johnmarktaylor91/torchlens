@@ -167,7 +167,7 @@ def test_refusal_kind_unsupported(pair):
     """PARAM selections refuse alignment (addresses not run-stable)."""
 
     trace_a, trace_b = pair
-    resolved = tl.params("c1.weight").resolve(trace_a)
+    resolved = tl.param("c1.weight").resolve(trace_a)
     with pytest.raises(SelectionError) as excinfo:
         resolved.align_to(trace_b)
     assert _alignment_reason(excinfo) == "kind_unsupported"
@@ -223,11 +223,11 @@ def test_refusal_site_key_unavailable(pair):
 
     import dataclasses
 
-    from torchlens.selection import ResolvedSelection
+    from torchlens.selection import Selection
 
     trace_a, trace_b = pair
     resolved = tl.units("relu_1_2", IDX).resolve(trace_a)
-    keyless = ResolvedSelection(
+    keyless = Selection(
         trace_a,
         "ACT",
         [dataclasses.replace(entry, structural_site_key=None) for entry in resolved],

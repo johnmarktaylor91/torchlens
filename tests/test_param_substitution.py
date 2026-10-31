@@ -1,7 +1,7 @@
 """Parameter substitution ("as if" the parameter were changed) — replay-only.
 
 Pins the decided param-operand contract (2026-08-17): ``fork.do(
-tl.params(...), edit)`` substitutes the VALUE each consuming op sees at its
+tl.param(...), edit)`` substitutes the VALUE each consuming op sees at its
 derived occurrence address on the replay engine, through the shipped
 tier-(ii) edge-substitution store, and the live parameter object is never
 written (bit-identical proof below). Engine scope (rerun/set_only refuse
@@ -63,7 +63,7 @@ def _as_if_forward(model: _Net, x: torch.Tensor, w1: torch.Tensor) -> torch.Tens
 def test_basic_as_if_substitution(capture):
     model, x, trace = capture
     fork = trace.fork()
-    fork.do(tl.params("fc1.weight"), tl.scale(0.0))
+    fork.do(tl.param("fc1.weight"), tl.scale(0.0))
     expected = _as_if_forward(model, x, torch.zeros_like(model.fc1.weight))
     assert torch.allclose(fork.output_ops[0].out, expected, atol=1e-6)
     # the source trace is untouched (fork is the sanctioned mutation surface)
@@ -80,7 +80,7 @@ def test_live_parameter_bit_identical(capture):
     before_ptr = weight.data_ptr()
     before_version = weight._version
     fork = trace.fork()
-    fork.do(tl.params("fc1.weight"), tl.scale(3.0))
+    fork.do(tl.param("fc1.weight"), tl.scale(3.0))
     assert weight.data_ptr() == before_ptr
     assert weight._version == before_version
     assert torch.equal(weight.detach(), before_bytes)
@@ -95,7 +95,7 @@ def test_masked_param_edit_scatters_only_selected_rows(capture):
     mask = torch.zeros_like(model.fc1.weight, dtype=torch.bool)
     mask[0] = True
     fork = trace.fork()
-    fork.do(tl.params("fc1.weight", mask=mask), tl.scale(0.0))
+    fork.do(tl.param("fc1.weight", mask=mask), tl.scale(0.0))
     as_if = model.fc1.weight.detach().clone()
     as_if[0] = 0.0
     expected = _as_if_forward(model, x, as_if)
@@ -105,12 +105,12 @@ def test_masked_param_edit_scatters_only_selected_rows(capture):
 def test_helpers_and_raw_tensor_compose(capture):
     model, x, trace = capture
     fork = trace.fork()
-    fork.do(tl.params("fc1.weight"), tl.add(0.25))
+    fork.do(tl.param("fc1.weight"), tl.add(0.25))
     expected = _as_if_forward(model, x, model.fc1.weight.detach() + 0.25)
     assert torch.allclose(fork.output_ops[0].out, expected, atol=1e-6)
     replacement = torch.randn_like(model.fc1.weight)
     fork2 = trace.fork()
-    fork2.do(tl.params("fc1.weight"), replacement)
+    fork2.do(tl.param("fc1.weight"), replacement)
     expected2 = _as_if_forward(model, x, replacement)
     assert torch.allclose(fork2.output_ops[0].out, expected2, atol=1e-6)
 
@@ -119,14 +119,14 @@ def test_engine_scoping_refusals(capture):
     model, x, trace = capture
     with pytest.raises(SelectionError) as excinfo:
         trace.fork().do(
-            tl.params("fc1.weight"),
+            tl.param("fc1.weight"),
             tl.scale(0.0),
             intervention=tl.options.InterventionOptions(engine="set_only"),
         )
     assert excinfo.value.fields["code"] == "param_substitution_engine_unsupported"
     with pytest.raises(SelectionError) as excinfo:
         trace.fork().do(
-            tl.params("fc1.weight"),
+            tl.param("fc1.weight"),
             tl.scale(0.0),
             model=model,
             x=x,
@@ -135,7 +135,7 @@ def test_engine_scoping_refusals(capture):
     assert excinfo.value.fields["code"] == "param_substitution_engine_unsupported"
     # auto with model+x resolves to rerun -> same refusal
     with pytest.raises(SelectionError) as excinfo:
-        trace.fork().do(tl.params("fc1.weight"), tl.scale(0.0), model=model, x=x)
+        trace.fork().do(tl.param("fc1.weight"), tl.scale(0.0), model=model, x=x)
     assert excinfo.value.fields["code"] == "param_substitution_engine_unsupported"
 
 
@@ -195,7 +195,7 @@ def test_recurrent_reused_param_substitutes_every_pass(recurrent_capture):
 
     model, x, trace = recurrent_capture
     fork = trace.fork()
-    fork.do(tl.params("cell.weight"), tl.add(0.25))
+    fork.do(tl.param("cell.weight"), tl.add(0.25))
     expected = _recurrent_ground_truth(
         x, model.cell.weight.detach() + 0.25, model.cell.bias.detach()
     )
@@ -219,7 +219,7 @@ def test_recurrent_bias_param_substitutes_every_pass(recurrent_capture):
     model, x, trace = recurrent_capture
     replacement = torch.randn(4)
     fork = trace.fork()
-    fork.do(tl.params("cell.bias"), replacement)
+    fork.do(tl.param("cell.bias"), replacement)
     expected = _recurrent_ground_truth(x, model.cell.weight.detach(), replacement)
     for k, (lin, relu) in enumerate(expected, start=1):
         assert torch.allclose(fork.layer_dict_all_keys[f"linear_1_1:{k}"].out, lin, atol=1e-6)
@@ -254,7 +254,7 @@ def test_tied_multipass_matmul_substitutes_every_pass():
         param = next(p for p in trace.params if p.address == "w")
         assert list(param.used_by_ops) == ["matmul_1_1:1", "matmul_1_1:2"]
         fork = trace.fork()
-        fork.do(tl.params("w"), tl.scale(2.0))
+        fork.do(tl.param("w"), tl.scale(2.0))
         w2 = model.w.detach() * 2.0
         with torch.no_grad():
             pass1 = x @ w2
@@ -289,7 +289,7 @@ def test_tied_embedding_projection_substitutes_both_sites():
     try:
         replacement = torch.randn(10, 4)
         fork = trace.fork()
-        fork.do(tl.params("emb.weight"), replacement)
+        fork.do(tl.param("emb.weight"), replacement)
         with torch.no_grad():
             h = torch.relu(model.fc(F.embedding(idx, replacement)))
             expected = F.linear(h, replacement)
@@ -309,7 +309,7 @@ def test_multipass_live_parameter_bit_identical(recurrent_capture):
     before_ptr = weight.data_ptr()
     before_version = weight._version
     fork = trace.fork()
-    fork.do(tl.params("cell.weight"), tl.scale(3.0))
+    fork.do(tl.param("cell.weight"), tl.scale(3.0))
     assert weight.data_ptr() == before_ptr
     assert weight._version == before_version
     assert torch.equal(weight.detach(), before_bytes)
@@ -321,7 +321,7 @@ def test_multipass_live_parameter_bit_identical(recurrent_capture):
 def test_multipass_validation_corroborates_every_pass(recurrent_capture):
     model, x, trace = recurrent_capture
     fork = trace.fork()
-    fork.do(tl.params("cell.weight"), tl.add(0.25))
+    fork.do(tl.param("cell.weight"), tl.add(0.25))
     for k in (1, 2, 3):
         verdict = _check_edge_intervention_boundary(
             fork, fork.layer_dict_all_keys[f"linear_1_1:{k}"]
@@ -337,7 +337,7 @@ def test_multipass_validation_tamper_strip_fire_record_fails(recurrent_capture):
 
     model, x, trace = recurrent_capture
     fork = trace.fork()
-    fork.do(tl.params("cell.weight"), tl.scale(0.5))
+    fork.do(tl.param("cell.weight"), tl.scale(0.5))
     tampered = fork.layer_dict_all_keys["linear_1_1:1"]
     tampered._internal_set(
         "interventions", [r for r in tampered.interventions if not r.edge_address]
@@ -359,7 +359,7 @@ def test_multipass_bare_consumer_spelling_refuses():
         param = next(p for p in trace.params if p.address == "cell.weight")
         param.used_by_ops = ["linear_1_1"]
         with pytest.raises(SelectionError) as excinfo:
-            trace.fork().do(tl.params("cell.weight"), tl.scale(2.0))
+            trace.fork().do(tl.param("cell.weight"), tl.scale(2.0))
         assert excinfo.value.fields["code"] == "param_substitution_occurrence_underivable"
     finally:
         trace.cleanup()
@@ -374,7 +374,7 @@ def test_multipass_incomplete_pass_coverage_refuses():
         param = next(p for p in trace.params if p.address == "cell.weight")
         param.used_by_ops = ["linear_1_1:1", "linear_1_1:3"]
         with pytest.raises(SelectionError) as excinfo:
-            trace.fork().do(tl.params("cell.weight"), tl.scale(2.0))
+            trace.fork().do(tl.param("cell.weight"), tl.scale(2.0))
         assert excinfo.value.fields["code"] == "param_substitution_occurrence_underivable"
         assert "pass(es) [2]" in str(excinfo.value)
     finally:
@@ -387,7 +387,7 @@ def test_zero_mask_is_disclosure_not_error(capture):
     fork = trace.fork()
     before = fork.output_ops[0].out.clone()
     fork.do(
-        tl.params("fc1.weight", mask=torch.zeros_like(model.fc1.weight, dtype=torch.bool)),
+        tl.param("fc1.weight", mask=torch.zeros_like(model.fc1.weight, dtype=torch.bool)),
         tl.scale(0.0),
     )
     assert torch.equal(fork.output_ops[0].out, before)
@@ -398,7 +398,7 @@ def test_zero_mask_is_disclosure_not_error(capture):
 def test_audit_record_discloses_substitution_not_change(capture):
     model, x, trace = capture
     fork = trace.fork()
-    fork.do(tl.params("fc1.weight"), tl.scale(0.5))
+    fork.do(tl.param("fc1.weight"), tl.scale(0.5))
     audit = fork.intervention_audit[-1]
     assert audit["kind"] == "PARAM"
     assert "substituted at consumption" in audit["disclosure"]
@@ -413,7 +413,7 @@ def test_audit_record_discloses_substitution_not_change(capture):
 def test_fire_record_and_store_mark_param_kind(capture):
     model, x, trace = capture
     fork = trace.fork()
-    fork.do(tl.params("fc1.weight"), tl.scale(0.5))
+    fork.do(tl.param("fc1.weight"), tl.scale(0.5))
     child = fork["fc1"].ops[0]
     (store_key,) = child.edge_substitutions.keys()
     payload = child.edge_substitutions[store_key]
@@ -429,7 +429,7 @@ def test_fire_record_and_store_mark_param_kind(capture):
 def test_validation_boundary_corroborates(capture):
     model, x, trace = capture
     fork = trace.fork()
-    fork.do(tl.params("fc1.weight"), tl.scale(0.5))
+    fork.do(tl.param("fc1.weight"), tl.scale(0.5))
     child = fork["fc1"].ops[0]
     verdict = _check_edge_intervention_boundary(fork, child)
     assert verdict is not None
@@ -443,7 +443,7 @@ def test_validation_tamper_strip_fire_record_fails(capture):
 
     model, x, trace = capture
     fork = trace.fork()
-    fork.do(tl.params("fc1.weight"), tl.scale(0.5))
+    fork.do(tl.param("fc1.weight"), tl.scale(0.5))
     child = fork["fc1"].ops[0]
     child._internal_set("interventions", [r for r in child.interventions if not r.edge_address])
     verdict = _check_edge_intervention_boundary(fork, child)
@@ -459,7 +459,7 @@ def test_substitution_survives_later_push(capture):
 
     model, x, trace = capture
     fork = trace.fork()
-    fork.do(tl.params("fc1.weight"), tl.scale(0.0))
+    fork.do(tl.param("fc1.weight"), tl.scale(0.0))
     after_do = fork.output_ops[0].out.clone()
 
     def _noop(out: torch.Tensor, *, hook) -> torch.Tensor:
@@ -473,7 +473,7 @@ def test_foreign_resolved_selection_refuses(capture):
     model, x, trace = capture
     other_model, other_x, other = _capture()
     try:
-        resolved = tl.params("fc1.weight").resolve(other)
+        resolved = tl.param("fc1.weight").resolve(other)
         with pytest.raises(SelectionError) as excinfo:
             trace.fork().do(resolved, tl.scale(0.0))
         assert excinfo.value.fields["code"] == "selection_trace_mismatch"

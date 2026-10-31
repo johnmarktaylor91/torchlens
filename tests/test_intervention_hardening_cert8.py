@@ -3,7 +3,7 @@
 Two BLOCKER-severity bugs found by the cert7 inspector, each a recurrence of a
 class a prior round fixed at a *different* site:
 
-* BLOCKER-1 -- ``Bundle._diff_members`` (backing ``Bundle.diff_pair(a, b)``) called
+* BLOCKER-1 -- ``Bundle._diff_members`` (backing ``Bundle.compare(a, b)``) called
   the scalar-only fallback ``relative_l1_scalar`` UNCONDITIONALLY, silently
   truncating every multi-element activation to its first element. This is the third
   sibling of the round-6 / cert7 scalar-vs-vector truncation class. The fix applies
@@ -74,7 +74,7 @@ def _top_level_bwd_hook(grad: torch.Tensor, *, hook: object) -> torch.Tensor:
 
 
 # ---------------------------------------------------------------------------
-# BLOCKER-1: Bundle.diff_pair(member_a, member_b) must not truncate to element 0.
+# BLOCKER-1: Bundle.compare(member_a, member_b) must not truncate to element 0.
 # ---------------------------------------------------------------------------
 
 
@@ -87,7 +87,7 @@ def test_diff_pair_members_multi_element_uses_vector_metric_no_truncation() -> N
     log_b = tl.trace(nn.Linear(8, 8), x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tl.bundle({"a": log_a, "b": log_b}, baseline="a")
 
-    rows = dict(bundle.diff_pair("a", "b"))
+    rows = dict(bundle.compare("a", "b"))
     assert rows, "diff_pair returned no rows"
 
     # The differing linear site: score must equal the real cosine distance over the
@@ -116,7 +116,7 @@ def test_diff_pair_node_multi_element_uses_vector_metric() -> None:
     bundle = tl.bundle({"a": log_a, "b": log_b}, baseline="a")
 
     linear_site = next(s.layer_label for s in log_a.layer_list if "linear" in str(s.layer_label))
-    matrix = bundle.node(linear_site).diff_pair()
+    matrix = bundle.node(linear_site).compare()
     # A 2x2 distance matrix with finite, non-truncated off-diagonal entries.
     assert matrix.shape == (2, 2)
     assert torch.isfinite(matrix).all()

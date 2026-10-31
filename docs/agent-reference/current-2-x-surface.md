@@ -256,7 +256,7 @@
   wrapped with `escalated_from`/`reason`/`fidelity_basis` disclosed (E-A3: mismatch records
   `diverged`, never a settlement input); declared unsnapshotable state refuses at declaration
   time (`episode_state_unsnapshotable`). Bundles gain the optional S6 member-relation table
-  (`member_relations=`, `Bundle.relate`, `Bundle.derive_episode_status` — a derived fold,
+  (`relations=`, `Bundle.relate`, `Bundle.episode_status` — a derived fold,
   never Bundle-level settlement; mutators cascade explicitly or refuse typed). Doc of record:
   `docs/reference/episode_capture.md`.
 - HARNESS BUNDLES (phases 1 and 2; every spelling DOCUMENTED-UNSTABLE; doc of record
@@ -327,7 +327,7 @@
   (`vary_partial_failure` + `material_action_completed`).
   `tl.sweep(include_baseline=True)` mints the PRISTINE baseline member (the
   legacy default discloses `sweep_baseline_absent` at construction).
-  `torchlens.experiment.site_sweep(baseline, candidates=, edit=, metric=,
+  `torchlens.experiment.sweep_sites(baseline, candidates=, edit=, metric=,
   retain=, engine="live_hook", model=, x=)` is the ONE candidate engine
   (serial, extract-before-cleanup, rolling `top_k` retention, byte
   preflight via `retention_projection_over_budget`); candidates execute in
@@ -750,9 +750,9 @@
   backend switch). Doc of record: `docs/reference/weightsfree_capture.md`.
 - SELECTION ALGEBRA (L6 stage 1; Selection/ResolvedSelection/resolve/
   `__selection__`/operators slate-ratified subject to D7, producer
-  constructors + members DOCUMENTED-UNSTABLE): `tl.Selection` is the
+  constructors + members DOCUMENTED-UNSTABLE): `tl.Selector` is the
   composable trace-independent query AST; `selection.resolve(trace)` returns
-  the frozen trace-bound `tl.ResolvedSelection` (ordered `SiteEntry(site_key,
+  the frozen trace-bound `tl.Selection` (ordered `SiteEntry(site_key,
   mask, provenance)` tuple; SESSION-ONLY, never persisted). TWO-LEVEL
   denotation: (touched-site family, selected-element set) — zero-mask entries
   stay first-class, `.empty`/`__bool__` are element-level, and `bool()` on
@@ -769,8 +769,8 @@
   normative). Kinds `ACT|PARAM|EDGE` are closed; mixed kinds refuse
   `selection_kind_incompatible`; resolution refusals ride
   `SelectionError` with `selection_unresolvable` + a closed reason set.
-  Producers: `tl.units(site, indices)`, `tl.params(name, mask=None)`,
-  `tl.random_selection(like=, within=, seed=)` (seeded size-matched control).
+  Producers: `tl.units(site, indices)`, `tl.param(name, mask=None)`,
+  `tl.random_like(like=, within=, seed=)` (seeded size-matched control).
   VALUE + STATISTICAL PRODUCERS (producer wave; DOCUMENTED-UNSTABLE):
   `tl.top_k(within, k, by=, largest=)` / `tl.top_fraction(within, fraction)`
   (global deterministic ranking over the population; too-few rankable
@@ -933,7 +933,7 @@
   masked copies.
 - PARAMETER SUBSTITUTION (param-operand, decided 2026-08-17, supersedes the
   D3 typed-refusal default on the replay path; DOCUMENTED-UNSTABLE):
-  `fork.do(tl.params(name, mask=None), edit)` applies the edit "AS IF" the
+  `fork.do(tl.param(name, mask=None), edit)` applies the edit "AS IF" the
   parameter were changed, for replay only — the value each consuming op sees
   is substituted at its derived occurrence address and the live
   `nn.Parameter` is NEVER written (bit-identical pinned). Parameters are NOT
@@ -1357,7 +1357,7 @@
   peaks; by default it is `None` with `resident_basis="not_requested"`. `tl.repgeom.rdm` gains keyword-only `metric="manhattan"`,
   `compute_device=`, `row_chunk_size=`, `output_device=`, `dtype=`,
   `output="condensed"`, `input_kind="batched"` (the no-new-keyword call is
-  bit-identical); `tl.repgeom.rdm_compare(a, b, method=)` is the DESCRIPTIVE
+  bit-identical); `tl.repgeom.compare_rdms(a, b, method=)` is the DESCRIPTIVE
   Pearson/Spearman/Kendall tau-a over aligned strict upper triangles (diagonal
   excluded; inference points at rsatoolbox); geometry evolution verbs read TRANSFORMED
   payloads when raw is dropped and disclose `result.payload_basis`; `tl.stats.cka`/
@@ -1503,7 +1503,7 @@
   and returns descriptive RSA, a cross-validated ridge score (seeded folds, per-fold
   exact leave-one-out penalty, mean Pearson r over target columns) and linear CKA,
   with `table()`/`disagreement()`/`to_dict()`; `n_resamples=` adds stimulus-bootstrap
-  `tl.repgeom.ScoreInterval`s (standalone: `tl.repgeom.rdm_compare_interval`,
+  `tl.repgeom.ScoreInterval`s (standalone: `tl.repgeom.compare_rdms_interval`,
   `tl.repgeom.cka_interval`); `tl.repgeom.metric_disagreement(scores)` ranks sites per
   metric and flags opposite orders. The neuro `compare` refusal row is gone; the
   `bootstrap`, `ridge` and `encoding_model` refusals keep inference with rsatoolbox /
@@ -1605,7 +1605,7 @@
   `torchlens.mechinterp.patch_edges`, `M(patched) - M(clean)`; pass the `corrupted=` and `metric=` it was
   scored with, `edges=` audits a subset; every set is patched in one call, into one receiver or
   several, and replays from its per-receiver pairs): each unit ablated (or patched) alone (one
-  `torchlens.experiment.site_sweep` member per unit where one edit serves every unit), then the
+  `torchlens.experiment.sweep_sites` member per unit where one edit serves every unit), then the
   top-k claimed units together beside bottom-k and seeded random-k controls, one
   `trace.fork().do(...)` each; returns `tl.attribution.CausalAuditResult` (`units`, `sets`,
   `rank_agreement` (Spearman), `original_score`, `site`) whose `tl.attribution.CausalAuditUnit`

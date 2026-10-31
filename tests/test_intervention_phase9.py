@@ -61,8 +61,8 @@ def test_bundle_construction_shapes_and_member_indexing() -> None:
 
     log_a = _log()
     log_b = _log()
-    log_a.trace_label = "auto_a"
-    log_b.trace_label = "auto_b"
+    log_a.name = "auto_a"
+    log_b.name = "auto_b"
 
     from_dict = tl.bundle({"a": log_a, "b": log_b})
     assert len(from_dict) == 2
@@ -98,7 +98,7 @@ def test_bundle_getitem_returns_modellog_and_nodeview_accessor() -> None:
     node = bundle.node(tl.func("relu"))
     assert set(node.members) == {"a", "b"}
     assert set(node.traces) == {"a", "b"}
-    assert node.absent_traces == set()
+    assert node.absent_names == set()
     assert node.label
     assert bundle._supergraph is not None
 
@@ -143,13 +143,13 @@ def test_relationship_matrix_gates_node_operations() -> None:
         member.input_signature_hash = None
     bundle = tl.bundle({"good": good, "different": different})
 
-    assert bundle.relationship("good", "different") is Relationship.UNKNOWN
+    assert bundle.comparability("good", "different") is Relationship.UNKNOWN
     with pytest.raises(BundleRelationshipError, match="node"):
         bundle.node(tl.func("relu"))
 
-    assert bundle.apply(lambda member: member.trace_label) == {
-        "good": good.trace_label,
-        "different": different.trace_label,
+    assert bundle.apply(lambda member: member.name) == {
+        "good": good.name,
+        "different": different.name,
     }
 
 
@@ -161,7 +161,7 @@ def test_relationship_derivation_shared_graph_same_input() -> None:
     right = _log(_ReluModel(), x)
     bundle = tl.bundle({"left": left, "right": right})
 
-    assert bundle.relationship("left", "right") in {
+    assert bundle.comparability("left", "right") in {
         Relationship.SAME_OBJECT,
         Relationship.SAME_MODEL_OBJECT_AT_CAPTURE,
         Relationship.SHARED_GRAPH_SAME_INPUT,
@@ -182,7 +182,7 @@ def test_baseline_auto_detect_and_ambiguity() -> None:
 
     ambiguous = tl.bundle({"a": _log(), "b": _log()})
     with pytest.raises(BaselineUndeterminedError):
-        ambiguous.most_changed()
+        ambiguous.rank_changes()
 
 
 def test_cluster_deferred_and_tracebundle_not_top_level() -> None:

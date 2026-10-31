@@ -197,7 +197,7 @@ def test_provenance_record_fields_and_repr(log):
     selection = tl.subspace(_RELU, _sparse_direction(), origin="repr test", method="manual")
     record = selection._node.provenance
     assert isinstance(record, BasisProvenance)
-    assert (record.n_vectors, record.space_dim, record.dim, record.tol) == (1, _D, -1, 0.0)
+    assert (record.num_vectors, record.space_dim, record.dim, record.tol) == (1, _D, -1, 0.0)
     assert record.origin == "repr test"
     assert len(record.sha256) == 64
     assert "origin='repr test'" in repr(selection)
@@ -297,7 +297,7 @@ def test_non_act_within_refuses_kind_incompatible():
     """PARAM populations refuse selection_kind_incompatible."""
 
     with pytest.raises(SelectionError) as excinfo:
-        tl.subspace(tl.params("encoder.weight"), torch.ones(_D), origin="param probe")
+        tl.subspace(tl.param("encoder.weight"), torch.ones(_D), origin="param probe")
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 

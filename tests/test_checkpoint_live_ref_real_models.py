@@ -63,7 +63,7 @@ def test_resnet18_real_checkpoint_series_refuses_typed() -> None:
     view = bundle.params["fc.weight"]
     for read in (
         lambda: view.weight_norm_diff,
-        lambda: view.diff_pair(),
+        lambda: view.compare(),
         lambda: view.aggregate("std"),
         lambda: view.out,
         lambda: view.grad,

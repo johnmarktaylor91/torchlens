@@ -22,8 +22,8 @@ torchlens.PayloadLoadHints	torchlens._io	L1	core	1	0
 torchlens.Quantity	torchlens.quantities	L0	core	1	0
 torchlens.Recording	torchlens.fastlog	L2	core	1	0
 torchlens.ReentrantTraceError	torchlens._state	L2	core	1	0
-torchlens.ResolvedSelection	torchlens.selection	L4	core	1	0
 torchlens.Selection	torchlens.selection	L4	core	1	0
+torchlens.Selector	torchlens.selection	L4	core	1	0
 torchlens.Trace	torchlens.data_classes.trace	L1	core	1	0
 torchlens.accessors	torchlens.accessors	L1	core	0	0
 torchlens.add	torchlens.intervention	L4	core	1	0
@@ -44,7 +44,7 @@ torchlens.changed	torchlens.selection_compare	L4	core	1	0
 torchlens.clamp	torchlens.intervention	L4	core	1	0
 torchlens.clear_capture_cache	torchlens.user_funcs	FACADE	facade	1	0
 torchlens.compat	torchlens.compat	L3	core	0	0
-torchlens.contains	torchlens.intervention	L4	core	1	0
+torchlens.label_contains	torchlens.intervention	L4	core	1	0
 torchlens.data_classes	torchlens.data_classes	L1	core	0	0
 torchlens.dataset_extraction	torchlens.dataset_extraction	L5	core	0	0
 torchlens.dead	torchlens.selection_values	L4	core	1	0
@@ -78,7 +78,7 @@ torchlens.hash	torchlens.hash	L1	core	1	0
 torchlens.head	torchlens.intervention	L4	core	1	0
 torchlens.in_backward_pass	torchlens.intervention	L4	core	1	0
 torchlens.in_module	torchlens.intervention	L4	core	1	0
-torchlens.input_at	torchlens.intervention	L4	core	1	0
+torchlens.model_input	torchlens.intervention	L4	core	1	0
 torchlens.intervention	torchlens.intervention	L4	core	0	0
 torchlens.io	torchlens.io	FACADE	facade	0	0
 torchlens.ir	torchlens.ir	L2	core	0	0
@@ -97,9 +97,9 @@ torchlens.noise	torchlens.intervention	L4	core	1	0
 torchlens.notebook	torchlens.notebook	L6	appliance	0	1
 torchlens.observers	torchlens.observers	L2	core	0	0
 torchlens.options	torchlens.options	L2	core	1	0
-torchlens.output	torchlens.intervention	L4	core	1	0
+torchlens.model_output	torchlens.intervention	L4	core	1	0
 torchlens.output_at	torchlens.intervention	L4	core	1	0
-torchlens.params	torchlens.selection	L4	core	1	0
+torchlens.param	torchlens.selection	L4	core	1	0
 torchlens.partial	torchlens.partial	L3	core	0	0
 torchlens.pass_variance	torchlens.selection_compare	L4	core	1	0
 torchlens.patch_from	torchlens.intervention	L4	core	1	0
@@ -110,11 +110,11 @@ torchlens.project_onto	torchlens.intervention	L4	core	1	0
 torchlens.push	torchlens.intervention	L4	core	1	0
 torchlens.push_from	torchlens.intervention	L4	core	1	0
 torchlens.quantities	torchlens.quantities	L0	core	0	0
-torchlens.random_selection	torchlens.selection	L4	core	1	0
+torchlens.random_like	torchlens.selection	L4	core	1	0
 torchlens.receptive_field	torchlens.receptive_field	L5	core	0	0
 torchlens.record	torchlens.fastlog	L2	core	1	0
 torchlens.record_kpi_in_graph	torchlens.user_funcs	FACADE	facade	1	0
-torchlens.regex	torchlens.intervention	L4	core	1	0
+torchlens.label_matches	torchlens.intervention	L4	core	1	0
 torchlens.register_container	torchlens.ir.container	L2	core	1	0
 torchlens.register_tensor_connection	torchlens.user_funcs	FACADE	facade	1	0
 torchlens.release_model	torchlens.user_funcs	FACADE	facade	1	0

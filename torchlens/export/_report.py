@@ -233,7 +233,7 @@ def _array_plan(log: Any, arrays: Any, share_safe: bool) -> _ArrayPlan:
     raise InvalidArgumentError(
         f"arrays= must be 'frontier', 'flagged', 'none', or a Selection; received {arrays!r}",
         code="report_arrays_invalid",
-        remedy="pass one of the documented presets or a tl.Selection instance",
+        remedy="pass one of the documented presets or a tl.Selector instance",
     )
 
 
@@ -572,7 +572,7 @@ def write_report(
         Destination ``.html`` path.
     arrays:
         ``"frontier"`` (default) / ``"flagged"`` / ``"none"`` / a
-        ``tl.Selection``.
+        ``tl.Selector``.
     graph:
         ``"collapsed"`` (default: module-collapsed real graph, depth
         disclosed) / ``"flat"`` / ``"none"``.

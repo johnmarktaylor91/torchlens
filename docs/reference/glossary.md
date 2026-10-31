@@ -525,7 +525,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `trace.last_run["replayed_with_changed_params"]`. Not detected: an in-place write through
   `param.data` or through a numpy or raw-storage alias. A replaced parameter object
   (`module.weight = nn.Parameter(t)`) is not used by replay at all: the template keeps the
-  captured object. For an as-if weight edit use `fork.do(tl.params(name), edit)`. The rerun
+  captured object. For an as-if weight edit use `fork.do(tl.param(name), edit)`. The rerun
   engine runs the live model and ignores the option.
 
 **torchlens.intervention.subspace_ablate(basis, *, mode="zero", feature_axis=-1, mean=None, seed=None)** — *documented-unstable*
@@ -624,7 +624,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   cross-run comparison. `tl.Bundle()` with no members builds an empty bundle to fill later with
   `add`; an empty bundle saves and loads like any other.
 
-**Bundle.member_relations** *(spelling documented-unstable)*
+**Bundle.relations** *(spelling documented-unstable)*
 : The bundle's typed, directed relation rows between members, read as an immutable tuple of
   `MemberRelationRow` (plus `OpaqueRelationRow` for unknown namespaced kinds loaded from an
   artifact). Pair kinds: `alternative_of` (peers; still comparable), `forked_from`,
@@ -790,8 +790,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   predicates as `compare_at`: no ordering path between them, a shared graph, and proven-equal
   input values; otherwise the read refuses with the gate's `bundle_gate_*` code.
 
-**Bundle.derive_episode_status** *(spelling documented-unstable)*
-: `b.derive_episode_status(episode_id, *, ledger=None)` folds the outcomes of the members named by
+**Bundle.episode_status** *(spelling documented-unstable)*
+: `b.episode_status(episode_id, *, ledger=None)` folds the outcomes of the members named by
   `episode_member` rows into a derived episode status (`EpisodeFoldResult`). A derivation, never
   a stored Bundle outcome; without a ledger the ledger-only arms degrade to `episode_unknown`.
 
@@ -981,7 +981,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 ## Site selectors
 
 **Label selectors**
-: `tl.label` (exact final label), `tl.contains` (label substring), and `tl.regex` (label
+: `tl.label` (exact final label), `tl.label_contains` (label substring), and `tl.label_matches` (label
   regex pattern) select ops by their public labels. `tl.where` filters a table with a
   predicate callable.
 
@@ -1004,8 +1004,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   whose forward left torch through a numpy or dlpack round trip, with
   `transform_kind="autograd.Function"`, and `jitscript`, one call to a
   `torch.jit.ScriptFunction` from an eager forward, with `transform_kind="jit.script"`);
-  `tl.output` selects model outputs, and
-  `tl.output_at` / `tl.input_at` select a nested output or model-input path.
+  `tl.model_output` selects model outputs, and
+  `tl.output_at` / `tl.model_input` select a nested output or model-input path.
 
 **Temporal composition**
 : `tl.followed_by` (retroactive successor) and `tl.preceded_by` (lookback predecessor)
@@ -1491,17 +1491,17 @@ shims, by declared contract. Each carries the same tag at its definition.
   is the serialized form that keeps the identifier
   (`{"score": ..., "similarity_repository_id": ...}`); pickling keeps it too.
 
-**ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.rdm_compare_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
+**ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.compare_rdms_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
 : A TorchLens score with a descriptive uncertainty interval beside it:
   `score` (the unchanged estimator on all stimuli), `low` and `high` (a
   percentile bootstrap over stimuli), `confidence`, `n_resamples`, `n_valid`
   (resamples with a finite score), `seed`, `basis` (how the interval was
   made, in words) and `similarity_repository_id` (the measure variant `score`
   computes: the linear CKA identifier from `cka_interval`, `None` from
-  `rdm_compare_interval`, whose precomputed RDMs do not name their metric),
+  `compare_rdms_interval`, whose precomputed RDMs do not name their metric),
   plus `width` and `to_dict()` (every field). `rdm_compare_interval(rdm_a,
   rdm_b, method, n_resamples=1000, seed=0, confidence=0.95)` resamples
-  stimuli and recomputes `rdm_compare`, dropping self-pairs; `cka_interval(a,
+  stimuli and recomputes `compare_rdms`, dropping self-pairs; `cka_interval(a,
   b, ...)` does the same for linear CKA. Descriptive, not a test; inference
   stays with rsatoolbox.
 
@@ -1535,7 +1535,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   analyses=("rsa", "ridge", "cka"))`. Each site's activations are read once
   from what `source` (a Trace with saved activations, an extraction, or a
   `{site: array}` mapping) already holds; the model is never re-run. `"rsa"`
-  is `rdm_compare` over `rdm(site)` and `rdm(target)` (`rdm_metric`,
+  is `compare_rdms` over `rdm(site)` and `rdm(target)` (`rdm_metric`,
   `rsa_method`); `"ridge"` is a cross-validated ridge score (a seeded
   `n_folds` split, the penalty per fold chosen from `ridge_alphas` by exact
   leave-one-out on the training fold, then the mean over target columns of
@@ -1719,10 +1719,10 @@ S2-gated*
 
 **Selection / ResolvedSelection / `__selection__`** — *unstable — no
 deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
-: `tl.Selection` is the composable selection QUERY — a frozen AST over leaf
+: `tl.Selector` is the composable selection QUERY — a frozen AST over leaf
   terms (selector / receptive-field box / gradient-RF / facet / param / unit)
   and boolean combinators, trace-independent; `selection.resolve(trace)`
-  returns a `tl.ResolvedSelection` — frozen, trace-bound, an ordered tuple of
+  returns a `tl.Selection` — frozen, trace-bound, an ordered tuple of
   `SiteEntry(site_key, mask, provenance)` rows. TWO-LEVEL DENOTATION:
   (touched-site family, selected-element set); zero-mask entries are retained
   first-class; `.empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
@@ -1744,7 +1744,7 @@ semantics unstable-documented*
   desugars to `and(a, not(b))`; a selector composed with a region producer
   defers to the Selection algebra.
 
-**tl.units / tl.params / tl.random_selection** — *unstable — no deprecation
+**tl.units / tl.param / tl.random_like** — *unstable — no deprecation
 shim owed*
 : Stage-1 producer constructors: `units(site, indices)` (explicit site +
   index set), `params(name, mask=None)` (named-parameter element region),
@@ -2070,7 +2070,7 @@ S2/S3-gated*
 
 **parameter substitution (do over PARAM selections)** — *unstable — no
 deprecation shim owed*
-: `fork.do(tl.params(name, mask=None), edit)` applies the edit "as if" the
+: `fork.do(tl.param(name, mask=None), edit)` applies the edit "as if" the
   parameter were changed, FOR REPLAY ONLY: the value each consuming op sees
   is substituted at its derived occurrence address, and the live
   `nn.Parameter` object is NEVER written (bit-identical before and after —
@@ -2092,7 +2092,7 @@ deprecation shim owed*
   index space, one replay pass over all consumer origins (cone
   recomputation RE-SPLICES every tier-(ii) entry — param, region, AND
   edge kinds — so later pushes never silently revert any edit; a chained
-  `do(tl.params(p), scale(0.5))` COMPOSES on the staged "as if" value,
+  `do(tl.param(p), scale(0.5))` COMPOSES on the staged "as if" value,
   0.25, keeping both FireRecords), and the same validation boundary
   (`edge_intervention_boundary` — a different check, never no check;
   uncorroborated entries FAIL). Replay/push engine ONLY:
@@ -2100,7 +2100,7 @@ deprecation shim owed*
   record (kind `PARAM`) discloses "substituted at consumption … live
   parameters unchanged" — the product is DERIVED-class, never a blessed
   VERIFIED reproduction of the original weights. BUFFER OPERANDS
-  (documented-unstable): `do(tl.params("<buffer address>", mask), edit)` on a
+  (documented-unstable): `do(tl.param("<buffer address>", mask), edit)` on a
   registered buffer (BatchNorm running stats, a rotary cache, recurrent state)
   substitutes the buffer's INITIAL version node, the value its consumers read,
   and replays the cone through the leaf-site path (needs an

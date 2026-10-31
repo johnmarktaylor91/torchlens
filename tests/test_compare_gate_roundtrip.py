@@ -199,8 +199,8 @@ def test_rank_upgrade_audit_across_save_load(tmp_path: Path) -> None:
     names = list(captures)
     for index, left_name in enumerate(names):
         for right_name in names[index + 1 :]:
-            live_rel = live.relationship(left_name, right_name)
-            loaded_rel = loaded.relationship(left_name, right_name)
+            live_rel = live.comparability(left_name, right_name)
+            loaded_rel = loaded.comparability(left_name, right_name)
             assert _MODEL_AXIS_RANK[loaded_rel] <= _MODEL_AXIS_RANK[live_rel], (
                 f"{left_name}/{right_name}: loaded {loaded_rel.value!r} outranks "
                 f"live {live_rel.value!r}"
@@ -213,8 +213,8 @@ def test_rank_upgrade_audit_across_save_load(tmp_path: Path) -> None:
     # The definitive shape: same live model object was same_object in
     # session; after loading, the pair settles to the graph evidence that
     # actually round-trips.
-    assert live.relationship("m1x1", "m1x2") is Relationship.SAME_OBJECT
-    assert loaded.relationship("m1x1", "m1x2") is Relationship.SHARED_GRAPH_SAME_INPUT
+    assert live.comparability("m1x1", "m1x2") is Relationship.SAME_OBJECT
+    assert loaded.comparability("m1x1", "m1x2") is Relationship.SHARED_GRAPH_SAME_INPUT
 
 
 def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
@@ -231,7 +231,7 @@ def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
 
     with pytest.raises(BundleRelationshipError) as excinfo:
-        bundle.diff_pair("turn1", "turn2")
+        bundle.compare("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
     path = tmp_path / "chain.tlspec"
@@ -239,7 +239,7 @@ def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
     loaded = tl.load(str(path))
 
     with pytest.raises(BundleRelationshipError) as excinfo:
-        loaded.diff_pair("turn1", "turn2")
+        loaded.compare("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]
 
@@ -264,8 +264,8 @@ def test_scoped_pair_read_works_after_bundle_round_trip(tmp_path: Path) -> None:
     bundle.save(str(path))
     loaded = tl.load(str(path))
 
-    rows = loaded.diff_pair("a", "b")
+    rows = loaded.compare("a", "b")
     assert isinstance(rows, list)
     with pytest.raises(BundleRelationshipError) as excinfo:
-        loaded.diff_pair("b", "next")
+        loaded.compare("b", "next")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"

@@ -22,7 +22,7 @@ edge rather than ablating a site; see ``_audit_edges``). Their plan
 
 Every ablation runs through the intervention engine on an intervention-ready
 trace: single-unit rows as the members of one
-``torchlens.experiment.site_sweep`` (one candidate per unit, replay engine)
+``torchlens.experiment.sweep_sites`` (one candidate per unit, replay engine)
 where one edit serves every unit, otherwise ``trace.fork().do(tl.units(label,
 mask), edit)``, one fork per row; every set on its own fork. Every row and
 set carries its edit as ``(tl.units(...), edit)`` pairs, so any point

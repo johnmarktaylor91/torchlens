@@ -392,7 +392,7 @@ class TraceExportMixin(_TraceMixinBase):
 
         return attach_dataframe_honesty(model_df, self)
 
-    def decode_output(self: "Trace", top_n: int | None = None) -> Any:
+    def decode_output(self: "Trace", k: int | None = None) -> Any:
         """Return captured decoded output rows when available.
 
         Parameters
@@ -420,7 +420,7 @@ class TraceExportMixin(_TraceMixinBase):
 
         require_gold(self, "decoded output labels")
         if self.decoded_output is None:
-            recomputed = self._recompute_decoded_output(top_n=top_n)
+            recomputed = self._recompute_decoded_output(top_n=k)
             if recomputed is None:
                 raise PayloadUnavailableError(
                     "logits not retained; re-decode unavailable",
@@ -431,11 +431,11 @@ class TraceExportMixin(_TraceMixinBase):
                     ),
                 )
             return recomputed
-        if top_n is None:
+        if k is None:
             return self.decoded_output
         captured_top_n = getattr(self.output_postprocessor, "top_n_captured", None)
-        if captured_top_n is not None and top_n > captured_top_n:
-            recomputed = self._recompute_decoded_output(top_n=top_n)
+        if captured_top_n is not None and k > captured_top_n:
+            recomputed = self._recompute_decoded_output(top_n=k)
             if recomputed is not None:
                 return recomputed
             raise PayloadUnavailableError(
@@ -453,7 +453,7 @@ class TraceExportMixin(_TraceMixinBase):
                 "rows": [
                     row
                     for row in self.decoded_output["rows"]
-                    if isinstance(row, dict) and int(row.get("rank", 1)) <= top_n
+                    if isinstance(row, dict) and int(row.get("rank", 1)) <= k
                 ],
             }
         if not isinstance(self.decoded_output, list):
@@ -461,11 +461,11 @@ class TraceExportMixin(_TraceMixinBase):
         return [
             row
             for row in self.decoded_output
-            if not isinstance(row, dict) or int(row.get("rank", 1)) <= top_n
+            if not isinstance(row, dict) or int(row.get("rank", 1)) <= k
         ]
 
     def output_table(
-        self: "Trace", top_n: int = 5, batch_items: int | Sequence[int] | None = None
+        self: "Trace", k: int = 5, batch_items: int | Sequence[int] | None = None
     ) -> "pd.DataFrame":
         """Return decoded output as a batch top-k dataframe.
 
@@ -496,14 +496,14 @@ class TraceExportMixin(_TraceMixinBase):
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
 
-        if top_n < 1:
+        if k < 1:
             raise InvalidArgumentError(
-                f"top_n must be >= 1; received {top_n!r}",
+                f"top_n must be >= 1; received {k!r}",
                 code="top_n_invalid",
                 remedy="pass a positive integer top_n",
                 argument="top_n",
             )
-        decoded = self.decode_output(top_n=top_n)
+        decoded = self.decode_output(top_n=k)
         rows = _decoded_batch_topk_rows(decoded)
         if rows is None:
             raise PayloadUnavailableError(
@@ -522,7 +522,7 @@ class TraceExportMixin(_TraceMixinBase):
                 "prob": float(row["prob"]),
             }
             for row in rows
-            if int(row.get("rank", 0)) <= top_n
+            if int(row.get("rank", 0)) <= k
             and (selected_items is None or int(row.get("batch_item", -1)) in selected_items)
         ]
         return pd.DataFrame(filtered_rows, columns=["batch_item", "rank", "label", "prob"])

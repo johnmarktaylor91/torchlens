@@ -743,11 +743,11 @@ def test_mlx_static_label_contains_and_composite_save_work() -> None:
     """MLX allows label, contains, and safe boolean composites for static save."""
 
     label_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.label("relu_1_3_raw:1"))
-    contains_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.contains("relu"))
+    contains_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.label_contains("relu"))
     composite_trace = tl.trace(
         TinyMLP(),
         _tiny_mlp_input(),
-        save=tl.func("linear") & ~tl.contains("linear_2"),
+        save=tl.func("linear") & ~tl.label_contains("linear_2"),
     )
 
     _assert_static_save_summary(label_trace, {"relu"})
@@ -759,7 +759,7 @@ def test_mlx_static_label_contains_and_composite_save_work() -> None:
 @pytest.mark.parametrize(
     ("selector", "pattern"),
     [
-        (tl.output(0), "unsupported selector kind 'output'"),
+        (tl.model_output(0), "unsupported selector kind 'output'"),
         (tl.where(_always_true, name_hint="always"), "tl.where"),
     ],
 )

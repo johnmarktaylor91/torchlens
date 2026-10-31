@@ -512,7 +512,7 @@ size evidence only) is N per-step captures composed in a `Bundle` with S6
 `episode_member` relation rows, under OBSERVER DISCIPLINE: the driver's
 native forward owns the live carried state; each capture observes an isolated
 copy; a capture product is never the source of carried episode state.
-`Bundle.derive_episode_status(episode_id, ledger=...)` folds member outcomes
+`Bundle.episode_status(episode_id, ledger=...)` folds member outcomes
 into a DERIVED episode status (`episode_complete` /
 `episode_halted_at_step` / `episode_aborted_at_step` /
 `episode_failed_at_step` / `episode_unknown`) — a total, fail-closed

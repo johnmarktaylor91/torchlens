@@ -98,7 +98,7 @@ def test_selector_factories_are_immutable_hashable_and_repr_friendly() -> None:
     assert repr(selector) == "tl.label('relu_1_2')"
     assert repr(tl.func("relu")) == "tl.func('relu')"
     assert repr(tl.module("block")) == "tl.module('block')"
-    assert repr(tl.contains("relu")) == "tl.contains('relu')"
+    assert repr(tl.label_contains("relu")) == "tl.label_contains('relu')"
     assert repr(tl.in_module("block")) == "tl.in_module('block')"
     assert repr(tl.output_at("logits")) == "tl.output_at(('logits',))"
     assert repr(tl.without_op()) == "tl.without_op()"
@@ -117,7 +117,7 @@ def test_resolve_sites_supports_all_phase2_match_types(phase2_log: tl.Trace) -> 
     assert phase2_log.resolve_sites(tl.label(f"{first_relu_label}:1")).labels() == (
         first_relu_label,
     )
-    assert phase2_log.resolve_sites(tl.contains("linear")).labels() == ("linear_1_1",)
+    assert phase2_log.resolve_sites(tl.label_contains("linear")).labels() == ("linear_1_1",)
     assert phase2_log.resolve_sites(tl.module("block.linear")).labels() == ("linear_1_1",)
     assert phase2_log.resolve_sites(tl.module("block")).labels() == ("relu_1_2",)
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):

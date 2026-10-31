@@ -1399,7 +1399,7 @@ class JAXBackend:
             kind="op",
             label=reserved.label,
             raw_label=reserved.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=reserved.raw_index,
             step_index=None,
             layer_type=reserved.layer_type,
@@ -1408,7 +1408,7 @@ class JAXBackend:
             func_name=func_name,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=(),
             recent_events=(),
             recent_ops=(),
@@ -1983,9 +1983,9 @@ class JAXBackend:
             op_log._label_raw = label
             op_log._layer_label_raw = assignment.layer_label
             op_log.label = pass_label
-            op_log.label_short = pass_label
+            op_log.short_label = pass_label
             op_log.layer_label = layer_label
-            op_log.layer_label_short = layer_label
+            op_log.short_layer_label = layer_label
             op_log.pass_index = assignment.pass_index
             op_log.num_passes = assignment.num_passes
             op_log.equivalence_class = assignment.equivalence_key

@@ -123,10 +123,10 @@ def _direction(dim: int = 4, site: str = "model.layers.3") -> tl.intervention.Di
         origin="direction",
         method="mean_diff",
         sha256="0" * 64,
-        n_vectors=1,
+        num_vectors=1,
         space_dim=dim,
         dim=1,
-        tol=0.0,
+        atol=0.0,
     )
     return tl.intervention.Direction(vector, site, "mean_diff", 3, -1, None, provenance)
 

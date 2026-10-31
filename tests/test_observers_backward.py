@@ -148,7 +148,7 @@ def test_tap_backward_grad_fn_mount_backward_selector() -> None:
 def test_tap_backward_both_directions_fire() -> None:
     """A both-direction tap records forward and backward events."""
 
-    tap = tl.tap(tl.contains("linear"), direction="both")
+    tap = tl.tap(tl.label_contains("linear"), direction="both")
     _trace_with_tap(tap)
 
     assert [record.direction for record in tap.records] == ["forward", "backward"]
@@ -182,7 +182,7 @@ def test_record_span_backward_direction() -> None:
 def test_record_span_both_direction_captures_both() -> None:
     """Both-direction spans annotate forward and backward tap records."""
 
-    tap = tl.tap(tl.contains("linear"), direction="both")
+    tap = tl.tap(tl.label_contains("linear"), direction="both")
     with tl.span("both_phase", direction="both"):
         _trace_with_tap(tap)
 
@@ -215,7 +215,7 @@ def test_record_span_backward_event_inside_active_span() -> None:
 def test_tap_record_direction_field() -> None:
     """TapRecord.direction distinguishes forward from backward events."""
 
-    tap = tl.tap(tl.contains("linear"), direction="both")
+    tap = tl.tap(tl.label_contains("linear"), direction="both")
     _trace_with_tap(tap)
 
     assert {record.direction for record in tap.records} == {"forward", "backward"}

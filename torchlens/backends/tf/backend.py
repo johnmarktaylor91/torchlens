@@ -649,7 +649,7 @@ class TFBackend:
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
-        trace.trace_label = name
+        trace.name = name
         trace.backend = cast(BackendName, self.name)
         trace.model_class_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
         # Root entry-point identity fact (C07X item (iv)): the TF entry
@@ -1034,7 +1034,7 @@ def _pop_tf_save_predicate(kwargs: dict[str, Any]) -> BaseSelector | None:
     if not isinstance(save_value, BaseSelector):
         raise BackendUnsupportedError(
             "tf backend supports trace(save=...) for static selectors such as tl.func, "
-            "tl.label, tl.in_module, tl.contains, and boolean composites; use save='all' "
+            "tl.label, tl.in_module, tl.label_contains, and boolean composites; use save='all' "
             "or omit save to retain every payload."
         )
     reject_selector_outside_kinds(

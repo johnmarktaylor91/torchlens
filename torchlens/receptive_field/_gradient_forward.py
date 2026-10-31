@@ -169,7 +169,7 @@ def _projective_recapture_recipe(source: Op, targets: Sequence[Op]) -> str:
         Selector-based recapture guidance.
     """
 
-    labels = (source.layer_label_short, *(target.layer_label_short for target in targets))
+    labels = (source.short_layer_label, *(target.short_layer_label for target in targets))
     selectors = " | ".join(f"tl.label({label!r})" for label in labels)
     return (
         "tl.trace(model, x.requires_grad_(True), "

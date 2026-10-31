@@ -939,7 +939,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         """
 
         fork = self._fork_trace(name=name)
-        self._record_operation("fork", source_id=id(self), name=fork.trace_label)
+        self._record_operation("fork", source_id=id(self), name=fork.name)
         return fork
 
     def _record_operation(self: "Trace", op: str, **payload: Any) -> None:
@@ -1066,7 +1066,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         """
 
         from ..intervention.spec import InterventionSpec as PublicInterventionSpec
-        from ..selection import ResolvedSelection, Selection
+        from ..selection import Selection, Selector
 
         if isinstance(hooks_or_site, PublicInterventionSpec):
             # C03 spec door: do(spec) applies the whole immutable spec through
@@ -1124,7 +1124,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             return self._apply_selection_batch_do(
                 hooks_or_site, engine=engine, strict=strict, direction=direction
             )
-        if isinstance(hooks_or_site, (Selection, ResolvedSelection)):
+        if isinstance(hooks_or_site, (Selector, Selection)):
             self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
             return self._apply_selection_do(
                 hooks_or_site,
@@ -1165,24 +1165,22 @@ class TraceInterventionMixin(_TraceMixinBase):
             return False
         if not all(isinstance(item, (list, tuple)) and len(item) == 2 for item in value):
             return False
-        from ..selection import ResolvedSelection, Selection
+        from ..selection import Selection, Selector
 
         slice_module = sys.modules.get("torchlens.trace_slice")
         slice_type = slice_module.TraceSlice if slice_module is not None else ()
-        return any(
-            isinstance(item[0], (Selection, ResolvedSelection, slice_type)) for item in value
-        )
+        return any(isinstance(item[0], (Selector, Selection, slice_type)) for item in value)
 
     @staticmethod
     def _selection_batch_kind(selection: Any) -> str:
         """The selection kind (``ACT``/``PARAM``/``EDGE``) of one batch pair's target."""
 
-        from ..selection import ResolvedSelection, Selection, _lift
+        from ..selection import Selection, Selector, _lift
 
         slice_module = sys.modules.get("torchlens.trace_slice")
         if slice_module is not None and isinstance(selection, slice_module.TraceSlice):
             selection = selection.__selection__()
-        if not isinstance(selection, (Selection, ResolvedSelection)):
+        if not isinstance(selection, (Selector, Selection)):
             return "ACT"
         return str(getattr(_lift(selection), "kind", "ACT"))
 
@@ -1223,7 +1221,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             batch, which has already propagated.
         """
 
-        from ..selection import ResolvedSelection, Selection, _lift
+        from ..selection import Selection, Selector, _lift
 
         slice_module = sys.modules.get("torchlens.trace_slice")
         slice_type = slice_module.TraceSlice if slice_module is not None else ()
@@ -1232,7 +1230,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         for index, (selection, edit) in enumerate(pairs):
             if isinstance(selection, slice_type):
                 selection = selection.__selection__()
-            if not isinstance(selection, (Selection, ResolvedSelection)):
+            if not isinstance(selection, (Selector, Selection)):
                 raise InvalidArgumentError(
                     f"selection-batch do() pair {index} carries a "
                     f"{type(selection).__name__} target; a batch mixing "
@@ -1504,14 +1502,14 @@ class TraceInterventionMixin(_TraceMixinBase):
     ) -> str:
         """Apply one EDGE-kind selection edit through the edge-substitution path."""
 
-        from ..selection import ResolvedSelection, SelectionError
+        from ..selection import Selection, SelectionError
 
         if edit is None:
             raise ValueError(
                 "do(selection, edit) requires an edit: pass an Edit/Edit, "
                 "a hook callable, or a replacement tensor."
             )
-        if isinstance(lifted, ResolvedSelection):
+        if isinstance(lifted, Selection):
             if lifted._trace is not self:
                 raise SelectionError(
                     "the resolved edge selection is bound to a different trace.",
@@ -1554,14 +1552,14 @@ class TraceInterventionMixin(_TraceMixinBase):
         default on the replay path; rerun/set_only keep refusing typed).
         """
 
-        from ..selection import ResolvedSelection, SelectionError
+        from ..selection import Selection, SelectionError
 
         if edit is None:
             raise ValueError(
                 "do(selection, edit) requires an edit: pass an Edit/Edit, "
                 "a hook callable, or a replacement tensor."
             )
-        if isinstance(lifted, ResolvedSelection):
+        if isinstance(lifted, Selection):
             if lifted._trace is not self:
                 raise SelectionError(
                     "the resolved parameter selection is bound to a different trace.",
@@ -1774,7 +1772,7 @@ class TraceInterventionMixin(_TraceMixinBase):
     def _next_fork_name(self: "Trace") -> str:
         """Return a deterministic default fork name for this parent log."""
 
-        base_name = self.trace_label or "trace"
+        base_name = self.name or "trace"
         fork_count = sum(
             1
             for record in self.state_history

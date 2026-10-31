@@ -132,7 +132,7 @@ def test_sweep_default_keeps_cardinality_and_discloses() -> None:
     assert bundle.names == ["sweep_0", "sweep_1"]
     assert bundle.baseline_name is None
     with pytest.raises(BaselineUndeterminedError):
-        bundle.most_changed()
+        bundle.rank_changes()
 
 
 @pytest.mark.smoke
@@ -145,7 +145,7 @@ def test_sweep_include_baseline_mints_pristine_first() -> None:
     assert bundle.baseline_name == "baseline"
     # The pristine member is un-intervened; swept members are intervened.
     assert bundle["baseline"].intervention_audit == []
-    ranked = bundle.most_changed()
+    ranked = bundle.rank_changes()
     assert ranked, "most_changed must run on a baselined sweep"
     # Lineage: anchors + chronology row.
     assert bundle._member_construction["sweep_0"]["origin"] == "swept"

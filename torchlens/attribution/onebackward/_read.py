@@ -218,15 +218,15 @@ def _resolve_within_impl(
 
     if within is None:
         return (dict.fromkeys(index.edges), False)
-    from ...selection import ResolvedSelection, Selection
+    from ...selection import Selection, Selector
     from ...selection_values import _lift_within
 
     population: dict[str, torch.Tensor | None] = {}
-    if isinstance(within, ResolvedSelection):
+    if isinstance(within, Selection):
         resolved = within
     else:
         lifted = _lift_within(within, "read")
-        if isinstance(lifted, Selection):
+        if isinstance(lifted, Selector):
             resolved = lifted.resolve(trace)
         else:
             raise ReadError(

@@ -132,7 +132,7 @@ def checked_param_value(component: LiteralTensor, pass_log: Op) -> Any:
         f"({changed}); replaying would silently compute with the new value. Remedy: "
         "re-capture the trace, or pass allow_changed_params=True (InterventionOptions or "
         "ReplayOptions) to replay with the current values; for an as-if weight edit use "
-        "fork.do(tl.params(name), edit)",
+        "fork.do(tl.param(name), edit)",
         code="replay_param_changed_since_capture",
         param=name,
         op=op_label,

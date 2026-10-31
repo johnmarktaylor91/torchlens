@@ -162,7 +162,7 @@ def test_param_and_mixed_plan_refusals(log):
 
     with pytest.raises(SelectionError) as excinfo:
         log.fork().do(
-            tl.params("c1.weight"),
+            tl.param("c1.weight"),
             tl.zero_ablate(),
             intervention=tl.options.InterventionOptions(engine="set_only"),
         )

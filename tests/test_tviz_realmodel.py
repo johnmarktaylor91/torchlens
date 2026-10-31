@@ -281,7 +281,7 @@ def test_qwen_gqa_disclosure(tmp_path) -> None:
         == model.model.layers[0].self_attn.v_proj.out_features
     )
     assert view.gqa is not None
-    assert view.gqa.n_query_heads == config.num_attention_heads
+    assert view.gqa.num_query_heads == config.num_attention_heads
     assert view.gqa.n_kv_heads == config.num_key_value_heads
     header = view.gqa.header(0)
     assert "kv group 1 of" in header and "shared by query heads" in header

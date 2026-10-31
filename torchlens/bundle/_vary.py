@@ -220,7 +220,7 @@ def bundle_vary(
     from ..experiment._ledger import active_ledger
 
     armed = active_ledger()
-    step_id = armed.material_step("vary") if armed is not None else None
+    step_id = armed.begin_step("vary") if armed is not None else None
 
     # ---- material phase (no rollback claimed) ----------------------------
     outcomes, spec_digests, failure = _apply_member_specs(bundle, lowered)
@@ -245,14 +245,14 @@ def bundle_vary(
     if armed is not None and step_id is not None:
         from ..experiment._ledger import EvidenceRef
 
-        armed.finalize_step(
+        armed.end_step(
             step_id,
             outcome="completed" if failure is None else "partial_failure",
             refs=[
                 EvidenceRef(
                     kind="bundle",
-                    uri=f"live://{bundle.bundle_id}",
-                    object_id=f"{bundle.bundle_id}:{operation.operation_id}",
+                    uri=f"live://{bundle.id}",
+                    object_id=f"{bundle.id}:{operation.operation_id}",
                 )
             ],
             material_result=bundle,
@@ -270,6 +270,6 @@ def bundle_vary(
             failed_member=failed_member,
             outcomes=dict(outcomes),
             material_action_completed=True,
-            operation_id=operation.operation_id,
+            history_id=operation.operation_id,
         ) from original
     return bundle

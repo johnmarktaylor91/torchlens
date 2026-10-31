@@ -115,7 +115,7 @@ def test_non_identity_edge_fork_validates_and_reaches_boundary(two) -> None:
 def test_param_fork_validates_against_hand_truth(two) -> None:
     model, x, trace = two
     fork = trace.fork()
-    fork.do(tl.params("fc2.bias"), tl.zero_ablate())
+    fork.do(tl.param("fc2.bias"), tl.zero_ablate())
     with torch.no_grad():
         expected = 2.0 * (torch.relu(model.fc1(x)) + torch.tanh(x @ model.fc2.weight.T))
     assert _validate(fork, expected) is True

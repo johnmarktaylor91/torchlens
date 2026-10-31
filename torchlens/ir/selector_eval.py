@@ -489,7 +489,7 @@ def looks_like_finalized_label(label_value: str) -> bool:
     Parameters
     ----------
     label_value:
-        Label literal from ``tl.label`` / ``tl.contains`` / ``tl.regex``.
+        Label literal from ``tl.label`` / ``tl.label_contains`` / ``tl.label_matches``.
 
     Returns
     -------
@@ -576,7 +576,7 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
         )
     if kind == "input_at":
         return SelectorCapabilityError(
-            "tl.input_at(...) resolves saved input placeholders, but model inputs are not "
+            "tl.model_input(...) resolves saved input placeholders, but model inputs are not "
             "live hook application sites. Use trace(..., intervene=...) on downstream ops "
             "or mutate the model input before capture."
         )
@@ -1614,7 +1614,6 @@ def selector_from_spec(
 
     from ..intervention.selectors import (
         FacetSelector,
-        contains,
         func,
         func_transform,
         grad_fn,
@@ -1623,12 +1622,13 @@ def selector_from_spec(
         grad_output,
         in_backward_pass,
         in_module,
-        input_at,
         label,
+        label_contains,
+        label_matches,
+        model_input,
+        model_output,
         module,
-        output,
         output_at,
-        regex,
         where,
         without_op,
     )
@@ -1647,19 +1647,19 @@ def selector_from_spec(
     if kind == "module":
         return module(str(value))
     if kind == "output":
-        return output(value)
+        return model_output(value)
     if kind == "output_at":
         return output_at(value)
     if kind == "input_at":
         if lifecycle == "live":
             raise _capability_error(kind, lifecycle)
         if isinstance(value, Sequence) and not isinstance(value, str):
-            return input_at(*value)
-        return input_at(value)
+            return model_input(*value)
+        return model_input(value)
     if kind == "contains":
-        return contains(str(value))
+        return label_contains(str(value))
     if kind == "regex":
-        return regex(str(value))
+        return label_matches(str(value))
     if kind == "in_module":
         selector = in_module(str(value))
         if isinstance(selector, BaseSelector):
@@ -1784,7 +1784,7 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
     selector_like:
         Selector, target spec, frozen target spec, or lifecycle shorthand.
         Bare strings keep their historical per-lifecycle meaning: post-hoc
-        queries treat them as substring searches (``tl.contains``), live hook
+        queries treat them as substring searches (``tl.label_contains``), live hook
         targets as exact labels (``tl.label``).
     lifecycle:
         Lifecycle the selector will be evaluated under.
@@ -1817,11 +1817,11 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
             lifecycle=lifecycle,
         )
     if isinstance(selector_like, str):
-        from ..intervention.selectors import contains, label
+        from ..intervention.selectors import label, label_contains
 
         if lifecycle == "live":
             return label(selector_like)
-        return contains(selector_like)
+        return label_contains(selector_like)
     if type(selector_like).__name__ == "SiteTable":
         # find_sites() output is accepted directly (leverage B3/NEW-4): the
         # zero-match refusal RECOMMENDS log.find_sites(...), so its result

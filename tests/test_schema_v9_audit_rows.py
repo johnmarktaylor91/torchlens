@@ -6,7 +6,7 @@ Three families land in the ONE closed ``intervention_audit`` row grammar:
    selection-door writer already emits (A04 dense-subspace point-of-use
    stamp). Pre-v9 the validator refused it, so a saved selection-intervened
    artifact refused ITS OWN load (C03 measured defect).
-2. PARAM rows (param-substitution ``do(tl.params(...), edit)``) are admitted
+2. PARAM rows (param-substitution ``do(tl.param(...), edit)``) are admitted
    with their shipped ``params[]``/``disclosure`` payload. Same defect class.
 3. EVENT rows -- the ``intervention_event_v2`` transaction envelope as a
    first-class audit row kind, with the OPTIONAL hash-chain extension
@@ -83,7 +83,7 @@ def test_param_intervened_artifact_loads_its_own_save(log, tmp_path):
     """PARAM rows (parameter substitution) round-trip through load."""
 
     fork = log.fork()
-    fork.do(tl.params("c1.weight"), tl.scale(0.5))
+    fork.do(tl.param("c1.weight"), tl.scale(0.5))
     assert any(row.get("kind") == "PARAM" for row in fork.intervention_audit)
     path = tmp_path / "param_intervened.tlspec"
     tl.save(fork, path)

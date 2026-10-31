@@ -66,7 +66,7 @@ def _validate_graph_structure(trace: Trace) -> None:
             _graph_invalid(
                 f"op {label!r} carries pass_index={pass_index!r} / num_passes={num_passes!r}; "
                 "pass stamps are 1-based ints with 1 <= pass_index <= num_passes",
-                "Op.pass_index",
+                "Op.pass_number",
                 "pass_stamp_range",
             )
         for relation in ("parents", "children"):

@@ -34,7 +34,7 @@ from ._metrics import (
 )
 from ._position_edits import at_positions
 from ._subspace_edits import subspace_ablate, subspace_interchange
-from ._super.super_op import (
+from ._super.at import (
     SuperAtenOp,
     SuperLayer as SuperLayer,
     SuperLayerAccessor as SuperLayerAccessor,
@@ -144,7 +144,6 @@ from .save import (
 )
 from .selectors import (
     at_step,
-    contains,
     facet,
     followed_by,
     func,
@@ -156,13 +155,14 @@ from .selectors import (
     head,
     in_backward_pass,
     in_module,
-    input_at,
     label,
+    label_contains,
+    label_matches,
+    model_input,
+    model_output,
     module,
-    output,
     output_at,
     preceded_by,
-    regex,
     site,
     where,
     without_op,
@@ -309,7 +309,7 @@ __all__ = [
     "classify_where",
     "compare_topology",
     "compose",
-    "contains",
+    "label_contains",
     "cosine_distance",
     "Direction",
     "direction_from_pairs",
@@ -329,10 +329,10 @@ __all__ = [
     "grad_output",
     "grad_scale",
     "grad_zero",
-    "input_at",
+    "model_input",
     "in_backward_pass",
     "in_module",
-    "regex",
+    "label_matches",
     "load_intervention_spec",
     "make_hook_context",
     "mean_ablate",
@@ -348,7 +348,7 @@ __all__ = [
     "noise",
     "normalize_hook_plan",
     "NormalizedHookEntry",
-    "output",
+    "model_output",
     "output_at",
     "preceded_by",
     "project_off",

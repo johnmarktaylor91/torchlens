@@ -37,7 +37,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .selection import ResolvedSelection
+    from .selection import Selection
 
 __all__ = ["ALIGNMENT_REASONS", "align_resolved_selection"]
 
@@ -105,7 +105,7 @@ def _healthy_stamp(trace: Any, role: str) -> dict[str, Any]:
     return stamp
 
 
-def _require_same_policy(resolved: ResolvedSelection, target: Any) -> None:
+def _require_same_policy(resolved: Selection, target: Any) -> None:
     """Enforce the L1 same-policy cross-stamp rule across both traces."""
 
     source_stamp = _healthy_stamp(resolved._trace, "source")
@@ -208,7 +208,7 @@ def _join_verdict_for_key(source_trace: Any, target: Any, structural_key: str) -
     return str(row.verdict.value)
 
 
-def align_resolved_selection(resolved: ResolvedSelection, target: Any) -> ResolvedSelection:
+def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
     """Re-bind a resolved selection onto ``target``, keyed on L1 site keys.
 
     Implementation home of ``ResolvedSelection.align_to``. Returns a NEW
@@ -226,7 +226,7 @@ def align_resolved_selection(resolved: ResolvedSelection, target: Any) -> Resolv
 
     import dataclasses
 
-    from .selection import ResolvedSelection, SelectionProvenance, _site_shape
+    from .selection import Selection, SelectionProvenance, _site_shape
 
     if target is resolved._trace:
         return resolved
@@ -268,4 +268,4 @@ def align_resolved_selection(resolved: ResolvedSelection, target: Any) -> Resolv
             )
         else:
             entries.append(dataclasses.replace(entry, provenance=provenance))
-    return ResolvedSelection(target, "ACT", entries)
+    return Selection(target, "ACT", entries)

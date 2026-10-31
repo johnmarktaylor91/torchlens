@@ -77,7 +77,7 @@ class BackwardPass:
     """
 
     _PORTABLE_STATE_POLICY: ClassVar[dict[str, FieldPolicy]] = {
-        "pass_index": FieldPolicy.KEEP,
+        "pass_number": FieldPolicy.KEEP,
         "trigger": FieldPolicy.KEEP,
         "implicit": FieldPolicy.KEEP,
         "outer_context": FieldPolicy.KEEP,
@@ -107,7 +107,7 @@ class BackwardPass:
         FIELD_POLICY
     )
 
-    pass_index: int
+    pass_number: int
     trigger: str
     implicit: bool
     outer_context: str | None = None
@@ -243,7 +243,7 @@ class BackwardPass:
             return None
         from ..backends.torch._backward_dispatch import recorded_ops
 
-        return recorded_ops(trace, self.pass_index)
+        return recorded_ops(trace, self.pass_number)
 
     @property
     def flops_attribution(self) -> Any:
@@ -265,13 +265,13 @@ class BackwardPass:
         record = self.executed_flops_record
         if record is None:
             return None
-        return attribution_from_record(trace, self.pass_index, record)
+        return attribution_from_record(trace, self.pass_number, record)
 
     @property
     def ordinal_index(self) -> int:
         """Return this pass's 0-based position in ``trace.backward_passes``."""
 
-        return self.pass_index - 1
+        return self.pass_number - 1
 
     def to_pandas(self) -> pd.DataFrame:
         """Export this backward pass as a one-row DataFrame.
@@ -306,7 +306,7 @@ class BackwardPass:
 # (dataclass defaults are baked into the generated __init__). Rows adopt
 # into the owning backward epoch's stores.
 _BACKWARD_PASS_STORED_FIELDS: tuple[str, ...] = (
-    "pass_index",
+    "pass_number",
     "trigger",
     "implicit",
     "outer_context",

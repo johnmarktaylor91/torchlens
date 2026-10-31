@@ -189,7 +189,7 @@ _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
         "GradFnCall",
     ),
     ("torchlens." + "multi_trace.node_view", "NodeView"): (
-        "torchlens.intervention._super.super_op",
+        "torchlens.intervention._super.at",
         "SuperOp",
     ),
 }

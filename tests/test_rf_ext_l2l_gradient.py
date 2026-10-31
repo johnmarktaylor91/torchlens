@@ -86,7 +86,7 @@ def test_unretained_layer_source_names_both_real_label_selectors() -> None:
     expected_recipe = (
         "tl.trace(model, x.requires_grad_(True), "
         'capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference", '
-        f"save=tl.label({source.layer_label_short!r}) | tl.label({target.layer_label_short!r}))"
+        f"save=tl.label({source.short_layer_label!r}) | tl.label({target.short_layer_label!r}))"
     )
 
     with pytest.raises(

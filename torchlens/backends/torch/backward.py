@@ -1815,7 +1815,7 @@ def _fold_fired_events(
             call_index=ordinal,
             ordinal=ordinal,
             backward_pass_index=event.pass_index,
-            label=grad_fn_record.label,
+            grad_fn_label=grad_fn_record.label,
             grad_inputs=event.grad_input_refs,
             grad_outputs=event.grad_output_refs,
             intervention_fire_ref=event.intervention_fire_ref,
@@ -1949,7 +1949,7 @@ def _build_backward_pass_records(
             else _order_attribution_coverage(grad_fn_calls, grad_fn_logs)
         )
         pass_record = BackwardPass(
-            pass_index=pass_index,
+            pass_number=pass_index,
             trigger=start.trigger if start is not None else "implicit",
             implicit=start.implicit if start is not None else True,
             outer_context=start.outer_context if start is not None else None,

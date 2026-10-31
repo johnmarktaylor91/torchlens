@@ -37,8 +37,8 @@ from collections.abc import Iterator
 from typing import Any
 
 from .selection import (
-    Selection,
     SelectionError,
+    Selector,
     _lift,
     _SelectionOperand,
 )
@@ -324,7 +324,7 @@ class TraceSlice(_SelectionOperand):
 
     # Algebra lift ------------------------------------------------------------
 
-    def __selection__(self) -> Selection:
+    def __selection__(self) -> Selector:
         """Lift the slice's members back into the selection algebra.
 
         Returns the whole-site QUERY over the member family, addressed by
@@ -345,7 +345,7 @@ class TraceSlice(_SelectionOperand):
             )
             for label in self._labels
         )
-        return Selection(_SliceMembersTerm(sites=sites, display=self._source), kind="ACT")
+        return Selector(_SliceMembersTerm(sites=sites, display=self._source), kind="ACT")
 
 
 def build_slice_between(trace: Any, sources: Any, sinks: Any) -> TraceSlice:
@@ -376,7 +376,7 @@ def build_slice_from_selection(trace: Any, selection_like: Any) -> TraceSlice:
         if isinstance(selection_like, str):
             from .selection import _WholeSiteTerm
 
-            lifted = Selection(
+            lifted = Selector(
                 _WholeSiteTerm(site_label=selection_like, pass_index=None), kind="ACT"
             )
         else:

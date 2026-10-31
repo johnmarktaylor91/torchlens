@@ -49,7 +49,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from ..selection import (
-    ResolvedSelection,
+    Selection,
     SelectionError,
     _apply_invalid,
     _require_edge_provenance,
@@ -200,7 +200,7 @@ def _edit_hook(edit: Any, site_label: str) -> tuple[Any, Edit | None, str]:
 
 def apply_edge_substitution_do(
     trace: Trace,
-    resolved: ResolvedSelection,
+    resolved: Selection,
     edit: Any,
     *,
     engine: str,

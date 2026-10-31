@@ -48,7 +48,7 @@ def _rich_bundle() -> tl.Bundle:
     child = bundle.fork()
     operation = child.operations[0]
     child._effect_tables[operation.operation_id] = MemberEffectTable(
-        operation_id=operation.operation_id,
+        history_id=operation.operation_id,
         rows=(
             MemberEffectRow(
                 candidate_id="c0",
@@ -75,7 +75,7 @@ def test_lineage_round_trips_through_tlspec(tmp_path: Path) -> None:
     child.save(str(path))
     loaded = tl.load(str(path))
 
-    assert loaded.bundle_id == child.bundle_id
+    assert loaded.id == child.id
     assert loaded._forked_from_bundle_id == child._forked_from_bundle_id
     assert loaded.member_construction == child.member_construction
     assert [row.to_payload() for row in loaded.operations] == [
@@ -106,7 +106,7 @@ def test_pre_f03_artifact_loads_with_loaded_anchors(tmp_path: Path) -> None:
 
     loaded = tl.load(str(path))
     # A fresh identity is minted; anchors disclose no construction evidence.
-    assert loaded.bundle_id
+    assert loaded.id
     assert loaded.member_construction == {
         "baseline": {"origin": "loaded"},
         "changed": {"origin": "loaded"},

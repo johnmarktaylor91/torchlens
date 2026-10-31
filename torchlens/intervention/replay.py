@@ -253,7 +253,7 @@ def _run_differentiable_replay(
     log._record_operation(
         "fork",
         source_id=id(log),
-        name=replay_log.trace_label,
+        name=replay_log.name,
         source_cone_labels=tuple(_disclosure_label(site) for site in source_cone),
     )
     _reset_backward_projection(replay_log)

@@ -261,9 +261,9 @@ def test_target_spec_selector_rehydration_covers_path_and_pattern_selectors() ->
         output_labels = log.resolve_sites(tl.output_at(0).to_target_spec()).labels()
     assert "chunk_1_2" in output_labels
     with pytest.warns(MultiMatchWarning):
-        regex_labels = log.resolve_sites(tl.regex("chunk_[12]").to_target_spec()).labels()
+        regex_labels = log.resolve_sites(tl.label_matches("chunk_[12]").to_target_spec()).labels()
     assert regex_labels == ("chunk_1_2", "chunk_2_3")
-    assert repr(selector_from_spec("input_at", (0,), {})) == "tl.input_at((0,))"
+    assert repr(selector_from_spec("input_at", (0,), {})) == "tl.model_input((0,))"
 
 
 def test_loaded_forward_hook_spec_executes_on_fresh_trace(tmp_path: Path) -> None:
@@ -303,7 +303,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     assert torch.count_nonzero(output_tensor) == 0
 
     regex_log = _log(_ReluModel(), torch.ones(1, 3))
-    regex_log.attach_hooks(tl.regex("relu"), tl.scale(0.0), confirm_mutation=True)
+    regex_log.attach_hooks(tl.label_matches("relu"), tl.scale(0.0), confirm_mutation=True)
     regex_path = tmp_path / "loaded_regex.tlspec"
     regex_log.save_intervention(regex_path, level="portable")
     regex_spec = load_intervention_spec(regex_path)

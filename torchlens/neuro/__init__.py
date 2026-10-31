@@ -51,7 +51,7 @@ sections:
    analyses rank sites differently.
 6. REFUSALS: noise ceilings, crossnobis/mahalanobis, searchlight,
    inferential bootstrap/permutation/model fitting (descriptive intervals
-   are tl.repgeom.rdm_compare_interval / cka_interval), encoding-model
+   are tl.repgeom.compare_rdms_interval / cka_interval), encoding-model
    inference, CCA/SVCCA/PWCCA,
    non-metric MDS, model zoos, and brain data itself are deliberately NOT
    here. Each attempted name raises a teaching refusal naming the owning
@@ -164,7 +164,7 @@ _REFUSALS: dict[str, str] = {
         "bootstrap inference over stimuli/subjects belongs to "
         "rsatoolbox.inference; torchlens hands it descriptor-complete RDMs "
         "via neuro.rdms(). For a DESCRIPTIVE stimulus-bootstrap interval on "
-        "torchlens's own scores, use tl.repgeom.rdm_compare_interval or "
+        "torchlens's own scores, use tl.repgeom.compare_rdms_interval or "
         "tl.repgeom.cka_interval (needs no extra)"
     ),
     "permutation_test": (

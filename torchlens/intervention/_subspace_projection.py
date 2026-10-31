@@ -60,7 +60,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from ..selection import ResolvedSelection, Selection, SiteEntry, _Combinator, _lift, _Mask
+from ..selection import Selection, Selector, SiteEntry, _Combinator, _lift, _Mask
 from ..selection_subspace import _basis_digest, _SubspaceTerm
 from ._affine_source import AFFINE_SOURCE_NAME, SourceCall, check_source_shape
 from ._subspace_edits import _orthonormal_rows
@@ -500,7 +500,7 @@ def subspace_projection_of(selection_like: Any) -> SubspaceProjection | None:
     """
 
     lifted = _lift(selection_like)
-    if isinstance(lifted, Selection):
+    if isinstance(lifted, Selector):
         if isinstance(lifted._node, _SubspaceTerm):
             return SubspaceProjection.from_term(lifted._node)
         if _contains_subspace(lifted._node):
@@ -515,7 +515,7 @@ def subspace_projection_of(selection_like: Any) -> SubspaceProjection | None:
                 ),
                 argument="target",
             )
-    if isinstance(lifted, ResolvedSelection) and any(
+    if isinstance(lifted, Selection) and any(
         entry.provenance.source.startswith("subspace(origin=") for entry in lifted
     ):
         raise InvalidArgumentError(

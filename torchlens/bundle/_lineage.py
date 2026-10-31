@@ -293,7 +293,7 @@ class BundleOperation:
         if prev_digest is not None and not isinstance(prev_digest, str):
             raise ValueError("bundle operation row prev_operation_digest must be a string or null")
         row = cls(
-            operation_id=str(payload["operation_id"]),
+            history_id=str(payload["operation_id"]),
             seq=payload["seq"] if isinstance(payload["seq"], int) else -1,
             kind=str(payload["kind"]),
             member_names=tuple(str(name) for name in member_names),
@@ -332,7 +332,7 @@ def validate_operation_chain(rows: Sequence[BundleOperation]) -> None:
                 "The operation ledger is append-only and hash-chained; a break "
                 "means rows were dropped, reordered, or edited.",
                 code="bundle_lineage_invalid",
-                operation_id=row.operation_id,
+                history_id=row.operation_id,
                 seq=row.seq,
             )
         previous = row
@@ -480,7 +480,7 @@ class MemberEffectTable:
             if value is not None and not isinstance(value, str):
                 raise ValueError(f"effect table {key} must be a string or null")
         return cls(
-            operation_id=str(payload["operation_id"]),
+            history_id=str(payload["operation_id"]),
             rows=tuple(MemberEffectRow.from_payload(row) for row in rows_payload),
             baseline_member=payload["baseline_member"],
             metric_repr=payload["metric_repr"],

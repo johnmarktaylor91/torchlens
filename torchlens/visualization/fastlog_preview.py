@@ -67,7 +67,7 @@ def _module_stack_from_layer(op_log: Any) -> tuple[ModuleStackFrame, ...]:
                 address=str(address),
                 module_type=module_type,
                 module_id=0,
-                pass_index=index,
+                pass_number=index,
             )
         )
     return tuple(frames)

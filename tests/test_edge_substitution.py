@@ -99,8 +99,8 @@ def _selection_for_kind_state(trace: tl.Trace, kind: str, state: str) -> Any:
         first = tl.units("relu_1_2", [(0, 0, 0, 0)])
         second = trace["conv2d_1_1"].__selection__()
     elif kind == "PARAM":
-        first = tl.params("c1.weight")
-        second = tl.params("c2.weight")
+        first = tl.param("c1.weight")
+        second = tl.param("c2.weight")
     else:
         first = _edge(trace).__selection__()
         second = _edge(trace, parent="conv2d_2_3").__selection__()

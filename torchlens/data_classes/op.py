@@ -1608,12 +1608,12 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         "_construction_done": FieldPolicy.DROP,
         "_is_in_conditional_body": FieldPolicy.KEEP,
         "label": FieldPolicy.KEEP,
-        "label_short": FieldPolicy.KEEP,
+        "short_label": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
-        "layer_label_short": FieldPolicy.KEEP,
+        "short_layer_label": FieldPolicy.KEEP,
         "type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
-        "pass_index": FieldPolicy.KEEP,
+        "pass_number": FieldPolicy.KEEP,
         "num_passes": FieldPolicy.KEEP,
         "lookup_keys": FieldPolicy.KEEP,
         "out": FieldPolicy.BLOB,
@@ -2730,7 +2730,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         if not _finished:
             return {self._label_raw}
         spellings = {self.layer_label}
-        pass_index = self.pass_index
+        pass_index = self.pass_number
         if isinstance(pass_index, int):
             spellings.add(f"{self.layer_label}:{pass_index}")
         return spellings
@@ -4388,7 +4388,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def _str_during_pass(self) -> str:
         """Return a human-readable summary of this tensor entry while the forward pass is still in progress."""
         s = f"Tensor {self._label_raw} (layer {self._layer_label_raw}) (PASS NOT FINISHED):"
-        s += f"\n\tPass: {self.pass_index}"
+        s += f"\n\tPass: {self.pass_number}"
         s += f"\n\tTensor info: shape {self.shape}, dtype {self.dtype}"
         s += f"\n\tComputed from params: {self.uses_params}"
         s += f"\n\tComputed in modules: {self.modules}"

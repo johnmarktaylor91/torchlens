@@ -619,7 +619,7 @@ def test_selection_error_kind_matrix_refusal() -> None:
     """
 
     act = tl.units("relu_1_2", [(0, 0, 1, 1)])
-    param = tl.params("weight")
+    param = tl.param("weight")
     with pytest.raises(terrors.SelectionError) as excinfo:
         act & param
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"

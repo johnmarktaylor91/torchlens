@@ -315,7 +315,7 @@ class ModuleCall:
         "class_qualname": FieldPolicy.KEEP,
         "cls": FieldPolicy.DROP,
         "call_index": FieldPolicy.KEEP,
-        "call_label": FieldPolicy.KEEP,
+        "label": FieldPolicy.KEEP,
         "ordinal_index": FieldPolicy.KEEP,
         "ops": FieldPolicy.KEEP,
         "input_ops": FieldPolicy.KEEP,
@@ -362,7 +362,7 @@ class ModuleCall:
     class_name: str
     class_qualname: str
     call_index: int
-    call_label: str
+    label: str
     ordinal_index: int
     ops: list[str]
     input_ops: list[str]
@@ -487,7 +487,7 @@ class ModuleCall:
         self.class_name = class_name
         self.class_qualname = class_qualname
         self.call_index = call_index
-        self.call_label = call_label  # e.g. "features.0:1"
+        self.label = call_label  # e.g. "features.0:1"
         self.ordinal_index = ordinal_index
         self.ops = ops  # pass-qualified Op labels
         self.input_layers = input_layers
@@ -765,7 +765,7 @@ class ModuleCall:
         return self.module.internal_param_memory
 
     @property
-    def call_parent_label(self) -> str | None:
+    def parent_label(self) -> str | None:
         """Parent ModuleCall label in the dynamic call tree (glossary stored-form name)."""
 
         return cast("str | None", self.call_parent)
@@ -915,7 +915,7 @@ class ModuleCall:
             from ..intervention.errors import MultiOutputModuleError
 
             raise MultiOutputModuleError(
-                f"ModuleCall '{self.call_label}' has {len(values)} outputs; "
+                f"ModuleCall '{self.label}' has {len(values)} outputs; "
                 "use .outs[i] or resolve .output_ops[i]."
             )
         return values[0]
@@ -944,7 +944,7 @@ class ModuleCall:
                 for index, label in enumerate(self.output_ops)
             )
             raise MultiOutputModuleError(
-                f"ModuleCall {self.call_label!r} has {len(self.output_ops)} output ops; "
+                f"ModuleCall {self.label!r} has {len(self.output_ops)} output ops; "
                 f"select one candidate explicitly: {candidates or 'none'}."
             )
         trace = self._source_trace
@@ -964,7 +964,7 @@ class ModuleCall:
             from ..intervention.errors import MultiOutputModuleError
 
             raise MultiOutputModuleError(
-                f"ModuleCall {self.call_label!r} has {len(self.output_ops)} output ops."
+                f"ModuleCall {self.label!r} has {len(self.output_ops)} output ops."
             )
         trace = self._source_trace
         if trace is None:
@@ -2697,7 +2697,7 @@ _MODULE_CALL_STORED_FIELDS: tuple[str, ...] = (
     "class_name",
     "class_qualname",
     "call_index",
-    "call_label",
+    "label",
     "ordinal_index",
     "ops",
     "input_layers",

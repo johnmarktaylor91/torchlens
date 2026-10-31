@@ -157,7 +157,7 @@ def test_matcher_refuses_two_runs_on_the_same_reader_tokens() -> None:
 def test_auto_spans_write_a_matched_row(model: _TinyLM) -> None:
     bundle = _harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans="auto", label="critique")
-    params = bundle.member_relations[0].params
+    params = bundle.relations[0].params
     assert params["token_spans"] == [[3, 7, 3, 7]]
     assert params["basis"] == "matched"
     assert params["coverage"] == 1.0
@@ -167,7 +167,7 @@ def test_auto_spans_write_a_matched_row(model: _TinyLM) -> None:
 def test_auto_spans_trimmed_coverage_is_partial(model: _TinyLM) -> None:
     bundle = _harness(model, [4, 5, 30, 8, 9, 10, 11])
     bundle.relate("fed_by", "critique", "draft", token_spans="auto")
-    params = bundle.member_relations[0].params
+    params = bundle.relations[0].params
     assert (params["basis"], params["coverage"]) == ("matched", 0.75)
 
 
@@ -178,7 +178,7 @@ def test_auto_spans_refuse_without_the_evidence(model: _TinyLM) -> None:
     with pytest.raises(BundleRelationError) as excinfo:
         no_completion.relate("fed_by", "critique", "draft", token_spans="auto")
     assert _code(excinfo) == "bundle_relation_auto_spans_unavailable"
-    assert no_completion.member_relations == ()
+    assert no_completion.relations == ()
 
 
 def test_auto_spans_refuse_when_ids_are_not_retained(model: _TinyLM) -> None:
@@ -202,7 +202,7 @@ def test_auto_spans_work_with_a_selection_that_names_the_input(model: _TinyLM) -
     critique = tl.trace(model, torch.tensor([_CRITIQUE_IDS]), capture=options)
     bundle = Bundle({"draft": draft, "critique": critique})
     bundle.relate("fed_by", "critique", "draft", token_spans="auto")
-    assert bundle.member_relations[0].params["basis"] == "matched"
+    assert bundle.relations[0].params["basis"] == "matched"
 
 
 @pytest.mark.parametrize(
@@ -249,7 +249,7 @@ def test_a_matched_claim_the_matcher_does_not_reproduce_settles_verified(
             "params": {"token_spans": [[4, 6, 4, 6]], "basis": "matched"},
         }
     )
-    assert bundle.member_relations[0].params["basis"] == "verified"
+    assert bundle.relations[0].params["basis"] == "verified"
 
 
 def _saved_matched(tmp_path: Path, model: _TinyLM) -> Path:
@@ -280,7 +280,7 @@ def test_edited_matched_spans_that_still_check_lose_matched(tmp_path: Path, mode
     source = _saved_matched(tmp_path, model)
     _rewrite_spans(source, tmp_path / "edited.tlspec", [[4, 6, 4, 6]])
     loaded = tl.load(tmp_path / "edited.tlspec")
-    assert loaded.member_relations[0].params["basis"] == "verified"
+    assert loaded.relations[0].params["basis"] == "verified"
 
 
 @pytest.mark.parametrize("lazy", [False, True])
@@ -288,7 +288,7 @@ def test_retained_ids_survive_save_and_load(tmp_path: Path, model: _TinyLM, lazy
     """The ids-retention check: a matched row re-attests after a round trip."""
 
     loaded = tl.load(_saved_matched(tmp_path, model), lazy=lazy)
-    params = loaded.member_relations[0].params
+    params = loaded.relations[0].params
     assert (params["basis"], params["token_spans"]) == ("matched", [[3, 7, 3, 7]])
     pairs = loaded.token_pairs("critique", "draft")
     assert pairs.pairs == ((3, 3), (4, 4), (5, 5), (6, 6))
@@ -343,7 +343,7 @@ def test_a_reader_token_spanning_a_delimiter_and_copied_text_is_not_paired(
     # Reader token 30 is "<delimiter>7" fused; the rest of the quote copies through.
     bundle = _harness(model, [4, 5, 30, 8, 9, 10, 11])
     bundle.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 2, 6]])
-    assert bundle.member_relations[0].params["basis"] == "declared"  # ids differ at 2
+    assert bundle.relations[0].params["basis"] == "declared"  # ids differ at 2
     pairs = bundle.token_pairs("critique", "draft")
     assert pairs.pairs == ()  # positions 3..5 agree, yet nothing inside the span pairs
     sides = {(entry["side"], entry["start"], entry["end"]) for entry in pairs.excluded}
@@ -353,7 +353,7 @@ def test_a_reader_token_spanning_a_delimiter_and_copied_text_is_not_paired(
 def test_a_source_token_copied_twice_is_not_paired(model: _TinyLM) -> None:
     bundle = _harness(model, [7, 8, 9, 10, 0, 7, 8, 9, 10])
     bundle.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 0, 4], [3, 7, 5, 9]])
-    assert bundle.member_relations[0].params["basis"] == "verified"
+    assert bundle.relations[0].params["basis"] == "verified"
     pairs = bundle.token_pairs("critique", "draft")
     assert pairs.pairs == ()
     assert all("several reader tokens" in entry["reason"] for entry in pairs.excluded)
@@ -383,11 +383,11 @@ def test_a_span_into_the_readers_own_output_never_verifies(model: _TinyLM) -> No
         {"stream": "input", "batch_row": 0, "completion": [8, 12]},
     )
     bundle.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 8, 12]])
-    assert bundle.member_relations[0].params["basis"] == "declared"
+    assert bundle.relations[0].params["basis"] == "declared"
     with pytest.raises(BundleRelationError) as excinfo:
         Bundle(
             dict(bundle.members),
-            member_relations=[
+            relations=[
                 {
                     "kind": "fed_by",
                     "from": "critique",

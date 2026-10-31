@@ -126,7 +126,7 @@ def test_relate_is_a_real_method() -> None:
     assert inspect.isfunction(tl.Bundle.relate)
     bundle = _pair()
     bundle.relate({"kind": "alternative_of", "from": "changed", "to": "baseline", "params": {}})
-    assert bundle.member_relations[0].kind == "alternative_of"
+    assert bundle.relations[0].kind == "alternative_of"
 
 
 # ---------------------------------------------------------------------------
@@ -137,9 +137,9 @@ def test_relate_is_a_real_method() -> None:
 def test_bundle_id_minted_random_and_distinct() -> None:
     first = _pair()
     second = _pair()
-    assert first.bundle_id != second.bundle_id
-    assert len(first.bundle_id) == 16
-    int(first.bundle_id, 16)  # hex
+    assert first.id != second.id
+    assert len(first.id) == 16
+    int(first.id, 16)  # hex
 
 
 def test_fork_carries_relations_baseline_and_anchors() -> None:
@@ -148,24 +148,24 @@ def test_fork_carries_relations_baseline_and_anchors() -> None:
     child = bundle.fork()
 
     # Relation table carried (the historical drop is the 0b defect).
-    assert [row.kind for row in child.member_relations] == ["alternative_of"]
+    assert [row.kind for row in child.relations] == ["alternative_of"]
     assert child.baseline_name == "baseline"
 
     # New identity, anchored source.
-    assert child.bundle_id != bundle.bundle_id
-    assert child._forked_from_bundle_id == bundle.bundle_id
+    assert child.id != bundle.id
+    assert child._forked_from_bundle_id == bundle.id
 
     # Per-member origin anchors.
     anchor = child._member_construction["changed"]
     assert anchor["origin"] == "forked"
-    assert anchor["source_bundle_id"] == bundle.bundle_id
+    assert anchor["source_bundle_id"] == bundle.id
     assert anchor["source_member"] == "changed"
 
     # Chronology rows on BOTH containers, chained from seq 1.
     assert bundle._operations[-1].kind == "fork"
-    assert bundle._operations[-1].params["child_bundle_id"] == child.bundle_id
+    assert bundle._operations[-1].params["child_bundle_id"] == child.id
     assert child._operations[0].kind == "fork"
-    assert child._operations[0].params["source_bundle_id"] == bundle.bundle_id
+    assert child._operations[0].params["source_bundle_id"] == bundle.id
     validate_operation_chain(bundle._operations)
     validate_operation_chain(child._operations)
 
@@ -188,7 +188,7 @@ def test_member_construction_tracks_add_and_remove() -> None:
 @pytest.mark.smoke
 def test_bundle_operation_round_trip_and_tamper_refusal() -> None:
     row = BundleOperation(
-        operation_id="abc123", seq=1, kind="fork", member_names=("a",), params={"x": 1}
+        history_id="abc123", seq=1, kind="fork", member_names=("a",), params={"x": 1}
     )
     payload = row.to_payload()
     rebuilt = BundleOperation.from_payload(payload)
@@ -201,16 +201,16 @@ def test_bundle_operation_round_trip_and_tamper_refusal() -> None:
 
 def test_bundle_operation_refuses_unknown_kind_and_bad_seq() -> None:
     with pytest.raises(ValueError, match="closed"):
-        BundleOperation(operation_id="a", seq=1, kind="mystery")
+        BundleOperation(history_id="a", seq=1, kind="mystery")
     with pytest.raises(ValueError, match="positive int"):
-        BundleOperation(operation_id="a", seq=0, kind="fork")
+        BundleOperation(history_id="a", seq=0, kind="fork")
 
 
 @pytest.mark.smoke
 def test_operation_chain_break_refuses_typed() -> None:
-    first = BundleOperation(operation_id="a", seq=1, kind="fork")
+    first = BundleOperation(history_id="a", seq=1, kind="fork")
     # A second row that does not chain from the first.
-    orphan = BundleOperation(operation_id="b", seq=2, kind="do", prev_operation_digest="0" * 64)
+    orphan = BundleOperation(history_id="b", seq=2, kind="do", prev_operation_digest="0" * 64)
     with pytest.raises(BundleRelationError) as excinfo:
         validate_operation_chain([first, orphan])
     assert excinfo.value.fields["code"] == "bundle_lineage_invalid"
@@ -233,7 +233,7 @@ def test_member_construction_validator_fail_closed() -> None:
 @pytest.mark.smoke
 def test_effect_table_round_trip_and_refusals() -> None:
     table = MemberEffectTable(
-        operation_id="op1",
+        history_id="op1",
         rows=(
             MemberEffectRow(candidate_id="c0", status="completed", member_name="m0", value=1.5),
             MemberEffectRow(candidate_id="c1", status="released", value=0.25),
@@ -250,7 +250,7 @@ def test_effect_table_round_trip_and_refusals() -> None:
         MemberEffectRow(candidate_id="c", status="vanished")
     with pytest.raises(ValueError, match="duplicate"):
         MemberEffectTable(
-            operation_id="op",
+            history_id="op",
             rows=(
                 MemberEffectRow(candidate_id="c", status="completed"),
                 MemberEffectRow(candidate_id="c", status="failed"),

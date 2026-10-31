@@ -2,7 +2,7 @@
 
 Every unit of a layer claim, and (under zero ablation) every unit of a read
 table, including one element of an element-grain row, is one candidate of a
-``torchlens.experiment.site_sweep``: its site label or ``tl.units(site,
+``torchlens.experiment.sweep_sites``: its site label or ``tl.units(site,
 mask)``. Each unit's measured effect is exactly what ablating it on its own
 fork gives (the path the audit took before, kept here as the reference), and
 the sweep's effect table holds one member per unit. A read table's "mean" and
@@ -27,7 +27,7 @@ class _Spy:
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self.calls: list[tuple[dict[str, Any], Any]] = []
-        real = experiment.site_sweep
+        real = experiment.sweep_sites
 
         def _sweep(baseline: Any, *, candidates: Any, **kwargs: Any) -> Any:
             bundle = real(baseline, candidates=candidates, **kwargs)

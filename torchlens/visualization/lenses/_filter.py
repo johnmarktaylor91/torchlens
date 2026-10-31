@@ -165,11 +165,11 @@ def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
     (``align_to``) is the one explicit door for cross-trace reuse.
     """
 
-    from torchlens.selection import ResolvedSelection, Selection
+    from torchlens.selection import Selection, Selector
 
-    if isinstance(selection, ResolvedSelection):
+    if isinstance(selection, Selection):
         resolved: Any = selection
-    elif isinstance(selection, Selection):
+    elif isinstance(selection, Selector):
         resolved = selection.resolve(trace)
     elif hasattr(selection, "__selection__"):
         resolved = selection.__selection__().resolve(trace)
@@ -184,7 +184,7 @@ def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
             remedy="pass the unresolved Selection, or align_to(this_trace) first",
             argument="display_filter",
         )
-    if isinstance(resolved, ResolvedSelection):
+    if isinstance(resolved, Selection):
         return tuple(resolved)
     return tuple(getattr(resolved, "entries", ()))
 

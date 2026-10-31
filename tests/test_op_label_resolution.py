@@ -204,7 +204,7 @@ def test_validation_fails_on_a_dangling_label(trace: tl.Trace) -> None:
     indexes = ops._ensure_alias_indexes()
     assert indexes is not None
     del ops._dict[later.label]
-    for alias in (later.label, later.label_short, later._label_raw, later.layer_label):
+    for alias in (later.label, later.short_label, later._label_raw, later.layer_label):
         indexes.final.pop(alias, None)
     indexes.layer.pop(later.layer_label, None)
     indexes.raw.pop(later.raw_label, None)

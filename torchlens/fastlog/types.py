@@ -304,7 +304,7 @@ class GradRecordContext:
     module_stack: tuple[Any, ...] = ()
     has_forward_op: bool = False
     has_op: bool = False
-    pass_index: int | None = None
+    pass_number: int | None = None
     order: int | None = None
     event_index: int | None = None
     shape: tuple[int, ...] | None = None
@@ -486,12 +486,12 @@ class Recording(CapturedRun):
     by_pass: dict[int, list[int]]
     by_label: dict[str, list[tuple[int, int]]]
     by_address: dict[str, list[int]]
-    bundle_path: Path | None
+    path: Path | None
     n_ops: int
     start_times: list[float]
     end_times: list[float]
     predicate_failures: list[PredicateFailure]
-    predicate_failure_overflow_count: int
+    num_predicate_failure_overflows: int
     keep_op_repr: str | None
     history_size: int
     orphan_records: list[dict[str, Any]] = field(default_factory=list)
@@ -630,7 +630,7 @@ class Recording(CapturedRun):
         return (
             f"Recording(status={self.status}, records={records}, "
             f"passes={self.n_passes}, grad_records={grads}, "
-            f"bundle={str(self.bundle_path) if self.bundle_path else 'none'})"
+            f"bundle={str(self.path) if self.path else 'none'})"
         )
 
     def __str__(self) -> str:

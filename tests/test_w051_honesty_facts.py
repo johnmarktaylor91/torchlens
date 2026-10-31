@@ -100,7 +100,7 @@ def test_fork_do_edits_are_disclosed(model_and_x) -> None:
     assert block["replaced_ops"] == ["relu_1_2"]
     assert "ACT" in block["audit_kinds"]
     param_fork = trace.fork()
-    param_fork.do(tl.params("b.weight"), tl.scale(0.5))
+    param_fork.do(tl.param("b.weight"), tl.scale(0.5))
     param_block = intervention_facts(param_fork)
     assert param_block is not None
     assert param_block["audit_kinds"] == ["PARAM"]

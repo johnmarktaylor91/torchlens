@@ -17,7 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors.episode import BundleExperimentError
-from torchlens.experiment import site_sweep, top_k
+from torchlens.experiment import sweep_sites, top_k
 
 
 class _Tiny(nn.Module):
@@ -45,7 +45,7 @@ def test_site_sweep_required_arguments_refuse_typed() -> None:
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),
@@ -56,7 +56,7 @@ def test_site_sweep_required_arguments_refuse_typed() -> None:
         )
     assert excinfo.value.fields["code"] == "site_sweep_retain_invalid"
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),
@@ -67,7 +67,7 @@ def test_site_sweep_required_arguments_refuse_typed() -> None:
         )
     assert excinfo.value.fields["code"] == "site_sweep_metric_invalid"
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),
@@ -82,7 +82,7 @@ def test_site_sweep_live_hook_lane_end_to_end() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates={"relu": "relu_1_2", "tanh": "tanh_1_4"},
         edit=tl.zero_ablate(),
@@ -107,7 +107,7 @@ def test_site_sweep_live_hook_lane_end_to_end() -> None:
 
     assert event_audit_rows(bundle["relu"])
     # The member axis ranks by |value - baseline|.
-    ranked = view.most_changed()
+    ranked = view.rank_changes()
     assert len(ranked) == 2 and ranked[0][1] >= ranked[1][1]
 
 
@@ -116,7 +116,7 @@ def test_site_sweep_retain_none_keeps_rows_releases_members() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=["relu_1_2", "tanh_1_4"],
         edit=tl.zero_ablate(),
@@ -137,7 +137,7 @@ def test_site_sweep_rolling_top_k_retention() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=["relu_1_2", "tanh_1_4"],
         edit=tl.zero_ablate(),
@@ -147,7 +147,7 @@ def test_site_sweep_rolling_top_k_retention() -> None:
         x=x,
     )
     view = bundle.effects()
-    ranked = view.most_changed()
+    ranked = view.rank_changes()
     top_candidate = ranked[0][0]
     assert set(bundle.names) == {"baseline", top_candidate}
     released = [row for row in view.rows if row.status == "released"]
@@ -160,7 +160,7 @@ def test_site_sweep_refuses_undeclared_multi_site_candidate() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates={"broadcast": tl.func("linear"), "single": "relu_1_2"},
         edit=tl.zero_ablate(),
@@ -179,7 +179,7 @@ def test_site_sweep_refuses_undeclared_multi_site_candidate() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("always")
-        declared = site_sweep(
+        declared = sweep_sites(
             baseline,
             candidates={"broadcast": tl.func("linear")},
             edit=tl.zero_ablate(),
@@ -200,7 +200,7 @@ def test_site_sweep_duplicate_candidates_refuse_unless_replicates() -> None:
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates={"one": "relu_1_2", "two": "relu_1_2"},
             edit=tl.zero_ablate(),
@@ -210,7 +210,7 @@ def test_site_sweep_duplicate_candidates_refuse_unless_replicates() -> None:
             x=x,
         )
     assert excinfo.value.fields["code"] == "site_sweep_duplicate_candidates"
-    replicated = site_sweep(
+    replicated = sweep_sites(
         baseline,
         candidates={"one": "relu_1_2", "two": "relu_1_2"},
         edit=tl.zero_ablate(),
@@ -229,7 +229,7 @@ def test_effect_table_survives_save_load_and_unarmed_ledger(tmp_path) -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=["relu_1_2"],
         edit=tl.zero_ablate(),
@@ -256,7 +256,7 @@ def test_measure_members_reports_unmeasured_and_orders_by_the_chain() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=["relu_1_2", "tanh_1_4"],
         edit=tl.zero_ablate(),
@@ -294,7 +294,7 @@ def test_effects_selection_tier_c_conversion_in_session() -> None:
     model = _Tiny().eval()
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
-    bundle = site_sweep(
+    bundle = sweep_sites(
         baseline,
         candidates=["relu_1_2", "tanh_1_4"],
         edit=tl.zero_ablate(),
@@ -317,7 +317,7 @@ def test_site_sweep_engine_vocabulary_closed() -> None:
     x = torch.randn(2, 3)
     baseline = _baseline(x, model)
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),
@@ -339,7 +339,7 @@ def test_site_sweep_candidate_plan_shapes_refuse_typed() -> None:
     baseline = _baseline(x, model)
 
     def _sweep(candidates) -> None:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=candidates,
             edit=tl.zero_ablate(),
@@ -371,7 +371,7 @@ def test_site_sweep_keyless_baseline_refuses_typed() -> None:
     baseline = _baseline(x, model)
     baseline.ops["relu_1_2"].site_key = None  # simulate a legacy keyless capture
     with pytest.raises(BundleExperimentError) as excinfo:
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),
@@ -395,7 +395,7 @@ def test_effects_view_requires_a_stored_table() -> None:
         bare.effects()
     assert excinfo.value.fields["code"] == "effects_table_missing"
 
-    swept = site_sweep(
+    swept = sweep_sites(
         baseline,
         candidates={"relu": "relu_1_2"},
         edit=tl.zero_ablate(),
@@ -405,7 +405,7 @@ def test_effects_view_requires_a_stored_table() -> None:
         x=x,
     )
     with pytest.raises(BundleExperimentError) as excinfo:
-        swept.effects(operation_id="op_never_ran")
+        swept.effects(history_id="op_never_ran")
     assert excinfo.value.fields["code"] == "effects_table_missing"
 
 

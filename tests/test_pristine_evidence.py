@@ -304,7 +304,7 @@ def test_bundle_without_a_pristine_member_refuses_typed() -> None:
     bundle = tl.Bundle({"a": _ablated(model), "b": _steered(model)})
     assert bundle.baseline_name is None
     with pytest.raises(BaselineUndeterminedError):
-        bundle.most_changed()
+        bundle.rank_changes()
 
 
 def test_reading_the_flag_never_changes_the_plain_run_verdict() -> None:

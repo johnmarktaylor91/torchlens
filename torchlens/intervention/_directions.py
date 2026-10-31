@@ -360,10 +360,10 @@ def direction_from_pairs(
         origin=origin,
         method=method,
         sha256=_basis_digest(canonical),
-        n_vectors=1,
+        num_vectors=1,
         space_dim=int(canonical.shape[1]),
         dim=-1,
-        tol=0.0,
+        atol=0.0,
     )
     return Direction(
         vector=vector,

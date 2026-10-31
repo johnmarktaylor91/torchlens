@@ -96,7 +96,7 @@ class GradFnCall:
         "call_index": FieldPolicy.KEEP,
         "ordinal": FieldPolicy.KEEP,
         "backward_pass_index": FieldPolicy.KEEP,
-        "label": FieldPolicy.KEEP,
+        "grad_fn_label": FieldPolicy.KEEP,
         "grad_inputs": FieldPolicy.BLOB_RECURSIVE,
         "grad_outputs": FieldPolicy.BLOB_RECURSIVE,
         "intervention_fire_ref": FieldPolicy.KEEP,
@@ -109,7 +109,7 @@ class GradFnCall:
         GRAD_FN_PASS_LOG_FIELD_ORDER,
         {
             **PORTABLE_STATE_SPEC,
-            "call_label": PORTABLE_STATE_SPEC["label"],
+            "label": PORTABLE_STATE_SPEC["grad_fn_label"],
         },
         schema_key="grad_fn_call",
     )
@@ -118,7 +118,7 @@ class GradFnCall:
     call_index: int
     ordinal: int | None = None
     backward_pass_index: int | None = None
-    label: str = ""
+    grad_fn_label: str = ""
     grad_inputs: Any = None
     grad_outputs: Any = None
     intervention_fire_ref: object | None = None
@@ -231,7 +231,7 @@ class GradFnCall:
             self.call_index,
             self.ordinal,
             self.backward_pass_index,
-            self.label,
+            self.grad_fn_label,
             self.timestamp,
             self._time_started,
             self._time_finished,
@@ -254,7 +254,9 @@ class GradFnCall:
     def __hash__(self) -> int:
         """Hash on the immutable scalar identity fields (eq-consistent)."""
 
-        return hash((type(self).__name__, self.call_index, self.backward_pass_index, self.label))
+        return hash(
+            (type(self).__name__, self.call_index, self.backward_pass_index, self.grad_fn_label)
+        )
 
     @property
     def ordinal_index(self) -> int:
@@ -282,7 +284,7 @@ class GradFnCall:
         return cached[1].get(id(self), -1)
 
     @property
-    def call_label(self) -> str:
+    def label(self) -> str:
         """Return the pass-qualified GradFnCall label.
 
         Returns
@@ -291,7 +293,11 @@ class GradFnCall:
             GradFn label with the 1-based call index suffix.
         """
 
-        return f"{self.label}:{self.call_index}" if self.label else str(self.call_index)
+        return (
+            f"{self.grad_fn_label}:{self.call_index}"
+            if self.grad_fn_label
+            else str(self.call_index)
+        )
 
     @property
     def is_saved(self) -> bool:
@@ -351,7 +357,7 @@ _GRAD_FN_CALL_STORED_FIELDS: tuple[str, ...] = (
     "call_index",
     "ordinal",
     "backward_pass_index",
-    "label",
+    "grad_fn_label",
     "grad_inputs",
     "grad_outputs",
     "intervention_fire_ref",

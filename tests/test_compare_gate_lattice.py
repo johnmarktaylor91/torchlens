@@ -112,7 +112,7 @@ def test_leg1_identity_shortcircuit_same_shape_different_values_refuses() -> Non
     bundle = tl.bundle({"a": left, "b": right})
 
     # Path-1 shape: the relationship itself is identity-ranked.
-    assert bundle.relationship("a", "b") is Relationship.SAME_OBJECT
+    assert bundle.comparability("a", "b") is Relationship.SAME_OBJECT
 
     with pytest.raises(BundleRelationshipError) as excinfo:
         bundle.compare_at(tl.func("relu"))
@@ -168,7 +168,7 @@ def test_leg3_value_blind_hash_path_distinct_objects_refuses() -> None:
     bundle = tl.bundle({"a": left, "b": right})
 
     # The value-blind rank IS derived (shape-level vocabulary unchanged) ...
-    assert bundle.relationship("a", "b") is Relationship.SHARED_GRAPH_SAME_INPUT
+    assert bundle.comparability("a", "b") is Relationship.SHARED_GRAPH_SAME_INPUT
     # ... and is still not accepted as proof of input equality.
     with pytest.raises(BundleRelationshipError) as excinfo:
         bundle.compare_at(tl.func("relu"))
@@ -272,7 +272,7 @@ def test_operand_scoping_pair_reads_survive_a_foreign_member() -> None:
     )
 
     # The named pair a/b is clean: scoped read works.
-    rows = bundle.diff_pair("a", "b")
+    rows = bundle.compare("a", "b")
     assert isinstance(rows, list)
 
     # compare_at consumes ALL pairs, so the foreign member still refuses it.
@@ -286,7 +286,7 @@ def test_operand_scoping_pair_reads_survive_a_foreign_member() -> None:
 
     # most_changed compares baseline vs others: 'foreign' IS an operand there.
     with pytest.raises(BundleRelationshipError) as excinfo:
-        bundle.most_changed()
+        bundle.rank_changes()
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
 
 
@@ -312,19 +312,19 @@ def test_ordering_topology_refusal_direct_and_transitive() -> None:
 
     # Direct edge.
     with pytest.raises(BundleRelationshipError) as excinfo:
-        bundle.diff_pair("turn1", "turn2")
+        bundle.compare("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]
 
     # Transitive directed path turn3 -> turn2 -> turn1.
     with pytest.raises(BundleRelationshipError) as excinfo:
-        bundle.diff_pair("turn1", "turn3")
+        bundle.compare("turn1", "turn3")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of", "successor_of"]
 
     # Control: an identical bundle WITHOUT ordering rows passes the same read.
     control = tl.bundle({"turn1": _capture(model, x), "turn2": _capture(model, x)})
-    assert isinstance(control.diff_pair("turn1", "turn2"), list)
+    assert isinstance(control.compare("turn1", "turn2"), list)
 
 
 def test_ordering_siblings_and_alternatives_stay_comparable() -> None:
@@ -349,12 +349,12 @@ def test_ordering_siblings_and_alternatives_stay_comparable() -> None:
 
     # Siblings through a common predecessor are not on one directed path,
     # and alternative_of is deliberately not an ordering kind.
-    rows = bundle.diff_pair("turn2a", "turn2b")
+    rows = bundle.compare("turn2a", "turn2b")
     assert isinstance(rows, list)
 
     # The ordered pairs still refuse.
     with pytest.raises(BundleRelationshipError) as excinfo:
-        bundle.diff_pair("turn1", "turn2a")
+        bundle.compare("turn1", "turn2a")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
 
@@ -369,7 +369,7 @@ def test_topology_refusal_precedes_input_evidence() -> None:
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
 
     with pytest.raises(BundleRelationshipError) as excinfo:
-        bundle.diff_pair("turn1", "turn2")
+        bundle.compare("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
 
@@ -388,5 +388,5 @@ def test_fork_comparison_workflow_stays_open() -> None:
     bundle = tl.bundle({"clean": clean, "ablated": ablated}, baseline="clean")
     matrix = bundle.compare_at(tl.func("relu"))
     assert matrix.shape == (2, 2)
-    rows = bundle.most_changed()
+    rows = bundle.rank_changes()
     assert rows

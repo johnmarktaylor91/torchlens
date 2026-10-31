@@ -32,7 +32,7 @@ accessing an unadvertised name teaches the exact install command.
    ridge and linear CKA on one extraction (below).
 6. **Refusals**: noise ceilings, crossnobis/mahalanobis, searchlight,
    inferential bootstrap/permutation/model fitting (descriptive intervals on
-   TorchLens's own scores are `tl.repgeom.rdm_compare_interval` /
+   TorchLens's own scores are `tl.repgeom.compare_rdms_interval` /
    `cka_interval`), encoding-model inference, CCA/SVCCA/PWCCA,
    non-metric MDS, model zoos, brain data. Each attempted name raises a
    teaching refusal naming the owner, the missing ingredient, and the
@@ -172,7 +172,7 @@ is any `[n_stimuli, ...]` target for the same stimuli in the same order
 (recordings, or another model's features). Every score is a descriptive
 similarity on these stimuli:
 
-- `"rsa"`: `tl.repgeom.rdm_compare(rdm(site, rdm_metric), rdm(target,
+- `"rsa"`: `tl.repgeom.compare_rdms(rdm(site, rdm_metric), rdm(target,
   rdm_metric), rsa_method)`; defaults `rdm_metric="correlation"`,
   `rsa_method="spearman"`.
 - `"ridge"`: a cross-validated ridge score. The stimuli are split into
@@ -200,9 +200,9 @@ feature bank).
 
 ## Uncertainty on TorchLens's own scores
 
-`tl.repgeom.rdm_compare_interval(rdm_a, rdm_b, method, n_resamples=1000,
+`tl.repgeom.compare_rdms_interval(rdm_a, rdm_b, method, n_resamples=1000,
 seed=0, confidence=0.95)` and `tl.repgeom.cka_interval(a, b, ...)` return a
-`ScoreInterval`: the unchanged point score (exactly `rdm_compare`; linear CKA
+`ScoreInterval`: the unchanged point score (exactly `compare_rdms`; linear CKA
 as `tl.stats.cka` computes it) with a percentile bootstrap interval over
 stimuli beside it, plus the settings that made it (`n_resamples`, `n_valid`,
 `seed`, `confidence`, `basis`). RDM resamples drop the entries that pair a

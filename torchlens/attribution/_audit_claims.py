@@ -96,7 +96,7 @@ class _AuditPlan:
         return None
 
     def unit_scores(self) -> dict[tuple[int, ...], float]:
-        """Score every unit ablated alone, in one ``torchlens.experiment.site_sweep``.
+        """Score every unit ablated alone, in one ``torchlens.experiment.sweep_sites``.
 
         One candidate per unit, ``tl.units(label, mask)``, all with the one
         edit of this site (zero, mean or baseline); a candidate the sweep did

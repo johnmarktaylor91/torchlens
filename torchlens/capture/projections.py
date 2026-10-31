@@ -147,7 +147,7 @@ def _empty_recording(options: RecordingOptions) -> Recording:
         by_label={},
         by_address={},
         orphan_records=[],
-        bundle_path=(
+        path=(
             None
             if options.streaming is None or options.streaming.bundle_path is None
             else Path(options.streaming.bundle_path)
@@ -156,7 +156,7 @@ def _empty_recording(options: RecordingOptions) -> Recording:
         start_times=[],
         end_times=[],
         predicate_failures=[],
-        predicate_failure_overflow_count=0,
+        num_predicate_failure_overflows=0,
         halted=False,
         halt_reason=None,
         halts_by_pass={},
@@ -312,12 +312,12 @@ class RecordingState:
         if len(self.predicate_failures) < self.options.max_predicate_failures:
             self.predicate_failures.append(failure)
         else:
-            self.predicate_failure_overflow_count += 1
+            self.num_predicate_failure_overflows += 1
         object.__setattr__(self.recording, "predicate_failures", list(self.predicate_failures))
         object.__setattr__(
             self.recording,
             "predicate_failure_overflow_count",
-            self.predicate_failure_overflow_count,
+            self.num_predicate_failure_overflows,
         )
 
     def handle_predicate_exception(self, ctx: RecordContext, exc: BaseException) -> None:
@@ -332,7 +332,7 @@ class RecordingState:
 
         if self.effective_predicate_error_mode() != "accumulate":
             return
-        if not self.predicate_failures and self.predicate_failure_overflow_count == 0:
+        if not self.predicate_failures and self.num_predicate_failure_overflows == 0:
             return
         details = ""
         if self.predicate_failures:
@@ -341,8 +341,8 @@ class RecordingState:
             f"fastlog predicate failed during recording{details}. "
             "Remedy: fix the predicate; exc.failures carries the accumulated tracebacks.",
             failures=list(self.predicate_failures),
-            total_count=len(self.predicate_failures) + self.predicate_failure_overflow_count,
-            overflow=self.predicate_failure_overflow_count,
+            total_count=len(self.predicate_failures) + self.num_predicate_failure_overflows,
+            overflow=self.num_predicate_failure_overflows,
             code="predicate_evaluation_failed",
         )
 
@@ -395,7 +395,7 @@ def _normalize_module_stack(
                 address=str(frame.get("address", "")),
                 module_type=str(frame.get("module_type", "")),
                 module_id=int(frame.get("module_id", 0)),
-                pass_index=int(frame.get("pass_index", 0)),
+                pass_number=int(frame.get("pass_index", 0)),
             )
         )
     return tuple(frames)
@@ -462,7 +462,7 @@ def _build_record_context(
         kind=kind,
         label=str(label),
         raw_label=raw_label,
-        pass_index=pass_index,
+        pass_number=pass_index,
         event_index=event_index,
         step_index=step_index,
         layer_type=layer_type,
@@ -471,7 +471,7 @@ def _build_record_context(
         func_name=_read_field(data, "func_name"),
         address=_read_field(data, "address"),
         module_type=_read_field(data, "module_type"),
-        module_pass_index=_read_field(data, "module_pass_index"),
+        module_pass_number=_read_field(data, "module_pass_index"),
         module_stack=stack,
         recent_events=recent_events,
         recent_ops=_recent_ops_for_event(recent_events, include_source_events),
@@ -1514,7 +1514,7 @@ def _maybe_add_grad_fn_metadata_record(
         grad_kind="grad_output",
         has_forward_op=False,
         has_op=False,
-        pass_index=event.pass_index,
+        pass_number=event.pass_index,
         order=getattr(pass_record, "order", None),
         event_index=ordinal,
     )
@@ -1556,7 +1556,7 @@ def _grad_record_context_from_op_grad_event(
                 module_stack=tuple(getattr(fastlog_ctx, "module_stack", ()) or ()),
                 has_forward_op=True,
                 has_op=True,
-                pass_index=event.pass_index,
+                pass_number=event.pass_index,
                 order=getattr(pass_record, "order", None),
                 event_index=ordinal,
                 shape=event.shape,
@@ -1573,7 +1573,7 @@ def _grad_record_context_from_op_grad_event(
             grad_kind="grad_output",
             has_forward_op=False,
             has_op=False,
-            pass_index=event.pass_index,
+            pass_number=event.pass_index,
             order=getattr(pass_record, "order", None),
             event_index=ordinal,
             shape=event.shape,
@@ -1593,7 +1593,7 @@ def _grad_record_context_from_op_grad_event(
         module_stack=tuple(getattr(op, "module_stack", ()) or ()),
         has_forward_op=True,
         has_op=True,
-        pass_index=event.pass_index,
+        pass_number=event.pass_index,
         order=getattr(pass_record, "order", None),
         event_index=ordinal,
         shape=event.shape,

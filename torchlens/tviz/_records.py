@@ -272,15 +272,15 @@ class GqaInfo:
         presented as independent heads.
     """
 
-    n_query_heads: int
+    num_query_heads: int
     n_kv_heads: int
 
     def __post_init__(self) -> None:
         """Validate the grouping arithmetic."""
 
         _require(
-            self.n_kv_heads > 0 and self.n_query_heads % self.n_kv_heads == 0,
-            f"GQA grouping {self.n_query_heads} query heads over {self.n_kv_heads} kv heads "
+            self.n_kv_heads > 0 and self.num_query_heads % self.n_kv_heads == 0,
+            f"GQA grouping {self.num_query_heads} query heads over {self.n_kv_heads} kv heads "
             "does not divide evenly.",
             "pass the model config's real num_attention_heads / num_key_value_heads",
         )
@@ -288,7 +288,7 @@ class GqaInfo:
     def group_of(self, query_head: int) -> int:
         """Return the KV group index a query head reads from."""
 
-        return query_head // (self.n_query_heads // self.n_kv_heads)
+        return query_head // (self.num_query_heads // self.n_kv_heads)
 
     def header(self, query_head: int) -> str:
         """Return the rendered KV-group header line for one query head."""
@@ -298,7 +298,7 @@ class GqaInfo:
     def query_heads(self, group: int) -> tuple[int, ...]:
         """Return the query heads that read KV group ``group`` (zero-based)."""
 
-        per_group = self.n_query_heads // self.n_kv_heads
+        per_group = self.num_query_heads // self.n_kv_heads
         return tuple(range(group * per_group, (group + 1) * per_group))
 
     def group_header(self, group: int) -> str:

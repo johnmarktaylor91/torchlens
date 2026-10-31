@@ -229,7 +229,7 @@ def _renamed_rows(second: Bundle, prefix: str) -> tuple[list[dict[str, Any]], in
 
     rows: list[dict[str, Any]] = []
     opaque = 0
-    for row in second.member_relations:
+    for row in second.relations:
         if not isinstance(row, MemberRelationRow):
             opaque += 1
             continue

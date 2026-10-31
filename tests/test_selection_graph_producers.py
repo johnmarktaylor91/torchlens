@@ -207,7 +207,7 @@ def test_neighborhood_refuses_param_seed_typed() -> None:
     """PARAM operands refuse selection_kind_incompatible at construction."""
 
     with pytest.raises(SelectionError) as excinfo:
-        tl.neighborhood(tl.params("lin1.weight"))
+        tl.neighborhood(tl.param("lin1.weight"))
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 
@@ -291,7 +291,7 @@ def test_between_refusal_matrix(log) -> None:
     with pytest.raises(ValueError, match="at least one region"):
         tl.between([], "add_1_5")
     with pytest.raises(SelectionError) as excinfo:
-        tl.between(tl.params("lin1.weight"), "add_1_5")
+        tl.between(tl.param("lin1.weight"), "add_1_5")
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
     with pytest.raises(SelectionError) as unresolved:
         tl.between("nonexistent_9_9", "add_1_5").resolve(log)
@@ -444,7 +444,7 @@ def test_slice_lifts_back_into_the_algebra(log, loopy_log) -> None:
 
     view = log.between("linear_1_1", "add_1_5")
     lifted = view.__selection__()
-    assert isinstance(lifted, tl.Selection)  # a QUERY, like Op/Layer lifts
+    assert isinstance(lifted, tl.Selector)  # a QUERY, like Op/Layer lifts
     assert _labels(lifted.resolve(log)) == set(view.labels)
     composed = (view & tl.units(_RELU, [(0, 0)])).resolve(log)
     assert _labels(composed) == {_RELU}
@@ -473,7 +473,7 @@ def test_subgraph_refusal_matrix(log) -> None:
     """Non-ACT regions and non-selection garbage refuse typed."""
 
     with pytest.raises(SelectionError) as excinfo:
-        log.subgraph(tl.params("lin1.weight"))
+        log.subgraph(tl.param("lin1.weight"))
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
     with pytest.raises(ValueError, match="selection-shaped"):
         log.subgraph(42)

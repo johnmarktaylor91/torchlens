@@ -126,9 +126,9 @@ def _fake_capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
     trace.module_identity_mode = "function_root"
     trace.param_source = "none"
     trace.model_class_name = "_FakeModel"
-    trace.model_label = "_FakeModel"
+    trace.model_name = "_FakeModel"
     trace.model_class_qualname = "tests.test_backend_registry._FakeModel"
-    trace.trace_label = "fake-backend-trace"
+    trace.name = "fake-backend-trace"
     for layer in trace.layer_list:
         layer.resolver_status = "metadata_only"
         layer.backend_address = f"fake:{layer.layer_label}"
@@ -899,7 +899,7 @@ def test_paddle_preview_applies_static_label_save_selector() -> None:
         model,
         paddle.to_tensor([-1.0, 2.0]),
         backend="paddle",
-        save=tl.contains("relu"),
+        save=tl.label_contains("relu"),
     )
 
     saved_ops = [op for op in trace.layer_list if op.has_saved_activation]

@@ -65,9 +65,9 @@ import torch
 
 from .errors._base import TorchLensWarning
 from .selection import (
-    ResolvedSelection,
     Selection,
     SelectionProvenance,
+    Selector,
     SiteEntry,
     _join_relation,
     _mask_from_dense,
@@ -433,7 +433,7 @@ def _refuse_self_comparison(node: _CompareTerm, trace: Any) -> None:
         )
 
 
-def _resolve_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
+def _resolve_changed(node: _CompareTerm, trace: Any) -> Selection:
     """Resolve the elementwise delta-bound criterion exactly."""
 
     _refuse_self_comparison(node, trace)
@@ -457,10 +457,10 @@ def _resolve_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
             dense &= compared < node.below
         dense &= entry._mask._dense_ro()
         entries.append(_entry_with_mask(entry, dense, "exact", source))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
-def _resolve_top_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
+def _resolve_top_changed(node: _CompareTerm, trace: Any) -> Selection:
     """Resolve the global delta-rank criterion exactly.
 
     Ranking is GLOBAL across the population with a deterministic tie-break:
@@ -526,10 +526,10 @@ def _resolve_top_changed(node: _CompareTerm, trace: Any) -> ResolvedSelection:
         dense = selected_flat[offset : offset + span].reshape(entry.shape)
         offset += span
         entries.append(_entry_with_mask(entry, dense, "exact", source))
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
-def _resolve_compare_term(node: _CompareTerm, trace: Any) -> ResolvedSelection:
+def _resolve_compare_term(node: _CompareTerm, trace: Any) -> Selection:
     """Resolve one differential term against the subject trace's payloads."""
 
     if node.criterion == "changed":
@@ -544,7 +544,7 @@ def changed(
     above: float | None = None,
     below: float | None = None,
     by: str = "abs",
-) -> Selection:
+) -> Selector:
     """Select elements whose value differs from a reference run's ("what moved?").
 
     The delta is DIRECTIONAL — ``subject - reference``, where the SUBJECT is
@@ -575,7 +575,7 @@ def changed(
         above = _validate_real_number(above, "above", "changed")
     if below is not None:
         below = _validate_real_number(below, "below", "changed")
-    return Selection(
+    return Selector(
         _CompareTerm(
             criterion="changed",
             reference=reference,
@@ -596,7 +596,7 @@ def top_changed(
     fraction: float | None = None,
     by: str = "abs",
     largest: bool = True,
-) -> Selection:
+) -> Selector:
     """Select the elements that changed most (or least) versus a reference run.
 
     Globally ranks ``subject - reference`` deltas across the whole population
@@ -628,7 +628,7 @@ def top_changed(
         fraction = _validate_real_number(fraction, "fraction", "top_changed")
         if not 0.0 <= fraction <= 1.0:
             raise ValueError(f"top_changed `fraction` must be in [0, 1]; got {fraction!r}.")
-    return Selection(
+    return Selector(
         _CompareTerm(
             criterion="top_changed",
             reference=reference,
@@ -671,7 +671,7 @@ class _PassTerm:
 
 
 def _pass_groups(
-    node: _PassTerm, population: ResolvedSelection, producer: str
+    node: _PassTerm, population: Selection, producer: str
 ) -> list[tuple[str, list[SiteEntry]]]:
     """Group population entries per layer and select each layer's pass window.
 
@@ -791,7 +791,7 @@ def _disclose_episode_pass_axis(trace: Any, producer: str, layer_labels: list[st
     )
 
 
-def _resolve_pass_term(node: _PassTerm, trace: Any) -> ResolvedSelection:
+def _resolve_pass_term(node: _PassTerm, trace: Any) -> Selection:
     """Resolve one cross-pass statistic against a capture's per-pass payloads.
 
     The element population per layer is the INTERSECTION of the window
@@ -854,15 +854,15 @@ def _resolve_pass_term(node: _PassTerm, trace: Any) -> ResolvedSelection:
             )
     if resolved_layers:
         _disclose_episode_pass_axis(trace, producer, resolved_layers)
-    return ResolvedSelection(trace, "ACT", entries)
+    return Selection(trace, "ACT", entries)
 
 
 def stable_across_passes(
     within: Any = None,
     *,
-    tol: float = 0.0,
+    atol: float = 0.0,
     passes: Any = None,
-) -> Selection:
+) -> Selector:
     """Select units stable across a recurrent layer's passes (its occurrences).
 
     Per element of each multi-pass layer in the population, computes the
@@ -888,14 +888,14 @@ def stable_across_passes(
     complement ``~stable_across_passes(...)``. DOCUMENTED-UNSTABLE spelling.
     """
 
-    tol = _validate_real_number(tol, "tol", "stable_across_passes")
-    if tol < 0:
-        raise ValueError(f"stable_across_passes `tol` must be non-negative; got {tol!r}.")
-    return Selection(
+    atol = _validate_real_number(atol, "tol", "stable_across_passes")
+    if atol < 0:
+        raise ValueError(f"stable_across_passes `tol` must be non-negative; got {atol!r}.")
+    return Selector(
         _PassTerm(
             stat="stable",
             within=_lift_within(within, "stable_across_passes"),
-            tol=tol,
+            tol=atol,
             passes=_validate_passes(passes, "stable_across_passes"),
         ),
         kind="ACT",
@@ -908,7 +908,7 @@ def pass_variance(
     above: float | None = None,
     below: float | None = None,
     passes: Any = None,
-) -> Selection:
+) -> Selector:
     """Select units by their variance across a recurrent layer's passes.
 
     Per element, computes the unbiased (n-1) variance in float64 of the
@@ -940,7 +940,7 @@ def pass_variance(
         above = _validate_real_number(above, "above", "pass_variance")
     if below is not None:
         below = _validate_real_number(below, "below", "pass_variance")
-    return Selection(
+    return Selector(
         _PassTerm(
             stat="variance",
             within=_lift_within(within, "pass_variance"),
