@@ -1,0 +1,72 @@
+# Proposed CODEOWNERS for torchlens
+#
+# Drafted for review; the live file belongs at .github/CODEOWNERS and is
+# installed by the CI owner. One line per top-level package, the maintainer
+# from pyproject.toml authors. Add a second handle to a line when a package
+# gains a co-maintainer; more specific paths later in the file win.
+
+*                                   @johnmarktaylor91
+/pyproject.toml                     @johnmarktaylor91
+/test-tiers.json                    @johnmarktaylor91
+/.github/                           @johnmarktaylor91
+/docs/                              @johnmarktaylor91
+/docs/maintainers/                  @johnmarktaylor91
+/tests/                             @johnmarktaylor91
+/tools/                             @johnmarktaylor91
+/scripts/                           @johnmarktaylor91
+/torchlens/*.py                     @johnmarktaylor91
+/torchlens/_data_substrate/          @johnmarktaylor91
+/torchlens/_extraction/              @johnmarktaylor91
+/torchlens/_io/                      @johnmarktaylor91
+/torchlens/_registry/                @johnmarktaylor91
+/torchlens/_trace_core/              @johnmarktaylor91
+/torchlens/_vocab/                   @johnmarktaylor91
+/torchlens/accessors/                @johnmarktaylor91
+/torchlens/agent/                    @johnmarktaylor91
+/torchlens/attribution/              @johnmarktaylor91
+/torchlens/autoroute/                @johnmarktaylor91
+/torchlens/backends/                 @johnmarktaylor91
+/torchlens/bridge/                   @johnmarktaylor91
+/torchlens/bundle/                   @johnmarktaylor91
+/torchlens/callbacks/                @johnmarktaylor91
+/torchlens/capture/                  @johnmarktaylor91
+/torchlens/checks/                   @johnmarktaylor91
+/torchlens/compat/                   @johnmarktaylor91
+/torchlens/conformance/              @johnmarktaylor91
+/torchlens/data_classes/             @johnmarktaylor91
+/torchlens/debug/                    @johnmarktaylor91
+/torchlens/distributed/              @johnmarktaylor91
+/torchlens/ecosystem/                @johnmarktaylor91
+/torchlens/errors/                   @johnmarktaylor91
+/torchlens/examples/                 @johnmarktaylor91
+/torchlens/experiment/               @johnmarktaylor91
+/torchlens/experimental/             @johnmarktaylor91
+/torchlens/export/                   @johnmarktaylor91
+/torchlens/fastlog/                  @johnmarktaylor91
+/torchlens/intervention/             @johnmarktaylor91
+/torchlens/io/                       @johnmarktaylor91
+/torchlens/ir/                       @johnmarktaylor91
+/torchlens/mechinterp/               @johnmarktaylor91
+/torchlens/merged/                   @johnmarktaylor91
+/torchlens/neuro/                    @johnmarktaylor91
+/torchlens/notebook/                 @johnmarktaylor91
+/torchlens/observability/            @johnmarktaylor91
+/torchlens/observe/                  @johnmarktaylor91
+/torchlens/partial/                  @johnmarktaylor91
+/torchlens/postprocess/              @johnmarktaylor91
+/torchlens/preprocessing/            @johnmarktaylor91
+/torchlens/quickstart/               @johnmarktaylor91
+/torchlens/receptive_field/          @johnmarktaylor91
+/torchlens/repgeom/                  @johnmarktaylor91
+/torchlens/report/                   @johnmarktaylor91
+/torchlens/schemas/                  @johnmarktaylor91
+/torchlens/semantic/                 @johnmarktaylor91
+/torchlens/snoop/                    @johnmarktaylor91
+/torchlens/stats/                    @johnmarktaylor91
+/torchlens/trackers/                 @johnmarktaylor91
+/torchlens/transforms/               @johnmarktaylor91
+/torchlens/tviz/                     @johnmarktaylor91
+/torchlens/utils/                    @johnmarktaylor91
+/torchlens/validation/               @johnmarktaylor91
+/torchlens/visualization/            @johnmarktaylor91
+/torchlens/viz/                      @johnmarktaylor91
