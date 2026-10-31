@@ -4,6 +4,7 @@
 
 | File | Purpose |
 |------|---------|
+| `build_torchlens_theme_gallery.py` | Generate visualization theme gallery artifacts (dagua renderer) |
 | `check_ci_executed_tests.py` | Executed-floor attestation over a junit XML (wired into CI legs) |
 | `check_flops_coverage.py` | Report FLOPs handler coverage (`torchlens/capture/flops.py`) against decorated torch functions |
 | `check_no_breaking_markers.py` | Reject semantic-release major-bump markers (commit-msg / pre-push hooks + the lint release-defenses CI scan) |
@@ -11,6 +12,7 @@
 | `no_major_parser.py` | Semantic-release parser layer that blocks major versions (behavioral tests: `tests/test_no_major_parser.py`) |
 | `normalize_sdist.py` | Deterministic sdist/wheel normalization for reproducible releases (invoked by `build_command` + the nightly double-build gate) |
 | `render_collapse_reference.py` | Regenerate the collapse reference images |
+| `render_large_graph.py` | Render synthetic large graphs with layout backends |
 
 ## Release Safety
 The release pipeline has three defenses against accidental major bumps:
@@ -24,3 +26,12 @@ Do not edit release scripts as part of docs or feature work unless explicitly re
 `check_flops_coverage.py` compares `capture/flops.py` rule coverage with
 `constants.ORIG_TORCH_FUNCS` and groups uncovered functions. Use it after changing FLOPs
 handlers or torch function discovery.
+
+## Large Graph Rendering
+
+```bash
+python scripts/render_large_graph.py 250000
+python scripts/render_large_graph.py 1000000 --format png --seed 123
+```
+
+Use this for stress-testing rank layout behavior, not for normal unit tests.
