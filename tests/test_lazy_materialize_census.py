@@ -13,6 +13,7 @@ accounts for them without exempting anything a value could flow through.
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch import nn
 
@@ -60,7 +61,12 @@ def _materialization_rows(trace: tl.Trace) -> list[dict[str, object]]:
 def test_pending_slot_data_reads_are_state_view_accessors_for_a_module_built_in_forward() -> None:
     wrap_torch(completeness_witness=True)
     torch.manual_seed(0)
-    trace = tl.trace(LazyBuiltInForward().eval(), [torch.randn(BATCH, WIDTH)])
+    # The parameters a module built inside forward creates are still outside the
+    # session inventory (no prep stamp), so the capture discloses them as
+    # source-less arguments; that provenance gap is a separate, open piece of the
+    # same finding and this test pins only the census accounting.
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        trace = tl.trace(LazyBuiltInForward().eval(), [torch.randn(BATCH, WIDTH)])
     rows = _materialization_rows(trace)
     # weight and bias, device and dtype read each: four value-free views of pending slots
     assert len(rows) == 4
