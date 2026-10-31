@@ -95,7 +95,7 @@ def test_module_recursive_params_memory_and_call_tree() -> None:
         "head.weight",
         "head.bias",
     ]
-    assert root.param_memory == trace.total_param_memory
+    assert root.param_memory == trace.cost.total_param_memory
     assert block.num_recursive_params == 2
     assert block.num_recursive_param_tensors == 2
     assert len(block_descendants) == block.num_descendant_calls

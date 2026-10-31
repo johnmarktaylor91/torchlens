@@ -224,7 +224,7 @@ def _escape_signal(trace: Trace) -> str | None:
     no-provenance source), the flag is a false alarm and no rescue runs.
     """
 
-    if getattr(trace, "capture_verified", None) is True:
+    if getattr(trace, "_provenance_verified", None) is True:
         return None
     if getattr(trace, "escape_diagnostics", None):
         return "escape_detector_diagnostic"
@@ -414,7 +414,7 @@ def _partial_buffer_write_labels(exc: BaseException) -> tuple[str, ...] | None:
     trace = getattr(partial, "trace", None)
     if trace is None:
         return None
-    if getattr(trace, "capture_mode", None) != "exhaustive":
+    if getattr(trace, "_options_mode", None) != "exhaustive":
         # The buffer-write tracker only arms exhaustive sessions; an empty
         # journal on any other mode proves nothing.
         return None
@@ -604,8 +604,8 @@ def _mark(trace: Trace, reason: str, info: dict[str, Any]) -> None:
     all; ``mode_rescue_rerun`` replaces only a generic or absent reason.
     """
 
-    trace.capture_verified = False
-    existing_reason = getattr(trace, "capture_verification_reason", None)
+    trace._provenance_verified = False
+    existing_reason = getattr(trace, "_provenance_verification_reason", None)
     if getattr(trace, "_raw_dynamo_region_detected", False) or (
         existing_reason in _SPECIFIC_VERIFICATION_REASONS
     ):
@@ -615,7 +615,7 @@ def _mark(trace: Trace, reason: str, info: dict[str, Any]) -> None:
         # ``rescue_rerun`` below.
         pass
     elif reason == "mode_rescue_rerun" or not existing_reason:
-        trace.capture_verification_reason = reason
+        trace._provenance_verification_reason = reason
     trace.rescue_rerun = info
 
 

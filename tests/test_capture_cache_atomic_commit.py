@@ -56,7 +56,7 @@ def test_crash_at_the_legacy_tag_seam_never_leaves_a_torn_entry(tmp_path, monkey
     model = _CacheModel()
     x = torch.randn(1, 4)
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     entry = _single_entry(tmp_path)
     secret = user_funcs._capture_cache_secret(entry.parent)
 
@@ -139,7 +139,7 @@ def test_committed_entry_is_self_authenticating(tmp_path) -> None:
         "the authenticated entry must be one atomic record, not a payload/tag pair"
     )
     second = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is True
+    assert second.provenance.cache_hit is True
 
 
 @pytest.mark.smoke

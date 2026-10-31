@@ -44,8 +44,8 @@ __tl_layer__ = "L1"
 # load validation; the "health_facts" and "capture_advisories" annotation
 # families are admitted as reserved keys; and the entry-dark field slots for
 # injection provenance (Op.injection_provenance), source snapshots
-# (Trace.source_snapshots + FuncCallLocation.source_file_digest), and the
-# structure-only evidence envelope (Trace.structure_evidence) are declared
+# (Trace.source.snapshots + FuncCallLocation.source_file_digest), and the
+# structure-only evidence envelope (Trace.graph.structure_evidence) are declared
 # with fail-closed load validation so their Phase-3 writers (F01/F30/F33)
 # need no further version bump.
 # The C07X amendment rides the SAME v9 window (TLSPEC_VERSION stays 9;
@@ -58,7 +58,7 @@ __tl_layer__ = "L1"
 # rows, arithmetic cache_len DELETED for the measured carried-state witness
 # slots entry_state_digest/exit_state_digest, capture_digest +
 # perturbed/intervention_digest/fire_count coupling slots, optional
-# step_join); the Trace.root_entry_point identity fact (written
+# step_join); the Trace.provenance.root_entry_point identity fact (written
 # unconditionally) with the Op.tl_authored_root marker and Op.episode_step
 # stamp -- all with fail-closed load validation so the F40b/F40c/F41/F42/
 # F-EPISODE/F-WITNESS writers need no further version bump.

@@ -292,20 +292,20 @@ def _make_trace_pickleable(trace: Any) -> None:
                 state[field_name] = value.detach().cpu()
             elif field_name in {"grad_fn_handle"}:
                 state[field_name] = None
-    if hasattr(trace, "input_object_id"):
-        trace.input_object_id = 0
-    if hasattr(trace, "model_object_id"):
-        trace.model_object_id = 0
+    if hasattr(trace, "_provenance_input_object_id"):
+        trace._provenance_input_object_id = 0
+    if hasattr(trace, "_provenance_model_object_id"):
+        trace._provenance_model_object_id = 0
     if hasattr(trace, "_source_code_blob"):
         trace._source_code_blob = {}
-    if hasattr(trace, "forward_source_file"):
-        trace.forward_source_file = None
-    if hasattr(trace, "forward_source_line"):
-        trace.forward_source_line = None
-    if hasattr(trace, "class_source_file"):
-        trace.class_source_file = None
-    if hasattr(trace, "class_source_line"):
-        trace.class_source_line = None
+    if hasattr(trace, "_source_forward_file"):
+        trace._source_forward_file = None
+    if hasattr(trace, "_source_forward_line"):
+        trace._source_forward_line = None
+    if hasattr(trace, "_source_class_file"):
+        trace._source_class_file = None
+    if hasattr(trace, "_source_class_line"):
+        trace._source_class_line = None
     if hasattr(trace, "name"):
         trace.name = "capture_events_parity"
     _drop_capture_scratch(trace)

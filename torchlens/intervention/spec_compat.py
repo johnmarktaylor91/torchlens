@@ -270,7 +270,7 @@ def check_spec_compat(spec: InterventionSpec, trace: Any) -> SpecCompat:
         Compatibility classification and target diff.
     """
 
-    graph_hash = getattr(trace, "graph_shape_hash", None)
+    graph_hash = getattr(trace, "_provenance_fingerprint", None)
     res = _ManifestResolution()
     for index, entry in enumerate(spec.metadata.get("target_manifest", [])):
         _fold_entry(res, entry, index, _resolve_entry(trace, entry, graph_hash))

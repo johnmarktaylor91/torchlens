@@ -378,7 +378,7 @@ def span(
     _state._active_record_spans.set(_state._active_record_spans.get() + (span_record,))
     trace = _state._active_trace
     if trace is not None:
-        trace.observer_spans.append(span_record)
+        trace._provenance_observer_spans.append(span_record)
     try:
         yield span_record
     finally:

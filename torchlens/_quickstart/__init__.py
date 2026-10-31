@@ -9,7 +9,7 @@ The quickstart package (workstream F17; quickstart panel memo of record
 - rung 3: nothing -- inferred shape, synthesized values, disclosed or a teach.
 
 Every synthesized input is disclosed in a provenance record that survives
-save/load on the existing ``Trace.input_preprocessor`` KEEP field, and the
+save/load on the existing ``Trace.provenance.input_preprocessor`` KEEP field, and the
 capability gate refuses derived-semantics claims on synthesized values.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint; the

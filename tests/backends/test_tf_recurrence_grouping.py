@@ -80,7 +80,7 @@ def test_tf_repeated_dense_groups_into_passes() -> None:
     matmul_ops = _grouped_ops(trace, "MatMul")
     relu_ops = _grouped_ops(trace, "Relu")
 
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     assert [op.pass_index for op in matmul_ops] == [1, 2, 3]
     assert [op.pass_index for op in relu_ops] == [1, 2, 3]
     assert {op.layer_label for op in matmul_ops} == {matmul_ops[0].layer_label}
@@ -180,7 +180,7 @@ def test_tf_static_funcgraph_path_stays_ungrouped() -> None:
     compiled(inputs)
     trace = tl.trace(compiled, inputs, backend="tf")
 
-    assert trace.recurrence_detection is False
+    assert trace.options.recurrence_detection is False
     assert all(op.num_passes == 1 for op in trace.layer_list)
 
 

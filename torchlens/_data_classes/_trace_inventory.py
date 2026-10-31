@@ -154,7 +154,7 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
     from .._quantities import Bytes
 
     outcome = getattr(trace, "outcome", None)
-    capture_duration = getattr(trace, "capture_duration", None)
+    capture_duration = getattr(trace, "_provenance_duration", None)
     from .._capture_honesty import capture_advisories, poison_facts
     from ..report._factcore import factcore
 
@@ -167,14 +167,14 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
     logged_values = (getattr(trace, "annotations", {}) or {}).get("logged_values", {})
     return {
         "capture": {
-            "backend": getattr(trace, "backend", None),
-            "model_class_name": getattr(trace, "model_class_name", None),
+            "backend": getattr(trace, "_provenance_backend", None),
+            "_source_class_name": getattr(trace, "_source_class_name", None),
             "outcome_status": getattr(getattr(outcome, "status", None), "value", None),
-            "capture_verified": getattr(trace, "capture_verified", None),
-            "structure_only": getattr(trace, "structure_only", False),
-            "grouping": getattr(trace, "grouping", None),
-            "save_mode": getattr(trace, "save_mode", None),
-            "capture_duration": capture_duration,
+            "_provenance_verified": getattr(trace, "_provenance_verified", None),
+            "structure_only": getattr(trace, "_options_structure_only", False),
+            "grouping": getattr(trace, "_options_grouping", None),
+            "save_mode": getattr(trace, "_options_save_mode", None),
+            "_provenance_duration": capture_duration,
             **poison_facts(trace),
             "advisories": capture_advisories(trace),
         },
@@ -191,7 +191,7 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "num_outputs": len(getattr(trace, "output_ops", ()) or ()),
             "is_recurrent": getattr(getattr(trace, "graph", None), "is_recurrent", False),
             "has_conditionals": getattr(getattr(trace, "graph", None), "has_conditionals", False),
-            "num_conditionals": len(getattr(trace, "conditionals", ())),
+            "num_conditionals": len(getattr(trace, "_graph_conditionals", ())),
         },
         "parameters": {
             "num_params": core.params.total,
@@ -199,7 +199,7 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "num_params_frozen": core.params.frozen,
             "tied_param_groups": core.params.tied_groups,
             "num_param_tensors": len(getattr(trace, "params", {}) or {}),
-            "param_memory": getattr(trace, "total_param_memory", None),
+            "param_memory": getattr(trace, "_cost_total_param_memory", None),
         },
         "buffers": {
             "num_buffer_tensors": len(getattr(trace, "buffers", {}) or {}),
@@ -216,7 +216,7 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "retained_now_memory": Bytes(memory_facts.retained_bytes),
             "num_present_now": memory_facts.retained_present_ops,
             "num_lazy_now": memory_facts.retained_lazy_ops,
-            "total_activation_memory": getattr(trace, "total_activation_memory", None),
+            "_cost_total_activation_memory": getattr(trace, "_cost_total_activation_memory", None),
         },
         "backward": {
             "num_grad_fn_records": len(getattr(trace, "grad_fn_logs", {}) or {}),

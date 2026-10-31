@@ -1,4 +1,4 @@
-"""``Trace.pinned_autograd_memory`` discloses what the default attached save keeps alive (R2-37).
+"""``Trace.cost.pinned_autograd_memory`` discloses what the default attached save keeps alive (R2-37).
 
 The default save keeps autograd history (``detach_saved_activations=False``, unchanged
 here), so every graph-connected payload pins the tensors autograd saved for the
@@ -41,9 +41,9 @@ def test_default_save_discloses_exact_pinned_bytes() -> None:
     model = _mlp()
     trace = tl.trace(model, torch.randn(2, 4))
 
-    assert trace.detach_saved_activations is False
+    assert trace.options.detach_saved_activations is False
     assert trace["0"].out.grad_fn is not None
-    assert int(trace.pinned_autograd_memory) == (2 * 4 + 2 * 3) * 4
+    assert int(trace.cost.pinned_autograd_memory) == (2 * 4 + 2 * 3) * 4
 
 
 def test_detached_and_no_grad_saves_pin_nothing() -> None:
@@ -87,9 +87,9 @@ def test_pickle_and_deepcopy_read_none() -> None:
     import pickle
 
     trace = tl.trace(_mlp(), torch.randn(2, 4))
-    assert trace.pinned_autograd_memory is not None
+    assert trace.cost.pinned_autograd_memory is not None
 
-    assert pickle.loads(pickle.dumps(trace)).pinned_autograd_memory is None
+    assert pickle.loads(pickle.dumps(trace)).cost.pinned_autograd_memory is None
     assert copy.deepcopy(trace).pinned_autograd_memory is None
 
 
@@ -102,4 +102,4 @@ def test_forged_restored_state_never_surfaces_a_number() -> None:
     restored = object.__new__(type(trace))
     restored.__setstate__(state)
 
-    assert restored.pinned_autograd_memory is None
+    assert restored.cost.pinned_autograd_memory is None

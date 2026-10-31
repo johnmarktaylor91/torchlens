@@ -931,7 +931,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     flops_evidence = _flops_evidence_by_label(aggregation)
     flops_by_label = _flops_values_by_label(aggregation)
     owners = _innermost_call_by_label(trace)
-    structure_only = bool(getattr(trace, "structure_only", False))
+    structure_only = bool(getattr(trace, "_options_structure_only", False))
 
     rows, row_evidence = _assemble_level_rows(
         trace,
@@ -994,8 +994,8 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     outcome = getattr(trace, "outcome", None)
     status_value = getattr(getattr(outcome, "status", None), "value", None)
     capture_status = str(status_value) if status_value is not None else "unknown"
-    capture_verified = getattr(trace, "capture_verified", None)
-    capture_verification_reason = getattr(trace, "capture_verification_reason", None)
+    capture_verified = getattr(trace, "_provenance_verified", None)
+    capture_verification_reason = getattr(trace, "_provenance_verification_reason", None)
     rescue_rerun = bool(getattr(trace, "rescue_rerun", None) or False)
     verification = {
         "capture_status": capture_status,

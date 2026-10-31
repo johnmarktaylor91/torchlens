@@ -1558,7 +1558,7 @@ def snapshot_buffer_args(
 ) -> list[BufferSnapshot]:
     """Snapshot buffer-backed arguments for one wrapped torch call."""
 
-    if trace.capture_mode != "exhaustive":
+    if trace._options_mode != "exhaustive":
         return []
     tracker = peek_buffer_write_tracker(trace)
     if not isinstance(tracker, BufferWriteTracker):

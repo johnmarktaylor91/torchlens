@@ -124,10 +124,10 @@ def _refuse_backward_evidence_without_registry(trace: Trace, name: str) -> None:
             f"num_backward_passes={num_backward_passes} exceeds the "
             f"{len(backward_pass_logs)} recorded pass record(s)"
         )
-    grad_fn_order = getattr(trace, "grad_fn_order", None) or ()
+    grad_fn_order = getattr(trace, "_autograd_grad_fn_order", None) or ()
     if grad_fn_order:
         evidence.append(f"grad_fn_order holds {len(grad_fn_order)} id(s)")
-    root_ids = getattr(trace, "backward_root_grad_fn_object_ids", None) or ()
+    root_ids = getattr(trace, "_autograd_backward_root_grad_fn_object_ids", None) or ()
     if root_ids:
         evidence.append(f"backward_root_grad_fn_object_ids holds {len(root_ids)} id(s)")
     if evidence:
@@ -162,12 +162,12 @@ def _check_backward_grad_fn_registry(trace: Trace, name: str) -> set[int]:
     """
 
     grad_fn_ids = set(trace.grad_fn_logs)
-    order_ids = set(trace.grad_fn_order)
+    order_ids = set(trace._autograd_grad_fn_order)
     if not order_ids <= grad_fn_ids:
         missing = sorted(order_ids - grad_fn_ids)
         raise MetadataInvariantError(name, f"grad_fn_order contains unknown ids {missing!r}")
 
-    root_ids = trace.backward_root_grad_fn_object_ids
+    root_ids = trace._autograd_backward_root_grad_fn_object_ids
     if not isinstance(root_ids, list):
         raise MetadataInvariantError(
             name,

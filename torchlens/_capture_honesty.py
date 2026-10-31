@@ -114,8 +114,8 @@ def capture_verification(log: Any) -> dict[str, Any]:
     status_value = getattr(status, "value", None)
     return {
         "capture_status": str(status_value) if status_value is not None else "unknown",
-        "capture_verified": getattr(log, "capture_verified", None),
-        "capture_verification_reason": getattr(log, "capture_verification_reason", None),
+        "capture_verified": getattr(log, "_provenance_verified", None),
+        "capture_verification_reason": getattr(log, "_provenance_verification_reason", None),
         "rescue_rerun": bool(getattr(log, "rescue_rerun", None) or False),
     }
 
@@ -252,7 +252,7 @@ def record_host_tensor_source_advisory(trace: Any) -> None:
         Completed capture.
     """
 
-    if getattr(trace, "capture_verified", None) is not None:
+    if getattr(trace, "_provenance_verified", None) is not None:
         return
     annotations = getattr(trace, "annotations", None)
     if not isinstance(annotations, dict):
@@ -387,7 +387,7 @@ def capture_honesty_facts(log: Any) -> dict[str, Any]:
     facts: dict[str, Any] = {
         "schema": CAPTURE_HONESTY_SCHEMA,
         **capture_verification(log),
-        "structure_only": bool(getattr(log, "structure_only", False)),
+        "structure_only": bool(getattr(log, "_options_structure_only", False)),
         **poison_facts(log),
     }
     if facts["structure_only"]:
@@ -422,7 +422,7 @@ def _structure_evidence_facts(log: Any) -> dict[str, Any]:
         "claim_status": claim_status_for(log).value,
         "values_available": False,
     }
-    envelope = getattr(log, "structure_evidence", None)
+    envelope = getattr(log, "_graph_structure_evidence", None)
     if isinstance(envelope, dict):
         facts["substrate"] = envelope.get("substrate")
         facts["structure_evidence"] = envelope

@@ -283,7 +283,7 @@ def _validate_site_keys(trace: Trace) -> None:
             )
 
     minter = SiteKeyMinter()
-    backend = str(getattr(trace, "backend", "torch") or "torch")
+    backend = str(getattr(trace, "_provenance_backend", "torch") or "torch")
     for op, key in zip(ops, keys, strict=True):
         if backend == JAX_BACKEND_NAME:
             from ..backends.jax._site_dialect import _jax_site_components
@@ -324,7 +324,7 @@ def _validate_site_keys(trace: Trace) -> None:
 
 
 def _validate_distributed_scope(trace: Trace) -> None:
-    """Validate the closed ``Trace.distributed_scope`` vocabulary.
+    """Validate the closed ``Trace.provenance.distributed_scope`` vocabulary.
 
     Parameters
     ----------
@@ -332,12 +332,12 @@ def _validate_distributed_scope(trace: Trace) -> None:
         Loaded trace carrying the shard-local disclosure marker.
     """
 
-    value = getattr(trace, "distributed_scope", None)
+    value = getattr(trace, "_provenance_distributed_scope", None)
     if value not in (None, "rank_local_shard"):
         _refuse(
             f"expected None or 'rank_local_shard', got {value!r}",
             code="artifact_distributed_scope_invalid",
-            field="Trace.distributed_scope",
+            field="Trace.provenance.distributed_scope",
             reason="vocabulary",
             remedy="re-save the source trace; do not invent distributed-scope markers",
         )
@@ -1284,7 +1284,7 @@ def _structure_only_invalid(message: str, reason: str) -> NoReturn:
     _refuse(
         message,
         code="artifact_structure_only_incoherent",
-        field="Trace.structure_only",
+        field="Trace.options.structure_only",
         reason=reason,
         remedy=(
             "re-capture and re-save with one current TorchLens version; do "
@@ -1797,7 +1797,7 @@ def _snapshot_invalid(message: str, reason: str) -> NoReturn:
     _refuse(
         message,
         code="artifact_source_snapshots_invalid",
-        field="Trace.source_snapshots",
+        field="Trace.source.snapshots",
         reason=reason,
         remedy="re-capture and re-save; do not hand-edit the source-snapshot table",
     )
@@ -1884,7 +1884,7 @@ def _evidence_invalid(message: str, reason: str) -> NoReturn:
     _refuse(
         message,
         code="artifact_structure_evidence_invalid",
-        field="Trace.structure_evidence",
+        field="Trace.graph.structure_evidence",
         reason=reason,
         remedy=(
             "re-capture structure-only and re-save with one current "

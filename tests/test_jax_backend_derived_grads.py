@@ -148,12 +148,12 @@ def test_jax_derived_grads_match_value_and_grad_oracle() -> None:
         params, x
     )
 
-    assert set(trace.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
-    assert jnp.allclose(trace.derived_grads["params.w"].grad, expected_param_grads["w"])
-    assert jnp.allclose(trace.derived_grads["params.b"].grad, expected_param_grads["b"])
-    assert jnp.allclose(trace.derived_grads["inputs.0"].grad, expected_x_grad)
-    assert trace.params["w"].grad is trace.derived_grads["params.w"].grad
-    assert trace.params["b"].grad is trace.derived_grads["params.b"].grad
+    assert set(trace.autograd.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
+    assert jnp.allclose(trace.autograd.derived_grads["params.w"].grad, expected_param_grads["w"])
+    assert jnp.allclose(trace.autograd.derived_grads["params.b"].grad, expected_param_grads["b"])
+    assert jnp.allclose(trace.autograd.derived_grads["inputs.0"].grad, expected_x_grad)
+    assert trace.params["w"].grad is trace.autograd.derived_grads["params.w"].grad
+    assert trace.params["b"].grad is trace.autograd.derived_grads["params.b"].grad
     assert trace.params["w"].has_grad
 
 
@@ -169,7 +169,7 @@ def test_jax_intermediate_derived_grads_remain_deferred_with_leaf_grads() -> Non
         grad_options=GradOptions(params=params, loss_fn=_loss, input_grad_argnums=(0,)),
     )
 
-    assert set(trace.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
+    assert set(trace.autograd.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
     assert len(trace.autograd.intermediate_derived_grads) == 0
     assert not hasattr(trace, "jax_intermediate_derived_grads")
 
@@ -194,7 +194,7 @@ def test_jax_intermediate_derived_grads_zero_tap_public_surface() -> None:
     tanh_op = next(op for op in trace.layer_list if op.func_name == "tanh")
     expected_tanh_grad = 2.0 * tanh_op.out
 
-    assert set(trace.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
+    assert set(trace.autograd.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
     assert len(trace.autograd.intermediate_derived_grads) > 0
     assert tanh_op.label in trace.autograd.intermediate_derived_grads
     assert jnp.allclose(tanh_op.derived_grad, expected_tanh_grad)
@@ -346,7 +346,7 @@ def test_jax_intermediate_derived_grads_degrade_to_leaf_grads(monkeypatch: Any) 
         ),
     )
 
-    assert set(trace.derived_grads.keys()) == {"params.b", "params.w"}
+    assert set(trace.autograd.derived_grads.keys()) == {"params.b", "params.w"}
     assert len(trace.autograd.intermediate_derived_grads) == 0
     assert trace.jax_intermediate_derived_grad_status["status"] == "degraded"
 
@@ -430,7 +430,7 @@ def test_jax_derived_grads_allow_scalar_output_without_loss_fn() -> None:
         grad_options=GradOptions(params=params),
     )
 
-    assert jnp.allclose(trace.derived_grads["params.w"].grad, x)
+    assert jnp.allclose(trace.autograd.derived_grads["params.w"].grad, x)
 
 
 def test_jax_derived_grads_reject_non_scalar_output_without_loss_fn() -> None:

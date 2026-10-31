@@ -497,7 +497,7 @@ def _append_state_for_json(log: Any) -> dict[str, Any]:
         if isinstance(record, dict) and record.get("op") == "append"
     ]
     return {
-        "is_appended": bool(getattr(log, "is_appended", False)),
+        "is_appended": bool(getattr(log, "_provenance_is_appended", False)),
         "append_sequence_id": int(getattr(log, "_append_sequence_id", 0)),
         "append_history": list(getattr(log, "append_history", [])),
         "state_history": append_records,
@@ -1727,7 +1727,7 @@ def _build_target_manifest(
                     "resolved_labels": [],
                     "resolved_status": status,
                     "resolution_error": str(exc),
-                    "graph_shape_hash": getattr(log, "graph_shape_hash", None),
+                    "graph_shape_hash": getattr(log, "_provenance_fingerprint", None),
                     "_address_normalized": _normalized_address(target),
                 }
             )
@@ -1742,7 +1742,7 @@ def _build_target_manifest(
                 # legacy captures) record None.
                 "resolved_site_keys": _site_keys_for_table(log, resolved),
                 "resolved_status": "resolved",
-                "graph_shape_hash": getattr(log, "graph_shape_hash", None),
+                "graph_shape_hash": getattr(log, "_provenance_fingerprint", None),
                 "_address_normalized": _normalized_address(target),
             }
         )

@@ -137,16 +137,19 @@ def test_tf_leaf_input_and_param_grads_match_direct_reference() -> None:
 
     kernel_address = next(key for key in trace.params.keys() if key.endswith("kernel"))
     bias_address = next(key for key in trace.params.keys() if key.endswith("bias"))
-    assert set(trace.derived_grads.keys()) == {
+    assert set(trace.autograd.derived_grads.keys()) == {
         "inputs.0",
         f"params.{kernel_address}",
         f"params.{bias_address}",
     }
-    _assert_close(trace.derived_grads["inputs.0"].grad, expected[0])
-    _assert_close(trace.derived_grads[f"params.{kernel_address}"].grad, expected[1])
-    _assert_close(trace.derived_grads[f"params.{bias_address}"].grad, expected[2])
-    assert trace.params[kernel_address].grad is trace.derived_grads[f"params.{kernel_address}"].grad
-    record = trace.derived_grads["inputs.0"]
+    _assert_close(trace.autograd.derived_grads["inputs.0"].grad, expected[0])
+    _assert_close(trace.autograd.derived_grads[f"params.{kernel_address}"].grad, expected[1])
+    _assert_close(trace.autograd.derived_grads[f"params.{bias_address}"].grad, expected[2])
+    assert (
+        trace.params[kernel_address].grad
+        is trace.autograd.derived_grads[f"params.{kernel_address}"].grad
+    )
+    record = trace.autograd.derived_grads["inputs.0"]
     assert record.provenance["backend"] == "tf"
     assert record.provenance["mechanism"] == "tf.GradientTape"
 
@@ -159,7 +162,7 @@ def test_tf_derived_grads_do_not_create_backward_logs() -> None:
     model(x)
     trace = tl.trace(model, x, backend="tf", grad_options=GradOptions(loss_fn=_loss))
 
-    assert trace.has_backward_pass is False
+    assert trace.autograd.has_backward_pass is False
     assert not trace.backward_pass_logs
     assert not trace.grad_fn_logs
     with pytest.raises(ValueError, match="derived_grads"):

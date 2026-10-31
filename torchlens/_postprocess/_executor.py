@@ -127,7 +127,7 @@ def _run_step_4(ctx: StepContext) -> None:
 
 
 def _should_run_step_4(ctx: StepContext) -> bool:
-    """Gate step 4 on the opt-in ``Trace.mark_layer_depths`` flag."""
+    """Gate step 4 on the opt-in ``Trace.options.mark_layer_depths`` flag."""
 
     return bool(ctx.trace.mark_layer_depths)
 
@@ -156,11 +156,11 @@ def _run_step_7(ctx: StepContext) -> None:
     trace = ctx.trace
     loop_desc = (
         "  Step 7: Loop detection (full)"
-        if trace.recurrence_detection
+        if trace._options_recurrence_detection
         else "  Step 7: Loop detection (params only)"
     )
     with _vtimed(trace, loop_desc):
-        if trace.recurrence_detection:
+        if trace._options_recurrence_detection:
             _pp()._detect_and_label_loops(trace)
         else:
             _pp()._group_by_shared_params(trace)
@@ -296,7 +296,7 @@ def _run_step_16_5(ctx: StepContext) -> None:
     trace = ctx.trace
     with _vtimed(trace, "  Step 16.5: Graph shape hash"):
         module.populate_normalized_layer_addresses(trace)
-        trace.graph_shape_hash = module.compute_graph_shape_hash(trace)
+        trace._provenance_fingerprint = module.compute_graph_shape_hash(trace)
 
 
 def _run_step_17(ctx: StepContext) -> None:

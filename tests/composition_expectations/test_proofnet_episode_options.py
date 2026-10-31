@@ -368,7 +368,7 @@ def test_bound_method_episode_defaults_stepped_module_to_owner() -> None:
     classification, _ = _expect("bound_method_default_owner")
     assert classification == COUPLED
     assert trace.outcome.status.name == "COMPLETE"
-    assert str(trace.root_entry_point).startswith("bound_method:")
+    assert str(trace.provenance.root_entry_point).startswith("bound_method:")
     rows = trace.annotations["episode"]["rows"]
     assert len(rows) == 3 and all(row["status"] == "complete" for row in rows), (
         "default-owner stepping did not attribute the three generate steps"

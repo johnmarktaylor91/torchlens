@@ -28,7 +28,7 @@ def test_one_linear_closed_form_pins() -> None:
     log = tl.trace(model, torch.randn(2, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
     try:
         assert int(log.cost.total_flops_forward) == 544  # 2*2*8*16 + 2*16 bias adds
-        assert int(log.total_activation_memory) == 192  # 64 input + 128 output
+        assert int(log.cost.total_activation_memory) == 192  # 64 input + 128 output
         output_rows = [op for op in log.layer_list if op.is_output]
         assert output_rows and all(op.flops_forward is None for op in output_rows)
     finally:

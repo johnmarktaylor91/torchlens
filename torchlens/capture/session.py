@@ -602,10 +602,10 @@ class CaptureSession:
                     detached_spills += int(
                         attached_escrow
                         and payload_entry.tensor is None
-                        and not trace.backward_ready
+                        and not trace._options_backward_ready
                     )
                     payload = payload_entry.materialize()
-                if trace.backward_ready:
+                if trace._options_backward_ready:
                     payload = self.gradient_reference_escrow.get(op.raw_index, payload)
                 if payload is None and getattr(op, "layer_type", None) == "output":
                     for parent_label in op.parents:
@@ -614,7 +614,7 @@ class CaptureSession:
                         parent_payload_entry = self.activation_escrow.get(parent.raw_index)
                         if payload is None and parent_payload_entry is not None:
                             payload = parent_payload_entry.materialize()
-                        if trace.backward_ready:
+                        if trace._options_backward_ready:
                             payload = self.gradient_reference_escrow.get(parent.raw_index, payload)
                         if payload is not None:
                             break
@@ -632,7 +632,7 @@ class CaptureSession:
                     (),
                     {},
                     False,
-                    getattr(trace, "activation_transform", None),
+                    getattr(trace, "_options_activation_transform", None),
                 )
             if detached_spills:
                 from .._utils.display import user_stacklevel
@@ -797,13 +797,17 @@ class CaptureSession:
                     getattr(getattr(tensor, "_tl", None), "label_raw", None)
                     for tensor in (output_tensors or ())
                 ),
-                "capture_start_time": getattr(trace, "capture_start_time", 0),
-                "setup_duration": getattr(trace, "setup_duration", 0),
-                "forward_duration": getattr(trace, "forward_duration", 0),
-                "forward_peak_memory": getattr(trace, "forward_peak_memory", None),
-                "forward_peak_memory_reason": getattr(trace, "forward_peak_memory_reason", None),
-                "forward_memory_backend": getattr(trace, "forward_memory_backend", None),
-                "random_seed": getattr(trace, "random_seed", None),
+                "capture_start_time": getattr(trace, "_provenance_start_time", 0),
+                "setup_duration": getattr(trace, "_provenance_setup_duration", 0),
+                "forward_duration": getattr(trace, "_cost_forward_duration", 0),
+                "forward_peak_memory": getattr(trace, "_cost_forward_peak_memory", None),
+                "forward_peak_memory_reason": getattr(
+                    trace, "_cost_forward_peak_memory_reason", None
+                ),
+                "forward_memory_backend": getattr(
+                    trace, "_provenance_forward_memory_backend", None
+                ),
+                "random_seed": getattr(trace, "_options_seed", None),
                 "source_model_ref": getattr(trace, "_source_model_ref", None),
                 "layer_counter": getattr(getattr(trace, "_raw_graph_ws", None), "layer_counter", 0),
             }
@@ -937,7 +941,7 @@ def compile_legacy_capture_plan(
         Immutable mirror of today's already-validated intent.
     """
 
-    capture_mode = str(getattr(trace, "capture_mode", "exhaustive"))
+    capture_mode = str(getattr(trace, "_options_mode", "exhaustive"))
     projection_target = "trace" if postprocess else "recording"
     # This is a compatibility-only demand declaration.  Existing producers
     # continue to choose their historical work; no extra metadata or payload
@@ -949,7 +953,7 @@ def compile_legacy_capture_plan(
     deferred_selector = getattr(trace, "_deferred_retention_selector", None)
     deferred_activation = bool(deferred_selector)
     deferred_gradients = bool(getattr(trace, "_deferred_gradient_selector", None))
-    graph_connected = bool(getattr(trace, "backward_ready", False))
+    graph_connected = bool(getattr(trace, "_options_backward_ready", False))
     from .._trace_selector_helpers import _selector_requires_unwindowed_escrow
 
     negative_windows = _negative_selector_windows(layers_to_save)
@@ -995,7 +999,7 @@ def compile_legacy_capture_plan(
         activation_attached=(
             deferred_activation
             and not graph_connected
-            and not bool(getattr(trace, "detach_saved_activations", True))
+            and not bool(getattr(trace, "_options_detach_saved_activations", True))
         ),
     )
     return CapturePlan.compile(
@@ -1010,12 +1014,12 @@ def compile_legacy_capture_plan(
             "lookback_payload_policy": getattr(trace, "_predicate_lookback_payload_policy", None),
         },
         backward={
-            "backward_ready": getattr(trace, "backward_ready", False),
+            "backward_ready": getattr(trace, "_options_backward_ready", False),
             "save_gradients": getattr(trace, "save_gradients", False),
         },
         execution_context={
             "random_seed": seed,
-            "inference_only": getattr(trace, "inference_only", False),
+            "inference_only": getattr(trace, "_options_inference_only", False),
         },
         stop_policy=getattr(trace, "_stop_directive", None),
         backend_name=backend_name,

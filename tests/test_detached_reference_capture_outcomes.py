@@ -150,8 +150,8 @@ def _assert_rescued(trace: tl.Trace, *expected: str) -> None:
     a silent miss must be impossible.
     """
     _assert_captured(trace, *expected)
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "mode_rescue_rerun"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "mode_rescue_rerun"
     info = trace.rescue_rerun
     assert info is not None and info["recovered"] is True
     if info["primary_error"] is not None:
@@ -166,8 +166,8 @@ def _assert_rescued(trace: tl.Trace, *expected: str) -> None:
 def _assert_unrecovered_disclosed(trace: tl.Trace, missing: str) -> None:
     """The escape stands (beyond any mode) but is DISCLOSED, never silent."""
     assert missing not in _op_names(trace)
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "escape_rescue_unrecovered"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "escape_rescue_unrecovered"
     info = trace.rescue_rerun
     assert info is not None and info["recovered"] is False
 
@@ -252,7 +252,7 @@ def test_model_instance_holders_are_captured(corpus_env: _CorpusEnv) -> None:
     trace = tl.trace(model, torch.tensor([0.25, 0.5]))
     _assert_captured(trace, "relu", "sigmoid", "tanh", "cos")
     assert trace.rescue_rerun is None
-    assert trace.capture_verification_reason != "mode_rescue_rerun"
+    assert trace.provenance.verification_reason != "mode_rescue_rerun"
     names = _op_names(trace)
     assert names.count("relu") == 1
     assert names.count("sigmoid") == 2  # list holder + partial.args holder

@@ -156,7 +156,7 @@ def test_nested_tensor_bearing_input_records_recursively() -> None:
         (DictKey("items"), TupleIndex(0)),
         (DictKey("items"), TupleIndex(1)),
     ]
-    assert trace.input_structure.kind == "dict"
+    assert trace.provenance.input_structure.kind == "dict"
 
 
 def test_same_site_input_output_mutation_has_distinct_snapshots() -> None:

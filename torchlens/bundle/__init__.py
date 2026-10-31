@@ -2407,9 +2407,9 @@ class Bundle:
             Fingerprint value.
         """
 
-        return getattr(log, "param_hash_full", None) or getattr(
+        return getattr(log, "_provenance_param_hash_full", None) or getattr(
             log,
-            "param_hash_quick",
+            "_provenance_param_hash_quick",
             None,
         )
 

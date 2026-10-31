@@ -39,7 +39,7 @@
     `seq`/`prev_event_digest` hash-chain slots); `"sidecar"` persists plainly with
     envelope-shape load validation; `"health_facts"`/`"capture_advisories"` are reserved
     annotation families; entry-dark declared slots `Op.injection_provenance` (F01 writes),
-    `Trace.source_snapshots` (F30), `Trace.structure_evidence` (F33) validate fail-closed.
+    `Trace.source.snapshots` (F30), `Trace.graph.structure_evidence` (F33) validate fail-closed.
     Contract of record `torchlens/schemas/writer_contract_v9.json`; the field-intent
     census is maintained privately.
 9c. The C07X amendment rides the same v9 window (TLSPEC_VERSION stays 9): bundle relation
@@ -56,7 +56,7 @@
     source disclosure, tail-aligned `step_axis`, minted `capture_digest`; generic
     `step_output`; `cache_len` DELETED for the channel-keyed
     `entry_state_digest`/`exit_state_digest` carried-state witness slots; v1/foreign
-    versions quarantine), and entry-dark slots `Trace.root_entry_point` (written unconditionally),
+    versions quarantine), and entry-dark slots `Trace.provenance.root_entry_point` (written unconditionally),
     `Op.episode_step`, `Op.tl_authored_root` with fail-closed validation.
 9d. tlspec v10 (batch-2 coordinated schema write): one bump for every new saved
     field of the window, each admitted by the v10 field registry
@@ -103,7 +103,7 @@
     `backends/torch/_script_boundary.py`, same core): its dispatches are owned by the audited
     `jit_script:boundary` token and replay calls the function again; a call that writes into a
     tensor argument in place is never collapsed and stays a census gap.
-14. Public backend-neutral state (`Trace.backend`, `module_identity_mode`, `param_source`,
+14. Public backend-neutral state (`Trace.provenance.backend`, `module_identity_mode`, `param_source`,
     `dtype_ref`, `device_ref`, `backend_address`, `resolver_status`) must stay in docs,
     glossary, FIELD_ORDER, and serialization compatibility gates together.
 15. TensorFlow `backend="tf"` / `backend="tensorflow"` targets Keras 3 on TF>=2.16 with

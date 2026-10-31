@@ -259,8 +259,8 @@ def capture_fingerprint(trace: Any) -> str:
         label_digest.update(str(getattr(op, "layer_label", "?")).encode())
         label_digest.update(b"|")
     parts = (
-        str(getattr(trace, "backend", None)),
-        str(getattr(trace, "model_class_name", None)),
+        str(getattr(trace, "_provenance_backend", None)),
+        str(getattr(trace, "_source_class_name", None)),
         str(len(ops)),
         str(getattr(trace, "num_params", None)),
         label_digest.hexdigest()[:16],

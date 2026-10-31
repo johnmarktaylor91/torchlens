@@ -584,7 +584,7 @@ def _store_annotation_tensor(trace: Any, key: str, tensor: torch.Tensor) -> None
 
     if not isinstance(tensor, torch.Tensor):
         raise TypeError("_store_annotation_tensor requires a torch.Tensor payload.")
-    backend_name = str(getattr(trace, "backend", "torch"))
+    backend_name = str(getattr(trace, "_provenance_backend", "torch"))
     if backend_name != "torch":
         raise ValueError(
             "Tensor annotation blobs are supported only for torch traces in this "

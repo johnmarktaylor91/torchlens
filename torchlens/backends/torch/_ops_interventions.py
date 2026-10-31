@@ -323,7 +323,7 @@ def _apply_predicate_mode_interventions_to_outputs(
             pass_index=state.pass_index,
             event_index=state.event_index + output_ordinal,
             step_index=state.step_index + output_ordinal,
-            capture_start_time=trace.capture_start_time,
+            capture_start_time=trace._provenance_start_time,
             include_source_events=state.options.include_source_events,
             sample_id=state.sample_id,
             address=module_frame.address if module_frame else None,

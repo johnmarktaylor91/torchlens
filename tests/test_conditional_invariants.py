@@ -195,8 +195,8 @@ def _get_only_event(trace: Trace) -> ConditionalEvent:
         The lone conditional event.
     """
 
-    assert len(trace.conditional_records) == 1
-    return trace.conditional_records[0]
+    assert len(trace.graph.conditional_records) == 1
+    return trace.graph.conditional_records[0]
 
 
 def _get_only_terminal_bool(trace: Trace) -> Op:
@@ -310,7 +310,7 @@ def test_invariant_1_arm_edges_bidirectional_consistency() -> None:
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
         event = _get_only_event(trace)
-        parent_label, child_label = trace.conditional_arm_entry_edges[(event.id, "then")][0]
+        parent_label, child_label = trace.graph.conditional_arm_entry_edges[(event.id, "then")][0]
         parent_layer = trace.layer_logs[parent_label]
         parent_layer.conditional_arm_children[event.id]["then"] = [
             label
@@ -328,7 +328,7 @@ def test_invariant_2_derived_child_views_match_primary_structures() -> None:
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
         event = _get_only_event(trace)
-        parent_label, _child_label = trace.conditional_arm_entry_edges[(event.id, "then")][0]
+        parent_label, _child_label = trace.graph.conditional_arm_entry_edges[(event.id, "then")][0]
         parent_layer = trace[parent_label]
         parent_layer.conditional_then_children = []
         _assert_invariant_error(trace, ("Invariant 2", "conditional_then_children"))
@@ -341,12 +341,12 @@ def test_invariant_3_child_labels_exist_in_trace() -> None:
 
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
-        parent_label = trace.conditional_branch_edges[0][0]
+        parent_label = trace.graph.conditional_branch_edges[0][0]
         missing_label = "missing_bool_layer"
         trace[parent_label].conditional_entry_children = tuple(
             trace[parent_label].conditional_entry_children
         ) + (missing_label,)
-        trace.conditional_branch_edges.append((parent_label, missing_label))
+        trace.graph.conditional_branch_edges.append((parent_label, missing_label))
         _assert_invariant_error(trace, ("Invariant 3", missing_label))
     finally:
         trace.cleanup()
@@ -447,9 +447,9 @@ def test_invariant_10_conditional_edge_call_indices_reject_invalid_pass() -> Non
 
     trace = _log_model(AlternatingRecurrentIfModel(), torch.ones(1, 4))
     try:
-        edge_key = next(iter(trace.conditional_edge_call_indices))
-        existing_ops = trace.conditional_edge_call_indices[edge_key]
-        trace.conditional_edge_call_indices[edge_key] = sorted(existing_ops + [0])
+        edge_key = next(iter(trace.graph.conditional_edge_call_indices))
+        existing_ops = trace.graph.conditional_edge_call_indices[edge_key]
+        trace.graph.conditional_edge_call_indices[edge_key] = sorted(existing_ops + [0])
         _assert_invariant_error(trace, ("Invariant 10", "pass 0"))
     finally:
         trace.cleanup()
@@ -496,7 +496,7 @@ def test_invariant_13_legacy_if_view_is_bidirectionally_consistent() -> None:
             for layer in trace.layer_list
             if bool_label not in layer.conditional_entry_children
         )
-        trace.conditional_branch_edges.append((parent_label, bool_label))
+        trace.graph.conditional_branch_edges.append((parent_label, bool_label))
         _assert_invariant_error(trace, ("Invariant 13", "conditional_branch_edges"))
     finally:
         trace.cleanup()
@@ -514,16 +514,16 @@ def test_invariant_14_arm_entry_edges_must_be_real_graph_edges() -> None:
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
         event = _get_only_event(trace)
-        parent_label, _child_label = trace.conditional_arm_entry_edges[(event.id, "then")][0]
+        parent_label, _child_label = trace.graph.conditional_arm_entry_edges[(event.id, "then")][0]
         bogus_child_label = trace.input_layers[0]
         assert bogus_child_label not in trace.layer_logs[parent_label].children
 
-        trace.conditional_arm_entry_edges[(event.id, "then")].append(
+        trace.graph.conditional_arm_entry_edges[(event.id, "then")].append(
             (parent_label, bogus_child_label)
         )
-        trace.conditional_edge_call_indices[(parent_label, bogus_child_label, event.id, "then")] = [
-            1
-        ]
+        trace.graph.conditional_edge_call_indices[
+            (parent_label, bogus_child_label, event.id, "then")
+        ] = [1]
 
         parent_layer_log = trace.layer_logs[parent_label]
         parent_layer_log.conditional_arm_children[event.id]["then"].append(bogus_child_label)

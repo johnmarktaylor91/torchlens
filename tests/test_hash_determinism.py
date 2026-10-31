@@ -457,7 +457,7 @@ def _trace_hash_pair(model: nn.Module, example_input: Any) -> HashPair:
     """
 
     trace = _trace_model(model, example_input)
-    return str(trace.graph_shape_hash), str(trace._raw_event_shape_hash)  # noqa: SLF001
+    return str(trace.provenance.fingerprint), str(trace._raw_event_shape_hash)  # noqa: SLF001
 
 
 def _graph_hash_for_tiny_mlp(seed: int, device: str = "cpu") -> str:

@@ -51,7 +51,7 @@ def _structure_capture(**trace_kwargs):
 
 
 def test_structure_only_defaults_false_and_validates_bool() -> None:
-    assert CaptureOptions().structure_only is False
+    assert CaptureOptions().options.structure_only is False
     assert CaptureOptions(structure_only=True).structure_only is True
     with pytest.raises(ArgumentTypeError) as excinfo:
         CaptureOptions(structure_only="yes")  # type: ignore[arg-type]
@@ -62,7 +62,7 @@ def test_grouped_structure_only_reaches_the_field() -> None:
     from torchlens.options import CaptureOptions
 
     merged = CaptureOptions(structure_only=True)
-    assert merged.structure_only is True
+    assert merged.options.structure_only is True
     assert merged.is_field_explicit("structure_only")
 
 
@@ -94,7 +94,7 @@ def test_torch_declares_and_binds_the_structure_only_capability() -> None:
 
 def test_e1_all_real_flag_on_capture_is_marked_gated_and_payload_free() -> None:
     log = _structure_capture()
-    assert log.structure_only is True
+    assert log.options.structure_only is True
     # No value payloads are retained anywhere: the contract records structure
     # and shape/dtype hypotheses only.
     for layer in log.layer_list:
@@ -106,7 +106,7 @@ def test_e1_all_real_flag_on_capture_is_marked_gated_and_payload_free() -> None:
 
 def test_e6_flag_off_default_capture_is_zero_diff() -> None:
     log = tl.trace(TwoLayer(), torch.randn(2, 4))
-    assert log.structure_only is False
+    assert log.options.structure_only is False
     assert log["relu_1_2"].out is not None
 
 
@@ -155,7 +155,7 @@ def test_value_free_structured_halt_stays_legal() -> None:
     value-free (structured selectors)."""
 
     log = _structure_capture(halt=tl.func("relu"))
-    assert log.structure_only is True
+    assert log.options.structure_only is True
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +201,7 @@ def test_explicit_metadata_only_save_stays_legal() -> None:
         torch.randn(2, 4),
         capture=CaptureOptions(structure_only=True, layers_to_save="none"),
     )
-    assert log.structure_only is True
+    assert log.options.structure_only is True
 
 
 # ---------------------------------------------------------------------------

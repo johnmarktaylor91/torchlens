@@ -523,7 +523,7 @@ class Recorder:
             backward_ready=True,
             inference_only=inference_only,
         )
-        trace.capture_mode = "predicate"
+        trace._options_mode = "predicate"
         trace._fastlog_recording = self._state.recording
         trace._predicate_save_options = self.options
         trace._stop_directive = StopDirective(
@@ -577,7 +577,7 @@ class Recorder:
                 max(self._state.recording.num_ops, self._next_pass_index),
             )
             self._mark_halted_pass(
-                self._next_pass_index, halt_exc, inference_only=trace.inference_only
+                self._next_pass_index, halt_exc, inference_only=trace._options_inference_only
             )
             if self._echo_session is not None:
                 # Halted is not failed: no crash tail, one typed disclosure.

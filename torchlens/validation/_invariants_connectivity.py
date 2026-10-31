@@ -48,7 +48,7 @@ def _check_distance_invariants(ml: Trace) -> None:
     - input_ancestors subset of input_layers; output_descendants subset of
       output_layers.
     """
-    if not ml.mark_layer_depths:
+    if not ml._options_mark_layer_depths:
         return
 
     name = "distance_invariants"
@@ -833,7 +833,7 @@ def _metadata_invariant_contracts_for_trace(
 
     from ..backends.registry import get_backend_spec
 
-    spec = get_backend_spec(getattr(trace, "backend", "torch"))
+    spec = get_backend_spec(getattr(trace, "_provenance_backend", "torch"))
     torch_spec = get_backend_spec("torch")
     backend_family: Literal["torch", "non_torch"] = "torch" if spec is torch_spec else "non_torch"
     return _metadata_invariant_contracts_for_backend(backend_family, spec=spec)

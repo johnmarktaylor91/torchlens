@@ -325,22 +325,22 @@ def _reset_backward_projection(log: Trace) -> None:
     log.__dict__.pop("_backward_projection_event_count", None)
     log.__dict__.pop("_backward_projection_revision", None)
     log.__dict__.pop("_backward_projection_fold_state", None)
-    log.has_backward_pass = False
-    log.has_gradients = False
+    log._autograd_has_backward_pass = False
+    log._autograd_has_grads = False
     log._saved_grad_labels = set()
     log.grad_fn_logs = OrderedDict()
-    log.grad_fn_order = []
+    log._autograd_grad_fn_order = []
     log.backward_pass_logs = OrderedDict()
-    log.backward_root_grad_fn_object_ids = []
-    log.backward_durations = []
+    log._autograd_backward_root_grad_fn_object_ids = []
+    log._cost_backward_durations = []
     log.num_backward_passes = 0
-    log.backward_peak_memory = Bytes(0)
+    log._cost_backward_peak_memory = Bytes(0)
     log.backward_peak_memory_reason = None
-    log.total_backward_memory = Bytes(0)
-    log.total_gradient_memory = Bytes(0)
-    log.saved_gradient_memory = Bytes(0)
-    log.total_param_gradient_memory = Bytes(0)
-    log.backward_memory_backend = "unknown"
+    log._cost_total_backward_memory = Bytes(0)
+    log._cost_total_grad_memory = Bytes(0)
+    log._cost_saved_grad_memory = Bytes(0)
+    log._cost_total_param_grad_memory = Bytes(0)
+    log._provenance_backward_memory_backend = "unknown"
     log._replay_frontier = {}
     for op in getattr(log, "layer_list", ()):
         _clear_op_gradient_projection(op)

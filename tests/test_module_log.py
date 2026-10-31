@@ -194,8 +194,8 @@ class TestModuleLogFields:
             capture=tl.options.CaptureOptions(save_source_context=True),
         )
         ml = log.modules["0"]
-        assert ml.class_source_file is not None  # nn.Linear has inspectable source
-        assert ml.forward_signature is not None
+        assert ml.source.class_file is not None  # nn.Linear has inspectable source
+        assert ml.source.forward_signature is not None
 
     def test_hierarchy_address(self):
         log = trace_fn(_make_nested_model(), _nested_input())

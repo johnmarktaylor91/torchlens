@@ -40,7 +40,7 @@ def test_mlx_linear_mlp_smoke() -> None:
     log = tl.trace(model, x)
 
     assert log.num_ops > 0
-    assert log.has_backward_pass is False
+    assert log.autograd.has_backward_pass is False
     assert any("linear" in label.lower() for label in log.layer_labels)
     assert log.num_ops in (3, 4, 5)
     for op_label in log.op_labels:

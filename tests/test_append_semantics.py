@@ -71,13 +71,13 @@ def test_is_appended_resets_on_non_append_rerun() -> None:
     )
     trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
-    assert trace.is_appended is True
+    assert trace.provenance.is_appended is True
     assert trace._append_sequence_id == 1
 
     with pytest.warns(ControlFlowDivergenceWarning, match="raw-event shape hash diverged"):
         trace.run(model, torch.randn(4, 3))
 
-    assert trace.is_appended is False
+    assert trace.provenance.is_appended is False
     assert trace._append_sequence_id == 0
     assert trace.append_history == []
     assert _first_batch_out(trace).shape[0] == 4
@@ -96,7 +96,7 @@ def test_repeated_appends_increment_sequence_id_and_history() -> None:
     trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
     trace.run(model, torch.randn(3, 3), replay=ReplayOptions(append=True))
 
-    assert trace.is_appended is True
+    assert trace.provenance.is_appended is True
     assert trace._append_sequence_id == 2
     assert [record["append_sequence_id"] for record in trace.append_history] == [1, 2]
     assert [record["chunk_size"] for record in trace.append_history] == [1, 3]

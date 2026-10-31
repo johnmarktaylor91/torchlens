@@ -125,8 +125,8 @@ def _planted_disclosing_trace() -> tl.Trace:
     trace.__dict__["_capture_outcome"] = dataclasses.replace(
         trace.outcome, status=CaptureStatus.UNATTESTED
     )
-    trace.capture_verified = False
-    trace.capture_verification_reason = "PROBE_REASON"
+    trace._provenance_verified = False
+    trace._provenance_verification_reason = "PROBE_REASON"
     trace.rescue_rerun = True
     trace._runnable.poisoned = True
     trace._runnable.path_faithfulness = PathFaithfulness.DIVERGED

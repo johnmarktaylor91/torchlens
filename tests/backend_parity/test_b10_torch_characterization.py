@@ -249,7 +249,7 @@ def test_halt_signal_returns_partial_trace_from_predicate_capture() -> None:
     # paths, so halt provenance is a stable public label that matches across
     # capture modes (was raw "relu_1_3_raw", capture-mode-local).
     assert trace.stop_reason == "relu_1_2"
-    assert trace.halt_frontier == "relu_1_2"
+    assert trace.graph.stop_frontier == "relu_1_2"
     assert [layer.func_name for layer in trace.layer_list] == ["none", "__add__", "relu", "none"]
     assert torchlens_state._logging_enabled is False
     assert torchlens_state._active_trace is None
@@ -266,7 +266,7 @@ def test_selective_layers_to_save_uses_fast_pass_save_new_outs() -> None:
     )
 
     saved = [(layer.func_name, layer.has_saved_activation) for layer in trace.layer_list]
-    assert trace.capture_mode == "exhaustive"
+    assert trace.options.mode == "exhaustive"
     assert trace.num_saved_ops == 3
     assert saved == [
         ("none", False),
@@ -310,7 +310,7 @@ def test_dataparallel_unwrap_preserves_structured_input_addresses() -> None:
     }
     trace = tl.trace(nn.DataParallel(_DataParallelStructuredInputModel()), payload)
 
-    assert trace.model_class_name == "_DataParallelStructuredInputModel"
+    assert trace.source.class_name == "_DataParallelStructuredInputModel"
     assert _input_io_roles(trace) == {"input.payload.left.0", "input.payload.right.x"}
     assert torch.allclose(
         cast(torch.Tensor, trace[trace.output_layers[0]].out), torch.full((2, 2), 3.0)

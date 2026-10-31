@@ -2,7 +2,7 @@
 
 The historical text-summary builder that once lived here was removed with the
 legacy ``summary()`` spellings; ``trace.summary()`` renders through
-``torchlens.report`` and ``trace.provenance()`` through ``_discoverability``.
+``torchlens.report`` and ``trace.provenance.summary()`` through ``_discoverability``.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def format_model_repr(trace: Trace) -> str:
         Short two-line representation.
     """
     state = getattr(getattr(trace, "state", None), "name", "UNKNOWN")
-    model_class_name = getattr(trace, "model_class_name", None)
+    model_class_name = getattr(trace, "_source_class_name", None)
     tracing_finished = getattr(trace, "_tracing_finished", True)
     if not tracing_finished:
         return (
@@ -42,7 +42,7 @@ def format_model_repr(trace: Trace) -> str:
     # ladder rides the session discharge state (HYPOTHESIS / CORROBORATED /
     # REFUTED), never a bare flag.
     structure_note = ""
-    if bool(getattr(trace, "structure_only", False)):
+    if bool(getattr(trace, "_options_structure_only", False)):
         from ...capture.structure_only import claim_status_for
 
         structure_note = f", structure_only={claim_status_for(trace).value.upper()}"

@@ -163,7 +163,7 @@ def test_append_success_grows_batch_and_sets_state() -> None:
     result = log.run(model, torch.randn(3, 3), replay=tl.options.ReplayOptions(append=True))
 
     assert result is log
-    assert log.is_appended is True
+    assert log.provenance.is_appended is True
     assert log._append_sequence_id == 1
     assert log.state is TraceState.APPENDED
     assert log.last_run["engine"] == "append"
@@ -257,7 +257,7 @@ def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
     bundle_path = tmp_path / "append_bundle"
     log.save(bundle_path)
     loaded = tl.load(bundle_path)
-    assert loaded.is_appended is True
+    assert loaded.provenance.is_appended is True
     assert loaded._append_sequence_id == log._append_sequence_id
     assert loaded.state_history[-1]["op"] == "append"
 

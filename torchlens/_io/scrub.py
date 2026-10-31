@@ -209,7 +209,7 @@ def scrub_for_save(
         so ``False`` drops the whole channel; values are never rewritten.
     backend_name:
         Backend identifier for payload audit records. Defaults to
-        ``trace.backend`` when present.
+        ``trace._provenance_backend`` when present.
     payload_materialization:
         Whether this backend can serialize materialized tensor payloads.
     sparse_runnable:
@@ -231,8 +231,8 @@ def scrub_for_save(
         include_custom_attributes=include_custom_attributes,
         include_buffer_values=include_buffer_values,
         sparse_runnable=sparse_runnable,
-        structure_only=bool(getattr(trace, "structure_only", False)),
-        backend_name=str(backend_name or getattr(trace, "backend", "torch")),
+        structure_only=bool(getattr(trace, "_options_structure_only", False)),
+        backend_name=str(backend_name or getattr(trace, "_provenance_backend", "torch")),
         payload_materialization=payload_materialization,
     )
     options.payload_codec = get_payload_codec(options.backend_name)

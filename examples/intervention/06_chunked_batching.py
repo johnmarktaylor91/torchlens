@@ -54,7 +54,7 @@ def main() -> None:
     assert output.shape[0] == first.shape[0] + second.shape[0]
     assert log.state_history[-1]["op"] == "append"
     assert log.last_run["engine"] == "append"
-    assert log.is_appended is True
+    assert log.provenance.is_appended is True
 
 
 if __name__ == "__main__":

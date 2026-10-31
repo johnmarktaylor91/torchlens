@@ -198,7 +198,7 @@ def _snapshot_probe_state(trace: Trace) -> _ProbeSnapshot:
     trace_dict = trace.__dict__
     return _ProbeSnapshot(
         num_backward_passes=int(getattr(trace, "num_backward_passes", 0)),
-        has_gradients=bool(getattr(trace, "has_gradients", False)),
+        has_gradients=bool(getattr(trace, "_autograd_has_grads", False)),
         backward_event_count=_backward_event_count(trace),
         active_index_present="_active_backward_pass_index" in trace_dict,
         active_index=trace_dict.get("_active_backward_pass_index"),
@@ -783,12 +783,12 @@ def gradient_for_unit(
             # route it through the input path so the result is byte-identical.
             input_op = _source_op
             source = None
-    spec = get_backend_spec(str(getattr(trace, "backend", "torch")))
+    spec = get_backend_spec(str(getattr(trace, "_provenance_backend", "torch")))
     if not spec.capabilities.backward_capture:
         raise BackendUnsupportedError(
             f"Backend {spec.name!r} does not support gradient receptive-field probes."
         )
-    if not getattr(trace, "backward_ready", False):
+    if not getattr(trace, "_options_backward_ready", False):
         raise ReceptiveFieldUnavailableError(
             "Gradient receptive fields require backward_ready=True and saved payloads. "
             f"Recapture with {_RECAPTURE_RECIPE}."

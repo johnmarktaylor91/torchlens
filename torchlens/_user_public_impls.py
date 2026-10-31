@@ -507,7 +507,7 @@ def _weightsfree_summary_facade(
         capture=_CaptureOptions(structure_only=True),
     )
     try:
-        envelope = trace.structure_evidence
+        envelope = trace._graph_structure_evidence
         if isinstance(envelope, dict) and isinstance(envelope.get("input_plan"), dict):
             envelope["input_plan"]["selection_source"] = "summary_facade_auto"
             if input_size is not None:
@@ -1103,7 +1103,7 @@ def _warn_if_validation_trace_not_reproducible(
 
     # Read outside the guard below: a trace without its save options must fail
     # loudly, never read as an "unavailable" re-trace.
-    retrace_output_device = cast(OutputDeviceLiteral, first_trace.output_device)
+    retrace_output_device = cast(OutputDeviceLiteral, first_trace._options_output_device)
     retrace_save_budget = first_trace.save_budget
     second_trace: Trace | None = None
     try:

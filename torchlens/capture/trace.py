@@ -93,7 +93,7 @@ restore bracket (breaking byte-exact RNG neutrality for a seeded host
 process) or, if the draw were bracketed too, made consecutive auto-seeded
 captures reuse one identical seed (silently correlating dropout patterns
 across runs). A private stream preserves both guarantees; the chosen seed is
-always disclosed on ``trace.random_seed``.
+always disclosed on ``trace._options_seed``.
 """
 
 
@@ -130,7 +130,7 @@ def _structure_only_forward_boundary(trace: "Trace") -> "contextlib.AbstractCont
     lazy import keeps this backend-neutral module torch-light.
     """
 
-    if bool(getattr(trace, "structure_only", False)):
+    if bool(getattr(trace, "_options_structure_only", False)):
         return _weightsfree_and_belt_boundary(trace)
     return contextlib.nullcontext()
 
@@ -157,8 +157,8 @@ def _weightsfree_and_belt_boundary(trace: "Trace") -> "Iterator[None]":
 def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "Iterator[None]":
     """Record forward-pass peak memory around the model forward call.
 
-    Stores the peak on ``trace.forward_peak_memory`` and the backend label on
-    ``trace.forward_memory_backend``. CUDA snapshots ``max_memory_allocated``
+    Stores the peak on ``trace._cost_forward_peak_memory`` and the backend label on
+    ``trace._provenance_forward_memory_backend``. CUDA snapshots ``max_memory_allocated``
     around the forward WITHOUT ``reset_peak_memory_stats`` (R36-2): resetting
     clobbered the caller's process-wide high-water counter on every capture
     (the CPU branch below explicitly refuses the analogous clobber). When the
@@ -234,12 +234,12 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
                 # the forward stayed under the pre-existing high-water mark
                 # and the figure honestly reads 0 (see docstring, R36-2).
                 live_peak = peak_after if peak_after > peak_before else 0
-                trace.forward_peak_memory = Bytes(live_peak)
-                trace.forward_peak_memory_reason = None  # the pair moves together
+                trace._cost_forward_peak_memory = Bytes(live_peak)
+                trace._cost_forward_peak_memory_reason = None  # the pair moves together
             with contextlib.suppress(Exception):
                 reserved_after = int(torch_module.cuda.max_memory_reserved(cuda_device))
                 resident_peak = reserved_after if reserved_after > reserved_before else 0
-            trace.forward_memory_backend = backend_label
+            trace._provenance_forward_memory_backend = backend_label
             # F20 peak PAIR (brainpipe D-7): live allocation vs resident
             # high-water are different physical quantities; a single number
             # cannot be both correct and portable. Session-time only.
@@ -325,7 +325,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
             else:
                 after = process_rss_bytes()
         rss_delta = max(0, after - before)
-        trace.forward_memory_backend = backend_label
+        trace._provenance_forward_memory_backend = backend_label
         # F20 peak PAIR (brainpipe D-7). ``live`` is a Python-allocation peak
         # and exists only when the tracemalloc opt-in paid for it; ``None``
         # means unmeasured, never zero. ``resident`` is the host high-water
@@ -361,7 +361,7 @@ def _backend_name_for_trace(trace: "Trace") -> BackendName:
         for old or partially constructed trace objects.
     """
 
-    return cast(BackendName, getattr(trace, "backend", "torch"))
+    return cast(BackendName, getattr(trace, "_provenance_backend", "torch"))
 
 
 def _capture_backend_from_registry(
@@ -485,7 +485,7 @@ def _run_predicate_forward_with_root_frame(
         pass_index=state.pass_index,
         event_index=state.event_index,
         step_index=None,
-        time_since_pass_start=time.time() - trace.capture_start_time,
+        time_since_pass_start=time.time() - trace._provenance_start_time,
         include_source_events=state.options.include_source_events,
         sample_id=state.sample_id,
     )
@@ -539,7 +539,7 @@ def _run_predicate_forward_with_root_frame(
             pass_index=state.pass_index,
             event_index=state.event_index,
             step_index=None,
-            time_since_pass_start=time.time() - trace.capture_start_time,
+            time_since_pass_start=time.time() - trace._provenance_start_time,
             include_source_events=state.options.include_source_events,
             sample_id=state.sample_id,
         )

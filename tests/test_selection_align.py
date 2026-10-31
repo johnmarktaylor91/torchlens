@@ -180,24 +180,24 @@ def test_refusal_grouping_stamp_degraded(pair):
 
     trace_a, trace_b = pair
     resolved = tl.units("relu_1_2", IDX).resolve(trace_a)
-    healthy = trace_b.grouping_policy
-    trace_b.grouping_policy = degraded_grouping_policy_stamp("parse_failure")
+    healthy = trace_b.options.grouping_policy
+    trace_b._options_grouping_policy = degraded_grouping_policy_stamp("parse_failure")
     try:
         with pytest.raises(SelectionError) as excinfo:
             resolved.align_to(trace_b)
         assert _alignment_reason(excinfo) == "grouping_stamp_degraded"
         assert excinfo.value.fields["role"] == "target"
     finally:
-        trace_b.grouping_policy = healthy
-    missing = dict(trace_a.grouping_policy or {})
-    trace_a.grouping_policy = None
+        trace_b._options_grouping_policy = healthy
+    missing = dict(trace_a.options.grouping_policy or {})
+    trace_a._options_grouping_policy = None
     try:
         with pytest.raises(SelectionError) as excinfo:
             resolved.align_to(trace_b)
         assert _alignment_reason(excinfo) == "grouping_stamp_degraded"
         assert excinfo.value.fields["role"] == "source"
     finally:
-        trace_a.grouping_policy = missing
+        trace_a._options_grouping_policy = missing
 
 
 def test_refusal_grouping_stamp_mismatch(pair):
@@ -205,17 +205,17 @@ def test_refusal_grouping_stamp_mismatch(pair):
 
     trace_a, trace_b = pair
     resolved = tl.units("relu_1_2", IDX).resolve(trace_a)
-    healthy = trace_b.grouping_policy
+    healthy = trace_b.options.grouping_policy
     crossed = dict(healthy)
     crossed["policy"] = "params_only"
-    trace_b.grouping_policy = crossed
+    trace_b._options_grouping_policy = crossed
     try:
         with pytest.raises(SelectionError) as excinfo:
             resolved.align_to(trace_b)
         assert _alignment_reason(excinfo) == "grouping_stamp_mismatch"
         assert excinfo.value.fields["axis"] == "policy"
     finally:
-        trace_b.grouping_policy = healthy
+        trace_b._options_grouping_policy = healthy
 
 
 def test_refusal_site_key_unavailable(pair):

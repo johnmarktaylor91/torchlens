@@ -9,7 +9,7 @@ accessors: ``Op.grads`` / ``Module.grads``, ``Trace.autograd.backward_passes``,
 ``Trace.saved_grad_modules`` all route through this guard, so on
 ``backward_capture=False`` backends they raise where they previously returned
 ``None``/``0``/empty. The registered table, not a hardcoded backend-name set,
-is the authority; the error text redirects to ``trace.derived_grads`` only
+is the authority; the error text redirects to ``trace._autograd_derived_grads`` only
 when the backend actually declares a derived-gradient surface, and an
 UNREGISTERED backend name refuses typed too — fail-closed, never silently
 empty.
@@ -48,12 +48,12 @@ def raise_if_no_backward_capture(trace: Any, *, plural_subject: str) -> None:
         readmitting the silently-empty accessor behavior it exists to remove.
     """
 
-    backend = str(getattr(trace, "backend", "torch"))
+    backend = str(getattr(trace, "_provenance_backend", "torch"))
     try:
         capabilities = get_backend_spec(backend).capabilities
     except BackendRegistryError as exc:
         raise InvalidArgumentError(
-            f"trace.backend={backend!r} is not a registered backend, so "
+            f"trace._provenance_backend={backend!r} is not a registered backend, so "
             f"{plural_subject} availability cannot be capability-checked; "
             "refusing instead of returning silently-empty results",
             code="unknown_backend",
@@ -68,7 +68,7 @@ def raise_if_no_backward_capture(trace: Any, *, plural_subject: str) -> None:
             "capture true backward graphs",
             code="backend_unsupported",
             remedy=(
-                "use trace.derived_grads for leaf-level derived gradients and "
+                "use trace._autograd_derived_grads for leaf-level derived gradients and "
                 "op.derived_grad for exact op-level derived gradients"
             ),
             backend=backend,

@@ -384,7 +384,7 @@ class JAXBackend:
         grad_options
             Optional JAX derived-gradient configuration. This runs a second
             pure functional ``jax.value_and_grad`` pass and populates
-            ``trace.derived_grads``.
+            ``trace._autograd_derived_grads``.
         capture
             Grouped ``CaptureOptions``. The sole post-sprint spelling for the
             flat capture kwargs above; an explicit field here is merged in
@@ -549,7 +549,7 @@ class JAXBackend:
             save_transformed_output=cast(str | bool, save_raw_output),
         )
         trace.capture_events = CaptureEvents()
-        trace.capture_start_time = time.time()
+        trace._provenance_start_time = time.time()
         if use_pytree_module:
             if module_tree is None:
                 raise AssertionError("pytree_module mode requires JAX module metadata.")
@@ -581,7 +581,7 @@ class JAXBackend:
         )
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
-        trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+        trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
         trace.raw_output = output_transform(output) if callable(output_transform) else None
         self._emit_arg_sources(trace, args)
         self._emit_equations(trace, result)
@@ -600,14 +600,14 @@ class JAXBackend:
             module_tree if use_pytree_module else None,
             result.equations,
         )
-        trace.jax_closed_jaxpr = closed_jaxpr
+        trace._provenance_jax_closed_jaxpr = closed_jaxpr
         trace.jax_equation_captures = result.equations
         trace.jax_ordered_captures = result.captures
         trace.jax_region_captures = tuple(
             capture for capture in result.captures if isinstance(capture, JaxRegionCapture)
         )
-        trace.jax_inlined_call_primitives = result.inlined_call_primitives
-        trace.jax_static_argnums = static_argnums
+        trace._provenance_jax_inlined_call_primitives = result.inlined_call_primitives
+        trace._options_jax_static_argnums = static_argnums
         apply_static_label_save_policy(trace, save_predicate, backend_name="JAX")
         if grad_options is not None:
             self._attach_derived_grads(
@@ -1540,7 +1540,7 @@ class JAXBackend:
         trace.num_params_trainable = trace.num_params
         trace.num_params_frozen = 0
         trace.num_layers_with_params = 0
-        trace.param_source = "pytree-derived" if param_logs else "none"
+        trace._provenance_param_source = "pytree-derived" if param_logs else "none"
 
     def _attach_pytree_params(
         self,
@@ -1574,7 +1574,7 @@ class JAXBackend:
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
         trace.num_layers_with_params = 0
-        trace.param_source = "pytree-derived" if param_logs else "none"
+        trace._provenance_param_source = "pytree-derived" if param_logs else "none"
 
     def _attach_derived_grads(
         self,
@@ -1615,7 +1615,7 @@ class JAXBackend:
         Returns
         -------
         None
-            ``trace.derived_grads`` and unambiguous param gradient slots are populated.
+            ``trace._autograd_derived_grads`` and unambiguous param gradient slots are populated.
         """
 
         import jax
@@ -1685,7 +1685,7 @@ class JAXBackend:
         if not jax.tree.all(jax.tree.map(_values_close, aux_output, captured_output)):
             raise ValueError(
                 "JAX derived gradient run raw output diverged from captured raw output; "
-                "refusing to expose trace.derived_grads."
+                "refusing to expose trace._autograd_derived_grads."
             )
         final_closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
         reject_undeclared_consts(final_closed_jaxpr)
@@ -1714,7 +1714,7 @@ class JAXBackend:
                     },
                 )
             )
-        trace.derived_grads = DerivedGradAccessor(records)
+        trace._autograd_derived_grads = DerivedGradAccessor(records)
         mirror_param_derived_grads(trace, records)
         if grad_options.intermediate_grads:
             try:
@@ -1949,9 +1949,9 @@ class JAXBackend:
         """
 
         assignments = self._jax_recurrence_assignments(trace)
-        trace.grouping_policy = build_grouping_policy_stamp(
-            ran_recurrence_grouping=bool(trace.recurrence_detection),
-            requested=getattr(trace, "grouping", "structural"),
+        trace._options_grouping_policy = build_grouping_policy_stamp(
+            ran_recurrence_grouping=bool(trace._options_recurrence_detection),
+            requested=getattr(trace, "_options_grouping", "structural"),
         )
         raw_labels = tuple(trace._raw_graph_ws.raw_layer_labels_list)
         raw_to_final_op_label: dict[str, str] = {}
@@ -2071,8 +2071,8 @@ class JAXBackend:
         if module_tree is not None:
             self._attach_pytree_op_params(trace, module_tree, captures)
 
-        trace.op_equivalence_classes.clear()
-        trace.op_equivalence_classes.update(equivalent_labels_by_key)
+        trace._graph_op_equivalence_classes.clear()
+        trace._graph_op_equivalence_classes.update(equivalent_labels_by_key)
         trace.num_ops = sum(
             1
             for op_log in trace.layer_list
@@ -2205,14 +2205,14 @@ class JAXBackend:
         trace.input_layers = [_final_label(label) for label in trace.input_layers]
         trace._layers_logged = True
         trace._layers_saved = True
-        trace.has_backward_pass = False
-        trace.capture_end_time = time.time()
-        trace.backend = cast(BackendName, self.name)
+        trace._autograd_has_backward_pass = False
+        trace._provenance_end_time = time.time()
+        trace._provenance_backend = cast(BackendName, self.name)
         if module_tree is None:
-            trace.module_identity_mode = "function_root"
+            trace._options_module_identity_mode = "function_root"
             attach_function_root_module(trace)
         else:
-            trace.module_identity_mode = "pytree_module"
+            trace._options_module_identity_mode = "pytree_module"
             self._attach_pytree_module_logs(trace, module_tree)
         trace._tracing_finished = True
         compact_op_metadata(trace)
@@ -2222,8 +2222,8 @@ class JAXBackend:
         # Layer objects, not the ops the flood must mutate); running it after
         # the finished flag flips is still required so relabeled child edges
         # are present on the ops the index collects.
-        trace.mark_layer_depths = bool(getattr(trace, "mark_layer_depths", False))
-        if trace.mark_layer_depths:
+        trace._options_mark_layer_depths = bool(getattr(trace, "_options_mark_layer_depths", False))
+        if trace._options_mark_layer_depths:
             from .._finalize import compute_preview_input_output_distances
 
             compute_preview_input_output_distances(trace)
@@ -2439,7 +2439,7 @@ class JAXBackend:
         """
 
         site_keys = self._jax_site_keys(trace)
-        if not trace.recurrence_detection:
+        if not trace._options_recurrence_detection:
             return {
                 label: self._jax_singleton_assignment(label, op_log, site_keys.get(label))
                 for label, op_log in trace._raw_graph_ws.raw_layer_dict.items()

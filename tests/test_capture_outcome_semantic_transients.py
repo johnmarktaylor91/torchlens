@@ -160,8 +160,8 @@ def test_halt_does_not_break_decoding_on_the_completed_path() -> None:
     trace = tl.trace(
         model, torch.ones(1, 2), capture=tl.options.CaptureOptions(output_style="hf_text")
     )
-    assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.style == "hf_text"
+    assert trace.provenance.output_postprocessor is not None
+    assert trace.provenance.output_postprocessor.style == "hf_text"
     assert trace.decoded_output is not None
     assert _leaked(trace) == []
 

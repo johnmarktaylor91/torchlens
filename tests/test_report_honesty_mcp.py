@@ -142,7 +142,7 @@ def test_changed_content_at_same_path_is_not_served_stale(artifact: Path, tmp_pa
     shutil.move(str(other_path), str(artifact))
     trace_b, _, _ = _artifacts.load_trace(str(artifact))
     assert trace_b is not trace_a
-    assert trace_b.model_class_name == "Sequential"
+    assert trace_b.source.class_name == "Sequential"
     assert int(trace_b.num_params) == int(other.num_params)
 
 

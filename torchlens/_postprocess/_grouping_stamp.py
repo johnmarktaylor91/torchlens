@@ -1,7 +1,7 @@
 """The grouping-policy stamp (``grouping_policy_v1``): writer, loader
 validation (coherence rules C1-C8), and the canonical degraded settlement.
 
-``trace.grouping_policy`` is a site-granular, load-validated record of HOW a
+``trace._options_grouping_policy`` is a site-granular, load-validated record of HOW a
 trace was grouped AND how its product rows were site-joined -- two distinct
 axes: ``policy`` records only the step-7 grouping that actually ran;
 ``site_join`` records the product-layer join (always ``"none"`` from the

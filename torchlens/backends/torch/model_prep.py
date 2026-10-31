@@ -309,7 +309,7 @@ def _refuse_release_during_active_capture() -> None:
     if _state._active_trace is None and not _state._logging_enabled:
         return
     trace = _state._active_trace
-    model_name = getattr(trace, "model_name", None) or getattr(trace, "model_class_name", None)
+    model_name = getattr(trace, "model_name", None) or getattr(trace, "_source_class_name", None)
     raise CaptureNotActiveError(
         "tl.release_model() was called while a TorchLens capture is still active"
         + (f" for model {model_name!r}" if model_name else ""),
@@ -506,39 +506,41 @@ def _prepare_model_session(
     else:
         identity_cls = type(model)
         entry_callable = getattr(identity_cls, "forward", None)
-    trace.model_class_name = str(identity_cls.__name__)
-    trace.class_docstring = identity_cls.__doc__
+    trace._source_class_name = str(identity_cls.__name__)
+    trace._source_class_docstring = identity_cls.__doc__
     init_method = getattr(identity_cls, "__init__", None)
     forward_method = entry_callable
     try:
-        trace.init_signature = str(inspect.signature(init_method)) if init_method else None
+        trace._source_init_signature = str(inspect.signature(init_method)) if init_method else None
     except (TypeError, ValueError):
-        trace.init_signature = None
-    trace.init_docstring = getattr(init_method, "__doc__", None)
+        trace._source_init_signature = None
+    trace._source_init_docstring = getattr(init_method, "__doc__", None)
     try:
-        trace.forward_signature = str(inspect.signature(forward_method)) if forward_method else None
+        trace._source_forward_signature = (
+            str(inspect.signature(forward_method)) if forward_method else None
+        )
     except (TypeError, ValueError):
-        trace.forward_signature = None
-    trace.forward_docstring = getattr(forward_method, "__doc__", None)
+        trace._source_forward_signature = None
+    trace._source_forward_docstring = getattr(forward_method, "__doc__", None)
     try:
-        trace.class_source_file = inspect.getfile(identity_cls)
-        trace.class_source_line = _source_start_line(identity_cls)
-        trace.init_source_file = inspect.getfile(identity_cls.__init__)
-        trace.init_source_line = _source_start_line(identity_cls.__init__)
+        trace._source_class_file = inspect.getfile(identity_cls)
+        trace._source_class_line = _source_start_line(identity_cls)
+        trace._source_init_file = inspect.getfile(identity_cls.__init__)
+        trace._source_init_line = _source_start_line(identity_cls.__init__)
     except (OSError, TypeError):
-        trace.class_source_file = None
-        trace.class_source_line = None
-        trace.init_source_file = None
-        trace.init_source_line = None
+        trace._source_class_file = None
+        trace._source_class_line = None
+        trace._source_init_file = None
+        trace._source_init_line = None
     try:
         forward_func = model.forward if entry_callable is None else entry_callable
-        trace.forward_source_file = inspect.getsourcefile(forward_func) or inspect.getfile(
+        trace._source_forward_file = inspect.getsourcefile(forward_func) or inspect.getfile(
             forward_func
         )
-        trace.forward_source_line = _source_start_line(forward_func)
+        trace._source_forward_line = _source_start_line(forward_func)
     except (OSError, TypeError):
-        trace.forward_source_file = None
-        trace.forward_source_line = None
+        trace._source_forward_file = None
+        trace._source_forward_line = None
 
     # Track seen module ids to detect shared modules (same module at multiple addresses).
     _seen_module_ids: dict[int, str] = {}
@@ -611,7 +613,7 @@ def _prepare_model_session(
             trace._module_capture_ws.mod_call_labels[mod_id] = []
             trace._module_capture_ws.mod_entered[mod_id] = []
             trace._module_capture_ws.mod_exited[mod_id] = []
-    if trace.capture_mode != "predicate":
+    if trace._options_mode != "predicate":
         _create_session_param_logs(trace, model, optimizer)
     prepare_buffer_tensors(trace, model)
     # Pre-forward ownership snapshot for the R16 module-entry adoption
@@ -622,7 +624,7 @@ def _prepare_model_session(
     trace._module_capture_ws.module_build_data["forward_outside_tensor_ids_at_entry"] = (
         forward_outside_ids
     )
-    if trace.capture_mode == "exhaustive":
+    if trace._options_mode == "exhaustive":
         from .buffer_writes import install_buffer_write_tracker
 
         install_buffer_write_tracker(trace, model)
@@ -705,7 +707,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             if (
                 not param_is_lazy
                 and param.is_leaf  # a non-leaf already requires grad; its flag is read-only
-                and not getattr(trace, "backward_ready", False)
+                and not getattr(trace, "_options_backward_ready", False)
                 and (torch.is_floating_point(param) or torch.is_complex(param))
             ):
                 param.requires_grad = True
@@ -940,7 +942,7 @@ def _capture_module_metadata(
     # Start from cached class-level metadata. dict() creates a shallow copy;
     # mutable fields (all_addresses, custom_attributes, custom_methods) are replaced
     # below with fresh instances per module, so no cross-contamination.
-    save_source = getattr(trace, "save_code_context", False)
+    save_source = getattr(trace, "_options_save_source_context", False)
     class_meta = _get_class_metadata(type(module), save_source_context=save_source)
     meta = dict(class_meta)
     meta["all_addresses"] = [address]
@@ -1179,7 +1181,8 @@ def _record_module_entry_metadata(
         module_call_label=module_call_label_str,
     )
     should_capture_template = bool(
-        getattr(trace, "is_replayable", False) or getattr(trace, "save_arg_templates", False)
+        getattr(trace, "is_replayable", False)
+        or getattr(trace, "_options_save_arg_templates", False)
     )
     forward_args_template = None
     forward_kwargs_template = None
@@ -1204,8 +1207,8 @@ def _record_module_entry_metadata(
         code_context_cache = {}
         trace._code_context_cache = code_context_cache
     code_context = _get_code_context(
-        num_context_lines=trace.num_context_lines,
-        source_loading_enabled=trace.save_code_context,
+        num_context_lines=trace._options_source_context_lines,
+        source_loading_enabled=trace._options_save_source_context,
         context_cache=code_context_cache,
     )
     trace._module_capture_ws.module_build_data.setdefault("module_code_contexts", {})[
@@ -1670,12 +1673,12 @@ def _ensure_module_output_tensor_logged(
             "out": None,
             "transformed_out": None,
             "has_saved_activation": False,
-            "activation_transform": trace.activation_transform,
+            "activation_transform": trace._options_activation_transform,
             "annotations": {},
             "interventions": [],
             "is_edited": not is_internal_source,
-            "detach_saved_activations": trace.detach_saved_activations,
-            "output_device": trace.output_device,
+            "detach_saved_activations": trace._options_detach_saved_activations,
+            "output_device": trace._options_output_device,
             "has_saved_args": False,
             "saved_args": None,
             "saved_kwargs": None,
@@ -1700,7 +1703,7 @@ def _ensure_module_output_tensor_logged(
             "out_versions_by_child": {},
             "grad": None,
             "transformed_grad": None,
-            "save_grads": getattr(trace, "save_grads", None) not in (None, False),
+            "save_grads": getattr(trace, "_options_save_grads", None) not in (None, False),
             "has_grad": False,
             "grad_shape": None,
             "transformed_grad_shape": None,
@@ -1758,7 +1761,7 @@ def _ensure_module_output_tensor_logged(
             "num_params_frozen": 0,
             "param_memory": 0,
             "equivalence_class": equivalence_class,
-            "equivalent_ops": trace.op_equivalence_classes[raw_label],
+            "equivalent_ops": trace._graph_op_equivalence_classes[raw_label],
             "recurrent_ops": [],
             "parents": parent_labels,
             "parent_arg_positions": {"args": {}, "kwargs": {}},
@@ -1841,9 +1844,9 @@ def _ensure_module_output_tensor_logged(
         # would otherwise launder into a plain capture.
         if fields_dict["is_edited"] and _live_intervention_machinery_armed():
             _note_replacement_event(trace, raw_label, origin="live_fire")
-    trace.op_equivalence_classes[raw_label].add(raw_label)
+    trace._graph_op_equivalence_classes[raw_label].add(raw_label)
     new_entry = _make_layer_log_entry(
-        trace, tensor, fields_dict, (), {}, trace.activation_transform
+        trace, tensor, fields_dict, (), {}, trace._options_activation_transform
     )
     if is_internal_source:
         # Keep the special-list <-> flag invariant satisfied: every op with
@@ -2339,7 +2342,7 @@ def module_forward_decorator(
         # address is read per call because role swaps re-address modules.
         _state.note_fingerprint_token(_state.module_token(_module_address(module)))
 
-        if trace.capture_mode == "predicate":
+        if trace._options_mode == "predicate":
             from ...capture.predicates import (
                 _evaluate_halt,
                 _is_halt_only_capture,

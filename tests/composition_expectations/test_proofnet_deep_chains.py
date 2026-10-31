@@ -60,11 +60,11 @@ def test_chain_structure_only_save_load_capability_doors(tmp_path: Any) -> None:
     import torchlens as tl
 
     trace = tl.trace(_model(), _x(), capture=tl.options.CaptureOptions(structure_only=True))
-    assert trace.structure_only
+    assert trace.options.structure_only
     path = tmp_path / "structure.tlspec"
     trace.save(str(path))
     loaded = tl.load(str(path))
-    assert loaded.structure_only, "structure_only flag fell off at the load hop"
+    assert loaded.options.structure_only, "structure_only flag fell off at the load hop"
     assert "hypothes" in loaded.explain().lower(), (
         "the loaded structure-only trace's explain() no longer discloses the hypothesis ladder"
     )

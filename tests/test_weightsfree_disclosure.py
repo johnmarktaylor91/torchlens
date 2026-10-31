@@ -51,9 +51,9 @@ def test_envelope_stamped_and_load_valid() -> None:
     from torchlens._io.forgery_validation import _validate_structure_evidence
 
     trace = _meta_capture()
-    assert trace.structure_evidence is not None
+    assert trace.graph.structure_evidence is not None
     _validate_structure_evidence(trace)  # raises on any schema violation
-    envelope = trace.structure_evidence
+    envelope = trace.graph.structure_evidence
     assert envelope["substrate"] == "meta"
     assert envelope["factory_device_policy"] == "torchlens_owned"
     assert envelope["outcome"] == "complete"
@@ -63,7 +63,7 @@ def test_envelope_stamped_and_load_valid() -> None:
 
 def test_ordinary_capture_carries_no_envelope() -> None:
     trace = tl.trace(Toy(), torch.randn(2, 4))
-    assert trace.structure_evidence is None
+    assert trace.graph.structure_evidence is None
 
 
 # ---------------------------------------------------------------------------

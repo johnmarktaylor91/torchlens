@@ -50,7 +50,7 @@ class TestOneResolverOneRecord:
 
         model = _cnn().eval()
         trace_log = tl.trace(model, input_size=SIZE)
-        trace_record = trace_log.input_preprocessor
+        trace_record = trace_log.provenance.input_preprocessor
         render_result = render(model, input_size=SIZE, file=str(tmp_path / "unused.svg"))
         render_record = provenance_to_record(render_result.provenance)
         assert trace_record is not None

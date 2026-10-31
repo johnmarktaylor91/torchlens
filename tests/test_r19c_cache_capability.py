@@ -47,7 +47,7 @@ def test_cache_with_activation_transform_roundtrips(tmp_path):
         capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir),
         save=tl.options.SaveOptions(activation_transform=_act_transform),
     )
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
 
     second = tl.trace(
         model,
@@ -55,7 +55,7 @@ def test_cache_with_activation_transform_roundtrips(tmp_path):
         capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir),
         save=tl.options.SaveOptions(activation_transform=_act_transform),
     )
-    assert second.capture_cache_hit is True
+    assert second.provenance.cache_hit is True
 
 
 @pytest.mark.smoke
@@ -73,7 +73,7 @@ def test_cache_with_grad_transform_roundtrips(tmp_path):
             cache=True, cache_dir=cache_dir, save_grads=True, backward_ready=True
         ),
     )
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
 
     second = tl.trace(
         model,
@@ -83,7 +83,7 @@ def test_cache_with_grad_transform_roundtrips(tmp_path):
             cache=True, cache_dir=cache_dir, save_grads=True, backward_ready=True
         ),
     )
-    assert second.capture_cache_hit is True
+    assert second.provenance.cache_hit is True
 
 
 # --------------------------------------------------------------------------- F3
@@ -103,7 +103,7 @@ def test_cache_key_distinguishes_intervention_ready(tmp_path):
         x,
         capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, replayable=False),
     )
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     assert first.is_replayable is False
 
     second = tl.trace(
@@ -112,7 +112,7 @@ def test_cache_key_distinguishes_intervention_ready(tmp_path):
         capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, replayable=True),
     )
     # Different capability => must not reuse the replayable=False trace.
-    assert second.capture_cache_hit is False
+    assert second.provenance.cache_hit is False
     assert second.is_replayable is True
 
 
@@ -127,14 +127,14 @@ def test_cache_key_distinguishes_save_raw_input(tmp_path):
         x,
         capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, save_raw_input=False),
     )
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
 
     second = tl.trace(
         model,
         x,
         capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, save_raw_input=True),
     )
-    assert second.capture_cache_hit is False
+    assert second.provenance.cache_hit is False
 
 
 def test_cache_hit_preserved_for_identical_capability(tmp_path):
@@ -148,7 +148,7 @@ def test_cache_hit_preserved_for_identical_capability(tmp_path):
         x,
         capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, replayable=True),
     )
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     assert first.is_replayable is True
 
     second = tl.trace(
@@ -156,7 +156,7 @@ def test_cache_hit_preserved_for_identical_capability(tmp_path):
         x,
         capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, replayable=True),
     )
-    assert second.capture_cache_hit is True
+    assert second.provenance.cache_hit is True
     assert second.is_replayable is True
 
 

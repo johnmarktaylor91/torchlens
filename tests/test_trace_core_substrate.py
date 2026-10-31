@@ -750,7 +750,7 @@ def test_fork_shares_one_equivalent_ops_view_per_class() -> None:
     fork = trace.fork()
     multi_member = {
         equivalence_class
-        for equivalence_class, members in fork.op_equivalence_classes.items()
+        for equivalence_class, members in fork.graph.op_equivalence_classes.items()
         if len(members) >= 2
     }
     assert multi_member, "test model must produce a shared equivalence class"

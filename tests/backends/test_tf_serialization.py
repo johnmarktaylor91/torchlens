@@ -122,7 +122,7 @@ def test_tf_default_tlspec_round_trip_materializes_payloads(tmp_path: Path) -> N
     loaded = tl.load(path)
     restored = _saved_output(loaded)
 
-    assert loaded.backend == "tf"
+    assert loaded.provenance.backend == "tf"
     assert check_metadata_invariants(loaded) is True
     assert isinstance(restored, tf.Tensor)
     assert restored.dtype == tf.float32

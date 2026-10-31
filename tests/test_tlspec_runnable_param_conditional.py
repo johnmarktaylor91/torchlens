@@ -77,8 +77,8 @@ def test_parameterized_conditional_saves_and_verifies(tmp_path: Path) -> None:
     trace.save(path, level="runnable", include_weights=True)
 
     # The save must not have mutated the live trace's conditional accessors.
-    assert trace.conditionals[0].arms[0]._trace is trace
-    assert trace.conditionals[0].arms[0].evaluation_ops
+    assert trace.graph.conditionals[0].arms[0]._trace is trace
+    assert trace.graph.conditionals[0].arms[0].evaluation_ops
 
     result = tl.load(path).run(inputs=value, seed=0)
 

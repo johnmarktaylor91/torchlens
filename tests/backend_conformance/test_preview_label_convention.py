@@ -69,7 +69,7 @@ def test_tinygrad_label_convention_matches_torch() -> None:
 
     w = Tensor.arange(16, dtype="float").reshape(4, 4) / 20.0
     trace = tl.trace(model, (Tensor.ones(2, 4), w), backend="tinygrad")
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     _assert_torch_label_convention(trace)
 
 
@@ -85,7 +85,7 @@ def test_jax_label_convention_matches_torch() -> None:
         return x
 
     trace = tl.trace(model, jnp.ones((1, 4)), backend="jax")
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     _assert_torch_label_convention(trace)
 
 
@@ -106,7 +106,7 @@ def test_mlx_label_convention_matches_torch() -> None:
             return x
 
     trace = tl.trace(M(), mx.ones((1, 4)), backend="mlx")
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     _assert_torch_label_convention(trace)
 
 
@@ -126,7 +126,7 @@ def test_paddle_label_convention_matches_torch() -> None:
             return x
 
     trace = tl.trace(M(), paddle.ones([1, 4]), backend="paddle")
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     _assert_torch_label_convention(trace)
 
 
@@ -150,5 +150,5 @@ def test_tf_label_convention_matches_torch() -> None:
     inputs = tf.ones((1, 4))
     model(inputs)
     trace = tl.trace(model, inputs, backend="tf")
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     _assert_torch_label_convention(trace)

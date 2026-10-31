@@ -931,7 +931,7 @@ class Recording(TraceLike):
         # no autograd graph: either backward would capture nothing.
         state = getattr(self, "_recording_state", None)
         runtime_trace = getattr(state, "runtime_trace", None)
-        if getattr(runtime_trace, "inference_only", False):
+        if getattr(runtime_trace, "_options_inference_only", False):
             from .exceptions import RecorderStateError
 
             raise RecorderStateError(
@@ -1163,7 +1163,7 @@ class Recording(TraceLike):
         # cooked projection; the honest provenance fact is the marker below,
         # which records that this Trace was cooked from a Recording rather
         # than captured live.
-        trace.capture_mode = "exhaustive"
+        trace._options_mode = "exhaustive"
         trace._cooked_from = "recording"
         trace._predicate_save_options = RecordingOptions()
         trace._replay_arg_version_data_complete = False
@@ -1205,7 +1205,7 @@ class Recording(TraceLike):
             projection.bind_halt_frontier(frontier_tensor, frontier_label)
             trace.halted = True
             trace.stop_reason = self.stop_reason
-            trace.halt_frontier = self.stop_reason
+            trace._graph_stop_frontier = self.stop_reason
             trace.raw_output = None
             trace.output_layers = [frontier_label]
             halt_output_tensors = [frontier_tensor]
@@ -1239,7 +1239,7 @@ class Recording(TraceLike):
             cooked_reason = (
                 remapped_reason if isinstance(remapped_reason, str) else self.stop_reason
             )
-            remapped_frontier = getattr(trace, "halt_frontier", None)
+            remapped_frontier = getattr(trace, "_graph_stop_frontier", None)
             cooked_boundary = (
                 remapped_frontier if isinstance(remapped_frontier, str) else cooked_reason
             )

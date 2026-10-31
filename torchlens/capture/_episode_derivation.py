@@ -575,7 +575,7 @@ def _product_identity(trace: Any, address: str, started: int) -> dict[str, Any]:
 
     labels = [str(getattr(op, "label", op)) for op in (getattr(trace, "layer_list", None) or ())]
     return {
-        "entry_seed": getattr(trace, "random_seed", None),
+        "entry_seed": getattr(trace, "_options_seed", None),
         "stepped_module": address,
         "stepped_calls": started,
         "op_labels": labels,

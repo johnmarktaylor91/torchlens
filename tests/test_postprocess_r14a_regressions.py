@@ -204,12 +204,12 @@ def test_equivalent_ops_are_renamed_to_final_labels() -> None:
     repeated_ops = [
         op
         for op in trace.layer_list
-        if len(trace.op_equivalence_classes.get(op.equivalence_class, set())) > 1
+        if len(trace.graph.op_equivalence_classes.get(op.equivalence_class, set())) > 1
     ]
 
     assert repeated_ops
     for op in repeated_ops:
-        expected_group = trace.op_equivalence_classes[op.equivalence_class]
+        expected_group = trace.graph.op_equivalence_classes[op.equivalence_class]
         assert op.equivalent_ops == expected_group
         assert all(not label.endswith("_raw") for label in op.equivalent_ops)
 
@@ -232,7 +232,7 @@ def test_equivalence_invariant_rejects_stale_per_op_views() -> None:
     target_op = next(
         op
         for op in trace.layer_list
-        if len(trace.op_equivalence_classes.get(op.equivalence_class, set())) > 1
+        if len(trace.graph.op_equivalence_classes.get(op.equivalence_class, set())) > 1
     )
     target_op.equivalent_ops = {"linear_1_2_raw"}
     trace.layer_logs[target_op.layer_label].equivalent_ops = {"linear_1_2_raw"}
@@ -256,7 +256,7 @@ def test_build_conditional_records_disambiguates_colliding_bool_layers() -> None
     trace = _ConditionalBuildTrace()
     _build_conditional_records(trace)
 
-    conditionals = list(trace.conditionals)
+    conditionals = list(trace.graph.conditionals)
     assert [conditional.id for conditional in conditionals] == [
         "cond_gt_1_3__event_0",
         "cond_gt_1_3__event_1",
@@ -296,9 +296,9 @@ def test_conditional_invariant_rejects_duplicate_public_ids(tmp_path: Path) -> N
         """,
         torch.ones(2, 2),
     )
-    conditionals = list(trace.conditionals)
+    conditionals = list(trace.graph.conditionals)
     conditionals[1].id = conditionals[0].id
-    trace.conditionals = ConditionalAccessor(conditionals)
+    trace._graph_conditionals = ConditionalAccessor(conditionals)
 
     with pytest.raises(MetadataInvariantError, match="conditional_invariants"):
         trace.check_metadata_invariants()
@@ -326,7 +326,7 @@ def test_loop_conditionals_clear_ambiguous_fired_arm_summary(tmp_path: Path) -> 
         """,
         torch.tensor([[1.0], [-1.0]]),
     )
-    conditional = trace.conditionals[0]
+    conditional = trace.graph.conditionals[0]
 
     assert [arm.fired for arm in conditional.arms] == [True, True]
     assert conditional.fired_arm_index is None
@@ -356,8 +356,8 @@ def test_conditional_invariant_rejects_ambiguous_fired_arm_summary(tmp_path: Pat
         """,
         torch.tensor([[1.0], [-1.0]]),
     )
-    trace.conditionals[0].fired_arm_index = 0
-    trace.conditionals[0].fired_arm_kind = "then"
+    trace.graph.conditionals[0].fired_arm_index = 0
+    trace.graph.conditionals[0].fired_arm_kind = "then"
 
     with pytest.raises(MetadataInvariantError, match="conditional_invariants"):
         trace.check_metadata_invariants()

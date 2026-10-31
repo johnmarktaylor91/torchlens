@@ -402,7 +402,7 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     out.mkdir(exist_ok=True)
     return {
         "summary": lambda t: t.summary(),
-        "provenance": lambda t: t.provenance(),
+        "provenance": lambda t: t.provenance.summary(),
         "profile": lambda t: t.profile(),
         "to_pandas": lambda t: t.to_pandas(),
         # Plain draw AND an encoding-channel draw: the channel path is the
@@ -851,7 +851,7 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
 def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     """N5: a defaultdict ``op_equivalence_classes`` must not crash the scrub.
 
-    ``Trace.op_equivalence_classes`` starts life as ``defaultdict(set)``
+    ``Trace.graph.op_equivalence_classes`` starts life as ``defaultdict(set)``
     (``data_classes/trace.py``); the torch backend's postprocessing always
     reassigns it to a plain ``dict`` before save (``cleanup.py``,
     ``labeling.py``), but the neutral/preview backends (tf, jax, tinygrad,

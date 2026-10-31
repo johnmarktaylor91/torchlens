@@ -323,8 +323,8 @@ def test_c_partial_blind_spot_is_machine_readably_unverified() -> None:
     assert trace.escape_diagnostics == []
     # The detector cannot see the C-partial channel; shadow mode's blanket
     # no-claim ceiling is what keeps the blind spot machine-readably honest.
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "shadow_diagnostic_mode"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "shadow_diagnostic_mode"
 
 
 def test_clean_composites_and_descriptor_wrappers_do_not_convict() -> None:
@@ -601,9 +601,9 @@ def test_record_fastlog_uses_same_guard_and_backward_boundary_is_explicit() -> N
     assert recording.capture_owner_thread_qualified is True
     assert recording.escape_diagnostics == []
     trace = tl.trace(Model(), torch.randn(3, requires_grad=True))
-    assert trace.escape_detector_backward_coverage == "not_armed"
+    assert trace.autograd.escape_detector_backward_coverage == "not_armed"
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
-    assert trace.has_backward_pass is True
+    assert trace.autograd.has_backward_pass is True
 
 
 def test_thread_count_tripwire_marks_trace_unverified() -> None:
@@ -632,10 +632,10 @@ def test_thread_count_tripwire_marks_trace_unverified() -> None:
     try:
         with pytest.warns(CaptureGapWarning, match="thread-count change"):
             trace = tl.trace(model, torch.randn(3))
-        assert trace.capture_owner_thread_qualified is True
-        assert trace.capture_thread_activity_detected is True
-        assert trace.capture_verified is False
-        assert trace.capture_verification_reason == "owner_thread_tripwire_changed"
+        assert trace.provenance.owner_thread_qualified is True
+        assert trace.provenance.thread_activity_detected is True
+        assert trace.provenance.verified is False
+        assert trace.provenance.verification_reason == "owner_thread_tripwire_changed"
     finally:
         release.set()
         if model.worker is not None:
@@ -659,9 +659,9 @@ def test_default_detector_is_off_and_default_trace_makes_no_claim() -> None:
 
     wrap_torch()
     trace = tl.trace(Model(), torch.randn(3))
-    assert trace.escape_detector_mode == "off"
-    assert trace.capture_verified is None
-    assert trace.capture_verification_reason is None
+    assert trace.health.escape_detector_mode == "off"
+    assert trace.provenance.verified is None
+    assert trace.provenance.verification_reason is None
 
 
 def test_scoped_and_legacy_match_on_in_scope_standard_model() -> None:
@@ -738,7 +738,7 @@ def test_guard_pass_metadata_is_machine_readable() -> None:
     )
     assert trace.capture_guard_passes
     assert all(
-        item["owner_thread_id"] == trace.capture_owner_thread_id
+        item["owner_thread_id"] == trace.provenance.owner_thread_id
         for item in trace.capture_guard_passes
     )
 
@@ -826,8 +826,8 @@ def test_user_call_into_witness_storage_helper_degrades_verification() -> None:
                 cache=False,
             ),
         )
-    assert not (trace.capture_verified and not trace.escape_diagnostics), (
-        trace.capture_verification_reason,
+    assert not (trace.provenance.verified and not trace.escape_diagnostics), (
+        trace.provenance.verification_reason,
         trace.escape_diagnostics,
     )
     storage_trips = [
@@ -893,8 +893,8 @@ def test_forged_frame_metadata_cannot_impersonate_witness_authorization() -> Non
                 cache=False,
             ),
         )
-    assert not (trace.capture_verified and not trace.escape_diagnostics), (
-        trace.capture_verification_reason,
+    assert not (trace.provenance.verified and not trace.escape_diagnostics), (
+        trace.provenance.verification_reason,
         trace.escape_diagnostics,
     )
     storage_trips = [
@@ -936,9 +936,9 @@ def test_detector_teardown_failure_demotes_and_discloses(
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         trace = tl.trace(Clean(), torch.randn(3))
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "escape_detector_teardown_failed"
-    assert trace.escape_detector_verified is False
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "escape_detector_teardown_failed"
+    assert trace.health.escape_detector_verified is False
     teardown_reports = [
         diagnostic
         for diagnostic in trace.escape_diagnostics
@@ -953,7 +953,7 @@ def test_detector_teardown_failure_demotes_and_discloses(
     # The failure must not poison the process: the next capture runs and settles
     # its ordinary shadow verdict with no teardown diagnostic.
     second = tl.trace(Clean(), torch.randn(3))
-    assert second.capture_verification_reason == "shadow_diagnostic_mode"
+    assert second.provenance.verification_reason == "shadow_diagnostic_mode"
     assert not any(
         diagnostic.get("kind") == "detector_teardown_failed"
         for diagnostic in second.escape_diagnostics
@@ -992,7 +992,7 @@ def test_owner_thread_scalar_only_stale_escape_is_shadow_reported() -> None:
         warnings.simplefilter("always")
         trace = tl.trace(Model(), torch.randn(3, 4))
 
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "callable_escape_shadow_report"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "callable_escape_shadow_report"
     assert trace.escape_diagnostics
     assert _gap_warnings(caught)

@@ -62,7 +62,7 @@ def test_capture_memory_fields_and_forward_source_line() -> None:
 
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU())
     log = tl.trace(model, torch.ones(1, 2))
-    assert isinstance(log.forward_source_line, int)
+    assert isinstance(log.source.forward_line, int)
     assert all(hasattr(layer, "bytes_delta_at_call") for layer in log.layer_list)
     assert all(hasattr(layer, "bytes_peak_at_call") for layer in log.layer_list)
 
@@ -75,9 +75,9 @@ def test_content_hash_cache_hit_and_miss(tmp_path: Path) -> None:
     capture = CaptureOptions(cache=True, cache_dir=tmp_path)
     first = tl.trace(model, x, capture=capture)
     second = tl.trace(model, x, capture=capture)
-    assert first.capture_cache_hit is False
-    assert second.capture_cache_hit is True
-    assert first.capture_cache_key == second.capture_cache_key
+    assert first.provenance.cache_hit is False
+    assert second.provenance.cache_hit is True
+    assert first.provenance.cache_key == second.provenance.cache_key
 
 
 @pytest.mark.parametrize(
@@ -111,9 +111,9 @@ def test_selective_capture_cache_preserves_unsaved_payload_contract(
         capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path, **capture_kwargs),
     )
 
-    assert first.capture_cache_hit is False
-    assert second.capture_cache_hit is True
-    assert first.capture_cache_key == second.capture_cache_key
+    assert first.provenance.cache_hit is False
+    assert second.provenance.cache_hit is True
+    assert first.provenance.cache_key == second.provenance.cache_key
     saved = first.find_sites(tl.func(saved_type)).first()
     assert isinstance(saved.out, torch.Tensor)
     with pytest.raises(ValueError, match="was not saved"):
@@ -137,8 +137,8 @@ def test_absorbed_layers_to_save_cache_key_is_stable(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path, layers_to_save=["relu"]),
     )
 
-    assert first.capture_cache_key == second.capture_cache_key
-    assert second.capture_cache_hit is True
+    assert first.provenance.cache_key == second.provenance.cache_key
+    assert second.provenance.cache_hit is True
 
 
 def test_config_output_metadata_pickles_into_capture_cache(tmp_path: Path) -> None:
@@ -151,10 +151,10 @@ def test_config_output_metadata_pickles_into_capture_cache(tmp_path: Path) -> No
     first = tl.trace(model, x, capture=capture)
     second = tl.trace(model, x, capture=capture)
 
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     assert first.output_id2label == {0: "negative", 1: "positive"}
     assert first.output_num_classes == 2
-    assert second.capture_cache_hit is True
+    assert second.provenance.cache_hit is True
     assert second.output_id2label == {0: "negative", 1: "positive"}
     assert second.output_num_classes == 2
 
@@ -183,7 +183,7 @@ def test_public_option_spine_changes_capture_cache_key(tmp_path: Path) -> None:
         ),
     )
 
-    assert first.capture_cache_key != second.capture_cache_key
+    assert first.provenance.cache_key != second.provenance.cache_key
 
 
 def test_saved_activation_identity_dedup_reuses_same_source_live_fields() -> None:

@@ -5,7 +5,7 @@ Eager wrapper capture with live per-op replay validation, static-label
 derived gradients. ``mx.compile``/``mx.grad``/``mx.vmap`` traced-transform
 entries refuse typed at capture entry (a compiled model attribute ceilings the
 capture with ``capture_verified=False``); true backward capture is unsupported
-so MLX traces always report ``Trace.has_backward_pass = False``, and RNG
+so MLX traces always report ``Trace.autograd.has_backward_pass = False``, and RNG
 replay snapshots are currently ``None``.
 """
 

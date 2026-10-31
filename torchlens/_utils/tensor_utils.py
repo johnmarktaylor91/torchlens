@@ -1612,7 +1612,7 @@ def capture_touched_cuda(trace: Any) -> bool:
         evidence, was stamped with a KNOWN non-CUDA backend.
     """
 
-    backend = getattr(trace, "forward_memory_backend", None)
+    backend = getattr(trace, "_provenance_forward_memory_backend", None)
     if backend == "cuda":
         return True
     observed = _capture_observed_cuda_device(trace)

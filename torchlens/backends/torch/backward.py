@@ -174,7 +174,7 @@ def _ensure_not_inference_only_backward(trace: Any) -> None:
         If the trace was captured with ``inference_only=True``.
     """
 
-    if getattr(trace, "inference_only", False):
+    if getattr(trace, "_options_inference_only", False):
         raise ConfigurationError(_INFERENCE_ONLY_BACKWARD_ERROR)
 
 
@@ -192,7 +192,7 @@ def _ensure_not_chunked_forward_backward(trace: Any) -> None:
         If the trace was captured with ``chunk_size``.
     """
 
-    if getattr(trace, "chunked_forward", False):
+    if getattr(trace, "_options_chunk_size", False):
         raise ConfigurationError(_CHUNKED_FORWARD_BACKWARD_ERROR)
 
 
@@ -226,13 +226,13 @@ def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
     while frame is not None:
         filename = os.path.abspath(frame.f_code.co_filename)
         if not filename.startswith(_TORCHLENS_PKG_DIR):
-            source_loading_enabled = bool(getattr(trace, "save_code_context", False))
+            source_loading_enabled = bool(getattr(trace, "_options_save_source_context", False))
             func_name = frame.f_code.co_name
             return FuncCallLocation(
                 file=frame.f_code.co_filename,
                 line_number=frame.f_lineno,
                 func_name=func_name,
-                num_context_lines_requested=int(getattr(trace, "num_context_lines", 7)),
+                num_context_lines_requested=int(getattr(trace, "_options_source_context_lines", 7)),
                 _frame_func_obj=(
                     frame.f_locals.get(func_name) or frame.f_globals.get(func_name)
                     if source_loading_enabled
@@ -1683,7 +1683,7 @@ def _materialize_backward_projections_impl(
         merged_grad_fn_logs.update(grad_fn_logs)
         grad_fn_logs = merged_grad_fn_logs
     trace.grad_fn_logs = grad_fn_logs
-    trace.grad_fn_order = list(grad_fn_logs)
+    trace._autograd_grad_fn_order = list(grad_fn_logs)
 
     pass_to_calls: dict[int, list[GradFnCall]] = {}
     _fold_fired_events(trace, state, fired_events, pass_to_calls)
@@ -1878,9 +1878,9 @@ def _fold_op_grad_events(
     # mid-pass, and every fold must overwrite those live writes with the
     # events-derived set exactly like the historical full rebuild did.
     trace._saved_grad_labels = set(state.saved_grad_labels)
-    trace.saved_gradient_memory = Bytes(state.total_gradient_memory)
-    trace.total_gradient_memory = Bytes(state.total_gradient_memory)
-    trace.total_backward_memory = Bytes(state.total_backward_memory)
+    trace._cost_saved_grad_memory = Bytes(state.total_gradient_memory)
+    trace._cost_total_grad_memory = Bytes(state.total_gradient_memory)
+    trace._cost_total_backward_memory = Bytes(state.total_backward_memory)
 
 
 def _fold_param_grad_events(
@@ -1984,12 +1984,12 @@ def _refresh_backward_pass_counters(trace: Any, state: _BackwardFoldState) -> No
     base_root_ids = tuple(
         getattr(getattr(trace, "_capture_events", None), "base_root_grad_fn_object_ids", ()) or ()
     )
-    trace.backward_root_grad_fn_object_ids = [
+    trace._autograd_backward_root_grad_fn_object_ids = [
         *base_root_ids,
         *(root_id for roots in roots_by_pass.values() for root_id in roots),
     ]
     trace.num_backward_passes = max(state.built_pass_indices, default=0)
-    trace.has_backward_pass = bool(state.built_pass_indices)
+    trace._autograd_has_backward_pass = bool(state.built_pass_indices)
     trace.num_saved_grad_fn_calls = len(trace.autograd.saved_grad_fn_calls)
     trace.num_saved_grad_fns = len(trace.autograd.saved_grad_fns)
 
@@ -2711,11 +2711,11 @@ def _walk_and_hook_backward_graph(
     roots_by_pass = trace.__dict__.setdefault("_backward_roots_by_pass", {})
     roots_by_pass.setdefault(pass_index, [])
     for root_grad_fn_id in map(id, root_grad_fns):
-        if root_grad_fn_id not in trace.backward_root_grad_fn_object_ids:
-            trace.backward_root_grad_fn_object_ids.append(root_grad_fn_id)
+        if root_grad_fn_id not in trace._autograd_backward_root_grad_fn_object_ids:
+            trace._autograd_backward_root_grad_fn_object_ids.append(root_grad_fn_id)
         if root_grad_fn_id not in roots_by_pass[pass_index]:
             roots_by_pass[pass_index].append(root_grad_fn_id)
-    trace.has_backward_pass = True
+    trace._autograd_has_backward_pass = True
 
     while queue:
         grad_fn_handle = queue.popleft()
@@ -2730,7 +2730,7 @@ def _walk_and_hook_backward_graph(
         grad_fn_record = trace.grad_fn_logs.get(grad_fn_object_id)
         if grad_fn_record is None:
             grad_fn_type = _normalize_grad_fn_type(grad_fn_handle)
-            step_index = len(trace.grad_fn_order) + 1
+            step_index = len(trace._autograd_grad_fn_order) + 1
             type_index, step_index, label = _grad_fn_label_parts(
                 trace,
                 grad_fn_type,
@@ -2750,7 +2750,7 @@ def _walk_and_hook_backward_graph(
                 label=label,
                 type=grad_fn_type,
                 type_index=type_index,
-                ordinal_index=len(trace.grad_fn_order),
+                ordinal_index=len(trace._autograd_grad_fn_order),
                 step_index=step_index,
                 is_custom=_grad_fn_is_custom(grad_fn_handle),
                 has_op=layer_label is not None,
@@ -2760,7 +2760,7 @@ def _walk_and_hook_backward_graph(
             )
             grad_fn_record.trace = trace
             trace.grad_fn_logs[grad_fn_object_id] = grad_fn_record
-            trace.grad_fn_order.append(grad_fn_object_id)
+            trace._autograd_grad_fn_order.append(grad_fn_object_id)
         else:
             grad_fn_record.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
             grad_fn_record.trace = trace
@@ -2904,7 +2904,7 @@ def _emit_discovered_grad_fn(
     grad_fn_record = trace.grad_fn_logs.get(grad_fn_object_id)
     if grad_fn_record is None:
         grad_fn_type = _normalize_grad_fn_type(grad_fn_handle)
-        step_index = len(trace.grad_fn_order) + 1
+        step_index = len(trace._autograd_grad_fn_order) + 1
         type_index, step_index, label = _grad_fn_label_parts(
             trace,
             grad_fn_type,
@@ -2920,7 +2920,7 @@ def _emit_discovered_grad_fn(
             label=label,
             type=grad_fn_type,
             type_index=type_index,
-            ordinal_index=len(trace.grad_fn_order),
+            ordinal_index=len(trace._autograd_grad_fn_order),
             step_index=step_index,
             is_custom=_grad_fn_is_custom(grad_fn_handle),
             has_op=False,
@@ -2933,7 +2933,7 @@ def _emit_discovered_grad_fn(
         )
         grad_fn_record.trace = trace
         trace.grad_fn_logs[grad_fn_object_id] = grad_fn_record
-        trace.grad_fn_order.append(grad_fn_object_id)
+        trace._autograd_grad_fn_order.append(grad_fn_object_id)
     else:
         grad_fn_record.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
         grad_fn_record.trace = trace
@@ -3268,7 +3268,7 @@ def _run_backward_with_capture(
     previous_save_grads_policy = getattr(trace, "_active_save_grads_policy", None)
     previous_had_save_grads_policy = "_active_save_grads_policy" in trace.__dict__
     active_save_grads_policy = (
-        getattr(trace, "save_grads", None) if save_grads is MISSING else save_grads
+        getattr(trace, "_options_save_grads", None) if save_grads is MISSING else save_grads
     )
     # Publish the backward window through the admission lock (R54: the raw
     # unlocked save/swap here was the one site left when tf/paddle converted;
@@ -3477,11 +3477,11 @@ def _run_backward_with_capture(
             _clear_forward_grad_fn_refs(trace)
         except BaseException as exc:
             cleanup_error = cleanup_error if cleanup_error is not None else exc
-        trace.backward_memory_backend = backend
+        trace._provenance_backward_memory_backend = backend
         # Largest peak over a pass baseline: CPU max (opt-in); CUDA excesses sum.
         record_backward_peak(trace, backend, peak_delta)
-        trace.backward_durations.append(Duration(duration))
-        trace.total_param_gradient_memory = Bytes(
+        trace._cost_backward_durations.append(Duration(duration))
+        trace._cost_total_param_grad_memory = Bytes(
             sum(int(param_log.gradient_memory) for param_log in getattr(trace, "param_logs", []))
         )
         # Fence in-flight cpu_async D2H grad copies before projections make

@@ -90,7 +90,7 @@ def decode_outputs_for_trace(
         from torchlens.errors import TorchLensWarning
 
         trace.decoded_output = None
-        trace.output_postprocessor = None
+        trace._provenance_output_postprocessor = None
         annotations = getattr(trace, "annotations", None)
         if isinstance(annotations, dict):
             annotations.setdefault("decode_skipped", []).append(
@@ -139,7 +139,7 @@ def _decode_outputs_for_trace_unguarded(
     logits_info = _select_logits(outputs, resolved, meta)
     if logits_info is None:
         if output_style is not None or resolved.verified:
-            trace.output_postprocessor = replace(
+            trace._provenance_output_postprocessor = replace(
                 resolved,
                 ambiguous=True,
                 description="decode: undetected; pass output_style=/output_head= to decode.",
@@ -160,7 +160,7 @@ def _decode_outputs_for_trace_unguarded(
     trace.decoded_output = (
         {"kind": "batch_topk", "rows": decoded} if resolved.style != "hf_text" else decoded
     )
-    trace.output_postprocessor = replace(
+    trace._provenance_output_postprocessor = replace(
         resolved,
         selected_output_head=selected_head,
         top_n_captured=_TOP_N_CAPTURED,

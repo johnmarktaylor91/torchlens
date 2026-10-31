@@ -112,7 +112,7 @@ def _resolve_include_flags(
     19 and 22; M(weightsfree) W3).
     """
 
-    structure_only = bool(getattr(trace, "structure_only", False))
+    structure_only = bool(getattr(trace, "_options_structure_only", False))
     if structure_only and save_level == "executable_with_callables":
         # Item 22: this level's required saved-args/RNG payloads land under
         # the structure-only marker and the M-C2 load coherence gate refuses

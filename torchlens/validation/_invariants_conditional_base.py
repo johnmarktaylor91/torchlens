@@ -341,7 +341,7 @@ def _check_conditional_invariants(ml: Trace) -> None:
     name = "conditional_invariants"
     layer_label_set = set(ml.layer_labels)
     valid_child_labels = _valid_conditional_child_labels(ml)
-    event_id_set = {event.id for event in ml.conditional_records}
+    event_id_set = {event.id for event in ml._graph_conditional_records}
     branch_context_kinds = {"if_test", "elif_test", "ifexp"}
     wrapped_context_kinds = branch_context_kinds | {"bool_cast"}
 
@@ -384,7 +384,7 @@ def _check_conditional_arm_entry_child_symmetry(
     """
 
     # Invariant 1: conditional_arm_entry_edges ↔ conditional_arm_children.
-    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
+    for (conditional_id, branch_kind), edge_list in ml._graph_conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             if parent_label not in layer_label_set:
                 _fail_conditional_invariant(
@@ -410,7 +410,9 @@ def _check_conditional_arm_entry_child_symmetry(
     for parent_layer in ml.layer_logs.values():
         for conditional_id, branch_map in parent_layer.conditional_arm_children.items():
             for branch_kind, child_labels in branch_map.items():
-                model_edges = ml.conditional_arm_entry_edges.get((conditional_id, branch_kind), [])
+                model_edges = ml._graph_conditional_arm_entry_edges.get(
+                    (conditional_id, branch_kind), []
+                )
                 for child_label in child_labels:
                     if (parent_layer.layer_label, child_label) not in model_edges:
                         _fail_conditional_invariant(

@@ -1404,8 +1404,8 @@ def _save_alias_runnable(path: Path, *, aliased_capture: bool = True) -> Path:
     if aliased_capture:
         with pytest.warns(CaptureGapWarning, match="sparse descriptor cannot encode"):
             trace = capture_call()
-        assert trace.capture_verified is False
-        assert trace.capture_verification_reason == "input_boundary_unverifiable"
+        assert trace.provenance.verified is False
+        assert trace.provenance.verification_reason == "input_boundary_unverifiable"
     else:
         trace = capture_call()
     trace.save(path, level="runnable", include_activations=True)
@@ -1465,7 +1465,7 @@ def test_h3_readonly_aliased_inputs_fail_closed(tmp_path: Path) -> None:
             [z, z],
             capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
         )
-    assert trace.capture_verified is False
+    assert trace.provenance.verified is False
     trace.save(tmp_path / "readonly.tlspec", level="runnable", include_activations=True)
 
     shared = torch.tensor([3.0, 4.0])

@@ -5559,9 +5559,9 @@ def _relabel_as_mlx_object_module(trace: Trace) -> Trace:
         Same trace object routed through backend-neutral object_module validation.
     """
 
-    trace.backend = "mlx"
-    trace.module_identity_mode = "object_module"
-    trace.param_source = "native-module"
+    trace._provenance_backend = "mlx"
+    trace._options_module_identity_mode = "object_module"
+    trace._provenance_param_source = "native-module"
     return trace
 
 
@@ -5581,9 +5581,9 @@ def _relabel_as_function_root(trace: Trace, backend: str) -> Trace:
         Same trace object routed through backend-neutral function_root validation.
     """
 
-    trace.backend = backend
-    trace.module_identity_mode = "function_root"
-    trace.param_source = "none"
+    trace._provenance_backend = backend
+    trace._options_module_identity_mode = "function_root"
+    trace._provenance_param_source = "none"
     return trace
 
 
@@ -5651,12 +5651,12 @@ def test_backend_identity_invariants_reject_torch_param_source_none_with_params(
 
     log = _make_clean_log()
     try:
-        assert log.backend == "torch"
-        assert log.module_identity_mode == "torch_module"
-        assert log.param_source == "native-module"
+        assert log.provenance.backend == "torch"
+        assert log.options.module_identity_mode == "torch_module"
+        assert log.provenance.param_source == "native-module"
         assert log.num_param_tensors > 0
 
-        log.param_source = "none"
+        log._provenance_param_source = "none"
 
         with pytest.raises(MetadataInvariantError, match="param_source='none'"):
             check_metadata_invariants(log)
@@ -5671,9 +5671,9 @@ def test_backend_identity_invariants_pass_healthy_resnet() -> None:
     model = torchvision_models.resnet18(weights=None).eval()
     log = trace_fn(model, torch.randn(1, 3, 32, 32), capture=tl.options.CaptureOptions(seed=42))
     try:
-        assert log.backend == "torch"
-        assert log.module_identity_mode == "torch_module"
-        assert log.param_source == "native-module"
+        assert log.provenance.backend == "torch"
+        assert log.options.module_identity_mode == "torch_module"
+        assert log.provenance.param_source == "native-module"
         assert log.num_param_tensors > 0
         assert check_metadata_invariants(log) is True
     finally:
@@ -6219,7 +6219,7 @@ def test_backward_phase_d_preconditions_reach_backward_trace() -> None:
 
     log = _make_backward_log()
     try:
-        assert log.has_backward_pass
+        assert log.autograd.has_backward_pass
         assert log.grad_fn_logs
         assert log.backward_pass_logs
         assert any(
@@ -6362,7 +6362,7 @@ def test_bad_grad_fn_order_raises() -> None:
     """Unknown grad_fn_handle ids in grad_fn_order raise an invariant error."""
 
     log = _make_backward_log()
-    log.grad_fn_order.append(-1)
+    log.autograd.grad_fn_order.append(-1)
     with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6372,7 +6372,7 @@ def test_bad_backward_root_grad_fn_id_raises() -> None:
     """An unknown backward root id raises an invariant error."""
 
     log = _make_backward_log()
-    log.backward_root_grad_fn_object_ids = -1  # type: ignore[assignment]
+    log._autograd_backward_root_grad_fn_object_ids = -1  # type: ignore[assignment]
     with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6910,7 +6910,7 @@ def test_corruption_distance_min_gt_max():
 def test_corruption_distance_input_nonzero():
     """Input layer with nonzero distance_from_input triggers error."""
     log = _make_clean_log()
-    if not log.mark_layer_depths:
+    if not log.options.mark_layer_depths:
         # Vacuous-pass conversion (b9 R71-3): a plant with no armed target
         # must SKIP, not silently green.
         log.cleanup()
@@ -6928,7 +6928,7 @@ def test_corruption_distance_input_nonzero():
 def test_corruption_distance_ancestor_flag():
     """Mismatch between has_input_ancestor and input_ancestors triggers error."""
     log = _make_clean_log()
-    if not log.mark_layer_depths:
+    if not log.options.mark_layer_depths:
         # Vacuous-pass conversion (b9 R71-3): a plant with no armed target
         # must SKIP, not silently green.
         log.cleanup()
@@ -8658,9 +8658,9 @@ def test_corruption_arm_equivalence_registry_group_mismatch() -> None:
     log = trace_fn(_ReusedLinear(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
         key, members = next(
-            (k, sorted(v)) for k, v in log.op_equivalence_classes.items() if len(v) >= 2
+            (k, sorted(v)) for k, v in log.graph.op_equivalence_classes.items() if len(v) >= 2
         )
-        log.op_equivalence_classes[key] = set(members[:-1])
+        log.graph.op_equivalence_classes[key] = set(members[:-1])
         with pytest.raises(MetadataInvariantError, match=r"equivalent_ops=.* != expected"):
             _check_equivalence_symmetry(log)
     finally:

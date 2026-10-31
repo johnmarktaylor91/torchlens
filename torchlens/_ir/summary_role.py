@@ -216,8 +216,8 @@ def retained_activation_bytes(trace_like: Any, op_like: Any) -> int:
         Retained bytes for this op under the capture's retention decision.
     """
 
-    transform = getattr(trace_like, "activation_transform", None)
-    store_raw = transform is None or getattr(trace_like, "save_raw_activations", True)
+    transform = getattr(trace_like, "_options_activation_transform", None)
+    store_raw = transform is None or getattr(trace_like, "_options_save_raw_activations", True)
     if store_raw:
         return int(getattr(op_like, "activation_memory", 0) or 0)
     return int(getattr(op_like, "transformed_activation_memory", 0) or 0)

@@ -98,7 +98,7 @@ def _ensure_replay_run_ctx(log: Trace) -> dict[str, Any]:
     run_ctx = cast(dict[str, Any], log.last_run)
     # Seed law D5 (F02): thread the capture's recorded seed so seed='auto'
     # stochastic edits canonicalize their base seed on the replay door too.
-    trace_seed = getattr(log, "random_seed", None)
+    trace_seed = getattr(log, "_options_seed", None)
     if trace_seed is not None:
         run_ctx.setdefault("trace_random_seed", trace_seed)
     return run_ctx

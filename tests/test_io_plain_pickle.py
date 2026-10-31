@@ -110,7 +110,7 @@ def test_plain_pickle_dump_and_load_still_work(tmp_path: Path) -> None:
         restored = pickle.load(handle)
 
     assert isinstance(restored, Trace)
-    assert restored.model_class_name == trace.model_class_name
+    assert restored.source.class_name == trace.source.class_name
     assert len(restored.layer_list) == len(trace.layer_list)
     assert restored[restored.output_layers[0]].layer_label == restored.output_layers[0]
     assert restored.layer_list[0].source_trace is restored
@@ -333,7 +333,7 @@ def test_trace_setstate_absent_container_fields_restore_typed() -> None:
     assert hasattr(restored.layer_logs, "values")
     assert isinstance(restored.op_labels, list)
     assert isinstance(restored.by_pass, dict)
-    assert isinstance(restored.conditional_records, list)
+    assert isinstance(restored.graph.conditional_records, list)
     # The exact crash sites from __setstate__ must be iterable now.
     assert list(restored.layer_logs.values()) == []
     assert list(restored.layer_list) == []
@@ -516,7 +516,7 @@ def test_plain_pickle_survives_a_lambda_activation_transform() -> None:
         save=tl.options.SaveOptions(activation_transform=lambda t: t * 2),
     )
     restored = pickle.loads(pickle.dumps(log))
-    assert restored.activation_transform is None
+    assert restored.options.activation_transform is None
     assert restored.layer_list[0].activation_transform is None
 
 

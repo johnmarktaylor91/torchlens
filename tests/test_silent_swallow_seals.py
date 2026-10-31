@@ -105,7 +105,7 @@ def test_failed_decode_leaves_a_durable_annotation(monkeypatch) -> None:
         )
 
     assert trace.decoded_output is None, "partial decode write survived the belt"
-    assert trace.output_postprocessor is None
+    assert trace.provenance.output_postprocessor is None
     rows = trace.annotations.get("decode_skipped")
     assert rows and rows[0]["error"].startswith("RuntimeError"), (
         f"no durable decode-skip record: {trace.annotations!r}"

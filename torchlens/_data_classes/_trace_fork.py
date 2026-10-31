@@ -619,7 +619,7 @@ def _fill_layer_shells(
 
     fork_layer_logs: OrderedDict[str, Any] = OrderedDict()
     consumed_shells: set[int] = set()
-    fork_equivalent_ops = fork.op_equivalence_classes
+    fork_equivalent_ops = fork._graph_op_equivalence_classes
     # One normalized relation view per equivalence class: the finished-Layer
     # write normalization (F5) converts each assigned staging set to an
     # immutable view, and materializing a fresh one PER MEMBER layer is
@@ -794,7 +794,7 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
     # A spec-less parent gives a spec-less fork; staging on it creates one lazily.
     fork._intervention_spec = copy.deepcopy(parent._intervention_spec, memo)
     fork.state_history = copy.deepcopy(parent.state_history, memo)
-    fork.relationship_evidence = copy.deepcopy(parent.relationship_evidence, memo)
+    fork._graph_relationship_evidence = copy.deepcopy(parent.relationship_evidence, memo)
     fork._out_recipe_revision = parent._out_recipe_revision
     fork._spec_revision = parent._spec_revision
     fork.state = parent.state

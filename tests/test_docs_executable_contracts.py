@@ -124,7 +124,7 @@ def test_every_public_python_fence_compiles_and_torchlens_imports_resolve() -> N
 
 
 @pytest.mark.smoke_cells(
-    'test_performance_python_fence_runs[3-import torch\\nfrom torch import nn\\nimport torchlens as tl\\nfrom torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch\\n\\n\\nmodel = nn.ReLU()\\nx = torch.randn(4)\\nwrap_torch(escape_detector="shadow")\\ntrace = tl.trace(model, x)\\nprint(trace.escape_detector_event_count, trace.escape_detector_callback_ns)\\nunwrap_torch()]',
+    'test_performance_python_fence_runs[3-import torch\\nfrom torch import nn\\nimport torchlens as tl\\nfrom torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch\\n\\n\\nmodel = nn.ReLU()\\nx = torch.randn(4)\\nwrap_torch(escape_detector="shadow")\\ntrace = tl.trace(model, x)\\nprint(trace.health.num_escape_detector_events, trace.health.escape_detector_callback_ns)\\nunwrap_torch()]',
     'test_performance_python_fence_runs[8-import torch\\nfrom torch import nn\\nimport torchlens as tl\\n\\n\\nmodel = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()\\nx = torch.randn(2, 4)\\n\\npatched = tl.trace(\\n    model,\\n    x,\\n    save=tl.func("relu"),\\n    intervene=tl.when(tl.func("relu"), tl.zero_ablate()),\\n)\\n\\nassert torch.count_nonzero(patched.find_sites(tl.func("relu")).first().out) == 0]',
 )
 @pytest.mark.parametrize(

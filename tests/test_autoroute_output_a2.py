@@ -139,8 +139,8 @@ def test_config_id2label_decodes_topk_labels_and_probs() -> None:
 
     trace = tl.trace(model, torch.ones(1, 2))
 
-    assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.source == "hf_config"
+    assert trace.provenance.output_postprocessor is not None
+    assert trace.provenance.output_postprocessor.source == "hf_config"
     rows = _decoded_rows(trace)
     assert rows[0]["label"] == "positive"
     assert rows[0]["class_index"] == 1
@@ -161,8 +161,8 @@ def test_output_style_override_and_output_head_select_named_head() -> None:
         capture=tl.options.CaptureOptions(output_style="classification", output_head="main"),
     )
 
-    assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.selected_output_head == "main"
+    assert trace.provenance.output_postprocessor is not None
+    assert trace.provenance.output_postprocessor.selected_output_head == "main"
     assert _decoded_rows(trace)[0]["label"] == "hot"
 
 
@@ -228,13 +228,13 @@ def test_multi_output_selects_logits_and_fails_closed_on_ambiguity() -> None:
 
     tuple_trace = tl.trace(_TupleClassifier(torch.tensor([[0.0, 3.0]]), labels).eval(), x)
     assert tuple_trace.decoded_output is not None
-    assert tuple_trace.output_postprocessor is not None
-    assert tuple_trace.output_postprocessor.selected_output_head == "1"
+    assert tuple_trace.provenance.output_postprocessor is not None
+    assert tuple_trace.provenance.output_postprocessor.selected_output_head == "1"
 
     hf_trace = tl.trace(_HFLikeClassifier(torch.tensor([[4.0, 1.0]]), labels).eval(), x)
     assert hf_trace.decoded_output is not None
-    assert hf_trace.output_postprocessor is not None
-    assert hf_trace.output_postprocessor.selected_output_head == "logits"
+    assert hf_trace.provenance.output_postprocessor is not None
+    assert hf_trace.provenance.output_postprocessor.selected_output_head == "logits"
 
     ambiguous = tl.trace(
         _TupleClassifier(torch.tensor([[0.0, 3.0]]), labels, ambiguous=True).eval(),
@@ -252,7 +252,7 @@ def test_generic_1000_width_tensor_without_verified_metadata_does_not_decode() -
     trace = tl.trace(model, torch.ones(1, 2))
 
     assert trace.decoded_output is None
-    assert trace.output_postprocessor is None
+    assert trace.provenance.output_postprocessor is None
 
 
 def test_hf_text_decode_uses_attached_tokenizer() -> None:
@@ -265,8 +265,8 @@ def test_hf_text_decode_uses_attached_tokenizer() -> None:
         model, torch.ones(1, 2), capture=tl.options.CaptureOptions(output_style="hf_text")
     )
 
-    assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.style == "hf_text"
+    assert trace.provenance.output_postprocessor is not None
+    assert trace.provenance.output_postprocessor.style == "hf_text"
     assert trace.decoded_output == [
         {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}
     ]
@@ -332,7 +332,7 @@ def test_cache_key_changes_when_only_id2label_changes(tmp_path: Path) -> None:
         model, input_tensor, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
     )
 
-    assert first.capture_cache_key != second.capture_cache_key
+    assert first.provenance.cache_key != second.provenance.cache_key
     assert first.decoded_output is not None
     assert second.decoded_output is not None
     assert first.decoded_output["rows"][0]["label"] == "old-yes"

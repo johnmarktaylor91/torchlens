@@ -1070,7 +1070,7 @@ def settle_completed(trace: object, session: object) -> CaptureOutcome:
         CaptureOutcome(
             status=CaptureStatus.COMPLETE,
             num_committed_ops=count_committed_ops(trace),
-            inference_only=bool(getattr(trace, "inference_only", False)),
+            inference_only=bool(getattr(trace, "_options_inference_only", False)),
         ),
     )
 
@@ -1107,7 +1107,7 @@ def settle_halted(
         remapped_reason = getattr(trace, "stop_reason", None)
         if isinstance(remapped_reason, str):
             reason = remapped_reason
-        remapped_frontier = getattr(trace, "halt_frontier", None)
+        remapped_frontier = getattr(trace, "_graph_stop_frontier", None)
         if isinstance(remapped_frontier, str):
             boundary_label = remapped_frontier
     return _stamp(
@@ -1120,7 +1120,7 @@ def settle_halted(
             boundary_label=boundary_label,
             frontier_labels=frontier,
             num_committed_ops=count_committed_ops(trace),
-            inference_only=bool(getattr(trace, "inference_only", False)),
+            inference_only=bool(getattr(trace, "_options_inference_only", False)),
         ),
     )
 
@@ -1169,7 +1169,7 @@ def settle_failed(
                 boundary_kind=stop_request.boundary_kind,
                 boundary_label=stop_request.boundary_label,
                 num_committed_ops=num_committed_ops,
-                inference_only=bool(getattr(trace, "inference_only", False)),
+                inference_only=bool(getattr(trace, "_options_inference_only", False)),
                 note=note,
             ),
         )
@@ -1184,7 +1184,7 @@ def settle_failed(
             reason=safe_exception_str(exc),
             error_type=_qualified_type_name(exc),
             num_committed_ops=num_committed_ops,
-            inference_only=bool(getattr(trace, "inference_only", False)),
+            inference_only=bool(getattr(trace, "_options_inference_only", False)),
             note=note,
         ),
     )
@@ -1363,7 +1363,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
         raise swallowed
     if bool(getattr(trace, "halted", False)):
         reason = getattr(trace, "stop_reason", None)
-        frontier_label = getattr(trace, "halt_frontier", None)
+        frontier_label = getattr(trace, "_graph_stop_frontier", None)
         # The preview tail ran to completion (module attachment, relation
         # freeze), so ``output_layers`` holds this backend's final labels for
         # the halt frontier -- the same fact settle_halted reads on the
@@ -1382,7 +1382,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
                 boundary_label=frontier_label if isinstance(frontier_label, str) else None,
                 frontier_labels=frontier,
                 num_committed_ops=count_committed_ops(trace),
-                inference_only=bool(getattr(trace, "inference_only", False)),
+                inference_only=bool(getattr(trace, "_options_inference_only", False)),
             ),
         )
     return _stamp(
@@ -1391,7 +1391,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
         CaptureOutcome(
             status=CaptureStatus.COMPLETE,
             num_committed_ops=count_committed_ops(trace),
-            inference_only=bool(getattr(trace, "inference_only", False)),
+            inference_only=bool(getattr(trace, "_options_inference_only", False)),
         ),
     )
 

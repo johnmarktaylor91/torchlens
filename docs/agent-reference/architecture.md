@@ -19,8 +19,8 @@ Key entry points:
   ("structural" default, which on torch is call-site grouping,
   `detector="callsite_v1"`, rule in `docs/guides/grouping.md`; others
   refuse typed pre-D1/S2) mirrored on
-  `trace.grouping`, with the load-validated `grouping_policy_v1` stamp on
-  `trace.grouping_policy` (C1-C8 coherence; degrade-settlement monotonic).
+  `trace.options.grouping`, with the load-validated `grouping_policy_v1` stamp on
+  `trace.options.grouping_policy` (C1-C8 coherence; degrade-settlement monotonic).
   Persisted rows are live as of the tlspec v8 bump (load-validated); join/fold
   machinery in `torchlens/_postprocess/_site_key.py` / `_site_join.py` /
   `_grouping_stamp.py`.
@@ -30,7 +30,7 @@ Key entry points:
   dtype facts, `torchlens.types.InputSpec` override) XOR zero-arg
   inference (the exact verified trace is consumed, never recaptured).
   Synthesized rungs persist `InputProvenance` inside the existing
-  `Trace.input_preprocessor` KEEP field; `decode_output`/`output_table`
+  `Trace.provenance.input_preprocessor` KEEP field; `decode_output`/`output_table`
   refuse `nongold_semantics_unavailable` on synthesized values; first raw
   read warns once (`nongold_raw_value_read`). `torchlens.user_funcs.render`
   is the one-call facade (metadata-only pinned eval/no-grad, state-hash
@@ -54,7 +54,7 @@ Key entry points:
   zero-input (reuses `guess_input_shape`'s verified trace, synthesis
   disclosed). Result API: `render`/`print`/`details`/`to_pandas`/
   `to_markdown`/`to_html` + scalar raw ints; survives model/Trace teardown;
-  `trace.provenance()` serves the relocated preamble byte-exact;
+  `trace.provenance.summary()` serves the relocated preamble byte-exact;
   `Trace._repr_html_` delegates to the summary HTML. Pins:
   `tools/derive_summary_pins.py`; ratio page:
   `docs/benchmarks/summary_performance.md`; docs: `docs/reference/summary.md`,
@@ -136,7 +136,7 @@ Key entry points:
   `docs/reference/structure_only_capabilities.md`); value-dependent
   branches refuse device-neutrally at the user's source line;
   `trace.discharge_against(real_trace)` corroborates/refutes hypotheses
-  behind a comparable-twins preflight; `Trace.structure_evidence` is the
+  behind a comparable-twins preflight; `Trace.graph.structure_evidence` is the
   persisted envelope; `tl.summary(meta_model, input_size=...)` and
   `Trace.check_plan(plan)` are the facade + audit verbs. Doc:
   `docs/reference/weightsfree_capture.md`.

@@ -679,7 +679,7 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
         # anything other than the exact marker string reads False -- absence
         # of the marker never blocks, presence of ANY other value never
         # blocks; only the one documented value engages the scope guard.
-        shard_local=(getattr(trace, "distributed_scope", None) == "rank_local_shard"),
+        shard_local=(getattr(trace, "_provenance_distributed_scope", None) == "rank_local_shard"),
     )
 
 

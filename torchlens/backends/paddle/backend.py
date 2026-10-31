@@ -484,15 +484,15 @@ class PaddleBackend:
             save_visualizations=save_visualizations,
         )
         trace.name = name
-        trace.backend = cast(BackendName, self.name)
+        trace._provenance_backend = cast(BackendName, self.name)
         # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module
         # root, backends/_finalize.py new_preview_function_trace's for a function root.
         if module_tree is not None:
             root_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
-            trace.root_entry_point = f"module_call:{root_qualname}.__call__"
+            trace._provenance_root_entry_point = f"module_call:{root_qualname}.__call__"
         else:
-            trace.root_entry_point = (
-                f"function_call:{getattr(model, '__qualname__', trace.model_class_name)}"
+            trace._provenance_root_entry_point = (
+                f"function_call:{getattr(model, '__qualname__', trace._source_class_name)}"
             )
         trace.capture_events = CaptureEvents()
         trace._paddle_capture_depth = 0
@@ -517,13 +517,13 @@ class PaddleBackend:
             from ...semantic import facets as facets_mod
 
             trace.facet_functions = facets_mod.snapshot(recipe_tuple)
-        trace.backend_runtime_version = str(getattr(self.paddle, "__version__", ""))
-        trace.backend_runtime_config = {"version": trace.backend_runtime_version}
+        trace._provenance_backend_version = str(getattr(self.paddle, "__version__", ""))
+        trace._provenance_backend_config = {"version": trace._provenance_backend_version}
         trace.backend_runtime_device_summary = {}
         trace._pre_forward_rng_states = None
         setattr(
             trace,
-            "random_seed",
+            "_options_seed",
             cast(int, random_seed) if random_seed is not None else random.randint(1, 4294967294),
         )
         self.tensor_store.clear()
@@ -548,7 +548,7 @@ class PaddleBackend:
         try:
             wrap_paddle(self)
             self._label_source_tensors(trace, args, kwargs)
-            trace.capture_start_time = time.time()
+            trace._provenance_start_time = time.time()
             halt_signal: StopSignal | None = None
             try:
                 with _state.active_logging(trace):
@@ -556,7 +556,7 @@ class PaddleBackend:
             except StopSignal as exc:
                 halt_signal = exc
                 output = exc.frontier_output
-            trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+            trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
             trace._paddle_capture_gap_markers.extend(
                 f"{PARAMETER_WRITE_MARKER}: {address}"
                 for address in self._param_write_guard.written_addresses(trace)
@@ -564,7 +564,7 @@ class PaddleBackend:
             if halt_signal is not None:
                 trace.halted = True
                 trace.stop_reason = halt_signal.reason
-                trace.halt_frontier = halt_signal.reason
+                trace._graph_stop_frontier = halt_signal.reason
                 trace.raw_output = None
             elif intervention_runtime is not None:
                 intervention_runtime.warn_if_zero_matches()
@@ -581,14 +581,14 @@ class PaddleBackend:
                     param.num_params for param in trace.param_logs if param.is_trainable
                 )
                 trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-                trace.param_source = "native-module"
+                trace._provenance_param_source = "native-module"
             else:
                 trace.param_logs = ParamAccessor({})
                 trace.num_param_tensors = 0
                 trace.num_params = 0
                 trace.num_params_trainable = 0
                 trace.num_params_frozen = 0
-                trace.param_source = "none"
+                trace._provenance_param_source = "none"
             self._finish_trace(trace, module_tree if use_object_module else None)
             apply_static_label_save_policy(trace, save_predicate, backend_name="paddle")
             if grad_options is not None:
@@ -677,7 +677,7 @@ class PaddleBackend:
         Returns
         -------
         None
-            ``trace.derived_grads`` and optionally
+            ``trace._autograd_derived_grads`` and optionally
             ``trace.autograd.intermediate_derived_grads`` are populated.
         """
 
@@ -732,7 +732,7 @@ class PaddleBackend:
                 if not _paddle_trees_close(self, replay_output, captured_output):
                     raise ValueError(
                         "Paddle derived gradient run raw output diverged from captured raw "
-                        "output; refusing to expose trace.derived_grads."
+                        "output; refusing to expose trace._autograd_derived_grads."
                     )
                 intermediate_accessor = IntermediateDerivedGradAccessor()
                 if observer is not None:
@@ -773,7 +773,7 @@ class PaddleBackend:
             if module_tree is not None and previous_forward_args is not None:
                 module_tree.forward_args_by_call.clear()
                 module_tree.forward_args_by_call.update(previous_forward_args)
-        trace.derived_grads = DerivedGradAccessor(records)
+        trace._autograd_derived_grads = DerivedGradAccessor(records)
         if grad_options.intermediate_grads:
             from ..._data_classes._trace_stats import set_intermediate_derived_grads
 
@@ -1714,7 +1714,7 @@ class PaddleBackend:
             attach_object_module_logs=self._attach_object_module_logs,
             attach_op_params=attach_module_owned_op_params,
             count_layers_with_attached_params=True,
-            recurrence_detection=bool(getattr(trace, "recurrence_detection", False)),
+            recurrence_detection=bool(getattr(trace, "_options_recurrence_detection", False)),
         )
 
     def _attach_object_module_logs(self, trace: Trace, tree: PaddleModuleTree) -> None:

@@ -117,13 +117,13 @@ def test_factory_configured_instance_forward_is_a_cache_miss(tmp_path) -> None:
     model.forward = types.MethodType(_make_flag_forward(True), model)
     x = torch.randn(1, 4)
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
 
     twin = _CacheModel()
     twin.load_state_dict(model.state_dict())
     twin.forward = types.MethodType(_make_flag_forward(False), twin)
     second = tl.trace(twin, x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is False, (
+    assert second.provenance.cache_hit is False, (
         "a factory-configured forward with a different closure value must miss"
     )
     labels = list(second.layer_labels)
@@ -142,11 +142,11 @@ def test_non_tensor_forward_input_is_a_cache_miss(tmp_path) -> None:
     model = _FlagModel()
     x = torch.randn(1, 4)
     first = tl.trace(model, (x, True), capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     assert any("relu" in label for label in first.layer_labels)
 
     second = tl.trace(model, (x, False), capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is False, (
+    assert second.provenance.cache_hit is False, (
         "a changed non-tensor forward input must be a cache miss"
     )
     labels = list(second.layer_labels)
@@ -245,6 +245,6 @@ def test_lazy_conj_input_capture_with_cache_does_not_crash(tmp_path) -> None:
     model = _DoubleModel()
     x = torch.randn(2, 3, dtype=torch.complex64).conj()
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     second = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is True
+    assert second.provenance.cache_hit is True

@@ -404,7 +404,7 @@ def speedscope(trace: Any, path: str | Path) -> Path:
         "profiles": [
             {
                 "type": "evented",
-                "name": getattr(trace, "model_class_name", "TorchLens forward"),
+                "name": getattr(trace, "_source_class_name", "TorchLens forward"),
                 "unit": "microseconds",
                 "startValue": 0,
                 "endValue": cursor_us,
@@ -446,7 +446,7 @@ def flamegraph(trace: Any, path: str | Path) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     lines = []
-    model_class_name = str(getattr(trace, "model_class_name", "TorchLens"))
+    model_class_name = str(getattr(trace, "_source_class_name", "TorchLens"))
     # The folded-stack format has no comment/metadata slot, so the honesty
     # facts ride a ZERO-WEIGHT synthetic frame: standard flamegraph tools
     # accept the line and render nothing for weight 0, but the exported file
@@ -905,7 +905,7 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
             "ph": "M",
             "pid": 1,
             "tid": 0,
-            "args": {"name": str(getattr(log, "model_class_name", "TorchLens forward"))},
+            "args": {"name": str(getattr(log, "_source_class_name", "TorchLens forward"))},
         }
     ]
     cursor_us = 0

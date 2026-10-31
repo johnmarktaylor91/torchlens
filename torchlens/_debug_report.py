@@ -398,4 +398,4 @@ def table_report(
 def trace_subject(trace: Any) -> str:
     """Name a trace for a report subject (its model class)."""
 
-    return str(getattr(trace, "model_class_name", None) or type(trace).__name__)
+    return str(getattr(trace, "_source_class_name", None) or type(trace).__name__)

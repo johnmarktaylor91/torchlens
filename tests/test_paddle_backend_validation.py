@@ -237,7 +237,7 @@ def test_paddle_validation_layer_parameters_are_known_sources() -> None:
 
     trace = tl.trace(_LinearRelu(), _layer_input(), backend="paddle")
 
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert PaddleBackend().validate_trace(trace) is True
     assert trace.validation_replay_status.num_replayed_ops == 2
     linear = next(c for c in trace._paddle_op_captures if c.op_name == "functional.linear")
@@ -302,11 +302,11 @@ def test_paddle_function_root_trace_has_buffers_and_graph_shape_hash() -> None:
         lambda x: paddle.nn.functional.relu(x + 1.0), _layer_input(), backend="paddle"
     )
 
-    assert first.module_identity_mode == "function_root"
+    assert first.options.module_identity_mode == "function_root"
     assert first.buffers is not None and len(first.buffers) == 0
-    assert isinstance(first.graph_shape_hash, str)
-    assert first.graph_shape_hash == second.graph_shape_hash
-    assert different.graph_shape_hash != first.graph_shape_hash
+    assert isinstance(first.provenance.fingerprint, str)
+    assert first.provenance.fingerprint == second.provenance.fingerprint
+    assert different.provenance.fingerprint != first.provenance.fingerprint
 
 
 class _BnRelu(paddle.nn.Layer):

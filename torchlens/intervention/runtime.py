@@ -1572,7 +1572,7 @@ def _stamp_live_site_identity(site: Any) -> None:
     if getattr(site, "site_key", None) or getattr(site, "_tl_module_boundary", False):
         return
     trace = _state._active_trace
-    if trace is None or getattr(trace, "capture_mode", None) != "exhaustive":
+    if trace is None or getattr(trace, "_options_mode", None) != "exhaustive":
         return
     # The minter rides the session-only run context (last_run, FieldPolicy
     # DROP) rather than its own Trace attr: no schema/ownership row, and the
@@ -1618,7 +1618,7 @@ def _live_run_ctx() -> dict[str, Any]:
     # Seed law D5 (F02): the capture's recorded seed rides the run context so
     # seed='auto' stochastic edits can canonicalize their base seed without
     # ever touching ambient RNG.
-    trace_seed = getattr(trace, "random_seed", None)
+    trace_seed = getattr(trace, "_options_seed", None)
     if trace_seed is not None:
         run_ctx.setdefault("trace_random_seed", trace_seed)
     return run_ctx

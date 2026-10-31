@@ -468,7 +468,7 @@ def _capture_status_lines(log: Any) -> list[str]:
     facts = _capture_verification(log)
     lines = [f"- Capture outcome: {facts['capture_status']}."]
     # L7a G3 render honesty (memo sec 3.4).
-    if bool(getattr(log, "structure_only", False)):
+    if bool(getattr(log, "_options_structure_only", False)):
         lines.append(
             "- Structure-only capture: shapes/dtypes are HYPOTHESES, not "
             "measurements; discharge against a real capture to corroborate."
@@ -576,7 +576,7 @@ def _model_summary_lines(log: Any) -> list[str]:
 
     from ._factcore import factcore
 
-    model_class_name = getattr(log, "model_class_name", type(log).__name__)
+    model_class_name = getattr(log, "_source_class_name", type(log).__name__)
     # Single-source law (sumfam D1/item 11): headline facts come from
     # FactCore, never raw trace attributes. A husked/foreign log that cannot
     # serve the substrate degrades to the legacy zero-shape (explain is the
@@ -680,13 +680,13 @@ def _backward_summary_lines(log: Any) -> list[str]:
         Bullet lines for the backward section.
     """
 
-    if not bool(getattr(log, "has_backward_pass", False)):
+    if not bool(getattr(log, "_autograd_has_backward_pass", False)):
         return ["- No backward passes are recorded on this log."]
     pass_count = int(getattr(log, "num_backward_passes", 0) or 0)
     grad_fn_count = len(getattr(getattr(log, "autograd", None), "grad_fns", None) or ())
     grad_fn_call_count = len(getattr(getattr(log, "autograd", None), "grad_fn_calls", None) or ())
     saved_grad_count = _safe_len(getattr(log, "saved_grad_ops", None))
-    total_backward_memory = getattr(log, "total_backward_memory", None)
+    total_backward_memory = getattr(log, "_cost_total_backward_memory", None)
     memory_line = (
         f"- Unique backward payload memory: {total_backward_memory}."
         if total_backward_memory is not None
@@ -955,7 +955,7 @@ def _dynamic_control_flow_line(log: Any) -> str:
         Dynamic-control-flow summary.
     """
 
-    event_count = _safe_len(getattr(log, "conditional_records", None))
+    event_count = _safe_len(getattr(log, "_graph_conditional_records", None))
     has_branching = bool(getattr(getattr(log, "graph", None), "has_conditional_branching", False))
     if event_count or has_branching:
         return (
@@ -1003,7 +1003,7 @@ def _operational_status_line(log: Any) -> str:
         Operational status summary.
     """
 
-    cache_hit = bool(getattr(log, "capture_cache_hit", False))
+    cache_hit = bool(getattr(log, "_provenance_cache_hit", False))
     streamed = sum(
         1
         for layer in getattr(log, "layer_list", []) or []

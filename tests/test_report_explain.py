@@ -262,8 +262,8 @@ def test_explain_surfaces_unverified_capture() -> None:
     """A ceilinged capture (capture_verified=False) stays visible everywhere."""
 
     log = _captured_log()
-    log.capture_verified = False
-    log.capture_verification_reason = "dynamo_region_not_logged"
+    log._provenance_verified = False
+    log._provenance_verification_reason = "dynamo_region_not_logged"
 
     capture = log.to_agent_json()["capture"]
     assert capture["capture_verified"] is False
@@ -278,8 +278,8 @@ def test_profile_surfaces_unverified_capture() -> None:
     """Profile output discloses verification state per the honesty contract."""
 
     log = _captured_log()
-    log.capture_verified = False
-    log.capture_verification_reason = "mode_rescue_rerun"
+    log._provenance_verified = False
+    log._provenance_verification_reason = "mode_rescue_rerun"
     log.rescue_rerun = True
 
     profile = tl.report.profile(log)
@@ -304,8 +304,8 @@ def test_summary_surfaces_unverified_capture() -> None:
     clean_text = log.summary()
     assert "UNVERIFIED" not in clean_text
 
-    log.capture_verified = False
-    log.capture_verification_reason = "dynamo_region_not_logged"
+    log._provenance_verified = False
+    log._provenance_verification_reason = "dynamo_region_not_logged"
     text = log.summary()
     assert "UNVERIFIED" in text
     assert "dynamo_region_not_logged" in text

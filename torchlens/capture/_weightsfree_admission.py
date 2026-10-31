@@ -223,9 +223,9 @@ def enforce_settlement_invariants(trace: Any) -> None:
 def _first_settlement_violation(trace: Any) -> str | None:
     """The first violated D22 invariant, or ``None`` when coherent."""
 
-    if not bool(getattr(trace, "structure_only", False)):
+    if not bool(getattr(trace, "_options_structure_only", False)):
         return "admitted meta capture lost its structure_only marker (fails closed)"
-    if bool(getattr(trace, "capture_verified", False)):
+    if bool(getattr(trace, "_provenance_verified", False)):
         return "capture_verified is True on a value-free capture"
     for layer in getattr(trace, "layer_list", ()):
         if getattr(layer, "out", None) is not None:

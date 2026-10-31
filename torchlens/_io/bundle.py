@@ -646,7 +646,7 @@ def save(
                 input_fingerprints=input_fingerprints,
             )
         sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
-    backend_name = str(getattr(trace, "backend", "torch"))
+    backend_name = str(getattr(trace, "_provenance_backend", "torch"))
     backend_spec = get_backend_spec(backend_name)
     _reject_audit_only_materialized_payload_save(
         backend_name=backend_name,
@@ -2793,9 +2793,9 @@ def _scrub_trace_for_bundle(
             include_custom_attributes=include_custom_attributes,
             include_buffer_values=include_buffer_values,
             sparse_runnable=sparse_runnable,
-            backend_name=str(getattr(trace, "backend", "torch")),
+            backend_name=str(getattr(trace, "_provenance_backend", "torch")),
             payload_materialization=get_backend_spec(
-                str(getattr(trace, "backend", "torch"))
+                str(getattr(trace, "_provenance_backend", "torch"))
             ).capabilities.payload_materialization,
         )
     finally:
@@ -3709,7 +3709,7 @@ def _validate_activation_transform_outputs(
         If a saved out is not a plain tensor.
     """
 
-    if not include_outs or getattr(trace, "activation_transform", None) is None:
+    if not include_outs or getattr(trace, "_options_activation_transform", None) is None:
         return
     for layer in trace.layer_list:
         if not getattr(layer, "has_saved_activation", False):

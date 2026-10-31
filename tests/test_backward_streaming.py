@@ -87,7 +87,7 @@ def test_log_backward_streams_grads_to_disk(tmp_path: Path) -> None:
     manifest = Manifest.read(bundle_path / "manifest.json")
 
     assert bundle_path.exists()
-    assert trace.has_backward_pass
+    assert trace.autograd.has_backward_pass
     assert any(entry.kind == "grad" for entry in manifest.tensors)
     assert len(trace.saved_grad_ops) > 0
 
@@ -103,7 +103,7 @@ def test_streamed_bundle_honors_per_call_save_grads_override(tmp_path: Path) -> 
         capture=CaptureOptions(layers_to_save="all", save_grads=True),
         storage=tl.to_disk(bundle_path),
     )
-    trace.save_grads = None
+    trace._options_save_grads = None
 
     trace.log_backward(trace[trace.output_layers[0]].out.sum(), save_grads=True)
 
@@ -141,15 +141,15 @@ def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
         grad_fn_handle for grad_fn_handle in restored.autograd.grad_fns if grad_fn_handle.op
     )
 
-    assert restored.has_backward_pass is True
+    assert restored.autograd.has_backward_pass is True
     assert restored.num_backward_passes == trace.num_backward_passes
-    assert restored.backward_memory_backend == trace.backward_memory_backend
+    assert restored.provenance.backward_memory_backend == trace.provenance.backward_memory_backend
     assert len(restored.grad_fn_logs) == len(trace.grad_fn_logs)
     # Portable grad-fn identities are remapped to deterministic sequential ids
     # at save time (order-preserving over grad_fn_order); the live trace keeps
     # raw id() values, so the roundtrip contract is the remap image, not raw
     # equality.
-    assert restored.grad_fn_order == list(range(1, len(trace.grad_fn_order) + 1))
+    assert restored.autograd.grad_fn_order == list(range(1, len(trace.autograd.grad_fn_order) + 1))
     assert grad_fn_handle.op.grad_fn_handle is grad_fn_handle
     assert torch.equal(restored[label].grad, expected[label])
 

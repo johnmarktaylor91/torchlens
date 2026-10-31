@@ -60,10 +60,10 @@ def test_tensorboard_writes_layer_count_memory_and_model_name() -> None:
     assert writer.scalars["tlx/num_layers"] == (len(log.layer_list), 7)
     memory_value, memory_step = writer.scalars["tlx/total_activation_memory"]
     assert memory_step == 7
-    assert memory_value == int(log.total_activation_memory or 0)
+    assert memory_value == int(log.cost.total_activation_memory or 0)
     text_value, text_step = writer.texts["tlx/model_class_name"]
     assert text_step == 7
-    assert text_value == str(log.model_class_name)
+    assert text_value == str(log.source.class_name)
     assert writer.flushed
 
 

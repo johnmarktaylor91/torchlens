@@ -143,7 +143,7 @@ class _TlSpecWriter:
         # which of two same-named keys wins.
         unified_fields.pop("tlspec_version", None)
         manifest.update(unified_fields)
-        backend_name = str(getattr(trace, "backend", "torch"))
+        backend_name = str(getattr(trace, "_provenance_backend", "torch"))
         if backend_name != "torch" or sparse_run is not None:
             spec = get_backend_spec(backend_name)
             manifest.update(

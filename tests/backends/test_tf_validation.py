@@ -296,7 +296,7 @@ def test_tf_num_layers_with_params_populated_in_object_module_mode() -> None:
 
     trace = tl.trace(SmallCnn(), tf.ones((1, 8, 8, 1), dtype=tf.float32), backend="tf")
 
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert trace.num_layers_with_params > 0
     assert check_metadata_invariants(trace) is True
 
@@ -404,8 +404,8 @@ def test_tf_function_root_trace_has_buffers_and_graph_shape_hash() -> None:
     second = tl.trace(chain, x, backend="tf")
     different = tl.trace(other, x, backend="tf")
 
-    assert first.module_identity_mode == "function_root"
+    assert first.options.module_identity_mode == "function_root"
     assert first.buffers is not None and len(first.buffers) == 0
-    assert isinstance(first.graph_shape_hash, str)
-    assert first.graph_shape_hash == second.graph_shape_hash
-    assert different.graph_shape_hash != first.graph_shape_hash
+    assert isinstance(first.provenance.fingerprint, str)
+    assert first.provenance.fingerprint == second.provenance.fingerprint
+    assert different.provenance.fingerprint != first.provenance.fingerprint

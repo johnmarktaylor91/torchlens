@@ -100,12 +100,12 @@ def _check_trace_self_consistency(ml: Trace) -> None:
         raise MetadataInvariantError(name, "No output layers found")
 
     # Timing
-    if ml.capture_duration < 0:
-        raise MetadataInvariantError(name, f"capture_duration={ml.capture_duration} < 0")
-    if ml.capture_start_time > ml.capture_end_time:
+    if ml._provenance_duration < 0:
+        raise MetadataInvariantError(name, f"capture_duration={ml._provenance_duration} < 0")
+    if ml._provenance_start_time > ml._provenance_end_time:
         raise MetadataInvariantError(
             name,
-            f"capture_start_time={ml.capture_start_time} > capture_end_time={ml.capture_end_time}",
+            f"capture_start_time={ml._provenance_start_time} > capture_end_time={ml._provenance_end_time}",
         )
 
     # Tensor counts
@@ -143,7 +143,7 @@ def _retained_orphan_computational_count(ml: Trace, name: str) -> int:
     if not retained_orphans:
         return 0
 
-    if not getattr(ml, "keep_orphans", False):
+    if not getattr(ml, "_options_keep_orphans", False):
         raise MetadataInvariantError(name, "retained orphan logs require keep_orphans=True")
 
     orphan_raw_labels = list(getattr(ml, "_orphan_labels", ()))

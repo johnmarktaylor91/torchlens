@@ -157,7 +157,7 @@ single-pass layers. Inputs and outputs are always single-pass layers.
   their Python call site; TorchLens does not see inside them.
 - Capturing across concurrent Python threads, including `nn.DataParallel`, is not supported.
 - Captures without Python call-site evidence (the JAX and preview backends, and the predicate mode
-  of `tl.record`) use the older structural grouper. `trace.grouping_policy["detector"]` says which
+  of `tl.record`) use the older structural grouper. `trace.options.grouping_policy["detector"]` says which
   ran: `"callsite_v1"` for the call-site rule, `"grouper_v1"` for the structural grouper.
 - Saved traces keep the labels they were saved with; loading never regroups.
 

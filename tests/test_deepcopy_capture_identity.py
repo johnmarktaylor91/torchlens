@@ -83,7 +83,7 @@ def test_deepcopy_of_a_buffer_is_its_own_node_and_validates() -> None:
         (copy_parent,) = [trace[label] for label in mul_op.parents if label != "input_1"]
         assert copy_parent.func_name == "__deepcopy__"
         assert [trace[label].is_buffer for label in copy_parent.parents] == [True]
-        assert trace.capture_verified is not False, trace.capture_verification_reason
+        assert trace.provenance.verified is not False, trace.provenance.verification_reason
     finally:
         trace.cleanup()
     assert tl.validate(_DeepcopyBuffer(), x, scope="forward") is True

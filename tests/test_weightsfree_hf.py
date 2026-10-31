@@ -153,7 +153,7 @@ def test_llama_7b_flagship_structural_anchors() -> None:
     assert elapsed < 120, f"flagship budget blown: {elapsed:.0f}s"
     for layer in trace.layer_list:
         assert getattr(layer, "out", None) is None
-    envelope = trace.structure_evidence
+    envelope = trace.graph.structure_evidence
     assert envelope is not None and envelope["substrate"] == "meta"
 
 

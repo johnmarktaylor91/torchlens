@@ -51,7 +51,7 @@ def _check_conditional_arm_edges_match_graph(
     for layer in ml.layer_list:
         for child_label in layer.children:
             rolled_graph_edges.add((layer.layer_label, _strip_pass_suffix(child_label)))
-    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
+    for (conditional_id, branch_kind), edge_list in ml._graph_conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             rolled_edge = (
                 _strip_pass_suffix(parent_label),
@@ -86,12 +86,12 @@ def _check_conditional_branch_membership_records(
     # membership; the depth counter and any 'body' roles in
     # ``in_conditionals`` must be consistent with it.
     event_id_by_bool_label: dict[str, int] = {}
-    for event in ml.conditional_records:
+    for event in ml._graph_conditional_records:
         for bool_label in event.bool_layers:
             event_id_by_bool_label[bool_label] = event.id
     event_id_by_conditional_id: dict[str, int] = {}
     branch_kind_by_conditional_arm: dict[tuple[str, int], str] = {}
-    for conditional in getattr(ml, "conditionals", []) or []:
+    for conditional in getattr(ml, "_graph_conditionals", []) or []:
         for arm in conditional.arms:
             if arm.terminal_bool_op_label is not None:
                 event_id = event_id_by_bool_label.get(arm.terminal_bool_op_label)
@@ -170,13 +170,13 @@ def _check_conditional_public_accessor_summary(
         Invariant check name for raised errors.
     """
 
-    conditionals = list(getattr(ml, "conditionals", []) or [])
+    conditionals = list(getattr(ml, "_graph_conditionals", []) or [])
     conditional_ids = [conditional.id for conditional in conditionals]
     if len(conditional_ids) != len(set(conditional_ids)):
         _fail_conditional_invariant(
             name,
             16,
-            f"Trace.conditionals contains duplicate ids: {conditional_ids}",
+            f"Trace.graph.conditionals contains duplicate ids: {conditional_ids}",
         )
 
     for conditional in conditionals:

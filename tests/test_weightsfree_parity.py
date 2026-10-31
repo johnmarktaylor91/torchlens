@@ -116,6 +116,6 @@ def test_meta_capture_is_complete_and_value_free() -> None:
     _, meta = build_twins(FunctionalChain)
     tr = weightsfree_trace(meta, torch.empty(2, 8, device="meta"))
     assert tr.outcome.status.value == "complete"
-    assert tr.structure_only is True
+    assert tr.options.structure_only is True
     for layer in tr.layer_list:
         assert getattr(layer, "out", None) is None, f"{layer.label} retained a payload"

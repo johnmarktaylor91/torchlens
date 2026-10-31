@@ -58,9 +58,9 @@ def test_hf_vit_uses_auto_image_processor() -> None:
 
     log = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
 
-    assert log.input_preprocessor is not None
-    assert log.input_preprocessor.source == "hf_auto_image_processor"
-    assert log.input_preprocessor.verified is True
+    assert log.provenance.input_preprocessor is not None
+    assert log.provenance.input_preprocessor.source == "hf_auto_image_processor"
+    assert log.provenance.input_preprocessor.verified is True
 
 
 @pytest.mark.slow
@@ -74,9 +74,9 @@ def test_clip_image_uses_auto_processor_fallback() -> None:
 
     log = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
 
-    assert log.input_preprocessor is not None
-    assert log.input_preprocessor.source == "hf_auto_image_processor"
-    assert log.input_preprocessor.verified is True
+    assert log.provenance.input_preprocessor is not None
+    assert log.provenance.input_preprocessor.source == "hf_auto_image_processor"
+    assert log.provenance.input_preprocessor.verified is True
 
 
 @pytest.mark.heavy
@@ -93,9 +93,9 @@ def test_torchvision_resnet_weights_uses_attached_weights() -> None:
 
     log = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
 
-    assert log.input_preprocessor is not None
-    assert log.input_preprocessor.source == "torchvision_weights"
-    assert log.input_preprocessor.verified is True
+    assert log.provenance.input_preprocessor is not None
+    assert log.provenance.input_preprocessor.source == "torchvision_weights"
+    assert log.provenance.input_preprocessor.verified is True
 
 
 @pytest.mark.slow
@@ -110,9 +110,9 @@ def test_timm_model_uses_default_cfg_transform() -> None:
 
     log = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
 
-    assert log.input_preprocessor is not None
-    assert log.input_preprocessor.source == "timm"
-    assert log.input_preprocessor.verified is True
+    assert log.provenance.input_preprocessor is not None
+    assert log.provenance.input_preprocessor.source == "timm"
+    assert log.provenance.input_preprocessor.verified is True
 
 
 def test_unknown_cnn_refuses_and_names_imagenet_opt_in() -> None:
@@ -149,7 +149,7 @@ def test_refusal_remedy_attach_authority_resolves_the_pil_input() -> None:
 
     trace = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
 
-    assert trace.input_preprocessor.source == "torchvision_weights"
+    assert trace.provenance.input_preprocessor.source == "torchvision_weights"
 
 
 def test_imagenet_default_opt_in_applies_and_discloses() -> None:
@@ -169,7 +169,7 @@ def test_imagenet_default_opt_in_applies_and_discloses() -> None:
             ),
         )
 
-    record = log.input_preprocessor
+    record = log.provenance.input_preprocessor
     assert record is not None
     assert record.source == "imagenet_default"
     assert record.verified is False
@@ -197,9 +197,9 @@ def test_transform_override_skips_image_autoroute() -> None:
     # The explicit transform bypasses the image autoroute entirely: no
     # resolver tier ran, so the provenance is the honest user_transform
     # record (tvscope B1), NEVER the autoroute's imagenet_default.
-    assert log.input_preprocessor is not None
-    assert log.input_preprocessor.source == "user_transform"
-    assert log.input_preprocessor.verified is False
+    assert log.provenance.input_preprocessor is not None
+    assert log.provenance.input_preprocessor.source == "user_transform"
+    assert log.provenance.input_preprocessor.verified is False
 
 
 def test_pil_raw_input_svg_embeds_montage_data_uri(tmp_path: Path) -> None:
@@ -252,7 +252,7 @@ def test_tensor_input_does_not_route_to_image_bridge(monkeypatch: pytest.MonkeyP
         capture=tl.options.CaptureOptions(layers_to_save="none"),
     )
 
-    assert log.input_preprocessor is None
+    assert log.provenance.input_preprocessor is None
 
 
 def test_list_of_pil_images_batches() -> None:
@@ -270,8 +270,8 @@ def test_list_of_pil_images_batches() -> None:
         ),
     )
 
-    assert log.input_preprocessor is not None
-    assert log.input_preprocessor.source == "imagenet_default"
+    assert log.provenance.input_preprocessor is not None
+    assert log.provenance.input_preprocessor.source == "imagenet_default"
     assert tuple(log[log.input_layers[0]].out.shape) == (2, 3, 224, 224)
     assert log.num_ops > 0
     assert isinstance(log.raw_input, list)

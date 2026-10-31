@@ -554,7 +554,7 @@ def test_emit_nvtx_capture_option_does_not_change_capture(
         capture=tl.options.CaptureOptions(emit_nvtx=True),
     )
 
-    assert log.emit_nvtx is True
+    assert log.options.emit_nvtx is True
     assert len(log.layer_list) > 0
 
 

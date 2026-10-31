@@ -404,8 +404,8 @@ def _apply_conditional_source_policy(
 ) -> None:
     """Apply the source-embedding privacy policy to a scrubbed conditional record.
 
-    Both ``ConditionalEvent.source_file`` (in ``Trace.conditional_records``) and
-    ``Conditional.source_file`` (in the public ``Trace.conditionals`` accessor) hold
+    Both ``ConditionalEvent.source_file`` (in ``Trace.graph.conditional_records``) and
+    ``Conditional.source_file`` (in the public ``Trace.graph.conditionals`` accessor) hold
     the ABSOLUTE path of the user's forward-defining module. Like every other
     source-file reference in a bundle each is relativized to a bare basename
     (unconditional privacy win); with ``include_source=False`` it is cleared to

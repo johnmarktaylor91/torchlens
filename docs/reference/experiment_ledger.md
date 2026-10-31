@@ -31,7 +31,7 @@ material record, never duplicates it).
   `unexplained` — the unrecorded-write detector), and comparability
   (structural relationship + lanes, in their own columns). Additive wording
   is licensed ONLY when the reference-side suffix is empty.
-  `bundle.provenance()` is the one-row-per-member view. Both are derived,
+  `bundle.provenance.summary()` is the one-row-per-member view. Both are derived,
   never stored.
 - **vary.** `bundle.vary(mapping)` — *do = one edit to all members; vary =
   one explicit edit or identity per member; both take the same spec

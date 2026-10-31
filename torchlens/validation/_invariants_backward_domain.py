@@ -60,7 +60,7 @@ def _check_backward_pass_domain_invariants(
         "replay",
     }
     valid_statuses = {"error", "ok"}
-    global_root_ids = set(trace.backward_root_grad_fn_object_ids)
+    global_root_ids = set(trace._autograd_backward_root_grad_fn_object_ids)
     roots_seen_by_pass: set[int] = set()
     backward_pass_logs = getattr(trace, "backward_pass_logs", {})
 
@@ -425,7 +425,7 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
     # the canonical registry constant (satisfies the backend-literal gate).
     from ..backends.registry import TORCH_BACKEND_NAME
 
-    if getattr(trace, "backend", TORCH_BACKEND_NAME) != TORCH_BACKEND_NAME:
+    if getattr(trace, "_provenance_backend", TORCH_BACKEND_NAME) != TORCH_BACKEND_NAME:
         return
     capture_events = getattr(trace, "_capture_events", None)
     if capture_events is None:

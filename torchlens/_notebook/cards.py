@@ -135,9 +135,9 @@ def _proof_section(trace_like: Any) -> CardSection:
     outcome = getattr(trace_like, "outcome", None)
     status = getattr(getattr(outcome, "status", None), "name", None)
     facts.append(CardText(f"capture outcome: {status or 'UNKNOWN'}"))
-    verified = getattr(trace_like, "capture_verified", None)
+    verified = getattr(trace_like, "_provenance_verified", None)
     if verified is False:
-        reason = getattr(trace_like, "capture_verification_reason", None) or "unverified"
+        reason = getattr(trace_like, "_provenance_verification_reason", None) or "unverified"
         facts.append(CardText(f"capture NOT verified: {reason}", role="notice"))
     elif verified is True:
         facts.append(CardText("capture verified"))
@@ -376,7 +376,7 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
     facts: list[CardNode] = [
         CardText(
             f"Layers: {len(layers)} | Ops: {getattr(trace, 'num_ops', '?')} | "
-            f"backend: {getattr(trace, 'backend', '?')} | "
+            f"backend: {getattr(trace, '_provenance_backend', '?')} | "
             f"modules: {getattr(trace, 'num_modules', '?')}"
         ),
         CardText(

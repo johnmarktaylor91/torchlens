@@ -204,7 +204,7 @@ def test_entry_seed_recorded_and_sampled_episode_reproduces():
     ledger_first = episode_ledger_for(first)
     ledger_second = episode_ledger_for(second)
     assert ledger_first is not None and ledger_second is not None
-    assert ledger_first.header.entry_seed == 1234 == first.random_seed
+    assert ledger_first.header.entry_seed == 1234 == first.options.seed
     tokens_first = [row.step_output for row in ledger_first.rows]
     tokens_second = [row.step_output for row in ledger_second.rows]
     assert tokens_first == tokens_second  # managed recipe: bit-identical episode

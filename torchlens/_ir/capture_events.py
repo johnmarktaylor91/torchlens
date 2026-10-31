@@ -358,11 +358,11 @@ class CaptureEvents:
 
         return cls(
             pass_index_base=int(getattr(trace, "num_backward_passes", 0) or 0),
-            base_total_gradient_memory=int(getattr(trace, "total_gradient_memory", 0) or 0),
-            base_total_backward_memory=int(getattr(trace, "total_backward_memory", 0) or 0),
+            base_total_gradient_memory=int(getattr(trace, "_cost_total_grad_memory", 0) or 0),
+            base_total_backward_memory=int(getattr(trace, "_cost_total_backward_memory", 0) or 0),
             base_saved_grad_labels=frozenset(getattr(trace, "_saved_grad_labels", ()) or ()),
             base_root_grad_fn_object_ids=tuple(
-                getattr(trace, "backward_root_grad_fn_object_ids", ()) or ()
+                getattr(trace, "_autograd_backward_root_grad_fn_object_ids", ()) or ()
             ),
         )
 

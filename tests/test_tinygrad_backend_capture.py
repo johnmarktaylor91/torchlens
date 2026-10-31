@@ -149,7 +149,7 @@ def test_tinygrad_codec_fixture_loads_eager_payloads_as_tensors(tmp_path: Path) 
     loaded = tl.load(path)
     loaded_op = _first_saved_op(loaded)
 
-    assert loaded.backend == "tinygrad"
+    assert loaded.provenance.backend == "tinygrad"
     assert isinstance(loaded_op.out, Tensor)
     assert str(loaded_op.out.dtype) == expected_dtype
     assert str(loaded_op.out.device) == expected_device
@@ -464,9 +464,9 @@ def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
     trace = tl.trace(_tiny_block, x, backend="tinygrad")
 
     layer_types = {op.layer_type for op in trace.layer_list}
-    assert trace.backend == "tinygrad"
-    assert trace.module_identity_mode == "function_root"
-    assert trace.param_source == "none"
+    assert trace.provenance.backend == "tinygrad"
+    assert trace.options.module_identity_mode == "function_root"
+    assert trace.provenance.param_source == "none"
     assert "input" in layer_types
     assert "add" in layer_types
     assert "where" in layer_types
@@ -600,7 +600,7 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
     assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
     assert trace.num_saved_ops == len(saved_ops)
-    assert int(trace.saved_activation_memory) == sum(
+    assert int(trace.cost.saved_activation_memory) == sum(
         int(op.activation_memory or 0) for op in saved_ops
     )
     assert trace.validate_forward_pass([_tiny_block(Tensor([1.0, -2.0, 3.0]))]) is True
@@ -612,7 +612,7 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
     loaded = tl.load(path)
 
     assert len(out_entries) == trace.num_saved_ops
-    assert loaded.backend == "tinygrad"
+    assert loaded.provenance.backend == "tinygrad"
     assert len(list(loaded.saved_ops)) == trace.num_saved_ops
     assert [op.has_saved_activation for op in loaded.layer_list] == [
         op.has_saved_activation for op in trace.layer_list
@@ -682,8 +682,10 @@ def test_tinygrad_derived_grads_match_backward_oracle() -> None:
     oracle_x = Tensor([1.0, -2.0, 3.0])
     _tiny_square_loss(oracle_x).backward()
 
-    assert set(trace.derived_grads.keys()) == {"inputs.0"}
-    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx(oracle_x.grad.tolist())
+    assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
+    assert trace.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx(
+        oracle_x.grad.tolist()
+    )
     assert x.grad is None
 
 
@@ -698,7 +700,7 @@ def test_tinygrad_derived_grads_use_loss_fn_for_vector_output() -> None:
         grad_options=GradOptions(loss_fn=_tiny_vector_loss, input_grad_argnums=(0,)),
     )
 
-    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert trace.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
     assert x.grad is None
 
 
@@ -730,7 +732,7 @@ def test_tinygrad_derived_grads_restore_preexisting_user_grad() -> None:
 
     assert x.grad is original_grad
     assert x.grad.tolist() == pytest.approx([10.0, 20.0, 30.0])
-    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert trace.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
 
 
 def test_tinygrad_derived_grads_repeat_without_accumulating_user_grad() -> None:
@@ -750,8 +752,10 @@ def test_tinygrad_derived_grads_repeat_without_accumulating_user_grad() -> None:
         grad_options=GradOptions(input_grad_argnums=(0,)),
     )
 
-    assert first.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
-    assert second.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert first.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert second.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx(
+        [2.0, -4.0, 6.0]
+    )
     assert x.grad is None
 
 
@@ -775,7 +779,7 @@ def test_tinygrad_intermediate_derived_grads_match_retained_backward_oracle() ->
     hidden_op = next(op for op in trace.layer_list if op.layer_type == "mul" and op.shape == (3,))
     scaled_op = [op for op in trace.layer_list if op.layer_type == "mul" and op.shape == (3,)][-1]
 
-    assert set(trace.derived_grads.keys()) == {"inputs.0"}
+    assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert x.grad is None
     assert len(trace.autograd.intermediate_derived_grads) > 0
     assert hidden_op.derived_grad.tolist() == pytest.approx(oracle_hidden.grad.tolist())
@@ -840,21 +844,21 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
         grad_options=GradOptions(input_grad_argnums=(0,)),
     )
 
-    assert trace.backend == "tinygrad"
+    assert trace.provenance.backend == "tinygrad"
     assert trace.validate_forward_pass([_tiny_square_loss(Tensor([1.0, -2.0, 3.0]))]) is True
     assert trace.validation_replay_status.state == "passed"
     assert trace.validation_replay_status.source == "live"
     assert isinstance(trace.summary(), str)
     assert len(trace.to_pandas()) == len(trace.layer_list)
     assert trace.modules["self"].address == "self"
-    assert trace.module_identity_mode == "function_root"
-    assert trace.param_source == "none"
+    assert trace.options.module_identity_mode == "function_root"
+    assert trace.provenance.param_source == "none"
     assert list(trace.params.keys()) == []
-    assert trace.has_backward_pass is False
+    assert trace.autograd.has_backward_pass is False
     assert trace.num_backward_passes == 0
     assert trace.autograd.num_backward_edges is None
-    assert set(trace.derived_grads.keys()) == {"inputs.0"}
-    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
+    assert trace.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
 
     outpath = tmp_path / "tinygrad_graph"
     dot = trace.draw(path=str(outpath), vis_save_only=True, file_format="dot")
@@ -863,10 +867,10 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     audit_path = tmp_path / "tinygrad_audit.tlspec"
     trace.save(audit_path, level="audit")
     loaded = tl.load(audit_path)
-    assert loaded.backend == "tinygrad"
-    assert loaded.param_source == "none"
+    assert loaded.provenance.backend == "tinygrad"
+    assert loaded.provenance.param_source == "none"
     assert all(op.out is None for op in loaded.layer_list)
-    assert loaded.derived_grads["inputs.0"].grad is None
+    assert loaded.autograd.derived_grads["inputs.0"].grad is None
 
     portable_path = tmp_path / "tinygrad_portable.tlspec"
     source_out = trace[trace.output_layers[0]].out
@@ -874,15 +878,15 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     trace.save(portable_path)
     loaded_portable = tl.load(portable_path)
     loaded_out = loaded_portable[loaded_portable.output_layers[0]].out
-    assert loaded_portable.backend == "tinygrad"
+    assert loaded_portable.provenance.backend == "tinygrad"
     assert getattr(loaded_portable, "payload_load_status") == "loaded_device_best_effort"
     assert isinstance(loaded_out, Tensor)
     assert loaded_out.shape == expected.shape
     assert str(loaded_out.dtype) == str(source_out.dtype)
     np.testing.assert_allclose(loaded_out.numpy(), expected)
     np.testing.assert_allclose(
-        loaded_portable.derived_grads["inputs.0"].grad.numpy(),
-        trace.derived_grads["inputs.0"].grad.numpy(),
+        loaded_portable.autograd.derived_grads["inputs.0"].grad.numpy(),
+        trace.autograd.derived_grads["inputs.0"].grad.numpy(),
     )
 
     loaded_status = loaded_portable.validate_forward_pass(
@@ -914,5 +918,5 @@ def test_tinygrad_capture_options_does_not_reject_the_whole_object() -> None:
 
     trace = _trace(capture=tl.options.CaptureOptions(keep_orphans=True))
 
-    assert trace.backend == "tinygrad"
+    assert trace.provenance.backend == "tinygrad"
     assert trace.num_ops > 0

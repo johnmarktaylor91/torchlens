@@ -625,7 +625,7 @@ def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
     if bool(getattr(trace, "is_replayable", False)):
         yield
         return
-    if bool(getattr(trace, "structure_only", False)):
+    if bool(getattr(trace, "_options_structure_only", False)):
         # L7a: structure-only sessions run the ESCALATED belt
         # (structure_only_belt.structure_only_escape_belt), which raises typed
         # teaching refusals instead of aggregating a warning; installing this

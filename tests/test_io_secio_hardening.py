@@ -277,7 +277,7 @@ def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> 
         torch.randn(2, 3, 4),
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
-    live_groups = dict(trace.op_equivalence_classes)
+    live_groups = dict(trace.graph.op_equivalence_classes)
     live_outindex_keys = {key for key in live_groups if "_outindex" in key}
     assert len(live_outindex_keys) >= 2, "expected multi-output param groups in-memory"
 

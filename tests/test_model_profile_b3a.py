@@ -82,14 +82,14 @@ def test_model_profile_recognizes_image_classifier_with_raw_images() -> None:
         capture=tl.options.CaptureOptions(layers_to_save="none"),
     )
     trace.raw_input = [_ImageLike(), _ImageLike()]
-    trace.input_preprocessor = ResolvedPreprocessing(
+    trace._provenance_input_preprocessor = ResolvedPreprocessing(
         source="imagenet_default",
         identifier="ImageNet-default-resize256-crop224",
         verified=False,
         config={},
         description="ImageNet default",
     )
-    trace.output_postprocessor = ResolvedPostprocessing(
+    trace._provenance_output_postprocessor = ResolvedPostprocessing(
         source="hf_config",
         identifier="tiny",
         verified=True,

@@ -46,7 +46,7 @@ def test_trace_halt_op_returns_partial_trace_after_save_decision() -> None:
     trace = tl.trace(_ThreeStageModel(), torch.ones(1, 3), halt=_halt_on_relu)
 
     assert trace.halted is True
-    assert trace.halt_frontier == trace.stop_reason
+    assert trace.graph.stop_frontier == trace.stop_reason
     assert trace.stop_reason is not None
     assert "relu" in trace.stop_reason
     assert any(

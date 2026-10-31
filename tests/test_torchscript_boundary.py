@@ -225,11 +225,11 @@ def test_scripted_helper_owns_its_interior_dispatches() -> None:
         unwrap_torch()
         wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
 
-    assert trace.capture_verified is True
+    assert trace.provenance.verified is True
     assert trace.completeness_diagnostics == []
     rows = [
         entry
-        for entry in trace.completeness_decompositions
+        for entry in trace.health.completeness_decompositions
         if entry["owner_wrapper"] == SCRIPT_FUNCTION_WRAPPER_NAME
     ]
     assert len(rows) == 1

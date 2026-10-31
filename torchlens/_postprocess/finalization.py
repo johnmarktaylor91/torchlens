@@ -1285,13 +1285,13 @@ def _build_layer_logs(self: "Trace") -> None:
         ]
         if pass_autograd_bytes:
             layer_log.autograd_memory = Bytes(sum(int(value) for value in pass_autograd_bytes))
-            layer_log.total_autograd_memory = layer_log.autograd_memory
+            layer_log._cost_total_autograd_memory = layer_log.autograd_memory
             layer_log.num_autograd_tensors = sum(pass_autograd_tensor_counts)
             autograd_memory += layer_log.autograd_memory
             has_autograd_saved_value = True
         else:
             layer_log.autograd_memory = None
-            layer_log.total_autograd_memory = None
+            layer_log._cost_total_autograd_memory = None
             layer_log.num_autograd_tensors = None
         _reconcile_multipass_layer_fields(layer_log)
         _rebuild_layer_log_conditional_views(layer_log)
@@ -1492,7 +1492,7 @@ def _make_public_conditional_ids(condition_events: list[Any]) -> dict[int, str]:
     -------
     dict[int, str]
         Mapping from dense ``ConditionalEvent.id`` to the public conditional id
-        exposed through ``Trace.conditionals`` and role refs.
+        exposed through ``Trace.graph.conditionals`` and role refs.
     """
 
     id_counts: dict[str, int] = defaultdict(int)
@@ -1739,7 +1739,7 @@ def _has_retained_gradient_payloads(self: "Trace") -> bool:
 
     Notes
     -----
-    The projection is the authority here, rather than ``Trace.save_grads``:
+    The projection is the authority here, rather than ``Trace.options.save_grads``:
     ``log_backward(save_grads=...)`` may override that capture-time default on
     each pass.
     """

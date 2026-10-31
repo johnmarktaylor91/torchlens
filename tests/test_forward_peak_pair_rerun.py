@@ -50,7 +50,7 @@ def _rerun_log(
         torch.randn(2, 3),
         capture=CaptureOptions(replayable=True, measure_host_peak_memory=True),
     )
-    assert (log.forward_peak_memory is None) == (first == 0)
+    assert (log.cost.forward_peak_memory is None) == (first == 0)
     _measure(monkeypatch, rerun)
     log.attach_hooks(tl.func("relu"), tl.zero_ablate())
     log.run(model, torch.randn(2, 3))
@@ -62,12 +62,12 @@ def test_zero_then_positive_rerun_drops_the_reason(
 ) -> None:
     log, _ = _rerun_log(monkeypatch, first=0, rerun=4096)
 
-    assert int(log.forward_peak_memory) == 4096
-    assert log.forward_peak_memory_reason is None
+    assert int(log.cost.forward_peak_memory) == 4096
+    assert log.cost.forward_peak_memory_reason is None
     log.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
-    assert int(loaded.forward_peak_memory) == 4096
-    assert loaded.forward_peak_memory_reason is None
+    assert int(loaded.cost.forward_peak_memory) == 4096
+    assert loaded.cost.forward_peak_memory_reason is None
 
 
 def test_positive_then_zero_rerun_carries_the_reason(
@@ -75,12 +75,12 @@ def test_positive_then_zero_rerun_carries_the_reason(
 ) -> None:
     log, _ = _rerun_log(monkeypatch, first=4096, rerun=0)
 
-    assert log.forward_peak_memory is None
-    assert log.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
+    assert log.cost.forward_peak_memory is None
+    assert log.cost.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
     log.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
-    assert loaded.forward_peak_memory is None
-    assert loaded.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
+    assert loaded.cost.forward_peak_memory is None
+    assert loaded.cost.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
 
 
 def test_append_rerun_after_a_cpu_zero_round_trips(
@@ -89,12 +89,12 @@ def test_append_rerun_after_a_cpu_zero_round_trips(
     log, model = _rerun_log(monkeypatch, first=0, rerun=4096)
     log.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
-    assert log.forward_peak_memory_reason is None
+    assert log.cost.forward_peak_memory_reason is None
     log.save(tmp_path / "append_bundle")
     loaded = tl.load(tmp_path / "append_bundle")
-    assert loaded.is_appended is True
-    assert int(loaded.forward_peak_memory) == int(log.forward_peak_memory)
-    assert loaded.forward_peak_memory_reason is None
+    assert loaded.provenance.is_appended is True
+    assert int(loaded.cost.forward_peak_memory) == int(log.cost.forward_peak_memory)
+    assert loaded.cost.forward_peak_memory_reason is None
 
 
 def test_cuda_bracket_clears_a_stale_reason(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -109,6 +109,6 @@ def test_cuda_bracket_clears_a_stale_reason(monkeypatch: pytest.MonkeyPatch) -> 
     with capture_trace._forward_peak_memory_bracket(trace, SimpleNamespace(type="cuda")):
         pass
 
-    assert int(trace.forward_peak_memory) == 200
-    assert trace.forward_peak_memory_reason is None
-    assert trace.forward_memory_backend == "cuda"
+    assert int(trace.cost.forward_peak_memory) == 200
+    assert trace.cost.forward_peak_memory_reason is None
+    assert trace.provenance.forward_memory_backend == "cuda"

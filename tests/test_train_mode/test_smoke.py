@@ -21,7 +21,7 @@ def test_trace_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
     )
     saved = trace[trace.output_layers[0]].out
 
-    assert trace.backward_ready is True
+    assert trace.options.backward_ready is True
     assert saved.grad_fn is not None
     two_layer_mlp.zero_grad(set_to_none=True)
     saved.sum().backward()

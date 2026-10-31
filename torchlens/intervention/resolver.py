@@ -1352,7 +1352,7 @@ def _iter_sites(log: Trace, direction: Literal["forward", "backward"]) -> Sequen
 
     if direction == "forward":
         return _iter_layer_ops(log)
-    if not getattr(log, "has_backward_pass", False):
+    if not getattr(log, "_autograd_has_backward_pass", False):
         raise SiteResolutionError("Backward selectors require log_backward() to run first.")
     return tuple(log.grad_fn_logs.values())
 

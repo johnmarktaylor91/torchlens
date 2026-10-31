@@ -153,7 +153,7 @@ def _assert_static_save_summary(trace: tl.Trace, expected_func_names: set[str]) 
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
     assert trace.num_saved_ops == len(saved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
-    assert int(trace.saved_activation_memory) == sum(
+    assert int(trace.cost.saved_activation_memory) == sum(
         int(op.activation_memory or 0) for op in saved_ops
     )
 
@@ -270,26 +270,28 @@ def test_mlx_derived_grads_match_value_and_grad_oracle() -> None:
         expected_param_grads["proj"]["bias"],
     )
 
-    assert set(trace.derived_grads.keys()) == {
+    assert set(trace.autograd.derived_grads.keys()) == {
         "params.proj.bias",
         "params.proj.weight",
         "inputs.0",
     }
     np.testing.assert_allclose(
-        np.asarray(trace.derived_grads["params.proj.weight"].grad),
+        np.asarray(trace.autograd.derived_grads["params.proj.weight"].grad),
         np.asarray(expected_param_grads["proj"]["weight"]),
     )
     np.testing.assert_allclose(
-        np.asarray(trace.derived_grads["params.proj.bias"].grad),
+        np.asarray(trace.autograd.derived_grads["params.proj.bias"].grad),
         np.asarray(expected_param_grads["proj"]["bias"]),
     )
     np.testing.assert_allclose(
-        np.asarray(trace.derived_grads["inputs.0"].grad),
+        np.asarray(trace.autograd.derived_grads["inputs.0"].grad),
         np.asarray(expected_x_grad),
     )
-    assert trace.derived_grads["inputs.0"].provenance["mechanism"] == "mlx_value_and_grad"
-    assert trace.params["proj.weight"].grad is trace.derived_grads["params.proj.weight"].grad
-    assert trace.params["proj.bias"].grad is trace.derived_grads["params.proj.bias"].grad
+    assert trace.autograd.derived_grads["inputs.0"].provenance["mechanism"] == "mlx_value_and_grad"
+    assert (
+        trace.params["proj.weight"].grad is trace.autograd.derived_grads["params.proj.weight"].grad
+    )
+    assert trace.params["proj.bias"].grad is trace.autograd.derived_grads["params.proj.bias"].grad
     assert len(trace.autograd.intermediate_derived_grads) == 0
 
 
@@ -317,7 +319,7 @@ def test_mlx_intermediate_derived_grads_match_direct_reference() -> None:
     expected = mx.grad(suffix)(hidden_op.out)
     mx.eval(expected, hidden_op.derived_grad)
 
-    assert set(trace.derived_grads.keys()) == {"inputs.0"}
+    assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert hidden_op.label in trace.autograd.intermediate_derived_grads
     np.testing.assert_allclose(np.asarray(hidden_op.derived_grad), np.asarray(expected))
     record = trace.autograd.intermediate_derived_grads[hidden_op.label]
@@ -491,7 +493,7 @@ def test_mlx_intermediate_derived_grads_oracle_fail_skips_public_record(
         grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
     )
 
-    assert set(trace.derived_grads.keys()) == {"inputs.0"}
+    assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert len(trace.autograd.intermediate_derived_grads) == 0
     assert all(op.derived_grad is None for op in trace.layer_list)
 
@@ -528,7 +530,9 @@ def test_mlx_derived_grads_allow_scalar_output_without_loss_fn() -> None:
         grad_options=GradOptions(input_grad_argnums=(0,)),
     )
 
-    np.testing.assert_allclose(np.asarray(trace.derived_grads["inputs.0"].grad), [2.0, -4.0, 6.0])
+    np.testing.assert_allclose(
+        np.asarray(trace.autograd.derived_grads["inputs.0"].grad), [2.0, -4.0, 6.0]
+    )
 
 
 @pytest.mark.optional
@@ -627,7 +631,7 @@ def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
     loaded = tl.load(bundle_path)
     manifest = tl.io.inspect_tlspec(bundle_path)
 
-    assert loaded.backend == "mlx"
+    assert loaded.provenance.backend == "mlx"
     assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
     _assert_mlx_materialized_manifest(manifest, {"out"})
     loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
@@ -662,7 +666,7 @@ def test_mlx_save_load_lazy_ref_materializes_public_payloads(tmp_path: Path) -> 
     loaded = tl.load(bundle_path, lazy=True)
     manifest = tl.io.inspect_tlspec(bundle_path)
 
-    assert loaded.backend == "mlx"
+    assert loaded.provenance.backend == "mlx"
     assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
     _assert_mlx_materialized_manifest(manifest, {"out"})
     loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
@@ -697,7 +701,7 @@ def test_mlx_save_load_missing_runtime_falls_back_to_audit_metadata(
     loaded = tl.load(bundle_path)
     loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
 
-    assert loaded.backend == "mlx"
+    assert loaded.provenance.backend == "mlx"
     assert getattr(loaded, "payload_load_status") == "audit_only_missing_runtime"
     assert loaded_saved_ops
     for op in loaded_saved_ops:

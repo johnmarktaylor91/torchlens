@@ -692,7 +692,7 @@ def _manifest(log: Any, plan: _ArrayPlan, ledger: dict[str, Any]) -> dict[str, A
         # otherwise match the dunder attribute access as a private touch.
         "torch_version": getattr(torch, "__version__", "unknown"),
         "model": _scrub(str(getattr(log, "model_name", "unknown"))),
-        "backend": str(getattr(log, "backend", "unknown")),
+        "backend": str(getattr(log, "_provenance_backend", "unknown")),
         "outcome": getattr(
             getattr(getattr(log, "outcome", None), "status", None), "name", "UNKNOWN"
         ),

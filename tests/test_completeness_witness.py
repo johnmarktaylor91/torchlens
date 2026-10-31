@@ -518,13 +518,13 @@ def test_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
     wrap_torch(completeness_witness=True)
     trace = tl.trace(_WrappedOpsModel(), torch.randn(4))
 
-    assert trace.completeness_witness_mode == "shadow"
-    assert trace.completeness_witness_verified is True
-    assert trace.completeness_witness_event_count >= 3
-    assert trace.completeness_witness_unaccounted_count == 0
+    assert trace.health.completeness_mode == "shadow"
+    assert trace.health.completeness_verified is True
+    assert trace.health.num_witness_events >= 3
+    assert trace.health.num_unaccounted_witness_events == 0
     assert trace.completeness_diagnostics == []
-    assert trace.capture_verified is True
-    assert trace.capture_verification_reason == "dispatch_witness_verified"
+    assert trace.provenance.verified is True
+    assert trace.provenance.verification_reason == "dispatch_witness_verified"
 
 
 def test_input_copy_preserves_alias_mutation_semantics_and_validation() -> None:
@@ -541,8 +541,8 @@ def test_input_copy_preserves_alias_mutation_semantics_and_validation() -> None:
     assert captured_output.tolist() == [13.0]
     assert capture_input.tolist() == [1.0]
     assert len(trace.input_layers) == 1
-    assert trace.capture_verified is True
-    assert trace.completeness_witness_verified is True
+    assert trace.provenance.verified is True
+    assert trace.health.completeness_verified is True
     validation_input = torch.tensor([1.0])
     assert (
         tl.validation.validate_forward_pass(
@@ -564,8 +564,8 @@ def test_input_copy_preserves_nonzero_storage_offset_semantics() -> None:
 
     assert plain_output.tolist() == [-98.0, -97.0, -96.0]
     assert trace[trace.output_layers[0]].out.tolist() == [-98.0, -97.0, -96.0]
-    assert trace.capture_verified is True
-    assert trace.completeness_witness_verified is True
+    assert trace.provenance.verified is True
+    assert trace.health.completeness_verified is True
 
 
 def test_deep_input_tensor_is_captured_and_witnessed() -> None:
@@ -579,9 +579,9 @@ def test_deep_input_tensor_is_captured_and_witnessed() -> None:
 
     assert len(trace.input_layers) == 1
     assert not any(op.unattributed_tensor_args for op in trace.ops)
-    assert trace.capture_verified is True
-    assert trace.completeness_witness_verified is True
-    assert trace.capture_verification_reason == "dispatch_witness_verified"
+    assert trace.provenance.verified is True
+    assert trace.health.completeness_verified is True
+    assert trace.provenance.verification_reason == "dispatch_witness_verified"
 
 
 def test_mid_band_container_depth_is_captured_and_witnessed() -> None:
@@ -600,9 +600,9 @@ def test_mid_band_container_depth_is_captured_and_witnessed() -> None:
     trace = tl.trace(_DeepInputModel(70), nested)
 
     assert len(trace.input_layers) == 1
-    assert trace.capture_verified is True
-    assert trace.completeness_witness_verified is True
-    assert trace.capture_verification_reason == "dispatch_witness_verified"
+    assert trace.provenance.verified is True
+    assert trace.health.completeness_verified is True
+    assert trace.provenance.verification_reason == "dispatch_witness_verified"
 
 
 def test_input_depth_limit_fails_closed_with_unresolved_path() -> None:
@@ -624,9 +624,9 @@ def test_input_depth_limit_fails_closed_with_unresolved_path() -> None:
         trace = tl.trace(_DeepAttrInputModel(depth), nested)
 
     assert trace.input_layers == []
-    assert trace.capture_verified is False
-    assert trace.completeness_witness_verified is False
-    assert trace.capture_verification_reason == "input_boundary_unverifiable"
+    assert trace.provenance.verified is False
+    assert trace.health.completeness_verified is False
+    assert trace.provenance.verification_reason == "input_boundary_unverifiable"
     input_gap = next(
         report
         for report in trace.completeness_diagnostics
@@ -643,10 +643,10 @@ def test_direct_aten_call_trips_non_vacuous_witness(monkeypatch: pytest.MonkeyPa
     with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         trace = tl.trace(_DirectAtenGapModel(), torch.randn(4))
 
-    assert trace.completeness_witness_verified is False
-    assert trace.completeness_witness_unaccounted_count == 1
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "dispatch_witness_unaccounted_ops"
+    assert trace.health.completeness_verified is False
+    assert trace.health.num_unaccounted_witness_events == 1
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "dispatch_witness_unaccounted_ops"
     assert len(trace.completeness_diagnostics) == 1
     report = trace.completeness_diagnostics[0]
     assert report["operator"] == "aten.relu.default"
@@ -687,13 +687,13 @@ def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> No
         trace = tl.trace(model, torch.randn(3, 4))
 
     assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
-    assert trace.capture_verified is True
-    assert trace.completeness_witness_verified is True
-    assert trace.completeness_witness_unaccounted_count == 0
+    assert trace.provenance.verified is True
+    assert trace.health.completeness_verified is True
+    assert trace.health.num_unaccounted_witness_events == 0
     assert trace.completeness_diagnostics == []
     hook_owners = [
         row
-        for row in trace.completeness_decompositions
+        for row in trace.health.completeness_decompositions
         if row["owner_wrapper"] == "module_forward_hook:user"
     ]
     assert len(hook_owners) == 1
@@ -712,13 +712,13 @@ def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
         trace = tl.trace(_DirectAtenSubmoduleGapModel(), torch.randn(4))
 
     assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
-    assert trace.capture_verified is True
-    assert trace.completeness_witness_verified is True
-    assert trace.completeness_witness_unaccounted_count == 0
+    assert trace.provenance.verified is True
+    assert trace.health.completeness_verified is True
+    assert trace.health.num_unaccounted_witness_events == 0
     assert trace.completeness_diagnostics == []
     module_owners = [
         row
-        for row in trace.completeness_decompositions
+        for row in trace.health.completeness_decompositions
         if row["owner_wrapper"] == "module_forward:exhaustive"
         and "aten.relu.default" in row["aten_ops"]
     ]
@@ -738,9 +738,9 @@ def test_direct_aten_child_intermediate_still_trips_witness(
     with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         trace = tl.trace(_DirectAtenIntermediateSubmoduleGapModel(), torch.randn(4))
 
-    assert trace.capture_verified is False
-    assert trace.completeness_witness_verified is False
-    assert trace.completeness_witness_unaccounted_count == 1
+    assert trace.provenance.verified is False
+    assert trace.health.completeness_verified is False
+    assert trace.health.num_unaccounted_witness_events == 1
     report = trace.completeness_diagnostics[0]
     assert report["operator"] == "aten.relu.default"
     assert report["reason"] == "owner_not_captured"
@@ -761,9 +761,9 @@ def test_untraceable_child_output_does_not_mask_observable_mutation(
     with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         trace = tl.trace(_MutatingDirectAtenOutputSubmoduleModel(), torch.randn(4))
 
-    assert trace.capture_verified is False
-    assert trace.completeness_witness_verified is False
-    assert trace.completeness_witness_unaccounted_count == 1
+    assert trace.provenance.verified is False
+    assert trace.health.completeness_verified is False
+    assert trace.health.num_unaccounted_witness_events == 1
     mutating = [
         report
         for report in trace.completeness_diagnostics
@@ -775,7 +775,7 @@ def test_untraceable_child_output_does_not_mask_observable_mutation(
     assert mutating[0]["in_replacement_hook"] is False
     child_owners = [
         row
-        for row in trace.completeness_decompositions
+        for row in trace.health.completeness_decompositions
         if row["owner_wrapper"] == "module_forward:exhaustive"
         and "aten.mul_.Tensor" in row["aten_ops"]
         and "aten.relu.default" in row["aten_ops"]
@@ -849,10 +849,12 @@ def test_logged_nested_wrapper_calls_are_accounted(
     wrap_torch(completeness_witness=True)
     trace = tl.trace(_NestedPoolModel(pool), torch.randn(1, 2, 4, 4))
 
-    assert trace.completeness_witness_unaccounted_count == 0
+    assert trace.health.num_unaccounted_witness_events == 0
     assert trace.completeness_diagnostics == []
     row = next(
-        item for item in trace.completeness_decompositions if item["owner_func_name"] == owner_name
+        item
+        for item in trace.health.completeness_decompositions
+        if item["owner_func_name"] == owner_name
     )
     assert row["capture_accounted"] is True
     assert any(op.func_call_id == row["owner_func_call_id"] for op in trace.ops)
@@ -864,12 +866,12 @@ def test_scalar_extraction_boundaries_are_narrowly_accounted() -> None:
     wrap_torch(completeness_witness=True)
     trace = tl.trace(_ScalarExtractionModel(), torch.ones(4))
 
-    assert trace.completeness_witness_unaccounted_count == 0
+    assert trace.health.num_unaccounted_witness_events == 0
     assert trace.completeness_diagnostics == []
-    assert trace.capture_verified is True
+    assert trace.provenance.verified is True
     scalar_rows = [
         row
-        for row in trace.completeness_decompositions
+        for row in trace.health.completeness_decompositions
         if row["owner_func_name"] in {"item", "__bool__", "__float__", "__int__", "__index__"}
     ]
     assert {row["owner_func_name"] for row in scalar_rows} == {
@@ -890,9 +892,11 @@ def test_linear_decomposition_is_owned_by_one_captured_call() -> None:
     trace = tl.trace(_LinearCompositeModel(), torch.randn(2, 4))
 
     assert trace.completeness_diagnostics == []
-    assert trace.completeness_witness_verified is True
+    assert trace.health.completeness_verified is True
     linear_rows = [
-        row for row in trace.completeness_decompositions if row["owner_func_name"] == "linear"
+        row
+        for row in trace.health.completeness_decompositions
+        if row["owner_func_name"] == "linear"
     ]
     assert len(linear_rows) == 1
     linear_row = linear_rows[0]
@@ -911,8 +915,8 @@ def test_vmap_interior_is_expected_opaque() -> None:
 
     assert any("captured a vmap transform as a boundary op" in str(item.message) for item in caught)
     assert trace.completeness_diagnostics == []
-    assert trace.completeness_witness_verified is True
-    assert trace.capture_verified is True
+    assert trace.health.completeness_verified is True
+    assert trace.provenance.verified is True
     assert "vmap" in {op.func_name for op in trace.ops}
 
 
@@ -936,10 +940,10 @@ def test_pre_wrap_vmap_is_witness_only_not_capture_verified() -> None:
         trace = tl.trace(model, torch.randn(3, 4))
 
     assert trace._raw_transform_escape_detected is True
-    assert trace.completeness_witness_verified is True
-    assert trace.completeness_witness_unaccounted_count == 0
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "transform_call_route_unverified"
+    assert trace.health.completeness_verified is True
+    assert trace.health.num_unaccounted_witness_events == 0
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "transform_call_route_unverified"
     assert "vmap" not in {op.func_name for op in trace.ops}
 
 
@@ -952,12 +956,12 @@ def test_escape_detector_and_witness_compose_on_shared_tokens() -> None:
     )
     trace = tl.trace(_WrappedOpsModel(), torch.randn(4))
 
-    assert trace.escape_detector_verified is True
+    assert trace.health.escape_detector_verified is True
     assert trace.escape_diagnostics == []
-    assert trace.completeness_witness_verified is True
+    assert trace.health.completeness_verified is True
     assert trace.completeness_diagnostics == []
-    assert trace.capture_verified is True
-    assert trace.capture_verification_reason == "dispatch_witness_and_detector_verified"
+    assert trace.provenance.verified is True
+    assert trace.provenance.verification_reason == "dispatch_witness_and_detector_verified"
 
 
 def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
@@ -1162,8 +1166,8 @@ def test_finalize_census_keeps_dispatch_reason_across_later_guard_passes() -> No
 
     cw._finalize_census(state)
 
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "dispatch_witness_unaccounted_ops"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "dispatch_witness_unaccounted_ops"
     assert len(trace.completeness_diagnostics) == 1
 
 
@@ -1197,8 +1201,8 @@ def test_index_boundary_excuses_only_the_scalar_read_under_its_token() -> None:
     with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         cw._finalize_census(state)
 
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "dispatch_witness_unaccounted_ops"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "dispatch_witness_unaccounted_ops"
     assert [
         (report["operator"], report["reason"], report["owner_wrapper"])
         for report in trace.completeness_diagnostics
@@ -1218,17 +1222,17 @@ def test_dynamic_parameter_initializers_and_registered_state_writes_are_captured
 
     initializer_rows = [
         row
-        for row in temporary_trace.completeness_decompositions
+        for row in temporary_trace.health.completeness_decompositions
         if row["owner_func_name"] == "uniform_"
     ]
     assert len(initializer_rows) == 2
     assert all(row["capture_accounted"] is True for row in initializer_rows)
     assert temporary_trace.completeness_diagnostics == []
-    assert temporary_trace.capture_verified is True
+    assert temporary_trace.provenance.verified is True
 
     state_trace = tl.trace(_RegisteredParameterMutationModel(), torch.randn(2, 4))
 
-    assert state_trace.capture_verified is True
+    assert state_trace.provenance.verified is True
     assert state_trace.completeness_diagnostics == []
     uniform_ops = [layer for layer in state_trace.layers if layer.type == "uniform"]
     assert len(uniform_ops) == 1
@@ -1249,14 +1253,16 @@ def test_mid_forward_autograd_grad_is_an_exact_backward_boundary() -> None:
     assert not [w for w in caught if "no graph/source provenance" in str(w.message)]
 
     boundary_rows = [
-        row for row in trace.completeness_decompositions if row["owner_wrapper"] == "autograd:grad"
+        row
+        for row in trace.health.completeness_decompositions
+        if row["owner_wrapper"] == "autograd:grad"
     ]
     assert len(boundary_rows) == 1
     assert boundary_rows[0]["scope"] == "expected_opaque"
     assert boundary_rows[0]["aten_ops"]
     assert trace.num_backward_passes == 1
     assert trace.completeness_diagnostics == []
-    assert trace.capture_verified is True
+    assert trace.provenance.verified is True
 
 
 def test_tensor_data_getter_dispatch_is_captured() -> None:
@@ -1269,7 +1275,7 @@ def test_tensor_data_getter_dispatch_is_captured() -> None:
     assert len(detach_ops) == 1
     assert detach_ops[0].parents == ("input_1",)
     assert trace.completeness_diagnostics == []
-    assert trace.capture_verified is True
+    assert trace.provenance.verified is True
 
 
 def test_is_mutating_operator_reads_schema_not_name() -> None:
@@ -1315,7 +1321,7 @@ def test_observable_uncaptured_mutation_is_flagged_mutates() -> None:
     with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
         trace = tl.trace(_DirectMutatingAtenModel(), torch.randn(4))
 
-    assert trace.completeness_witness_verified is False
+    assert trace.health.completeness_verified is False
     mutating = [d for d in trace.completeness_diagnostics if d["mutates"] is True]
     assert mutating, "expected the in-place mul_ drop to be tagged mutates=True"
     assert any(d["operator"].startswith("aten.mul_") for d in mutating)

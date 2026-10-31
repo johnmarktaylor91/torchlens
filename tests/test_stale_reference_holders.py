@@ -238,7 +238,7 @@ def test_rebindable_stale_reference_captures_in_one_forward(
     assert "gelu" in [op.func_name for op in trace.ops]
     assert "internalsource" not in [layer.layer_type for layer in trace.layer_list]
     assert trace.rescue_rerun is None
-    assert trace.capture_verified is not False
+    assert trace.provenance.verified is not False
 
 
 @pytest.mark.parametrize("holder", sorted(_UNREBINDABLE))
@@ -259,8 +259,8 @@ def test_unrebindable_stale_reference_is_disclosed_and_rescued(
     assert "internalsource" not in [layer.layer_type for layer in trace.layer_list]
     assert trace.rescue_rerun is not None and trace.rescue_rerun["recovered"] is True
     assert trace.rescue_rerun["forward_runs"] == 2
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "mode_rescue_rerun"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "mode_rescue_rerun"
 
 
 def test_capture_leaves_every_held_reference_identical(raw: types.SimpleNamespace) -> None:
@@ -526,7 +526,7 @@ def test_iql_output_activation_returned_by_the_root_is_rescued(
         trace = tl.trace(model, torch.randn(2, 4))
 
     assert "tanh" in [op.func_name for op in trace.ops]
-    assert trace.capture_verification_reason == "mode_rescue_rerun"
+    assert trace.provenance.verification_reason == "mode_rescue_rerun"
 
 
 def test_clean_module_return_stays_quiet() -> None:
@@ -538,7 +538,7 @@ def test_clean_module_return_stays_quiet() -> None:
 
     assert "gelu" in [op.func_name for op in trace.ops]
     assert trace.rescue_rerun is None
-    assert trace.capture_verification_reason != "mode_rescue_rerun"
+    assert trace.provenance.verification_reason != "mode_rescue_rerun"
 
 
 def test_foreign_callable_returned_from_a_module_stays_quiet() -> None:
@@ -622,8 +622,8 @@ def test_module_returning_its_own_parameter_or_buffer_is_not_an_escape(kind: str
         trace = tl.trace(Outer(), torch.randn(2, 4))
 
     assert trace.rescue_rerun is None
-    assert trace.capture_verified is not False
-    assert trace.capture_verification_reason is None
+    assert trace.provenance.verified is not False
+    assert trace.provenance.verification_reason is None
 
 
 def test_opaque_module_return_is_disclosed_adopted_and_fails_validation(

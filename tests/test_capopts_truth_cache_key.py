@@ -109,8 +109,8 @@ def test_warm_cache_identical_config_hits(tmp_path: Path) -> None:
     x = torch.randn(2, 4)
     cold = _trace(model, x, str(tmp_path))
     warm = _trace(model, x, str(tmp_path))
-    assert cold.capture_cache_hit is False
-    assert warm.capture_cache_hit is True
+    assert cold.provenance.cache_hit is False
+    assert warm.provenance.cache_hit is True
 
 
 @pytest.mark.parametrize(
@@ -143,7 +143,7 @@ def test_warm_cache_neutral_flip_still_hits(tmp_path: Path) -> None:
     x = torch.randn(2, 4)
     _trace(model, x, str(tmp_path))
     warm = _trace(model, x, str(tmp_path), verbose=True)
-    assert warm.capture_cache_hit is True
+    assert warm.provenance.cache_hit is True
 
 
 def test_warm_cache_restamps_batch_render(tmp_path: Path) -> None:
@@ -153,7 +153,7 @@ def test_warm_cache_restamps_batch_render(tmp_path: Path) -> None:
     x = torch.randn(2, 4)
     _trace(model, x, str(tmp_path))
     warm = _trace(model, x, str(tmp_path), batch_render="grid")
-    assert warm.capture_cache_hit is True
+    assert warm.provenance.cache_hit is True
     assert warm.batch_render == "grid"
 
 
@@ -216,6 +216,6 @@ def test_warm_cache_semantic_flip_recaptures_distilgpt2(tmp_path: Path) -> None:
     cold = _trace(model, input_ids, str(tmp_path))
     warm = _trace(model, input_ids, str(tmp_path))
     flipped = _trace(model, input_ids, str(tmp_path), raise_on_nan=True)
-    assert cold.capture_cache_hit is False
-    assert warm.capture_cache_hit is True
+    assert cold.provenance.cache_hit is False
+    assert warm.provenance.cache_hit is True
     assert flipped.capture_cache_hit is False

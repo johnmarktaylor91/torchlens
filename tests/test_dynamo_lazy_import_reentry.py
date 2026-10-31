@@ -44,8 +44,8 @@ trace = tl.trace(
     torch.empty(2, 4, device="meta"),
     capture=CaptureOptions(structure_only=True),
 )
-assert trace.completeness_witness_verified is True, trace.completeness_witness_verified
-assert trace.capture_verified is None, trace.capture_verified
+assert trace.health.completeness_verified is True, trace.health.completeness_verified
+assert trace.provenance.verified is None, trace.provenance.verified
 """,
     "structure_only_meta": """
 with torch.device("meta"):

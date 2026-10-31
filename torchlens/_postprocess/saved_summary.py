@@ -110,7 +110,7 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
 
     Notes
     -----
-    Sets ``trace.pinned_autograd_memory``: ``Bytes(0)`` when every
+    Sets ``trace._cost_pinned_autograd_memory``: ``Bytes(0)`` when every
     payload is detached, ``None`` on a non-torch backend, where the walk does
     not apply.
     """
@@ -118,9 +118,11 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
     from .._quantities import Bytes
     from ..backends import TORCH_BACKEND_NAME
 
-    backend_name = str(getattr(trace, "backend", TORCH_BACKEND_NAME) or TORCH_BACKEND_NAME)
+    backend_name = str(
+        getattr(trace, "_provenance_backend", TORCH_BACKEND_NAME) or TORCH_BACKEND_NAME
+    )
     if backend_name != TORCH_BACKEND_NAME:
-        trace.pinned_autograd_memory = None
+        trace._cost_pinned_autograd_memory = None
         return
     from ..backends.torch._pinned_graph import pinned_autograd_bytes
 
@@ -129,4 +131,4 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
         for op in saved_ops
         for payload in (getattr(op, "out", None), getattr(op, "transformed_out", None))
     ]
-    trace.pinned_autograd_memory = Bytes(pinned_autograd_bytes(payloads))
+    trace._cost_pinned_autograd_memory = Bytes(pinned_autograd_bytes(payloads))

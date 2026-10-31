@@ -357,17 +357,17 @@ def record_forward_peak(
 
     from .._quantities import Bytes
 
-    peak, trace.forward_peak_memory_reason = forward_peak_value(
+    peak, trace._cost_forward_peak_memory_reason = forward_peak_value(
         backend,
         measured,
         python_peak_measured=python_probe is not None,
         host_requested=host_requested,
     )
-    trace.forward_peak_memory = None if peak is None else Bytes(peak)
+    trace._cost_forward_peak_memory = None if peak is None else Bytes(peak)
 
 
 def record_backward_peak(trace: Any, backend: str, peak_delta: int) -> None:
-    """Fold one backward pass's peak into ``trace.backward_peak_memory``.
+    """Fold one backward pass's peak into ``trace._cost_backward_peak_memory``.
 
     CPU passes aggregate by max (the largest peak above a pass's starting
     baseline) and only under ``measure_host_peak_memory=True``; without the
@@ -388,12 +388,12 @@ def record_backward_peak(trace: Any, backend: str, peak_delta: int) -> None:
     from .._quantities import Bytes
 
     if backend == "cpu" and not getattr(trace, "measure_host_peak_memory", False):
-        trace.backward_peak_memory = None
+        trace._cost_backward_peak_memory = None
         trace.backward_peak_memory_reason = CPU_PEAK_NOT_REQUESTED_REASON
         return
-    prior_value = getattr(trace, "backward_peak_memory", None)
+    prior_value = getattr(trace, "_cost_backward_peak_memory", None)
     prior = int(prior_value) if prior_value is not None else 0
-    trace.backward_peak_memory = Bytes(
+    trace._cost_backward_peak_memory = Bytes(
         max(prior, peak_delta) if backend == "cpu" else prior + peak_delta
     )
     trace.backward_peak_memory_reason = None

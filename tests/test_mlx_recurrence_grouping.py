@@ -84,7 +84,7 @@ def test_mlx_repeated_block_groups_into_passes() -> None:
     matmul_ops = [op for op in trace.layer_list if op.func_name == "matmul"]
     relu_ops = [op for op in trace.layer_list if op.func_name == "maximum"]
 
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     assert [op.pass_index for op in matmul_ops] == [1, 2]
     assert [op.pass_index for op in relu_ops] == [1, 2]
     assert {op.layer_label for op in matmul_ops} == {matmul_ops[0].layer_label}
@@ -143,7 +143,7 @@ def test_mlx_recurrence_detection_off_preserves_single_pass_layout() -> None:
         capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
-    assert trace.recurrence_detection is False
+    assert trace.options.recurrence_detection is False
     assert all(op.num_passes == 1 for op in trace.layer_list)
     assert MLXBackend().validate_trace(trace) is True
 

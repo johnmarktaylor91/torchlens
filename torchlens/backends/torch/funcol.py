@@ -879,7 +879,7 @@ def _make_funcol_wrap(site: FuncolSite, original: Callable[..., Any]) -> Callabl
                 return original(*args, **kwargs)
 
         trace = active_trace
-        if getattr(trace, "capture_mode", None) == "predicate":
+        if getattr(trace, "_options_mode", None) == "predicate":
             raise CompatibilityError(
                 "Fastlog cannot represent collective boundary journals; refusing before "
                 "the collective executes instead of returning a Recording that omits it.",
@@ -892,7 +892,7 @@ def _make_funcol_wrap(site: FuncolSite, original: Callable[..., Any]) -> Callabl
 
         from ..._utils.rng import log_current_autocast_state, log_current_rng_states
 
-        save_rng = getattr(trace, "save_rng_states", False)
+        save_rng = getattr(trace, "_options_save_rng", False)
         rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
         autocast_state = log_current_autocast_state()
         session = active_funcol_session()

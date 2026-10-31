@@ -94,8 +94,8 @@ def test_tf_static_captures_loaded_saved_model_structure_values_and_modules(
 
     trace = tl.trace(loaded, x, backend="tf", save=tl.func("relu"))
     op_types = {op.func_name for op in trace.layer_list}
-    assert trace.backend == "tf"
-    assert trace.module_identity_mode == "function_root"
+    assert trace.provenance.backend == "tf"
+    assert trace.options.module_identity_mode == "function_root"
     relu_ops = [op for op in trace.layer_list if op.func_name == "Relu"]
     if relu_ops:
         relu = relu_ops[0]
@@ -137,7 +137,7 @@ def test_tf_static_captures_tf_function_compiled_model() -> None:
     op_types = {op.func_name for op in trace.layer_list}
     relu = next(op for op in trace.layer_list if op.func_name == "Relu")
 
-    assert trace.backend == "tf"
+    assert trace.provenance.backend == "tf"
     assert {"MatMul", "AddV2", "Relu"} <= op_types
     assert relu.parents
     assert np.allclose(relu.out, np.array([[5.0, 4.0]], dtype=np.float32))
@@ -150,7 +150,7 @@ def test_tf_static_control_flow_regions_are_unverified() -> None:
     regions = [op for op in trace.layer_list if str(op.func_name).startswith("region:")]
     status = TFBackend().validate_trace(trace)
 
-    assert trace.backend == "tf"
+    assert trace.provenance.backend == "tf"
     assert regions
     assert all(not region.has_saved_activation for region in regions)
     assert getattr(trace.validation_replay_status, "state") == "unverified", getattr(

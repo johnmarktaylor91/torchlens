@@ -195,7 +195,7 @@ def compute_suppressed_arg_keys(trace: Trace, universe: Any) -> dict[int, frozen
     live on the trace).
     """
 
-    if str(getattr(trace, "backend", "")) != TORCH_BACKEND_NAME:
+    if str(getattr(trace, "_provenance_backend", "")) != TORCH_BACKEND_NAME:
         # Non-torch capture backends are never candidates (the axis
         # semantics in the table are the PyTorch module contract).
         return {}

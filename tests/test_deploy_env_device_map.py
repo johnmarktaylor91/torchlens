@@ -59,6 +59,6 @@ def test_cpu_device_map_dispatch_captures_and_validates() -> None:
     )
     input_ids = torch.randint(0, 128, (1, 8))
     trace = tl.trace(model, input_ids)
-    assert trace.capture_verified is None
+    assert trace.provenance.verified is None
     assert len(trace.ops) > 0
     assert tl.validate(model, input_ids, scope="forward") is True

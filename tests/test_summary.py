@@ -68,7 +68,7 @@ def test_small_model_default_output_golden(tiny_summary_log: tl.Trace) -> None:
     assert "view: hybrid, all 4 ops" in rebuilt
     assert "conv (Conv2d)" in rebuilt
     assert "Params   1,388 declared" in rebuilt
-    assert "TorchLens Discoverability Summary" in tiny_summary_log.provenance()
+    assert "TorchLens Discoverability Summary" in tiny_summary_log.provenance.summary()
 
 
 def test_summary_discloses_unknown_flops_operations() -> None:

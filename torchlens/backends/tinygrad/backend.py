@@ -481,7 +481,7 @@ class TinygradBackend:
             save_transformed_output=cast(str | bool, save_raw_output),
         )
         trace.capture_events = CaptureEvents()
-        trace.capture_start_time = time.time()
+        trace._provenance_start_time = time.time()
         observed_ops: dict[int, list[str]] = {}
         observed_module_stacks: dict[int, tuple[TinygradModuleFrame, ...]] = {}
         input_identities = self._input_identities(args)
@@ -507,7 +507,7 @@ class TinygradBackend:
             raise BackendUnsupportedError(
                 "tinygrad backend preview requires at least one tinygrad Tensor output."
             )
-        trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+        trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
         trace.raw_output = output_transform(output) if callable(output_transform) else None
         uop_labels = self._emit_input_sources(trace, args)
         captures = self._emit_uop_graph(
@@ -527,14 +527,14 @@ class TinygradBackend:
                 param.num_params for param in trace.param_logs if param.is_trainable
             )
             trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-            trace.param_source = "native-module"
+            trace._provenance_param_source = "native-module"
         else:
             trace.param_logs = ParamAccessor({})
             trace.num_param_tensors = 0
             trace.num_params = 0
             trace.num_params_trainable = 0
             trace.num_params_frozen = 0
-            trace.param_source = "none"
+            trace._provenance_param_source = "none"
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
         trace.num_layers_with_params = 0
@@ -1208,7 +1208,7 @@ class TinygradBackend:
             enrich_layer=_enrich_tinygrad_layer,
             update_param_totals_from_layers=True,
             finish_before_module_logs=False,
-            recurrence_detection=bool(getattr(trace, "recurrence_detection", False)),
+            recurrence_detection=bool(getattr(trace, "_options_recurrence_detection", False)),
         )
 
     def _attach_object_module_logs(self, trace: Trace, tree: TinygradModuleTree) -> None:
@@ -1263,13 +1263,13 @@ class TinygradBackend:
         Returns
         -------
         None
-            ``trace.derived_grads`` is populated with input leaf gradient records.
+            ``trace._autograd_derived_grads`` is populated with input leaf gradient records.
         """
 
         if getattr(trace, "tinygrad_payload_policy", None) != "dev_python_realized_copy":
             raise BackendUnsupportedError(
                 "tinygrad derived gradients require live DEV=PYTHON realized-copy payloads; "
-                "audit-only traces cannot expose trace.derived_grads."
+                "audit-only traces cannot expose trace._autograd_derived_grads."
             )
         input_argnums = _normalize_tinygrad_input_grad_argnums(
             grad_options.input_grad_argnums,
@@ -1308,7 +1308,7 @@ class TinygradBackend:
             if not _tinygrad_outputs_close(self, derived_output, captured_output):
                 raise ValueError(
                     "tinygrad derived gradient run raw output diverged from captured raw output; "
-                    "refusing to expose trace.derived_grads."
+                    "refusing to expose trace._autograd_derived_grads."
                 )
             cast(Any, loss).backward()
             records = _records_for_tinygrad_leaf_grads(
@@ -1324,7 +1324,7 @@ class TinygradBackend:
             )
         finally:
             _restore_tinygrad_grads(snapshots)
-        trace.derived_grads = DerivedGradAccessor(records)
+        trace._autograd_derived_grads = DerivedGradAccessor(records)
         mirror_param_derived_grads(trace, records)
 
     def _derive_intermediate_grads_no_realize(

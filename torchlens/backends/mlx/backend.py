@@ -1212,15 +1212,15 @@ class MLXBackend:
             save_visualizations=save_visualizations,
         )
         trace.name = name
-        trace.backend = cast(BackendName, self.name)
+        trace._provenance_backend = cast(BackendName, self.name)
         # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module
         # root, backends/_finalize.py new_preview_function_trace's for a function root.
         if module_tree is not None:
             root_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
-            trace.root_entry_point = f"module_call:{root_qualname}.__call__"
+            trace._provenance_root_entry_point = f"module_call:{root_qualname}.__call__"
         else:
-            trace.root_entry_point = (
-                f"function_call:{getattr(model, '__qualname__', trace.model_class_name)}"
+            trace._provenance_root_entry_point = (
+                f"function_call:{getattr(model, '__qualname__', trace._source_class_name)}"
             )
         if compiled_attribute_paths:
             # Conservative ceiling, not a refusal: the attribute may never be
@@ -1234,8 +1234,8 @@ class MLXBackend:
                 UserWarning,
                 stacklevel=2,
             )
-            trace.capture_verified = False
-            trace.capture_verification_reason = "mlx_compiled_attribute_not_logged"
+            trace._provenance_verified = False
+            trace._provenance_verification_reason = "mlx_compiled_attribute_not_logged"
         trace.capture_events = CaptureEvents()
         trace._mlx_saved_payloads = []
         trace._mlx_capture_depth = 0
@@ -1245,7 +1245,7 @@ class MLXBackend:
         trace._pre_forward_rng_states = None
         setattr(
             trace,
-            "random_seed",
+            "_options_seed",
             cast(int, seed) if seed is not None else random.randint(1, 4294967294),
         )
         self.tensor_store.clear()
@@ -1260,7 +1260,7 @@ class MLXBackend:
             args = self._normalize_input_args(input_args)
             kwargs = {} if input_kwargs is None else dict(input_kwargs)
             self._label_source_arrays(trace, args, kwargs)
-            trace.capture_start_time = time.time()
+            trace._provenance_start_time = time.time()
             halt_signal: StopSignal | None = None
             try:
                 with self.active_logging(trace):
@@ -1272,7 +1272,7 @@ class MLXBackend:
                 output = signal.frontier_output
                 trace.halted = True
                 trace.stop_reason = signal.reason
-                trace.halt_frontier = signal.reason
+                trace._graph_stop_frontier = signal.reason
             # Forward-time-only state: the emit path reads these during the
             # model call; leaving them on the trace breaks the portable-state
             # scrub (they are not in _PORTABLE_STATE_SPEC by design).
@@ -1297,7 +1297,7 @@ class MLXBackend:
                     UserWarning,
                     stacklevel=2,
                 )
-            trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+            trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
             if halt_signal is not None:
                 trace.raw_output = None
             else:
@@ -1314,14 +1314,14 @@ class MLXBackend:
                     param.num_params for param in trace.param_logs if param.is_trainable
                 )
                 trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-                trace.param_source = "native-module"
+                trace._provenance_param_source = "native-module"
             else:
                 trace.param_logs = ParamAccessor({})
                 trace.num_param_tensors = 0
                 trace.num_params = 0
                 trace.num_params_trainable = 0
                 trace.num_params_frozen = 0
-                trace.param_source = "none"
+                trace._provenance_param_source = "none"
             self._finish_trace(trace, module_tree if use_object_module else None)
             if halt_signal is not None:
                 self._restrict_halted_param_logs(trace)
@@ -1410,7 +1410,7 @@ class MLXBackend:
         Returns
         -------
         None
-            ``trace.derived_grads`` and unambiguous param gradient slots are populated.
+            ``trace._autograd_derived_grads`` and unambiguous param gradient slots are populated.
         """
 
         params = grad_options.params
@@ -1499,7 +1499,7 @@ class MLXBackend:
             if not _mlx_trees_close(aux_output, captured_output):
                 raise ValueError(
                     "MLX derived gradient run raw output diverged from captured raw output; "
-                    "refusing to expose trace.derived_grads."
+                    "refusing to expose trace._autograd_derived_grads."
                 )
             grad_trees = grads if len(differentiated_argnums) != 1 else (grads,)
             records: dict[str, DerivedGradRecord] = {}
@@ -1539,7 +1539,7 @@ class MLXBackend:
                 update = getattr(model, "update", None)
                 if callable(update):
                     update(original_params)
-        trace.derived_grads = DerivedGradAccessor(records)
+        trace._autograd_derived_grads = DerivedGradAccessor(records)
         mirror_param_derived_grads(trace, records)
 
     def _records_for_intermediate_mlx_grads(
@@ -2291,7 +2291,7 @@ class MLXBackend:
             attach_object_module_logs=self._attach_object_module_logs,
             attach_op_params=attach_module_owned_op_params,
             count_layers_with_attached_params=True,
-            recurrence_detection=bool(getattr(trace, "recurrence_detection", False)),
+            recurrence_detection=bool(getattr(trace, "_options_recurrence_detection", False)),
         )
 
     def _attach_object_module_logs(self, trace: Trace, tree: MLXModuleTree) -> None:
@@ -2946,7 +2946,10 @@ def _mlx_model_args_from_value_args(value_args: tuple[Any, ...], trace: Trace) -
         Positional model input arguments.
     """
 
-    if getattr(trace, "param_source", "none") == "native-module" and len(value_args) > 1:
+    if (
+        getattr(trace, "_provenance_param_source", "none") == "native-module"
+        and len(value_args) > 1
+    ):
         return value_args[1:]
     return value_args
 

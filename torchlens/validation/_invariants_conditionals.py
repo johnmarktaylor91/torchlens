@@ -93,21 +93,21 @@ def _check_conditional_child_labels_resolve(
                         f"contains missing child label {child_label!r}",
                     )
 
-    for parent_label, child_label in ml.conditional_branch_edges:
+    for parent_label, child_label in ml._graph_conditional_branch_edges:
         if child_label not in valid_child_labels:
             _fail_conditional_invariant(
                 name,
                 3,
-                f"Trace.conditional_branch_edges contains missing child label {child_label!r} "
+                f"Trace.graph.conditional_branch_edges contains missing child label {child_label!r} "
                 f"for parent {parent_label!r}",
             )
-    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
+    for (conditional_id, branch_kind), edge_list in ml._graph_conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             if child_label not in valid_child_labels:
                 _fail_conditional_invariant(
                     name,
                     3,
-                    f"Trace.conditional_arm_entry_edges contains missing child label "
+                    f"Trace.graph.conditional_arm_entry_edges contains missing child label "
                     f"{child_label!r} for edge {(conditional_id, branch_kind, parent_label)}",
                 )
 
@@ -195,7 +195,7 @@ def _check_conditional_event_references(
         )
         referenced_cond_ids.update(layer_log.conditional_arm_children)
     referenced_cond_ids.update(
-        conditional_id for conditional_id, _ in ml.conditional_arm_entry_edges
+        conditional_id for conditional_id, _ in ml._graph_conditional_arm_entry_edges
     )
 
     for conditional_id in sorted(referenced_cond_ids):
@@ -204,7 +204,7 @@ def _check_conditional_event_references(
                 name,
                 5,
                 f"Referenced cond_id {conditional_id} has no matching ConditionalEvent.id "
-                f"in Trace.conditional_records",
+                f"in Trace.graph.conditional_records",
             )
 
 
@@ -262,7 +262,7 @@ def _check_conditional_elif_key_contiguity(
     """
 
     # Invariant 7: elif keys are contiguous on ConditionalEvent.
-    for event in ml.conditional_records:
+    for event in ml._graph_conditional_records:
         for field_name, mapping in (
             ("branch_ranges", event.branch_ranges),
             ("branch_test_spans", event.branch_test_spans),
@@ -295,7 +295,7 @@ def _check_conditional_bool_event_backrefs(
     """
 
     # Invariant 8: ConditionalEvent.bool_layers back-reference to the event id.
-    for event in ml.conditional_records:
+    for event in ml._graph_conditional_records:
         for bool_label in event.bool_layers:
             if bool_label not in layer_label_set:
                 _fail_conditional_invariant(
@@ -389,7 +389,7 @@ def _check_conditional_rolled_edge_call_indices(
     # layer-level arm-entry edges. Exact pass lists live only in
     # conditional_edge_call_indices after the label remap.
     actual_arm_edges: set[tuple[str, str, int, str]] = set()
-    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
+    for (conditional_id, branch_kind), edge_list in ml._graph_conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             actual_arm_edges.add(
                 (
@@ -400,7 +400,7 @@ def _check_conditional_rolled_edge_call_indices(
                 )
             )
 
-    for edge_key, call_indexs in ml.conditional_edge_call_indices.items():
+    for edge_key, call_indexs in ml._graph_conditional_edge_call_indices.items():
         parent_no_pass, child_no_pass, conditional_id, branch_kind = edge_key
         if call_indexs != sorted(call_indexs) or len(call_indexs) != len(set(call_indexs)):
             _fail_conditional_invariant(
@@ -433,12 +433,12 @@ def _check_conditional_rolled_edge_call_indices(
     for actual_edge in sorted(actual_arm_edges):
         parent_no_pass, child_no_pass, conditional_id, branch_kind = actual_edge
         edge_key = (parent_no_pass, child_no_pass, conditional_id, branch_kind)
-        if edge_key not in ml.conditional_edge_call_indices:
+        if edge_key not in ml._graph_conditional_edge_call_indices:
             _fail_conditional_invariant(
                 name,
                 10,
                 f"conditional_arm_entry_edges implies rolled edge {actual_edge} but "
-                f"conditional_edge_call_indices[{edge_key}]={ml.conditional_edge_call_indices.get(edge_key)}",
+                f"conditional_edge_call_indices[{edge_key}]={ml._graph_conditional_edge_call_indices.get(edge_key)}",
             )
 
 
@@ -509,7 +509,7 @@ def _check_conditional_branch_entry_edges(
     """
 
     # Invariant 13: legacy IF-view conditional_branch_edges ↔ start-children.
-    for parent_label, bool_label in ml.conditional_branch_edges:
+    for parent_label, bool_label in ml._graph_conditional_branch_edges:
         if parent_label not in layer_label_set:
             _fail_conditional_invariant(
                 name,
@@ -527,10 +527,10 @@ def _check_conditional_branch_entry_edges(
 
     for parent_layer in ml.layer_logs.values():
         for bool_label in parent_layer.conditional_entry_children:
-            if (parent_layer.layer_label, bool_label) not in ml.conditional_branch_edges:
+            if (parent_layer.layer_label, bool_label) not in ml._graph_conditional_branch_edges:
                 _fail_conditional_invariant(
                     name,
                     13,
                     f"{parent_layer.layer_label}.conditional_entry_children includes "
-                    f"{bool_label!r} but conditional_branch_edges={ml.conditional_branch_edges}",
+                    f"{bool_label!r} but conditional_branch_edges={ml._graph_conditional_branch_edges}",
                 )

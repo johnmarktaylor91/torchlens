@@ -891,14 +891,14 @@ class RecordingProjection:
 
         trace.buffer_layers = list(self.buffer_layers)
         trace.internal_source_ops = list(self.internal_source_ops)
-        trace.capture_start_time = self.trace_facts["capture_start_time"]
-        trace.setup_duration = self.trace_facts["setup_duration"]
-        trace.forward_duration = self.trace_facts["forward_duration"]
-        trace.forward_peak_memory = self.trace_facts["forward_peak_memory"]
-        trace.forward_peak_memory_reason = self.trace_facts.get("forward_peak_memory_reason")
-        trace.forward_memory_backend = self.trace_facts["forward_memory_backend"]
+        trace._provenance_start_time = self.trace_facts["capture_start_time"]
+        trace._provenance_setup_duration = self.trace_facts["setup_duration"]
+        trace._cost_forward_duration = self.trace_facts["forward_duration"]
+        trace._cost_forward_peak_memory = self.trace_facts["forward_peak_memory"]
+        trace._cost_forward_peak_memory_reason = self.trace_facts.get("forward_peak_memory_reason")
+        trace._provenance_forward_memory_backend = self.trace_facts["forward_memory_backend"]
         trace._source_model_ref = self.trace_facts["source_model_ref"]
-        trace.random_seed = self.trace_facts["random_seed"]
+        trace._options_seed = self.trace_facts["random_seed"]
         trace._raw_graph_ws.layer_counter = cast(int, self.trace_facts["layer_counter"])
 
         from ..backends.torch._tl import get_tensor_label, set_tensor_label

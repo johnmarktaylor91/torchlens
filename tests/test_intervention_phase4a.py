@@ -41,13 +41,13 @@ def test_intervention_ready_sets_relationship_evidence() -> None:
     log = tl.trace(model, x, capture=CaptureOptions(replayable=True))
 
     assert log.is_replayable is True
-    assert log.model_object_id == id(model)
-    assert log.model_class_qualname == f"{type(model).__module__}.{type(model).__qualname__}"
-    assert log.param_hash_quick is not None
-    assert log.param_hash_full == log.param_hash_quick
-    assert log.input_object_id == id(x)
-    assert log.input_signature_hash is not None
-    assert log.save_arg_values is False
+    assert log.provenance.model_object_id == id(model)
+    assert log.source.class_qualname == f"{type(model).__module__}.{type(model).__qualname__}"
+    assert log.provenance.param_hash_quick is not None
+    assert log.provenance.param_hash_full == log.provenance.param_hash_quick
+    assert log.provenance.input_object_id == id(x)
+    assert log.provenance.input_signature_hash is not None
+    assert log.options.save_args is False
 
 
 def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:

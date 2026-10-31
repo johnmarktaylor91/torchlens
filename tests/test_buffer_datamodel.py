@@ -586,8 +586,8 @@ def test_buffer_write_lookup_avoids_per_op_full_storage_scan(
     )
     extra_count = call_count
 
-    assert trace.graph_shape_hash is not None
-    assert trace_extra.graph_shape_hash is not None
+    assert trace.provenance.fingerprint is not None
+    assert trace_extra.provenance.fingerprint is not None
     # A per-op full scan would add ~num_buffers calls for EACH extra op
     # (~16 * 49 = 784); genuine per-op resolution adds only a handful.
     assert extra_count - base_count < extra_ops * (num_buffers // 6)

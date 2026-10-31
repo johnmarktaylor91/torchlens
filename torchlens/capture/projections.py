@@ -970,7 +970,7 @@ def append_projected_event(
     recording_state = _active_recording_state
     module_fields = None if recording_state is None else recording_state.module_fields_for(ctx)
     detach_unkept = (
-        bool(getattr(trace, "detach_saved_activations", True))
+        bool(getattr(trace, "_options_detach_saved_activations", True))
         if recording_state is None
         else recording_state.options.detach_saved_activations
     )

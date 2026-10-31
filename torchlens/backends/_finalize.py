@@ -61,7 +61,7 @@ def finalize_single_pass_trace(
     trace:
         Trace whose ``_raw_layer_dict`` contains backend-created op logs.
     backend_name:
-        Canonical backend name written to ``trace.backend``.
+        Canonical backend name written to ``trace._provenance_backend``.
     module_tree:
         Optional object-module discovery tree for object-module traces.
     attach_function_root_module:
@@ -85,8 +85,8 @@ def finalize_single_pass_trace(
     compute_input_output_distances:
         Whether to run the neutral input/output distance flood (torch Step 4)
         over the finalized single-pass graph. ``None`` reads the request the
-        backend stored on ``trace.mark_layer_depths``; the effective value is
-        written back to ``trace.mark_layer_depths`` either way.
+        backend stored on ``trace._options_mark_layer_depths``; the effective value is
+        written back to ``trace._options_mark_layer_depths`` either way.
     recurrence_detection:
         Whether to run the neutral recurrence grouper over the raw graph and
         apply its assignments (multi-pass layers, pass-qualified op labels,
@@ -147,8 +147,8 @@ def finalize_single_pass_trace(
         if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
     )
     if compute_input_output_distances is None:
-        compute_input_output_distances = bool(getattr(trace, "mark_layer_depths", False))
-    trace.mark_layer_depths = bool(compute_input_output_distances)
+        compute_input_output_distances = bool(getattr(trace, "_options_mark_layer_depths", False))
+    trace._options_mark_layer_depths = bool(compute_input_output_distances)
     if compute_input_output_distances:
         # The flood runs BEFORE the relabel epilogue: edges and the trace-side
         # input/output label lists are still uniformly raw here, so every seed
@@ -163,10 +163,10 @@ def finalize_single_pass_trace(
     # grouper actually ran over this graph, so an ungrouped finalize can never
     # claim grouping that never happened. (JAX finalizes through its own
     # recurrence-grouping path and keeps the request.)
-    trace.recurrence_detection = assignments is not None
-    trace.grouping_policy = build_grouping_policy_stamp(
+    trace._options_recurrence_detection = assignments is not None
+    trace._options_grouping_policy = build_grouping_policy_stamp(
         ran_recurrence_grouping=assignments is not None,
-        requested=getattr(trace, "grouping", "structural"),
+        requested=getattr(trace, "_options_grouping", "structural"),
     )
     if update_param_totals_from_layers:
         _update_param_totals_from_layers(trace)
@@ -174,17 +174,17 @@ def finalize_single_pass_trace(
         trace.num_layers_with_params = len(layers_with_params_seen)
     trace._layers_logged = True
     trace._layers_saved = True
-    trace.has_backward_pass = False
-    trace.capture_end_time = time.time()
-    trace.backend = cast(BackendName, backend_name)
+    trace._autograd_has_backward_pass = False
+    trace._provenance_end_time = time.time()
+    trace._provenance_backend = cast(BackendName, backend_name)
     if finish_before_module_logs:
         trace._tracing_finished = True
         _set_per_op_tracing_finished(trace)
     if module_tree is None:
-        trace.module_identity_mode = "function_root"
+        trace._options_module_identity_mode = "function_root"
         attach_function_root_module(trace)
     else:
-        trace.module_identity_mode = "object_module"
+        trace._options_module_identity_mode = "object_module"
         attach_object_module_logs(trace, module_tree)
     if not finish_before_module_logs:
         trace._tracing_finished = True
@@ -194,7 +194,7 @@ def finalize_single_pass_trace(
 
 
 def stamp_preview_graph_shape_hash(trace: Trace) -> None:
-    """Compute ``trace.graph_shape_hash`` for a finalized preview trace.
+    """Compute ``trace._provenance_fingerprint`` for a finalized preview trace.
 
     Torch traces get the hash in postprocess Step 16.5; preview backends
     finalize through this module and used to leave it ``None``. The hash
@@ -208,7 +208,7 @@ def stamp_preview_graph_shape_hash(trace: Trace) -> None:
     """
 
     populate_normalized_layer_addresses(trace)
-    trace.graph_shape_hash = compute_graph_shape_hash(trace)
+    trace._provenance_fingerprint = compute_graph_shape_hash(trace)
 
 
 def _set_per_op_tracing_finished(trace: Trace) -> None:
@@ -258,8 +258,8 @@ def attach_function_root_module(trace: Trace) -> None:
     trace._module_capture_ws.module_metadata = {
         "self": {
             "cls": None,
-            "class_name": trace.model_class_name,
-            "class_qualname": trace.model_class_qualname,
+            "class_name": trace._source_class_name,
+            "class_qualname": trace._source_class_qualname,
             "all_addresses": ["self"],
             "training": False,
         }
@@ -747,8 +747,8 @@ def _apply_recurrence_relabel_epilogue(
         op_log.recurrent_ops = [
             raw_to_final_op[member] for member in recurrent_labels if member in raw_to_final_op
         ]
-    trace.op_equivalence_classes.clear()
-    trace.op_equivalence_classes.update(equivalent_labels_by_key)
+    trace._graph_op_equivalence_classes.clear()
+    trace._graph_op_equivalence_classes.update(equivalent_labels_by_key)
 
     if relabel_sidecar_labels is not None:
         relabel_sidecar_labels(dict(raw_to_final_op))
@@ -829,7 +829,7 @@ def _update_param_totals_from_layers(trace: Trace) -> None:
     check (``num_param_tensors != len(param_logs)``).
     """
 
-    if trace.param_source != "none":
+    if trace._provenance_param_source != "none":
         trace.num_param_tensors = len(trace.param_logs)
         trace.num_params = sum(param.num_params for param in trace.param_logs)
         trace.num_params_trainable = sum(
@@ -1249,15 +1249,17 @@ def new_preview_function_trace(
         save_visualizations=False,
     )
     trace.name = name
-    trace.backend = cast(BackendName, backend_name)
-    trace.module_identity_mode = "function_root"
-    trace.param_source = cast("Literal['native-module', 'pytree-derived', 'none']", param_source)
-    trace.model_name = trace.model_class_name
-    trace.model_class_qualname = getattr(model, "__qualname__", trace.model_class_name)
+    trace._provenance_backend = cast(BackendName, backend_name)
+    trace._options_module_identity_mode = "function_root"
+    trace._provenance_param_source = cast(
+        "Literal['native-module', 'pytree-derived', 'none']", param_source
+    )
+    trace.model_name = trace._source_class_name
+    trace._source_class_qualname = getattr(model, "__qualname__", trace._source_class_name)
     # Root entry-point identity fact (C07X item (iv)): preview backends
     # capture a function/module-like root under module_identity_mode
     # "function_root", so the honest closed-kind token is function_call.
-    trace.root_entry_point = f"function_call:{trace.model_class_qualname}"
+    trace._provenance_root_entry_point = f"function_call:{trace._source_class_qualname}"
     trace._pre_forward_rng_states = None
     return trace
 

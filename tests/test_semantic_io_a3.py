@@ -164,7 +164,7 @@ def test_provenance_surfaces_output_postprocessing_and_output_table() -> None:
     """provenance() carries output decode provenance; output_table() the labels."""
 
     trace = _trace_batch_classifier()
-    summary = trace.provenance()
+    summary = trace.provenance.summary()
 
     assert "Output postprocessing:" in summary
     assert "style=classification" in summary
@@ -178,7 +178,7 @@ def test_summary_surfaces_undetected_output_style_hint() -> None:
     trace = tl.trace(_Classifier(torch.zeros(1, 3)).eval(), torch.ones(1, 2))
 
     assert trace.decoded_output is None
-    assert "undetected; pass output_style= to decode." in trace.provenance()
+    assert "undetected; pass output_style= to decode." in trace.provenance.summary()
 
 
 def test_redecode_after_load_raises_clearly_when_logits_dropped(tmp_path: Path) -> None:

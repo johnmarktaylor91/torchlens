@@ -158,7 +158,7 @@ def test_default_budget_does_not_fire_on_an_ordinary_model() -> None:
 
     trace = tl.trace(_model(), _input())
     assert trace.num_saved_ops > 0
-    assert int(trace.saved_activation_memory) > 0
+    assert int(trace.cost.saved_activation_memory) > 0
 
 
 def test_default_capture_is_unchanged_by_the_budget() -> None:
@@ -483,7 +483,7 @@ def test_lookback_promotions_stay_charged_after_capture() -> None:
     # linear_1 is promoted (2 KB) and linear_2's candidate is still in the
     # bounded window (2 KB): both are genuinely retained, so both stay charged.
     assert trace.num_saved_ops == 1
-    assert int(trace.saved_activation_memory) == 2048
+    assert int(trace.cost.saved_activation_memory) == 2048
     assert ledger.committed_bytes == 4096
 
 

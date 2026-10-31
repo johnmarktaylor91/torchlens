@@ -343,12 +343,12 @@ def test_runnable_producer_gate_reads_save_levels() -> None:
         torch_codes = {d.code for d in descriptor.preflight.diagnostics}
         assert RunnableErrorCode.UNSUPPORTED_BACKEND_REPLAY not in torch_codes
 
-        trace.backend = "paddle"
+        trace._provenance_backend = "paddle"
         descriptor = build_sparse_run_descriptor(trace)
         preview_codes = {d.code for d in descriptor.preflight.diagnostics}
         assert RunnableErrorCode.UNSUPPORTED_BACKEND_REPLAY in preview_codes
     finally:
-        trace.backend = "torch"
+        trace._provenance_backend = "torch"
         tl.release_model(model)
 
 
@@ -405,19 +405,19 @@ def test_backward_accessors_raise_for_all_non_backward_backends() -> None:
     trace = tl.trace(model, torch.randn(1, 2))
     try:
         for name in _PREVIEW_NAMES:
-            trace.backend = name
+            trace._provenance_backend = name
             with pytest.raises(ValueError):
                 _ = trace.autograd.backward_passes
             with pytest.raises(ValueError):
                 _ = trace.saved_grad_ops
             with pytest.raises(ValueError):
                 _ = trace.layer_list[0].grads
-        trace.backend = "torch"
+        trace._provenance_backend = "torch"
         _ = trace.autograd.backward_passes
         _ = trace.saved_grad_ops
         _ = trace.layer_list[0].grads
     finally:
-        trace.backend = "torch"
+        trace._provenance_backend = "torch"
         tl.release_model(model)
 
 

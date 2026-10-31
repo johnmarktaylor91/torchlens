@@ -287,9 +287,9 @@ def stop_directive_for_trace(trace: object) -> StopDirective:
     halt_options = getattr(trace, "_predicate_save_options", None)
     directive = StopDirective(
         halt_options=halt_options,
-        raise_on_nan=bool(getattr(trace, "raise_on_nan", False)),
+        raise_on_nan=bool(getattr(trace, "_options_on_nonfinite", False)),
         forward_error_mode="raise",
-        inference_only=bool(getattr(trace, "inference_only", False)),
+        inference_only=bool(getattr(trace, "_options_inference_only", False)),
     )
     setattr(trace, "_stop_directive", directive)
     return directive

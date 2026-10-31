@@ -361,7 +361,7 @@ class TestSaveNewActivationsStateReset:
         )
         try:
             log.save_new_outs(model, torch.randn(2, 10), layers_to_save="all")
-            assert log.func_calls_duration >= 0
+            assert log.cost.func_calls_duration >= 0
         finally:
             log.cleanup()
 

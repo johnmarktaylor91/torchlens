@@ -72,7 +72,7 @@ def test_distilgpt2_fresh_run_product_never_carries_foreign_ledger():
     )
     ledger = episode_ledger_for(trace)
     assert ledger is not None
-    assert trace.capture_kind == "episode"
+    assert trace.provenance.kind == "episode"
     assert len(ledger.rows) == N_STEPS
     assert all(row.status == "complete" for row in ledger.rows)
     assert all(row.step_output is not None for row in ledger.rows)

@@ -781,7 +781,7 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
     manifest = _read_manifest(path)
 
     assert isinstance(loaded, tl.Trace)
-    assert loaded.has_backward_pass is True
+    assert loaded.autograd.has_backward_pass is True
     assert loaded.autograd.backward_passes.for_pass(1).pass_index == 1
     assert manifest["backward_summary"]["has_backward_pass"] is True
     assert manifest["backward_summary"]["num_backward_passes"] == log.num_backward_passes
@@ -919,7 +919,7 @@ def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     loaded = tl.load(path)
 
     assert isinstance(loaded, tl.Trace)
-    assert loaded.backend == "mlx"
+    assert loaded.provenance.backend == "mlx"
     assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
     saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
     assert saved_ops
@@ -949,7 +949,7 @@ def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path
     saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
 
     assert isinstance(loaded, tl.Trace)
-    assert loaded.backend == "mlx"
+    assert loaded.provenance.backend == "mlx"
     assert getattr(loaded, "payload_load_status") == "audit_only"
     assert saved_ops
     assert all(op.out is None and op.out_ref is None for op in saved_ops)

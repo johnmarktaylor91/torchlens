@@ -134,7 +134,7 @@ def _trace_token(record: Any) -> str | None:
     """Short owning-trace token (model class name), or None when detached."""
 
     trace = fail_open(lambda: record.source_trace, lambda _error: None)
-    return getattr(trace, "model_class_name", None)
+    return getattr(trace, "_source_class_name", None)
 
 
 def _op_position(op: Any) -> str | None:

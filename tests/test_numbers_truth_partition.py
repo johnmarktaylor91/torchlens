@@ -109,7 +109,7 @@ def test_tracked_bytes_partition_input_inclusive_alias_exclusive() -> None:
     for name, log in _fixture_traces():
         try:
             owned = sum(int(op.activation_memory or 0) for op in log.layer_list if not op.is_output)
-            assert int(log.total_activation_memory) == owned, name
+            assert int(log.cost.total_activation_memory) == owned, name
         finally:
             log.cleanup()
 

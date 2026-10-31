@@ -1664,9 +1664,9 @@ def _compute_edge_label(
 
     Precedence matches the Phase 7 conditional rendering spec:
 
-    1. Arm-entry labels from ``Trace.conditional_arm_entry_edges`` /
-       ``Trace.conditional_edge_call_indices``.
-    2. ``IF`` labels from ``Trace.conditional_branch_edges``.
+    1. Arm-entry labels from ``Trace.graph.conditional_arm_entry_edges`` /
+       ``Trace.graph.conditional_edge_call_indices``.
+    2. ``IF`` labels from ``Trace.graph.conditional_branch_edges``.
     3. ``None`` when the edge has no branch semantics.
 
     Args:
@@ -1768,7 +1768,10 @@ def _get_arm_edge_entries(
     arm_entries: List[Tuple[int, str, Optional[Tuple[int, ...]]]] = []
     if vis_mode == "unrolled":
         edge_key = (parent_node.layer_label, child_node.layer_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items():
+        for (
+            conditional_id,
+            branch_kind,
+        ), edge_list in trace._graph_conditional_arm_entry_edges.items():
             if edge_key in edge_list:
                 arm_entries.append((conditional_id, branch_kind, None))
     elif vis_mode == "rolled":
@@ -1779,7 +1782,7 @@ def _get_arm_edge_entries(
             edge_child,
             conditional_id,
             branch_kind,
-        ), call_indexs in trace.conditional_edge_call_indices.items():
+        ), call_indexs in trace._graph_conditional_edge_call_indices.items():
             if (edge_parent, edge_child) == (parent_no_pass, child_no_pass):
                 arm_entries.append((conditional_id, branch_kind, tuple(call_indexs)))
     else:
@@ -1971,7 +1974,7 @@ def _get_conditional_reference_text(conditional_id: int, trace: "Trace") -> str:
     str
         Line-based conditional reference when available, otherwise ``"C{id}"``.
     """
-    for conditional_event in trace.conditional_records:
+    for conditional_event in trace._graph_conditional_records:
         if conditional_event.id == conditional_id:
             return f"L{conditional_event.if_stmt_span[0]}"
     return f"C{conditional_id}"
@@ -1998,7 +2001,7 @@ def _arm_entry_sort_key(
         Sort key ordered by source line, branch rank, then conditional id.
     """
     source_line = 10**9
-    for conditional_event in trace.conditional_records:
+    for conditional_event in trace._graph_conditional_records:
         if conditional_event.id == conditional_id:
             source_line = conditional_event.if_stmt_span[0]
             break
@@ -2049,7 +2052,7 @@ def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trac
         ``"IF"`` or ``"ELIF"`` (falls back to ``"IF"`` if no bool is reachable).
     """
     bool_kind: dict[str, str] = {}
-    for event in getattr(trace, "conditional_records", ()) or ():
+    for event in getattr(trace, "_graph_conditional_records", ()) or ():
         for bool_label in getattr(event, "bool_layers", ()) or ():
             bool_layer = trace[bool_label]
             bool_ops = tuple(getattr(bool_layer, "ops", {}).values())
@@ -2113,12 +2116,12 @@ def _edge_is_conditional_branch(
         return (
             parent_node.layer_label,
             child_node.layer_label,
-        ) in trace.conditional_branch_edges
+        ) in trace._graph_conditional_branch_edges
     if vis_mode == "rolled":
         edge_key = (parent_node.layer_label, child_node.layer_label)
         return any(
             (branch_parent.split(":")[0], branch_child.split(":")[0]) == edge_key
-            for branch_parent, branch_child in trace.conditional_branch_edges
+            for branch_parent, branch_child in trace._graph_conditional_branch_edges
         )
     raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
 

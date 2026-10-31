@@ -179,12 +179,12 @@ def test_recording_to_trace_materializes_input_layers_and_backfills_timing() -> 
 
     # capture_start_time must be a real, in-window wall-clock timestamp, not
     # the dataclass default of 0 (epoch).
-    assert before <= cooked.capture_start_time <= after
+    assert before <= cooked.provenance.start_time <= after
 
     # cleanup_duration must be a small, real duration -- not the
     # `time.time() - 0 - 0 - 0` garbage value (effectively "now", i.e. ~56
     # years for a 2026 run) the missing back-fill used to produce.
-    assert 0 <= cooked.cleanup_duration < 60.0
+    assert 0 <= cooked.provenance.cleanup_duration < 60.0
 
     # input_layers must be symmetrically back-filled just like output_layers
     # already was, and must match the set of Ops actually flagged is_input.
@@ -475,7 +475,7 @@ def test_recording_to_trace_halted_produces_valid_halted_trace() -> None:
     assert cooked.halted is True
     assert cooked.halted == exhaustive.halted
     assert cooked.stop_reason == exhaustive.stop_reason
-    assert cooked.halt_frontier == exhaustive.halt_frontier
+    assert cooked.graph.stop_frontier == exhaustive.halt_frontier
     assert list(cooked.output_layers) == list(exhaustive.output_layers)
 
     # And it must pass the FULL invariant chain rather than crashing.
@@ -657,7 +657,7 @@ def test_recording_to_trace_halt_labels_match_exhaustive_across_buffer() -> None
     assert cooked.halted is True
     # Final labels (not raw) -- and they match exhaustive exactly.
     assert cooked.stop_reason == exhaustive.stop_reason
-    assert cooked.halt_frontier == exhaustive.halt_frontier
+    assert cooked.graph.stop_frontier == exhaustive.halt_frontier
     assert not cooked.stop_reason.endswith("_raw")
     check_metadata_invariants(cooked)
     check_metadata_invariants(exhaustive)
@@ -701,4 +701,4 @@ def test_recording_to_trace_backfills_random_seed() -> None:
 
     x = torch.randn(2, 4)
     cooked = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"), seed=4242).to_trace()
-    assert cooked.random_seed == 4242
+    assert cooked.options.seed == 4242

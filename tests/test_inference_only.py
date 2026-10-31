@@ -58,7 +58,7 @@ def test_inference_only_discards_saved_output_grad_fn() -> None:
         model, x, capture=tl.options.CaptureOptions(layers_to_save="all", inference_only=True)
     )
     try:
-        assert trace.inference_only is True
+        assert trace.options.inference_only is True
         assert trace[trace.output_layers[0]].out.grad_fn is None
     finally:
         trace.cleanup()
@@ -70,7 +70,7 @@ def test_default_capture_retains_saved_output_grad_fn() -> None:
     model, x = _model_and_input()
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
     try:
-        assert trace.inference_only is False
+        assert trace.options.inference_only is False
         assert trace[trace.output_layers[0]].out.grad_fn is not None
     finally:
         trace.cleanup()
@@ -105,7 +105,7 @@ def test_inference_only_allows_default_tensor_grad_hook_flag() -> None:
         capture=tl.options.CaptureOptions(inference_only=True, capture_tensor_grad_hooks=True),
     )
     try:
-        assert trace.inference_only is True
+        assert trace.options.inference_only is True
     finally:
         trace.cleanup()
 

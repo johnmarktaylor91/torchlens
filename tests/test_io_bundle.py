@@ -158,7 +158,7 @@ def _build_non_tensor_out_log() -> Trace:
     trace = _build_conv_log()
     first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
     first_saved_layer.transformed_out = 1.0
-    trace.activation_transform = lambda tensor: float(tensor.mean().item())
+    trace._options_activation_transform = lambda tensor: float(tensor.mean().item())
     return trace
 
 
@@ -413,8 +413,8 @@ def test_semantic_output_fields_default_none_roundtrip(tmp_path: Path) -> None:
 
     trace = _build_conv_log()
 
-    assert trace.output_postprocessor is None
-    assert trace.transform_repr is None
+    assert trace.provenance.output_postprocessor is None
+    assert trace.options.input_transform is None
     assert trace.output_id2label is None
     assert trace.output_num_classes is None
     assert trace.decoded_output is None
@@ -423,8 +423,8 @@ def test_semantic_output_fields_default_none_roundtrip(tmp_path: Path) -> None:
     trace.save(bundle_path)
     restored = load(bundle_path)
 
-    assert restored.output_postprocessor is None
-    assert restored.transform_repr is None
+    assert restored.provenance.output_postprocessor is None
+    assert restored.options.input_transform is None
     assert restored.output_id2label is None
     assert restored.output_num_classes is None
     assert restored.decoded_output is None
@@ -434,7 +434,7 @@ def test_resolved_postprocessing_roundtrips_through_tlspec(tmp_path: Path) -> No
     """Resolved output postprocessing provenance is portable state."""
 
     trace = _build_conv_log()
-    trace.output_postprocessor = ResolvedPostprocessing(
+    trace._provenance_output_postprocessor = ResolvedPostprocessing(
         source="hf_config",
         identifier="tiny-classifier",
         verified=True,
@@ -454,7 +454,7 @@ def test_resolved_postprocessing_roundtrips_through_tlspec(tmp_path: Path) -> No
     trace.save(bundle_path)
     restored = load(bundle_path)
 
-    assert restored.output_postprocessor == trace.output_postprocessor
+    assert restored.provenance.output_postprocessor == trace.provenance.output_postprocessor
     assert restored.decoded_output == trace.decoded_output
 
 
@@ -482,14 +482,14 @@ def test_input_transform_repr_roundtrips_while_callable_drops(tmp_path: Path) ->
         torch.ones(1, 2),
         capture=tl.options.CaptureOptions(input_transform=double_input),
     )
-    assert trace.transform_repr == repr(double_input)
+    assert trace.options.input_transform == repr(double_input)
     assert trace._transform is double_input
 
     bundle_path = tmp_path / "input_transform.tlspec"
     trace.save(bundle_path)
     restored = load(bundle_path)
 
-    assert restored.transform_repr == trace.transform_repr
+    assert restored.options.input_transform == trace.options.input_transform
     assert restored._transform is None
 
 
@@ -711,7 +711,7 @@ def test_bundle_version_policy_rows(
         (bundle_path / "blobs" / "extra.bin").write_bytes(b"extra")
         with pytest.warns(UserWarning, match="unreferenced extra files"):
             loaded = load(bundle_path)
-        assert loaded.model_class_name == "_ConvBundleModel"
+        assert loaded.source.class_name == "_ConvBundleModel"
         return
 
     if expectation == "raise":
@@ -730,26 +730,26 @@ def test_bundle_version_policy_rows(
         metadata_path.write_bytes(pickle.dumps(state))
         with pytest.warns(ArtifactSchemaAgeWarning, match=resolved_expected_text or ""):
             loaded = load(bundle_path)
-        assert loaded.model_class_name == "_ConvBundleModel"
+        assert loaded.source.class_name == "_ConvBundleModel"
         return
 
     if expectation == "warning":
         with pytest.warns(UserWarning, match=resolved_expected_text or ""):
             loaded = load(bundle_path)
-        assert loaded.model_class_name == "_ConvBundleModel"
+        assert loaded.source.class_name == "_ConvBundleModel"
         return
 
     if expectation == "info_log":
         with caplog.at_level(logging.INFO, logger="torchlens._io.manifest"):
             loaded = load(bundle_path)
-        assert loaded.model_class_name == "_ConvBundleModel"
+        assert loaded.source.class_name == "_ConvBundleModel"
         assert resolved_expected_text is not None
         assert resolved_expected_text in caplog.text
         assert "older than runtime torchlens_version" in caplog.text
         return
 
     loaded = load(bundle_path)
-    assert loaded.model_class_name == "_ConvBundleModel"
+    assert loaded.source.class_name == "_ConvBundleModel"
 
 
 def test_bundle_load_raises_for_missing_safetensors_backend(

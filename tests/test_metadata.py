@@ -1731,7 +1731,7 @@ class TestConditionalBranchDetection:
     # --- Edge/model log tests ---
 
     def test_conditional_branch_edges_populated(self):
-        """trace.conditional_branch_edges is non-empty."""
+        """trace.graph.conditional_branch_edges is non-empty."""
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input())
         assert len(mh.conditional_branch_edges) > 0

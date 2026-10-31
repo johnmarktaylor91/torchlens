@@ -134,7 +134,7 @@ def main() -> None:
         model, x, capture=tl.options.CaptureOptions(output_style="classification")
     )
     print_table("override: output_style='classification'", override_trace, top_n=1)
-    print(f"override postprocessor: {override_trace.output_postprocessor.description}")
+    print(f"override postprocessor: {override_trace.provenance.output_postprocessor.description}")
 
     register_custom_decoder()
     try:
@@ -142,7 +142,7 @@ def main() -> None:
             model, x, capture=tl.options.CaptureOptions(output_style="demo_custom_labels")
         )
         print_table("custom decoder: output_style='demo_custom_labels'", custom_trace, top_n=1)
-        print(f"custom postprocessor: {custom_trace.output_postprocessor.description}")
+        print(f"custom postprocessor: {custom_trace.provenance.output_postprocessor.description}")
     finally:
         tl._autoroute.output.unregister("demo_custom_labels")
 
@@ -153,7 +153,7 @@ def main() -> None:
             input_transform=text_to_tensor, output_style="classification"
         ),
     )
-    text_trace.input_preprocessor = ResolvedPreprocessing(
+    text_trace._provenance_input_preprocessor = ResolvedPreprocessing(
         source="example.transform",
         identifier="comma-vector-v1",
         verified=True,
@@ -162,7 +162,7 @@ def main() -> None:
     )
     print("\n## original input + preprocessing provenance")
     print(f"raw_input: {text_trace.raw_input!r}")
-    print(f"input_preprocessor: {text_trace.input_preprocessor.description}")
+    print(f"input_preprocessor: {text_trace.provenance.input_preprocessor.description}")
     with tempfile.TemporaryDirectory(prefix="torchlens_semantic_io_") as tmpdir:
         outpath = Path(tmpdir) / "semantic_io_input"
         text_trace.draw(

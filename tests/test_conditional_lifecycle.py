@@ -211,18 +211,18 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
     trace._raw_to_final_layer_labels = mapping
     trace._raw_to_final_parent_layer_labels = mapping
     trace._raw_to_final_op_labels = mapping
-    trace.conditional_branch_edges = [("raw_bool", "raw_parent")]
-    trace.conditional_arm_entry_edges = {
+    trace._graph_conditional_branch_edges = [("raw_bool", "raw_parent")]
+    trace._graph_conditional_arm_entry_edges = {
         (0, "then"): [("raw_parent", "raw_child_then")],
         (0, "elif_1"): [("raw_parent", "raw_child_elif")],
         (0, "else"): [("raw_parent", "raw_child_else")],
     }
-    trace.conditional_edge_call_indices = {
+    trace._graph_conditional_edge_call_indices = {
         ("raw_parent", "raw_child_then", 0, "then"): [1],
         ("raw_parent", "raw_child_elif", 0, "elif_1"): [1],
         ("raw_parent", "raw_child_else", 0, "else"): [1],
     }
-    trace.conditional_records = [_make_conditional_event(["raw_bool"])]
+    trace._graph_conditional_records = [_make_conditional_event(["raw_bool"])]
 
     _replace_layer_names_for_layer_entry(trace, parent_layer)
     _rename_model_history_layer_names(trace)
@@ -238,18 +238,18 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
             "else": ["add_1_5"],
         }
     }
-    assert trace.conditional_branch_edges == [("gt_1_2", "linear_1_1")]
-    assert trace.conditional_arm_entry_edges == {
+    assert trace.graph.conditional_branch_edges == [("gt_1_2", "linear_1_1")]
+    assert trace.graph.conditional_arm_entry_edges == {
         (0, "then"): [("linear_1_1", "relu_1_3")],
         (0, "elif_1"): [("linear_1_1", "sigmoid_1_4")],
         (0, "else"): [("linear_1_1", "add_1_5")],
     }
-    assert trace.conditional_edge_call_indices == {
+    assert trace.graph.conditional_edge_call_indices == {
         ("linear_1_1", "relu_1_3", 0, "then"): [1],
         ("linear_1_1", "sigmoid_1_4", 0, "elif_1"): [1],
         ("linear_1_1", "add_1_5", 0, "else"): [1],
     }
-    assert trace.conditional_records[0].bool_layers == ["gt_1_2"]
+    assert trace.graph.conditional_records[0].bool_layers == ["gt_1_2"]
 
 
 def test_conditional_cleanup_scrubs_removed_labels() -> None:
@@ -280,30 +280,30 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
     parent_layer.conditional_branch_stack_ops = {((0, "then"),): [1, 2]}
 
     trace = _StubTrace(layer_list=[parent_pass], layer_logs={"parent": parent_layer})
-    trace.conditional_branch_edges = [
+    trace._graph_conditional_branch_edges = [
         ("removed_child:2", "parent:1"),
         ("kept_start:1", "parent:1"),
     ]
-    trace.conditional_arm_entry_edges = {
+    trace._graph_conditional_arm_entry_edges = {
         (0, "then"): [("parent:1", "removed_child:2"), ("parent:1", "kept_child:1")],
         (0, "else"): [("parent:1", "removed_child:2")],
     }
-    trace.conditional_edge_call_indices = {
+    trace._graph_conditional_edge_call_indices = {
         ("parent", "removed_child", 0, "then"): [2],
         ("parent", "kept_child", 0, "then"): [1],
     }
-    trace.conditional_records = [_make_conditional_event(["removed_child:2", "kept_bool:1"])]
+    trace._graph_conditional_records = [_make_conditional_event(["removed_child:2", "kept_bool:1"])]
 
     _remove_log_entry_references(trace, "removed_child:2")
 
-    assert trace.conditional_branch_edges == [("kept_start:1", "parent:1")]
-    assert trace.conditional_arm_entry_edges == {
+    assert trace.graph.conditional_branch_edges == [("kept_start:1", "parent:1")]
+    assert trace.graph.conditional_arm_entry_edges == {
         (0, "then"): [("parent:1", "kept_child:1")],
     }
-    assert trace.conditional_edge_call_indices == {
+    assert trace.graph.conditional_edge_call_indices == {
         ("parent", "kept_child", 0, "then"): [1],
     }
-    assert trace.conditional_records[0].bool_layers == ["kept_bool:1"]
+    assert trace.graph.conditional_records[0].bool_layers == ["kept_bool:1"]
 
     assert parent_pass.conditional_entry_children == ["kept_start:1"]
     assert parent_pass.conditional_then_children == ["kept_child:1"]
@@ -385,7 +385,7 @@ def test_conditional_edge_legacy_aliases_removed() -> None:
     """The legacy conditional edge views are deleted; canonical arm edges stay."""
 
     trace = Trace("Tiny")
-    trace.conditional_arm_entry_edges = {
+    trace._graph_conditional_arm_entry_edges = {
         (0, "then"): [("parent", "then_child")],
         (0, "elif_1"): [("parent", "elif_child")],
         (0, "else"): [("parent", "else_child")],
@@ -394,4 +394,4 @@ def test_conditional_edge_legacy_aliases_removed() -> None:
     assert not hasattr(type(trace), "conditional_then_entry_edges")
     assert not hasattr(type(trace), "conditional_elif_entry_edges")
     assert not hasattr(type(trace), "conditional_else_entry_edges")
-    assert trace.conditional_arm_entry_edges[(0, "then")] == [("parent", "then_child")]
+    assert trace.graph.conditional_arm_entry_edges[(0, "then")] == [("parent", "then_child")]

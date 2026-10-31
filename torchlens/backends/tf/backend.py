@@ -293,7 +293,7 @@ class TFBackend:
                 tf=tf,
             )
             trace.capture_events = CaptureEvents()
-            trace.capture_start_time = time.time()
+            trace._provenance_start_time = time.time()
             static_result = capture_static_funcgraph(
                 tf=tf,
                 model=model,
@@ -302,7 +302,7 @@ class TFBackend:
                 kwargs=plan.call_kwargs,
                 save_predicate=save_predicate,
             )
-            trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+            trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
             trace.raw_output = (
                 output_transform(static_result.output) if callable(output_transform) else None
             )
@@ -407,7 +407,7 @@ class TFBackend:
 
             session.module_exit_hook = _module_exit_hook
         trace.capture_events = CaptureEvents()
-        trace.capture_start_time = time.time()
+        trace._provenance_start_time = time.time()
         # Admission-locked publication: a raw save/restore swap here silently
         # rebound a concurrent torch capture's _active_trace (its wrapper hot
         # path reads the global raw) and could republish a finished trace on
@@ -426,7 +426,7 @@ class TFBackend:
             # capture entry: a typo'd save= must never complete COMPLETE
             # silently with zero payloads (R17 parity with sibling previews).
             warn_zero_match_save_predicate("tf")
-        trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+        trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
         trace.raw_output = output_transform(result.output) if callable(output_transform) else None
         trace.capture_events = result.events
         trace._tf_unresolved_producers = result.unresolved_producers
@@ -440,7 +440,7 @@ class TFBackend:
         self._finish_trace(
             trace,
             module_tree,
-            recurrence_detection=bool(getattr(trace, "recurrence_detection", False)),
+            recurrence_detection=bool(getattr(trace, "_options_recurrence_detection", False)),
         )
         if grad_options is not None:
             from .derived_grads import GradOptions, attach_tf_derived_grads
@@ -650,18 +650,18 @@ class TFBackend:
             save_visualizations=save_visualizations,
         )
         trace.name = name
-        trace.backend = cast(BackendName, self.name)
-        trace.model_class_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
+        trace._provenance_backend = cast(BackendName, self.name)
+        trace._source_class_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
         # Root entry-point identity fact (C07X item (iv)): the TF entry
         # invokes the model object itself (Keras/tf.Module __call__).
-        trace.root_entry_point = f"module_call:{trace.model_class_qualname}.__call__"
-        trace.backend_runtime_version = str(getattr(tf, "__version__", ""))
-        trace.backend_runtime_config = {"version": trace.backend_runtime_version}
+        trace._provenance_root_entry_point = f"module_call:{trace._source_class_qualname}.__call__"
+        trace._provenance_backend_version = str(getattr(tf, "__version__", ""))
+        trace._provenance_backend_config = {"version": trace._provenance_backend_version}
         trace.backend_runtime_device_summary = _tf_device_summary(tf)
         trace._pre_forward_rng_states = None
         setattr(
             trace,
-            "random_seed",
+            "_options_seed",
             cast(int, seed) if seed is not None else random.randint(1, 4294967294),
         )
         return trace
@@ -688,7 +688,7 @@ class TFBackend:
             trace.num_params = 0
             trace.num_params_trainable = 0
             trace.num_params_frozen = 0
-            trace.param_source = "none"
+            trace._provenance_param_source = "none"
             return
         trace.param_logs = ParamAccessor(tf_param_logs(module_tree, trace))
         trace.num_param_tensors = len(trace.param_logs)
@@ -697,7 +697,7 @@ class TFBackend:
             param.num_params for param in trace.param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.param_source = "native-module"
+        trace._provenance_param_source = "native-module"
 
     def _finish_trace(
         self,

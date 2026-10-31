@@ -47,8 +47,8 @@ def test_builtin_style_is_unaffected() -> None:
 
     options = tl.options.CaptureOptions(output_style="imagenet")
     trace = tl.trace(nn.Linear(4, 1000), torch.randn(1, 4), capture=options)
-    assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.style == "imagenet"
+    assert trace.provenance.output_postprocessor is not None
+    assert trace.provenance.output_postprocessor.style == "imagenet"
 
 
 def test_custom_style_resolved_by_a_registered_detector_is_honored() -> None:
@@ -76,8 +76,8 @@ def test_custom_style_resolved_by_a_registered_detector_is_honored() -> None:
     try:
         options = tl.options.CaptureOptions(output_style="walk_labels")
         trace = tl.trace(_logits_model(), torch.randn(2, 4), capture=options)
-        assert trace.output_postprocessor is not None
-        assert trace.output_postprocessor.identifier == "walk_labels"
+        assert trace.provenance.output_postprocessor is not None
+        assert trace.provenance.output_postprocessor.identifier == "walk_labels"
     finally:
         tl._autoroute.output.unregister("walk_labels")
 

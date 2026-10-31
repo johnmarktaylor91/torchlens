@@ -433,7 +433,7 @@ def test_absent_root_entry_point_refuses_from_the_armed_stamp(
     monkeypatch.setattr(facts, "_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC", tl._io.TLSPEC_VERSION)
     torch.manual_seed(0)
     trace = tl.trace(_Model(), torch.randn(1, 1, 12, 12))
-    trace.root_entry_point = None
+    trace._provenance_root_entry_point = None
     with governed_artifact_load(), pytest.raises(ArtifactError) as excinfo:
         facts._validate_root_entry_point(trace)
     assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"
@@ -454,6 +454,6 @@ def test_pre_v9_artifact_without_root_entry_point_refuses_as_2x(tmp_path: Path) 
 def test_plain_session_pickle_tolerates_absent_root_entry_point() -> None:
     torch.manual_seed(0)
     trace = tl.trace(_Model(), torch.randn(1, 1, 12, 12))
-    trace.root_entry_point = None
+    trace._provenance_root_entry_point = None
     restored = pickle.loads(pickle.dumps(trace))
-    assert restored.root_entry_point is None
+    assert restored.provenance.root_entry_point is None

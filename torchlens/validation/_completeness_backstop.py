@@ -130,7 +130,7 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
     """
 
     layer_list = getattr(trace, "layer_list", ())
-    decompositions = getattr(trace, "completeness_decompositions", ())
+    decompositions = getattr(trace, "_health_completeness_decompositions", ())
     diagnostics = getattr(trace, "completeness_diagnostics", ())
 
     accounted_owner_fcids: set[int] = {

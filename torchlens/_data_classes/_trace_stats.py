@@ -215,7 +215,7 @@ class TraceStatsMixin(_TraceMixinBase):
     def _graph_has_conditionals(self: "Trace") -> bool:
         """Whether this Trace contains conditional-flow records."""
 
-        return len(self.conditionals) > 0
+        return len(self._graph_conditionals) > 0
 
     @property
     def _graph_is_dynamic(self: "Trace") -> bool:
@@ -227,63 +227,63 @@ class TraceStatsMixin(_TraceMixinBase):
     def _source_forward_location(self: "Trace") -> str | None:
         """Combined forward source location."""
 
-        if self.forward_source_file is None or self.forward_source_line is None:
+        if self._source_forward_file is None or self._source_forward_line is None:
             return None
-        return f"{self.forward_source_file}:{self.forward_source_line}"
+        return f"{self._source_forward_file}:{self._source_forward_line}"
 
     @property
     def _source_class_location(self: "Trace") -> str | None:
         """Combined model class source location."""
 
-        if self.class_source_file is None or self.class_source_line is None:
+        if self._source_class_file is None or self._source_class_line is None:
             return None
-        return f"{self.class_source_file}:{self.class_source_line}"
+        return f"{self._source_class_file}:{self._source_class_line}"
 
     @property
     def _source_init_location(self: "Trace") -> str | None:
         """Combined model ``__init__`` source location."""
 
-        if self.init_source_file is None or self.init_source_line is None:
+        if self._source_init_file is None or self._source_init_line is None:
             return None
-        return f"{self.init_source_file}:{self.init_source_line}"
+        return f"{self._source_init_file}:{self._source_init_line}"
 
     @property
     def _cost_last_backward_duration(self: "Trace") -> Duration | None:
         """Most recent backward-pass duration, if any."""
 
-        if not self.backward_durations:
+        if not self._cost_backward_durations:
             return None
-        return as_duration(self.backward_durations[-1])
+        return as_duration(self._cost_backward_durations[-1])
 
     @property
     def _cost_total_backward_duration(self: "Trace") -> Duration:
         """Sum of all captured backward-pass durations."""
 
-        return Duration(sum(self.backward_durations))
+        return Duration(sum(self._cost_backward_durations))
 
     @property
     def _autograd_last_backward_root_grad_fn_object_id(self: "Trace") -> int | None:
         """Most recent backward root grad_fn_handle object id, if any."""
 
-        if not self.backward_root_grad_fn_object_ids:
+        if not self._autograd_backward_root_grad_fn_object_ids:
             return None
-        return self.backward_root_grad_fn_object_ids[-1]
+        return self._autograd_backward_root_grad_fn_object_ids[-1]
 
     @property
     def _cost_overhead_duration(self: "Trace") -> Duration:
         """Time spent on TorchLens overhead (total minus function calls)."""
-        return self.capture_duration - self.func_calls_duration
+        return self._provenance_duration - self._cost_func_calls_duration
 
     @property
-    def capture_duration(self: "Trace") -> Duration:
+    def _provenance_duration(self: "Trace") -> Duration:
         """Total capture-phase duration in seconds."""
 
-        if not self.capture_start_time or not self.capture_end_time:
+        if not self._provenance_start_time or not self._provenance_end_time:
             return Duration(0)
-        return Duration(self.capture_end_time - self.capture_start_time)
+        return Duration(self._provenance_end_time - self._provenance_start_time)
 
     @property
-    def capture_kind(self: "Trace") -> str:
+    def _provenance_kind(self: "Trace") -> str:
         """Return this product's capture kind: ``"episode"`` or ``"plain"``.
 
         Discoverability seam only (lane F40a; spelling DOCUMENTED-UNSTABLE
@@ -640,8 +640,8 @@ class TraceStatsMixin(_TraceMixinBase):
             output-label metadata. This property is not persisted.
         """
 
-        input_preprocessor = self.input_preprocessor
-        output_postprocessor = self.output_postprocessor
+        input_preprocessor = self._provenance_input_preprocessor
+        output_postprocessor = self._provenance_output_postprocessor
         input_source = input_preprocessor.source if input_preprocessor is not None else None
         output_source = output_postprocessor.source if output_postprocessor is not None else None
         has_output_labels = bool(self.output_id2label)
@@ -1230,7 +1230,7 @@ class TraceStatsMixin(_TraceMixinBase):
     def _autograd_num_backward_edges(self: "Trace") -> int | None:
         """Distinct edges in the backward GradFn graph, or ``None`` if ungated."""
 
-        if not self.has_backward_pass:
+        if not self._autograd_has_backward_pass:
             return None
         return len(
             {
@@ -1337,7 +1337,7 @@ class TraceStatsMixin(_TraceMixinBase):
     def _autograd_grad_fns(self: "Trace") -> GradFnAccessor:
         """Access backward grad_fn_handle metadata by label, index, pass label, or substring."""
         self._sync_backward_projection_if_needed()
-        return GradFnAccessor(self.grad_fn_logs, self.grad_fn_order)
+        return GradFnAccessor(self.grad_fn_logs, self._autograd_grad_fn_order)
 
     @property
     def _autograd_grad_fn_calls(self: "Trace") -> TraceGradFnCallAccessor:

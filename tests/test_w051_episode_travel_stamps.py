@@ -87,7 +87,7 @@ def test_run_product_round_trips_save_load(tmp_path) -> None:
     path = tmp_path / "product.tlspec"
     product.save(path)
     loaded = tl.load(path)
-    assert loaded.capture_kind == "plain"
+    assert loaded.provenance.kind == "plain"
     assert _stamped(loaded) == []
 
 
@@ -99,13 +99,13 @@ def test_guarded_fast_live_product_round_trips_save_load(tmp_path) -> None:
     assert _stamped(trace)
     result = trace.run(inputs=torch.tensor([[1]]), fast=True)
     assert result.trace is trace
-    assert trace.capture_kind == "plain"
+    assert trace.provenance.kind == "plain"
     assert _stamped(trace) == []
 
     path = tmp_path / "fast.tlspec"
     trace.save(path)
     loaded = tl.load(path)
-    assert loaded.capture_kind == "plain"
+    assert loaded.provenance.kind == "plain"
     assert _stamped(loaded) == []
 
 

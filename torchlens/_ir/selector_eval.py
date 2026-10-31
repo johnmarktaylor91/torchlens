@@ -816,7 +816,7 @@ def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
         # Capture subjects include backend ``OpEvent`` records, which carry the
         # owning session as ``source_trace`` (they have no ``trace`` member).
         source_trace = getattr(subject, "source_trace", None)
-        if getattr(source_trace, "backend", TORCH_BACKEND_NAME) != TORCH_BACKEND_NAME:
+        if getattr(source_trace, "_provenance_backend", TORCH_BACKEND_NAME) != TORCH_BACKEND_NAME:
             module_candidate = getattr(subject, "module", None)
             if module_candidate is not None:
                 module_outputs = (module_candidate,)
@@ -897,7 +897,7 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
     if address is not None:
         candidates.append(str(address))
     source_trace = getattr(ctx, "source_trace", None)
-    if getattr(source_trace, "module_identity_mode", None) == "function_root":
+    if getattr(source_trace, "_options_module_identity_mode", None) == "function_root":
         candidates.append("self")
         candidates.append("self:1")
     for frame in getattr(ctx, "module_stack", ()):

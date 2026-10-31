@@ -3,7 +3,7 @@
 Summary memo 3.8 + composition rows 11/14/16: the result survives model
 and trace teardown; every numeric field is a plain int or None; renderer
 and projection values agree; HTML is escaped and dependency-free;
-``Trace.provenance()`` serves the relocated preamble byte-for-byte.
+``Trace.provenance.summary()`` serves the relocated preamble byte-for-byte.
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def test_html_escapes_malicious_names() -> None:
 
     model = _Evil()
     trace = tl.trace(model, torch.randn(1, 4))
-    trace.model_class_name = '<script>alert("x")</script>'
+    trace._source_class_name = '<script>alert("x")</script>'
     report = trace.summary()
     rendered = report.render("html")
     assert "<script>" not in rendered
@@ -165,8 +165,8 @@ def test_provenance_is_the_preamble_byte_for_byte() -> None:
         format_discoverability_summary,
     )
 
-    assert trace.provenance() == format_discoverability_summary(trace)
-    assert "TorchLens Discoverability Summary" in trace.provenance()
+    assert trace.provenance.summary() == format_discoverability_summary(trace)
+    assert "TorchLens Discoverability Summary" in trace.provenance.summary()
 
 
 def test_details_serves_capture_facts() -> None:

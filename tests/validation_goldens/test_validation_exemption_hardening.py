@@ -1052,7 +1052,7 @@ def test_equivalence_symmetry_catches_suffixed_in_module_group_corruption() -> N
     """Symmetric group corruption on a suffixed in-module layer must FAIL.
 
     Per-op ``equivalence_class`` carries the module suffix appended at op
-    creation, while ``trace.op_equivalence_classes`` keys are pre-suffix, so
+    creation, while ``trace.graph.op_equivalence_classes`` keys are pre-suffix, so
     the key-based group lookup missed for EVERY parameterized in-module layer
     and the group-symmetry comparison silently skipped: corrupting
     ``equivalent_ops`` identically on all passes of a shared Linear (and its
@@ -1094,11 +1094,11 @@ def test_equivalence_symmetry_catches_suffixed_in_module_group_corruption() -> N
     assert len(linear_ops) == 2
     # The vacuousness precondition: the suffixed per-op key misses the
     # pre-suffix trace-dict keys, while membership still resolves the group.
-    assert all(op.equivalence_class not in trace.op_equivalence_classes for op in linear_ops), (
-        "suffix mismatch precondition gone -- update or retire this regression test"
-    )
+    assert all(
+        op.equivalence_class not in trace.graph.op_equivalence_classes for op in linear_ops
+    ), "suffix mismatch precondition gone -- update or retire this regression test"
     expected_group = {op.label for op in linear_ops}
-    assert any(group == expected_group for group in trace.op_equivalence_classes.values())
+    assert any(group == expected_group for group in trace.graph.op_equivalence_classes.values())
 
     wrong_group = {linear_ops[0].label}
     for op in linear_ops:

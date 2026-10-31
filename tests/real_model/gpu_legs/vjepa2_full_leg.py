@@ -164,7 +164,7 @@ def stage_a(model: Any, inputs: dict[str, Any]) -> dict[str, Any]:
             "num_ops": int(trace.num_ops),
             "num_layers": int(len(trace.layers)),
             "num_modules": int(trace.num_modules),
-            "saved_activation_memory_bytes": int(trace.saved_activation_memory),
+            "saved_activation_memory_bytes": int(trace.cost.saved_activation_memory),
             "trace_seconds": round(seconds, 1),
             **_peaks(),
         }

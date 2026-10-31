@@ -47,7 +47,7 @@ def test_changed_class_forward_is_a_cache_miss(tmp_path) -> None:
     model = _CacheModel()
     x = torch.randn(1, 4)
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     assert any("relu" in label for label in _op_labels(first))
 
     original_forward = _CacheModel.forward
@@ -61,7 +61,7 @@ def test_changed_class_forward_is_a_cache_miss(tmp_path) -> None:
     finally:
         _CacheModel.forward = original_forward
 
-    assert second.capture_cache_hit is False, (
+    assert second.provenance.cache_hit is False, (
         "a changed forward implementation must not hit the stale cached trace"
     )
     labels = _op_labels(second)
@@ -75,7 +75,7 @@ def test_instance_forward_override_is_a_cache_miss(tmp_path) -> None:
     model = _CacheModel()
     x = torch.randn(1, 4)
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
 
     def tanh_forward(self, inputs):  # noqa: ANN001 - test shim
         return torch.tanh(self.lin(inputs))
@@ -86,7 +86,7 @@ def test_instance_forward_override_is_a_cache_miss(tmp_path) -> None:
     finally:
         del model.forward
 
-    assert second.capture_cache_hit is False
+    assert second.provenance.cache_hit is False
     assert any("tanh" in label for label in _op_labels(second))
 
 
@@ -96,9 +96,9 @@ def test_unchanged_model_still_hits(tmp_path) -> None:
     model = _CacheModel()
     x = torch.randn(1, 4)
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     second = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is True
+    assert second.provenance.cache_hit is True
 
 
 def test_submodule_structure_change_is_a_cache_miss(tmp_path) -> None:
@@ -130,9 +130,9 @@ def test_submodule_structure_change_is_a_cache_miss(tmp_path) -> None:
 
     x = torch.randn(1, 4)
     first = tl.trace(first_model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     second = tl.trace(second_model, x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is False
+    assert second.provenance.cache_hit is False
     assert any("sigmoid" in label for label in _op_labels(second))
 
 
@@ -164,10 +164,10 @@ def test_changed_plain_instance_attribute_is_a_cache_miss(tmp_path) -> None:
     x = torch.randn(1, 4)
     torch.manual_seed(0)
     first = tl.trace(_AttrLoop(1), x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     torch.manual_seed(0)
     second = tl.trace(_AttrLoop(5), x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is False, (
+    assert second.provenance.cache_hit is False, (
         "a changed plain instance attribute must not hit the stale cached trace"
     )
     # grouping rule row 3: the one-op relu loop is one layer with k passes, so
@@ -196,10 +196,10 @@ def test_mutated_numeric_instance_attribute_is_a_cache_miss(tmp_path) -> None:
     model = _Scaled()
     x = torch.randn(1, 4)
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     model.scale = 2.0
     second = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is False
+    assert second.provenance.cache_hit is False
     assert torch.allclose(second.layer_list[-1].out, first.layer_list[-1].out * 2.0)
 
 
@@ -242,12 +242,12 @@ def test_registered_forward_hook_is_a_cache_miss(tmp_path) -> None:
     model = _CacheModel()
     x = torch.randn(1, 4)
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
 
     handle = model.register_forward_hook(lambda mod, args, out: out * 2)
     try:
         second = tl.trace(model, x, capture=_cache_capture(tmp_path))
-        assert second.capture_cache_hit is False, (
+        assert second.provenance.cache_hit is False, (
             "a newly registered forward hook must not hit the hook-free cached trace"
         )
     finally:
@@ -264,12 +264,12 @@ def test_registered_forward_pre_hook_is_a_cache_miss(tmp_path) -> None:
     model = _CacheModel()
     x = torch.randn(1, 4)
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
 
     handle = model.lin.register_forward_pre_hook(lambda mod, args: (args[0] + 1,))
     try:
         second = tl.trace(model, x, capture=_cache_capture(tmp_path))
-        assert second.capture_cache_hit is False
+        assert second.provenance.cache_hit is False
     finally:
         handle.remove()
 
@@ -283,14 +283,14 @@ def test_edited_hook_implementation_is_a_cache_miss(tmp_path) -> None:
     handle = model.register_forward_hook(lambda mod, args, out: out * 2)
     try:
         first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-        assert first.capture_cache_hit is False
+        assert first.provenance.cache_hit is False
     finally:
         handle.remove()
 
     handle = model.register_forward_hook(lambda mod, args, out: out * 3)
     try:
         second = tl.trace(model, x, capture=_cache_capture(tmp_path))
-        assert second.capture_cache_hit is False, (
+        assert second.provenance.cache_hit is False, (
             "an edited hook implementation must not hit the old hook's cached trace"
         )
     finally:
@@ -309,9 +309,9 @@ def test_input_requires_grad_flip_is_a_cache_miss(tmp_path) -> None:
     model = _CacheModel()
     x = torch.randn(1, 4)
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     second = tl.trace(model, x.clone().requires_grad_(True), capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is False, (
+    assert second.provenance.cache_hit is False, (
         "an input requires_grad flip must not hit the no-grad cached trace"
     )
 
@@ -322,11 +322,11 @@ def test_frozen_parameters_are_a_cache_miss(tmp_path) -> None:
     model = _CacheModel()
     x = torch.randn(1, 4)
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     for parameter in model.parameters():
         parameter.requires_grad_(False)
     second = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is False
+    assert second.provenance.cache_hit is False
 
 
 def test_tensor_content_hash_covers_device_and_requires_grad() -> None:
@@ -400,9 +400,9 @@ def test_bf16_state_flip_is_a_cache_miss(tmp_path) -> None:
 
     x = torch.randn(1, 4)
     first = tl.trace(_BufModel(torch.bfloat16), x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     second = tl.trace(_BufModel(torch.float32), x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is False, (
+    assert second.provenance.cache_hit is False, (
         "a bf16 buffer and its fp32 twin must not share a capture-cache key"
     )
 
@@ -488,11 +488,11 @@ def test_underscore_instance_attribute_is_a_cache_miss(tmp_path) -> None:
     five.load_state_dict(one.state_dict())  # identical weights, different program
 
     first = tl.trace(one, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     assert sum("linear" in op.label for op in first.ops) == 1
 
     second = tl.trace(five, x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is False, (
+    assert second.provenance.cache_hit is False, (
         "a changed underscore instance attribute must not hit the stale cached trace"
     )
     # Five passes of the (recurrently grouped) linear layer, not one.
@@ -505,9 +505,9 @@ def test_underscore_attribute_unchanged_model_still_hits(tmp_path) -> None:
     x = torch.ones(1, 4)
     model = _UnderscoreLoop(3)
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     second = tl.trace(model, x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is True
+    assert second.provenance.cache_hit is True
 
 
 def test_over_ceiling_containers_never_key_equal() -> None:
@@ -566,13 +566,13 @@ def test_over_ceiling_dict_tail_difference_is_a_cache_miss(tmp_path) -> None:
     x = torch.randn(1, 4)
     shallow = _DictLoop(1)
     first = tl.trace(shallow, x, capture=_cache_capture(tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     assert first["relu_1_2"].num_passes == 1
 
     deep = _DictLoop(5)
     deep.load_state_dict(shallow.state_dict())
     second = tl.trace(deep, x, capture=_cache_capture(tmp_path))
-    assert second.capture_cache_hit is False, (
+    assert second.provenance.cache_hit is False, (
         "a config difference past the container item ceiling must not hit the stale cached trace"
     )
     assert second["relu_1_2"].num_passes == 5

@@ -206,7 +206,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 "function": callsite.function if callsite is not None else None,
                 "owner_thread_id": state.owner_thread_id,
                 "guard_pass_index": state.guard_pass_index,
-                "capture_mode": getattr(trace, "capture_mode", None),
+                "capture_mode": getattr(trace, "_options_mode", None),
                 "scope": "active_logging",
                 "enforced": False,
                 "in_replacement_hook": event.in_replacement_hook,
@@ -247,25 +247,25 @@ def _finalize_census(state: _WitnessState) -> None:
         )
     reports = trace.__dict__.setdefault("completeness_diagnostics", [])
     reports.extend(diagnostics)
-    trace.completeness_witness_event_count = int(
-        getattr(trace, "completeness_witness_event_count", 0)
-    ) + len(state.events)
-    trace.completeness_witness_accounted_count = (
-        int(getattr(trace, "completeness_witness_accounted_count", 0)) + accounted_count
+    trace._health_num_witness_events = int(getattr(trace, "_health_num_witness_events", 0)) + len(
+        state.events
     )
-    trace.completeness_witness_expected_opaque_count = (
-        int(getattr(trace, "completeness_witness_expected_opaque_count", 0)) + expected_opaque_count
+    trace._health_num_accounted_witness_events = (
+        int(getattr(trace, "_health_num_accounted_witness_events", 0)) + accounted_count
     )
-    trace.completeness_witness_unaccounted_count = int(
-        getattr(trace, "completeness_witness_unaccounted_count", 0)
+    trace._health_num_expected_opaque_witness_events = (
+        int(getattr(trace, "_health_num_expected_opaque_witness_events", 0)) + expected_opaque_count
+    )
+    trace._health_num_unaccounted_witness_events = int(
+        getattr(trace, "_health_num_unaccounted_witness_events", 0)
     ) + len(diagnostics)
-    trace.completeness_witness_callback_ns = (
-        int(getattr(trace, "completeness_witness_callback_ns", 0)) + state.callback_ns
+    trace._health_completeness_callback_ns = (
+        int(getattr(trace, "_health_completeness_callback_ns", 0)) + state.callback_ns
     )
-    trace.completeness_witness_verified = not reports
+    trace._health_completeness_verified = not reports
     if reports:
-        trace.capture_verified = False
-        trace.capture_verification_reason = (
+        trace._provenance_verified = False
+        trace._provenance_verification_reason = (
             "dispatch_witness_unaccounted_ops"
             if diagnostics or _reports_include_non_input_boundary(reports)
             else "input_boundary_unverifiable"
@@ -291,23 +291,23 @@ def _finalize_census(state: _WitnessState) -> None:
         # More specific than either reason below: the transform-escape flag is shared with
         # the functorch boundary, and a shadow-mode escape report is a downstream symptom
         # of the same bypassed compiled region.
-        trace.capture_verified = False
-        trace.capture_verification_reason = "dynamo_region_not_logged"
-    elif getattr(trace, "escape_detector_verified", None) is False:
-        trace.capture_verified = False
-        trace.capture_verification_reason = "callable_escape_shadow_report"
+        trace._provenance_verified = False
+        trace._provenance_verification_reason = "dynamo_region_not_logged"
+    elif getattr(trace, "_health_escape_detector_verified", None) is False:
+        trace._provenance_verified = False
+        trace._provenance_verification_reason = "callable_escape_shadow_report"
     elif getattr(trace, "_raw_transform_escape_detected", False):
-        trace.capture_verified = False
-        trace.capture_verification_reason = "transform_call_route_unverified"
+        trace._provenance_verified = False
+        trace._provenance_verification_reason = "transform_call_route_unverified"
     elif _is_value_free_capture(trace):
         # A clean census proves dispatch ownership, not values: a value-free
         # capture stays unverified (completeness_witness_verified keeps the fact).
-        trace.capture_verified = None
-        trace.capture_verification_reason = None
+        trace._provenance_verified = None
+        trace._provenance_verification_reason = None
     else:
-        trace.capture_verified = True
-        detector_verified = getattr(trace, "escape_detector_verified", None)
-        trace.capture_verification_reason = (
+        trace._provenance_verified = True
+        detector_verified = getattr(trace, "_health_escape_detector_verified", None)
+        trace._provenance_verification_reason = (
             "dispatch_witness_and_detector_verified"
             if detector_verified is True
             else "dispatch_witness_verified"
@@ -330,7 +330,7 @@ def _is_value_free_capture(trace: Any) -> bool:
         marker still fails the settlement invariant's lost-marker check.
     """
 
-    if bool(getattr(trace, "structure_only", False)):
+    if bool(getattr(trace, "_options_structure_only", False)):
         return True
     from ...capture._weightsfree_admission import admission_record_for
 
@@ -378,16 +378,16 @@ def _finalize_input_semantics_without_census(trace: Any) -> None:
         for report in reports
     ):
         return
-    trace.capture_verified = False
-    trace.capture_verification_reason = "input_boundary_unverifiable"
+    trace._provenance_verified = False
+    trace._provenance_verification_reason = "input_boundary_unverifiable"
 
 
 def _init_witness_fields(trace: Any, mode: str) -> None:
     """Initialize the witness disclosure fields and counters on the trace."""
 
-    trace.completeness_witness_mode = mode
-    if not hasattr(trace, "completeness_witness_verified"):
-        trace.completeness_witness_verified = None
+    trace._health_completeness_mode = mode
+    if not hasattr(trace, "_health_completeness_verified"):
+        trace._health_completeness_verified = None
     trace.__dict__.setdefault("completeness_diagnostics", [])
     trace.__dict__.setdefault("completeness_decompositions", [])
     for counter_field in (

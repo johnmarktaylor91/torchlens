@@ -97,12 +97,12 @@ its successor:
 | `mode=` | `level="op"`, or `fold_repeats=False` to unfold repeated runs |
 | `print_to=` | `report.print(file=...)`, or `print_to(str(report))` |
 | `count_fma_as_two=` | `flop_convention="fma2"` (was `True`) / `"fma1"` (was `False`) |
-| `show_input_preprocessing_details=` | `trace.provenance()` and `trace.input_preprocessor` |
+| `show_input_preprocessing_details=` | `trace.provenance.summary()` and `trace.provenance.input_preprocessor` |
 | `level="overview"` | `view="overview"` (the default) |
 | `level="compute"`, `level="cost"` | `view="compute"` |
 | `level="graph"` | `trace.to_agent_json()` (op rows, edges, hierarchy) or `trace.draw()` |
 | `level="memory"` | `trace.profile(sort_by="activation_memory")`; totals stay in the footer |
-| `level="control_flow"` | `trace.conditional_records` and the `conditional_*` columns of `trace.to_pandas()` |
+| `level="control_flow"` | `trace.graph.conditional_records` and the `conditional_*` columns of `trace.to_pandas()` |
 | `level="waterfall"` | `trace.profile(level="op")`, or `trace.to_pandas()` in execution order |
 | `level="output"` | `trace.output_table()` |
 
@@ -190,7 +190,7 @@ neither the model nor the Trace and survives cleanup and GC:
 - Projections: `to_pandas(scope="display"|"all")`, `to_dict()` (bounded,
   JSON-safe), `to_markdown()`, `to_html()`, `render(style=)`, `print()`.
 - `report.details()` serves the capture facts;
-  `trace.provenance()` returns the full historical provenance preamble
+  `trace.provenance.summary()` returns the full historical provenance preamble
   byte-for-byte (it no longer opens the table).
 
 Capture honesty travels with the table: structure-only, unverified,

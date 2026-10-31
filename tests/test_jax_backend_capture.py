@@ -621,9 +621,9 @@ def test_jax_trace_captures_equation_ops_and_params() -> None:
 
     trace = _trace_jax(_mlp, (params, x))
 
-    assert trace.backend == "jax"
-    assert trace.module_identity_mode == "function_root"
-    assert trace.param_source == "pytree-derived"
+    assert trace.provenance.backend == "jax"
+    assert trace.options.module_identity_mode == "function_root"
+    assert trace.provenance.param_source == "pytree-derived"
     assert trace.modules["self"].address == "self"
     assert set(trace.params.keys()) == {"w1", "b1", "w2"}
     assert trace.params["w1"].backend_address == "pytree:w1"
@@ -658,7 +658,7 @@ def test_jax_function_root_attributes_params_to_consuming_ops() -> None:
 
     trace = _trace_jax(_mlp, (params, x))
 
-    assert trace.module_identity_mode == "function_root"
+    assert trace.options.module_identity_mode == "function_root"
     # 3 distinct layers genuinely use a param: the two matmuls (w1, w2) and
     # the bias broadcast (b1).
     assert trace.num_layers_with_params == 3
@@ -695,7 +695,7 @@ def test_jax_trace_preserves_nested_param_paths() -> None:
 
     assert set(trace.params.keys()) == {"encoder.w", "encoder.b", "head.w"}
     assert trace.params["encoder.w"].backend_address == "pytree:encoder.w"
-    assert trace.param_source == "pytree-derived"
+    assert trace.provenance.param_source == "pytree-derived"
 
 
 def test_jax_trace_preserves_output_pytree_paths() -> None:
@@ -737,7 +737,7 @@ def test_jax_trace_accepts_declared_static_argnums() -> None:
         jax_static_argnums=2,
     )
 
-    assert trace.jax_static_argnums == (2,)
+    assert trace.options.jax_static_argnums == (2,)
     assert "mul" in {op.func_name for op in trace.layer_list}
     assert trace.validate_forward_pass([])
 
@@ -750,7 +750,7 @@ def test_jax_trace_inlines_allowlisted_pure_library_calls() -> None:
 
     trace = _trace_jax(_relu_block, (params, x))
 
-    assert "custom_jvp_call" in trace.jax_inlined_call_primitives
+    assert "custom_jvp_call" in trace.provenance.jax_inlined_call_primitives
     assert any(capture.inlined for capture in trace.jax_equation_captures)
     assert "max" in {op.func_name for op in trace.layer_list}
     assert trace.validate_forward_pass([])
@@ -773,7 +773,7 @@ def test_jax_trace_inlines_non_allowlisted_jit_call() -> None:
     trace = _trace_jax(model, (_params(), jnp.ones((2, 3), dtype=jnp.float32)))
     inlined_ops = [op for op in trace.layer_list if op.annotations.get("jax_inlined") is True]
 
-    assert "jit" in trace.jax_inlined_call_primitives
+    assert "jit" in trace.provenance.jax_inlined_call_primitives
     assert "dot_general" in {op.func_name for op in inlined_ops}
     assert "add" in {op.func_name for op in inlined_ops}
     assert trace.validate_forward_pass([]) is True
@@ -812,7 +812,7 @@ def test_jax_trace_inlines_jitted_scan_and_unrolls_body() -> None:
         and "/body/" in op.annotations.get("jax_source_path", "")
     ]
 
-    assert "jit" in trace.jax_inlined_call_primitives
+    assert "jit" in trace.provenance.jax_inlined_call_primitives
     assert len(body_adds) == 4
     assert any(op.annotations.get("jax_capture_kind") == "scan_stack" for op in trace.layer_list)
     assert trace.validate_forward_pass([]) is True
@@ -1405,7 +1405,7 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
     assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
     assert trace.num_saved_ops == len(saved_ops)
-    assert int(trace.saved_activation_memory) == sum(
+    assert int(trace.cost.saved_activation_memory) == sum(
         int(op.activation_memory or 0) for op in saved_ops
     )
     assert trace.validate_forward_pass([]) is True
@@ -1417,7 +1417,7 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
     loaded = tl.load(path)
 
     assert len(out_entries) == trace.num_saved_ops
-    assert loaded.backend == "jax"
+    assert loaded.provenance.backend == "jax"
     assert len(list(loaded.saved_ops)) == trace.num_saved_ops
     assert [op.has_saved_activation for op in loaded.layer_list] == [
         op.has_saved_activation for op in trace.layer_list
@@ -1842,5 +1842,5 @@ def test_jax_capture_options_does_not_reject_the_whole_object() -> None:
         capture=tl.options.CaptureOptions(keep_orphans=True),
     )
 
-    assert trace.backend == "jax"
+    assert trace.provenance.backend == "jax"
     assert trace.num_ops > 0

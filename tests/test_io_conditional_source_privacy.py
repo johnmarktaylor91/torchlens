@@ -1,6 +1,6 @@
 """B8-18: a captured conditional must not leak an absolute source path on save.
 
-``Trace.conditional_records`` holds ``ConditionalEvent`` objects whose
+``Trace.graph.conditional_records`` holds ``ConditionalEvent`` objects whose
 ``source_file`` is the ABSOLUTE path of the user's ``forward``-defining module.
 Those dataclasses had no ``_PORTABLE_STATE_SPEC``, so the scrubber returned them
 verbatim and the source-path relativizer never ran -- the absolute path (with its
@@ -40,7 +40,7 @@ def _conditional_source_files(trace: tl.Trace) -> list[str]:
 
     return [
         getattr(record, "source_file", "")
-        for record in trace.conditional_records
+        for record in trace.graph.conditional_records
         if getattr(record, "source_file", None)
     ]
 

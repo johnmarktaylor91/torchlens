@@ -159,8 +159,8 @@ def test_save_scrub_remaps_process_local_identity_tokens(tmp_path: Path) -> None
     assert [op.equivalence_class for op in first_param_ops] == [
         op.equivalence_class for op in second_param_ops
     ]
-    assert first.model_object_id == second.model_object_id == 1
-    assert first.input_object_id == second.input_object_id == 1
+    assert first.provenance.model_object_id == second.provenance.model_object_id == 1
+    assert first.provenance.input_object_id == second.provenance.input_object_id == 1
 
     first_manifest = json.loads((first_path / "manifest.json").read_text(encoding="utf-8"))
     second_manifest = json.loads((second_path / "manifest.json").read_text(encoding="utf-8"))
@@ -179,10 +179,10 @@ def test_save_scrub_remaps_autograd_identity_joins(tmp_path: Path) -> None:
     trace.save(path)
 
     loaded = tl.load(path)
-    expected_ids = list(range(1, len(loaded.grad_fn_order) + 1))
-    assert loaded.grad_fn_order == expected_ids
+    expected_ids = list(range(1, len(loaded.autograd.grad_fn_order) + 1))
+    assert loaded.autograd.grad_fn_order == expected_ids
     assert list(loaded.grad_fn_logs) == expected_ids
-    assert set(loaded.backward_root_grad_fn_object_ids) <= set(expected_ids)
+    assert set(loaded.autograd.backward_root_grad_fn_object_ids) <= set(expected_ids)
     assert all(
         grad_fn.grad_fn_object_id == grad_fn_id
         and set(grad_fn.next_grad_fn_ids) <= set(expected_ids)

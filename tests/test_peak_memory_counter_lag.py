@@ -167,8 +167,8 @@ def test_cpu_forward_peak_counts_a_freed_buffer_under_the_counter_lag() -> None:
         outside = SAMPLES["alive"] - SAMPLES["entry"]
         assert outside >= PLANT_BYTES - MARGIN
         assert lagged.lag >= MIN_LAG
-        assert trace.forward_peak_memory is not None
-        assert int(trace.forward_peak_memory) >= outside - MARGIN
+        assert trace.cost.forward_peak_memory is not None
+        assert int(trace.cost.forward_peak_memory) >= outside - MARGIN
     finally:
         trace.cleanup()
 
@@ -205,7 +205,7 @@ def test_cpu_backward_peak_counts_a_freed_buffer_under_the_counter_lag() -> None
         outside = samples["alive"] - samples["entry"]
         assert outside >= PLANT_BYTES - MARGIN
         assert lagged.lag >= MIN_LAG
-        assert int(trace.backward_peak_memory) >= outside - MARGIN
+        assert int(trace.cost.backward_peak_memory) >= outside - MARGIN
     finally:
         trace.cleanup()
 

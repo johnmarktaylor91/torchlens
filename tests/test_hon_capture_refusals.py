@@ -56,7 +56,7 @@ def test_emit_nvtx_refuses_without_cuda_and_the_remedy_runs(
     assert "drop emit_nvtx=True" in info.value.fields["remedy"]
 
     trace = tl.trace(_Tiny(), x)
-    assert trace.emit_nvtx is False and len(trace.layer_list) > 0
+    assert trace.options.emit_nvtx is False and len(trace.layer_list) > 0
 
 
 def test_emit_nvtx_refusal_tracks_the_real_host() -> None:

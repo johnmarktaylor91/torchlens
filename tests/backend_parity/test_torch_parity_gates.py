@@ -421,12 +421,12 @@ def _trace_projection(trace: Trace) -> dict[str, Any]:
     """
 
     return {
-        "backend": trace.backend,
-        "module_identity_mode": trace.module_identity_mode,
-        "param_source": trace.param_source,
+        "backend": trace.provenance.backend,
+        "module_identity_mode": trace.options.module_identity_mode,
+        "param_source": trace.provenance.param_source,
         "num_ops": trace.num_ops,
         "num_saved_ops": trace.num_saved_ops,
-        "has_backward_pass": trace.has_backward_pass,
+        "has_backward_pass": trace.autograd.has_backward_pass,
         "num_backward_passes": trace.num_backward_passes,
         "output_layers": list(trace.output_layers),
         "ops": [_op_projection(op) for op in trace.layer_list],

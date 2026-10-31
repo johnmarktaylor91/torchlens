@@ -145,7 +145,7 @@ def stubbed_runner(
 
         captured_calls.append(kwargs)
         dummy_log = _DummyLog()
-        dummy_log.output_device = kwargs.get("output_device", "same")
+        dummy_log._options_output_device = kwargs.get("output_device", "same")
         dummy_log.save_budget = kwargs.get("save_budget", "auto")
         dummy_logs.append(dummy_log)
         return dummy_log

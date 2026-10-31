@@ -59,8 +59,8 @@ def _owned_object_ids(trace: tl.Trace) -> set[int]:
     owned |= {id(layer) for layer in trace.layer_logs.values()}
     owned |= {id(module) for module in trace.modules}
     owned |= {id(call) for module in trace.modules for call in module.calls.values()}
-    owned |= {id(conditional) for conditional in trace.conditionals}
-    owned |= {id(arm) for conditional in trace.conditionals for arm in conditional.arms}
+    owned |= {id(conditional) for conditional in trace.graph.conditionals}
+    owned |= {id(arm) for conditional in trace.graph.conditionals for arm in conditional.arms}
     return owned
 
 
@@ -78,8 +78,8 @@ def test_fork_back_references_point_at_the_fork(cond_trace: tl.Trace) -> None:
     assert all(op.source_trace is fork for op in fork.layer_list)
     assert all(layer.source_trace is fork for layer in fork.layer_logs.values())
     assert all(module._source_trace is fork for module in fork.modules)
-    assert fork.conditionals, "fixture must produce at least one conditional"
-    for conditional in fork.conditionals:
+    assert fork.graph.conditionals, "fixture must produce at least one conditional"
+    for conditional in fork.graph.conditionals:
         for arm in conditional.arms:
             assert arm._trace is fork
 
@@ -101,17 +101,17 @@ def test_fork_mutation_does_not_reach_parent(cond_trace: tl.Trace) -> None:
 
     before = [dict(op.annotations) for op in cond_trace.layer_list]
     before_arms = [
-        [arm.fired for arm in conditional.arms] for conditional in cond_trace.conditionals
+        [arm.fired for arm in conditional.arms] for conditional in cond_trace.graph.conditionals
     ]
     fork = cond_trace._fork_trace(name="mutation")
     for op in fork.layer_list:
         op.annotations["__probe__"] = "fork-only"
-    for conditional in fork.conditionals:
+    for conditional in fork.graph.conditionals:
         for arm in conditional.arms:
             arm.fired = not arm.fired
     assert [dict(op.annotations) for op in cond_trace.layer_list] == before
     assert [
-        [arm.fired for arm in conditional.arms] for conditional in cond_trace.conditionals
+        [arm.fired for arm in conditional.arms] for conditional in cond_trace.graph.conditionals
     ] == before_arms
 
 

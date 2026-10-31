@@ -103,15 +103,18 @@ def test_paddle_leaf_input_and_param_grads_match_direct_reference() -> None:
         allow_unused=True,
     )
 
-    assert set(trace.derived_grads.keys()) == {
+    assert set(trace.autograd.derived_grads.keys()) == {
         "inputs.0",
         "params.linear.weight",
         "params.linear.bias",
     }
-    _assert_close(trace.derived_grads["inputs.0"].grad, expected[0])
-    _assert_close(trace.derived_grads["params.linear.weight"].grad, expected[1])
-    _assert_close(trace.derived_grads["params.linear.bias"].grad, expected[2])
-    assert trace.params["linear.weight"].grad is trace.derived_grads["params.linear.weight"].grad
+    _assert_close(trace.autograd.derived_grads["inputs.0"].grad, expected[0])
+    _assert_close(trace.autograd.derived_grads["params.linear.weight"].grad, expected[1])
+    _assert_close(trace.autograd.derived_grads["params.linear.bias"].grad, expected[2])
+    assert (
+        trace.params["linear.weight"].grad
+        is trace.autograd.derived_grads["params.linear.weight"].grad
+    )
 
 
 def test_paddle_derived_grads_do_not_create_backward_logs() -> None:
@@ -125,7 +128,7 @@ def test_paddle_derived_grads_do_not_create_backward_logs() -> None:
         grad_options=GradOptions(loss_fn=_loss),
     )
 
-    assert trace.has_backward_pass is False
+    assert trace.autograd.has_backward_pass is False
     assert not trace.backward_pass_logs
     assert not trace.grad_fn_logs
 

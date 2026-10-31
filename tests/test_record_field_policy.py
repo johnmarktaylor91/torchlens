@@ -300,7 +300,7 @@ def test_postprocess_contract_assertions_run_over_standard_model(
         capture=tl.options.CaptureOptions(save_grads=False),
     )
     try:
-        assert trace.graph_shape_hash is not None
+        assert trace.provenance.fingerprint is not None
         assert trace.layer_logs
         assert trace.modules
     finally:

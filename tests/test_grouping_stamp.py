@@ -46,8 +46,8 @@ def _healthy() -> dict:
 
 def test_grouping_kwarg_is_keyword_only_and_structural_proceeds() -> None:
     log = _tiny_trace(grouping="structural")
-    assert log.grouping == "structural"
-    assert log.grouping_policy == _healthy()
+    assert log.options.grouping == "structural"
+    assert log.options.grouping_policy == _healthy()
 
 
 @pytest.mark.smoke
@@ -71,7 +71,7 @@ def test_grouping_entry_refusals() -> None:
 
 def test_stamp_written_on_default_and_degraded_paths() -> None:
     default_log = _tiny_trace()
-    assert default_log.grouping_policy == {
+    assert default_log.options.grouping_policy == {
         "schema": GROUPING_POLICY_SCHEMA,
         "policy": "structural",
         "requested": "structural",
@@ -82,7 +82,7 @@ def test_stamp_written_on_default_and_degraded_paths() -> None:
         "settlement_note": None,
     }
     degraded_path_log = _tiny_trace(capture=tl.options.CaptureOptions(recurrence_detection=False))
-    stamp = degraded_path_log.grouping_policy
+    stamp = degraded_path_log.options.grouping_policy
     assert stamp["policy"] == "params_only"
     assert stamp["detector"] == "unknown"
     assert stamp["effective"] is True
@@ -91,8 +91,8 @@ def test_stamp_written_on_default_and_degraded_paths() -> None:
     assert (
         validate_grouping_policy_stamp(
             stamp,
-            recurrence_detection=degraded_path_log.recurrence_detection,
-            grouping=degraded_path_log.grouping,
+            recurrence_detection=degraded_path_log.options.recurrence_detection,
+            grouping=degraded_path_log.options.grouping,
         )
         is None
     )
@@ -150,7 +150,7 @@ def test_validation_rule_matrix() -> None:
     assert validate_grouping_policy_stamp(_healthy(), recurrence_detection=False) == "C5"
     params_only = build_grouping_policy_stamp(ran_recurrence_grouping=False, requested="structural")
     assert validate_grouping_policy_stamp(params_only, recurrence_detection=True) == "C5"
-    # C6: mirror coherence with trace.grouping.
+    # C6: mirror coherence with trace.options.grouping.
     assert validate_grouping_policy_stamp(_healthy(), grouping="strict_shapes") == "C6"
     # C7: a healthy stamp never carries a settlement.
     assert (
@@ -178,8 +178,8 @@ def test_g1_stamp_roundtrip_under_switch(tmp_path) -> None:
         with warnings.catch_warnings():
             warnings.simplefilter("error", TorchLensWarning)
             loaded = tl.load(str(path))
-    assert loaded.grouping == "structural"
-    assert loaded.grouping_policy == trace.grouping_policy
+    assert loaded.options.grouping == "structural"
+    assert loaded.options.grouping_policy == trace.options.grouping_policy
 
 
 # ---------------------------------------------------------------------------
@@ -202,31 +202,34 @@ def _tampered_reload(tmp_path, mutate, name: str) -> tl.Trace:
 
 def test_g3_tampered_unknown_key_refuses_and_settles(tmp_path) -> None:
     def plant_unknown_key(trace: tl.Trace) -> None:
-        trace.grouping_policy = {**trace.grouping_policy, "forged": True}
+        trace._options_grouping_policy = {**trace.options.grouping_policy, "forged": True}
 
     reloaded = _tampered_reload(tmp_path, plant_unknown_key, "unknown_key")
-    assert reloaded.grouping_policy == degraded_grouping_policy_stamp("unknown_key")
+    assert reloaded.options.grouping_policy == degraded_grouping_policy_stamp("unknown_key")
 
 
 def test_g3_forged_policy_degrades_with_rule_name(tmp_path) -> None:
     def forge_policy(trace: tl.Trace) -> None:
-        trace.grouping_policy = {**trace.grouping_policy, "policy": "greedy"}
+        trace._options_grouping_policy = {**trace.options.grouping_policy, "policy": "greedy"}
 
     reloaded = _tampered_reload(tmp_path, forge_policy, "forged_policy")
-    assert reloaded.grouping_policy == degraded_grouping_policy_stamp("vocabulary")
+    assert reloaded.options.grouping_policy == degraded_grouping_policy_stamp("vocabulary")
 
 
 def test_g3_mirror_incoherence_degrades_c6(tmp_path) -> None:
     def forge_requested(trace: tl.Trace) -> None:
-        trace.grouping_policy = {**trace.grouping_policy, "requested": "fold_sites"}
+        trace._options_grouping_policy = {
+            **trace.options.grouping_policy,
+            "requested": "fold_sites",
+        }
 
     reloaded = _tampered_reload(tmp_path, forge_requested, "mirror")
-    assert reloaded.grouping_policy == degraded_grouping_policy_stamp("c6")
+    assert reloaded.options.grouping_policy == degraded_grouping_policy_stamp("c6")
 
 
 def test_g3_degraded_settlement_roundtrips_byte_stable(tmp_path) -> None:
     def forge_policy(trace: tl.Trace) -> None:
-        trace.grouping_policy = {**trace.grouping_policy, "policy": "greedy"}
+        trace._options_grouping_policy = {**trace.options.grouping_policy, "policy": "greedy"}
 
     settled = _tampered_reload(tmp_path, forge_policy, "settle_once")
     settled_payload = dict(settled.grouping_policy)
@@ -264,5 +267,5 @@ def test_healthy_stamp_persists_on_plain_v8_round_trip(tmp_path) -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
         loaded = tl.load(str(path))
-    assert loaded.grouping_policy == trace.grouping_policy
-    assert loaded.grouping == "structural"
+    assert loaded.options.grouping_policy == trace.options.grouping_policy
+    assert loaded.options.grouping == "structural"

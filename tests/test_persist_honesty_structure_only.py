@@ -60,7 +60,7 @@ def test_structure_only_buffer_model_round_trips(buffer_structure_trace, tmp_pat
 
     buffer_structure_trace.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
-    assert loaded.structure_only is True
+    assert loaded.options.structure_only is True
     # Declared geometry survives the payload strip.
     buffer_ops = [op for layer in loaded.layer_list for op in layer.ops if op.is_buffer]
     assert buffer_ops, "expected buffer graph nodes on the loaded trace"
@@ -72,7 +72,7 @@ def test_structure_only_buffer_model_round_trips(buffer_structure_trace, tmp_pat
 def test_structure_only_buffer_model_audit_round_trips(buffer_structure_trace, tmp_path):
     buffer_structure_trace.save(tmp_path / "bundle", level="audit")
     loaded = tl.load(tmp_path / "bundle")
-    assert loaded.structure_only is True
+    assert loaded.options.structure_only is True
 
 
 def test_structure_only_save_ships_no_buffer_initial_values(buffer_structure_trace, tmp_path):

@@ -76,5 +76,5 @@ def test_bert_structure_only_save_round_trips(tmp_path):
     trace.save(path)
     assert list((path / "blobs").iterdir()) == []
     loaded = tl.load(path)
-    assert loaded.structure_only is True
+    assert loaded.options.structure_only is True
     assert loaded.layer_list

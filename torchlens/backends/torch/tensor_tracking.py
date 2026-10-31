@@ -626,8 +626,8 @@ def _build_grad_payloads(
         raw_payload, transformed_payload = _build_fastlog_grad_payloads(trace, grad)
         return raw_payload, transformed_payload, True
     op = trace.layer_dict_all_keys[layer_label]
-    grad_transform = getattr(trace, "grad_transform", None)
-    save_raw_gradients = getattr(trace, "save_raw_gradients", True)
+    grad_transform = getattr(trace, "_options_grad_transform", None)
+    save_raw_gradients = getattr(trace, "_options_save_raw_grads", True)
     save_mode = _trace_grad_save_mode(trace)
     reservation = _admit_grad_payload_budget(trace, grad, layer_label, save_mode)
     raw_payload = (
@@ -713,8 +713,8 @@ def _build_fastlog_grad_payloads(
 ) -> tuple[torch.Tensor | None, Any | None]:
     """Return gradient payloads for predicate-mode recording contexts."""
 
-    grad_transform = getattr(trace, "grad_transform", None)
-    save_raw_gradients = getattr(trace, "save_raw_gradients", True)
+    grad_transform = getattr(trace, "_options_grad_transform", None)
+    save_raw_gradients = getattr(trace, "_options_save_raw_grads", True)
     save_mode = _trace_grad_save_mode(trace)
     reservation = _admit_grad_payload_budget(trace, grad, "<fastlog grad>", save_mode)
     raw_payload = (
@@ -783,7 +783,7 @@ def _trace_grad_save_mode(trace: "Trace") -> SaveMode:
     policy = _active_save_grads_policy(trace)
     if isinstance(policy, CaptureSpec):
         return policy.save_mode
-    return cast(SaveMode, getattr(trace, "save_mode", "copy"))
+    return cast(SaveMode, getattr(trace, "_options_save_mode", "copy"))
 
 
 def _copy_grad_payload(grad: torch.Tensor, *, save_mode: SaveMode = "copy") -> torch.Tensor:
@@ -959,7 +959,7 @@ def _active_save_grads_policy(trace: "Trace") -> Any:
 
     if hasattr(trace, "_active_save_grads_policy"):
         return getattr(trace, "_active_save_grads_policy")
-    return getattr(trace, "save_grads", None)
+    return getattr(trace, "_options_save_grads", None)
 
 
 def _log_tensor_grad(

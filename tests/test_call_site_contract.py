@@ -199,7 +199,7 @@ def test_contract_and_narrowed_invariants_hold_on_rule_rows(model_cls: type[nn.M
 
     torch.manual_seed(0)
     trace = tl.trace(model_cls(), _x())
-    assert trace.grouping_policy["detector"] == "callsite_v1"
+    assert trace.options.grouping_policy["detector"] == "callsite_v1"
     assert contract.call_site_classes_for(trace) is not None
     assert check_metadata_invariants(trace) is True
     assert not [
@@ -258,7 +258,7 @@ def test_loaded_trace_reports_the_contract_unchecked(tmp_path: Path) -> None:
     spec = tmp_path / "loop.tlspec"
     trace.save(str(spec))
     loaded = tl.load(str(spec))
-    assert loaded.grouping_policy["detector"] == "callsite_v1"
+    assert loaded.options.grouping_policy["detector"] == "callsite_v1"
     assert contract.call_site_classes_for(loaded) is None
     check_metadata_invariants(loaded)
     unchecked = [

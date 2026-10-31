@@ -313,7 +313,7 @@ class _TreeBuilder:
         self.fold_repeats = fold_repeats
         self.partition_total = int(agg.partition_total)
         self.calls = {str(call.call_label): call for call in trace.module_calls.values()}
-        self.model_root_name = str(getattr(trace, "model_class_name", None) or "model")
+        self.model_root_name = str(getattr(trace, "_source_class_name", None) or "model")
         self.rows: list[CostTreeRow] = []
         self.hidden_flops = 0
         self._ownership()

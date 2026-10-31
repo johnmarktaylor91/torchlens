@@ -306,7 +306,7 @@ def test_rg08_episode_captured_generation_matches_direct_generate(
     )
     try:
         assert trace.outcome.status.name == "COMPLETE"
-        assert str(trace.root_entry_point).startswith("bound_method:")
+        assert str(trace.provenance.root_entry_point).startswith("bound_method:")
         ledger = trace.annotations["episode"]
         rows = ledger["rows"]
         assert [row["status"] for row in rows] == ["complete"] * 4

@@ -296,7 +296,7 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
     # TRANSFORMED bytes) is served by this same aggregate.
     from .._save_budget import retained_activation_bytes
 
-    trace.saved_activation_memory = Bytes(retained_activation_bytes(saved_ops))
+    trace._cost_saved_activation_memory = Bytes(retained_activation_bytes(saved_ops))
     trace.num_saved_layers = len({op.layer_label for op in saved_ops})
     refresh_saved_module_call_count(trace, {op.label for op in saved_ops})
     refresh_pinned_autograd_memory(trace, saved_ops)

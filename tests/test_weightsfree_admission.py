@@ -51,7 +51,7 @@ def test_meta_with_flag_admits() -> None:
 
     tr = weightsfree_trace(_meta_model(), _meta_input())
     assert tr.outcome.status.value == "complete"
-    assert tr.structure_only is True
+    assert tr.options.structure_only is True
 
 
 def test_real_substrate_structure_only_still_works() -> None:
@@ -59,7 +59,7 @@ def test_real_substrate_structure_only_still_works() -> None:
 
     real, _ = build_twins(LinearReluLinear)
     tr = weightsfree_trace(real, torch.randn(3, 2))
-    assert tr.structure_only is True
+    assert tr.options.structure_only is True
     assert tr.outcome.status.value == "complete"
 
 
@@ -224,7 +224,7 @@ def test_failed_admitted_capture_restores_wrappers_and_flags() -> None:
 
 def test_admitted_capture_carries_admission_and_envelope() -> None:
     tr = weightsfree_trace(_meta_model(), _meta_input())
-    envelope = tr.structure_evidence
+    envelope = tr.graph.structure_evidence
     assert envelope is not None
     assert envelope["capture_mode"] == "structure_only"
     assert envelope["substrate"] == "meta"
@@ -235,7 +235,7 @@ def test_admitted_capture_carries_admission_and_envelope() -> None:
 def test_real_structure_only_envelope_says_real() -> None:
     real, _ = build_twins(LinearReluLinear)
     tr = weightsfree_trace(real, torch.randn(3, 2))
-    envelope = tr.structure_evidence
+    envelope = tr.graph.structure_evidence
     assert envelope is not None
     assert envelope["substrate"] == "real"
     assert envelope["factory_device_policy"] == "none"

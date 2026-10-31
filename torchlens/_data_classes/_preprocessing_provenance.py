@@ -68,7 +68,7 @@ def status_of(record: ResolvedPreprocessing) -> str:
 
 
 def stamp_user_transform_provenance(trace: Trace, input_transform: Callable[..., Any]) -> None:
-    """Populate ``trace.input_preprocessor`` for a user-supplied transform (B1).
+    """Populate ``trace._provenance_input_preprocessor`` for a user-supplied transform (B1).
 
     A capture that APPLIED an input transform carries provenance on every
     path, not only the HF bridges (which stamp a richer record over this one
@@ -80,7 +80,7 @@ def stamp_user_transform_provenance(trace: Trace, input_transform: Callable[...,
     ``"unknown"`` -- never a guess about what the callable did.
     """
 
-    if getattr(trace, "input_preprocessor", None) is not None:
+    if getattr(trace, "_provenance_input_preprocessor", None) is not None:
         return
     from .trace import ResolvedPreprocessing, _scrubbed_transform_repr
 
@@ -88,7 +88,7 @@ def stamp_user_transform_provenance(trace: Trace, input_transform: Callable[...,
     # own record; stamp a copy so the capture names the recipe, not a guess.
     minted = getattr(input_transform, "_tl_preprocessing_record", None)
     if isinstance(minted, ResolvedPreprocessing):
-        trace.input_preprocessor = ResolvedPreprocessing(
+        trace._provenance_input_preprocessor = ResolvedPreprocessing(
             source=minted.source,
             identifier=minted.identifier,
             verified=minted.verified,
@@ -101,11 +101,11 @@ def stamp_user_transform_provenance(trace: Trace, input_transform: Callable[...,
 
     recognized = record_for_transform(input_transform)
     if recognized is not None:
-        trace.input_preprocessor = recognized
+        trace._provenance_input_preprocessor = recognized
         return
 
     transform_repr = _scrubbed_transform_repr(input_transform) or "<transform>"
-    trace.input_preprocessor = ResolvedPreprocessing(
+    trace._provenance_input_preprocessor = ResolvedPreprocessing(
         source="user_transform",
         identifier=transform_repr,
         verified=False,

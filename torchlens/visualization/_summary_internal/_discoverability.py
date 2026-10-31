@@ -1,7 +1,7 @@
-"""The capture-provenance block served by ``trace.provenance()``.
+"""The capture-provenance block served by ``trace.provenance.summary()``.
 
 The ~35-line block and its exclusive helpers (formerly the summary
-preamble; the F08 rebuild moved it to ``trace.provenance()`` byte-identically).
+preamble; the F08 rebuild moved it to ``trace.provenance.summary()`` byte-identically).
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def format_discoverability_summary(
         "TorchLens Discoverability Summary",
         "Capture:",
         f"  name: {getattr(trace, 'name', None)!r}",
-        f"  model_class_qualname: {getattr(trace, 'model_class_name', None)}",
+        f"  model_class_qualname: {getattr(trace, '_source_class_name', None)}",
         f"  input_shape: {_input_shape_summary(trace)}",
         *_input_preprocessing_lines(
             trace,
@@ -53,11 +53,11 @@ def format_discoverability_summary(
         *_output_postprocessing_lines(trace),
         f"  capture_timestamp: {_capture_timestamp(trace)}",
         f"  replayable: {bool(getattr(trace, 'is_replayable', False))}",
-        f"  save_arg_templates: {bool(getattr(trace, 'save_arg_templates', False))}",
+        f"  save_arg_templates: {bool(getattr(trace, '_options_save_arg_templates', False))}",
         "Run state:",
         f"  state: {_run_state_name(trace)}",
         f"  direct_write_dirty: {bool(getattr(trace, '_has_direct_writes', False))}",
-        f"  append: is_appended={bool(getattr(trace, 'is_appended', False))}, "
+        f"  append: is_appended={bool(getattr(trace, '_provenance_is_appended', False))}, "
         f"sequence_id={getattr(trace, '_append_sequence_id', 0)}",
         f"  stale_spec: {_stale_spec_status(trace)}",
         f"  last_run: {_last_run_summary(trace)}",
@@ -71,9 +71,9 @@ def format_discoverability_summary(
         f"  parent_run: {_parent_run_summary(trace)}",
         f"  fork_chain: {_fork_chain_summary(trace)}",
         "Graph and relationship evidence:",
-        f"  graph_shape_hash: {_truncated(getattr(trace, 'graph_shape_hash', None))}",
-        f"  model_class_qualname: {getattr(trace, 'model_class_qualname', None)}",
-        f"  weight_fingerprint: {_truncated(getattr(trace, 'param_hash_quick', None))}",
+        f"  graph_shape_hash: {_truncated(getattr(trace, '_provenance_fingerprint', None))}",
+        f"  model_class_qualname: {getattr(trace, '_source_class_qualname', None)}",
+        f"  weight_fingerprint: {_truncated(getattr(trace, '_provenance_param_hash_quick', None))}",
         f"  relationship_evidence: {_relationship_evidence_summary(trace)}",
         "Next operations:",
         f"  {_next_operation_hint(trace)}",
@@ -104,7 +104,7 @@ def _input_preprocessing_lines(
         two-line summary block.
     """
 
-    record = getattr(trace, "input_preprocessor", None)
+    record = getattr(trace, "_provenance_input_preprocessor", None)
     if record is None:
         return []
     lines = ["Input preprocessing:", f"  {record.description}"]
@@ -135,7 +135,7 @@ def _output_postprocessing_lines(trace: Trace) -> list[str]:
         Compact output decode provenance and preview lines.
     """
 
-    record = getattr(trace, "output_postprocessor", None)
+    record = getattr(trace, "_provenance_output_postprocessor", None)
     if record is None:
         return [
             "Output postprocessing:",
@@ -228,7 +228,7 @@ def _input_shape_summary(trace: Trace) -> str:
     shape = _combined_shape_str(trace, layers)
     if shape and shape != "-":
         return shape
-    metadata = getattr(trace, "input_annotations", {}) or {}
+    metadata = getattr(trace, "_provenance_input_annotations", {}) or {}
     if metadata:
         return _shorten(repr(metadata), limit=80)
     return "unknown"
@@ -248,8 +248,8 @@ def _capture_timestamp(trace: Trace) -> str:
         Pass start/end timing information.
     """
 
-    pass_start = float(getattr(trace, "capture_start_time", 0.0) or 0.0)
-    pass_end = float(getattr(trace, "capture_end_time", 0.0) or 0.0)
+    pass_start = float(getattr(trace, "_provenance_start_time", 0.0) or 0.0)
+    pass_end = float(getattr(trace, "_provenance_end_time", 0.0) or 0.0)
     if pass_start <= 0:
         return "unknown"
     if pass_end > 0:
@@ -541,7 +541,7 @@ def _relationship_evidence_summary(trace: Trace) -> str:
         Compact relationship summary.
     """
 
-    evidence = getattr(trace, "relationship_evidence", {}) or {}
+    evidence = getattr(trace, "_graph_relationship_evidence", {}) or {}
     if not evidence:
         return "unknown"
     parts = []
@@ -596,7 +596,7 @@ def _rng_note_summary(trace: Trace) -> str:
                 notes.append(str(note))
     if notes:
         return _shorten("; ".join(notes[:3]), limit=140)
-    if getattr(trace, "save_rng_states", False):
+    if getattr(trace, "_options_save_rng", False):
         return "per-operation RNG states captured"
     return "no unseeded helper RNG notes"
 

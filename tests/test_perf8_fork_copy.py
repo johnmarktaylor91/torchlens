@@ -140,7 +140,7 @@ def _reference_fill_layer_shells(
 ) -> None:
     fork_layer_logs: OrderedDict[str, Any] = OrderedDict()
     consumed_shells: set[int] = set()
-    fork_equivalent_ops = fork.op_equivalence_classes
+    fork_equivalent_ops = fork.graph.op_equivalence_classes
     equivalent_view_memo: dict[Any, Any] = {}
     remap = translator.map
     for label, parent_layer in (parent.__dict__.get("layer_logs") or {}).items():

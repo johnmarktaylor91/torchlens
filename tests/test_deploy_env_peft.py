@@ -39,7 +39,7 @@ def test_lora_capture_parity_params_and_hierarchy() -> None:
     with torch.no_grad():
         reference = model(input_ids=input_ids).logits
     trace = tl.trace(model, input_ids)
-    assert trace.capture_verified is None
+    assert trace.provenance.verified is None
     logits_ops = [
         op
         for op in trace.ops.values()

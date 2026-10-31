@@ -192,7 +192,7 @@ def test_respelled_dunders_do_not_refuse_a_recovery() -> None:
     result = capture_with_rescue(lambda: next(traces))
 
     assert result is rescued
-    assert result.capture_verification_reason == "mode_rescue_rerun"
+    assert result.provenance.verification_reason == "mode_rescue_rerun"
     assert result.rescue_rerun["recovered_ops"] == ("relu",)
     assert result.rescue_rerun["lost_ops"] == ()
 
@@ -217,7 +217,7 @@ def test_genuine_loss_still_refuses_the_rescue(
     result = capture_with_rescue(lambda: next(traces))
 
     assert result is primary
-    assert result.capture_verification_reason == "escape_rescue_unrecovered"
+    assert result.provenance.verification_reason == "escape_rescue_unrecovered"
     assert result.rescue_rerun["recovered"] is False
     assert result.rescue_rerun["lost_ops"] == lost
 
@@ -273,5 +273,5 @@ def test_stale_ref_rescue_with_operators_returns_the_rescued_trace(
     info = trace.rescue_rerun
     assert info is not None and info["recovered"] is True, info
     assert info["lost_ops"] == ()
-    assert trace.capture_verification_reason == "mode_rescue_rerun"
+    assert trace.provenance.verification_reason == "mode_rescue_rerun"
     assert "cos" in [op.func_name for op in trace.ops]

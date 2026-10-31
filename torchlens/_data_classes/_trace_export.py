@@ -433,7 +433,7 @@ class TraceExportMixin(_TraceMixinBase):
             return recomputed
         if k is None:
             return self.decoded_output
-        captured_top_n = getattr(self.output_postprocessor, "top_n_captured", None)
+        captured_top_n = getattr(self._provenance_output_postprocessor, "top_n_captured", None)
         if captured_top_n is not None and k > captured_top_n:
             recomputed = self._recompute_decoded_output(top_n=k)
             if recomputed is not None:
@@ -542,7 +542,7 @@ class TraceExportMixin(_TraceMixinBase):
             ``None``.
         """
 
-        postprocessor = getattr(self, "output_postprocessor", None)
+        postprocessor = getattr(self, "_provenance_output_postprocessor", None)
         if postprocessor is None or getattr(postprocessor, "style", None) == "hf_text":
             return None
         logits = _retained_output_logits(self)

@@ -49,8 +49,8 @@ def test_distilgpt2_generate_greedy_episode() -> None:
     # stepped_module DEFAULTED to the bound method's owner.
     assert episode["header"]["stepped_module"] == "owner"
     assert len(episode["rows"]) == N_NEW
-    assert log.root_entry_point.endswith("GPT2LMHeadModel.generate")
-    assert log.model_class_name == "GPT2LMHeadModel"
+    assert log.provenance.root_entry_point.endswith("GPT2LMHeadModel.generate")
+    assert log.source.class_name == "GPT2LMHeadModel"
     # The captured root output IS what real generate() returns.
     captured = log[log.output_layers[0]].out
     assert torch.equal(captured, expected)
@@ -77,7 +77,7 @@ def test_distilgpt2_generate_plain_capture_without_episode() -> None:
     model = build_distilgpt2("eager")
     ids = _token_ids()
     log = tl.trace(model.generate, ids, input_kwargs=_generate_kwargs(False))
-    assert log.root_entry_point.endswith("GPT2LMHeadModel.generate")
+    assert log.provenance.root_entry_point.endswith("GPT2LMHeadModel.generate")
     assert "episode" not in (log.annotations or {})
     for output_label in log.output_layers:
         for op in log[output_label].ops:
@@ -90,8 +90,8 @@ def test_bert_bound_method_encoder() -> None:
     with torch.no_grad():
         hidden = model.embeddings(ids)
     log = tl.trace(model.encoder.forward, hidden)
-    assert log.model_class_name == "BertEncoder"
-    assert log.root_entry_point.endswith("BertEncoder.forward")
+    assert log.source.class_name == "BertEncoder"
+    assert log.provenance.root_entry_point.endswith("BertEncoder.forward")
     assert log.outcome.status.name == "COMPLETE"
 
 
@@ -99,8 +99,8 @@ def test_bert_forward_trivial_case_modeloutput_return() -> None:
     model = build_bert("eager")
     ids = _token_ids()
     log = tl.trace(model.forward, ids)
-    assert log.model_class_name == "BertModel"
-    assert log.root_entry_point.endswith("BertModel.forward")
+    assert log.source.class_name == "BertModel"
+    assert log.provenance.root_entry_point.endswith("BertModel.forward")
     # BertModel.forward returns a ModelOutput; the root output structure
     # captures per-slot output ops rather than refusing.
     assert len(log.output_layers) >= 1
@@ -110,7 +110,7 @@ def test_bert_forward_tuple_return() -> None:
     model = build_bert("eager")
     ids = _token_ids()
     log = tl.trace(model.forward, ids, input_kwargs={"return_dict": False})
-    assert log.root_entry_point.endswith("BertModel.forward")
+    assert log.provenance.root_entry_point.endswith("BertModel.forward")
     assert len(log.output_layers) >= 1
 
 
@@ -145,7 +145,7 @@ def test_bound_capture_save_load(tmp_path) -> None:
     target = tmp_path / "gpt2_generate.tlspec"
     log.save(target)
     loaded = tl.load(target)
-    assert loaded.root_entry_point == log.root_entry_point
+    assert loaded.provenance.root_entry_point == log.provenance.root_entry_point
     with pytest.raises(ModelMismatchError):
         loaded._validate_supplied_model_matches_capture(model)
 

@@ -77,7 +77,7 @@ def test_corruption_arm_call_site_key_forgery_fails_contract_ii() -> None:
         capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        assert log.grouping_policy["detector"] == "callsite_v1"
+        assert log.options.grouping_policy["detector"] == "callsite_v1"
         classes = dict(contract.call_site_classes_for(log) or {})
         first, second = [op for op in log.layer_list if op.func_name == "linear"][:2]
         assert classes[first._label_raw] != classes[second._label_raw]

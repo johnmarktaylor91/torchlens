@@ -588,5 +588,5 @@ def test_tf_trace_exercises_backend_neutral_topology_invariant() -> None:
 
     trace = tl.trace(IdentityModule(), tf.constant([1.0, 2.0]), backend="tf")
 
-    assert trace.backend == "tf"
+    assert trace.provenance.backend == "tf"
     _check_backend_neutral_graph_topology(trace)

@@ -285,7 +285,7 @@ def test_log_backward_captures_per_layer_grads() -> None:
     """log_backward captures saved per-layer grads."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
-    assert trace.has_gradients
+    assert trace.autograd.has_grads
     assert len(trace.saved_grad_ops) > 0
     assert all(trace[label].grad is not None for label in trace.saved_grad_ops.keys())
 
@@ -362,13 +362,13 @@ def _backward_projection_snapshot(trace: tl.Trace) -> dict:
         "passes": passes,
         "op_grads": op_grads,
         "param_grads": param_grads,
-        "order": list(trace.grad_fn_order),
+        "order": list(trace.autograd.grad_fn_order),
         "num_passes": trace.num_backward_passes,
         "num_calls": trace.num_saved_grad_fn_calls,
         "num_fns": trace.num_saved_grad_fns,
         "saved_labels": set(trace._saved_grad_labels),
-        "total_grad_mem": int(trace.total_gradient_memory),
-        "total_bwd_mem": int(trace.total_backward_memory),
+        "total_grad_mem": int(trace.cost.total_grad_memory),
+        "total_bwd_mem": int(trace.cost.total_backward_memory),
     }
 
 
@@ -545,7 +545,7 @@ def test_param_gradient_payloads_honor_per_call_retention_policy() -> None:
 def test_param_gradient_payloads_use_trace_save_mode() -> None:
     """Parameter gradients route through the shared save-mode copy chokepoint."""
     _model, _x, trace = _logged_model()
-    trace.save_mode = "reference"
+    trace._options_save_mode = "reference"
     trace.log_backward(_output_loss(trace))
 
     payloads = [record.grad for param in trace.param_logs.values() for record in param.grads]
@@ -827,7 +827,7 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
         ),
     )
     trace.log_backward(_output_loss(trace))
-    assert trace.has_gradients
+    assert trace.autograd.has_grads
     assert trace._saved_grad_labels
     assert any(param_log._grad_records for param_log in trace.param_logs.values())
 
@@ -840,13 +840,13 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
         )
     )
 
-    assert fork.has_gradients is False
+    assert fork.autograd.has_grads is False
     assert fork._saved_grad_labels == set()
     assert not any(param_log._grad_records for param_log in fork.param_logs.values())
-    assert int(fork.total_param_gradient_memory) == 0
+    assert int(fork.cost.total_param_grad_memory) == 0
     assert fork.num_backward_passes == 0
 
-    assert trace.has_gradients
+    assert trace.autograd.has_grads
     assert trace._saved_grad_labels
     assert any(param_log._grad_records for param_log in trace.param_logs.values())
 
@@ -1041,7 +1041,7 @@ def test_grads_to_save_independent_override() -> None:
 def test_auto_train_mode_when_backward_opted_in() -> None:
     """Explicit save_grads selectors auto-enable backward_ready."""
     _model, _x, trace = _logged_model()
-    assert trace.backward_ready is True
+    assert trace.options.backward_ready is True
 
 
 def test_auto_train_mode_conflict_with_explicit_false() -> None:
@@ -1342,14 +1342,14 @@ def test_peak_memory_tracking_populated() -> None:
     """Trace stores flat backward peak-memory tracking metadata."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
-    assert trace.has_backward_pass
-    assert trace.backward_memory_backend in {"cpu", "cuda", "mps"}
-    if trace.backward_memory_backend == "cpu":
+    assert trace.autograd.has_backward_pass
+    assert trace.provenance.backward_memory_backend in {"cpu", "cuda", "mps"}
+    if trace.provenance.backward_memory_backend == "cpu":
         # measure.2: the CPU peak is opt-in; the default reads None with the reason.
-        assert trace.backward_peak_memory is None
+        assert trace.cost.backward_peak_memory is None
         assert "measure_host_peak_memory=True" in trace.backward_peak_memory_reason
     else:
-        assert isinstance(trace.backward_peak_memory, int)
+        assert isinstance(trace.cost.backward_peak_memory, int)
 
 
 def test_higher_order_grads_basic_support() -> None:

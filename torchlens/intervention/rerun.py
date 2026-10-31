@@ -124,7 +124,7 @@ def run(
     refuse_unmatchable_staged_labels(spec_plan.capture_spec)
     hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
     started_at = time.monotonic()
-    old_hash = getattr(trace, "graph_shape_hash", None)
+    old_hash = getattr(trace, "_provenance_fingerprint", None)
     old_raw_hash = getattr(trace, "_raw_event_shape_hash", None)
 
     with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
@@ -153,7 +153,7 @@ def run(
         _release_discarded_capture(new_log)
     else:
         trace.replace_state_from(new_log)
-    trace.is_appended = False
+    trace._provenance_is_appended = False
     trace._append_sequence_id = 0
     trace.append_history = []
 
@@ -161,7 +161,7 @@ def run(
         trace,
         started_at=started_at,
         old_hash=old_hash,
-        new_hash=getattr(new_log, "graph_shape_hash", None),
+        new_hash=getattr(new_log, "_provenance_fingerprint", None),
         old_raw_hash=old_raw_hash,
         new_raw_hash=getattr(new_log, "_raw_event_shape_hash", None),
         hook_plan=hook_plan,
@@ -188,7 +188,7 @@ def run(
         "fast_refused": fast_refused,
         "shape_varied": False,
         "old_graph_shape_hash": old_hash,
-        "new_graph_shape_hash": getattr(trace, "graph_shape_hash", None),
+        "new_graph_shape_hash": getattr(trace, "_provenance_fingerprint", None),
         "old_raw_event_shape_hash": old_raw_hash,
         "new_raw_event_shape_hash": getattr(trace, "_raw_event_shape_hash", None),
     }
@@ -387,7 +387,7 @@ def _append_rerun(
     refuse_unmatchable_staged_labels(spec_plan.capture_spec)
     hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
     started_at = time.monotonic()
-    old_hash = getattr(log, "graph_shape_hash", None)
+    old_hash = getattr(log, "_provenance_fingerprint", None)
 
     with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
         new_log = _capture_with_active_spec(
@@ -405,7 +405,7 @@ def _append_rerun(
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)
     log._append_state_from(new_log)
-    log.is_appended = True
+    log._provenance_is_appended = True
     log._append_sequence_id = int(getattr(log, "_append_sequence_id", 0)) + 1
     log.state = TraceState.APPENDED
     log._has_direct_writes = False
@@ -429,7 +429,7 @@ def _append_rerun(
         "total_batch_size": total_batch_size,
         "append_sequence_id": log._append_sequence_id,
         "old_graph_shape_hash": old_hash,
-        "new_graph_shape_hash": getattr(new_log, "graph_shape_hash", None),
+        "new_graph_shape_hash": getattr(new_log, "_provenance_fingerprint", None),
     }
     log.append_history.append(dict(log.last_run))
     log._record_operation(
@@ -444,7 +444,7 @@ def _append_rerun(
         total_batch_size=total_batch_size,
         append_sequence_id=log._append_sequence_id,
         old_graph_shape_hash=old_hash,
-        new_graph_shape_hash=getattr(new_log, "graph_shape_hash", None),
+        new_graph_shape_hash=getattr(new_log, "_provenance_fingerprint", None),
     )
     return log
 
@@ -489,7 +489,7 @@ def _streaming_append_error_message(log: Trace) -> str:
         details.append("on_save streaming")
     details_text = ", ".join(details) if details else "streaming"
     return (
-        f"Trace {getattr(log, 'model_class_name', None)!r} has active {details_text}; "
+        f"Trace {getattr(log, '_source_class_name', None)!r} has active {details_text}; "
         "rerun(append=True) cannot update streamed activation storage. Save and reload "
         "the trace before appending, or disable streaming for this capture."
     )
@@ -626,8 +626,8 @@ def _validate_append_candidate(
         Active hook entries used to decide grad support.
     """
 
-    old_hash = getattr(old_log, "graph_shape_hash", None)
-    new_hash = getattr(new_log, "graph_shape_hash", None)
+    old_hash = getattr(old_log, "_provenance_fingerprint", None)
+    new_hash = getattr(new_log, "_provenance_fingerprint", None)
     if old_hash != new_hash:
         raise AppendMismatchError("graph shape changed")
 
@@ -967,31 +967,31 @@ def _capture_with_active_spec(
     model = _unwrap_data_parallel(model)
     x = _coerce_input_args(model, x)
     check_model_and_input_variants(model, x, {})
-    save_grads_policy = getattr(log, "save_grads", None)
+    save_grads_policy = getattr(log, "_options_save_grads", None)
     grads_to_save = "all" if save_grads_policy is True else save_grads_policy
     with _share_source_state_clones(log):
         return _run_model_and_save_specified_outs(
             model=model,
             input_args=x,
             input_kwargs={},
-            output_device=getattr(log, "output_device", "same"),
-            activation_transform=getattr(log, "activation_transform", None),
-            grad_transform=getattr(log, "grad_transform", None),
-            save_raw_activations=getattr(log, "save_raw_activations", True),
-            save_raw_grads=getattr(log, "save_raw_gradients", True),
-            save_mode=getattr(log, "save_mode", "copy"),
+            output_device=getattr(log, "_options_output_device", "same"),
+            activation_transform=getattr(log, "_options_activation_transform", None),
+            grad_transform=getattr(log, "_options_grad_transform", None),
+            save_raw_activations=getattr(log, "_options_save_raw_activations", True),
+            save_raw_grads=getattr(log, "_options_save_raw_grads", True),
+            save_mode=getattr(log, "_options_save_mode", "copy"),
             capture_tensor_grad_hooks=getattr(log, "capture_tensor_grad_hooks", True),
-            mark_layer_depths=getattr(log, "mark_layer_depths", False),
-            detach_saved_activations=getattr(log, "detach_saved_activations", False),
-            save_args=getattr(log, "save_arg_values", False),
+            mark_layer_depths=getattr(log, "_options_mark_layer_depths", False),
+            detach_saved_activations=getattr(log, "_options_detach_saved_activations", False),
+            save_args=getattr(log, "_options_save_args", False),
             save_grads=save_grads_policy not in (None, False),
             grads_to_save=grads_to_save,
-            seed=getattr(log, "random_seed", None),
-            num_context_lines=getattr(log, "num_context_lines", 7),
+            seed=getattr(log, "_options_seed", None),
+            num_context_lines=getattr(log, "_options_source_context_lines", 7),
             optimizer=getattr(log, "_optimizer", None),
-            save_source_context=getattr(log, "save_code_context", False),
-            save_rng=getattr(log, "save_rng_states", False),
-            recurrence_detection=getattr(log, "recurrence_detection", True),
+            save_source_context=getattr(log, "_options_save_source_context", False),
+            save_rng=getattr(log, "_options_save_rng", False),
+            recurrence_detection=getattr(log, "_options_recurrence_detection", True),
             # Inherit the source trace's readiness: forcing ``True`` armed the host
             # RNG monitor (most of a rerun's cost) and minted replay templates the
             # source never had. The rerun divergence detector
@@ -999,8 +999,8 @@ def _capture_with_active_spec(
             replayable=bool(getattr(log, "is_replayable", False)),
             intervention_spec=intervention_spec,
             normalized_hook_plan=hook_plan,
-            verbose=getattr(log, "verbose", False),
-            backward_ready=getattr(log, "backward_ready", False),
+            verbose=getattr(log, "_options_verbose", False),
+            backward_ready=getattr(log, "_options_backward_ready", False),
             # An intervention rerun retains payloads like any capture; inherit the
             # source log's configured budget rather than silently rebudgeting at
             # the default.
@@ -1008,7 +1008,7 @@ def _capture_with_active_spec(
             # A rerun measures CPU peaks only if the source opted in.
             measure_host_peak_memory=bool(getattr(log, "measure_host_peak_memory", False)),
             output_transform=output_transform,
-            save_transformed_output=getattr(log, "save_raw_output", "small"),
+            save_transformed_output=getattr(log, "_options_save_transformed_output", "small"),
             intervene_predicate=intervene_predicate,
             **_rerun_save_kwargs(log),
         )
@@ -1584,8 +1584,8 @@ def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:
         pass) compares pass by pass through the shared per-listing rule.
     """
 
-    source_hash = getattr(source_log, "graph_shape_hash", None)
-    if source_hash is None or source_hash != getattr(new_log, "graph_shape_hash", None):
+    source_hash = getattr(source_log, "_provenance_fingerprint", None)
+    if source_hash is None or source_hash != getattr(new_log, "_provenance_fingerprint", None):
         return False
     labels = list(getattr(source_log, "input_layers", None) or ())
     if not labels or labels != list(getattr(new_log, "input_layers", None) or ()):

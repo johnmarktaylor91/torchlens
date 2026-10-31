@@ -42,7 +42,7 @@ def test_transform_capture_stamps_user_transform_record() -> None:
             input_transform=lambda x: torch.tensor([x], dtype=torch.float32)
         ),
     )
-    record = log.input_preprocessor
+    record = log.provenance.input_preprocessor
     assert record is not None
     assert record.source == "user_transform"
     assert record.verified is False
@@ -54,7 +54,7 @@ def test_plain_tensor_capture_keeps_none() -> None:
     """No transform applied -> no provenance invented (the field stays None)."""
 
     log = tl.trace(_Tiny().eval(), torch.randn(2, 8))
-    assert log.input_preprocessor is None
+    assert log.provenance.input_preprocessor is None
 
 
 def test_record_survives_save_load_with_stable_status(tmp_path) -> None:
@@ -65,7 +65,7 @@ def test_record_survives_save_load_with_stable_status(tmp_path) -> None:
         torch.randn(2, 8),
         capture=tl.options.CaptureOptions(layers_to_save="none"),
     )
-    log.input_preprocessor = ResolvedPreprocessing(
+    log._provenance_input_preprocessor = ResolvedPreprocessing(
         source="torchvision_weights",
         identifier="ResNet50_Weights.IMAGENET1K_V2",
         verified=True,
@@ -75,7 +75,7 @@ def test_record_survives_save_load_with_stable_status(tmp_path) -> None:
     path = tmp_path / "trace.tlspec"
     log.save(str(path))
     loaded = tl.load(str(path))
-    record = loaded.input_preprocessor
+    record = loaded.provenance.input_preprocessor
     assert record is not None
     assert record.source == "torchvision_weights"
     assert record.verified is True
@@ -92,7 +92,7 @@ def test_unverified_fallback_status_survives_save_load(tmp_path) -> None:
         torch.randn(2, 8),
         capture=tl.options.CaptureOptions(layers_to_save="none"),
     )
-    log.input_preprocessor = ResolvedPreprocessing(
+    log._provenance_input_preprocessor = ResolvedPreprocessing(
         source="imagenet_default",
         identifier="ImageNet-default-resize256-crop224",
         verified=False,
@@ -102,4 +102,4 @@ def test_unverified_fallback_status_survives_save_load(tmp_path) -> None:
     path = tmp_path / "trace_fallback.tlspec"
     log.save(str(path))
     loaded = tl.load(str(path))
-    assert loaded.input_preprocessor.status == provenance.STATUS_UNVERIFIED_FALLBACK
+    assert loaded.provenance.input_preprocessor.status == provenance.STATUS_UNVERIFIED_FALLBACK

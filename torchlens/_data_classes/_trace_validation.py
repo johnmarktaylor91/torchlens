@@ -272,7 +272,7 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
 
     if not bool(getattr(trace, "_loaded_from_bundle", False)):
         return False
-    backend = str(getattr(trace, "backend", "torch"))
+    backend = str(getattr(trace, "_provenance_backend", "torch"))
     if backend == _MLX_VALIDATION_REPLAY_BACKEND:
         return True
     if backend == _JAX_VALIDATION_REPLAY_BACKEND:
@@ -1301,7 +1301,7 @@ class TraceValidationMixin(_TraceMixinBase):
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward capture. "
-                "Use trace.derived_grads when this backend exposes leaf-level "
+                "Use trace._autograd_derived_grads when this backend exposes leaf-level "
                 "derived gradients."
             )
         from ..backends.torch.backward import log_backward as _impl
@@ -1349,7 +1349,7 @@ class TraceValidationMixin(_TraceMixinBase):
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward capture. "
-                "Use trace.derived_grads when this backend exposes leaf-level "
+                "Use trace._autograd_derived_grads when this backend exposes leaf-level "
                 "derived gradients."
             )
         from ..backends.torch.backward import recording_backward as _impl
@@ -1435,8 +1435,8 @@ class TraceValidationMixin(_TraceMixinBase):
             collection = getattr(self, field_name)
             collection[:] = [label for label in collection if label not in labels_to_remove]
 
-        self.conditional_branch_edges = _substitute_conditional_branch_edges(
-            self.conditional_branch_edges, labels_to_remove, replacement_labels
+        self._graph_conditional_branch_edges = _substitute_conditional_branch_edges(
+            self._graph_conditional_branch_edges, labels_to_remove, replacement_labels
         )
 
         for param_group, tensor_labels in list(self.layers_with_params.items()):
@@ -1449,11 +1449,11 @@ class TraceValidationMixin(_TraceMixinBase):
             if len(tensor_labels) > 0
         }
 
-        for _equiv_group, equivalent_label_set in list(self.op_equivalence_classes.items()):
+        for _equiv_group, equivalent_label_set in list(self._graph_op_equivalence_classes.items()):
             equivalent_label_set -= labels_to_remove
-        self.op_equivalence_classes = {
+        self._graph_op_equivalence_classes = {
             equiv_group: equivalent_label_set
-            for equiv_group, equivalent_label_set in self.op_equivalence_classes.items()
+            for equiv_group, equivalent_label_set in self._graph_op_equivalence_classes.items()
             if len(equivalent_label_set) > 0
         }
 

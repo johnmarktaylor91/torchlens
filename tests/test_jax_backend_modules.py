@@ -331,7 +331,7 @@ def test_jax_equinox_simple_mlp_uses_pytree_module_hierarchy() -> None:
     model = SimpleEquinoxMlp()
     trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
 
-    assert trace.module_identity_mode == "pytree_module"
+    assert trace.options.module_identity_mode == "pytree_module"
     assert [module.address for module in trace.modules] == ["self", "fc1", "fc2"]
     assert set(trace.modules["self"].address_children) == {"fc1", "fc2"}
     assert trace.modules["fc1"].address_parent == "self"
@@ -354,7 +354,7 @@ def test_jax_nnx_simple_mlp_uses_pytree_module_hierarchy() -> None:
     model = SimpleNnxMlp()
     trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
 
-    assert trace.module_identity_mode == "pytree_module"
+    assert trace.options.module_identity_mode == "pytree_module"
     assert [module.address for module in trace.modules] == ["self", "fc1", "fc2"]
     assert set(trace.modules["self"].address_children) == {"fc1", "fc2"}
     assert trace.modules["fc1"].address_parent == "self"
@@ -376,7 +376,7 @@ def test_jax_equinox_nested_modules_preserve_address_tree_and_selectors() -> Non
     model = NestedEquinoxMlp()
     trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
 
-    assert trace.module_identity_mode == "pytree_module"
+    assert trace.options.module_identity_mode == "pytree_module"
     assert {module.address for module in trace.modules} == {
         "self",
         "encoder",
@@ -406,7 +406,7 @@ def test_jax_nnx_nested_modules_preserve_address_tree_and_selectors() -> None:
     model = NestedNnxMlp()
     trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
 
-    assert trace.module_identity_mode == "pytree_module"
+    assert trace.options.module_identity_mode == "pytree_module"
     assert {module.address for module in trace.modules} == {
         "self",
         "encoder",
@@ -526,7 +526,7 @@ def test_jax_raw_function_traces_remain_function_root() -> None:
     }
     trace = tl.trace(raw_fn, (params, jnp.ones((4, 3), dtype=jnp.float32)), backend="jax")
 
-    assert trace.module_identity_mode == "function_root"
+    assert trace.options.module_identity_mode == "function_root"
     assert [module.address for module in trace.modules] == ["self"]
     check_metadata_invariants(trace)
     assert trace.validate_forward_pass([]) is True
@@ -606,7 +606,7 @@ def _assert_pytree_modules_surface(trace: Any, tmp_path: Path) -> None:
     """Assert module accessors and predicates on a pytree-module trace."""
 
     del tmp_path
-    assert trace.module_identity_mode == "pytree_module"
+    assert trace.options.module_identity_mode == "pytree_module"
     assert len(trace.modules) > 1
     assert trace.modules["fc1"].address == "fc1"
     with pytest.warns(MultiMatchWarning, match="will fan out"):
@@ -672,8 +672,8 @@ def _assert_pytree_save_load_surface(trace: Any, tmp_path: Path) -> None:
     audit_path = tmp_path / "jax_pytree_audit.tlspec"
     trace.save(audit_path, level="audit")
     loaded = tl.load(audit_path)
-    assert loaded.backend == "jax"
-    assert loaded.module_identity_mode == "pytree_module"
+    assert loaded.provenance.backend == "jax"
+    assert loaded.options.module_identity_mode == "pytree_module"
     assert all(op.out is None for op in loaded.layer_list)
 
     portable_path = tmp_path / "jax_pytree_portable.tlspec"
@@ -681,8 +681,8 @@ def _assert_pytree_save_load_surface(trace: Any, tmp_path: Path) -> None:
     trace.save(portable_path)
     loaded_portable = tl.load(portable_path)
     loaded_out = loaded_portable[loaded_portable.output_layers[0]].out
-    assert loaded_portable.backend == "jax"
-    assert loaded_portable.module_identity_mode == "pytree_module"
+    assert loaded_portable.provenance.backend == "jax"
+    assert loaded_portable.options.module_identity_mode == "pytree_module"
     assert getattr(loaded_portable, "payload_load_status") == "loaded_device_best_effort"
     assert isinstance(loaded_out, jax.Array)
     assert loaded_out.shape == expected.shape
@@ -705,7 +705,7 @@ def _assert_pytree_grad_surface(trace: Any, tmp_path: Path) -> None:
     """Assert current pytree-module gradient surface contract."""
 
     del tmp_path
-    assert trace.has_backward_pass is False
+    assert trace.autograd.has_backward_pass is False
     with pytest.raises(ValueError, match="derived_grads"):
         _ = trace[0].grads
 

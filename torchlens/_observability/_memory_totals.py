@@ -27,7 +27,7 @@ def total_transformed_activation_memory(trace: Trace) -> Bytes:
     Read-time derivation over per-op ``transformed_activation_memory``
     (never persisted; works on legacy artifacts). Output pseudo-rows
     alias their producer's tensor and contribute nothing, mirroring
-    ``Trace.total_activation_memory``'s identity partition.
+    ``Trace.cost.total_activation_memory``'s identity partition.
     """
 
     return Bytes(

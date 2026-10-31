@@ -194,7 +194,7 @@ def _metadata_props(
     outcome = _capture_outcome_marker(log)
     if outcome:
         rows.append(("torchlens.capture_outcome", outcome))
-    rows.append(("torchlens.model_class", str(getattr(log, "model_class_name", ""))))
+    rows.append(("torchlens.model_class", str(getattr(log, "_source_class_name", ""))))
     rows.append(("torchlens.granularity", projection.granularity))
     if projection.module_depth is not None:
         rows.append(("torchlens.module_depth", str(projection.module_depth)))
@@ -376,7 +376,7 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
     projection = _build_projection(trace, granularity, depth, show_buffers)
     _warn_extent(projection)
     baseline_text, diff = _baseline_slot(trace, baseline, projection)
-    graph_name = str(getattr(trace, "model_class_name", "TorchLens graph"))
+    graph_name = str(getattr(trace, "_source_class_name", "TorchLens graph"))
     text = emit_model_json(
         projection,
         graph_name=graph_name,

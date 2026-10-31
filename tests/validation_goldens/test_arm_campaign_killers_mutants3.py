@@ -93,7 +93,7 @@ class _AddrIndexed(list):
 
 
 def test_backend_identity_invariants_fires_on_missing_backend() -> None:
-    """Arm 0: Trace.backend must be a non-empty string."""
+    """Arm 0: Trace.provenance.backend must be a non-empty string."""
 
     fake_trace = SimpleNamespace(backend="")
     with pytest.raises(MetadataInvariantError, match="must be a non-empty string"):

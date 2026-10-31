@@ -89,7 +89,7 @@ def test_tf_capture_hand_built_op_chain_edges_and_saved_values() -> None:
     trace = tl.trace(chain, tf.constant([2.0, 3.0]), backend="tf")
     by_func = {op.func_name: op for op in trace.layer_list}
 
-    assert trace.backend == "tf"
+    assert trace.provenance.backend == "tf"
     assert {"AddV2", "Mul"} <= {op.func_name for op in trace.layer_list}
     # Torch parity: parents/children hold the FINAL label, not the internal
     # raw capture identifier (``_label_raw``) -- the preview finalizer now
@@ -123,7 +123,7 @@ def test_tf_capture_options_does_not_reject_the_whole_object() -> None:
         capture=tl.options.CaptureOptions(keep_orphans=True),
     )
 
-    assert trace.backend == "tf"
+    assert trace.provenance.backend == "tf"
     assert trace.num_ops > 0
 
 
@@ -137,7 +137,7 @@ def test_tf_capture_small_keras_cnn_modules_params_and_warm_boundary() -> None:
     conv = next(op for op in trace.layer_list if op.func_name == "Conv2D")
     dense = next(op for op in trace.layer_list if op.func_name == "MatMul")
 
-    assert trace.backend == "tf"
+    assert trace.provenance.backend == "tf"
     assert {"Conv2D", "MatMul", "MaxPool", "Relu"} <= op_types
     assert conv.modules[-1].startswith("conv:")
     assert dense.modules[-1].startswith("dense:")
@@ -181,7 +181,7 @@ def test_tf_capture_raw_tf_module_class_level_stack() -> None:
     matmul = next(op for op in trace.layer_list if op.func_name == "MatMul")
 
     assert {"ReadVariableOp", "MatMul", "AddV2", "Relu"} <= op_types
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert matmul.modules == ("self:1",)
     assert getattr(trace, "_tf_init_op_labels", ()) == ()
     assert np.allclose(trace[matmul.label].out, np.array([[5.0]], dtype=np.float32))

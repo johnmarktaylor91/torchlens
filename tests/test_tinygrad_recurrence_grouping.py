@@ -72,7 +72,7 @@ def test_tinygrad_repeated_block_groups_into_passes() -> None:
     mul_ops = _grouped_ops(trace, "<lambda>")
     where_ops = _grouped_ops(trace, "where")
 
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     assert mul_ops, "no grouped multi-pass ops found for the repeated body"
     assert where_ops
     assert {op.num_passes for op in where_ops} == {2}
@@ -107,7 +107,7 @@ def test_tinygrad_recurrence_detection_off_preserves_single_pass_layout() -> Non
         capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
-    assert trace.recurrence_detection is False
+    assert trace.options.recurrence_detection is False
     assert all(op.num_passes == 1 for op in trace.layer_list)
     assert TinygradBackend().validate_trace(trace) is True
 

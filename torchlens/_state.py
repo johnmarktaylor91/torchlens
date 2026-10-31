@@ -535,7 +535,7 @@ _completeness_witness_mode: str = "off"
 """Dispatcher completeness witness mode: ``"off"`` or diagnostic ``"shadow"``.
 
 OFF BY DEFAULT (AUD-HONESTY H4): a plain ``tl.trace()`` never arms the aten-dispatch
-census, so ``Trace.capture_verified`` stays ``None`` (NOT RECORDED -- never a clean
+census, so ``Trace.provenance.verified`` stays ``None`` (NOT RECORDED -- never a clean
 bill) and host escapes only the census can see (``from_numpy``/``as_tensor``/
 ``from_dlpack`` round-trips in a plain forward, in-forward storage writes) leave no
 ceiling. A numpy- or dlpack-backed ``autograd.Function`` forward is the one such
@@ -813,7 +813,7 @@ def _reentrant_refusal() -> ReentrantTraceError:
 
     active_model = getattr(_active_trace, "model_name", None)
     if active_model is None:
-        active_model = getattr(_active_trace, "model_class_name", None)
+        active_model = getattr(_active_trace, "_source_class_name", None)
     active_model_text = f" for active model {active_model!r}" if active_model else ""
     return ReentrantTraceError(
         "torchlens.trace / active_logging is not re-entrant: "

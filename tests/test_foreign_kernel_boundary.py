@@ -184,13 +184,13 @@ def test_foreign_function_owns_its_interior_dispatches() -> None:
     with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):
         trace = tl.trace(model, torch.randn(3, 4))
 
-    assert trace.capture_verified is True
+    assert trace.provenance.verified is True
     assert trace.completeness_diagnostics == []
-    owners = {entry["owner_wrapper"] for entry in trace.completeness_decompositions}
+    owners = {entry["owner_wrapper"] for entry in trace.health.completeness_decompositions}
     assert FOREIGN_FUNCTION_WRAPPER_NAME in owners
     boundary_rows = [
         entry
-        for entry in trace.completeness_decompositions
+        for entry in trace.health.completeness_decompositions
         if entry["owner_wrapper"] == FOREIGN_FUNCTION_WRAPPER_NAME
     ]
     assert len(boundary_rows) == 1
@@ -198,7 +198,7 @@ def test_foreign_function_owns_its_interior_dispatches() -> None:
     assert boundary_rows[0]["capture_accounted"] is True
     # The interior detach was re-owned: no owner row of its own survives.
     assert not any(
-        entry["owner_func_name"] == "detach" for entry in trace.completeness_decompositions
+        entry["owner_func_name"] == "detach" for entry in trace.health.completeness_decompositions
     )
 
 

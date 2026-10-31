@@ -351,7 +351,7 @@ def test_cleanup_does_not_flush_cuda_for_cpu_capture() -> None:
     from torchlens._data_classes import cleanup as cleanup_module
 
     trace = tl.trace(nn.Sequential(nn.Linear(4, 4)), torch.randn(2, 4))
-    assert getattr(trace, "forward_memory_backend", None) in ("cpu", "mps")
+    assert getattr(trace, "_provenance_forward_memory_backend", None) in ("cpu", "mps")
 
     calls = {"flush": 0}
     saved_available = cleanup_module._is_cuda_available

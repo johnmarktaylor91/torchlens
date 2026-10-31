@@ -951,7 +951,7 @@ def _stabilize_backward_identifiers(trace: tl.Trace) -> None:
         item.grad_fn_object_id = identifiers[old_identifier]
         item.next_grad_fn_ids = [identifiers[next_id] for next_id in item.next_grad_fn_ids]
     trace.grad_fn_logs = {item.grad_fn_object_id: item for item in grad_fns}
-    trace.grad_fn_order = [identifiers[item] for item in trace.grad_fn_order]
+    trace._autograd_grad_fn_order = [identifiers[item] for item in trace.autograd.grad_fn_order]
 
 
 def _record(tmp_path: Path) -> dict[str, Any]:

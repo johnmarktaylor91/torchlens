@@ -99,7 +99,7 @@ def _probe_snapshot(trace: object, model: nn.Module) -> tuple[object, ...]:
 
     return (
         trace.num_backward_passes,  # type: ignore[attr-defined]
-        trace.has_gradients,  # type: ignore[attr-defined]
+        trace.autograd.has_grads,  # type: ignore[attr-defined]
         tuple(trace.event_stream.backward_events),  # type: ignore[attr-defined]
         tuple(tuple(op.grads) for op in trace.layer_list),  # type: ignore[attr-defined]
         (
@@ -253,7 +253,7 @@ def test_projective_probe_does_not_pollute_trace_state() -> None:
 
     trace.log_backward(target.out.sum())
     assert trace.num_backward_passes == 1
-    assert trace.has_gradients
+    assert trace.autograd.has_grads
     assert trace.event_stream.backward_events
 
 
@@ -299,5 +299,5 @@ def test_cotangent_linearization_failure_is_typed_and_restores_state(
     assert call_count == failure_call
     assert "_tl_rf_probe_active" not in trace.__dict__
     assert trace.num_backward_passes == 0
-    assert not trace.has_gradients
+    assert not trace.autograd.has_grads
     assert not trace.event_stream.backward_events

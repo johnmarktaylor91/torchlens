@@ -124,7 +124,7 @@ class TestMarkerFieldSubstrate:
     def test_plain_capture_never_carries_the_marker(self):
         lifecycle.disarm()
         log = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
-        assert log.distributed_scope is None
+        assert log.provenance.distributed_scope is None
 
     def test_plain_round_trip_preserves_the_marker(self, tmp_path):
         """Tamper row (a) counterpart: at tlspec v8 the marker persists on a
@@ -132,11 +132,11 @@ class TestMarkerFieldSubstrate:
 
         lifecycle.disarm()
         log = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
-        log.distributed_scope = RANK_LOCAL_SHARD
+        log._provenance_distributed_scope = RANK_LOCAL_SHARD
         path = tmp_path / "shard-local.tlspec"
         log.save(str(path))
         loaded = tl.load(str(path))
-        assert loaded.distributed_scope == RANK_LOCAL_SHARD
+        assert loaded.provenance.distributed_scope == RANK_LOCAL_SHARD
 
 
 class TestErasurePreventionInvariant:
@@ -145,7 +145,7 @@ class TestErasurePreventionInvariant:
     def _marked_trace(self):
         lifecycle.disarm()
         log = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
-        log.distributed_scope = RANK_LOCAL_SHARD
+        log._provenance_distributed_scope = RANK_LOCAL_SHARD
         return log
 
     def test_row_b_marked_save_proceeds_and_round_trips_at_v8(self, tmp_path):
@@ -158,7 +158,7 @@ class TestErasurePreventionInvariant:
         for level in ("portable", "audit"):
             path = tmp_path / f"marked-{level}.tlspec"
             log.save(str(path), level=level)
-            assert tl.load(str(path)).distributed_scope == RANK_LOCAL_SHARD
+            assert tl.load(str(path)).provenance.distributed_scope == RANK_LOCAL_SHARD
 
     def test_row_e_forced_drop_refires_post_bump(self, tmp_path, monkeypatch):
         """The predicate keys on the ACTUAL field-policy state: forcing the
@@ -187,7 +187,7 @@ class TestErasurePreventionInvariant:
         lifecycle.disarm()
         log = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
         log.save(str(tmp_path / "plain.tlspec"))
-        assert tl.load(str(tmp_path / "plain.tlspec")).distributed_scope is None
+        assert tl.load(str(tmp_path / "plain.tlspec")).provenance.distributed_scope is None
 
 
 class TestMergeScopeMarkerKey:
@@ -206,7 +206,7 @@ class TestMergeScopeMarkerKey:
 
         lifecycle.arm()
         log = tl.trace(CollectiveModel(), torch.randn(2, 4))
-        log.distributed_scope = RANK_LOCAL_SHARD
+        log._provenance_distributed_scope = RANK_LOCAL_SHARD
         return log
 
     @requires_vetted_snapshot

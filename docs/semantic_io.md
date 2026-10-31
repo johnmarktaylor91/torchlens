@@ -39,7 +39,7 @@ An `output_style` that no detector resolves refuses typed
 when no custom detector is registered, after the capture when the
 registered custom detectors all declined it.
 
-`trace.output_postprocessor` records the resolver source, selected style,
+`trace.provenance.output_postprocessor` records the resolver source, selected style,
 selected head, label source, confidence, ambiguity flag, and captured top-N
 bound. `trace.output_table(top_n, batch_items)` returns a dataframe with
 `batch_item`, `rank`, `label`, and `prob`. `batch_items=None` returns all
@@ -118,14 +118,14 @@ trace = tl.trace(
 trace.draw(show_input_transform_summary=True)
 ```
 
-Auto-route bridges populate `trace.input_preprocessor` when they resolve a
+Auto-route bridges populate `trace.provenance.input_preprocessor` when they resolve a
 known preprocessing pipeline. For local transforms, attach the same provenance
 record shape when documenting the transform in a demo or integration:
 
 ```python
 from torchlens._data_classes.trace import ResolvedPreprocessing
 
-trace.input_preprocessor = ResolvedPreprocessing(
+trace._provenance_input_preprocessor = ResolvedPreprocessing(
     source="project.transform",
     identifier="comma-vector-v1",
     verified=True,
@@ -175,7 +175,7 @@ trace = tl.trace(
 trace.model_profile
 ```
 
-For local transforms, set `trace.input_preprocessor` to a
+For local transforms, set `trace.provenance.input_preprocessor` to a
 `ResolvedPreprocessing` record before presenting the profile. This keeps demos
 and integrations honest about where preprocessing came from without adding a
 new persisted field.
@@ -331,7 +331,7 @@ template. It demonstrates:
 - `output_table()`, `decode_output()`, and gated pandas summaries;
 - `output_style=` override and `tl._autoroute.output.register(...)`;
 - original text input display with `show_input_transform_summary=True`;
-- `trace.raw_input` and `trace.input_preprocessor` provenance.
+- `trace.raw_input` and `trace.provenance.input_preprocessor` provenance.
 
 See `notebooks/semantic_io_keystone_demo.ipynb` for the Sprint B keystone demo.
 It uses a tiny deterministic image classifier and synthetic PIL stimuli so the
@@ -342,14 +342,14 @@ core flow runs without downloading external model weights.
 - `tl.trace(..., capture=CaptureOptions(output_style=..., output_head=...))`
 - `Trace.output_table(k=5, batch_items=None)`
 - `Trace.decode_output(k=None)`
-- `Trace.output_postprocessor`
+- `Trace.provenance.output_postprocessor`
 - `tl._autoroute.output.register(...)`
 - `tl._autoroute.output.unregister(...)`
 - `tl._autoroute.output.list()`
 - `tl._autoroute.output.info(...)`
 - `tl.trace(..., capture=CaptureOptions(input_transform=..., save_raw_input=..., batch_render=...))`
 - `Trace.raw_input`
-- `Trace.input_preprocessor`
+- `Trace.provenance.input_preprocessor`
 - `Trace.draw(show_input_transform_summary=True)`
 - `Trace.to_pandas(include_decoded_output_summary=True)`
 - `Trace.annotate(selector, data=..., image=..., max_fanout=..., copy=...)`

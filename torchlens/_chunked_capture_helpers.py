@@ -107,8 +107,8 @@ def _validate_chunk_append_candidate(old_trace: Trace, new_trace: Trace) -> None
         Raises when graph metadata is incompatible.
     """
 
-    old_hash = getattr(old_trace, "graph_shape_hash", None)
-    new_hash = getattr(new_trace, "graph_shape_hash", None)
+    old_hash = getattr(old_trace, "_provenance_fingerprint", None)
+    new_hash = getattr(new_trace, "_provenance_fingerprint", None)
     if old_hash != new_hash:
         raise AppendMismatchError("graph shape changed")
 
@@ -160,8 +160,8 @@ def _append_chunk_trace_state(trace: Trace, new_trace: Trace, chunk: _ChunkAppen
 
     _validate_chunk_append_candidate(trace, new_trace)
     started_at = time.monotonic()
-    old_hash = getattr(trace, "graph_shape_hash", None)
-    new_hash = getattr(new_trace, "graph_shape_hash", None)
+    old_hash = getattr(trace, "_provenance_fingerprint", None)
+    new_hash = getattr(new_trace, "_provenance_fingerprint", None)
     old_predicate_options = getattr(trace, "_predicate_save_options", MISSING)
     new_predicate_options = getattr(new_trace, "_predicate_save_options", MISSING)
     try:
@@ -178,7 +178,7 @@ def _append_chunk_trace_state(trace: Trace, new_trace: Trace, chunk: _ChunkAppen
         else:
             new_trace._predicate_save_options = new_predicate_options
 
-    trace.is_appended = True
+    trace._provenance_is_appended = True
     trace._append_sequence_id = chunk.append_sequence_id
     trace.state = TraceState.APPENDED
     trace._has_direct_writes = False

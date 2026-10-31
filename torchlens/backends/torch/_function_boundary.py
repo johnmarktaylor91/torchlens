@@ -496,7 +496,7 @@ def open_boundary_call(trace: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
 
     op_events = getattr(getattr(trace, "capture_events", None), "op_events", None)
     witness_state = _active_witness_state(trace)
-    save_rng = getattr(trace, "save_rng_states", False)
+    save_rng = getattr(trace, "_options_save_rng", False)
     return BoundaryMarks(
         op_events=op_events if isinstance(op_events, list) else None,
         journal_mark=len(op_events) if isinstance(op_events, list) else 0,

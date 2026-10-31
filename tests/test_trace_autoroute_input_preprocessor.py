@@ -1,4 +1,4 @@
-"""Tests for ``Trace.input_preprocessor`` provenance."""
+"""Tests for ``Trace.provenance.input_preprocessor`` provenance."""
 
 from __future__ import annotations
 
@@ -28,10 +28,10 @@ def test_text_autoroute_sets_input_preprocessor() -> None:
 
     log = tl.trace(model, "Hello world!", capture=tl.options.CaptureOptions(layers_to_save="none"))
 
-    assert log.input_preprocessor is not None
-    assert log.input_preprocessor.source == "hf_auto_tokenizer"
-    assert log.input_preprocessor.verified is True
-    assert log.input_preprocessor.config["tokenizer_name"]
+    assert log.provenance.input_preprocessor is not None
+    assert log.provenance.input_preprocessor.source == "hf_auto_tokenizer"
+    assert log.provenance.input_preprocessor.verified is True
+    assert log.provenance.input_preprocessor.config["tokenizer_name"]
 
 
 def test_summary_includes_input_preprocessing_when_present() -> None:
@@ -40,7 +40,7 @@ def test_summary_includes_input_preprocessing_when_present() -> None:
     log = tl.trace(
         _TinyModel(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save="none")
     )
-    log.input_preprocessor = ResolvedPreprocessing(
+    log._provenance_input_preprocessor = ResolvedPreprocessing(
         source="imagenet_default",
         identifier="ImageNet-default-resize256-crop224",
         verified=False,
@@ -49,7 +49,7 @@ def test_summary_includes_input_preprocessing_when_present() -> None:
     )
 
     # Preprocessing provenance lives on provenance() (summary memo 3.6).
-    provenance = log.provenance()
+    provenance = log.provenance.summary()
 
     assert "Input preprocessing:" in provenance
     assert "ImageNet default (UNVERIFIED): resize 256" in provenance
@@ -57,12 +57,12 @@ def test_summary_includes_input_preprocessing_when_present() -> None:
 
 
 def test_unverified_input_preprocessing_detail_is_reachable() -> None:
-    """The verification/source detail is reachable on trace.input_preprocessor."""
+    """The verification/source detail is reachable on trace.provenance.input_preprocessor."""
 
     log = tl.trace(
         _TinyModel(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save="none")
     )
-    log.input_preprocessor = ResolvedPreprocessing(
+    log._provenance_input_preprocessor = ResolvedPreprocessing(
         source="imagenet_default",
         identifier="ImageNet-default-resize256-crop224",
         verified=False,
@@ -70,11 +70,11 @@ def test_unverified_input_preprocessing_detail_is_reachable() -> None:
         description="ImageNet default (UNVERIFIED): resize 256",
     )
 
-    record = log.input_preprocessor
+    record = log.provenance.input_preprocessor
     assert record.verified is False
     assert record.source == "imagenet_default"
     assert record.identifier == "ImageNet-default-resize256-crop224"
-    assert "ImageNet default (UNVERIFIED): resize 256" in log.provenance()
+    assert "ImageNet default (UNVERIFIED): resize 256" in log.provenance.summary()
 
 
 def test_input_transform_summary_render_is_opt_in() -> None:
@@ -85,7 +85,7 @@ def test_input_transform_summary_render_is_opt_in() -> None:
     )
     log.raw_input = "hello world"
     default_dot = log.draw(vis_save_only=True, file_format="dot")
-    log.input_preprocessor = ResolvedPreprocessing(
+    log._provenance_input_preprocessor = ResolvedPreprocessing(
         source="unit_test",
         identifier="tiny",
         verified=True,

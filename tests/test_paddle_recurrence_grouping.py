@@ -89,7 +89,7 @@ def test_paddle_repeated_block_groups_into_passes() -> None:
     linear_ops = [op for op in trace.layer_list if op.func_name == "functional.linear"]
     relu_ops = [op for op in trace.layer_list if op.func_name == "functional.relu"]
 
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     assert [op.pass_index for op in linear_ops] == [1, 2]
     assert [op.pass_index for op in relu_ops] == [1, 2]
     assert {op.layer_label for op in linear_ops} == {linear_ops[0].layer_label}
@@ -153,7 +153,7 @@ def test_paddle_recurrence_detection_off_preserves_single_pass_layout() -> None:
         capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
-    assert trace.recurrence_detection is False
+    assert trace.options.recurrence_detection is False
     assert all(op.num_passes == 1 for op in trace.layer_list)
     assert PaddleBackend().validate_trace(trace) is True
 

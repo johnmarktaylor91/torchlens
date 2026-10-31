@@ -525,7 +525,7 @@ def _save_activation_fields(
             func_name=fields_dict.get("func_name"),
             is_inplace=bool(fields_dict.get("is_inplace", False)),
         )
-        save_raw_activations = getattr(trace, "save_raw_activations", True)
+        save_raw_activations = getattr(trace, "_options_save_raw_activations", True)
         store_raw = save_raw_activations or activation_transform is None
         # Explorer P2: when nothing raw is retained AND the transform declares
         # the non-differentiable summary role, the transient safe_copy is
@@ -561,7 +561,7 @@ def _save_activation_fields(
                 trace,
                 t,
                 fields_dict["annotations"],
-                getattr(trace, "save_arg_values", False),
+                getattr(trace, "_options_save_args", False),
             )
             if store_raw and save_mode == "copy"
             else None
@@ -607,7 +607,7 @@ def _save_activation_fields(
                     raw_out,
                     fields_dict["_layer_label_raw"],
                     fields_dict["annotations"],
-                    getattr(trace, "save_arg_values", False),
+                    getattr(trace, "_options_save_args", False),
                 )
             if isinstance(raw_out, torch.Tensor):
                 mark_detached_saved_activation(
@@ -636,7 +636,7 @@ def _save_activation_fields(
                 transform_kind="activation",
                 tripwire_armed=train_mode_tripwire_armed(
                     backward_ready=fields_dict.get(
-                        "backward_ready", getattr(trace, "backward_ready", False)
+                        "backward_ready", getattr(trace, "_options_backward_ready", False)
                     ),
                     transform=activation_transform,
                 ),
@@ -679,7 +679,7 @@ def _save_activation_fields(
         if out_sink is not None and isinstance(fields_dict["out"], torch.Tensor):
             out_sink(fields_dict["_label_raw"], fields_dict["out"])
 
-        if trace.save_arg_values:
+        if trace._options_save_args:
             # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
             # used to clone every tensor argument first and charge after.
             from ._ops_retention import _copy_saved_arg_tree

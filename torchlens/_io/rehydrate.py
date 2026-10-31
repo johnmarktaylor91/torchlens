@@ -226,7 +226,7 @@ def _bind_conditional_arms(trace: Trace) -> None:
 
     from .._data_classes.trace import ConditionalAccessor
 
-    accessor = getattr(trace, "conditionals", None)
+    accessor = getattr(trace, "_graph_conditionals", None)
     if not isinstance(accessor, ConditionalAccessor):
         return
     for conditional in accessor.values():
@@ -347,7 +347,7 @@ def _apply_manifest_backend(trace: Trace, manifest: Manifest | dict[str, Any]) -
     else:
         backend_name = manifest.get("backend")
     if isinstance(backend_name, str) and backend_name:
-        setattr(trace, "backend", backend_name)
+        setattr(trace, "_provenance_backend", backend_name)
 
 
 def _build_manifest_index(

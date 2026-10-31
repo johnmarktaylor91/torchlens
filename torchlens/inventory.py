@@ -372,7 +372,7 @@ def sites_of_trace(trace: Any) -> SiteInventory:
                 ),
             )
         )
-    structure_only = bool(getattr(trace, "structure_only", False))
+    structure_only = bool(getattr(trace, "_options_structure_only", False))
     disclosures = [
         "one real forward: sites on untaken data-dependent branches are absent from this inventory",
         "module training flags are reported as found, never mutated",

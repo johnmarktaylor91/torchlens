@@ -240,7 +240,7 @@ def _promote_layers_to_save_output_parent(
         in_ram=streaming is None or streaming.bundle_path is None or streaming.retain_in_memory,
         on_disk=streaming is not None and streaming.bundle_path is not None,
     )
-    output_device = getattr(trace, "output_device", None)
+    output_device = getattr(trace, "_options_output_device", None)
     if output_device == "same":
         output_device = None
     spec = CaptureSpec(
@@ -248,7 +248,7 @@ def _promote_layers_to_save_output_parent(
         save_metadata=True,
         save_grad=False,
         device=output_device,
-        save_mode=cast(Any, getattr(trace, "save_mode", "copy")),
+        save_mode=cast(Any, getattr(trace, "_options_save_mode", "copy")),
     )
     # Output-parent promotion retains real payloads and must be visible to
     # the save-budget accountant like every other RAM retention: this path
@@ -270,11 +270,11 @@ def _promote_layers_to_save_output_parent(
         tensor,
         spec,
         intent,
-        activation_transform=getattr(trace, "activation_transform", None),
-        save_raw_activations=getattr(trace, "save_raw_activations", True),
+        activation_transform=getattr(trace, "_options_activation_transform", None),
+        save_raw_activations=getattr(trace, "_options_save_raw_activations", True),
         ctx=ctx,
         kind="activation",
-        detach_saved_activations=bool(getattr(trace, "detach_saved_activations", True)),
+        detach_saved_activations=bool(getattr(trace, "_options_detach_saved_activations", True)),
     )
     if budget is not None and reservation is not None:
         budget.commit(reservation, (ram_payload, transformed_ram_payload))
@@ -973,7 +973,7 @@ class TorchBackend:
                 )
             attributable_output_tensors.append(t)
             attributable_output_tensor_addresses.append(output_address)
-            if self_trace.capture_mode in {"exhaustive", "predicate"}:
+            if self_trace._options_mode in {"exhaustive", "predicate"}:
                 self_trace.output_layers.append(_label_raw)
                 event = self_trace.capture_events.op_event_by_label_raw.get(_label_raw)
                 if event is not None:

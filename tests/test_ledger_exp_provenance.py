@@ -160,7 +160,7 @@ def test_provenance_rows_one_per_member() -> None:
     model = _Tiny()
     x = torch.randn(2, 3)
     bundle = tl.sweep(model, x, site="relu", values=[0.0], include_baseline=True)
-    rows = bundle.provenance()
+    rows = bundle.provenance.summary()
     by_member = {row["member"]: row for row in rows}
     assert by_member["baseline"]["lineage_status"] == "baseline"
     assert by_member["sweep_0"]["lineage_status"] == "exact"
@@ -168,4 +168,4 @@ def test_provenance_rows_one_per_member() -> None:
     assert by_member["sweep_0"]["n_events"] == 1
     # No baseline -> disclosure, not a default.
     plain = tl.Bundle({"a": _ready(), "b": _ready()})
-    assert {row["lineage_status"] for row in plain.provenance()} == {"no_baseline"}
+    assert {row["lineage_status"] for row in plain.provenance.summary()} == {"no_baseline"}

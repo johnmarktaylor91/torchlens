@@ -1,6 +1,6 @@
 """The pass-level-peak publication gate (observe item 4).
 
-``Trace.forward_peak_memory`` / ``backward_peak_memory`` are real runtime
+``Trace.cost.forward_peak_memory`` / ``backward_peak_memory`` are real runtime
 measurements with BACKEND-DEPENDENT meaning: CUDA reports the device
 allocator peak; CPU reports a process-RSS endpoint delta (non-reproducible --
 measured 151.0 -> 113.7 MB on identical runs, and 332 KB while retaining

@@ -43,9 +43,9 @@ def test_meta_buffer_trace_roundtrips_value_free(tmp_path) -> None:
         model, torch.empty(2, 4, device="meta"), capture=CaptureOptions(structure_only=True)
     )
     loaded = _roundtrip(trace, tmp_path)
-    assert loaded.structure_only is True
-    assert loaded.structure_evidence is not None
-    assert loaded.structure_evidence["substrate"] == "meta"
+    assert loaded.options.structure_only is True
+    assert loaded.graph.structure_evidence is not None
+    assert loaded.graph.structure_evidence["substrate"] == "meta"
     for layer in loaded.layer_list:
         assert getattr(layer, "out", None) is None
 
@@ -58,9 +58,9 @@ def test_real_buffer_trace_roundtrips_value_free(tmp_path) -> None:
     model.eval()
     trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(structure_only=True))
     loaded = _roundtrip(trace, tmp_path)
-    assert loaded.structure_only is True
-    assert loaded.structure_evidence is not None
-    assert loaded.structure_evidence["substrate"] == "real"
+    assert loaded.options.structure_only is True
+    assert loaded.graph.structure_evidence is not None
+    assert loaded.graph.structure_evidence["substrate"] == "real"
     for layer in loaded.layer_list:
         assert getattr(layer, "out", None) is None
 
@@ -80,7 +80,7 @@ def test_loaded_trace_is_hypothesis_again(tmp_path) -> None:
     assert claim_status_for(trace) is StructureClaimStatus.CORROBORATED
     loaded = _roundtrip(trace, tmp_path)
     assert claim_status_for(loaded) is StructureClaimStatus.HYPOTHESIS
-    assert loaded.structure_evidence["discharge"] == "absent"
+    assert loaded.graph.structure_evidence["discharge"] == "absent"
 
 
 def test_forged_envelope_fails_validation(tmp_path) -> None:
@@ -99,20 +99,20 @@ def test_forged_envelope_fails_validation(tmp_path) -> None:
     trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(structure_only=True))
     loaded = _roundtrip(trace, tmp_path)
     # Forge 1: an out-of-vocabulary substrate token.
-    loaded.structure_evidence = dict(loaded.structure_evidence, substrate="warp")
+    loaded._graph_structure_evidence = dict(loaded.graph.structure_evidence, substrate="warp")
     with pytest.raises(Exception) as excinfo:
         _validate_structure_evidence(loaded)
     assert excinfo.value.fields["code"] == "artifact_structure_evidence_invalid"
     # Forge 2: values_available=True contradicts the mode the envelope discloses.
-    loaded.structure_evidence = dict(
-        loaded.structure_evidence, substrate="real", values_available=True
+    loaded._graph_structure_evidence = dict(
+        loaded.graph.structure_evidence, substrate="real", values_available=True
     )
     with pytest.raises(Exception) as excinfo:
         _validate_structure_evidence(loaded)
     assert excinfo.value.fields["code"] == "artifact_structure_evidence_invalid"
     # Forge 3: an envelope on a values-bearing capture is incoherent.
     ordinary = tl.trace(BufferedToy().eval(), torch.randn(2, 4))
-    ordinary.structure_evidence = trace.structure_evidence
+    ordinary.structure_evidence = trace.graph.structure_evidence
     with pytest.raises(Exception) as excinfo:
         _validate_structure_evidence(ordinary)
     assert excinfo.value.fields["code"] == "artifact_structure_evidence_invalid"

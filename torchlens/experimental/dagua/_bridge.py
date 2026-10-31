@@ -214,18 +214,18 @@ def build_torchlens_caption(trace: Any) -> str:
     if num_params == 0:
         params_line = "0 params"
     elif frozen == 0:
-        params_line = f"{num_params:,} params (all trainable, {human_readable_size(getattr(trace, 'total_param_memory', 0) or 0)})"
+        params_line = f"{num_params:,} params (all trainable, {human_readable_size(getattr(trace, '_cost_total_param_memory', 0) or 0)})"
     elif trainable == 0:
-        params_line = f"{num_params:,} params (all frozen, {human_readable_size(getattr(trace, 'total_param_memory', 0) or 0)})"
+        params_line = f"{num_params:,} params (all frozen, {human_readable_size(getattr(trace, '_cost_total_param_memory', 0) or 0)})"
     else:
         params_line = (
             f"{num_params:,} params "
-            f"({trainable:,}/{num_params:,} trainable, {human_readable_size(getattr(trace, 'total_param_memory', 0) or 0)})"
+            f"({trainable:,}/{num_params:,} trainable, {human_readable_size(getattr(trace, '_cost_total_param_memory', 0) or 0)})"
         )
     return (
-        f"{getattr(trace, 'model_class_name', 'TorchLens model')}\n"
+        f"{getattr(trace, '_source_class_name', 'TorchLens model')}\n"
         f"{len(trace)} tensors total "
-        f"({human_readable_size(getattr(trace, 'total_activation_memory', 0) or 0)})\n"
+        f"({human_readable_size(getattr(trace, '_cost_total_activation_memory', 0) or 0)})\n"
         f"{params_line}"
     )
 
@@ -847,7 +847,7 @@ def trace_to_dagua_graph(
             g.edge_container_role.append(_container_semantic_attrs(child)["container_role"])
 
     if include_grad_edges is None:
-        include_grad_edges = bool(getattr(trace, "has_gradients", False))
+        include_grad_edges = bool(getattr(trace, "_autograd_has_grads", False))
 
     if include_grad_edges and vis_mode == "unrolled":
         for child in entries:

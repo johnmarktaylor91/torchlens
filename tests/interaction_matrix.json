@@ -175,7 +175,7 @@
    "status": "asymmetry",
    "asymmetry": "A01",
    "confidence": "high",
-   "note": "Preview backends give derived gradients (grad_options, trace.derived_grads); true backward capture is torch only."
+   "note": "Preview backends give derived gradients (grad_options, trace.autograd.derived_grads); true backward capture is torch only."
   },
   {
    "a": "backend",

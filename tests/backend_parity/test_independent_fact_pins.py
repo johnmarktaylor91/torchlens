@@ -28,8 +28,8 @@ def test_linear_trace_facts_hold_from_first_principles():
     log = tl.trace(model, x)
     try:
         # One module, one weight + one bias parameter: from the definition.
-        assert log.backend == "torch"
-        assert log.model_class_name == "Linear"
+        assert log.provenance.backend == "torch"
+        assert log.source.class_name == "Linear"
         assert log.num_modules == 1
         # Exactly one compute op (the linear kernel); input and output nodes
         # exist besides it.

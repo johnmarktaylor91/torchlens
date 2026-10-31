@@ -196,7 +196,7 @@ def _refuse_trace(trace: Any, reason: str, detail: str, remedy: str) -> None:
         f"cannot serve one: {detail} Remedy: {remedy}",
         code="read_addressing_unavailable",
         reason=reason,
-        trace_backend=getattr(trace, "backend", None),
+        trace_backend=getattr(trace, "_provenance_backend", None),
     )
 
 
@@ -211,7 +211,7 @@ def _check_trace_liveness(trace: Any) -> None:
         chunked / structure-only / detached / non-torch traces.
     """
 
-    backend = getattr(trace, "backend", None)
+    backend = getattr(trace, "_provenance_backend", None)
     if backend is not None and backend != _SUPPORTED_BACKEND:
         _refuse_trace(
             trace,
@@ -226,14 +226,14 @@ def _check_trace_liveness(trace: Any) -> None:
             "Trace.cleanup() released its autograd registry.",
             "re-capture the model and read before cleanup",
         )
-    if getattr(trace, "structure_only", False):
+    if getattr(trace, "_options_structure_only", False):
         _refuse_trace(
             trace,
             "structure_only",
             "structure-only captures retain no values and no autograd graph.",
             "re-capture without CaptureOptions(structure_only=True)",
         )
-    if getattr(trace, "inference_only", False):
+    if getattr(trace, "_options_inference_only", False):
         _refuse_trace(
             trace,
             "inference_only",
@@ -243,14 +243,14 @@ def _check_trace_liveness(trace: Any) -> None:
             "re-capture with gradients enabled (outside torch.no_grad() and "
             "torch.inference_mode()) and without inference_only=True",
         )
-    if getattr(trace, "chunked_forward", False):
+    if getattr(trace, "_options_chunk_size", False):
         _refuse_trace(
             trace,
             "chunked_forward",
             "chunk-assembled traces hold no single live autograd graph.",
             "re-capture without forward chunking",
         )
-    if getattr(trace, "detach_saved_activations", False):
+    if getattr(trace, "_options_detach_saved_activations", False):
         _refuse_trace(
             trace,
             "detached",

@@ -177,7 +177,7 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
     width = max((int(node["x"]) for node in nodes), default=0) + 160
     height = max((int(node["y"]) for node in nodes), default=0) + 100
     return {
-        "title": getattr(log, "model_class_name", "TorchLens graph"),
+        "title": getattr(log, "_source_class_name", "TorchLens graph"),
         "nodes": nodes,
         "edges": edges,
         "width": width,

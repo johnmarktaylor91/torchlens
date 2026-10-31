@@ -85,7 +85,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
 
     # op_equivalence_classes is keyed by equivalence type descriptors (not Op labels),
     # with values being sets of Op labels in that equivalence group.
-    for eq_type, equiv_set in ml.op_equivalence_classes.items():
+    for eq_type, equiv_set in ml._graph_op_equivalence_classes.items():
         if not isinstance(equiv_set, set):
             raise MetadataInvariantError(
                 name,
@@ -100,7 +100,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
 
     # Each Op that appears in any equivalence group should exist.
     all_equiv_labels = set()
-    for equiv_set in ml.op_equivalence_classes.values():
+    for equiv_set in ml._graph_op_equivalence_classes.values():
         all_equiv_labels.update(equiv_set)
     extra = all_equiv_labels - label_set
     if extra:
@@ -134,14 +134,14 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
     # invariant actually run for suffixed classes; the key lookup stays first
     # so a label scrubbed OUT of its group still resolves the group and fails.
     group_by_member: dict[str, set] = {}
-    for group in ml.op_equivalence_classes.values():
+    for group in ml._graph_op_equivalence_classes.values():
         if isinstance(group, set):
             for member_label in group:
                 group_by_member[member_label] = group
     for op in ml.layer_list:
         equivalence_class = getattr(op, "equivalence_class", None)
         expected_group = (
-            ml.op_equivalence_classes.get(equivalence_class)
+            ml._graph_op_equivalence_classes.get(equivalence_class)
             if isinstance(equivalence_class, str)
             else None
         )
@@ -356,7 +356,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     - Parameter sharing rule: layers with same (func_name,
       sorted(_param_barcodes)) must share layer_label.
     - Equivalence group consistency: all members of a recurrent_ops
-      group belong to the same Trace.op_equivalence_classes set.
+      group belong to the same Trace.graph.op_equivalence_classes set.
 
     Call-site grouping (``callsite_v1``, grouping rule section 3) replaces two
     of these, and only for traces stamped with that detector:
@@ -578,12 +578,12 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
 
     # Equivalence group ↔ same_layer consistency: all members of a
     # recurrent_ops group must belong to the same equivalence set.
-    # Note: Trace.op_equivalence_classes keys use the pre-module-suffix type
+    # Note: Trace.graph.op_equivalence_classes keys use the pre-module-suffix type
     # (from loop_detection), while per-layer equivalence_class has
     # a module suffix appended by control_flow.py. So we check group membership
     # consistency, not exact key matching.
     op_label_to_equiv_key: dict[str, str] = {}
-    for eq_type, equiv_set in ml.op_equivalence_classes.items():
+    for eq_type, equiv_set in ml._graph_op_equivalence_classes.items():
         for label in equiv_set:
             op_label_to_equiv_key[label] = eq_type
 
@@ -623,7 +623,7 @@ _OUTINDEX_TOKEN = re.compile(r"_outindex(\d+)")
 def _is_call_site_grouped(trace: Trace) -> bool:
     """Whether step 7 grouped this trace by call site (stamp ``detector``)."""
 
-    stamp = getattr(trace, "grouping_policy", None)
+    stamp = getattr(trace, "_options_grouping_policy", None)
     return isinstance(stamp, dict) and stamp.get("detector") == "callsite_v1"
 
 

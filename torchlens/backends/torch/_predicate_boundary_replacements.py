@@ -93,7 +93,7 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
             pass_index=state.pass_index,
             event_index=state.event_index,
             step_index=state.step_index,
-            capture_start_time=trace.capture_start_time,
+            capture_start_time=trace._provenance_start_time,
             include_source_events=state.options.include_source_events,
             sample_id=state.sample_id,
             address=consumer_frame.address if consumer_frame else None,
