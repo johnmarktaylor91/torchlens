@@ -1144,7 +1144,7 @@ def _live_backward_context_matches(
         values = grad_input if selector.grad_kind == "grad_input" else grad_output
         return any(isinstance(value, torch.Tensor) for value in values or ())
     if isinstance(selector, BackwardPassSelector):
-        trace = getattr(grad_fn_handle, "source_trace", None)
+        trace = getattr(grad_fn_handle, "trace", None)
         return getattr(trace, "_active_backward_pass_index", None) == selector.pass_index
     return True
 

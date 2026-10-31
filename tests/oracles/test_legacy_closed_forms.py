@@ -474,8 +474,8 @@ def test_gradient_bytes_on_layers_modules_and_buffers(outer_case) -> None:
     try:
         buffered.backward(buffered[buffered.output_layers[0]].out.sum())
         by_address = {buffer.address: buffer for buffer in buffered.buffers}
-        assert int(by_address["w"].gradient_memory) == 4 * FP32  # d/dw of x * w: (4,)
-        assert int(by_address["c"].gradient_memory) == 0  # c needs no gradient
+        assert int(by_address["w"].grad_memory) == 4 * FP32  # d/dw of x * w: (4,)
+        assert int(by_address["c"].grad_memory) == 0  # c needs no gradient
     finally:
         buffered.cleanup()
 

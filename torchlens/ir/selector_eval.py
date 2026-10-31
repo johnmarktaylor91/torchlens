@@ -813,7 +813,7 @@ def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
 
     module_outputs = tuple(getattr(subject, "output_of_module_calls", ()) or ())
     if lifecycle == "capture" and not module_outputs:
-        source_trace = getattr(subject, "source_trace", None)
+        source_trace = getattr(subject, "trace", None)
         if getattr(source_trace, "backend", TORCH_BACKEND_NAME) != TORCH_BACKEND_NAME:
             module_candidate = getattr(subject, "module", None)
             if module_candidate is not None:
@@ -987,7 +987,7 @@ def _input_path_subject_matches(
     if lifecycle == "site":
         from .container_registry import Role
 
-        trace = getattr(subject, "source_trace", None)
+        trace = getattr(subject, "trace", None)
         site_labels = {
             label
             for label in (
@@ -1491,7 +1491,7 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
 
     from torchlens.data_classes.grad_fn import _pass_op_for_grad_fn
 
-    trace = site.source_trace
+    trace = site.trace
     if trace is None:
         return ()
     paired_label = site.op_label

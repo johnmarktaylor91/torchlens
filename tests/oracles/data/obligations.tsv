@@ -51,8 +51,6 @@ OBL-Q-NUM-INTERNAL-SOURCE-OPS	the internal-source count equals the hand-counted 
 OBL-Q-NUM-INTERNAL-SOURCE-LAYERS	the internal-source layer count equals the hand-counted parentless non-input layers	layers of the internal-source ops; unit: layers	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-INTERNAL-SINK-OPS	the internal-sink count equals the hand-counted childless non-output ops	op passes with no child that are not model outputs (discarded results and unread buffer writes); unit: ops	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-INTERNAL-SINK-LAYERS	the internal-sink layer count equals the hand-counted childless non-output layers	layers of the internal-sink ops; unit: layers	I2	PURE_OBSERVER	REAL
-OBL-Q-NUM-PARENTS	the parent count equals the hand-counted distinct producers	distinct parent ops of an op, or distinct parent layers of a layer; unit: nodes	I2	PURE_OBSERVER	REAL
-OBL-Q-NUM-CHILDREN	the child count equals the hand-counted distinct consumers	distinct child ops of an op, or distinct child layers of a layer; unit: nodes	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-INPUTS	an op's input count equals its hand-counted graph parents	distinct graph-parent ops feeding an op; unit: ops	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-INTERNAL-EDGES	a module scope's internal edges equal the hand-counted edges inside it	distinct op-graph edges whose both endpoints are ops of the module or call; unit: edges	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-INPUT-EDGES	a module scope's input edges equal the hand-counted edges entering it	distinct op-graph edges from an op outside the module or call to one inside; unit: edges	I2	PURE_OBSERVER	REAL
@@ -77,8 +75,6 @@ OBL-Q-MAX-DISTANCE-FROM-INPUT	the farthest-input hop count equals the hand count
 OBL-Q-MIN-DISTANCE-TO-OUTPUT	the nearest-output hop count equals the hand count	fewest Op-graph edges to any model output; None when unreachable; unit: hops	I2	PURE_OBSERVER	REAL
 OBL-Q-MAX-DISTANCE-TO-OUTPUT	the farthest-output hop count equals the hand count	most Op-graph edges to any model output; None when unreachable; unit: hops	I2	PURE_OBSERVER	REAL
 OBL-Q-MAX-LAYER-OP-COUNT	the largest Layer pass count equals the hand count	most Ops (passes) grouped into one Layer; unit: ops	I2	PURE_OBSERVER	REAL
-OBL-Q-NUM-USES-BY-OPS	a parameter's op-use count equals the hand count	Ops that consumed the parameter tensor; unit: ops	I2	PURE_OBSERVER	REAL
-OBL-Q-NUM-USES-BY-LAYERS	a parameter's layer-use count equals the hand count	Layers whose Ops consumed the parameter tensor; unit: layers	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-POS-ARGS	the positional-argument count equals the call as written	positional arguments of the torch call; unit: arguments	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-KWARGS	the keyword-argument count equals the call as written	keyword arguments of the torch call; unit: arguments	I2	PURE_OBSERVER	REAL
 OBL-Q-NUM-ARGS-TOTAL	the argument total equals positional plus keyword	all arguments of the torch call; unit: arguments	I2	PURE_OBSERVER	REAL
