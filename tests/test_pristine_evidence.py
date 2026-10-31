@@ -31,7 +31,7 @@ from torchlens.options import CaptureOptions
 
 _DIM = 8
 _HERE = Path(__file__).parent
-_V9_ARTIFACT = _HERE / "agent_surface_goldens" / "clean.tlspec"
+_V9_ARTIFACT = _HERE / "fixtures" / "tlspec_v9" / "clean.tlspec"
 _V7_ARTIFACT = _HERE / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
 
 

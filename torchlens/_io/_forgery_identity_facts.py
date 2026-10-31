@@ -48,7 +48,7 @@ _ROOT_ENTRY_POINT_KINDS = frozenset({"module_call", "bound_method", "function_ca
 #: First tlspec stamp on which an ABSENT ``Trace.root_entry_point`` refuses.
 #: The C07X writers stamp the fact unconditionally, but they ride the SAME v9
 #: window as pre-C07X v9 writers whose artifacts are checked in (e.g.
-#: ``tests/agent_surface_goldens/clean.tlspec``: tlspec 9, torchlens 2.34.1,
+#: ``tests/fixtures/tlspec_v9/clean.tlspec``: tlspec 9, torchlens 2.34.1,
 #: no root_entry_point), so within v9 the slot is ENTRY-DARK by construction
 #: and absence cannot be told from deletion. The tripwire is armed for the
 #: next coordinated bump (AUD-CODE 3.0e; W051-IO).

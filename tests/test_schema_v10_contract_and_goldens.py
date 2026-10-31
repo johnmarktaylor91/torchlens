@@ -249,7 +249,7 @@ def test_future_version_refuses_on_state_and_producer_windows() -> None:
 def test_v9_artifact_loads_at_its_recorded_schema(tmp_path: Path) -> None:
     """A committed v9 artifact (writer 2.34.1) loads under v10 with the age advisory."""
 
-    source = _HERE / "agent_surface_goldens" / "clean.tlspec"
+    source = _HERE / "fixtures" / "tlspec_v9" / "clean.tlspec"
     manifest = _load(source / "manifest.json")
     assert manifest["tlspec_version"] == 9, "fixture must stay a v9 artifact"
     work = tmp_path / "clean_v9.tlspec"

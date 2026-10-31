@@ -105,6 +105,7 @@ repos:
             tests/snapshots/.*|
             tests/perf_baselines/.*|
             tests/fixtures/tlspec_v7/.*|
+            tests/fixtures/tlspec_v9/.*|
             tests/release_goldens/.*|
             tests/agent_surface_goldens/.*|
             torchlens/schemas/writer_contract_v[0-9]+\.json|
