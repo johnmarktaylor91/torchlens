@@ -5,7 +5,6 @@
 # root names is immediate (tests/test_arch_spine_surface.py).
 canonical_path	home_module	implementation_layer	product_role	in_all	legacy_top_level
 torchlens.ActivationLookup	torchlens.captured_run	L3	core	1	0
-torchlens.errors.AmbiguousOpLookupError	torchlens._errors	L0	core	1	0
 torchlens.AtenOp	torchlens.data_classes.aten_op	L1	core	1	0
 torchlens.Bundle	torchlens.intervention	L4	core	1	0
 torchlens.Bytes	torchlens.quantities	L0	core	1	0
@@ -21,7 +20,6 @@ torchlens.Op	torchlens.data_classes.op	L1	core	1	0
 torchlens.PayloadLoadHints	torchlens._io	L1	core	1	0
 torchlens.Quantity	torchlens.quantities	L0	core	1	0
 torchlens.Recording	torchlens.fastlog	L2	core	1	0
-torchlens.errors.ReentrantTraceError	torchlens._state	L2	core	1	0
 torchlens.ResolvedSelection	torchlens.selection	L4	core	1	0
 torchlens.Selection	torchlens.selection	L4	core	1	0
 torchlens.Trace	torchlens.data_classes.trace	L1	core	1	0
