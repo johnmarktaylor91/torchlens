@@ -31,6 +31,12 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
     silently presenting post-edit values with zero edge provenance.
     """
 
+    from .._data_classes.trace import Trace
+
+    if not isinstance(trace, Trace):
+        # A Recording or other non-Trace save subject holds no Ops, so it
+        # cannot carry edge substitutions; its own refusal fires later.
+        return
     carriers = [
         op.label for op in trace._layer_list or () if getattr(op, "edge_substitutions", None)
     ]
