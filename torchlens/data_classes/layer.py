@@ -818,6 +818,16 @@ class Layer(_SelectionOperand):
         """Whether this layer was computed inside a submodule."""
         return self.module is not None
 
+    def _intervention_site(self) -> Any:
+        """Return the site spelling for this Layer's intervention doors.
+
+        A bare layer label addresses only a single-pass layer; a multi-pass
+        Layer passes itself, which lowers to every pass's pass-qualified label
+        (the all-passes spelling).
+        """
+
+        return self if self.num_passes > 1 else self.layer_label
+
     @property
     def module_call_depth(self) -> int:
         """Depth of module nesting for this layer."""
@@ -1841,7 +1851,7 @@ class Layer(_SelectionOperand):
         """
 
         return self._source_trace_or_error().do(
-            self.layer_label,
+            self._intervention_site(),
             transform,
             model=model,
             x=x,
@@ -1873,7 +1883,7 @@ class Layer(_SelectionOperand):
         """
 
         return self._source_trace_or_error().set(
-            self.layer_label,
+            self._intervention_site(),
             value,
             strict=strict,
             confirm_mutation=confirm_mutation,
@@ -1909,7 +1919,7 @@ class Layer(_SelectionOperand):
         """
 
         return self._source_trace_or_error().attach_hooks(
-            self.layer_label,
+            self._intervention_site(),
             hook,
             *extra_hooks,
             strict=strict,
