@@ -18,7 +18,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._utils._torch_compat import get_gradient_edge_support
 from torchlens.attribution import onebackward as ob
-from torchlens.errors import SelectionError
+from torchlens.errors import SelectionError, TraceCleanedUpError
 
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
@@ -145,9 +145,9 @@ class TestByDoorContract:
         table = _site_table(trace)
         selection = tl.top_k(k=1, by=table)
         trace.cleanup()
-        with pytest.raises(SelectionError) as excinfo:
+        # The resolution door is trace[selector]; a husked trace refuses at the door.
+        with pytest.raises(TraceCleanedUpError):
             trace[selection]
-        assert excinfo.value.fields["reason"] in ("by_table_foreign", "by_table_stale")
 
     @pytest.mark.smoke
     @_requires_gradient_edge

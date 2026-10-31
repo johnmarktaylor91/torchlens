@@ -6,12 +6,14 @@ import weakref
 from collections.abc import Callable, Iterator, Mapping
 from typing import Any, ClassVar, Generic, TypeVar
 
+import torch
+
 from .._errors import InvalidArgumentError
 
 T = TypeVar("T")
 
 #: Scalar types a record field may hold for ``count_by`` to group on it.
-_COUNTABLE_SCALARS: tuple[type, ...] = (str, int, bool, type(None))
+_COUNTABLE_SCALARS: tuple[type, ...] = (str, int, bool, type(None), torch.dtype, torch.device)
 _MISSING = object()
 
 

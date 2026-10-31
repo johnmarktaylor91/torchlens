@@ -18,6 +18,7 @@ For integer keys: direct index into ``layer_list`` (supports negative indexing).
 For slice keys: returns a list slice of ``layer_list``.
 """
 
+import warnings
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -134,11 +135,19 @@ def _getitem_selector(self: "Trace", ix: Any) -> Any:
     """
 
     from .._selection import _selection_from_selector
-    from ..intervention.resolver import _resolve_sites
+    from ..intervention._module_alias_guard import refuse_trace_alias_spellings
+    from ..intervention.errors import MultiMatchWarning
+    from ..intervention.resolver import _guard_episode_step_query, _normalize_query, _resolve_sites
 
     if not _names_one_thing(ix):
-        return _selection_from_selector(ix)._resolve(self)
-    table = _resolve_sites(self, ix, max_fanout=max(1, len(self.layer_list)))
+        normalized = _normalize_query(ix)
+        _guard_episode_step_query(self, normalized)
+        refuse_trace_alias_spellings(self, normalized)
+        return _selection_from_selector(normalized)._resolve(self)
+    with warnings.catch_warnings():
+        # The count is reported by the typed refusal below, not by a fan-out warning.
+        warnings.simplefilter("ignore", MultiMatchWarning)
+        table = _resolve_sites(self, ix, max_fanout=max(1, len(self.layer_list)))
     if len(table) != 1:
         raise AmbiguousSiteError(
             f"{ix!r} names one site but matched {len(table)} on this trace.",

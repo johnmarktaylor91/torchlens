@@ -118,6 +118,18 @@ def test_do_accepts_find_sites_output():
     assert fork.intervention_audit  # fire evidence, never silence
 
 
+def test_do_empty_site_table_refuses():
+    from torchlens.intervention.errors import SiteResolutionError
+
+    _, _, trace = _traced_toy()
+    fork = trace.fork()
+    nothing = trace.find_sites(tl.func("conv2d"))
+    assert len(nothing) == 0
+    with pytest.raises(SiteResolutionError) as excinfo:
+        fork.do(nothing, tl.zero_ablate())
+    assert excinfo.value.fields["code"] == "site_table_empty"
+
+
 def test_when_refuses_raw_string_at_build():
     """NEW-16 (landed upstream, pinned here): spec-build refusal is typed."""
 
