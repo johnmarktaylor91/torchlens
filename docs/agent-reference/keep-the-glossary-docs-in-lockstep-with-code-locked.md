@@ -67,7 +67,7 @@ and keeps refusing train-mode writers. Unproven (`None`) evidence, a value-chang
 mode claim contradicting the evidence, a refreshed rerun's own journal recording a
 value-changing write the target does not prove, or diverging target-vs-refreshed evidence
 (compared per sink label) refuses with the typed `BufferSinkRoutingError` carrying
-`RunnableErrorCode.BUFFER_SINK_ROUTING_MUTABLE` (provisional spelling, documented-unstable;
+code `"buffer_sink_routing_mutable"` (provisional spelling, documented-unstable;
 pinned "computational graph changed" message term preserved). A loaded sparse Trace binds cloned
 input leaves plus staged/random state and executes its resolved taken-path DAG under
 `pause_logging()`. Both return `RunResult(output, trace, report)` and leave the source Trace

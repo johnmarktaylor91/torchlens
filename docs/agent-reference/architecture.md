@@ -238,7 +238,7 @@ Key entry points:
   Implicit-boundary: journal/scavenge/finalize split with the finalize guard
   in-routine (never inside an engine invocation), identity-checked
   engine-drain close callback, sync-point backstop always armed,
-  `BackwardPassEnd.close_path` sidecar-only disclosure. Grouped floor:
+  `torchlens._ir.events.BackwardPassEnd.close_path` sidecar-only disclosure. Grouped floor:
   `trace.grad_fn_site_summary` per-site backward rollups (read-only L1
   consumption).
 - Predicate runtime extension point (DOCUMENTED-UNSTABLE, S4 seam):
@@ -253,7 +253,7 @@ Key entry points:
   errors for unsaved payload reads. Forward exceptions default to
   `on_forward_error="raise"`; `on_forward_error="attach_partial"` attaches
   `exc.partial_recording` and re-raises, while `on_forward_error="return_partial"` returns a
-  failed partial `Recording`. Failed partials set `status="partial_error"`, `failed=True`,
+  failed partial `Recording`. Failed partials set `status="partial_error"`, `is_failed=True`,
   string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields.
   user-op failures exclude the failing call; TL-side capture failures may include a
   skipped/partial current-call event. Trace failed captures separately expose
@@ -376,7 +376,7 @@ recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
 # D18: eval-mode BatchNorm is runnable on the default live path (no value-changing
 # buffer writes); train-mode buffer writers refuse with the typed BufferSinkRoutingError
-# (RunnableErrorCode.BUFFER_SINK_ROUTING_MUTABLE, provisional/documented-unstable).
+# (code "buffer_sink_routing_mutable", provisional/documented-unstable).
 run_result = torch_trace.run(inputs=x, seed=42)
 runnable_path = "architecture.tlspec"
 torch_trace.save(runnable_path, level="runnable", include_weights=True)

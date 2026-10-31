@@ -75,7 +75,7 @@
   the historical `on_forward_error="raise"` behavior; opt into
   `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
   `on_forward_error="return_partial"` to return a failed partial `Recording`. Failed partials
-  set `status="partial_error"`, `failed=True`, string-only error metadata, `num_committed_ops`,
+  set `status="partial_error"`, `is_failed=True`, string-only error metadata, `num_committed_ops`,
   and best-effort `last_event_*` fields. user-op failures exclude the failing call; TL-side
   capture failures may include a skipped/partial current-call event. Failed partials cannot be
   converted with `Recording.to_trace()` or used with `Recording.backward()`.
@@ -132,7 +132,7 @@
   chokepoint with stable codes on `tl.errors.CaptureOutcomeError.fields["code"]`:
   N1 (failed/aborted/unknown exports refuse), N2 (validation ENTRY refusal only
   — tripwire bodies untouched, UNATTESTED enters), N3 (replay/backward), N4
-  (halted runnable save, `RunnableErrorCode.HALTED_CAPTURE_NOT_RUNNABLE`), N5
+  (halted runnable save, code `"halted_capture_not_runnable"`), N5
   (halted LIVE-provider replay refuses — loaded-sparse `run()` stays allowed).
   A swallowed halt/nonfinite signal (broad `except:` in user code) raises
   `tl.errors.StopSignalSwallowedError` at the capture boundary and settles
@@ -195,7 +195,7 @@
   spelling.
 - EPISODE CAPTURE (torch-only; every spelling DOCUMENTED-UNSTABLE): one wrapped multi-step
   generation run is ONE product — `tl.trace(episode_root, x,
-  episode=tl.options.EpisodeOptions(stepped_module=model, n_steps=N))` stamps
+  episode=tl.options.EpisodeOptions(stepped_module=model, num_steps=N))` stamps
   `capture_kind=episode` and lands the per-step status ledger (GRAMMAR v2 as of the
   C07X amendment, `episode_ledger_version=2` family-local: header carries the declared
   `step_output_kind` tokens|digest|none + the `step_output_from` source disclosure /
@@ -1044,7 +1044,7 @@
   inside an engine invocation; mid-engine reads journal without
   materializing); implicit opens enqueue an identity-checked engine-drain
   final callback with the sync-point backstop always armed; the
-  `BackwardPassEnd.close_path` disclosure is sidecar-event-only in wave 2.
+  `torchlens._ir.events.BackwardPassEnd.close_path` disclosure is sidecar-event-only in wave 2.
   GROUPED FLOOR -- `trace.grad_fn_site_summary` rolls backward facts up per
   L1 site_key (read-only; keyless legacy refuses `site_key_unavailable`).
 - PREDICATE RUNTIME EXTENSION POINT (S4 seam; every spelling
@@ -1060,7 +1060,7 @@
   outside the contract. Contract: `docs/reference/predicate_runtime.md`.
 - NETRON EXPORT v2 (F14; every kwarg spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `tl.export.netron(log, path=None, *, granularity="module"|"op"|"rolled",
-  depth=1, show_buffers="never"|"meaningful"|"always", attachment=None, open=False,
+  depth=1, show_buffers="never"|"meaningful"|"always", attachment=None, serve=False,
   baseline=None)` emits schema-v2 ONNX protobuf-JSON (irVersion 10, custom domains
   `ai.torchlens.lossy`/`ai.torchlens.module` — NEVER re-domained for colour, ruling N1)
   with typed values + native graph I/O, per-call module FunctionProtos (module is the FILE
@@ -1074,7 +1074,7 @@
   `attachment=True` refuses the memory-only serve), `baseline=<reference Trace>` per-node
   `torchlens.diff.*` facts from `torchlens.report.diff` in node metadataProps
   and the companion plus the diff summary in the `torchlens.baseline` slot (ruling U09.5;
-  a string stays a bare identifier), serve/widget one-liner (`open=True`, extra `torchlens[netron]`), and
+  a string stays a bare identifier), serve/widget one-liner (`serve=True`, extra `torchlens[netron]`), and
   an extent-budget WARN past ~27 ranks. Every artifact stays green under strict
   `onnx.ModelProto` parse + `check_model(full_check=True)`; netron 9.2.2's own parser
   executes over it in CI (tests/test_netron_export_*.py). Doc:
@@ -1227,9 +1227,9 @@
   activation), print each setting's source via `print_fn=` (argument > env >
   derived > default), keep `callback.settings`; malformed refuses
   `watch_env_config_invalid`. HISTORY (explorer sign-offs): nullable
-  `StepBlockRecord.trace_ref` (history schema 2, v1 loads unchanged);
-  `WatchSettings(sketch_embeddings=False, artifact_budget_bytes=256 MiB)`
-  (embedding tables >= 2**20 elements spine-only; budget refuses
+  `torchlens._observability._schema.StepBlockRecord.trace_ref` (history schema 2, v1 loads unchanged);
+  the private `torchlens._observability.WatchSettings` defaults (`sketch_embeddings` off,
+  `artifact_budget_bytes` 256 MiB; embedding tables >= 2**20 elements spine-only; budget refuses
   `history_artifact_budget_exceeded` before the crossing block).
 - LIGHTNING FIT-START SUMMARY (walk U03.4; DOCUMENTED-UNSTABLE):
   `torchlens.callbacks.lightning.SummaryCallback(input_getter=None, print_fn=print,
@@ -1329,7 +1329,7 @@
   (doctor / api_map / load_overview / agent_dump / explain), wrapping the same public
   surface -- no user-code execution, no mutation.
 - DATASET EXTRACTION (D7/V5; `resume=`, `stimulus_ids=`, and the loader
-  DOCUMENTED-UNSTABLE): disk-mode `tl.extract_dataset(..., output_dir=)` writes atomic
+  DOCUMENTED-UNSTABLE): disk-mode `tl.extract_dataset(..., path=)` writes atomic
   shards plus a self-describing `manifest.json` (run signature, per-site identity with
   L1 site keys where derivable, stimulus ordering/provenance, axis semantics, dtypes,
   devices, transform disclosure, TorchLens version), ledgered per batch. `resume=True`
@@ -1720,3 +1720,116 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.viz.site_detail`: Render the per-site detail sheet: every stream on one step axis.
 - `tl.viz.timeline`: Render one timeline v2 artifact as deterministic standalone SVG text.
 - `tl.viz.token_strip`: Render the paper-format token strip via matplotlib.
+
+## Namespace exports added or renamed in the 3.0 rename
+
+Names the 3.0 rename added to, or respelled in, the public namespaces (one line each, from the
+object's docstring):
+
+- `tl.bundle.SuperAtenOp`: Positional, coverage-qualified alignment of one ATen slot across members.
+- `tl.bundle.SuperOp`: View of a single site across all bundle members.
+- `tl.debug.BackwardNanReport`: Result of `bisect_nan_backward`.
+- `tl.debug.BisectNanReport`: Result returned by `bisect_nan`.
+- `tl.debug.BisectPrecisionReport`: Result of `bisect_precision`.
+- `tl.debug.FindNanReport`: Structured first-non-finite diagnostic returned by `find_nan`.
+- `tl.debug.GuessInputShapeReport`: Result returned by `guess_input_shape`.
+- `tl.debug.LineageReport`: Result returned by `lineage`.
+- `tl.differential.DiffReport`: The settled two-capture differential: rows plus honest totals.
+- `tl.differential.diff`: Settle two captures into the guarded differential projection.
+- `tl.distributed.is_vetted_build`: Capability probe: does this torch build match a censused snapshot?
+- `tl.errors.AmbiguousAxisError`: Raised when a helper cannot infer a feature axis safely.
+- `tl.errors.AmbiguousBackendError`: Raised when backend auto-resolution has multiple equal-priority matches.
+- `tl.errors.AmbiguousBatchInputError`: Raised when `chunk_size` cannot infer which input leaf is batched.
+- `tl.errors.AmbiguousCallError`: Raised when a module-level query has multiple executed calls.
+- `tl.errors.AmbiguousLabelError`: Raised when `Bundle.at` finds a label in multiple accessors.
+- `tl.errors.AmbiguousPassError`: Raised when a layer-level query has multiple executed passes.
+- `tl.errors.AmbiguousTargetError`: Raised when a projective query has more than one reachable target.
+- `tl.errors.AppendStreamingUnsupportedError`: Raised when append rerun would need to mutate active streamed activation blobs.
+- `tl.errors.ArtifactTooNewError`: Raised when an artifact declares a schema newer than this runtime's ceiling.
+- `tl.errors.BundleComparisonError`: Raised when bundle members fail a gated operation's comparison gate.
+- `tl.errors.CaptureGapError`: Reserved enforcement error for an unrepresented torch invocation.
+- `tl.errors.CaptureGapWarning`: Shadow-mode report for a possible unrepresented torch invocation.
+- `tl.errors.CaptureNotActiveError`: Raised when a capture-only operation is called outside an active capture.
+- `tl.errors.DatasetExtractionResumeError`: Raised when a resumable extraction artifact cannot be safely continued.
+- `tl.errors.DirectWriteSaveError`: Raised when executable spec save sees direct out writes.
+- `tl.errors.InterventionWarning`: Base class for TorchLens intervention warnings.
+- `tl.errors.LiveIndexWindowError`: Raised when a live-index query targets an unavailable raw label.
+- `tl.errors.MLXValueUnavailableError`: Raised when MLX lazy evaluation makes a predicate value unavailable.
+- `tl.errors.MergeConflictError`: The presented rank cores structurally contradict each other.
+- `tl.errors.MergeInputError`: A merge input is unusable: not a rank capture, duplicate rank,
+- `tl.errors.MergedArtifactError`: Merged artifact save/load failure: schema, integrity, or tamper.
+- `tl.errors.MergedSurfaceUnsupportedError`: A refused surface on a merged trace (run/export/validate/selectors).
+- `tl.errors.MergedTraceError`: Base class for merged-trace errors; `fields["code"]` is frozen.
+- `tl.errors.NarrationConfigError`: Raised for `echo=` configuration refusals at capture entry.
+- `tl.errors.NarrationStatsError`: Raised when an armed echo stats rung refuses a value computation.
+- `tl.errors.NoInfluencePathError`: Raised when two graph points have no directed influence path.
+- `tl.errors.OpaqueCallableError`: Raised when an executable intervention save would require opaque code.
+- `tl.errors.ParamEvidenceMissingError`: Cross-member parameter read refused: no immutable capture-time evidence.
+- `tl.errors.ParamReleasedError`: Raised when a released Param cannot re-fetch its live model parameter.
+- `tl.errors.ReceptiveFieldConfigurationError`: Raised when a receptive-field call is misconfigured by its caller.
+- `tl.errors.ReceptiveFieldError`: Base class for receptive-field failures.
+- `tl.errors.ReceptiveFieldUnavailableError`: Raised when a receptive-field result requires unavailable capture state.
+- `tl.errors.ReceptiveFieldValidationError`: Raised when receptive-field cross-validation detects a violation.
+- `tl.errors.RenderError`: Raised when a transformer picture cannot be honestly produced.
+- `tl.errors.ReplayValueMismatchError`: A recomputed selected activation differed from its archived bytes.
+- `tl.errors.SidecarError`: Raised for sidecar-family registration and payload refusals.
+- `tl.errors.TensorSubclassUnsupportedError`: A strict Tensor subclass could not be constructed while a mode was active here.
+- `tl.errors.TraceMutationWarning`: First root-log mutation; Trace mutators operate in place.
+- `tl.errors.TransformContractError`: Raised when a transform spec, chain, or plan violates its contract.
+- `tl.errors.UserTransformError`: Raised when activation_transform or grad_transform raises.
+- `tl.export.describe_target`: Return one export target's registration metadata (tier row included).
+- `tl.export.list_targets`: Return the registered export-target names.
+- `tl.export.register_target`: Register one export target through the public door.
+- `tl.export.resolve_target`: Return one registered exporter callable; unknown names refuse teaching.
+- `tl.export.unregister_target`: Remove one export-target registration.
+- `tl.fingerprint.StructuralHashMismatchError`: Raised when a model's provisional structural hash differs from its pin.
+- `tl.intervention.BundleComparisonError`: Raised when bundle members fail a gated operation's comparison gate.
+- `tl.intervention.label_contains`: Create a label-substring selector.
+- `tl.intervention.label_matches`: Create a label regex-pattern selector.
+- `tl.intervention.model_input`: Create a nested model-input path selector.
+- `tl.intervention.model_output`: Create an output selector.
+- `tl.io.list_traces`: Return a snapshot of currently live TorchLens traces.
+- `tl.io.materialize_nested`: Replace any remaining nested portable blob refs on a loaded model log.
+- `tl.model_output`: Create an output selector.
+- `tl.options.HtmlReportOptions`: Emission plumbing for the offline HTML report (C06 house pattern).
+- `tl.preprocessing.PreprocessingComparison`: The field-level audit report.
+- `tl.receptive_field.GradReceptiveField`: Empirical receptive-field influence set measured by autograd.
+- `tl.report.CompatWindow`: Frozen compatibility-window report.
+- `tl.report.DiffReport`: The settled two-capture differential: rows plus honest totals.
+- `tl.report.InterventionValidationReport`: Five-axis intervention validation result.
+- `tl.report.KernelProfileReport`: One door call: one execution, one trace, one joined result.
+- `tl.report.MergeReport`: Graph-free diagnostic summary of a merge derivation (3.2).
+- `tl.report.ValidationDiagnostic`: Structured non-failing diagnostic emitted by validation.
+- `tl.report.ValidationFailure`: A structured description of the first surfaced validation mismatch.
+- `tl.report.ValidationStatus`: Machine-readable replay-validation availability or result.
+- `tl.report.compare_topology`: Compare two Traces structurally.
+- `tl.report.doctor`: Run a TorchLens startup health check.
+- `tl.trackers.HistoryReader`: Read one artifact without loading the run or importing a model.
+- `tl.trackers.correct_running_stats`: Apply the closed-form unscale correction to one spine record.
+- `tl.trackers.corrected_grad_block`: Return `block` with every SCALED gradient observation corrected.
+- `tl.trackers.running_stats_scalars`: Derive the portable scalar statistics from one spine record.
+- `tl.transformer.ANNOTATION_KINDS`: The closed annotation-kind vocabulary (`descriptive_head_score`, `additive_logit_contribution`, `screening_estimate`, `intervention_effect`).
+- `tl.transformer.CropInfo`: Crop disclosure: cropping never renormalizes.
+- `tl.transformer.EpisodeCoordinates`: Episode coordinates carried by records from day one.
+- `tl.transformer.GqaInfo`: Grouped-query-attention disclosure.
+- `tl.transformer.MaskInfo`: Mask provenance for an attention view.
+- `tl.transformer.TokenAxis`: One labeled token axis (query and key stay separate records).
+- `tl.transformer.TokenScoreRow`: One labeled row of per-token scores (strip row).
+- `tl.transformer.attention_view`: Extract one layer's attention pattern as a typed view.
+- `tl.transformer.circuitsvis_payload`: Build the CircuitsVis attention payload from typed views.
+- `tl.transformer.metric_strip`: Convert a metric record to a strip record for rendering.
+- `tl.transformer.prediction_table_html`: Emit the zero-dependency HTML top-k table (inspectus, matched).
+- `tl.transformer.receipt_from_patch_grid`: Build a validated receipt from a mech-interp patch grid row.
+- `tl.transformer.render_neuron_card`: Render the selected-pair neuron card (family-gated static card).
+- `tl.types.Accessor`: Generic dict-like accessor for ordered TorchLens log objects.
+- `tl.types.ContainerLeafOccurrence`: One tensor occurrence at one container path.
+- `tl.types.ContainerSpec`: Portable description of an output container seen during capture.
+- `tl.types.Container`: Computed view over a captured Python output container.
+- `tl.types.ContractCheck`: One contract check recorded in a run report.
+- `tl.types.MergedFinding`: One structured merge finding.
+- `tl.types.ReadinessReport`: Complete non-executing readiness report for a Trace provider.
+- `tl.types.RunReport`: Honesty, state, resolution, and contract metadata for one run.
+- `tl.types.RunnableCompatibility`: Producer/runtime versions recorded for readiness diagnostics.
+- `tl.types.RunnableDiagnostic`: Structured diagnostic shared by preflight, readiness, and run reports.
+- `tl.user_funcs.CaptureNotActiveError`: Raised when a capture-only operation is called outside an active capture.
+- `tl.user_funcs.UserTransformError`: Raised when activation_transform or grad_transform raises.

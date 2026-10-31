@@ -107,7 +107,7 @@
   a helper. Tests: `tests/test_protocol_redispatch.py`.
 - Buffer provenance never rests on values: step 6 merges two buffer nodes only when
   capture recorded the same buffer version for both (tensor object, storage and version counter,
-  `RawGraphWorkspace.buffer_version_keys`) and the later one is not a journaled write, and a buffer
+  `torchlens._ir.workspaces.RawGraphWorkspace.buffer_version_keys`) and the later one is not a journaled write, and a buffer
   version replays as `identity` of its producer only on exact NaN-equal bytes (`tensor_nanequal`).
   Comparing buffer values with IEEE `torch.equal` made a model whose buffers reach NaN from one entry
   state record a different graph, so validation's re-trace called it non-reproducible.
