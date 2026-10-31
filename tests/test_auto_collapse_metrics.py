@@ -2201,7 +2201,7 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
         )
         rep_line = _collapsed_node_line(source, "blocks.0")
 
-        assert fold.num_layers != representative.num_layers
+        assert fold.num_layers != len(representative.layer_labels)
         assert fold.num_params != representative.num_params
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
         assert _module_contents_label(trace, representative) in rep_line
@@ -2290,7 +2290,7 @@ def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
         )
         rep_line = _collapsed_node_line(source, "branches.0")
 
-        assert fold.num_layers != representative.num_layers
+        assert fold.num_layers != len(representative.layer_labels)
         assert fold.num_params != representative.num_params
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
         assert _module_contents_label(trace, representative) in rep_line
@@ -2698,7 +2698,7 @@ def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
         module = trace.modules["block"]
         surfaced_ops = _atomic_own_output_ops(trace, "block")
         surfaced_params = sum(int(getattr(op, "num_params", 0) or 0) for op in surfaced_ops)
-        remainder_layers = module.num_layers - len(surfaced_ops)
+        remainder_layers = len(module.layer_labels) - len(surfaced_ops)
         remainder_buffers = sum(trace[label].is_buffer for label in module.layer_labels) - sum(
             op.is_buffer for op in surfaced_ops
         )

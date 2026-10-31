@@ -1453,7 +1453,7 @@ def _build_collapsed_module_node(
         # A rolled box stands for every call of the module, so the mode
         # presets aggregate per-pass op records across all calls.
         scope_op_labels = tuple(op_label for call in ml.ops.values() for op_label in call.ops)
-        module_num_tensors = ml.num_layers
+        module_num_tensors = len(ml.layer_labels)
         module_num_buffers = sum(self[layer].is_buffer for layer in ml.layer_labels)
         module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.layer_labels)
         # Rolled boxes need the same surfaced-exit remainder belt as the

@@ -25,8 +25,6 @@ Layer.module_call_depth	int	quantity	module_call_depth	green	tests/oracles/test_
 Layer.num_args_total	int	quantity	num_args_total	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Layer.num_autograd_tensors	int	quantity	num_autograd_tensors	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 Layer.num_kwargs	int	quantity	num_kwargs	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
-Layer.num_ops	int	quantity	num_ops	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
-Layer.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Layer.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Layer.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Layer.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
@@ -60,9 +58,7 @@ Module.num_descendant_calls	int	quantity	num_descendant_calls	green	tests/oracle
 Module.num_edges	int	quantity	num_edges	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
 Module.num_input_edges	int	quantity	num_input_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
 Module.num_internal_edges	int	quantity	num_internal_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
-Module.num_layers	int	quantity	num_layers	green	tests/oracles/test_legacy_module_counts.py::test_layer_and_op_counts_on_the_root_call (I2)	-
 Module.num_output_edges	int	quantity	num_output_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
-Module.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Module.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Module.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Module.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
@@ -86,7 +82,6 @@ Module.total_internal_gradient_memory	Bytes	quantity	internal_gradient_memory	gr
 Module.total_macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
 Module.total_output_activation_memory	Bytes	quantity	output_activation_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
 Module.total_output_gradient_memory	Bytes	quantity	output_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers (I2)	-
-Module.total_param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
 ModuleCall.autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 ModuleCall.call_index	int	identifier	-	-	-	id/index/line
 ModuleCall.forward_duration	Duration	quantity	forward_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_module_and_call_durations_are_bounded (I1)	-
@@ -103,7 +98,6 @@ ModuleCall.num_forward_pos_args	int	quantity	num_forward_pos_args	green	tests/or
 ModuleCall.num_input_edges	int	quantity	num_input_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
 ModuleCall.num_internal_edges	int	quantity	num_internal_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
 ModuleCall.num_layers	int	quantity	num_layers	green	tests/oracles/test_legacy_module_counts.py::test_layer_and_op_counts_on_the_root_call (I2)	-
-ModuleCall.num_ops	int	quantity	num_ops	green	tests/oracles/test_legacy_module_counts.py::test_layer_and_op_counts_on_the_root_call (I2)	-
 ModuleCall.num_output_edges	int	quantity	num_output_edges	green	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts (I2)	-
 ModuleCall.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 ModuleCall.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
@@ -138,7 +132,6 @@ Op.num_args_total	int	quantity	num_args_total	green	tests/oracles/test_legacy_cl
 Op.num_autograd_tensors	int	quantity	num_autograd_tensors	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
 Op.num_inputs	int	quantity	num_inputs	green	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts (I2)	-
 Op.num_kwargs	int	quantity	num_kwargs	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
-Op.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Op.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Op.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Op.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-

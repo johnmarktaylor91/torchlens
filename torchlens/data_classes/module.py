@@ -2612,7 +2612,7 @@ class ModuleAccessor(Accessor["Module"]):
             lines.append(
                 f"{ml.address:<40} {ml.class_name:<20} "
                 f"{ml.call_depth:>5} {ml.num_params:>10} "
-                f"{ml.num_layers:>7} {ml.num_calls:>7}"
+                f"{len(ml.layer_labels):>7} {ml.num_calls:>7}"
             )
         return "\n".join(lines)
 

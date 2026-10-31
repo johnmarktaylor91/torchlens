@@ -194,7 +194,7 @@ def test_layer_and_op_counts_on_the_root_call() -> None:
     trace = tl.trace(model, (torch.randn(2, 4), torch.randn(2, 4)))
     try:
         root = trace.module_calls["self:1"]
-        assert root.num_ops == G_OPS  # 13: the Linear ran twice
+        assert len(root.ops) == G_OPS  # 13: the Linear ran twice
         assert root.num_layers == G_LAYERS  # 12: its two passes share one Layer
         assert trace.num_layers == G_LAYERS
         assert trace.modules["self"].num_layers == G_LAYERS

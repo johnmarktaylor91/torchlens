@@ -269,7 +269,7 @@ def test_module_scope_edge_and_layer_counts(graph_trace) -> None:
     fc = modules["fc"]
     # fc holds both linear passes: one Layer; internal edge pass1 -> pass2,
     # input edge x -> pass1, output edge pass2 -> mul.
-    assert int(fc.num_layers) == 1
+    assert len(fc.layer_labels) == 1
     assert (int(fc.num_internal_edges), int(fc.num_input_edges), int(fc.num_output_edges)) == (
         1,
         1,

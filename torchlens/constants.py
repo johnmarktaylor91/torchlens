@@ -774,7 +774,6 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "call_label",
     "ordinal_index",
     "ops",
-    "num_ops",
     "input_ops",
     "input_layers",
     "output_ops",
@@ -859,7 +858,6 @@ MODULE_LOG_FIELD_ORDER = [
     # Layers
     "layer_labels",
     "layers",
-    "num_layers",
     "input_ops",
     "input_layers",
     "output_ops",
@@ -870,7 +868,6 @@ MODULE_LOG_FIELD_ORDER = [
     "num_params",
     "num_params_trainable",
     "num_params_frozen",
-    "num_param_tensors",
     "num_param_tensors_trainable",
     "num_param_tensors_frozen",
     "recursive_params",

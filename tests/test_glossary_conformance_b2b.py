@@ -71,7 +71,7 @@ def test_op_and_layer_convenience_properties() -> None:
     """Op and Layer convenience properties aggregate already captured data."""
 
     trace = _make_trace()
-    op = next(record for record in trace.compute_ops if record.num_param_tensors)
+    op = next(record for record in trace.compute_ops if record.num_params)
     layer = trace.layers[op.layer_label]
 
     assert op.flops_total == (op.flops_forward or 0) + (op.flops_backward or 0)

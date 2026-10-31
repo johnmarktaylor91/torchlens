@@ -317,7 +317,6 @@ _NON_NUMERIC_FIELDS = frozenset(
         "leaf_module_ops",
         "out",
         "grad",
-        "tensor",
         "transformed_out",
         "transformed_grad",
         "receptive_field",
