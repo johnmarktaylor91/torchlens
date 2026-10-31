@@ -442,7 +442,14 @@ def _prepare_model_once(model: nn.Module) -> None:
         _state.record_module_root_prep(model, module)
 
         # Annotate children with their full dotted address path (root-relative).
+        # The traversal visits a shared module once per registration path; its
+        # canonical address is the FIRST one (``named_modules()`` order, the
+        # address stock-torch module hooks and the glossary use), so a later
+        # path never overwrites it. The other paths stay alias addresses.
         for _, child_module, child_address in child_entries:
+            if id(child_module) in addressed_module_ids:
+                continue
+            addressed_module_ids.add(id(child_module))
             set_module_meta(
                 child_module,
                 address=child_address,
@@ -453,8 +460,11 @@ def _prepare_model_once(model: nn.Module) -> None:
         if is_root:
             return
 
-        set_module_meta(module, address=address, module_type=str(type(module).__name__))
+        if id(module) not in addressed_module_ids:
+            addressed_module_ids.add(id(module))
+            set_module_meta(module, address=address, module_type=str(type(module).__name__))
 
+    addressed_module_ids: set[int] = set()
     _traverse_model_modules(model, _visit_once)
     _state._prepared_models.add(model)
 

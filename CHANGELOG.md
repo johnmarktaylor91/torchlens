@@ -391,6 +391,35 @@
   distinct call sites into false loops. The TorchLens-frame test now compares normalised file
   names.
 
+- **capture**: a module registered under several names (`self.act = nn.Tanh()` reused inside
+  two `nn.Sequential`s) now gets its first registration path as its canonical address, as
+  `named_modules()` reports it and the glossary says; the later paths stay alias addresses. The
+  last path used to win, so backward validation's stock module hooks (keyed by `named_modules()`)
+  and the capture disagreed on the shared module's calls and the verdict was False
+  (`aenet-PyTorch` in the classics corpus).
+- **validation**: backward validation's module-output gradient check now agrees with the
+  capture on what a module's outputs are and on outputs no gradient reaches. The stock side
+  enumerates the tensor leaves of a plain object output (a `torch.distributions` object) with
+  the capture's own fallback walk, and an output that received no gradient in stock autograd
+  and none in the capture is `compared_no_grad` (agreement, recorded, not counted as evidence)
+  instead of a fail-closed gap; stock-has-gradient-capture-none and capture-has-gradient-stock-none
+  still fail, and a run that compares no gradient at all still returns False with a record saying
+  nothing was compared. `IQL (Implicit Q-Learning, rlkit actor)` in the classics corpus now
+  validates.
+- **validation**: every False verdict of `tl.validate(..., scope="backward")` now records a
+  structured failure: `last_validation_failure()` returns a record with `check="backward"` and
+  `extra["reason"]` naming the refusal or mismatch (`parameter_grad_mismatch` with the parameter
+  name and max diffs, `parameter_census_mismatch`, `module_output_grads` with the first mismatched
+  or uncaptured module call, `no_module_output_evidence`, `backward_coverage_gap`,
+  `no_parameter_gradients`, `degenerate_parameter_gradients`, `non_leaf_parameter`,
+  `pristine_oracle_unavailable`, `appended_trace`). Three of these paths used to return a bare
+  False with no warning either. A True backward verdict clears any earlier record.
+- **backward**: a second-order `torch.autograd.grad` inside forward (or a forward op applied to
+  a `create_graph` gradient and differentiated again) no longer fails forward validation on
+  `backward_graph_invariants` ("order 2 does not match creator order + 1 (3)"). GradFn order
+  assignment now runs the creator rule and the topology inference to a fixed point, so the nodes
+  created by differentiating an inferred-order node sit one order above it. The invariant is
+  unchanged.
 - **replay**: replay no longer refuses a template parent as "ambiguous across the 2 passes of
   that layer" when a fused multi-pass layer's public raw label equals another op's final label
   (each residual add pair of a Hugging Face Gemma-2 decoder layer); it resolves the exact op the
