@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+import torchlens.errors
 import torchlens.trackers as trk
 from torchlens.errors import HistorySchemaError
 from torchlens.trackers._errors import WatchConfigError, WatchRuntimeError
@@ -283,7 +284,7 @@ class TestLoudFailures:
 
         model, opt = _mlp()
         narrow = trk.MemorySink(capabilities=frozenset({"scalar", "text_manifest"}))
-        with pytest.raises(trk.SinkProtocolError) as info:
+        with pytest.raises(torchlens.errors.SinkProtocolError) as info:
             trk.watch(model, to=narrow, optimizer=opt, hist_every=10)
         assert info.value.fields["code"] == "tracker_sink_capability_missing"
         assert narrow.scalars == []

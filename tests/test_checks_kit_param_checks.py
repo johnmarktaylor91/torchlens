@@ -17,6 +17,8 @@ import torch
 import torch.nn as nn
 
 import torchlens.checks as tc
+import torchlens.errors
+from torchlens.checks import _adapters
 
 
 class _DeadNet(nn.Module):
@@ -162,7 +164,7 @@ def test_frozen_clone_raises_with_delta_evidence_and_aliases() -> None:
     try:
         optimizer.zero_grad()
         model(torch.randn(2, 4)).sum().backward()
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
     finally:
         session.detach()
@@ -202,7 +204,7 @@ def test_frozen_digest_optin_raises_on_proof_never_exact_pass() -> None:
             frozen_param[0, 0] += 1.0
         optimizer.zero_grad()
         model(torch.randn(2, 4)).sum().backward()
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
         assert exc.value.fields["finding"]["evidence"] == "digest"
         assert "probabilistic" in exc.value.fields["finding"]["message"]
@@ -302,7 +304,7 @@ def test_unknown_optimizer_band_unavailable_with_reason() -> None:
 
     model = nn.Linear(4, 2)
     optimizer = ExoticOptimizer(model.parameters(), lr=0.1)
-    facts = tc.optimizer_facts(optimizer)
+    facts = _adapters.optimizer_facts(optimizer)
     assert not facts.known
     assert "no adapter" in (facts.band_reason or "")
 
@@ -358,18 +360,18 @@ def test_registration_refusals_are_typed() -> None:
     model = nn.Linear(4, 2)
     session = tc.ChecksSession(model, torch.optim.SGD(model.parameters(), lr=0.1))
 
-    with pytest.raises(tc.CheckConfigError) as name_exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as name_exc:
         session.register_frozen_check(["ghost"])
     assert name_exc.value.fields["code"] == "check_within_unknown_name"
 
-    with pytest.raises(tc.CheckConfigError) as window_exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as window_exc:
         session.register_change_check(window=(9, 2))
     assert window_exc.value.fields["code"] == "check_window_invalid"
 
-    with pytest.raises(tc.CheckConfigError) as action_exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as action_exc:
         session.register_change_check(action="explode")
     assert action_exc.value.fields["code"] == "check_vocab_invalid"
 
-    with pytest.raises(tc.CheckConfigError) as evidence_exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as evidence_exc:
         session.register_frozen_check(["weight"], evidence="vibes")
     assert evidence_exc.value.fields["code"] == "check_vocab_invalid"

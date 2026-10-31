@@ -163,7 +163,7 @@ or inferred evidence never produces an exact pass.
 ```python
 import torchlens.checks as checks
 
-audit = checks.param_health(model)          # also: tl.debug.param_health(model)
+audit = torchlens.report.param_health(model)          # also: tl.debug.param_health(model)
 print(audit)                                # notebook-style summary
 assert not audit.findings                    # healthy fresh model
 ```
@@ -188,7 +188,7 @@ optimizer_state = {
     if isinstance(value, torch.Tensor)
 }
 if optimizer_state:
-    print(checks.param_health(optimizer_state))
+    print(torchlens.report.param_health(optimizer_state))
 ```
 
 ```python
@@ -196,7 +196,7 @@ if optimizer_state:
 optimizer.zero_grad()
 model(torch.randn(4, 8)).square().mean().backward()
 grads = {f"grad.{n}": p.grad for n, p in model.named_parameters() if p.grad is not None}
-grad_audit = checks.param_health(grads)
+grad_audit = torchlens.report.param_health(grads)
 print(f"{len(grad_audit.rows)} gradient tensors scanned, {len(grad_audit.findings)} findings")
 optimizer.zero_grad()
 ```

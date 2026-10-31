@@ -14,6 +14,7 @@ import torch.nn as nn
 
 import torchlens as tl
 import torchlens.checks as tc
+import torchlens.report
 
 
 def _tiny_trace() -> object:
@@ -65,7 +66,7 @@ def test_grad_magnitude_flagged_provoked() -> None:
 def test_param_bounds_violated_provoked() -> None:
     """Declared bounds catch an out-of-range parameter value."""
 
-    audit = tc.param_health({"w": torch.ones(4)}, bounds={"w": (0.0, 0.5)})
+    audit = torchlens.report.param_health({"w": torch.ones(4)}, bounds={"w": (0.0, 0.5)})
     codes = [f.code for f in audit.findings]
     assert "param_bounds_violated" in codes
 
@@ -74,7 +75,7 @@ def test_param_dtype_headroom_provoked() -> None:
     """Magnitudes within max_fraction of the fp16 finite max are flagged."""
 
     near_max = torch.full((4,), 60000.0, dtype=torch.float16)  # fp16 max is 65504
-    audit = tc.param_health({"w": near_max}, max_fraction=0.9)
+    audit = torchlens.report.param_health({"w": near_max}, max_fraction=0.9)
     codes = [f.code for f in audit.findings]
     assert "param_dtype_headroom" in codes
 
@@ -83,6 +84,6 @@ def test_param_subnormal_heavy_provoked() -> None:
     """A subnormal-dominated tensor trips the underflow signature."""
 
     subnormals = torch.full((8,), 1e-40)  # below the ~1.18e-38 fp32 normal floor
-    audit = tc.param_health({"w": subnormals}, subnormal_fraction_threshold=0.1)
+    audit = torchlens.report.param_health({"w": subnormals}, subnormal_fraction_threshold=0.1)
     codes = [f.code for f in audit.findings]
     assert "param_subnormal_heavy" in codes

@@ -18,6 +18,7 @@ import torch
 
 pytest.importorskip("torchvision")
 
+import torchlens.errors
 import torchlens.preprocessing as pp  # noqa: E402
 from torchlens.data_classes.trace import ResolvedPreprocessing  # noqa: E402
 
@@ -234,14 +235,14 @@ class TestAuditOracle:
     ) -> None:
         """Strict mode refuses BOTH failure kinds, distinctly typed."""
 
-        with pytest.raises(pp.PreprocessingAuditError) as mismatch_info:
+        with pytest.raises(torchlens.errors.PreprocessingAuditError) as mismatch_info:
             pp.audit(
                 resnet50_v2_resolution,
                 {"mean": [0.5] * 3, "std": [0.5] * 3},
                 strict=True,
             )
         assert mismatch_info.value.fields["code"] == "preprocessing_audit_mismatch"
-        with pytest.raises(pp.PreprocessingAuditError) as unknown_info:
+        with pytest.raises(torchlens.errors.PreprocessingAuditError) as unknown_info:
             pp.audit(detection_resolution, None, strict=True)
         assert unknown_info.value.fields["code"] == "preprocessing_audit_unknown"
 

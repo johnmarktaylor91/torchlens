@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+import torchlens.report
 from torchlens.backends.torch import _op_markers
 
 
@@ -137,11 +138,9 @@ def test_native_chrome_artifact_and_sidecar(tmp_path) -> None:
 
     import json
 
-    from torchlens import observability as obs
-
     model = nn.Sequential(nn.Linear(8, 8), nn.ReLU()).eval()
     path = tmp_path / "native.json"
-    result = obs.kernel_profile(model, torch.randn(2, 8), native_chrome_path=path)
+    result = torchlens.report.kernel_profile(model, torch.randn(2, 8), native_chrome_path=path)
     native = json.loads(path.read_text())
     assert "traceEvents" in native  # torch's own artifact, not rewritten
     sidecar = json.loads((tmp_path / "native.json.torchlens-map.json").read_text())

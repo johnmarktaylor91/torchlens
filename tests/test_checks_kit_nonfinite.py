@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 
 import torchlens.checks as tc
+import torchlens.errors
 from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
 if HAS_AMP_GRADSCALER:
@@ -65,7 +66,7 @@ def test_sb_raise_pre_write_without_scaler(dtype: torch.dtype, kind: str) -> Non
     try:
         optimizer.zero_grad()
         _poison_backward(model, kind, dtype)
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
     finally:
         session.detach()
@@ -119,7 +120,7 @@ def test_nan_backward_smear_sets_smeared_attribution() -> None:
     try:
         optimizer.zero_grad()
         model(torch.randn(4, 8)).sum().backward()
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
     finally:
         session.detach()
@@ -151,7 +152,7 @@ def test_clip_collateral_counted_and_disclosed() -> None:
         optimizer.zero_grad()
         _poison_backward(model, "inf", torch.float32)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
     finally:
         session.detach()
@@ -203,7 +204,7 @@ def test_param_space_nonfinite_routes_to_scheduled_scan() -> None:
             model[1].weight[0, 0] = float("nan")
         optimizer.zero_grad()
         model(torch.randn(4, 8)).sum().backward()
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
     finally:
         session.detach()

@@ -16,6 +16,7 @@ import pytest
 import torch
 
 import torchlens as tl
+import torchlens.errors
 import torchlens.trackers as trk
 
 
@@ -158,7 +159,7 @@ class TestTensorBoardIngestPin:
 
         trace, _ = conv_trace
         ir = trk.build_graph_ir(trace)
-        with pytest.raises(trk.SinkProtocolError) as info:
+        with pytest.raises(torchlens.errors.SinkProtocolError) as info:
             trk.graph_ir_to_tensorboard(ir, str(tmp_path / "tb"))
         assert info.value.fields["code"] == "tracker_sink_unavailable"
         assert "torchlens[tensorboard]" in info.value.fields["remedy"]

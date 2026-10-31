@@ -29,13 +29,7 @@ spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
 
 from __future__ import annotations
 
-from ._adapters import OptimizerFacts, optimizer_facts
-from ._constants import (
-    MAX_FRACTION_DEFAULT,
-    SUBNORMAL_FRACTION_THRESHOLD_DEFAULT,
-    WARN_WINDOW_DEFAULT,
-    WATCHDOG_FACTOR,
-)
+from ._adapters import OptimizerFacts
 from ._ledgers import (
     ClipLedger,
     ClipLedgerSnapshot,
@@ -46,33 +40,15 @@ from ._ledgers import (
 )
 from ._range import LivenessProbe, RangeProbe
 from ._records import (
-    ACTIONS,
-    CHECK_REPORT_SCHEMA_VERSION,
-    EVIDENCE_KINDS,
-    SCALE_PROVENANCE,
-    SEVERITIES,
-    STAGES,
     CheckFinding,
     CheckReport,
 )
-from ._scan import ScanRow, named_entries_from_target, scan_named_tensors, tensor_digest
-from ._session import HAS_MULTI_GRAD_HOOK, MAX_STORED_FINDINGS, ChecksSession
+from ._scan import ScanRow
+from ._session import ChecksSession
 
 __tl_layer__ = "L5"
 
 __all__ = [
-    "ACTIONS",
-    "CHECK_REPORT_SCHEMA_VERSION",
-    "EVIDENCE_KINDS",
-    "HAS_MULTI_GRAD_HOOK",
-    "MAX_FRACTION_DEFAULT",
-    "MAX_STORED_FINDINGS",
-    "SCALE_PROVENANCE",
-    "SEVERITIES",
-    "STAGES",
-    "SUBNORMAL_FRACTION_THRESHOLD_DEFAULT",
-    "WARN_WINDOW_DEFAULT",
-    "WATCHDOG_FACTOR",
     "CheckFinding",
     "CheckReport",
     "ChecksSession",
@@ -86,8 +62,4 @@ __all__ = [
     "ScanRow",
     "Watchdog",
     "WatchdogSnapshot",
-    "named_entries_from_target",
-    "optimizer_facts",
-    "scan_named_tensors",
-    "tensor_digest",
 ]

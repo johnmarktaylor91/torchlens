@@ -29,6 +29,7 @@ import transformers.models.llama.modeling_llama as llama_modeling  # noqa: E402
 from transformers import LlamaConfig, LlamaForCausalLM  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+import torchlens.errors
 import torchlens.mechinterp as mi  # noqa: E402
 import torchlens.tviz as tviz  # noqa: E402
 from torchlens.errors._base import TorchLensWarning  # noqa: E402
@@ -313,7 +314,7 @@ def test_interceptor_receipt_discloses_effect_source_and_annotates(
     assert annotation.heads == (0, 1, 2, 3)
     assert annotation.values == receipt.effects
 
-    with pytest.raises(tviz.RenderError) as excinfo:
+    with pytest.raises(torchlens.errors.RenderError) as excinfo:
         tviz.receipt_from_patch_grid(
             value_grid,
             layer=LAYERS[0],
