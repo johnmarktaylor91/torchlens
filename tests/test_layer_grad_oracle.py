@@ -633,7 +633,7 @@ def test_per_module_output_oracle_basic() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
     _assert_acceptance(report)
 
@@ -722,7 +722,7 @@ def test_nested_module_parent_and_child_outputs_are_covered() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
     assert report.coverage["0.1:1"] == "covered"
     assert report.coverage["0:1"] == "covered"
@@ -739,7 +739,7 @@ def test_identity_output_modules_are_skipped() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
     assert report.coverage["identity:1"] == "skipped_identity_output"
     assert report.skipped_identity_output_count == 1
@@ -756,7 +756,7 @@ def test_near_identity_output_modules_are_covered() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
 
     assert report.coverage["near:1"] == "covered"
@@ -810,7 +810,7 @@ def test_weight_tied_module_call_indices_are_separate() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
     assert report.coverage["shared:1"] == "covered"
     assert report.coverage["shared:2"] == "covered"
@@ -827,7 +827,7 @@ def test_oracle_rnn_3_step() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
     _assert_acceptance(report)
 
@@ -851,7 +851,7 @@ def test_oracle_resnet50_eval() -> None:
         lambda output: output.float().sum(),
         atol=1e-4,
         rtol=1e-3,
-        random_seed=42,
+        seed=42,
     )
     _assert_acceptance(report)
 
@@ -914,7 +914,7 @@ def test_oracle_gpt2_small_forward_backward() -> None:
         gpt2_loss,
         atol=1e-4,
         rtol=1e-3,
-        random_seed=42,
+        seed=42,
     )
     _assert_acceptance(report)
 

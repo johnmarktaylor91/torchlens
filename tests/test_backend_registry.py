@@ -812,7 +812,7 @@ def test_tf_backend_rejects_random_seed_without_importing_tensorflow() -> None:
     """TensorFlow preview random_seed is a typed unsupported option."""
 
     with pytest.raises(BackendUnsupportedError, match="random_seed"):
-        TFBackend().capture_trace(lambda x: x, object(), random_seed=123)
+        TFBackend().capture_trace(lambda x: x, object(), seed=123)
 
 
 def test_paddle_shared_capture_backend_is_unsupported_typed_error() -> None:

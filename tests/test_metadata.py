@@ -1221,13 +1221,13 @@ def test_flops_sdpa():
 # =============================================================================
 
 
-def _get_code_context_with_flag(small_input, save_code_context: bool):
+def _get_code_context_with_flag(small_input, save_source_context: bool):
     """Helper: return a non-input layer's code_context for either source-loading mode."""
     model = example_models.SimpleFF()
     mh = trace_fn(
         model,
         small_input,
-        capture=tl.options.CaptureOptions(save_source_context=save_code_context),
+        capture=tl.options.CaptureOptions(save_source_context=save_source_context),
     )
     for label in mh.layer_labels:
         entry = mh[label]
@@ -1238,7 +1238,7 @@ def _get_code_context_with_flag(small_input, save_code_context: bool):
 
 def _get_code_context(small_input):
     """Helper: run a model and return the code_context from a non-input layer."""
-    return _get_code_context_with_flag(small_input, save_code_context=True)
+    return _get_code_context_with_flag(small_input, save_source_context=True)
 
 
 # --- Class structure ---
@@ -1336,7 +1336,7 @@ def test_repr_source_unavailable():
 
 
 def test_func_call_location_no_source_state_with_save_code_context_off(small_input, monkeypatch):
-    stack, mh = _get_code_context_with_flag(small_input, save_code_context=False)
+    stack, mh = _get_code_context_with_flag(small_input, save_source_context=False)
     assert isinstance(stack, list)
     assert len(stack) > 0
     captured_entries = [
@@ -1631,9 +1631,9 @@ class TestConditionalBranchDetection:
     # --- Shared helpers ---
 
     @staticmethod
-    def _log(model, x, save_code_context=False):
+    def _log(model, x, save_source_context=False):
         return trace_fn(
-            model, x, capture=tl.options.CaptureOptions(save_source_context=save_code_context)
+            model, x, capture=tl.options.CaptureOptions(save_source_context=save_source_context)
         )
 
     @staticmethod
@@ -1661,14 +1661,14 @@ class TestConditionalBranchDetection:
         Uses positive input so the if-body (THEN branch) actually executes.
         """
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_code_context=True)
+        mh = self._log(model, self._pos_input(), save_source_context=True)
         found = any(len(mh[label].conditional_then_children) > 0 for label in mh.layer_labels)
         assert found, "Should detect THEN branch children with save_code_context"
 
     def test_branch_start_has_both_if_and_then(self):
         """Branch start has both IF and THEN children when if-body executes."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_code_context=True)
+        mh = self._log(model, self._pos_input(), save_source_context=True)
         for label in mh.layer_labels:
             entry = mh[label]
             if entry.conditional_entry_children:
@@ -1679,7 +1679,7 @@ class TestConditionalBranchDetection:
     def test_if_and_then_children_disjoint(self):
         """No overlap between IF and THEN children sets."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_code_context=True)
+        mh = self._log(model, self._pos_input(), save_source_context=True)
         for label in mh.layer_labels:
             entry = mh[label]
             if_set = set(entry.conditional_entry_children)
@@ -1739,7 +1739,7 @@ class TestConditionalBranchDetection:
     def test_conditional_then_arm_edges_populated(self):
         """Canonical THEN arm edges non-empty with save_code_context."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_code_context=True)
+        mh = self._log(model, self._pos_input(), save_source_context=True)
         then_edges = [
             edge
             for (_, branch_kind), edges in mh.conditional_arm_entry_edges.items()
@@ -1751,7 +1751,7 @@ class TestConditionalBranchDetection:
     def test_edges_reference_valid_labels(self):
         """All labels in edge tuples exist in trace.layer_labels."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_code_context=True)
+        mh = self._log(model, self._pos_input(), save_source_context=True)
         all_labels = set(mh.layer_labels)
         for parent, child in mh.conditional_branch_edges:
             assert parent in all_labels, f"IF edge parent {parent} not in layer_labels"
@@ -1767,7 +1767,7 @@ class TestConditionalBranchDetection:
         """ConditionalNoBranch: post-validation clears false IF markings."""
         model = example_models.ConditionalNoBranch()
         x = torch.rand(2, 3, 32, 32)
-        mh = self._log(model, x, save_code_context=True)
+        mh = self._log(model, x, save_source_context=True)
         # After post-validation, if no ast.If found, IF markings cleared
         branch_starts = [
             label for label in mh.layer_labels if len(mh[label].conditional_entry_children) > 0
@@ -1780,7 +1780,7 @@ class TestConditionalBranchDetection:
         """ConditionalAlwaysTrue still detects THEN branch."""
         model = example_models.ConditionalAlwaysTrue()
         x = torch.rand(2, 3, 32, 32)
-        mh = self._log(model, x, save_code_context=True)
+        mh = self._log(model, x, save_source_context=True)
         found = any(len(mh[label].conditional_then_children) > 0 for label in mh.layer_labels)
         assert found, "ConditionalAlwaysTrue should detect THEN branch"
 
@@ -1891,7 +1891,7 @@ class TestConditionalBranchDetection:
     def test_cond_fields_survive_deepcopy(self):
         """Fields persist through Trace deepcopy cycle."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_code_context=True)
+        mh = self._log(model, self._pos_input(), save_source_context=True)
         mh2 = copy.deepcopy(mh)
         assert mh2.conditional_branch_edges == mh.conditional_branch_edges
         assert mh2.conditional_arm_entry_edges == mh.conditional_arm_entry_edges
@@ -1904,14 +1904,14 @@ class TestConditionalBranchDetection:
     def test_if_detection_works_without_source_context(self):
         """Bug #88 fix works without save_code_context."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._cond_input(), save_code_context=False)
+        mh = self._log(model, self._cond_input(), save_source_context=False)
         found = any(mh[label].is_in_conditional_body for label in mh.layer_labels)
         assert found, "IF detection should work without source context"
 
     def test_then_empty_without_source_context(self):
         """conditional_then_children stays empty when save_code_context=False."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._cond_input(), save_code_context=False)
+        mh = self._log(model, self._cond_input(), save_source_context=False)
         for label in mh.layer_labels:
             assert len(mh[label].conditional_then_children) == 0, (
                 f"THEN children should be empty without source context: {label}"

@@ -159,7 +159,7 @@ class ManualEdgeModel(nn.Module):
         a = self.fc1(x)
         b = self.fc2(x)
         # Public amendment channel: graph_edge_insertion family.
-        tl.register_tensor_connection(a, b)
+        tl.observers.register_tensor_connection(a, b)
         return a + b
 
 

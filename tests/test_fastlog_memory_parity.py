@@ -24,7 +24,7 @@ class ManyOps(nn.Module):
 def test_fastlog_nonmatching_ops_do_not_materialize_oplogs() -> None:
     """Non-matching fastlog events stay lightweight and have no Op bridge."""
 
-    recording = tl.fastlog.record(ManyOps(), torch.ones(1), save=lambda ctx: False)
+    recording = tl.record(ManyOps(), torch.ones(1), save=lambda ctx: False)
     events = recording.lazy_trace.events
     op_events = recording._capture_events.op_events  # noqa: SLF001
 

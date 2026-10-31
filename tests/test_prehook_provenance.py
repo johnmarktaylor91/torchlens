@@ -573,7 +573,7 @@ def test_record_to_trace_ram_and_disk_preserve_provenance(tmp_path: Path) -> Non
     ):
         model = _Nested()
         model.child.register_forward_pre_hook(lambda _m, args: (args[0] + 1,))
-        recording = tl.fastlog.record(model, torch.ones(1), default_op=True, streaming=streaming)
+        recording = tl.record(model, torch.ones(1), default_op=True, streaming=streaming)
         trace = recording.to_trace()
         assert torch.equal(_call(trace).inputs_after_pre_hooks.args[0], torch.tensor([2.0]))
 

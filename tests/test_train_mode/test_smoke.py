@@ -56,7 +56,7 @@ def test_save_new_outs_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
 def test_fastlog_record_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
     """fastlog record backward_ready keeps recorded payloads differentiable."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,

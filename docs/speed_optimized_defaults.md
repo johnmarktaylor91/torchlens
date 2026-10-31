@@ -57,7 +57,7 @@ windowed = tl.trace(
 streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 ```
 
-`tl.fastlog.record(...)` remains available as a torch compatibility path; `record(save=...)`
+`tl.record(...)` remains available as a torch compatibility path; `record(save=...)`
 is the only predicate spelling (the old alias kwargs are removed). Keep predicate
 functions small and deterministic because they run in the logging hot path.
 

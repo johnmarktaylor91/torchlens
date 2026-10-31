@@ -665,7 +665,7 @@ def validate_backward_pass(
                         stock_inputs,
                         stock_kwargs,
                         loss_fn=loss_fn,
-                        random_seed=seed,
+                        seed=seed,
                         state_dict_snapshot=state_dict,
                     )
                 else:

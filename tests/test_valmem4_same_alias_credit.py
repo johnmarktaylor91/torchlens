@@ -258,7 +258,7 @@ def _validate_corrupted(corrupt: Any) -> tuple[bool, list[str]]:
     ):
         warnings.simplefilter("ignore")
         verdict = _user_public_impls._validate_forward_pass_torch(
-            model, x, random_seed=0, output_device="same", _trace_observer=observe
+            model, x, seed=0, output_device="same", _trace_observer=observe
         )
     return bool(verdict), checks
 

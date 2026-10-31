@@ -14,13 +14,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import (
-    bisect_precision,
-    compare_rows,
-    first_divergence,
-    isolated_capture,
-    preserved_rng_state,
-)
+from torchlens.debug import bisect_precision, compare_rows, first_divergence, preserved_rng_state
+from torchlens.report import isolated_capture
 
 
 class _TanhThenAdd(nn.Module):

@@ -37,7 +37,7 @@ def _input() -> torch.Tensor:
 def test_recording_log_backward_grad_fn_id_link() -> None:
     """Fastlog joins a ReLU grad_fn_handle back to its forward RecordContext."""
 
-    out, recording = tl.fastlog.record(
+    out, recording = tl.record(
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
@@ -56,7 +56,7 @@ def test_recording_log_backward_grad_fn_id_link() -> None:
 def test_recording_log_backward_intervening_grad_fn() -> None:
     """Callable save_grads can capture an intervening grad_fn_handle as metadata."""
 
-    out, recording = tl.fastlog.record(
+    out, recording = tl.record(
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
@@ -79,7 +79,7 @@ def test_recording_log_backward_intervening_grad_fn() -> None:
 def test_recording_log_backward_disk_only_rejects_save_grads(tmp_path: Path) -> None:
     """Static save_grads=True rejects disk-only storage before backward runs."""
 
-    out, recording = tl.fastlog.record(
+    out, recording = tl.record(
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
@@ -96,7 +96,7 @@ def test_recording_log_backward_disk_only_rejects_save_grads(tmp_path: Path) -> 
 def test_recording_log_backward_disk_only_dynamic_save_grads_resolves(tmp_path: Path) -> None:
     """Dynamic save_grads predicates hit the late storage resolver gate."""
 
-    out, recording = tl.fastlog.record(
+    out, recording = tl.record(
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
@@ -133,7 +133,7 @@ def test_fastlog_keep_grad_selector_is_removed() -> None:
     """Fastlog backward capture uses save_grads, with no keep_grad alias."""
 
     with pytest.raises(TypeError, match="keep_grad"):
-        tl.fastlog.record(
+        tl.record(
             TinyRelu(),
             _input(),
             save=lambda ctx: ctx.label == "relu_1",
@@ -141,7 +141,7 @@ def test_fastlog_keep_grad_selector_is_removed() -> None:
             return_output=True,
         )
 
-    out, recording = tl.fastlog.record(
+    out, recording = tl.record(
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",

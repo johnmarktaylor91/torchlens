@@ -43,7 +43,7 @@ class _FrontierModel(nn.Module):
         return self.b(x)
 
 
-def _failed_partial() -> tl.fastlog.Recording:
+def _failed_partial() -> tl.Recording:
     """Capture the failed partial recording for the frontier model."""
 
     with pytest.warns(RuntimeWarning, match="capture attempt failed"):

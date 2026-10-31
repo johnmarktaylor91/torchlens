@@ -29,7 +29,7 @@ def _inputs() -> list[torch.Tensor]:
     return [torch.randn(1, 3, generator=generator) for _ in range(3)]
 
 
-def _record_passes(save, **recorder_kwargs) -> tl.fastlog.Recording:
+def _record_passes(save, **recorder_kwargs) -> tl.Recording:
     model = _model()
     with Recorder(model, save=save, **recorder_kwargs) as recorder:
         for x in _inputs():

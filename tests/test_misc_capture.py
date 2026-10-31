@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import torch
-
 import torchlens as tl
 
 
@@ -16,15 +14,6 @@ def test_register_op_rule_affects_flops() -> None:
     from torchlens.capture.flops import compute_forward_flops
 
     assert compute_forward_flops("custom_test_op", (1,), [], (), {}) == 123
-
-
-def test_decide_recording_of_batch_marks_discarded() -> None:
-    """Retroactive batch decision can discard a log."""
-
-    log = tl.trace(torch.nn.ReLU(), torch.ones(1, 2))
-    kept = tl.decide_recording_of_batch(log, lambda _log: False)
-    assert kept is False
-    assert log.recording_kept is False
 
 
 def test_fastlog_grad_capture_spec() -> None:

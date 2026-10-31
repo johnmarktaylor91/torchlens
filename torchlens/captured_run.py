@@ -52,7 +52,7 @@ class ActivationLookup(Protocol[ActivationT]):
         """Return activation records captured at a module/buffer address."""
 
 
-class CapturedRun:
+class TraceLike:
     """Small shared base for uncooked and cooked capture projections."""
 
     @property
@@ -280,3 +280,6 @@ class CapturedRun:
         if hasattr(activation, "ram_payload"):
             return getattr(activation, "ram_payload", None)
         return getattr(activation, "out", None)
+
+
+__all__ = ["ActivationLookup"]

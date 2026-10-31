@@ -23,7 +23,6 @@ TARGET_ALL = [
     "record",
     "Recording",
     "ActivationLookup",
-    "CapturedRun",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "load",
@@ -38,9 +37,6 @@ TARGET_ALL = [
     "extract_dataset",
     "load_extraction",
     "validate",
-    "decide_recording_of_batch",
-    "record_kpi_in_graph",
-    "register_tensor_connection",
     "show_bundle_graph",
     "summary",
     "options",
@@ -186,7 +182,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     `span`; removes `sites` = 76. Internal sprint 2 adds `export` and
     `AmbiguousOpLookupError` = 78. Tech-debt sprint adds
     `ReentrantTraceError` = 79. Capture unification and backward/public option
-    follow-ups add `ActivationLookup`, `CapturedRun`, `decide_recording_of_batch`,
+    follow-ups add `ActivationLookup`, `TraceLike`, `decide_recording_of_batch`,
     `record_kpi_in_graph`, `register_tensor_connection`, `show_bundle_graph`,
     `options`, `to_disk`, `grad_input`, `grad_output`, and `in_backward_pass` = 90.
     The provisional structural-hash namespace and CI tripwire add `hash` and

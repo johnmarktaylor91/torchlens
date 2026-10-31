@@ -10,8 +10,9 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+from torchlens import Recording
 from torchlens._trace_state import TraceState
-from torchlens.fastlog import RecordContext, Recording
+from torchlens.fastlog import RecordContext
 from torchlens.options import CaptureOptions
 
 
@@ -175,7 +176,7 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
     else:
         output, recording = cast(
             tuple[torch.Tensor, Recording],
-            tl.fastlog.record(
+            tl.record(
                 LinearRelu(),
                 torch.ones(1, 4),
                 save=tl.func("linear"),

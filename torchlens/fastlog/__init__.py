@@ -20,9 +20,7 @@ _LAZY_ATTRS = {
     "PredicateError": ("torchlens.fastlog.exceptions", "PredicateError"),
     "Recorder": ("torchlens.fastlog._recorder", "Recorder"),
     "RecorderStateError": ("torchlens.fastlog.exceptions", "RecorderStateError"),
-    "Recording": ("torchlens.fastlog.types", "Recording"),
     "RecordingConfigError": ("torchlens.fastlog.exceptions", "RecordingConfigError"),
-    "RecordingOptions": ("torchlens.fastlog.options", "RecordingOptions"),
     "DryRun": ("torchlens.fastlog.types", "DryRun"),
     "RecordContext": ("torchlens.fastlog.types", "RecordContext"),
     "RecordContextFieldError": ("torchlens.fastlog.exceptions", "RecordContextFieldError"),
@@ -33,7 +31,6 @@ _LAZY_ATTRS = {
     "stop": ("torchlens.fastlog._halt", "stop"),
     "load": ("torchlens.fastlog.recover", "load"),
     "recover": ("torchlens.fastlog.recover", "recover"),
-    "record": ("torchlens.fastlog._record_one_shot", "record"),
 }
 
 __all__ = [
@@ -49,9 +46,7 @@ __all__ = [
     "PredicateError",
     "Recorder",
     "RecorderStateError",
-    "Recording",
     "RecordingConfigError",
-    "RecordingOptions",
     "DryRun",
     "RecordContext",
     "RecordContextFieldError",
@@ -63,7 +58,6 @@ __all__ = [
     "load",
     "preview",
     "recover",
-    "record",
 ]
 
 

@@ -412,7 +412,7 @@ def _run_compiled_aggregate_batch(
     # data_classes -> stats import edge puts this module inside an import
     # SCC where mypy degrades facade names to implicit-Any and refuses the
     # call ("_Any? not callable").
-    from ..fastlog import record
+    from ..fastlog._record_one_shot import record
 
     wanted = frozenset(plan.sites.values())
     cursor = _RecordStreamCursor()

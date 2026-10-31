@@ -76,7 +76,7 @@ from .._runnable_seam import (
 from .._save_budget import SaveBudget, SaveBudgetOption
 from .._trace_state import TraceState
 from ..backends import BackendName
-from ..captured_run import CapturedRun
+from ..captured_run import TraceLike
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
 from ..intervention.types import (
     MODEL_LOG_FIELD_FORK_POLICY,
@@ -893,7 +893,7 @@ class Trace(
     TraceExportMixin,
     TraceVisualizationMixin,
     TraceNarrateMixin,
-    CapturedRun,
+    TraceLike,
 ):
     """Top-level container for a logged forward pass.
 

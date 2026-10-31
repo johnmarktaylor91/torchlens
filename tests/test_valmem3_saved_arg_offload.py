@@ -137,7 +137,7 @@ def _validation_capture(
         warnings.simplefilter("ignore")
         try:
             verdict = _user_public_impls._validate_forward_pass_torch(
-                model, x, random_seed=0, output_device=output_device, _trace_observer=observe
+                model, x, seed=0, output_device=output_device, _trace_observer=observe
             )
         except Exception as exc:  # a raised validation failure is compared by its type
             return False, [*failures, f"raised {type(exc).__name__}"]

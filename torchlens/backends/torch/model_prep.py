@@ -945,7 +945,7 @@ def _capture_module_metadata(
     # mutable fields (all_addresses, custom_attributes, custom_methods) are replaced
     # below with fresh instances per module, so no cross-contamination.
     save_source = getattr(trace, "save_code_context", False)
-    class_meta = _get_class_metadata(type(module), save_code_context=save_source)
+    class_meta = _get_class_metadata(type(module), save_source_context=save_source)
     meta = dict(class_meta)
     meta["all_addresses"] = [address]
 

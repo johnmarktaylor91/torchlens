@@ -19,7 +19,7 @@ def test_predicate_exception_propagates() -> None:
         raise RuntimeError(f"stop at {ctx.label}")
 
     with pytest.raises(RuntimeError, match="stop at"):
-        tl.fastlog.record(
+        tl.record(
             nn.Sequential(nn.Linear(3, 3), nn.ReLU()),
             torch.ones(1, 3),
             save=keep_op,
@@ -36,7 +36,7 @@ def test_predicate_exception_accumulate_preserved() -> None:
         raise RuntimeError(f"bad predicate at {ctx.label}")
 
     with pytest.raises(PredicateError, match="fastlog predicate failed"):
-        tl.fastlog.record(
+        tl.record(
             nn.Sequential(nn.Linear(3, 3), nn.ReLU()),
             torch.ones(1, 3),
             save=keep_op,

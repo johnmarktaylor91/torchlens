@@ -95,7 +95,7 @@ def test_validation_passes_with_weight_norm_captured(model_cls: type[nn.Module])
         RuntimeWarning, match="could not deepcopy the model|model could not be copied"
     ):
         passed = _validate_forward_pass_torch(
-            model_cls(), [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
+            model_cls(), [torch.randn(1, 4, 8)], {}, seed=0, validate_metadata=True
         )
     assert passed, tl.validation.last_validation_failure()
 

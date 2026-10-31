@@ -1379,29 +1379,6 @@ def _model_for_validation_replay(
             return model, None, False
 
 
-def decide_recording_of_batch(trace: Trace, predicate: Callable[[Trace], bool]) -> bool:
-    """Retroactively keep or discard a captured batch log.
-
-    Parameters
-    ----------
-    trace:
-        Captured log to decide on.
-    predicate:
-        Callable receiving the log and returning whether to keep it.
-
-    Returns
-    -------
-    bool
-        True when the log was kept.
-    """
-
-    keep = bool(predicate(trace))
-    if not keep:
-        trace.cleanup()
-    trace.recording_kept = keep
-    return keep
-
-
 def _qualname_for_model(model: nn.Module) -> str:
     """Return a stable class name for relationship evidence.
 

@@ -30,10 +30,10 @@ class PersistenceModel(nn.Module):
         return torch.relu(self.linear(x))
 
 
-def _write_bundle(path: Path) -> tl.fastlog.Recording:
+def _write_bundle(path: Path) -> tl.Recording:
     """Write a finalized disk-only bundle."""
 
-    return tl.fastlog.record(
+    return tl.record(
         PersistenceModel(),
         torch.ones(1, 3),
         default_op=True,
@@ -48,7 +48,7 @@ def _copy_bundle(source: Path, destination: Path) -> Path:
     return destination
 
 
-def _labels(recording: tl.fastlog.Recording) -> list[str]:
+def _labels(recording: tl.Recording) -> list[str]:
     """Return record labels for equality checks."""
 
     return [record.ctx.label for record in recording.records]
@@ -372,7 +372,7 @@ def test_disk_roundtrip_label_index_deduplicates_same_raw_label(tmp_path: Path) 
     """Disk label indexes persist one entry when ``label == raw_label``."""
 
     bundle_path = tmp_path / "dedup.tlfast"
-    recording = tl.fastlog.record(
+    recording = tl.record(
         PersistenceModel(),
         torch.ones(1, 3),
         save=tl.func("relu"),
@@ -433,7 +433,7 @@ def test_disk_finalize_baseexception_marks_partial(
 
     bundle_path = tmp_path / "interrupted.tlfast"
     with pytest.raises(KeyboardInterrupt):
-        tl.fastlog.record(
+        tl.record(
             PersistenceModel(),
             torch.ones(1, 3),
             default_op=True,
@@ -463,7 +463,7 @@ def test_disk_finalize_refuses_concurrently_created_target(
     monkeypatch.setattr(storage_disk_module, "_build_fastlog_manifest", _race_then_build)
 
     with pytest.raises(TorchLensIOError, match="already exists"):
-        tl.fastlog.record(
+        tl.record(
             PersistenceModel(),
             torch.ones(1, 3),
             default_op=True,

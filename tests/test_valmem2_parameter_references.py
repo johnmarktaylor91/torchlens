@@ -45,7 +45,7 @@ def _validate(model: nn.Module, x: torch.Tensor) -> tuple[bool, list[Any], int]:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             verdict = _user_public_impls._validate_forward_pass_torch(
-                model, x, random_seed=0, _trace_observer=observe
+                model, x, seed=0, _trace_observer=observe
             )
     finally:
         handle.remove()
@@ -58,7 +58,7 @@ def _copy_only_verdict(model: nn.Module, x: torch.Tensor) -> bool:
     unwrapped: Callable[..., bool] = _user_public_impls._validate_forward_pass_torch.__wrapped__  # type: ignore[attr-defined]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return bool(unwrapped(model, x, random_seed=0))
+        return bool(unwrapped(model, x, seed=0))
 
 
 def _fallbacks(diagnostics: list[Any]) -> list[Any]:

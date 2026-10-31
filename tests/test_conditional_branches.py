@@ -1255,7 +1255,7 @@ def _render_dot_source(
     tuple[str, Trace]
         Rendered DOT source and the populated model log.
     """
-    trace = _log_model(model, x, save_code_context=True)
+    trace = _log_model(model, x, save_source_context=True)
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = f"{tmpdir}/conditional_branch_matrix"
         dot_source = trace.draw(
@@ -1894,7 +1894,7 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
     trace = _log_model(
         SaveSourceContextOffModel(),
         torch.ones(2, 2),
-        save_code_context=False,
+        save_source_context=False,
     )
     event = _get_root_event(trace)
     relu_layer = _find_only_layer(trace, "relu")
@@ -1950,7 +1950,7 @@ def test_save_code_context_off_assert_model_has_no_false_positive_if_edges() -> 
     trace = _log_model(
         SaveSourceContextOffAssertModel(),
         torch.ones(2, 2),
-        save_code_context=False,
+        save_source_context=False,
     )
     bool_layer = _get_terminal_bool_layers(trace)[0]
 

@@ -40,7 +40,7 @@ def test_train_mode_disk_only_fastlog_errors(tmp_path: Path) -> None:
     """Fastlog backward_ready keeps the existing disk-only RecordingConfigError."""
 
     with pytest.raises(RecordingConfigError, match="disk-only"):
-        tl.fastlog.record(
+        tl.record(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
             backward_ready=True,

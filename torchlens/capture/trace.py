@@ -675,20 +675,20 @@ def save_new_outs(
         activation_transform=getattr(self, "activation_transform", None),
         grad_transform=getattr(self, "grad_transform", None),
         save_raw_activations=getattr(self, "save_raw_activations", True),
-        save_raw_gradients=getattr(self, "save_raw_gradients", True),
+        save_raw_grads=getattr(self, "save_raw_gradients", True),
         save_mode=getattr(self, "save_mode", "copy"),
         capture_tensor_grad_hooks=getattr(self, "capture_tensor_grad_hooks", True),
         keep_orphans=getattr(self, "keep_orphans", False),
         mark_layer_depths=getattr(self, "mark_layer_depths", False),
         detach_saved_activations=getattr(self, "detach_saved_activations", False),
-        save_arg_values=getattr(self, "save_arg_values", False),
+        save_args=getattr(self, "save_arg_values", False),
         save_grads=save_grads_policy not in (None, False),
         grads_to_save=grad_layers_to_save,
-        random_seed=refresh_seed,
+        seed=refresh_seed,
         num_context_lines=getattr(self, "num_context_lines", 7),
         optimizer=getattr(self, "_optimizer", None),
-        save_code_context=getattr(self, "save_code_context", False),
-        save_rng_states=getattr(self, "save_rng_states", False),
+        save_source_context=getattr(self, "save_code_context", False),
+        save_rng=getattr(self, "save_rng_states", False),
         recurrence_detection=getattr(self, "recurrence_detection", True),
         verbose=getattr(self, "verbose", False),
         backward_ready=getattr(self, "backward_ready", False),
@@ -704,7 +704,7 @@ def save_new_outs(
         # A refresh measures CPU peaks only if the source opted in.
         measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),
         output_transform=getattr(self, "_output_transform", None),
-        save_raw_output=getattr(self, "save_raw_output", "small"),
+        save_transformed_output=getattr(self, "save_raw_output", "small"),
         retain_output_parents_for_layers_to_save=True,
         _resolved_layer_nums_to_save=resolved_layer_nums,
         _resolved_grad_layer_nums_to_save=(
@@ -1429,7 +1429,7 @@ def _settle_interrupted_halted_arm(
             capture_session,
             interrupt_exc,
             interrupted=True,
-            settlement_note=(
+            note=(
                 "interrupted during halted finalization after halt at "
                 f"{getattr(halt_exc, 'reason', '')!r}"
             ),
@@ -1773,7 +1773,7 @@ def run_and_log_inputs_through_model(
             capture_mode=str(self.capture_mode),
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
-            random_seed=random_seed,
+            seed=random_seed,
             postprocess=postprocess,
             stop=self._stop_directive,
         )
@@ -1783,7 +1783,7 @@ def run_and_log_inputs_through_model(
             backend_name=str(_backend_name_for_trace(self)),
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
-            random_seed=random_seed,
+            seed=random_seed,
             postprocess=postprocess,
         )
         attach_capture_events_session(capture_events, capture_session)
@@ -2130,7 +2130,7 @@ def run_and_log_inputs_through_model(
                     self,
                     capture_session,
                     secondary_exc,
-                    settlement_note=(
+                    note=(
                         "halted finalization failed after halt at "
                         f"{getattr(halt_exc, 'reason', '')!r}"
                     ),
@@ -2173,9 +2173,7 @@ def run_and_log_inputs_through_model(
                 self,
                 capture_session,
                 secondary_exc,
-                settlement_note=(
-                    f"halted cleanup failed after halt at {getattr(halt_exc, 'reason', '')!r}"
-                ),
+                note=(f"halted cleanup failed after halt at {getattr(halt_exc, 'reason', '')!r}"),
             )
             _scrub_failed_capture_transients(self)
             raise
@@ -2254,7 +2252,7 @@ def run_and_log_inputs_through_model(
             # pre-settlement arms. The transient scrub runs after settlement
             # (R11/R32: the escaping partial must not pin live input tensors
             # or the payload-bearing event stream).
-            settle_failed(self, capture_session, e, n_ops_committed=committed_ops)
+            settle_failed(self, capture_session, e, num_committed_ops=committed_ops)
             _scrub_failed_capture_transients(self)
         raise e
 
@@ -2294,7 +2292,7 @@ def run_and_log_inputs_through_model(
                     capture_session,
                     interrupt_exc,
                     interrupted=True,
-                    n_ops_committed=committed_ops,
+                    num_committed_ops=committed_ops,
                 )
                 _scrub_failed_capture_transients(self)
             except Exception as settle_exc:

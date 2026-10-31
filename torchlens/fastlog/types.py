@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 import torch
 
 from .._errors import CaptureContextError, InvalidArgumentError
-from ..captured_run import CapturedRun
+from ..captured_run import TraceLike
 from ..ir.predicate import EventKind, ModuleStackFrame, RecordContext, RetroactiveCaptureDecision
 from ..utils.tensor_utils import SaveMode
 
@@ -459,7 +459,7 @@ _RAW_METADATA_FIELDS = (
 
 
 @dataclass(frozen=True, slots=True)
-class Recording(CapturedRun):
+class Recording(TraceLike):
     """Result of a fastlog recording session.
 
     Notes

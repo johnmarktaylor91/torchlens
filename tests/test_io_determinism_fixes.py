@@ -148,8 +148,8 @@ def test_save_scrub_remaps_process_local_identity_tokens(tmp_path: Path) -> None
 
     first_path = tmp_path / "first.tlspec"
     second_path = tmp_path / "second.tlspec"
-    first = _save_seeded_trace(first_path, random_seed=1)
-    second = _save_seeded_trace(second_path, random_seed=2)
+    first = _save_seeded_trace(first_path, seed=1)
+    second = _save_seeded_trace(second_path, seed=2)
 
     first_param_ops = [op for op in first.layer_list if op.uses_params]
     second_param_ops = [op for op in second.layer_list if op.uses_params]

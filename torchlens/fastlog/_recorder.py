@@ -339,14 +339,14 @@ class Recorder:
             on_predicate_error=on_predicate_error,
             on_forward_error=on_forward_error,
             streaming=streaming,
-            random_seed=seed,
+            seed=seed,
             activation_transform=activation_transform,
             save_raw_activations=save_raw_activations,
             save_grads=save_grads,
             default_grad=default_grad,
             grad_transform=grad_transform,
-            save_raw_gradients=save_raw_grads,
-            echo=echo_normalized if echo_normalized is not None else MISSING,
+            save_raw_grads=save_raw_grads,
+            narrate=echo_normalized if echo_normalized is not None else MISSING,
             detach_saved_activations=detach_saved_activations,
         )
         validate_recording_options(self.options)
@@ -516,7 +516,7 @@ class Recorder:
             # grad_transform and save_raw_gradients on every Recorder /
             # record() backward (explorer rider: Recorder backward coverage).
             grad_transform=self.options.grad_transform,
-            save_raw_grads=self.options.save_raw_gradients,
+            save_raw_grads=self.options.save_raw_grads,
             detach_saved_activations=False,
             capture_tensor_grad_hooks=self._backward_requested,
             backward_ready=True,
@@ -536,7 +536,7 @@ class Recorder:
             capture_mode="predicate",
             layers_to_save=[],
             grad_layers_to_save=[],
-            random_seed=self.options.seed,
+            seed=self.options.seed,
             postprocess=False,
             stop=trace._stop_directive,
         )
@@ -561,7 +561,7 @@ class Recorder:
                     input_kwargs,
                     layers_to_save=[],
                     grad_layers_to_save=[],
-                    random_seed=self.options.seed,
+                    seed=self.options.seed,
                     postprocess=False,
                     reservation_resume=reservation_token,
                 )
@@ -825,7 +825,7 @@ class Recorder:
             CaptureStatus.FAILED,
             CaptureStatus.ABORTED_NONFINITE,
         ):
-            stamped = dataclass_replace(settled, n_ops_committed=recording.num_committed_ops)
+            stamped = dataclass_replace(settled, num_committed_ops=recording.num_committed_ops)
         else:
             stamped = CaptureOutcome(
                 status=CaptureStatus.FAILED,

@@ -81,9 +81,9 @@ def _record_under_group(*args: object, **kwargs: object):
     """
 
     if has_vetted_snapshot():
-        return tl.fastlog.record(*args, **kwargs)
+        return tl.record(*args, **kwargs)
     with pytest.warns(UserWarning, match="uncaptured_collective_op"):
-        return tl.fastlog.record(*args, **kwargs)
+        return tl.record(*args, **kwargs)
 
 
 def test_ddp_wrapped_model_records_unwrapped_module(process_group: None) -> None:
@@ -128,7 +128,7 @@ def test_process_group_teardown_leaves_distributed_capture_dormant(process_group
     """
 
     ddp_model = torch.nn.parallel.DistributedDataParallel(DdpModel())
-    tl.fastlog.record(ddp_model, torch.ones(1, 2), default_op=True)
+    tl.record(ddp_model, torch.ones(1, 2), default_op=True)
     assert tl.distributed.is_armed(), "capture under an initialized group should auto-arm"
 
     torch.distributed.destroy_process_group()

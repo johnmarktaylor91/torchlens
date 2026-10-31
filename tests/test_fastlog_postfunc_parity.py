@@ -40,7 +40,7 @@ class _PostfuncModel(nn.Module):
 
 
 def _out_records(
-    recording: tl.fastlog.Recording,
+    recording: tl.Recording,
 ) -> list[ActivationRecord]:
     """Return retained records for out events."""
 
@@ -53,7 +53,7 @@ def _out_records(
 
 
 def _disk_out_records(
-    recording: tl.fastlog.Recording,
+    recording: tl.Recording,
 ) -> list[ActivationRecord]:
     """Return retained records that wrote a disk out blob."""
 
@@ -68,7 +68,7 @@ def _disk_out_records(
 def test_transform_replaces_transformed_payload_with_raw_kept() -> None:
     """Postfunc populates transformed RAM payload while keeping raw."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
@@ -93,7 +93,7 @@ def test_transform_replaces_transformed_payload_with_raw_kept() -> None:
 def test_activation_transform_canonical_name_matches_transform_alias() -> None:
     """Fastlog accepts activation_transform as the canonical transform name."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
@@ -114,7 +114,7 @@ def test_activation_transform_canonical_name_matches_transform_alias() -> None:
 def test_save_raw_outs_false_drops_raw_payload() -> None:
     """Disabling raw save retains only the transformed RAM payload."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
@@ -135,7 +135,7 @@ def test_save_raw_outs_false_drops_raw_payload() -> None:
 def test_no_transform_leaves_transformed_payload_unset() -> None:
     """Without a transform transformed fields stay None on every record."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
@@ -151,7 +151,7 @@ def test_disk_only_mode_persists_transformed_blob(tmp_path: Path) -> None:
     """Disk-only mode writes a ``transformed_out`` blob and roundtrips."""
 
     bundle_path = tmp_path / "disk.tlfast"
-    recording = tl.fastlog.record(
+    recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
@@ -189,7 +189,7 @@ def test_ram_disk_mirror_populates_both_transformed_payloads(tmp_path: Path) -> 
     """Mirror mode populates both RAM and disk transformed payloads."""
 
     bundle_path = tmp_path / "mirror.tlfast"
-    recording = tl.fastlog.record(
+    recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
@@ -225,7 +225,7 @@ def test_ram_disk_mirror_invokes_transform_once_per_selected_event(tmp_path: Pat
         invocations["n"] += 1
         return t + invocations["n"]
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op" and ctx.func_name == "relu",
@@ -249,7 +249,7 @@ def test_train_mode_well_behaved_transform_keeps_graph_connected_payload() -> No
     """A graph-preserving transform keeps RAM payload differentiable."""
 
     model = _PostfuncModel()
-    recording = tl.fastlog.record(
+    recording = tl.record(
         model,
         torch.ones(1, 3),
         default_op=CaptureSpec(save_grad=True),
@@ -271,7 +271,7 @@ def test_train_mode_detaching_transform_rejected() -> None:
     """A detaching transform fails train-mode validation."""
 
     with pytest.raises(tl.errors.TrainingModeConfigError, match="grad_fn is None"):
-        tl.fastlog.record(
+        tl.record(
             _PostfuncModel(),
             torch.ones(1, 3),
             default_op=CaptureSpec(save_grad=True),
@@ -283,7 +283,7 @@ def test_train_mode_integer_transform_rejected() -> None:
     """A transform returning integer dtype fails train-mode validation."""
 
     with pytest.raises(tl.errors.TrainingModeConfigError, match="non-grad dtype"):
-        tl.fastlog.record(
+        tl.record(
             _PostfuncModel(),
             torch.ones(1, 3),
             default_op=CaptureSpec(save_grad=True),
@@ -294,7 +294,7 @@ def test_train_mode_integer_transform_rejected() -> None:
 def test_source_events_receive_transform_outputs() -> None:
     """``include_source_events`` routes input/buffer events through the transform."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
@@ -329,7 +329,7 @@ def test_predicate_transform_invocation_count_matches_kept_events() -> None:
 
         return ctx.kind == "op" and ctx.func_name == "relu"
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         save=keep_op,
@@ -374,7 +374,7 @@ def test_transform_error_wrapped_with_event_context() -> None:
         raise RuntimeError("custom failure")
 
     with pytest.raises(tl.errors.TorchLensPostfuncError) as exc_info:
-        tl.fastlog.record(
+        tl.record(
             _PostfuncModel(),
             torch.ones(1, 3),
             default_op=True,
@@ -399,7 +399,7 @@ def test__activation_transform_repr_exposed_and_persisted(tmp_path: Path) -> Non
 
         return t.float() * 2
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
@@ -409,7 +409,7 @@ def test__activation_transform_repr_exposed_and_persisted(tmp_path: Path) -> Non
     assert "named_transform" in recording._activation_transform_repr
 
     bundle_path = tmp_path / "metadata.tlfast"
-    persisted = tl.fastlog.record(
+    persisted = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
@@ -427,7 +427,7 @@ def test_transform_roundtrips_via_disk_recovery(tmp_path: Path) -> None:
     """Disk bundles roundtrip transformed blob metadata via load/recover."""
 
     bundle_path = tmp_path / "roundtrip.tlfast"
-    original = tl.fastlog.record(
+    original = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,

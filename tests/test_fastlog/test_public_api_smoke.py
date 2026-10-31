@@ -47,7 +47,7 @@ def _keep_no_ops(ctx: RecordContext) -> bool:
     return False
 
 
-def _assert_unique_label_lookups(recording: tl.fastlog.Recording) -> None:
+def _assert_unique_label_lookups(recording: tl.Recording) -> None:
     """Assert each retained record is indexed exactly once per distinct label."""
 
     for record in recording.records:
@@ -59,7 +59,7 @@ def _assert_unique_label_lookups(recording: tl.fastlog.Recording) -> None:
             assert raw_matches == [record]
 
 
-def _force_legacy_capture_event_projection(recording: tl.fastlog.Recording) -> None:
+def _force_legacy_capture_event_projection(recording: tl.Recording) -> None:
     """Reset a lazy Recording to rebuild records from legacy ``_capture_events`` only."""
 
     assert object.__getattribute__(recording, "_capture_events") is not None
@@ -75,8 +75,8 @@ def test_record_save_true_and_false() -> None:
     """One-shot record honors constant true and false operation predicates."""
 
     x = torch.ones(1, 3)
-    kept = tl.fastlog.record(SimpleMlp(), x, save=_keep_all_ops)
-    skipped = tl.fastlog.record(SimpleMlp(), x, save=_keep_no_ops)
+    kept = tl.record(SimpleMlp(), x, save=_keep_all_ops)
+    skipped = tl.record(SimpleMlp(), x, save=_keep_no_ops)
 
     assert len(kept.records) > 0
     assert skipped.records == []
@@ -87,7 +87,7 @@ def test_record_multi_arg_and_kwargs_forward() -> None:
 
     x = torch.ones(1, 3)
     y = torch.ones(1, 3)
-    recording = tl.fastlog.record(
+    recording = tl.record(
         MultiArgModel(),
         (x, y),
         {"scale": 2},
@@ -100,7 +100,7 @@ def test_record_multi_arg_and_kwargs_forward() -> None:
 def test_record_single_tensor_input_shorthand() -> None:
     """One-shot record treats a single tensor as one positional argument."""
 
-    recording = tl.fastlog.record(SimpleMlp(), torch.ones(1, 3), save=_keep_all_ops)
+    recording = tl.record(SimpleMlp(), torch.ones(1, 3), save=_keep_all_ops)
 
     assert len(recording.records) > 0
 

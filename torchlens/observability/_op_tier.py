@@ -242,13 +242,14 @@ class OpTierCollector:
         import warnings
 
         from .. import fastlog
+        from ..fastlog._record_one_shot import record as _record
 
         with warnings.catch_warnings():
             # Fastlog's zero-match WARNING is superseded here by the plan-time
             # TYPED refusal below (strictly stronger: a warning at step 0 of a
             # ten-hour run is not disclosure, D6).
             warnings.filterwarnings("ignore", message=".*matched zero sites.*")
-            recording = fastlog.record(
+            recording = _record(
                 self.model,
                 input_args,
                 input_kwargs,
@@ -404,9 +405,9 @@ class OpTierCollector:
         without writing a block into the history.
         """
 
-        from .. import fastlog
+        from ..fastlog._record_one_shot import record as _record
 
-        output, _recording = fastlog.record(
+        output, _recording = _record(
             self.model,
             input_args,
             input_kwargs,
@@ -437,9 +438,9 @@ class OpTierCollector:
                 code="watch_lifecycle_invalid",
                 remedy="Wrap the training step in collector.step(global_step).",
             )
-        from .. import fastlog
+        from ..fastlog._record_one_shot import record as _record
 
-        output, recording = fastlog.record(
+        output, recording = _record(
             self.model,
             input_args,
             input_kwargs,

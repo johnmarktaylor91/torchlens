@@ -1169,10 +1169,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Observers**
 : `tl.tap` creates a tap observer for a site; `tl.span` records a named observer span
   around captures or hook execution (the former `record_span` alias is removed);
-  `tl.record_kpi_in_graph` records a user KPI on the active capture graph;
-  `tl.register_tensor_connection` registers a manual parent-child tensor edge during
-  capture; `tl.decide_recording_of_batch` retroactively keeps or discards a captured
-  batch log.
+  `tl.observers.register_tensor_connection` registers a manual parent-child tensor edge during
+  capture.
 
 **Validation entry**
 : `tl.validate(model, x, scope=...)` validates a model/input pair for a requested scope
@@ -1233,7 +1231,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   output container.
 
 **Capture-product bases**
-: `tl.CapturedRun` is the shared base for uncooked and cooked capture projections;
+: `tl.types.TraceLike` is the shared base for uncooked and cooked capture projections;
   `tl.ActivationLookup` is the protocol for raw-label/pass/address activation lookup
   consumers.
 

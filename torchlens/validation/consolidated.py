@@ -548,7 +548,7 @@ def validate(
             model,
             input_args,
             input_kwargs,
-            random_seed=seed,
+            seed=seed,
             validate_metadata=validate_metadata,
             backend=backend,
         )
@@ -642,7 +642,7 @@ def validate(
         model,
         input_args,
         input_kwargs,
-        random_seed=seed,
+        seed=seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
         save_options=save_options,

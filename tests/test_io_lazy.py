@@ -121,8 +121,8 @@ def _save_bundle(
 
     trace = _build_log(
         seed=seed,
-        save_arg_values=save_arg_values,
-        save_rng_states=save_rng_states,
+        save_args=save_arg_values,
+        save_rng=save_rng_states,
     )
     bundle_path = tmp_path / path_name
     save(
@@ -332,7 +332,7 @@ def test_rehydrate_nested_materializes_saved_args_blob_refs(tmp_path: Path) -> N
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_arg_values=True,
+        save_args=True,
         include_saved_args=True,
         path_name="saved_args.tl",
     )
@@ -358,7 +358,7 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_arg_values=True,
+        save_args=True,
         include_saved_args=True,
         path_name="saved_args.tl",
     )
@@ -378,8 +378,8 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_arg_values=True,
-        save_rng_states=True,
+        save_args=True,
+        save_rng=True,
         include_saved_args=True,
         include_rng_states=True,
         path_name="saved_args_and_rng.tl",

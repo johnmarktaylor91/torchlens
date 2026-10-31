@@ -1115,7 +1115,7 @@ def attach_legacy_capture_session(
             backend_name=backend_name,
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
-            random_seed=random_seed,
+            seed=random_seed,
             postprocess=postprocess,
         ),
         backend_token=backend_token,

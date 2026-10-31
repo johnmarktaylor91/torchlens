@@ -495,7 +495,7 @@ def test_save_code_context_false_still_attributes_branches() -> None:
     trace = _log_model(
         SaveSourceContextFalseModel(),
         torch.ones(2, 2),
-        save_code_context=False,
+        save_source_context=False,
     )
     event = _get_only_event(trace)
     bool_layers = _get_terminal_bool_layers(trace)

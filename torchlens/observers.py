@@ -454,4 +454,25 @@ if not TYPE_CHECKING:
         )
 
 
-__all__ = ["TapObserver", "TapRecord", "active_span_records", "log_value", "span", "tap"]
+if TYPE_CHECKING:
+    from .user_funcs import register_tensor_connection as register_tensor_connection
+
+__all__ = [
+    "TapObserver",
+    "TapRecord",
+    "active_span_records",
+    "log_value",
+    "register_tensor_connection",
+    "span",
+    "tap",
+]
+
+
+def __getattr__(name: str) -> object:
+    """Resolve ``register_tensor_connection`` lazily (its code lives with the capture door)."""
+
+    if name == "register_tensor_connection":
+        from .user_funcs import register_tensor_connection
+
+        return register_tensor_connection
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -341,7 +341,7 @@ def test_fp64_corruption_fails_through_every_legacy_spelling(
         passed = fns[spelling](
             model,
             torch.randn(2, 4, dtype=torch.float64),
-            random_seed=11,
+            seed=11,
             validate_metadata=False,
             validate_layer_grads=False,
         )

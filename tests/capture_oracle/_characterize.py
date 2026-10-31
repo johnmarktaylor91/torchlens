@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import Recording
+from torchlens import Recording
 from torchlens.ir.events import OpEvent
 
 from ._models import build_model_case, side_effect_count

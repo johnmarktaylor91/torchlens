@@ -235,7 +235,7 @@ class _ManualEdge(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         a = self.fc1(x)
         b = self.fc2(x)
-        tl.register_tensor_connection(a, b)
+        tl.observers.register_tensor_connection(a, b)
         return a + b
 
 

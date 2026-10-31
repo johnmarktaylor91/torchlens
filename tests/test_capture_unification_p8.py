@@ -130,7 +130,7 @@ def test_mlx_emit_function_outputs_produces_topology_complete_events() -> None:
         capture_events=events,
         _mlx_saved_payloads=[],
         save_raw_activations=True,
-        save_code_context=False,
+        save_source_context=False,
         detach_saved_activations=False,
         activation_transform=None,
     )

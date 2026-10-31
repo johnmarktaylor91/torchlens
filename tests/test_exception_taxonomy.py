@@ -844,7 +844,6 @@ def test_top_refusal_messages_name_a_remedy(
 @pytest.mark.parametrize(
     ("operation", "trigger"),
     (
-        ("record_kpi_in_graph", lambda: user_funcs.record_kpi_in_graph("score", 1.0)),
         (
             "register_tensor_connection",
             lambda: user_funcs.register_tensor_connection(object(), object()),  # type: ignore[arg-type]

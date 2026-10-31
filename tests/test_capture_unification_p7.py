@@ -106,7 +106,7 @@ def _structure(trace: tl.Trace) -> list[tuple[str, str, tuple[str, ...], tuple[s
 
 
 def test_recording_and_trace_are_captured_run_activation_lookup_siblings() -> None:
-    """Recording and Trace subclass CapturedRun and satisfy ActivationLookup."""
+    """Recording and Trace subclass TraceLike and satisfy ActivationLookup."""
 
     model = ConvReluAdd()
     x = torch.randn(1, 1, 4, 4)
@@ -114,8 +114,8 @@ def test_recording_and_trace_are_captured_run_activation_lookup_siblings() -> No
     recording = tl.record(model, x, save=tl.func("conv2d"), seed=17)
     trace = tl.trace(model, x, save=tl.func("conv2d"), capture=tl.options.CaptureOptions(seed=17))
 
-    assert issubclass(type(recording), tl.CapturedRun)
-    assert issubclass(type(trace), tl.CapturedRun)
+    assert issubclass(type(recording), tl.types.TraceLike)
+    assert issubclass(type(trace), tl.types.TraceLike)
     assert not issubclass(type(trace), type(recording))
     assert isinstance(recording, tl.ActivationLookup)
     assert isinstance(trace, tl.ActivationLookup)

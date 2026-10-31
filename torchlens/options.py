@@ -38,7 +38,6 @@ from ._option_receipt import (
     _field_is_explicit,
     _resolve_option_value,
     _set_frozen_fields,
-    option_receipt,
 )
 from ._options_validation import (
     _normalize_layout,
@@ -56,6 +55,7 @@ from ._vocab.node_spec import NodeSpec
 if TYPE_CHECKING:
     from .data_classes.layer import Layer
     from .data_classes.module import Module
+    from .fastlog.options import RecordingOptions as RecordingOptions
 
 T = TypeVar("T")
 ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
@@ -190,17 +190,17 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "output_transform": "output_transform",
     "output_style": "output_style",
     "output_head": "output_head",
-    "save_transformed_output": "save_raw_output",
+    "save_transformed_output": "save_transformed_output",
     "layer_visualizers": "layer_visualizers",
     "save_visualizations": "save_visualizations",
     "keep_orphans": "keep_orphans",
     "output_device": "output_device",
-    "save_args": "save_arg_values",
+    "save_args": "save_args",
     "save_grads": "save_grads",
     "capture_tensor_grad_hooks": "capture_tensor_grad_hooks",
-    "save_source_context": "save_code_context",
-    "save_rng": "save_rng_states",
-    "seed": "random_seed",
+    "save_source_context": "save_source_context",
+    "save_rng": "save_rng",
+    "seed": "seed",
     "source_context_lines": "source_context_lines",
     "optimizer": "optimizer",
     "compute_input_output_distances": "compute_input_output_distances",
@@ -978,6 +978,29 @@ class CaptureOptions:
         _set_frozen_fields(instance, _CAPTURE_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
+
+    def receipt(
+        self,
+        *,
+        adjustments: Mapping[str, tuple[Any, str]] | None = None,
+    ) -> tuple[Any, ...]:
+        """Return the per-field option receipt: each public field, its value and why.
+
+        Parameters
+        ----------
+        adjustments:
+            Field name -> ``(effective_value, reason)`` for options a consumer
+            forced, normalized or refused after construction.
+
+        Returns
+        -------
+        tuple[Any, ...]
+            One receipt entry per public field, in field order.
+        """
+
+        from ._option_receipt import option_receipt
+
+        return option_receipt(self, adjustments=adjustments)
 
 
 @dataclass(frozen=True, init=False)
@@ -1949,6 +1972,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
 
 
 __all__ = [
+    "RecordingOptions",
     "CaptureOptions",
     "NarrationOptions",
     "EpisodeSpec",
@@ -1957,8 +1981,17 @@ __all__ = [
     "ReplayOptions",
     "SaveOptions",
     "StorageOptions",
-    "option_receipt",
     "to_disk",
     "VisualizationOptions",
     "suppress_mutate_warnings",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Resolve ``RecordingOptions`` lazily (its module imports this one)."""
+
+    if name == "RecordingOptions":
+        from .fastlog.options import RecordingOptions
+
+        return RecordingOptions
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

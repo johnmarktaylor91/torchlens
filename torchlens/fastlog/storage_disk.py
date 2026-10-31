@@ -227,7 +227,7 @@ class DiskStorageBackend:
         """
 
         transform = options.grad_transform if kind == "grad" else options.activation_transform
-        save_raw = options.save_raw_gradients if kind == "grad" else options.save_raw_activations
+        save_raw = options.save_raw_grads if kind == "grad" else options.save_raw_activations
         return _resolve_storage(
             tensor,
             spec,

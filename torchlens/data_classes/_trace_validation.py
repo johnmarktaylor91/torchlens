@@ -349,7 +349,7 @@ class TraceValidationMixin(_TraceMixinBase):
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
-            random_seed=seed,
+            seed=seed,
             backward_ready=backward_ready,
             _run_until_plan=_run_until_plan,
         )
@@ -1263,7 +1263,7 @@ class TraceValidationMixin(_TraceMixinBase):
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
-            random_seed=random_seed,
+            seed=random_seed,
             postprocess=postprocess,
             reservation_resume=reservation_resume,
         )

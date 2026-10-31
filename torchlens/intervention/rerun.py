@@ -978,19 +978,19 @@ def _capture_with_active_spec(
             activation_transform=getattr(log, "activation_transform", None),
             grad_transform=getattr(log, "grad_transform", None),
             save_raw_activations=getattr(log, "save_raw_activations", True),
-            save_raw_gradients=getattr(log, "save_raw_gradients", True),
+            save_raw_grads=getattr(log, "save_raw_gradients", True),
             save_mode=getattr(log, "save_mode", "copy"),
             capture_tensor_grad_hooks=getattr(log, "capture_tensor_grad_hooks", True),
             mark_layer_depths=getattr(log, "mark_layer_depths", False),
             detach_saved_activations=getattr(log, "detach_saved_activations", False),
-            save_arg_values=getattr(log, "save_arg_values", False),
+            save_args=getattr(log, "save_arg_values", False),
             save_grads=save_grads_policy not in (None, False),
             grads_to_save=grads_to_save,
-            random_seed=getattr(log, "random_seed", None),
+            seed=getattr(log, "random_seed", None),
             num_context_lines=getattr(log, "num_context_lines", 7),
             optimizer=getattr(log, "_optimizer", None),
-            save_code_context=getattr(log, "save_code_context", False),
-            save_rng_states=getattr(log, "save_rng_states", False),
+            save_source_context=getattr(log, "save_code_context", False),
+            save_rng=getattr(log, "save_rng_states", False),
             recurrence_detection=getattr(log, "recurrence_detection", True),
             # Inherit the source trace's readiness: forcing ``True`` armed the host
             # RNG monitor (most of a rerun's cost) and minted replay templates the
@@ -1008,7 +1008,7 @@ def _capture_with_active_spec(
             # A rerun measures CPU peaks only if the source opted in.
             measure_host_peak_memory=bool(getattr(log, "measure_host_peak_memory", False)),
             output_transform=output_transform,
-            save_raw_output=getattr(log, "save_raw_output", "small"),
+            save_transformed_output=getattr(log, "save_raw_output", "small"),
             intervene_predicate=intervene_predicate,
             **_rerun_save_kwargs(log),
         )

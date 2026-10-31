@@ -1700,7 +1700,7 @@ def test_save_code_context_off_assert_model_has_no_false_positive_if_edges() -> 
     trace = _log_model(
         SaveSourceContextOffAssertModel(),
         torch.ones(2, 2),
-        save_code_context=False,
+        save_source_context=False,
     )
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
@@ -1718,7 +1718,7 @@ def test_selective_save_preserves_all_conditional_surfaces() -> None:
     log = _log_model(
         KeepUnsavedLayersFalseModel(),
         input_tensor,
-        save_code_context=True,
+        save_source_context=True,
         layers_to_save=[-1],
     )
 

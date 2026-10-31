@@ -11,6 +11,7 @@ __tl_role__ = "FACADE"
 import torch
 
 from .capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
+from .captured_run import TraceLike
 from .data_classes.aten_op import AtenOp, OpRef
 from .data_classes.attribute_write import AttributeWrite
 from .data_classes.backward_pass import BackwardPass
@@ -29,6 +30,7 @@ ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
 GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 __all__ = [
+    "TraceLike",
     "ActivationPostfunc",
     "AtenOp",
     "AttributeWrite",

@@ -73,7 +73,7 @@ def record(
     """Record one model forward pass with capture predicates.
 
     ``record(save=...)`` is the one predicate spelling and matches
-    ``trace(save=...)``; ``tl.fastlog.record`` remains a shim to this API.
+    ``trace(save=...)``; ``tl.record`` remains a shim to this API.
 
     Parameters
     ----------
