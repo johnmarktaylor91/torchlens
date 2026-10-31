@@ -7,7 +7,7 @@ capture-free callable, transparency, real HF ``generate`` (KV cache on/off),
 exception, zero-fire settlement by on_zero_fire, the two-edit misfire
 disclosure naming the unfired rule, the OP2 model-door funnel (BOTH arms
 behind one switch), the closed engine-set ``execution_effect`` vocabulary,
-and the bind-side turnkey steer wrapper.
+and bound generation with its out-of-band report.
 
 Toy-model tests are smoke-tier; the real-model gate rows (distilgpt2 + one
 small Llama family) are heavy + real_model and skip when the HF snapshot is
@@ -34,7 +34,6 @@ from torchlens.intervention.model_door import (
     model_door_policy,
     resolve_model_operand,
 )
-from torchlens.intervention.steering import SteerResult, steer_generate
 
 HF_HUB_CACHE = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
@@ -533,22 +532,24 @@ def test_bind_generate_unavailable_refuses(toy) -> None:
 
 
 @pytest.mark.smoke
-def test_steer_generate_toy_composition() -> None:
-    """The steer wrapper returns model outputs + the ledger, never a Trace."""
+def test_bound_generate_toy_composition() -> None:
+    """Bound generation returns model outputs and settles its out-of-band ledger."""
 
     torch.manual_seed(0)
     model = _ToyGen().eval()
     x = torch.randn(2, 4)
-    result = steer_generate(model, x, tl.when(tl.func("relu"), tl.scale(0.5)), steps=3)
-    assert isinstance(result, SteerResult)
-    assert isinstance(result.outputs, torch.Tensor)
-    assert isinstance(result.report, BindReport)
-    assert result.report.door == "generate"
-    assert result.report.num_fires == 3  # one relu per generation step
-    assert result.report.trace is None
+    bound = tl.when(tl.func("relu"), tl.scale(0.5)).bind(model)
+    assert isinstance(bound, BoundModel)
+    result = bound.generate(x, steps=3)
+    report = bound.last_report
+    assert isinstance(result, torch.Tensor)
+    assert isinstance(report, BindReport)
+    assert report.door == "generate"
+    assert report.num_fires == 3  # one relu per generation step
+    assert report.trace is None
     from torchlens import Trace
 
-    assert not isinstance(result.outputs, Trace)
+    assert not isinstance(result, Trace)
 
 
 # ---------------------------------------------------------------------------

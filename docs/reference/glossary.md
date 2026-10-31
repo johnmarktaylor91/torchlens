@@ -820,7 +820,16 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   the named subset, gated pairwise inside that subset (`same_param_shapes` floor), so one foreign
   member no longer disables the view for the rest.
 
-**Bundle delta family** *(`delta_map`, `norm_delta`, `output_delta`, `compare`)*
+**Bundle.compare**
+: `bundle.compare(a, b, *, metric="cosine", on="out")` returns the per-site differences between
+  two members as `(site_label, distance)` rows over the sites both members share, paired through
+  the structural alignment; `metric` is a metric name or callable (scalar-like sites always use
+  `relative_l1`) and `on` reads `"out"` or `"grad"`. The receiver sets the axis: `bundle.at(site)
+  .compare()` is the member-by-member matrix at one site. The pair goes through the comparison
+  gate first and refuses typed when the members cannot be aligned; its grade is
+  `bundle.comparability(a, b)`, a `tl.types.Relationship`.
+
+**Bundle delta family** *(`delta_map`, `norm_delta`, `output_delta`)*
 : Per-node and per-output distances from a baseline member (the configured baseline, else the
   first member). Every (baseline, member) pair goes through the comparison gate first, the same
   predicates as `compare_at`: no ordering path between them, a shared graph, and proven-equal
@@ -854,7 +863,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Checkpoint live-ref guard** *(spelling documented-unstable)*
 : TorchLens records which parameter a run used, not its bytes, so cross-member parameter
-  value/difference/trajectory reads on a Bundle (`weight_norm_diff`, `diff_pair`, `aggregate`,
+  value/difference/trajectory reads on a Bundle (`weight_norm_diff`, `compare`, `aggregate`,
   `out`/`grad` on `SuperParam` views with two or more members) refuse BEFORE tensor lookup with
   the stable code `checkpoint_series_live_params` unless every member carries immutable
   capture-time parameter evidence. The guard is keyed on the claim, never on Python object
@@ -3344,6 +3353,7 @@ The sections above describe each surface in depth.
 | `tl.errors.TraceMutationWarning` | First root-log mutation; Trace mutators operate in place |
 | `tl.errors.TransformContractError` | Raised when a transform spec, chain, or plan violates its contract |
 | `tl.errors.UserTransformError` | Raised when activation_transform or grad_transform raises |
+| `tl.experiment.read_ledger` | Open a saved experiment ledger for reading without arming it: `.overview`, `.entry(entry_id, *, page, page_size)`, `.evidence(entry_id, index)` |
 | `tl.experiment.sweep_sites` | Ablate every candidate site, one member per candidate, baseline first |
 | `tl.export.describe_target` | Return one export target's registration metadata (tier row included) |
 | `tl.export.list_targets` | Return the registered export-target names |
@@ -3353,10 +3363,12 @@ The sections above describe each surface in depth.
 | `tl.fingerprint.StructuralHashMismatchError` | Raised when a model's provisional structural hash differs from its pin |
 | `tl.fingerprint.content` | Return a deterministic SHA-256 digest of nested tensor content |
 | `tl.intervention.BundleComparisonError` | The same class as `tl.errors.BundleComparisonError` |
+| `tl.intervention.Population` | A prepared, provenance-stamped donor population: `members`, `datums`, `origin`, `kind`, `content_digest`, `digest_kind`, `identity`, `eligible_indices(...)`, `mean(dim=None, ...)`, `std(dim=None, ...)`; built by `tl.intervention.population` |
 | `tl.intervention.label_contains` | Create a label-substring selector |
 | `tl.intervention.label_matches` | Create a label regex-pattern selector |
 | `tl.intervention.model_input` | Create a nested model-input path selector |
 | `tl.intervention.model_output` | Create an output selector |
+| `tl.intervention.population` | Build a `Population` from a tensor, a sequence of tensors or a sequence of Traces, with a required `origin=` provenance string |
 | `tl.options.HtmlReportOptions` | Options for emitting the offline HTML report (thumbnail budgets, determinism, share-safe stripping) |
 | `tl.receptive_field.GradReceptiveField` | Empirical receptive-field influence set measured by autograd |
 | `tl.report.DiffReport` | The same class as `tl.differential.DiffReport` |
@@ -3415,6 +3427,7 @@ The sections above describe each surface in depth.
 | `tl.types.PathFaithfulness` | Honesty states reported by a completed sparse run |
 | `tl.types.ReadinessReport` | Complete non-executing readiness report for a Trace provider |
 | `tl.types.ReadinessStatus` | Overall non-executing runnable readiness states |
+| `tl.types.Relationship` | The derived relationship between two Bundle members, returned by `Bundle.comparability` and `comparability_table` (persisted bundle data; values unchanged) |
 | `tl.types.RunProvider` | Providers selected by the `Trace.run` contract |
 | `tl.types.RunReport` | Honesty, state, resolution, and contract metadata for one run |
 | `tl.types.RunnableCompatibility` | Producer/runtime versions recorded for readiness diagnostics |
@@ -3457,7 +3470,8 @@ The sections above describe each surface in depth.
 | `BisectPrecisionReport.max_abs_err` | First divergent op's maximum absolute error, or `None` |
 | `BisectPrecisionReport.max_rel_err` | First divergent op's maximum relative error, or `None` |
 | `BisectPrecisionReport.message` | Human-readable summary |
-| `Bundle.comparability` | Return the derived relationship for a pair of members |
+| `Bundle.comparability` | Return the derived relationship for a pair of members (`tl.types.Relationship`) |
+| `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=` |
 | `Bundle.comparability_table` | Return pairwise relationships for all member pairs |
 | `Bundle.map` | Apply a function independently to each member |
 | `Bundle.rank_changes` | Rank sites by their distance from a baseline member |

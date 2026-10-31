@@ -77,11 +77,11 @@
   refuses; hand-written-hook oracle in its test file); the experiment
   ledger (`torchlens.experiment.ledger`) is the opt-in event-sourced
   hash-chained semantic record (per-event fsync, kill-9-safe, quarantine
-  default, closed verdict vocabulary, `ledger_overview`/`ledger_entry`/
-  `ledger_evidence` read-only serving, MCP `torchlens_ledger_*`).
+  default, closed verdict vocabulary, `tl.experiment.read_ledger(path)` read-only
+  reading with `.overview`, `.entry(id)` and `.evidence(id, index)`, MCP `torchlens_ledger_*`).
 - Checkpoint live-ref guard (spellings documented-unstable): cross-member parameter
   value/difference/trajectory reads on a Bundle (`SuperParam` views with >= 2 members:
-  `weight_norm_diff`, `diff_pair`, `aggregate`, `out`/`grad`) refuse BEFORE tensor lookup
+  `weight_norm_diff`, `compare`, `aggregate`, `out`/`grad`) refuse BEFORE tensor lookup
   with stable code `checkpoint_series_live_params` — parameter reads resolve through live
   model handles, never capture-time bytes, so a checkpoint series would otherwise report
   identical weights (or NaN/empty after load). Claim-keyed, never object identity; guard

@@ -22,7 +22,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import BindingRuntimeError
-from torchlens.intervention.steering import steer_generate
 
 
 class _Doubler(nn.Module):
@@ -344,13 +343,3 @@ def test_async_lazy_output_refuses_typed(model_cls: type[_Doubler]) -> None:
     assert bound.last_report.status == "error"
     _assert_clean(model)
     assert _values([bound(torch.ones(1))]) == [[4.0]]
-
-
-def test_steer_generate_refuses_lazy_generate() -> None:
-    """The turnkey wrapper needs a settled report at return: lazy refuses typed."""
-
-    model = _PureGen()
-    with pytest.raises(BindingRuntimeError) as excinfo:
-        steer_generate(model, torch.ones(1), _add_one())
-    assert excinfo.value.fields["code"] == "bind_lazy_output"
-    _assert_clean(model)

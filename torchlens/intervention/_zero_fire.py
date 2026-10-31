@@ -3,7 +3,7 @@
 An intervention that fires at zero sites is always recorded as a fact on the door's
 own record (the bind report, the trace's intervention audit and unmatched-selector
 ledger, or the rerun's ``last_run``). The ``on_zero_fire`` knob, accepted by
-``spec.bind``, ``steer_generate``, ``tl.trace(intervene=)`` and ``Trace.run``,
+``spec.bind`` (including ``binding.generate(...)``), ``tl.trace(intervene=)`` and ``Trace.run``,
 decides what happens next, identically at every door:
 
 - ``"warn"`` (default): emit a coded ``TorchLensWarning`` naming the door's code.

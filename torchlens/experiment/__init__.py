@@ -3,7 +3,7 @@
 The F03 ledger-memo surface: the private candidate engine and its
 ``site_sweep`` face (items 6-7), the head-ablation sugar (7b), the effect
 -table reads (item 8), and the persistent event-sourced experiment ledger
-with its read-only serving tools (items 9-11). The Bundle is the MATERIAL
+with its read-only reader ``read_ledger`` (items 9-11). The Bundle is the MATERIAL
 record (always on, travels with the artifact); the ledger is the SEMANTIC
 record (hypothesis, metric choice, verdict — opt-in, references the material
 record, never duplicates it).
@@ -31,7 +31,7 @@ from ._ledger import (
     active_ledger,
     ledger,
 )
-from ._mcp import ledger_entry, ledger_evidence, ledger_overview
+from ._reader import read_ledger
 
 __all__ = [
     "EffectsView",
@@ -40,9 +40,7 @@ __all__ = [
     "active_ledger",
     "head_ablation_candidates",
     "ledger",
-    "ledger_entry",
-    "ledger_evidence",
-    "ledger_overview",
+    "read_ledger",
     "retained_bytes",
     "sweep_sites",
 ]

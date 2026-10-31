@@ -20,7 +20,7 @@ import torch
 
 import torchlens as tl
 from torchlens.intervention.errors import BundleComparisonError
-from torchlens.intervention.types import Relationship
+from torchlens.types import Relationship
 
 pytestmark = pytest.mark.slow
 

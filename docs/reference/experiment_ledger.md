@@ -100,10 +100,13 @@ return the material result unharmed (`on_record_error="raise"` is the strict
 opt-in). Contents are references only (EvidenceRefs with digests; a bundle
 overwritten at the same path reads `stale`, never silently relinked).
 
-Serving is read-only and artifact-fresh mid-experiment:
-`ledger_overview` / `ledger_entry` / `ledger_evidence` (also on the MCP
-stdio server as `torchlens_ledger_*`). No tool runs a model, arms a process,
-writes a verdict, or executes an opaque metric.
+Reading is read-only and artifact-fresh mid-experiment:
+`tl.experiment.read_ledger(path)` opens the artifact once without arming it;
+`.overview` is the one-line-per-entry summary, `.entry(entry_id, page=0,
+page_size=50)` the paginated trajectory of one entry and `.evidence(entry_id,
+index=0)` one digest-verified evidence ref (also on the MCP stdio server as
+`torchlens_ledger_*`). No read runs a model, arms a process, writes a verdict,
+or executes an opaque metric.
 
 ## Deliberately not built
 

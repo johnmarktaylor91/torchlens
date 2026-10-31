@@ -30,6 +30,7 @@ from ._runnable import NumericAttestationStatus, PathFaithfulness, ReadinessStat
 from ._selection import Site
 from ._selection_subspace import BasisProvenance
 from .intervention import SpecCompat, TargetManifestDiff
+from .intervention.types import Relationship
 
 if TYPE_CHECKING:
     from ._data_classes.container import Container
@@ -90,6 +91,7 @@ __all__ = [
     "PreHookEffect",
     "Quantity",
     "ReadinessStatus",
+    "Relationship",
     "RunProvider",
     "Site",
     "SpecCompat",

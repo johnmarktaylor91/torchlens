@@ -297,7 +297,7 @@ Common operations:
 | `bundle.do(...)`, `bundle.attach_hooks(...)`, `bundle.push()`, `bundle.run(model, x)` | Apply mutator/propagation calls to each member (the former `replay`/`rerun` aliases are removed). |
 | `bundle.fork(name=None)` | Fork all members into a new bundle. |
 
-Site reads (`most_changed`, `diff_pair`) pair ops across members through the
+Site reads (`most_changed`, `compare`) pair ops across members through the
 bundle's structural alignment, not by literal label, so an op renumbered by an
 inserted edit op still meets its counterpart. A site that only some members have
 (such as the replacement op a module edit inserts) is not scored.
@@ -310,7 +310,7 @@ proof of input equality, unprovable input identity refuses fail-closed
 (`bundle_gate_input_identity_unproven`), and members joined by an ordering
 relation (`successor_of`/`forked_from`/`escalates`) are not comparison
 operands regardless of rank (`bundle_gate_ordering_topology`). Pair-scoped
-reads (`diff_pair(a, b)`, `most_changed` baseline pairs) gate only the
+reads (`compare(a, b)`, `most_changed` baseline pairs) gate only the
 operands they actually read.
 
 ## Cohort Migration

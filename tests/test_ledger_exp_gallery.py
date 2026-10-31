@@ -29,9 +29,7 @@ import torchlens as tl
 from torchlens.experiment import (
     head_ablation_candidates,
     ledger,
-    ledger_entry,
-    ledger_evidence,
-    ledger_overview,
+    read_ledger,
     sweep_sites,
 )
 from torchlens.experiment._ledger import EvidenceRef, _artifact_digest
@@ -129,15 +127,15 @@ def test_flagship_gallery_end_to_end(tmp_path: Path) -> None:
         assert "intervention_audit" not in text
 
         # ---- the agent-recovery reads (bounded) ------------------------------
-        overview = ledger_overview(str(ledger_path))
+        overview = read_ledger(str(ledger_path)).overview
         (line,) = overview["entries"]
         assert "verdict=supports (basis=1)" in line
         assert len(line) < 400, "the overview line must stay tens-of-tokens bounded"
-        entry = ledger_entry(str(ledger_path), "e1")
+        entry = read_ledger(str(ledger_path)).entry("e1")
         assert entry["metric_declared_at_seq"] < min(
             event["seq"] for event in entry["events"] if event["kind"] == "material_step_started"
         ), "declaration order is a checkable fact (never post-hoc pre-registration)"
-        evidence = ledger_evidence(str(ledger_path), "e1", index=1)
+        evidence = read_ledger(str(ledger_path)).evidence("e1", index=1)
         assert evidence["ref"]["availability"] == "persisted"
         served_tables = evidence["served"]["effect_tables"]
         assert list(served_tables.values())[0]["rows"], "served effect table is empty"

@@ -4,7 +4,7 @@ TorchLens records WHICH parameter a run used, not its bytes: a parameter read
 resolves through a live handle to the model and returns TODAY'S weights, not
 the weights at capture time. Two Bundle members captured from one mutated
 model therefore reported identical weights on five public reads
-(``weight_norm_diff``, ``diff_pair``, ``aggregate``, ``out``, ``grad``) --
+(``weight_norm_diff``, ``compare``, ``aggregate``, ``out``, ``grad``) --
 confident wrong numbers -- and after a save/load round trip the same reads
 degraded silently to NaN / empty / ``None`` instead of refusing.
 
@@ -230,7 +230,7 @@ def test_ordinary_bundle_activation_reads_do_not_trigger() -> None:
     view = bundle.node("relu_1_2")
     assert tuple(view.compare().shape) == (2, 2)
     assert view.aggregate("mean").shape == view.members["a"].out.shape
-    assert bundle.diff_pair("a", "b")
+    assert bundle.compare("a", "b")
 
 
 def test_version_row_still_orders_members(ckpt_bundle: Any) -> None:
@@ -277,8 +277,8 @@ def test_direct_param_value_read_contract_untouched(stepped_pair: dict[str, Any]
     "read",
     [
         pytest.param(lambda view: view.weight_norm_diff, id="weight_norm_diff"),
-        pytest.param(lambda view: view.compare(), id="diff_pair"),
-        pytest.param(lambda view: view.compare(other="ck0"), id="diff_pair_row"),
+        pytest.param(lambda view: view.compare(), id="compare"),
+        pytest.param(lambda view: view.compare(other="ck0"), id="compare_row"),
         pytest.param(lambda view: view.aggregate("mean"), id="aggregate_mean"),
         pytest.param(lambda view: view.aggregate("std"), id="aggregate_std"),
         pytest.param(lambda view: view.out, id="out"),
@@ -287,7 +287,7 @@ def test_direct_param_value_read_contract_untouched(stepped_pair: dict[str, Any]
     ],
 )
 def test_bypass_matrix_every_read_hits_the_guard(ckpt_bundle: Any, read: Any) -> None:
-    """direct SuperParam read, diff_pair, aggregate, out/grad: one guard, one code."""
+    """direct SuperParam read, compare, aggregate, out/grad: one guard, one code."""
 
     view = ckpt_bundle.params[_WEIGHT]
     with pytest.raises(ParamEvidenceMissingError) as excinfo:

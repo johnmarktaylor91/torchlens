@@ -21,7 +21,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import BundleComparisonError
-from torchlens.intervention.types import Relationship
+from torchlens.types import Relationship
 
 _OPTS = tl.options.CaptureOptions(intervention_ready=True)
 
@@ -252,7 +252,7 @@ def test_unproven_input_identity_refuses_fail_closed() -> None:
 def test_operand_scoping_pair_reads_survive_a_foreign_member() -> None:
     """Item 3: one foreign member no longer disables every gated read.
 
-    ``diff_pair(a, b)`` gates exactly its named pair, and ``most_changed``
+    ``compare(a, b)`` gates exactly its named pair, and ``most_changed``
     gates only baseline pairs — while the whole-bundle reads (``compare_at``)
     honestly keep gating every pair they actually consume.
     """
@@ -272,7 +272,7 @@ def test_operand_scoping_pair_reads_survive_a_foreign_member() -> None:
     )
 
     # The named pair a/b is clean: scoped read works.
-    rows = bundle.diff_pair("a", "b")
+    rows = bundle.compare("a", "b")
     assert isinstance(rows, list)
 
     # compare_at consumes ALL pairs, so the foreign member still refuses it.
@@ -312,19 +312,19 @@ def test_ordering_topology_refusal_direct_and_transitive() -> None:
 
     # Direct edge.
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.diff_pair("turn1", "turn2")
+        bundle.compare("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]
 
     # Transitive directed path turn3 -> turn2 -> turn1.
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.diff_pair("turn1", "turn3")
+        bundle.compare("turn1", "turn3")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of", "successor_of"]
 
     # Control: an identical bundle WITHOUT ordering rows passes the same read.
     control = tl.Bundle({"turn1": _capture(model, x), "turn2": _capture(model, x)})
-    assert isinstance(control.diff_pair("turn1", "turn2"), list)
+    assert isinstance(control.compare("turn1", "turn2"), list)
 
 
 def test_ordering_siblings_and_alternatives_stay_comparable() -> None:
@@ -349,12 +349,12 @@ def test_ordering_siblings_and_alternatives_stay_comparable() -> None:
 
     # Siblings through a common predecessor are not on one directed path,
     # and alternative_of is deliberately not an ordering kind.
-    rows = bundle.diff_pair("turn2a", "turn2b")
+    rows = bundle.compare("turn2a", "turn2b")
     assert isinstance(rows, list)
 
     # The ordered pairs still refuse.
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.diff_pair("turn1", "turn2a")
+        bundle.compare("turn1", "turn2a")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
 
@@ -369,7 +369,7 @@ def test_topology_refusal_precedes_input_evidence() -> None:
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
 
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.diff_pair("turn1", "turn2")
+        bundle.compare("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
 

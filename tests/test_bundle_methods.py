@@ -110,14 +110,15 @@ def test_delta_map_norm_delta_output_delta_on_three_model_pairs() -> None:
         delta = bundle.delta_map("relative_l2")
         norm_delta = bundle.norm_delta()
         output_delta = bundle.output_delta("baseline")
-        comparison = bundle.compare("relative_l2")
+        rows = bundle.compare("baseline", "changed", metric="relative_l2")
 
         assert delta
         assert norm_delta == delta
         assert set(output_delta) == {"baseline", "changed"}
-        assert comparison["nodes"] == delta
-        assert comparison["outputs"] == output_delta
-        assert comparison["metric"] == "relative_l2"
+        assert rows and all(
+            isinstance(label, str) and isinstance(value, float) for label, value in rows
+        )
+        assert dict(rows).keys() <= set(delta)
         assert any("baseline" in node_values for node_values in delta.values())
 
 

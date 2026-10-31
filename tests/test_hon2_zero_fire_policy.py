@@ -4,7 +4,7 @@ An intervention that fires at zero sites is always recorded on the door's own
 record. ``on_zero_fire`` then decides, identically at every door: ``"warn"``
 (default) emits the door's coded ``TorchLensWarning``, ``"error"`` raises the door's
 typed refusal with the same code, ``"disclose"`` records only. Doors: ``spec.bind``,
-``steer_generate``, ``tl.trace(intervene=)``, ``Trace.run`` (capture rerun and the
+``binding.generate(...)``, ``tl.trace(intervene=)``, ``Trace.run`` (capture rerun and the
 fast engine). The typed rerun refusals for an edit that cannot fire on a rerun stay
 ahead of the policy: ``"disclose"`` cannot silence them.
 """
@@ -27,7 +27,6 @@ from torchlens.intervention.errors import (
     LiveModeLabelError,
     SiteResolutionError,
 )
-from torchlens.intervention.steering import steer_generate
 from torchlens.options import CaptureOptions
 
 _POLICIES = ("warn", "error", "disclose")
@@ -78,7 +77,7 @@ def _bare_zero_match(caught: list[warnings.WarningMessage]) -> list[str]:
     ]
 
 
-# --- bind and steer_generate -------------------------------------------------
+# --- bind and bound generate -------------------------------------------------
 
 
 @pytest.mark.parametrize("policy", _POLICIES)
@@ -100,17 +99,19 @@ def test_bind_door_policy(policy: str) -> None:
 
 
 @pytest.mark.parametrize("policy", _POLICIES)
-def test_steer_generate_door_policy(policy: str) -> None:
+def test_bound_generate_door_policy(policy: str) -> None:
     model, x = _setup()
     kwargs = {} if policy == "warn" else {"on_zero_fire": policy}
+    bound = _never().bind(model, **kwargs)
     with _caught() as caught:
         if policy == "error":
             with pytest.raises(BindingRuntimeError) as refused:
-                steer_generate(model, x, _never(), **kwargs)
+                bound.generate(x)
             assert refused.value.fields["code"] == "bind_zero_fire"
         else:
-            result = steer_generate(model, x, _never(), **kwargs)
-            assert len(result.report.zero_fire_rule_ids) == 1
+            assert bound.generate(x).shape == (2, 2)
+        assert bound.last_report is not None
+        assert len(bound.last_report.zero_fire_rule_ids) == 1
     expected = ["bind_zero_fire"] if policy == "warn" else []
     assert [c for c in _codes(caught) if c.endswith("zero_fire")] == expected
 

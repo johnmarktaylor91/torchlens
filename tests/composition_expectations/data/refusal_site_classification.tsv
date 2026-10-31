@@ -359,7 +359,6 @@ torchlens.intervention.binding:_lower_rules:BindingPreflightError::1	CONTRACTED	
 torchlens.intervention.binding:_lower_rules:BindingPreflightError::2	CONTRACTED	bind_static_anchor_unresolved	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change
 torchlens.intervention._module_alias_guard:refuse_module_alias_spellings:BindingPreflightError::1	CONTRACTED	bind_static_anchor_unresolved	shared-module alias spelling refused identically at every selector door (trace/record/post hoc/bind; AUD-CODE 3.7d): typed + code + remedy + contract-doc row
 torchlens.intervention.binding:bind_spec_to_model:BindingPreflightError::1	CONTRACTED	bind_model_invalid	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change
-torchlens.intervention.steering:steer_generate:BindingRuntimeError::1	CONTRACTED	bind_lazy_output	F2 state-leak fix: the turnkey wrapper cannot settle a lazy generate's report at return; provoked in tests/test_bind_lazy_generate.py
 torchlens.intervention.injection:refuse_injection_logged_runnable_save:InvalidArgumentError::1	CONTRACTED	injection_logged_runnable_unsupported	F44 injections stage 2: the runnable sparse core cannot carry the injected family; provoked in tests/test_log_injections_s2_persistence.py
 torchlens.intervention.injection:refuse_injection_logged_stream_finalize:InvalidArgumentError::1	CONTRACTED	injection_logged_stream_unsupported	F44 injections stage 2: streamed writer bypasses the analysis save door; provoked directly in tests/test_log_injections_s2_forgery.py (end-to-end path blocked by the pre-existing streamed-intervene portability gap)
 torchlens._io.injection_codec:append_injected_op_rows:ArtifactError::1	INTERNAL		F44: fires only if scrub_for_save produced a state without layer_list -- a TorchLens scrub defect, not reachable from lawful user input
@@ -728,14 +727,14 @@ torchlens.intervention.compose:compose.factory._hook:HookValueError::1	CONTRACTE
 torchlens.intervention.compose:compose.factory._hook:HookValueError::2	CONTRACTED	compose_leaf_failed	F02 D20 non-tensor leaf return naming compose[i]
 torchlens.intervention.masked_edit:_row_equivariance_facts:InvalidArgumentError::1	CONTRACTED	sampling_geometry_mismatch	F02 D23 batch axis out of range for the site mask
 torchlens.intervention.masked_edit:_row_equivariance_facts:InvalidArgumentError::2	CONTRACTED	mask_not_row_equivariant	F02 D23 draw-independent uniform-row mask law
-torchlens.intervention.population:Reference.__post_init__:InvalidArgumentError::1	CONTRACTED	population_empty	F02 D2 population invariant
-torchlens.intervention.population:Reference.__post_init__:InvalidArgumentError::2	CONTRACTED	population_datum_count_mismatch	F02 D2 datum/member alignment
-torchlens.intervention.population:Reference.eligible_indices:InvalidArgumentError::1	CONTRACTED	population_agreement_empty	F02 D13 conditioned draw without datums
-torchlens.intervention.population:Reference.eligible_indices:InvalidArgumentError::2	CONTRACTED	population_agreement_empty	F02 D13 empty agreement class (ephemeral message names keys and class sizes)
-torchlens.intervention.population:Reference._tensor_members:InvalidArgumentError::1	CONTRACTED	population_reduce_unsupported	F02 D3 reducers need tensor members
-torchlens.intervention.population:Reference._reduce:InvalidArgumentError::1	CONTRACTED	population_matching_invalid	F02 agreement condition is both-or-neither
-torchlens.intervention.population:Reference._reduce:InvalidArgumentError::2	CONTRACTED	population_matching_invalid	F02 reducers take ONE subject datum
-torchlens.intervention.population:Reference._reduce:InvalidArgumentError::3	CONTRACTED	population_reduce_underdetermined	F02 D3 too few eligible members (std needs >= 2)
+torchlens.intervention.population:Population.__post_init__:InvalidArgumentError::1	CONTRACTED	population_empty	F02 D2 population invariant
+torchlens.intervention.population:Population.__post_init__:InvalidArgumentError::2	CONTRACTED	population_datum_count_mismatch	F02 D2 datum/member alignment
+torchlens.intervention.population:Population.eligible_indices:InvalidArgumentError::1	CONTRACTED	population_agreement_empty	F02 D13 conditioned draw without datums
+torchlens.intervention.population:Population.eligible_indices:InvalidArgumentError::2	CONTRACTED	population_agreement_empty	F02 D13 empty agreement class (ephemeral message names keys and class sizes)
+torchlens.intervention.population:Population._tensor_members:InvalidArgumentError::1	CONTRACTED	population_reduce_unsupported	F02 D3 reducers need tensor members
+torchlens.intervention.population:Population._reduce:InvalidArgumentError::1	CONTRACTED	population_matching_invalid	F02 agreement condition is both-or-neither
+torchlens.intervention.population:Population._reduce:InvalidArgumentError::2	CONTRACTED	population_matching_invalid	F02 reducers take ONE subject datum
+torchlens.intervention.population:Population._reduce:InvalidArgumentError::3	CONTRACTED	population_reduce_underdetermined	F02 D3 too few eligible members (std needs >= 2)
 torchlens.intervention.population:population:InvalidArgumentError::1	CONTRACTED	population_origin_required	F02 D2 origin= required non-empty (subspace precedent)
 torchlens.intervention.population:population:InvalidArgumentError::2	CONTRACTED	population_empty	F02 D2 empty tensor stack
 torchlens.intervention.population:population:InvalidArgumentError::3	CONTRACTED	population_heterogeneous	F02 D2 one homogeneous member stack
@@ -1215,6 +1214,12 @@ torchlens._visualization.surgery_visuals:surgery_stage:InvalidArgumentError::1	C
 torchlens._visualization._surgery_diff:surgery_diff:InvalidArgumentError::1	CONTRACTED	surgery_diff_incomparable	F43 surgery diff self-diff refusal (vacuous); contract row + tests/test_surgery_visuals_marks.py
 torchlens._visualization._surgery_diff:surgery_diff:InvalidArgumentError::2	CONTRACTED	surgery_diff_incomparable	F43 surgery diff op-free operand refusal; contract row + tests/test_surgery_visuals_marks.py
 torchlens._capture.session:CaptureSession._spill_activation_escrow_to_budget:SaveBudgetExceededError::1	CONTRACTED	escrow_budget_exceeded	leverage B9 declared escrow spill bound: typed + code + accounting fields + contract-doc row, contracted in its own change (lane F34)
+torchlens.experiment._reader:_LedgerReader.entry:BundleExperimentError::1	CONTRACTED	ledger_entry_unknown	F03 items 6-11: unknown entry id; contract row + tests/test_ledger_exp_*.py
+torchlens.experiment._reader:_LedgerReader.evidence:BundleExperimentError::1	CONTRACTED	ledger_evidence_unavailable	F03 items 6-11: evidence ref index out of range; contract row + tests/test_ledger_exp_*.py
+torchlens.visualization.surgery_visuals:surgery_stage:InvalidArgumentError::1	CONTRACTED	surgery_evidence_missing	F43 surgery lens headline refusal: no audit entries to render; contract row + tests/test_surgery_visuals_marks.py
+torchlens.visualization._surgery_diff:surgery_diff:InvalidArgumentError::1	CONTRACTED	surgery_diff_incomparable	F43 surgery diff self-diff refusal (vacuous); contract row + tests/test_surgery_visuals_marks.py
+torchlens.visualization._surgery_diff:surgery_diff:InvalidArgumentError::2	CONTRACTED	surgery_diff_incomparable	F43 surgery diff op-free operand refusal; contract row + tests/test_surgery_visuals_marks.py
+torchlens.capture.session:CaptureSession._spill_activation_escrow_to_budget:SaveBudgetExceededError::1	CONTRACTED	escrow_budget_exceeded	leverage B9 declared escrow spill bound: typed + code + accounting fields + contract-doc row, contracted in its own change (lane F34)
 torchlens.differential:DiffReport.rows_with_status:InvalidArgumentError::1	CONTRACTED	differential_status_invalid	leverage B15 closed row-status vocabulary refusal, contracted in its own change (lane F34)
 torchlens.differential:diff:InvalidArgumentError::1	CONTRACTED	differential_subject_is_reference	leverage B15 self-comparison refusal, contracted in its own change (lane F34)
 torchlens.intervention.replay:_validated_cone_origins:InvalidArgumentError::1	CONTRACTED	cone_origin_invalid	leverage B3 string-origin validation (a string origins argument would silently return an empty cone), contracted in its own change (lane F34)

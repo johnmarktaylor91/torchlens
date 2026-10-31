@@ -424,7 +424,7 @@ def test_node_scoped_to_members_skips_a_foreign_member(model: _TinyLM) -> None:
         lambda b: b.delta_map("relative_l2"),
         lambda b: b.norm_delta(),
         lambda b: b.output_delta("draft"),
-        lambda b: b.compare("relative_l2"),
+        lambda b: b.compare("draft", "critique", metric="relative_l2"),
         lambda b: b.store_comparison("relative_l2"),
     ],
 )

@@ -347,66 +347,6 @@ def _output_delta_values(
     return result
 
 
-def _bundle_motif_occurrences(self: Bundle) -> dict[str, list[tuple[str, str]]]:
-    """Return repeated operation-equivalence motifs across bundle traces.
-
-    Parameters
-    ----------
-    self:
-        Bundle being inspected.
-
-    Returns
-    -------
-    dict[str, list[tuple[str, str]]]
-        Operation-equivalence key to ``(member_name, layer_label)`` occurrences.
-    """
-
-    motifs: dict[str, list[tuple[str, str]]] = {}
-    for member_name, member in self.members.items():
-        for layer in getattr(member, "layer_list", []):
-            key = getattr(layer, "equivalence_class", None)
-            if not key:
-                continue
-            motifs.setdefault(str(key), []).append((member_name, str(layer.layer_label)))
-    return {key: rows for key, rows in motifs.items() if len(rows) > 1}
-
-
-def _bundle_compare(
-    self: Bundle,
-    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
-    *,
-    baseline: str | Trace | None = None,
-    on: Literal["out", "grad"] = "out",
-) -> dict[str, Any]:
-    """Return a unified bundle comparison payload.
-
-    Parameters
-    ----------
-    metric:
-        Metric name or callable.
-    baseline:
-        Baseline member name or log. Defaults like :meth:`delta_map`.
-    on:
-        Tensor field to compare.
-
-    Returns
-    -------
-    dict[str, Any]
-        Uniform payload with metric metadata, node deltas, output deltas, and
-        repeated motif occurrences.
-    """
-
-    baseline_name = _gated_baseline(self, "compare", baseline)
-    return {
-        "baseline": baseline_name,
-        "metric": _metric_label(metric),
-        "on": on,
-        "nodes": _delta_map_values(self, metric, baseline_name, on),
-        "outputs": _output_delta_values(self, baseline_name, metric, on),
-        "motifs": _bundle_motif_occurrences(self),
-    }
-
-
 def _alignment_score(left: Any, right: Any, left_index: int, right_index: int) -> float:
     """Return a conservative cross-architecture alignment score.
 
@@ -542,7 +482,6 @@ def dynamic_bundle_methods() -> dict[str, Callable[..., Any]]:
 
     table: dict[str, Callable[..., Any]] = {
         "aligned_pairs": _bundle_aligned_pairs,
-        "compare": _bundle_compare,
         "delta_map": _bundle_delta_map,
         "norm_delta": _bundle_norm_delta,
         "output_delta": _bundle_output_delta,

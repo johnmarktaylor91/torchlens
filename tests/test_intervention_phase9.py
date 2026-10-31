@@ -12,7 +12,7 @@ from torchlens.intervention.errors import (
     BaselineUndeterminedError,
     BundleComparisonError,
 )
-from torchlens.intervention.types import Relationship
+from torchlens.types import Relationship
 
 
 class _TanhModel(nn.Module):
