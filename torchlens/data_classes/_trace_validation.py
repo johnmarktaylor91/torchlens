@@ -444,7 +444,7 @@ class TraceValidationMixin(_TraceMixinBase):
                 payload_load_status=getattr(self, "payload_load_status", None),
             )
         spec = get_backend_spec(backend)
-        if not spec.capabilities.validation_replay:
+        if not spec.capabilities.has_validation_replay:
             return ValidationStatus.unavailable_unsupported(backend=backend)
         return ValidationStatus.available_live(backend=backend)
 

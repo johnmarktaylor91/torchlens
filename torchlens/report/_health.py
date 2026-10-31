@@ -155,7 +155,7 @@ def _parse_persisted(payload: Any, revision: str) -> HealthFacts:
         )
     except (KeyError, TypeError, ValueError):
         return _not_checked("persisted_invalid", revision)
-    if record.checked < 0 or record.unexamined < 0 or record.unchecked < 0:
+    if record.num_checked_ops < 0 or record.num_unexamined_ops < 0 or record.num_unchecked_ops < 0:
         return _not_checked("persisted_invalid", revision)
     return record
 
@@ -258,7 +258,7 @@ def normalize_health_facts(trace: Any) -> HealthFacts:
         "underivable",
         "persisted_invalid",
     ):
-        annotations[HEALTH_FACTS_ANNOTATIONS_KEY] = record.to_payload()
+        annotations[HEALTH_FACTS_ANNOTATIONS_KEY] = record.to_dict()
     return record
 
 

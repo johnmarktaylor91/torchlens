@@ -443,15 +443,15 @@ def build_summary_data(
         params_frozen=core.params.frozen,
         flops_forward_fma2=int(core.compute.partition_total),
         macs_forward=int(core.compute.macs_total),
-        captured_bytes=core.memory.at_capture_bytes,
-        retained_bytes=core.memory.retained_now_bytes,
+        captured_bytes=core.memory.captured_bytes,
+        retained_bytes=core.memory.retained_bytes,
         compute_coverage={
             "known": core.compute.coverage.known,
             "zero_by_rule": core.compute.coverage.zero_by_rule,
             "not_applicable": core.compute.coverage.not_applicable,
             "unknown": core.compute.coverage.unknown,
         },
-        params_bytes=core.params.bytes,
+        params_bytes=core.params.nbytes,
         params_effective=(
             core.params.total - pruned.masked
             if pruned is not None and pruned.masked is not None and core.params.total is not None

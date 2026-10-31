@@ -1719,9 +1719,9 @@ class MLXBackend:
             status_result = ValidationStatus.from_replay_counts(
                 backend=self.name,
                 source=_mlx_validation_source(trace),
-                replayed_node_count=replayed_count,
-                unverified_node_count=unverified_count,
-                failed_node_count=failed_count,
+                num_replayed_ops=replayed_count,
+                num_unverified_ops=unverified_count,
+                num_failed_ops=failed_count,
                 payload_load_status=getattr(trace, "payload_load_status", None),
                 unverified_reason_counts=reason_counts,
             )
@@ -1731,8 +1731,8 @@ class MLXBackend:
                 backend=self.name,
                 source=_mlx_validation_source(trace),
                 payload_load_status=getattr(trace, "payload_load_status", None),
-                replayed_node_count=replayed_count,
-                failed_node_count=max(1, failed_count),
+                num_replayed_ops=replayed_count,
+                num_failed_ops=max(1, failed_count),
             )
         setattr(trace, "_validation_replay_status", status_result)
         return status_result if status_result.state == "unverified" else status_result.passed

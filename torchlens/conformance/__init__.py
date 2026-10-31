@@ -131,7 +131,7 @@ def _canonical_report_json(report: ConformanceReport, *, include_attestation: bo
         "funnel": dict(sorted(report.funnel.items())),
         "realism": {key: sorted(value) for key, value in sorted(report.realism.items())},
         "earned_tier": report.earned_tier,
-        "claim_eligible": report.claim_eligible,
+        "claim_eligible": report.is_claim_eligible,
         "environment": dict(sorted(report.environment.items())),
     }
     if include_attestation:
@@ -295,7 +295,7 @@ def run_conformance(
         funnel=report.funnel,
         realism=report.realism,
         earned_tier=report.earned_tier,
-        is_claim_eligible=report.claim_eligible,
+        is_claim_eligible=report.is_claim_eligible,
         environment=report.environment,
         attestation_sha256=digest,
     )
@@ -328,7 +328,7 @@ def claim_string(report: ConformanceReport) -> str:
         provider).
     """
 
-    if not report.claim_eligible or not report.earned_tier:
+    if not report.is_claim_eligible or not report.earned_tier:
         pretrained = len(report.realism.get("pretrained", []))
         raise ConfigurationError(
             f"Report for backend {report.backend!r} earned no claim: earned_tier="

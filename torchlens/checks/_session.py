@@ -696,7 +696,7 @@ class ChecksSession:
         self._disclosures["optimizers"] = [
             {
                 "kind": facts.kind,
-                "known_adapter": facts.known,
+                "known_adapter": facts.is_known,
                 "decoupled_decay": facts.decoupled_decay,
                 "band_reason": facts.band_reason,
             }
@@ -744,11 +744,11 @@ class ChecksSession:
         if name in self._fired_this_backward:
             self._close_backward()
         if not self._fired_this_backward:
-            self._scale_ledger.read()
+            self._scale_ledger.observe_backward()
             scaler = self._scaler
             self._pending_scale = (
                 float(scaler.get_scale())
-                if self._scale_ledger.enabled and scaler is not None
+                if self._scale_ledger.is_enabled and scaler is not None
                 else None
             )
             if self._watchdog.on_backward():
@@ -798,7 +798,7 @@ class ChecksSession:
                 verdict = "vanishing"
             if verdict is None:
                 continue
-            if verdict == "nonfinite" and self._scale_ledger.enabled:
+            if verdict == "nonfinite" and self._scale_ledger.is_enabled:
                 # The mechanism working (memo D6): collected into the ledger,
                 # never raised, never a finding flood.
                 continue
@@ -975,7 +975,7 @@ class ChecksSession:
                 finding.message + " Remedy: " + finding.remedy,
                 code="param_grad_nonfinite",
                 finding=finding.to_dict(),
-                names=list(finding.names),
+                names=list(finding.param_names),
                 accepted_step_id=self.accepted_step_id,
                 backward_id=self.backward_id,
                 report=self.report().to_dict(),
@@ -1001,7 +1001,7 @@ class ChecksSession:
         if self._paused:
             return
         self.accepted_step_id += 1
-        self._scale_ledger.accepted()
+        self._scale_ledger.observe_accepted_step()
         self._watchdog.on_accepted()
         # The free disconnection report (site matrix S-B row): p.grad is None
         # at an accepted step is host-side evidence, catching the
@@ -1118,7 +1118,7 @@ class ChecksSession:
         if self._change is None or not self._optimizers:
             return
         facts: OptimizerFacts = optimizer_facts(self._optimizers[0])
-        if not facts.known:
+        if not facts.is_known:
             self._unavailable.setdefault("param_movement_decay_band", facts.band_reason or "")
             return
         if not facts.decoupled_decay:
@@ -1378,7 +1378,7 @@ class ChecksSession:
             entries.extend((name, "buffer", buffer) for name, buffer in self._model.named_buffers())
         rows = scan_named_tensors(entries)
         self._checks_run.append(f"scheduled_scan@{self.accepted_step_id}")
-        corrupt = [row for row in rows if row.audited and row.n_nonfinite]
+        corrupt = [row for row in rows if row.is_audited and row.num_nonfinite]
         if not corrupt:
             return
         names = tuple(row.name for row in corrupt)
@@ -1448,7 +1448,7 @@ class ChecksSession:
             ObserverEvent(
                 key="checks/watchdog",
                 kind="verdict",
-                verdict="tripped" if snapshot.tripped else "armed",
+                verdict="tripped" if snapshot.is_tripped else "armed",
                 backward_id=self.backward_id,
                 global_step=self._global_step(),
                 axis_provenance=self._axis_provenance(),
@@ -1466,7 +1466,7 @@ class ChecksSession:
             "axis_provenance": provenance,
         }
         ledger = self._scale_ledger.snapshot()
-        if ledger.scaler_present:
+        if ledger.has_scaler:
             self.events.publish(
                 ObserverEvent(
                     key="checks/scale",

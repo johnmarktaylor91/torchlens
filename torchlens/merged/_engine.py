@@ -177,7 +177,7 @@ class MergeDerivation:
             "ranks": list(self.ranks),
             "expected_ranks": (None if self.expected_ranks is None else list(self.expected_ranks)),
             "joins": [join.to_payload() for join in self.joins],
-            "findings": [finding.to_payload() for finding in self.findings],
+            "findings": [finding.to_dict() for finding in self.findings],
             "audit": {
                 digest: {
                     "status": verdict.status,

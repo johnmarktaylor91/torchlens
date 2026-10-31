@@ -187,11 +187,11 @@ def validate_tf_trace(trace: Any, *, validate_metadata: bool = True) -> Validati
     status = ValidationStatus.from_replay_counts(
         backend="tf",
         source=source,
-        replayed_node_count=result.counts.replayed_node_count,
-        unverified_node_count=0,
-        pure_unverified_node_count=result.counts.pure_unverified_node_count,
-        effect_region_node_count=result.counts.effect_region_node_count,
-        failed_node_count=result.counts.failed_node_count,
+        num_replayed_ops=result.counts.replayed_node_count,
+        num_unverified_ops=0,
+        num_pure_unverified_ops=result.counts.pure_unverified_node_count,
+        num_effect_region_ops=result.counts.effect_region_node_count,
+        num_failed_ops=result.counts.failed_node_count,
         payload_load_status=getattr(trace, "payload_load_status", None),
     )
     setattr(trace, "_tf_validation_result", result)

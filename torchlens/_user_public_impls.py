@@ -1233,12 +1233,12 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
                 "re-trace diverged structurally, so the overall validation "
                 "result is unverified."
             ),
-            replayed_node_count=current_status.replayed_node_count,
-            unverified_node_count=max(1, current_status.unverified_node_count),
+            num_replayed_ops=current_status.replayed_node_count,
+            num_unverified_ops=max(1, current_status.unverified_node_count),
             payload_load_status=current_status.payload_load_status,
-            pure_unverified_node_count=current_status.pure_unverified_node_count,
-            effect_region_node_count=current_status.effect_region_node_count,
-            failed_node_count=current_status.failed_node_count,
+            num_pure_unverified_ops=current_status.pure_unverified_node_count,
+            num_effect_region_ops=current_status.effect_region_node_count,
+            num_failed_ops=current_status.failed_node_count,
             unverified_reason_counts=unverified_reason_counts,
             exempted_reason_counts=current_status.exempted_reason_counts,
             decisions=current_status.decisions,
@@ -1780,7 +1780,7 @@ def _validate_forward_pass_torch(
                 (
                     diagnostic
                     for diagnostic in get_validation_diagnostics(trace)
-                    if diagnostic.check == "trace_retrace_structure_mismatch"
+                    if diagnostic.check_name == "trace_retrace_structure_mismatch"
                 ),
                 None,
             )

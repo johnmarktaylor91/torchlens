@@ -786,7 +786,7 @@ def instrumented_rate_calibration(
         inflation_factor=instrumented / clean.seconds if clean.seconds > 0 else float("inf"),
         instrumented_seconds=instrumented,
         raw_seconds=clean.seconds,
-        n_forwards_run=clean.n_forwards_run + 1,
+        n_forwards_run=clean.num_forward_runs + 1,
         method="one timed capture vs median uninstrumented forward (perf_counter)",
     )
 

@@ -99,7 +99,7 @@ class InputDiagnostics:
             "schema": "tl_input_diagnostics_v1",
             "findings": [
                 {
-                    "check": f.check,
+                    "check": f.check_name,
                     "outcome": f.outcome,
                     "evidence_class": f.evidence_class,
                     "detail": f.detail,

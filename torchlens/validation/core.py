@@ -289,9 +289,9 @@ class ValidationDecisionRecorder:
         return ValidationStatus.from_replay_counts(
             backend=backend,
             source="live",
-            replayed_node_count=self.replay_validated_node_count(),
-            unverified_node_count=self.node_count("unverified"),
-            failed_node_count=self.node_count("failed"),
+            num_replayed_ops=self.replay_validated_node_count(),
+            num_unverified_ops=self.node_count("unverified"),
+            num_failed_ops=self.node_count("failed"),
             unverified_reason_counts=self.reason_counts("unverified"),
             exempted_reason_counts=self.reason_counts("exempted"),
             decisions=tuple(item.as_dict() for item in self.decisions),

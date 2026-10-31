@@ -127,7 +127,7 @@ class CompatReport:
                         _escape_markdown(row.label),
                         f"`{row.status}`",
                         f"`{row.severity}`",
-                        "yes" if row.detected else "no",
+                        "yes" if row.is_detected else "no",
                         _escape_markdown(row.details),
                         _escape_markdown(row.suggestion),
                     ]
@@ -155,7 +155,7 @@ class CompatReport:
                 row.label,
                 row.status,
                 row.severity,
-                "yes" if row.detected else "no",
+                "yes" if row.is_detected else "no",
                 row.details,
                 row.suggestion,
             )
@@ -187,10 +187,10 @@ class CompatReport:
 
         severity_rank = {"error": 0, "warning": 1, "info": 2, "ok": 3}
         findings = sorted(
-            (row for row in self.checks if row.detected or row.severity != "ok"),
+            (row for row in self.checks if row.is_detected or row.severity != "ok"),
             key=lambda row: severity_rank.get(row.severity, 3),
         )
-        clean = [row for row in self.checks if not (row.detected or row.severity != "ok")]
+        clean = [row for row in self.checks if not (row.is_detected or row.severity != "ok")]
         lines = [
             f"TorchLens compatibility report for {self.model_type}",
             (

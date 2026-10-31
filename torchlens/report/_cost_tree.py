@@ -378,7 +378,7 @@ class _TreeBuilder:
         self.bwd_unattributed = int(status.unattributed_flops or 0)
         if not self.backward_known:
             return
-        for attribution in status.attributions:
+        for attribution in status.flops_attributions:
             for row in attribution.rows:
                 if row.op_label is None:
                     self.bwd_no_op += int(row.flops or 0)
@@ -763,7 +763,7 @@ class _TreeBuilder:
                     subtree_pct=_pct(sub_flops, self.partition_total),
                     subtree_forward_mac_flops=sub_mac,
                     subtree_backward_flops=self._bwd(sub_bwd),
-                    subtree_total_flops=self._total(sub_mac, sub_bwd),
+                    subtree_forward_backward_flops=self._total(sub_mac, sub_bwd),
                 )
                 break
 
@@ -818,7 +818,7 @@ def format_cost_tree(tree: CostTree) -> str:
     as not run or unknown, never 0.
     """
 
-    counted = tree.backward_total is not None
+    counted = tree.total_backward_flops is not None
     head = f"{'call':<44} {'self FLOPs':>14} {'self%':>7} {'subtree FLOPs':>14} {'subtree%':>9}"
     if counted:
         head += f" {'fwd MAC':>12} {'bwd':>12} {'fwd MAC+bwd':>12}"
@@ -839,7 +839,7 @@ def format_cost_tree(tree: CostTree) -> str:
                 for value in (
                     row.self_forward_mac_flops,
                     row.self_backward_flops,
-                    row.self_total_flops,
+                    row.self_forward_backward_flops,
                 )
             )
         lines.append(line)
@@ -860,9 +860,9 @@ def format_cost_tree(tree: CostTree) -> str:
 def _backward_footer(tree: CostTree) -> str:
     """One line on the backward columns: counted with its convention, or why absent."""
 
-    if tree.backward_total is not None:
+    if tree.total_backward_flops is not None:
         return (
-            f"executed backward: {tree.backward_total} FLOPs (matmul and convolution "
+            f"executed backward: {tree.total_backward_flops} FLOPs (matmul and convolution "
             "families, fma2); fwd MAC = 2 x true MACs, the same convention"
         )
     if tree.backward_state == "grad_disabled":

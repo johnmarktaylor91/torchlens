@@ -211,11 +211,11 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
         # not contain.)
         "activations": {
             "payload_scope": "retained_now",
-            "num_saved_at_capture": memory_facts.at_capture_saved_ops,
-            "at_capture_memory": Bytes(memory_facts.at_capture_bytes),
-            "retained_now_memory": Bytes(memory_facts.retained_now_bytes),
-            "num_present_now": memory_facts.retained_now_present_ops,
-            "num_lazy_now": memory_facts.retained_now_lazy_ops,
+            "num_saved_at_capture": memory_facts.captured_saved_ops,
+            "at_capture_memory": Bytes(memory_facts.captured_bytes),
+            "retained_now_memory": Bytes(memory_facts.retained_bytes),
+            "num_present_now": memory_facts.retained_present_ops,
+            "num_lazy_now": memory_facts.retained_lazy_ops,
             "total_activation_memory": getattr(trace, "total_activation_memory", None),
         },
         "backward": {

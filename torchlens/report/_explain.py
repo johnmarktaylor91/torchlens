@@ -647,7 +647,7 @@ def _capture_summary_lines(log: Any) -> list[str]:
             f"{_format_count(core.counts.alias_rows)} boundary/buffer rows)."
         ),
         (
-            f"- Tensors saved at capture: {_format_count(core.memory.at_capture_saved_ops)} "
+            f"- Tensors saved at capture: {_format_count(core.memory.captured_saved_ops)} "
             f"of {_format_count(core.counts.tracked_tensor_rows)}."
         ),
         f"- Maximum observed ops for one layer: {_format_count(max_ops)}.",
@@ -735,7 +735,7 @@ def _anomaly_lines(log: Any) -> list[str]:
     if verdict == "checked_and_clean":
         return [
             (
-                f"- CHECKED-AND-CLEAN: {facts.checked} op output(s) examined, none "
+                f"- CHECKED-AND-CLEAN: {facts.num_checked_ops} op output(s) examined, none "
                 f"non-finite (basis: {basis})."
             ),
             "- Not audited: judgments (severity, follow-ups) come from tl.audit(trace).",

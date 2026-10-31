@@ -162,7 +162,7 @@ def _empirical_adjoint_checks(
 
     checks: list[EmpiricalAdjointCheck] = []
     for validation in containment:
-        for role, receptive in validation.gradient.items():
+        for role, receptive in validation.grad.items():
             far_label = next(
                 (op.label for op in trace.layer_list if str(op.io_role or op.label) == role),
                 "",

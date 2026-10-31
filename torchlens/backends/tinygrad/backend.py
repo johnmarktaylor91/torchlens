@@ -600,7 +600,7 @@ class TinygradBackend:
                 backend="tinygrad",
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
                 payload_load_status=getattr(trace, "payload_load_status", None),
-                failed_node_count=1,
+                num_failed_ops=1,
             )
         setattr(
             trace,
@@ -641,9 +641,9 @@ class TinygradBackend:
         return ValidationStatus.from_replay_counts(
             backend="tinygrad",
             source=source,
-            replayed_node_count=replayed_node_count,
-            unverified_node_count=unverified_node_count,
-            failed_node_count=0 if passed else 1,
+            num_replayed_ops=replayed_node_count,
+            num_unverified_ops=unverified_node_count,
+            num_failed_ops=0 if passed else 1,
             payload_load_status=payload_load_status,
         )
 
