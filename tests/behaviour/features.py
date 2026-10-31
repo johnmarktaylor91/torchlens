@@ -94,7 +94,7 @@ def _prepare_save(cell: Cell) -> None:
 
 
 def _after_save(cell: Cell) -> None:
-    """The selected ops are saved; anything else saved is an output or a buffer source."""
+    """The selected ops are saved; anything else saved is an output or a buffer node."""
 
     want = {op.label for op in cell.facts.plain.ops if op.func_name == cell.facts.common_func}
     for name, trace in (("live", cell.trace), ("loaded", cell.loaded)):
@@ -103,6 +103,7 @@ def _after_save(cell: Cell) -> None:
         got = {op.label for op in trace.saved_ops}
         allowed = {op.label for op in trace.output_ops}
         allowed |= {op.label for op in trace.ops if op.is_buffer_source}
+        allowed |= {op.label for op in trace.ops if op.label.startswith("buffer_")}
         missing, extra = sorted(want - got), sorted(got - want - allowed)
         cell.expect(not missing, f"{name}: selected ops not saved: {missing[:8]}")
         cell.expect(not extra, f"{name}: unselected ops saved: {extra[:8]}")
@@ -117,13 +118,16 @@ def _prepare_intervene(cell: Cell) -> None:
 
 
 def _after_intervene(cell: Cell) -> None:
-    """The edit fired (``on_zero_fire="error"`` guards that) and changed the output."""
-
-    from tests.behaviour.harness import first_leaf_difference
+    """Every selected op records a replaced value (``on_zero_fire="error"`` guards firing)."""
 
     trace = cell.require_trace()
-    diff = first_leaf_difference(cell.plain_output, cell.output_leaves(trace))
-    cell.expect(diff is not None, "scaling every selected op left the output unchanged")
+    target = cell.facts.common_float_func
+    want = {op.label for op in cell.facts.plain.ops if op.func_name == target}
+    got = {op.label for op in trace.ops if op.intervention_replaced}
+    cell.expect(
+        got == want,
+        f"ops recording a replaced value {sorted(got)[:8]} != selected {sorted(want)[:8]}",
+    )
 
 
 def _prepare_halt(cell: Cell) -> None:

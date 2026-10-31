@@ -240,8 +240,25 @@ def first_leaf_difference(want: Sequence[Any], got: Sequence[Any]) -> str | None
         return f"{len(want)} leaves expected, {len(got)} found"
     for index, (a, b) in enumerate(zip(want, got, strict=True)):
         if not _same_leaf(a, b):
-            return f"leaf {index} differs: {_describe(a)} vs {_describe(b)}"
+            return f"leaf {index} differs: {_describe(a)} vs {_describe(b)}{_gap(a, b)}"
     return None
+
+
+def _gap(a: Any, b: Any) -> str:
+    """Describe how far two same-shaped real tensors are apart."""
+
+    if not (isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor)):
+        return ""
+    if a.shape != b.shape or a.dtype != b.dtype or a.is_complex() or not a.is_floating_point():
+        return ""
+    delta = (a.double() - b.double()).abs()
+    finite = torch.isfinite(delta)
+    if not bool(finite.any()):
+        return " (no finite difference)"
+    return (
+        f" (max abs diff {delta[finite].max().item():.3e} over {int(finite.sum())} "
+        f"of {delta.numel()} elements, {int((delta[finite] > 0).sum())} differ)"
+    )
 
 
 def _describe(leaf: Any) -> str:
