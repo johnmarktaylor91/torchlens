@@ -449,7 +449,7 @@ class TraceValidationMixin(_TraceMixinBase):
         return ValidationReplayStatus.available_live(backend=backend)
 
     @property
-    def pristine(self: "Trace") -> bool | None:
+    def is_pristine(self: "Trace") -> bool | None:
         """Whether nothing ever intervened on this trace, read from its saved evidence.
 
         Derived at read time from records that persist with the trace (the

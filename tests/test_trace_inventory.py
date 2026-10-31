@@ -51,7 +51,7 @@ def test_sites_table_groups_ops_by_site_key() -> None:
     torch.manual_seed(0)
     trace = tl.trace(LoopMlp(), torch.randn(1, 4))
 
-    frame = trace.sites_table()
+    frame = trace.sites()
 
     assert list(frame.columns) == [
         "site_key",
@@ -87,7 +87,7 @@ def test_sites_table_refuses_keyless_legacy_artifacts() -> None:
         op.site_key = None
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        trace.sites_table()
+        trace.sites()
     assert excinfo.value.fields["code"] == "site_key_unavailable"
 
 

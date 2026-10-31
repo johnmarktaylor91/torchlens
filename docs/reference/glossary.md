@@ -863,7 +863,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   positively verified, for example `mode_rescue_rerun`, `escape_rescue_unrecovered`,
   `owner_thread_tripwire_changed`, or `dynamo_region_not_logged`.
 
-**Pristine (`Trace.pristine`)** *(spelling documented-unstable)*
+**Pristine (`Trace.is_pristine`)** *(spelling documented-unstable)*
 : Whether nothing ever intervened on the trace, read from the evidence it carries: `True`,
   `False`, or `None`. It is derived at read time from records that persist with the trace (the
   intervention audit, the operation history, mutation states, direct writes and op intervention
@@ -2538,7 +2538,7 @@ deprecation shim owed*
   A loaded artifact's fast tier still refuses `run_fast_until_unsupported`. Full
   contract: [the runnable tlspec contract](runnable_tlspec_contract.md).
 
-**Trace.sites_table()** — *unstable — no deprecation shim owed*
+**Trace.sites()** — *unstable — no deprecation shim owed*
 : The tabular view of a trace's structural sites: one row per distinct L1
   `site_key` in first-occurrence execution order, aggregating the ops that
   share the site (`module_site`, `layer_type`, `output_slot`,

@@ -715,7 +715,7 @@ class TraceStatsMixin(_TraceMixinBase):
             group_by=group_by,
         )
 
-    def sites_table(self: "Trace") -> Any:
+    def sites(self: "Trace") -> Any:
         """Return the tabular view of this trace's structural sites.
 
         DOCUMENTED-UNSTABLE spelling (pending naming-session ratification).
@@ -761,7 +761,7 @@ class TraceStatsMixin(_TraceMixinBase):
 
         return build_bill_of_materials(self)
 
-    def capability_card(self: "Trace") -> Any:
+    def capabilities(self: "Trace") -> Any:
         """Return the report-family capability card for THIS trace (F09/D24).
 
         DOCUMENTED-UNSTABLE spelling (pending naming-session ratification).

@@ -2259,7 +2259,7 @@ class Bundle:
     def _auto_detect_baseline(self) -> str | None:
         """Auto-detect a pristine baseline when exactly one candidate exists.
 
-        A member is a candidate only when ``Trace.pristine`` reads ``True``;
+        A member is a candidate only when ``Trace.is_pristine`` reads ``True``;
         ``None`` (no evidence recorded) never counts as pristine.
 
         Returns

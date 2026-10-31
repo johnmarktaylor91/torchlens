@@ -1,4 +1,4 @@
-"""``Trace.pristine`` is derived from the evidence a trace carries, never a stored flag.
+"""``Trace.is_pristine`` is derived from the evidence a trace carries, never a stored flag.
 
 A plain capture reads pristine before and after ``tl.save``/``tl.load``; any
 intervention, staged hook, value replacement or hooked run reads not pristine, and
@@ -89,10 +89,10 @@ def _double(out: torch.Tensor) -> torch.Tensor:
 
 def test_plain_capture_reads_pristine_before_and_after_save(tmp_path: Path) -> None:
     trace = tl.trace(_model(), _x())
-    assert trace.pristine is True
+    assert trace.is_pristine is True
     assert pristine_touch_evidence(trace) == ()
-    assert _saved(trace, tmp_path).pristine is True
-    assert pickle.loads(pickle.dumps(trace)).pristine is True
+    assert _saved(trace, tmp_path).is_pristine is True
+    assert pickle.loads(pickle.dumps(trace)).is_pristine is True
 
 
 def test_intervened_capture_reads_not_pristine_although_its_state_says_pristine(
@@ -102,12 +102,12 @@ def test_intervened_capture_reads_not_pristine_although_its_state_says_pristine(
     # The operational state machine never left PRISTINE for a func-targeted edit;
     # the derived reading comes from the evidence the capture recorded.
     assert trace.state is TraceState.PRISTINE
-    assert trace.pristine is False
+    assert trace.is_pristine is False
     assert {"intervention_audit", "state_history", "op_marks"} <= set(
         pristine_touch_evidence(trace)
     )
     loaded = _saved(trace, tmp_path)
-    assert loaded.pristine is False
+    assert loaded.is_pristine is False
     assert {"intervention_audit", "state_history", "op_marks"} <= set(
         pristine_touch_evidence(loaded)
     )
@@ -115,27 +115,27 @@ def test_intervened_capture_reads_not_pristine_although_its_state_says_pristine(
 
 def test_steered_capture_reads_not_pristine_after_save(tmp_path: Path) -> None:
     trace = _steered(_model())
-    assert trace.pristine is False
-    assert _saved(trace, tmp_path).pristine is False
+    assert trace.is_pristine is False
+    assert _saved(trace, tmp_path).is_pristine is False
 
 
 def test_zero_fire_capture_reads_not_pristine(tmp_path: Path) -> None:
     never = tl.when(tl.func("sigmoid"), tl.zero_ablate())
     trace = tl.trace(_model(), _x(), intervene=never, on_zero_fire="disclose")
-    assert trace.pristine is False
-    assert _saved(trace, tmp_path).pristine is False
+    assert trace.is_pristine is False
+    assert _saved(trace, tmp_path).is_pristine is False
 
 
 def test_staged_hook_stays_not_pristine_after_clear_and_save(tmp_path: Path) -> None:
     trace = _ready(_model())
     trace.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
-    assert trace.pristine is False
+    assert trace.is_pristine is False
     assert "staged_spec" in pristine_touch_evidence(trace)
     trace.clear_hooks(confirm_mutation=True)
-    assert trace.pristine is False
+    assert trace.is_pristine is False
     # The staged spec is session-time; the staging row persists.
     loaded = _saved(trace, tmp_path)
-    assert loaded.pristine is False
+    assert loaded.is_pristine is False
     assert "state_history" in pristine_touch_evidence(loaded)
 
 
@@ -143,18 +143,18 @@ def test_value_replacement_survives_a_state_reassignment(tmp_path: Path) -> None
     trace = _ready(_model())
     trace.set(tl.module("block"), _double, confirm_mutation=True)
     trace.state = TraceState.PRISTINE
-    assert trace.pristine is False
+    assert trace.is_pristine is False
     loaded = _saved(trace, tmp_path)
     loaded.state = TraceState.PRISTINE
-    assert loaded.pristine is False
+    assert loaded.is_pristine is False
 
 
 def test_clear_hooks_on_an_untouched_trace_stays_pristine(tmp_path: Path) -> None:
     trace = _ready(_model())
     trace.clear_hooks(confirm_mutation=True)
     assert trace.state is TraceState.SPEC_STALE
-    assert trace.pristine is True
-    assert _saved(trace, tmp_path).pristine is True
+    assert trace.is_pristine is True
+    assert _saved(trace, tmp_path).is_pristine is True
 
 
 def test_plain_reruns_and_runs_stay_pristine(tmp_path: Path) -> None:
@@ -162,23 +162,23 @@ def test_plain_reruns_and_runs_stay_pristine(tmp_path: Path) -> None:
     rerun = tl.trace(model, _x())
     rerun.run(model, _x(1))
     assert rerun.state is TraceState.RERUN_PROPAGATED
-    assert rerun.pristine is True
-    assert _saved(rerun, tmp_path, "rerun").pristine is True
+    assert rerun.is_pristine is True
+    assert _saved(rerun, tmp_path, "rerun").is_pristine is True
 
     source = tl.trace(model, _x())
     result = source.run(inputs=_x(1))
-    assert source.pristine is True and result.trace.pristine is True
+    assert source.is_pristine is True and result.trace.is_pristine is True
 
 
 def test_fork_inherits_the_reading_and_never_touches_its_parent() -> None:
     model = _model()
     plain = tl.trace(model, _x(), capture=CaptureOptions(intervention_ready=True))
     fork = plain.fork("f")
-    assert fork.pristine is True and plain.pristine is True
+    assert fork.is_pristine is True and plain.is_pristine is True
     fork.set(tl.module("block"), _double, confirm_mutation=True)
-    assert fork.pristine is False
-    assert plain.pristine is True
-    assert fork.fork("g").pristine is False
+    assert fork.is_pristine is False
+    assert plain.is_pristine is True
+    assert fork.fork("g").is_pristine is False
 
 
 def test_hooked_fast_run_agrees_with_the_flag() -> None:
@@ -186,15 +186,15 @@ def test_hooked_fast_run_agrees_with_the_flag() -> None:
     plain = tl.trace(model, _x(), save=tl.module("block") | tl.module("head"))
     plain_report = plain.run(inputs=_x(1), fast=True).report
     assert plain_report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert plain.pristine is True
+    assert plain.is_pristine is True
 
     hooked = _steered(model)
     result = hooked.run(inputs=_x(1), fast=True)
     mismatch = result.report.first_mismatch
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert mismatch is not None and ("pristine", "false") in tuple(mismatch.details)
-    assert result.trace.pristine is False
-    assert pickle.loads(pickle.dumps(result.trace)).pristine is False
+    assert result.trace.is_pristine is False
+    assert pickle.loads(pickle.dumps(result.trace)).is_pristine is False
 
 
 def test_v9_artifact_reads_what_it_carries(tmp_path: Path) -> None:
@@ -205,7 +205,7 @@ def test_v9_artifact_reads_what_it_carries(tmp_path: Path) -> None:
         trace = tl.load(work)
     assert trace.tlspec_version == 9
     assert pristine_touch_evidence(trace) == ()
-    assert trace.pristine is True
+    assert trace.is_pristine is True
 
 
 def test_pre_v9_artifact_reads_no_evidence_never_pristine(tmp_path: Path) -> None:
@@ -216,7 +216,7 @@ def test_pre_v9_artifact_reads_no_evidence_never_pristine(tmp_path: Path) -> Non
         trace = tl.load(work)
     assert trace.tlspec_version == 7
     assert pristine_touch_evidence(trace) == ()
-    assert trace.pristine is None
+    assert trace.is_pristine is None
 
 
 @pytest.mark.parametrize(
@@ -312,7 +312,7 @@ def test_reading_the_flag_never_changes_the_plain_run_verdict() -> None:
     first = tl.trace(model, _x())
     unread = first.run(inputs=_x(1)).report
     second = tl.trace(model, _x())
-    assert second.pristine is True
+    assert second.is_pristine is True
     read = second.run(inputs=_x(1)).report
     card = ("path_faithfulness", "first_mismatch", "poisoned", "numeric_attestation")
     assert [getattr(read, name) for name in card] == [getattr(unread, name) for name in card]
