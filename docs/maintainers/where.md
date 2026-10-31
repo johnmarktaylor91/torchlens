@@ -1286,6 +1286,7 @@ Torch backend implementation package for TorchLens capture. (98 modules, 51529 l
 | `module_stack` | Manage the torch capture module-call stack. | 87 |
 | `offload_hooks` | Accelerate offload/dispatch hook shims for eager capture (R5). | 214 |
 | `ops` | Log tensors produced by decorated torch operations. | 605 |
+| `param_late_registration` | Late registration of parameters the captured forward itself created (lazy modules). | 235 |
 | `param_mutation` | In-place mutation of Parameters during torch capture (receiver policy). | 300 |
 | `prehook_provenance` | Reversible forward-pre-hook input provenance for PyTorch eager capture. | 1003 |
 | `rescue` | Rescue re-run: recover escaped ops with a TorchFunctionMode net. | 960 |

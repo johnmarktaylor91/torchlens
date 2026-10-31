@@ -59,6 +59,12 @@ ADVISORY_UNRECORDED_OPERATOR_MUTATION = "unrecorded_operator_mutation"
 #: forward, its replay and the validation ground truth all run the unfused program
 #: (``_capture_state_helpers.hold_fused_attention_fastpath_off``). A disclosure, not a gap.
 ADVISORY_FUSED_ATTENTION_FASTPATH_HELD = "fused_attention_fastpath_held_off"
+#: Advisory kind recorded when a parameter the captured forward itself created (a lazy
+#: module built inside forward whose pending slot torch materialized in place) was
+#: registered late, at the wrapped call that first consumed it
+#: (``backends/torch/param_late_registration``). A disclosure, not a gap: the parameter is a
+#: live slot of the captured model's own module tree and carries session provenance.
+ADVISORY_PARAMETER_CREATED_IN_FORWARD = "parameter_created_in_forward"
 
 
 def append_capture_advisory(trace: Any, kind: str, entries: list[str]) -> None:

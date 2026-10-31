@@ -135,6 +135,11 @@ from .escape_detection import (
     mark_expected_original_accounted,
     reset_detector_tables,
 )
+from .param_late_registration import (
+    late_register_forward_created_parameter,
+    materialized_lazy_slots,
+    note_lazy_slot_materializing,
+)
 from .param_mutation import (
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
     is_prepared_parameter_receiver as _is_prepared_parameter_receiver,
@@ -1281,9 +1286,13 @@ def torch_func_decorator(
         # empty_like on the data alias). A pending tensor has no
         # shape/storage to log and the plumbing is pre-forward
         # materialization, not model dataflow (the materialized buffer
-        # registers at the module-entry gate); pass the call through
-        # unlogged, mirroring the functorch/dynamo region guards above.
+        # registers at the module-entry gate, the materialized parameter of
+        # a module built inside forward at the wrapped call that first
+        # consumes it, through ``late_register_forward_created_parameter``);
+        # pass the call through unlogged, mirroring the functorch/dynamo
+        # region guards above. The watched slot is recorded by identity.
         if args and isinstance(args[0], torch.Tensor) and _is_uninitialized_param(args[0]):
+            note_lazy_slot_materializing(trace, args[0])
             return func(*args, **kwargs)
 
         # Usage stats: count every decorated function call during logging.
@@ -1337,9 +1346,16 @@ def torch_func_decorator(
 
         # Register buffer tensors on first encounter. Buffers are tagged with
         # _tl.address during model prep but don't get _tl.label_raw
-        # until the first function actually uses them.
+        # until the first function actually uses them. A Parameter torch
+        # materialized from a pending lazy slot earlier in THIS forward (a
+        # lazy module built inside forward) registers late here, at its first
+        # consuming call; the watched-slot set is ``None`` until such a slot
+        # was seen, so the prepared-parameter path pays one attribute read.
+        watched_lazy_slots = materialized_lazy_slots(trace)
         for t in arg_tensorlike:
             if isinstance(t, torch.nn.Parameter):
+                if watched_lazy_slots is not None and t in watched_lazy_slots:
+                    late_register_forward_created_parameter(trace, t)
                 continue
             # The r81 identity ladder + F20 lazy late-index live in
             # buffer_writes.resolve_or_late_index_buffer_address.
