@@ -340,8 +340,11 @@ include = ["torchlens*"]
 # every annotation in the package.
 torchlens = [
     "py.typed",
-    "autoroute/data/*.json",
-    "autoroute/data/*.md",
+    # _autoroute/_builtin_output.py reads imagenet1k_labels.json through
+    # importlib.resources; tests/test_package_data_paths.py binds every data
+    # file under torchlens/ to a glob here and every glob to a real file.
+    "_autoroute/data/*.json",
+    "_autoroute/data/*.md",
     "schemas/*.json",
     # mechinterp/_aliases.py reads translation.json through importlib.resources at
     # runtime, so the file must ship in BOTH artifacts (the tests/test_mikit_*
