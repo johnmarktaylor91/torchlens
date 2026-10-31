@@ -436,9 +436,8 @@ footer code { font-size: 12px; }
     var n = node(id), t = target(n);
     var html = '<div class="details">';
     if (t.s) html += '<p class="label">Signature</p><div class="fullsig mono">' + esc(t.n) + renderSig(t.s, t.a) + '</div>';
-    var doc = t.D || t.d;
-    if (doc) html += '<pre>' + esc(doc) + '</pre>';
-    else html += '<p class="note">No docstring.</p>';
+    if (t.D) html += '<pre>' + esc(t.D) + '</pre>';
+    else if (!t.d) html += '<p class="note">No docstring.</p>';
     html += '<div class="src">';
     if (t.f !== undefined) html += '<span>defined in <code>' + esc(FILES[t.f]) + (t.l ? ":" + t.l : "") + '</code></span>';
     if (t.b && t.b.length) html += '<span>bases: <code>' + esc(t.b.join(", ")) + '</code></span>';
@@ -450,7 +449,7 @@ footer code { font-size: 12px; }
     html += '</div>';
     if (n.o) html += '<div class="note">' + esc(n.o) + '</div>';
     if (t.o && t.o !== n.o) html += '<div class="note">' + esc(t.o) + '</div>';
-    if (t.x && t.d && !t.D) html += '<div class="note">Internal row: the summary line only; the full docstring is in the file.</div>';
+    if (t.x && t.d && !t.D) html += '<div class="note">Internal row: the summary line above is all the page carries; the full docstring is in the file.</div>';
     html += '</div>';
     return html;
   }

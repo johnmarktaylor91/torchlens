@@ -26,6 +26,7 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -195,7 +196,7 @@ def _record_assign(module: Module, stmt: ast.Assign | ast.AnnAssign | ast.AugAss
             module.defs.setdefault(target.id, stmt)
 
 
-def _name_targets(targets: list[ast.expr]) -> list[ast.expr]:
+def _name_targets(targets: Sequence[ast.expr]) -> list[ast.expr]:
     """Flatten tuple-unpacking targets (``A, B = ...``) into their names."""
 
     out: list[ast.expr] = []
@@ -322,24 +323,65 @@ def _decorator_name(node: ast.expr) -> str:
     return text.rsplit(".", 1)[-1]
 
 
-def discover_modules(repo: Path) -> dict[str, Module]:
-    """Parse every module of the package, keyed by dotted path."""
+class Modules:
+    """The package's modules by dotted path, parsed on first access.
 
-    modules: dict[str, Module] = {}
-    pkg_root = repo / PACKAGE
-    paths: list[tuple[str, Path, Path]] = []
-    for path in sorted(pkg_root.rglob("*.py")):
-        rel = path.relative_to(repo).with_suffix("")
-        parts = list(rel.parts)
-        if parts[-1] == "__init__":
-            parts = parts[:-1]
-        paths.append((".".join(parts), path, rel))
-    _KNOWN_MODULES.clear()
-    _KNOWN_MODULES.update(dotted for dotted, _, _ in paths)
-    for dotted, path, rel in paths:
-        modules[dotted] = parse_module(dotted, path)
-        modules[dotted].rel = str(rel.with_suffix(".py"))
-    return modules
+    Listing the files is cheap; parsing all of them is the expensive part of a
+    build, so a caller that only needs the root surface (the tripwire test)
+    touches a fraction of the tree.
+    """
+
+    def __init__(self, repo: Path) -> None:
+        self.repo = repo
+        self._paths: dict[str, tuple[Path, str]] = {}
+        self._parsed: dict[str, Module] = {}
+        for path in sorted((repo / PACKAGE).rglob("*.py")):
+            rel = path.relative_to(repo).with_suffix("")
+            parts = list(rel.parts)
+            if parts[-1] == "__init__":
+                parts = parts[:-1]
+            self._paths[".".join(parts)] = (path, str(rel.with_suffix(".py")))
+        _KNOWN_MODULES.clear()
+        _KNOWN_MODULES.update(self._paths)
+
+    def __contains__(self, dotted: object) -> bool:
+        return dotted in self._paths
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._paths)
+
+    def __len__(self) -> int:
+        return len(self._paths)
+
+    @property
+    def parsed_count(self) -> int:
+        return len(self._parsed)
+
+    def __getitem__(self, dotted: str) -> Module:
+        module = self._parsed.get(dotted)
+        if module is None:
+            path, rel = self._paths[dotted]
+            module = parse_module(dotted, path)
+            module.rel = rel
+            self._parsed[dotted] = module
+        return module
+
+    def get(self, dotted: str) -> Module | None:
+        return self[dotted] if dotted in self._paths else None
+
+    def values(self) -> list[Module]:
+        return [self[d] for d in self._paths]
+
+    def under(self, prefix: str) -> list[Module]:
+        """Modules below ``prefix`` (parsed on demand)."""
+
+        return [self[d] for d in self._paths if d.startswith(prefix + ".")]
+
+
+def discover_modules(repo: Path) -> Modules:
+    """Index every module of the package, keyed by dotted path (lazy parse)."""
+
+    return Modules(repo)
 
 
 # --------------------------------------------------------------------------
@@ -349,9 +391,7 @@ def discover_modules(repo: Path) -> dict[str, Module]:
 Resolved = tuple[Module, ast.AST | None]  # (module, definition); (module, None) = the module
 
 
-def resolve(
-    modules: dict[str, Module], module: Module, name: str, depth: int = 0
-) -> Resolved | None:
+def resolve(modules: Modules, module: Module, name: str, depth: int = 0) -> Resolved | None:
     """Find where ``module.name`` is defined, following imports and lazy rows."""
 
     if depth > 8:
@@ -511,9 +551,10 @@ def _doc(node: ast.AST) -> tuple[str, str]:
 class Builder:
     """Turns parsed modules into the node graph the page embeds."""
 
-    def __init__(self, repo: Path, modules: dict[str, Module]) -> None:
+    def __init__(self, repo: Path, modules: Modules, deep: bool = True) -> None:
         self.repo = repo
         self.modules = modules
+        self.deep = deep
         self.nodes: dict[str, Node] = {}
         self.layers = _package_layers(modules)
 
@@ -537,6 +578,8 @@ class Builder:
         if layer:
             node.tags.append(layer)
         self.nodes[node.id] = node
+        if not self.deep:
+            return node  # root-scope build: the namespace row only, no members
         prefix = module.dotted + "."
         for dotted in sorted(self.modules):
             if dotted.startswith(prefix) and "." not in dotted[len(prefix) :]:
@@ -793,16 +836,15 @@ class Builder:
         return Node(id=node_id, name=name, kind=kind, public=public, sig=sig)
 
 
-def _find_definition(modules: dict[str, Module], module: Module, name: str) -> Resolved | None:
-    """Last resort for facade names: the one module in the package defining ``name``."""
+def _find_definition(modules: Modules, module: Module, name: str) -> Resolved | None:
+    """Last resort for facade names: the one module defining ``name``, nearest first."""
 
-    hits = [m for m in modules.values() if name in m.defs and m is not module]
-    if not hits:
-        return None
-    near = [m for m in hits if m.dotted.startswith(module.package + ".")]
-    pool = near or hits
-    pool.sort(key=lambda m: (not m.public, m.dotted.count("."), m.dotted))
-    return pool[0], pool[0].defs[name]
+    for pool in (modules.under(module.package), modules.values()):
+        hits = [m for m in pool if name in m.defs and m is not module]
+        if hits:
+            hits.sort(key=lambda m: (not m.public, m.dotted.count("."), m.dotted))
+            return hits[0], hits[0].defs[name]
+    return None
 
 
 def name_of(node: ast.AST) -> str:
@@ -831,7 +873,7 @@ def cls_body_of(module: Module, qual: str) -> list[ast.stmt]:
 # --------------------------------------------------------------------------
 
 
-def _package_layers(modules: dict[str, Module]) -> dict[str, str]:
+def _package_layers(modules: Modules) -> dict[str, str]:
     arch = modules.get(f"{PACKAGE}._architecture")
     if arch is None:
         return {}
@@ -963,9 +1005,11 @@ def git_commit(repo: Path) -> str:
         return "unknown"
 
 
-def build_model(repo: Path = REPO) -> dict[str, object]:
+def build_model(repo: Path = REPO, scope: str = "full") -> dict[str, object]:
+    """The page model. ``scope="root"`` resolves only the root surface (fast tripwire)."""
+
     modules = discover_modules(repo)
-    builder = Builder(repo, modules)
+    builder = Builder(repo, modules, deep=scope == "full")
     root = build_root(builder, read_surface_rows(repo), repo)
     package = builder.module_node(modules[PACKAGE])
     files: dict[str, int] = {}
@@ -980,6 +1024,8 @@ def build_model(repo: Path = REPO) -> dict[str, object]:
         "roots": {"tl": index[root.id], PACKAGE: index[package.id]},
         "root_count": len(root.children),
         "counts": counts,
+        "scope": scope,
+        "modules_parsed": modules.parsed_count,
         "files": list(files),
         "nodes": nodes,
     }

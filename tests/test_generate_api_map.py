@@ -38,7 +38,9 @@ def generator():  # type: ignore[no-untyped-def]
 
 @pytest.fixture(scope="module")
 def model(generator):  # type: ignore[no-untyped-def]
-    return generator.build_model(REPO_ROOT)
+    """The root-scope model: every surface row resolved, namespaces shallow (seconds, not tens)."""
+
+    return generator.build_model(REPO_ROOT, scope="root")
 
 
 @pytest.mark.smoke
@@ -57,7 +59,7 @@ def test_every_root_surface_name_is_in_the_map(generator, model) -> None:  # typ
         assert target["k"] in {"function", "class", "module", "package", "variable", "constant"}, (
             alias
         )
-        assert target.get("f"), f"root name {alias['n']} has no defining file"
+        assert "f" in target, f"root name {alias['n']} has no defining file"
 
 
 @pytest.mark.smoke
@@ -83,11 +85,16 @@ def test_unresolvable_root_name_fails_loudly(generator, monkeypatch) -> None:  #
     assert generator.main([str(Path("/nonexistent") / "out.html"), "--repo", str(REPO_ROOT)]) == 2
 
 
-def test_cli_writes_the_page(generator, tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_cli_writes_the_full_page(generator, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The full build (every module parsed): the backstop tiers, not smoke (about 10 s under load)."""
+
     out = tmp_path / "map.html"
     assert generator.main([str(out), "--repo", str(REPO_ROOT)]) == 0
     text = out.read_text(encoding="utf-8")
     assert text.startswith("<!doctype html>")
+    for row in generator.read_surface_rows(REPO_ROOT):
+        assert f'"n":"{row["canonical_path"].split(".")[-1]}"' in text
+    assert '"scope":"full"' in text
     assert "http://" not in text.split('<script id="api-map-data"')[0].replace(
         "http://www.w3.org", ""
     )
