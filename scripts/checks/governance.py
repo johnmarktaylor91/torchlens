@@ -42,6 +42,8 @@ MOVED: tuple[str, ...] = (
     "ruff_ratchet",
     "known_failures_ledger",
     "skip_audit",
+    "schema_lockstep",
+    "golden_governance_lint",
 )
 
 
