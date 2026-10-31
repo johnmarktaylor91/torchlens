@@ -169,7 +169,7 @@ def flops_vs_dispatch(
     training_flags = {name: module.training for name, module in model.named_modules()}
 
     trace_kwargs.setdefault("save", None)
-    trace = user_funcs.trace(model, input_args, input_kwargs, **trace_kwargs)
+    trace = user_funcs.trace(model, input_args, input_kwargs=input_kwargs, **trace_kwargs)
     try:
         aggregation = compute_aggregation(trace)
         torchlens_total = int(aggregation.partition_total)

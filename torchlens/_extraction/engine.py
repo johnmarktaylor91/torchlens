@@ -802,7 +802,7 @@ def _capture_outputs(
         trace = _tl.trace(
             plan.model,
             envelope.args,
-            dict(envelope.kwargs),
+            input_kwargs=dict(envelope.kwargs),
             capture=_tl.options.CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
             intervene=plan.intervention.spec,
         )
@@ -814,7 +814,7 @@ def _capture_outputs(
         trace = _tl.trace(
             plan.model,
             envelope.args,
-            dict(envelope.kwargs),
+            input_kwargs=dict(envelope.kwargs),
             capture=_tl.options.CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
         )
         return _resolve_trace_outputs(plan, trace)

@@ -11,7 +11,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING
-from .._errors import KeywordConflictError
+from .._errors import ArgumentTypeError, KeywordConflictError
 from .._input_coerce import _coerce_input_args
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
@@ -63,6 +63,23 @@ def _unfold_record_options(
     """
 
     flat: dict[str, Any] = {}
+    if capture is not None:
+        unread = sorted(
+            name
+            for name in capture._specified_fields  # noqa: SLF001
+            if name not in _CAPTURE_DOOR_FIELDS and name != "backward_ready"
+        )
+        if unread:
+            raise ArgumentTypeError(
+                f"tl.record does not read CaptureOptions field(s) {', '.join(unread)}: the "
+                "recorder has no door for them, so they would be a silent no-op",
+                code="record_capture_option_unsupported",
+                remedy=(
+                    "drop the field(s) from capture= for tl.record, or use tl.trace, which "
+                    "reads every CaptureOptions field"
+                ),
+                argument="capture",
+            )
     for name in _RECORDING_DOOR_FIELDS:
         explicit = recording is not None and recording.is_field_explicit(name)
         flat[name] = getattr(recording, name) if explicit else MISSING

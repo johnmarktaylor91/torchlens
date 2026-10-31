@@ -179,26 +179,6 @@ def test_stop_after_explicit_wins_over_ambient() -> None:
 
 
 @pytest.mark.smoke
-def test_stop_after_cache_key_distinct_from_halt(tmp_path) -> None:
-    """A completed halt= capture must not satisfy a stop_after= request."""
-
-    model, x = ThreeStep(), torch.randn(2, 4)
-    first = tl.trace(
-        model,
-        x,
-        stop_after=tl.func("relu"),
-        capture=CaptureOptions(cache=True, cache_dir=str(tmp_path)),
-    )
-    assert first.halted is True
-    second = tl.trace(
-        model,
-        x,
-        stop_after=tl.func("relu"),
-        capture=CaptureOptions(cache=True, cache_dir=str(tmp_path)),
-    )
-    assert second.capture_cache_key != first.capture_cache_key
-
-
 @pytest.mark.real_model
 def test_stop_after_gpt2_block_frontier() -> None:
     """R0 realism row: stop after transformer block 0 on the REAL GPT-2 class."""

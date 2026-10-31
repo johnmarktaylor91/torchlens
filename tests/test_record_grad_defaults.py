@@ -113,7 +113,11 @@ def test_record_opt_in_restores_grad_hooks_and_backward(opt_in: dict[str, object
     """Each backward opt-in installs the hooks and log_backward records gradients."""
 
     model, x = _model_and_input()
-    out, recording = tl.record(model, x, save=_keep_relu, return_output=True, **opt_in)
+    if "default_grad" in opt_in:
+        routed = {"recording": tl.options.RecordingOptions(**opt_in)}
+    else:
+        routed = {"capture": tl.options.CaptureOptions(**opt_in)}
+    out, recording = tl.record(model, x, save=_keep_relu, return_output=True, **routed)
     assert _has_grad_hooks(out)
     recording.backward(out.sum(), save_grads=True)
     assert recording.grad_records

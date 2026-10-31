@@ -437,7 +437,9 @@ def list_sites(
     import torchlens as tl
 
     options = capture if capture is not None else tl.options.CaptureOptions(layers_to_save=None)
-    trace = tl.trace(model, inputs if inputs is not None else (), input_kwargs, capture=options)
+    trace = tl.trace(
+        model, inputs if inputs is not None else (), input_kwargs=input_kwargs, capture=options
+    )
     return sites_of_trace(trace)
 
 

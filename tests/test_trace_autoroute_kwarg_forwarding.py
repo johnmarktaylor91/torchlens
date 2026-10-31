@@ -109,7 +109,7 @@ class _Identity(nn.Module):
 
 @pytest.mark.smoke
 def test_detectors_receive_the_once_dropped_kwargs() -> None:
-    """A registered detector sees structure_only/episode/grouping in kwargs."""
+    """A registered detector sees capture/episode/stop_after in kwargs."""
 
     received: dict[str, object] = {}
 
@@ -125,7 +125,7 @@ def test_detectors_receive_the_once_dropped_kwargs() -> None:
             _Identity(), torch.ones(2), capture=tl.options.CaptureOptions(layers_to_save="none")
         )
     assert log is not None
-    for key in ("capture", "episode", "grouping"):
+    for key in ("capture", "episode", "stop_after"):
         assert key in received, (
             f"autoroute detectors no longer receive {key!r}: it is being "
             f"silently dropped on the autoroute dispatch path again"
