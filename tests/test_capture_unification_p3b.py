@@ -183,7 +183,7 @@ def test_layers_to_save_absorbed_path_honors_pass_qualified_substrings() -> None
     ]
     assert contexts
     predicate = _make_layers_to_save_predicate(["lin:2"])
-    assert [ctx.pass_index for ctx in contexts if predicate(ctx)] == [2]
+    assert [ctx.pass_number for ctx in contexts if predicate(ctx)] == [2]
 
 
 def test_layers_to_save_supports_backward_ready_and_gradients_two_pass() -> None:

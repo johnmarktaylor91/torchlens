@@ -107,9 +107,9 @@ def test_saved_affine_source_applies_bit_identically(tmp_path: Path, rank: int) 
     tl.io.save_intervention(fork, path, level="portable")
     loaded = tl.io.load_intervention_spec(path)
     helper = loaded.hook_specs[0].helper
-    assert helper.helper_name == "subspace_edit" and helper.portability == "builtin"
+    assert helper.name == "subspace_edit" and helper.portability == "builtin"
     inner = helper.args[0]
-    assert inner.helper_name == "set_affine_coordinates"
+    assert inner.name == "set_affine_coordinates"
     assert torch.equal(inner.args[0], _W[:rank]) and torch.equal(
         dict(inner.kwargs)["bias"], _B[:rank]
     )

@@ -859,7 +859,7 @@ def _payload_projection(product: Any) -> list[dict[str, Any]]:
             payloads.append(
                 {
                     "label_raw": record.ctx.raw_label or record.ctx.label,
-                    "pass_index": record.ctx.pass_index,
+                    "pass_index": record.ctx.pass_number,
                     "tensor": _tensor_fingerprint(record.ram_payload),
                 }
             )
@@ -877,7 +877,7 @@ def _payload_projection(product: Any) -> list[dict[str, Any]]:
         payloads.append(
             {
                 "label_raw": getattr(op, "_label_raw", None),
-                "pass_index": getattr(op, "pass_index", None),
+                "pass_index": getattr(op, "pass_number", None),
                 "tensor": _tensor_fingerprint(out),
             }
         )

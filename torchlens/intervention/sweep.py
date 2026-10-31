@@ -354,7 +354,7 @@ def sweep_replace(value: Any) -> Edit:
     """
 
     return Edit(
-        helper_name="sweep_replace",
+        name="sweep_replace",
         args=(value,),
         factory=lambda: _replacement_hook(value),
         is_batch_independent=True,

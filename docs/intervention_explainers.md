@@ -259,7 +259,7 @@ helper = spec.hook_specs[0].helper
 
 RESULT = [
     torch.equal(reloaded[site].out, fork[site].out),  # the same interchange, bit for bit
-    helper.helper_name == "subspace_edit",
+    helper.name == "subspace_edit",
     dict(helper.kwargs)["origin"] == "DAS rotation trained elsewhere",
 ]
 ```

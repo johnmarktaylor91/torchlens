@@ -428,7 +428,7 @@ def _pass_qualified_label(op: Any) -> str:
     """The ``layer_label:pass_index`` spelling of one restored model op row."""
 
     layer_label = str(getattr(op, "layer_label", ""))
-    pass_index = getattr(op, "pass_index", None)
+    pass_index = getattr(op, "pass_number", None)
     return f"{layer_label}:{pass_index}" if pass_index is not None else layer_label
 
 
@@ -468,7 +468,7 @@ def _validate_host_anchor(
             f"op at host site key {host_site_key!r} carries that label",
             "host_label_mismatch",
         )
-    host_pass = getattr(host, "pass_index", None)
+    host_pass = getattr(host, "pass_number", None)
     if host_pass is not None and record["host_pass"] != host_pass:
         _refuse_codec(
             f"injected-op row {label!r} claims host_pass {record['host_pass']!r}, but its "

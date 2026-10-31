@@ -158,7 +158,7 @@ def _entity_outputs(
         for call in trace.module_calls.values():
             for output_index, output_op in enumerate(call.output_ops):
                 yield (
-                    call.call_label,
+                    call.label,
                     "call",
                     output_index,
                     _resolved_output_label(trace, output_op),

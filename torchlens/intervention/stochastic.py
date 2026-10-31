@@ -284,7 +284,7 @@ def _firing_coordinate(hook: HookContext, share_draw: str) -> tuple[Any, ...]:
     if share_draw == "per_rule":
         return ()
     layer_log = hook.op or {}
-    pass_index = layer_log.get("pass_index")
+    pass_index = layer_log.get("pass_number")
     generation_step = hook.run_ctx.get("generation_step")
     if share_draw == "per_group":
         return (pass_index, generation_step)

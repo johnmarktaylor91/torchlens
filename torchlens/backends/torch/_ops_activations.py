@@ -217,7 +217,7 @@ def _log_output_tensor_info(
         )
         base_equivalence_class = equivalence_class
         self.layers_with_params[equivalence_class].append(_label_raw)
-        fields_dict["pass_index"] = len(self.layers_with_params[equivalence_class])
+        fields_dict["pass_number"] = len(self.layers_with_params[equivalence_class])
         equivalence_class = _append_module_suffix_to_equivalence_class(
             equivalence_class, fields_dict["modules"]
         )
@@ -239,7 +239,7 @@ def _log_output_tensor_info(
             equivalence_class, fields_dict["modules"]
         )
         fields_dict["equivalence_class"] = equivalence_class
-        fields_dict["pass_index"] = 1
+        fields_dict["pass_number"] = 1
 
     # Call-site grouping (step 7, ``callsite_v1``): when the capture walk saw
     # where this op ran, record its call-site class in the raw-graph workspace
@@ -393,11 +393,11 @@ def _log_output_tensor_info(
 
     # Other labeling info
     fields_dict["layer_label"] = None
-    fields_dict["layer_label_short"] = None
+    fields_dict["short_layer_label"] = None
     fields_dict["label"] = None
-    fields_dict["label_short"] = None
+    fields_dict["short_label"] = None
     fields_dict["layer_label"] = None
-    fields_dict["layer_label_short"] = None
+    fields_dict["short_layer_label"] = None
     fields_dict["type"] = layer_type
     fields_dict["_layer_label_raw"] = _label_raw
     fields_dict["type_index"] = type_index

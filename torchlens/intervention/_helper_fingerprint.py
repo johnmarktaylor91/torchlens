@@ -175,7 +175,7 @@ def changed_helpers(entries: Iterable[tuple[Any, Any, Any]]) -> list[str]:
         if recorded is None or helper is None:
             continue
         if helper_digests(helper) != tuple(recorded):
-            changed.append(f"{helper.helper_name} at {site}")
+            changed.append(f"{helper.name} at {site}")
     return changed
 
 

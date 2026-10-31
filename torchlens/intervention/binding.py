@@ -397,7 +397,7 @@ class _RulePlan:
         self.helper_spec = decision.hook if isinstance(decision.hook, Edit) else None
         self.hook_callable = normalize_hook(decision.hook, direction="forward")
         self.display_name = (
-            self.helper_spec.helper_name
+            self.helper_spec.name
             if self.helper_spec is not None
             else getattr(decision.hook, "__qualname__", type(decision.hook).__name__)
         )
@@ -482,11 +482,11 @@ class _BindSession:
             target_label=site.target_label,
             container_path=site.container_path,
             engine="bind",
-            helper=plan.helper_spec,
+            edit=plan.helper_spec,
             site_label=site.site_key,
             timing="post",
             direction="forward",
-            helper_name=plan.display_name,
+            edit_name=plan.display_name,
             run_ctx=self.run_ctx,
             previous_notes=previous_notes,
             replaced=replaced,
@@ -656,7 +656,9 @@ def _consider_op(
             sample_id=None,
             address=getattr(module_frame, "address", None) if module_frame else None,
             module_type=getattr(module_frame, "module_type", None) if module_frame else None,
-            module_pass_index=(getattr(module_frame, "pass_index", None) if module_frame else None),
+            module_pass_number=(
+                getattr(module_frame, "pass_number", None) if module_frame else None
+            ),
         )
         try:
             rule = binding.recipe.match(ctx)
@@ -689,7 +691,7 @@ def _consider_op(
                 "layer_type": layer_type,
                 "func_name": func_name,
                 "site_key": site_key,
-                "pass_index": max(session.root_passes, 1),
+                "pass_number": max(session.root_passes, 1),
             },
             ctx=session.rule_scratch[session.rule_ids[id(rule)]],
             run_context=session.run_ctx,
@@ -837,7 +839,7 @@ class _ArmedRuntime:
                         address=address,
                         module_type=module_type,
                         module_id=module_id,
-                        pass_index=session.module_pass_counts[address],
+                        pass_number=session.module_pass_counts[address],
                     )
                 )
 
@@ -915,7 +917,7 @@ def _make_boundary_hook(
                 op={
                     "label": f"{address}:{pass_index}",
                     "module_address": address,
-                    "pass_index": pass_index,
+                    "pass_number": pass_index,
                 },
                 ctx=session.rule_scratch[session.rule_ids[id(plan.rule)]],
                 run_context=session.run_ctx,

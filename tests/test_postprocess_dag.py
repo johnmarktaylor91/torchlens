@@ -144,7 +144,7 @@ MULTI_WRITER_GOLDEN = {
     "parent_arg_positions": ("1", "6", "9"),
     "parent_params": ("1", "15"),
     "parents": ("1", "6", "9"),
-    "pass_index": ("1", "7"),
+    "pass_number": ("1", "7"),
     "recurrent_ops": ("1", "7", "9"),
     # b9 R71-1: step 1's output-node minting re-derives root_ancestors
     # (input_ancestors | internal_source_ancestors over the ONE parent) so the

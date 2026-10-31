@@ -192,7 +192,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 **Layer**
 : The user-facing grouping of Ops that run one place in a module's code. Running that place
   again (a loop, a recursion, a comprehension) is another pass, addressed with a one-based
-  suffix such as `linear_1:2`; `op.pass_index` is the pass and `num_passes` the count. A module
+  suffix such as `linear_1:2`; `op.pass_number` is the pass and `num_passes` the count. A module
   object called again is another module call (`m:1`, `m:2`), a separate concept: each op inside it
   runs once per module call, so its passes match the module's calls. Two different places are two layers even with the same weights, so a
   loop written out by hand is N layers. The exact rule (scope, call site, operation, output slot)
@@ -978,7 +978,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **stack_by** *(unstable — no deprecation shim owed; keyword-only)*
 : `draw(stack_by=...)` pins nodes sharing an annotation value to one Graphviz rank (the classic
   unrolled-RNN timestep diagram; strictly opt-in). `True`/`"auto"` derives the annotation
-  (`pass_index` on multi-pass ops only) under the LOCKSTEP LICENSE: granted iff the pass_index
+  (`pass_number` on multi-pass ops only) under the LOCKSTEP LICENSE: granted iff the pass_number
   sequence over all multi-pass ops in raw execution order is globally non-decreasing — then
   "same column = same execution window" is exactly what the figure claims. Non-monotone traces
   refuse (`stack_by_auto_underivable`); an explicit field/callable bypasses the license with the
@@ -2033,7 +2033,7 @@ default-keep); mask-application semantics documented-unstable*
   (`tl.scale_grad(2.0)`, default-valued keywords omitted; evaluating it
   rebuilds an equal edit), any other edit as `tl.Edit('name', kind=...,
   portability=...)`. An `Edit` is a frozen record of its identity:
-  `helper_name` (also read as `name`), positional `args`, keyword `kwargs`
+  `name`, positional `args`, keyword `kwargs`
   (a tuple of name and value pairs), `kind`, `portability`, `metadata`
   (name and value pairs, such as `("keep_grad", True)` or the selection
   disclosure a masked `do()` adds), `direction`, `is_batch_independent`,
@@ -3197,13 +3197,17 @@ describe each surface in depth.
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
+| `backward_pass_number=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
 | `can_intervene=` | keyword of `BackendCapabilities` |
 | `draw_index=` | keyword of `tl.attribution.CausalAuditSet` |
+| `edit=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
+| `edit_name=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
 | `extra_facets=` | keyword of `tl.facets.snapshot` |
 | `frozen_sites=` | keyword of `tl.attribution.AttributionGraph` |
 | `function_id=` | keyword of `FacetSpec.computed`, `FacetSpec.from_home`, `tl.facets.FacetSpec` |
 | `function_version=` | keyword of `FacetSpec.computed`, `FacetSpec.from_home`, `tl.facets.FacetSpec` |
 | `functions=` | Immutable active recipe entries |
+| `grad_fn_label=` | field and constructor keyword of `GradFnCall` |
 | `has_changes=` | keyword of `PreHookEffect` |
 | `has_demeaned_logits=` | keyword of `tl.attribution.AttributionGraph` |
 | `has_fused_qkv=` | keyword of `tl.mechinterp.ProjectionSource` |
@@ -3219,6 +3223,7 @@ describe each surface in depth.
 | `is_magnitude_based=` | keyword of `tl.stats.TensorStats` |
 | `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
 | `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
+| `module_pass_number=` | field and constructor keyword of `RecordContext` |
 | `mutation_version=` | keyword of `TensorInputObservation` |
 | `num_examples=` | keyword of `tl.mechinterp.TrajectoryStats` |
 | `num_finite=` | keyword of `RunningStatsResult` |
@@ -3232,6 +3237,7 @@ describe each surface in depth.
 | `num_stimuli=` | keyword of `tl.neuro.ExtractionPlan`, `tl.neuro.plan_extraction` |
 | `num_true=` | keyword of `tl.stats.TensorStats` |
 | `num_zero=` | keyword of `tl.stats.TensorStats` |
+| `pass_number=` | field and constructor keyword of `BackwardPass`, `DiffRow`, `GradRecordContext`, `ModuleStackFrame`, `RecordContext`, `SiteRow` |
 | `python_object_id=` | keyword of `TensorInputObservation` |
 | `run_record=` | keyword of `tl.trackers.HistoryView` |
 | `signal=` | keyword of `tl.stats.NarrationObserver` |
@@ -3394,6 +3400,7 @@ The sections above describe each surface in depth.
 | `BackwardNanReport.transitions` | The full transition ledger in measured fire order |
 | `BackwardNanReport.unchecked_calls` | Calls without saved or checkable gradient payloads |
 | `BackwardNanReport.verdict_scope` | `"complete"` when every earlier call was checkable, else `"found_first_among_checked"` |
+| `BackwardPass.pass_number` | 1-based number of this backward pass |
 | `BackwardStatus.num_backward_passes` | Number of backward passes observed |
 | `BackwardStatus.num_grad_fn_records` | Number of GradFn records the status read |
 | `BackwardStatus.uncounted_op_counts` | Every recorded op kind outside the counted families with its call count, never zeroed or estimated |
@@ -3433,7 +3440,9 @@ The sections above describe each surface in depth.
 | `DeterminismReport.first_problem` | Project the first divergence into the shared vocabulary |
 | `DiagnosticFinding.check_name` | Check name (`"nonfinite"`, `"dtype_regime"`, `"layout"` or `"confinement"`) |
 | `DiffReport.rows_with_status` | Return the rows carrying one closed-vocabulary status |
+| `DiffRow.pass_number` | Pass number of the compared op |
 | `DryRun.filter` | Return a new trace with decisions from a new op predicate |
+| `Edit.name` | The edit's public name (the builder that made it, such as `zero_ablate`) |
 | `EffectsView.rank_changes` | Rank candidates by the size of their change from baseline, descending |
 | `EffectsView.to_selection` | Convert the view to a selection: the union of its WHERE regions |
 | `EpisodeOptions.acknowledge_step_cost` | Accept a step declaration beyond the cost ceiling |
@@ -3453,8 +3462,13 @@ The sections above describe each surface in depth.
 | `FindNanReport.found` | Whether a NaN or Inf was found |
 | `FindNanReport.label_status` | Whether the reported label is final (`"final"`) or absent (`"none"`) |
 | `FindNanReport.message` | Human-readable diagnostic summary |
+| `FireRecord.backward_pass_number` | Backward pass the edit fired in, or `None` for a forward fire |
+| `FireRecord.edit` | The `Edit` that fired, or `None` for a raw hook |
+| `FireRecord.edit_name` | Name of the edit or hook that fired |
 | `GqaInfo.num_query_heads` | Number of query heads |
 | `GradFnCall.fire_record` | The fire record of the edit that produced this grad-fn call, or `None` |
+| `GradFnCall.grad_fn_label` | Label of the grad_fn this call belongs to |
+| `GradFnCall.label` | Pass-qualified call label (`<grad_fn_label>:<call_index>`) |
 | `GradFnSketch.num_nodes` | Number of walked nodes |
 | `GradReceptiveField.batch_support` | Batch indices the influence set reaches, or `None` |
 | `GradReceptiveField.cross_batch_influence` | Whether the influence crosses batch elements |
@@ -3469,6 +3483,7 @@ The sections above describe each surface in depth.
 | `GradReceptiveField.target_key` | Return the direction-stable key of the target graph point |
 | `GradReceptiveField.unit_shape` | Shape of the target unit |
 | `GradReceptiveField.warnings` | Warnings raised while measuring |
+| `GradRecordContext.pass_number` | Pass number of the op whose gradient is recorded |
 | `GuessInputShapeReport.attempts` | Probe diary as `(shape, outcome)` tuples |
 | `GuessInputShapeReport.constraining_module` | Module qualname that constrained the inferred shape, when known |
 | `GuessInputShapeReport.constraining_op` | Operation name that constrained the inferred shape, when known |
@@ -3498,6 +3513,8 @@ The sections above describe each surface in depth.
 | `KernelProfileReport.join` | The profiler join result that maps kernels to ops |
 | `KernelProfileReport.session_facts` | Facts about the profiler session |
 | `Layer.is_edited` | Whether a user edit replaced the output of any pass of this layer |
+| `Layer.short_label` | Short pass-qualified label of a single-pass layer |
+| `Layer.short_layer_label` | Short layer label (no pass suffix) |
 | `LedgerEntry.is_draft` | Whether the entry is still a draft (no hypothesis declared yet) |
 | `LineageReport.message` | Human-readable status |
 | `LineageReport.start_label` | Resolved starting op label, or the requested label when lookup failed |
@@ -3514,11 +3531,16 @@ The sections above describe each surface in depth.
 | `MergedTrace.at` | Return the SPMD fan: the ops matching `label` on every rank |
 | `MergedTrace.degradations` | Environment degradations recorded at load (empty on a live merge) |
 | `ModuleCall.has_pre_hook_input_change` | Whether a user forward pre-hook changed the call's effective inputs (`None` when evidence is incomplete) |
+| `ModuleCall.label` | Pass-qualified module call label (`address:call_index`) |
 | `ModuleInputSnapshot.is_capture_complete` | Whether all supported mutation evidence was available for the snapshot |
 | `ModuleCall.parent_label` | Label of the parent ModuleCall in the dynamic call tree |
+| `ModuleStackFrame.pass_number` | Call number of this module in the stack |
 | `NarrationEvent.has_intervention` | Whether an intervention acted at this event |
 | `Op.edits` | The FireRecords of every edit that fired at this op, in fire order (was `interventions`) |
 | `Op.is_edited` | Whether a user edit replaced this op's output |
+| `Op.pass_number` | 1-based pass of this op within its layer |
+| `Op.short_label` | Short pass-qualified op label |
+| `Op.short_layer_label` | Short layer label (no pass suffix) |
 | `Op.type` | The op's normalized operation type token (for example `"linear"`); `Layer.layer_type` is the Layer's spelling |
 | `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
 | `PreHookEffect.has_changes` | `True`/`False` when the pre-hook's mutation evidence is complete, otherwise `None` |
@@ -3535,6 +3557,8 @@ The sections above describe each surface in depth.
 | `Recipe.decision` | The sole rule's normalized decision (`None` on multi-clause specs) |
 | `Recipe.door_pairs` | Lower the spec to `(site, action)` pairs for the hook doors |
 | `Recipe.match` | Return the single rule matching one op context, or `None` |
+| `RecordContext.module_pass_number` | Call number of the innermost module, or `None` |
+| `RecordContext.pass_number` | Pass number of the recorded op |
 | `Recording.num_predicate_failure_overflows` | Predicate failures beyond the kept list (counted, not stored) |
 | `RooflineRow.is_cache_resident_hint` | Whether the row's working set likely fits in cache (a hint, not a measurement) |
 | `RosterModel.builder` | Zero-arg factory returning `(model, example_input)` |
@@ -3561,6 +3585,7 @@ The sections above describe each surface in depth.
 | `Session.to_bundle` | Return a bundle containing all captured invocation logs |
 | `Site.num_selected` | Return the number of selected elements at this site |
 | `Site.structural_site_key` | The structural site key when present, else `None` |
+| `SiteRow.pass_number` | Pass number of the site |
 | `SixNDFacts.num_params` | Parameter count used by the 6ND estimate |
 | `SpecCompat.has_identical_target_resolution` | Whether the spec resolves to the same targets on both sides |
 | `SummaryTotals.captured_bytes` | Bytes the capture retained when it ran |

@@ -955,7 +955,7 @@ def test_mds_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
     """A single recurrent pass selection should read op.out and store op coords."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_index == 2)
+    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_number == 2)
 
     coords_by_key = repgeom.mds_evolution(trace, save=tl.label(linear_op.label), min_stimuli=8)
 
@@ -1003,7 +1003,7 @@ def _recurrent_linear_ops(trace: tl.Trace) -> list[Any]:
     """
 
     ops = [op for op in trace._layer_list if op.type == "linear"]
-    return sorted(ops, key=lambda op: op.pass_index)
+    return sorted(ops, key=lambda op: op.pass_number)
 
 
 def test_rdm_evolution_default_sweep_expands_recurrent_passes() -> None:
@@ -1017,7 +1017,7 @@ def test_rdm_evolution_default_sweep_expands_recurrent_passes() -> None:
 
     keys = [f"op:{op.label}" for op in ops]
     assert len(ops) == 3
-    assert [op.pass_index for op in ops] == [1, 2, 3]
+    assert [op.pass_number for op in ops] == [1, 2, 3]
     assert list(matrices_by_key) == keys
     assert trace._annotation_blobs is not None
     for key, hand_rdm in zip(keys, expected, strict=True):
@@ -1096,7 +1096,7 @@ def test_rdm_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
     """A single recurrent pass selection should read op.out and store op RDM."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_index == 2)
+    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_number == 2)
 
     matrices_by_key = repgeom.rdm_evolution(trace, save=tl.label(linear_op.label), min_stimuli=8)
 
@@ -1113,7 +1113,7 @@ def test_scree_evolution_recurrent_pass_qualified_selector_uses_op_key(tmp_path:
     """A single recurrent pass selection should read op.out and store op scree."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_index == 2)
+    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_number == 2)
 
     spectra_by_key = repgeom.scree_evolution(trace, save=tl.label(linear_op.label), min_stimuli=8)
 

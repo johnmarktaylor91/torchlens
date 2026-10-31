@@ -1408,7 +1408,7 @@ def _record_context_for_symbolic(
         {
             "address": frame.address,
             "module_type": frame.module_type,
-            "pass_index": frame.call_index,
+            "pass_number": frame.call_index,
         }
         for frame in modules
     )
@@ -1416,7 +1416,7 @@ def _record_context_for_symbolic(
         kind="op",
         label=label_raw,
         raw_label=label_raw,
-        pass_index=1,
+        pass_number=1,
         event_index=raw_index,
         step_index=raw_index,
         layer_type=op_type.lower(),
@@ -1425,7 +1425,7 @@ def _record_context_for_symbolic(
         func_name=op_type,
         address=modules[-1].address if modules else None,
         module_type=modules[-1].module_type if modules else None,
-        module_pass_index=modules[-1].call_index if modules else None,
+        module_pass_number=modules[-1].call_index if modules else None,
         module_stack=module_frames,
         recent_events=(),
         recent_ops=(),

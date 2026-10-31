@@ -83,8 +83,8 @@ def test_saved_rotation_reapplies_bit_identically(tmp_path: Path, rank: int, ver
     session = _edited(_ROTATION[:rank], edit)
     loaded = _save_load(session, tmp_path / "rotation.tlspec")
     helper = loaded.hook_specs[0].helper
-    assert helper.helper_name == "subspace_edit" and helper.portability == "builtin"
-    assert helper.args[0].helper_name == verb
+    assert helper.name == "subspace_edit" and helper.portability == "builtin"
+    assert helper.args[0].name == verb
     reapplied = _apply(loaded)
     assert torch.equal(reapplied[_SITE].out, session[_SITE].out)
     assert torch.equal(_out(reapplied), _out(session))

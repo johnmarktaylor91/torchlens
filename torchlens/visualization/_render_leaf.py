@@ -695,7 +695,7 @@ def _compute_backward_node_lines(
     title = grad_fn_handle.label
     if call is not None and len(getattr(grad_fn_handle, "calls", {})) > 1:
         call_index = getattr(call, "call_index", getattr(call, "ordinal", 0))
-        title = getattr(call, "call_label", f"{grad_fn_handle.label}:{call_index}")
+        title = getattr(call, "label", f"{grad_fn_handle.label}:{call_index}")
     if not grad_fn_handle.has_op:
         title = f"[i] {title}"
     if grad_fn_handle.is_custom:

@@ -111,8 +111,8 @@ _FIELD_TIER_OVERRIDES: dict[str, dict[str, FieldTier]] = {
         "internal_source_ancestors": FieldTier.DERIVED,
         "output_descendants": FieldTier.DERIVED,
         # P4c label projections (derivation caveats r2 C7 -- still derived).
-        "label_short": FieldTier.DERIVED,
-        "layer_label_short": FieldTier.DERIVED,
+        "short_label": FieldTier.DERIVED,
+        "short_layer_label": FieldTier.DERIVED,
         "lookup_keys": FieldTier.DERIVED,
         # E2 P6: never a real value on any backend; P7 KEEP-OPT candidates.
         "bytes_delta_at_call": FieldTier.ENRICHMENT,

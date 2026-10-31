@@ -271,7 +271,7 @@ def _run_step_15_5(ctx: StepContext) -> None:
         _pp()._build_layer_logs(trace)
         trace._by_pass = {}
         for index, op in enumerate(trace._layer_list):
-            pass_index = getattr(op, "pass_index", None)
+            pass_index = getattr(op, "pass_number", None)
             if pass_index is not None:
                 trace._by_pass.setdefault(pass_index, []).append(index)
 

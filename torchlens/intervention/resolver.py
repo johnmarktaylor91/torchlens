@@ -951,7 +951,7 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
         # A genuine substring pattern keeps its documented fan-out semantics;
         # only the exact bare layer label is the pass-ambiguous address.
         return
-    pass_indices = sorted(int(getattr(site, "pass_index", 1) or 1) for site in matched)
+    pass_indices = sorted(int(getattr(site, "pass_number", 1) or 1) for site in matched)
     raise AmbiguousSiteError(
         multipass_bare_label_message(layer_label, pass_indices),
         code="multipass_bare_label_ambiguous",

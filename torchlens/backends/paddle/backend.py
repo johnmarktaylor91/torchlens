@@ -1109,7 +1109,7 @@ class PaddleBackend:
                     raw_by_path[path] = tensor
                     record = fire_result.fire_record
                     if helper_name is None and record is not None:
-                        helper_name = cast(Any, record).helper_name
+                        helper_name = cast(Any, record).edit_name
             if replacements:
                 final_output = _replace_paddle_tensors_at_paths(output, replacements)
                 final_outputs = tuple(
@@ -1224,7 +1224,7 @@ class PaddleBackend:
             kind="op",
             label=reserved.label,
             raw_label=reserved.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=reserved.raw_index,
             step_index=None,
             layer_type=reserved.layer_type,
@@ -1233,7 +1233,7 @@ class PaddleBackend:
             func_name=func_event_input.func_name,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=func_event_input.module_stack,
             recent_events=(),
             recent_ops=(),

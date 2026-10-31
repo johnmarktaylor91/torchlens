@@ -254,7 +254,7 @@ def _build_root_module_log(
     root_pass = ModuleCall(
         address="self",
         call_index=1,
-        call_label="self:1",
+        label="self:1",
         ops=[op.label for op in self._layer_list],  # Op space, as on every other call
         input_layers=_layer_space_labels(self, self.input_layers),
         output_layers=_layer_space_labels(self, self.output_layers),
@@ -538,8 +538,8 @@ def _merge_layer_log_conditional_fields(
         layer_log.conditional_branch_stack_ops[stack_signature] = []
 
     signature_ops = layer_log.conditional_branch_stack_ops[stack_signature]
-    if pass_log.pass_index not in signature_ops:
-        signature_ops.append(pass_log.pass_index)
+    if pass_log.pass_number not in signature_ops:
+        signature_ops.append(pass_log.pass_number)
         signature_ops.sort()
 
     for conditional_id, branch_children in pass_log.conditional_arm_children.items():
@@ -737,7 +737,7 @@ def _build_submodule_call_logs(
         module_call_log = ModuleCall(
             address=address,
             call_index=call_index,
-            call_label=call_label,
+            label=call_label,
             ops=pass_layers,
             input_layers=pass_input_layers,
             output_layers=pass_output_layers,
@@ -1252,7 +1252,7 @@ def _build_layer_logs(self: "Trace") -> None:
             if pass_log.is_atomic_module:
                 layer_log.is_atomic_module = True
 
-        layer_log.ops[pass_log.pass_index] = pass_log
+        layer_log.ops[pass_log.pass_number] = pass_log
         layer_log.call_labels.append(pass_log.label)
         _merge_layer_log_conditional_fields(layer_log, pass_log)
 

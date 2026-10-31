@@ -150,7 +150,7 @@ def _op_position(op: Any) -> str | None:
 def _pass_token(op: Any) -> str:
     """Pass tag ``k/n`` (``(pass 1/1)`` on single-pass ops stays explicit)."""
 
-    return f"{getattr(op, 'pass_index', 1)}/{getattr(op, 'num_passes', 1)}"
+    return f"{getattr(op, 'pass_number', 1)}/{getattr(op, 'num_passes', 1)}"
 
 
 def op_repr_line(op: Any) -> str:
@@ -433,7 +433,7 @@ def module_call_repr_line(call: Any) -> str:
     module_class = getattr(call, "class_name", None)
     if not module_class:
         module_class = fail_open(lambda: call.module.class_name, lambda _error: "?")
-    label = getattr(call, "call_label", "?")
+    label = getattr(call, "label", "?")
     core = f"{module_class} ops={len(getattr(call, 'ops', ()) or ())}"
     return envelope_line(core, address=label, bracket=("module_call",))
 

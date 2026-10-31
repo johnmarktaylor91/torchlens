@@ -265,7 +265,7 @@ def _call_dict(call: Any) -> dict[str, Any]:
 
     return {
         "address": call.address,
-        "call_label": call.call_label,
+        "call_label": call.label,
         "forward_args_summary": call.forward_args_summary,
         "forward_kwargs_summary": call.forward_kwargs_summary,
         "input_layers": list(call.input_layers),

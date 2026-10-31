@@ -2029,7 +2029,7 @@ def compute_default_node_lines(
         ":" in node_address
     )
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
-        call_label = f":{layer_log.pass_index}"
+        call_label = f":{layer_log.pass_number}"
     elif (layer_log.num_passes > 1) and (vis_mode == "rolled"):
         if atomic_marking_has_range:
             call_label = ""
@@ -2048,7 +2048,7 @@ def compute_default_node_lines(
         # The latter renumbers the ordinal from this pass's step_index and yields an
         # un-lookup-able label (linear_1_3:2 for what is really linear_1_1:2), so
         # users copying the displayed name got a "not found" ValueError.
-        title = f"{layer_log.layer_label}:{layer_log.pass_index}"
+        title = f"{layer_log.layer_label}:{layer_log.pass_number}"
     elif record_type(layer_log) in ["input", "output", "buffer"]:
         title = f"{record_type(layer_log)}_{layer_log.type_index}{call_label}"
     else:

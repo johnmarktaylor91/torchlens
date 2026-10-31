@@ -147,7 +147,7 @@ def positions(
             argument="axis",
         )
     inner = normalize_hook(edit, direction="forward")
-    inner_name = getattr(edit, "helper_name", getattr(edit, "__qualname__", type(edit).__name__))
+    inner_name = getattr(edit, "name", getattr(edit, "__qualname__", type(edit).__name__))
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook restricting the inner edit to the positions."""

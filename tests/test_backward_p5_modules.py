@@ -226,7 +226,7 @@ def test_multi_pass_module_grad_fns_keep_layer_label_and_hooks_see_their_own_pas
             (
                 hook.kwargs["grad_fn_handle"].label,
                 hook.op["label"],
-                hook.op["pass_index"],
+                hook.op["pass_number"],
             )
         )
         return grad

@@ -86,7 +86,7 @@ def _hook_key(hook_spec: Any) -> tuple[Any, ...]:
     helper = getattr(hook_spec, "helper", None)
     hook = getattr(hook_spec, "hook", None)
     hook_identity = (
-        getattr(helper, "helper_name", None)
+        getattr(helper, "name", None)
         if helper is not None
         else getattr(hook, "__qualname__", type(hook).__name__)
     )

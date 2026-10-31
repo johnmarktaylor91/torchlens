@@ -227,7 +227,7 @@ def test_resolve_auto_forms() -> None:
 
 
 def test_resolve_field_and_callable_kinds() -> None:
-    assert resolve_stack_by("pass_index", "unrolled").source_kind == "field"
+    assert resolve_stack_by("pass_number", "unrolled").source_kind == "field"
     assert resolve_stack_by(lambda node: 1, "unrolled").source_kind == "callable"
 
 
@@ -338,14 +338,14 @@ def test_caption_and_legend_disclose_annotation(lockstep_log: tl.Trace, tmp_path
 def test_explicit_field_bypasses_license(chained_log: tl.Trace, tmp_path: Path) -> None:
     """Non-lockstep loops get their figure via explicit annotation."""
 
-    dot = _draw(chained_log, tmp_path, stack_by="pass_index")
+    dot = _draw(chained_log, tmp_path, stack_by="pass_number")
     state = _state(chained_log)
     assert state.stack_groups
     assert "stacked by: pass_index" in dot
 
 
 def test_callable_bypasses_license_with_disclosure(chained_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(chained_log, tmp_path, stack_by=lambda node: int(node.pass_index))
+    _draw(chained_log, tmp_path, stack_by=lambda node: int(node.pass_number))
     state = _state(chained_log)
     assert state.stack_groups
     assert any("callable" in note for note in state.stack_notes)

@@ -103,7 +103,7 @@ def test_torch_bare_label_artifact_is_last_pass() -> None:
         record = log._layer_dict_all_keys[key]
         if key != record.layer_label:
             continue  # raw/address spellings, not the bare layer label
-        assert record.pass_index == record.num_passes, (
+        assert record.pass_number == record.num_passes, (
             f"torch bare-label artifact for {key!r} no longer resolves to the last pass"
         )
 
@@ -128,7 +128,7 @@ def test_singleton_fallback_strips_raw_capture_sentinel() -> None:
     _finalize_single_op(trace, op_log, "input_1_1_raw", 0, None)
 
     assert op_log.layer_label == "input_1_1"
-    assert op_log.layer_label_short == "input_1_1"
+    assert op_log.short_layer_label == "input_1_1"
     assert op_log.label == "input_1_1:1"
     assert op_log._label_raw == "input_1_1_raw"
     # Torch parity (second-pass convention): ``_layer_label_raw`` carries the

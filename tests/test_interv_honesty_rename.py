@@ -54,7 +54,7 @@ def test_old_spelling_raises_typed_error_naming_the_replacement(owner: str) -> N
 def test_constructor_mints_the_honest_name() -> None:
     """Specs carry the honest helper name."""
 
-    assert scramble_elements(torch.ones(3), seed=0).helper_name == "scramble_elements"
+    assert scramble_elements(torch.ones(3), seed=0).name == "scramble_elements"
 
 
 @pytest.mark.smoke
@@ -74,7 +74,7 @@ def test_serialized_specs_load_under_the_new_name() -> None:
     """A persisted ``scramble_elements`` spec reconstructs through its constructor."""
 
     spec = rebuild_builtin_helper("scramble_elements", (torch.ones(3),), {"seed": 3})
-    assert spec.helper_name == "scramble_elements"
+    assert spec.name == "scramble_elements"
     hook = spec.factory()
     sampled = hook(torch.zeros(4), hook=None)
     assert torch.equal(sampled, torch.ones(4))
@@ -101,7 +101,7 @@ def test_a_pickled_edit_naming_the_old_helper_refuses_typed() -> None:
     from torchlens._errors import InvalidArgumentError
 
     saved = replace(scramble_elements(torch.ones(3), seed=3), factory=None)
-    legacy = replace(saved, helper_name="resample_ablate")
+    legacy = replace(saved, name="resample_ablate")
     payload = pickle.dumps(legacy)
     with pytest.raises(InvalidArgumentError) as excinfo:
         pickle.loads(payload)

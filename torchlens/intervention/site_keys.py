@@ -70,7 +70,7 @@ class LiveSiteKeyMinter:
         if event_index in self._by_event:
             return self._by_event[event_index]
         frames = tuple(getattr(ctx, "module_stack", ()) or ())
-        entries = tuple((frame.address, frame.pass_index) for frame in frames)
+        entries = tuple((frame.address, frame.pass_number) for frame in frames)
         key = self._minter.mint(
             entries,
             str(getattr(ctx, "layer_type", None) or getattr(ctx, "type", "")),

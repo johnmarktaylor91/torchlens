@@ -399,16 +399,16 @@ def _check_backward_pass_record_consistency(
     """
 
     for pass_index, backward_pass in trace._backward_pass_logs.items():
-        if backward_pass.pass_index != pass_index:
+        if backward_pass.pass_number != pass_index:
             raise MetadataInvariantError(
                 name,
-                f"BackwardPass stored index {backward_pass.pass_index!r} under {pass_index!r}",
+                f"BackwardPass stored index {backward_pass.pass_number!r} under {pass_index!r}",
             )
         for call in backward_pass.grad_fn_calls:
             if call.backward_pass_index != pass_index:
                 raise MetadataInvariantError(
                     name,
-                    f"{call.call_label} is attached to pass {pass_index} but records "
+                    f"{call.label} is attached to pass {pass_index} but records "
                     f"pass {call.backward_pass_index}",
                 )
     for grad_fn_handle in trace._grad_fn_logs.values():
@@ -416,7 +416,7 @@ def _check_backward_pass_record_consistency(
             if call.backward_pass_index not in valid_pass_indices:
                 raise MetadataInvariantError(
                     name,
-                    f"{call.label} references missing backward pass {call.backward_pass_index}",
+                    f"{call.grad_fn_label} references missing backward pass {call.backward_pass_index}",
                 )
 
 

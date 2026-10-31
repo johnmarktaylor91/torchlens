@@ -94,7 +94,7 @@ def test_tf_curated_chain_admits_no_new_family_name() -> None:
     source = (_REPO / "torchlens" / "backends" / "tf" / "interventions.py").read_text(
         encoding="utf-8"
     )
-    compared = set(re.findall(r"helper_name\s*==\s*['\"]([a-z_]+)['\"]", source))
+    compared = set(re.findall(r"spec\.name\s*==\s*['\"]([a-z_]+)['\"]", source))
     assert compared, "the TF curated chain parsed empty"
     assert not (compared & _NEW_FAMILY_NAMES)
 

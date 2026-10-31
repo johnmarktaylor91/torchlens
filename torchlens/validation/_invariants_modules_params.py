@@ -54,7 +54,7 @@ def _check_module_call_boundary_and_tree(
         output structure references are inconsistent.
     """
 
-    call_label = getattr(module_call, "call_label", None)
+    call_label = getattr(module_call, "label", None)
     address = getattr(module_call, "address", None)
     call_index = getattr(module_call, "call_index", None)
     expected_call_label = f"{address}:{call_index}"
@@ -112,7 +112,7 @@ def _check_module_call_tree_links(ml: Trace, module_call: object, name: str) -> 
         inconsistent child stack prefix.
     """
 
-    call_label = getattr(module_call, "call_label", "")
+    call_label = getattr(module_call, "label", "")
     call_accessor = getattr(ml, "module_calls", {})
     call_parent = getattr(module_call, "call_parent", None)
     if call_parent is not None:
@@ -209,7 +209,7 @@ def _check_module_call_output_structure_paths(
     if mismatched_paths:
         raise MetadataInvariantError(
             name,
-            f"ModuleCall '{getattr(module_call, 'call_label', '')}' output_structure "
+            f"ModuleCall '{getattr(module_call, 'label', '')}' output_structure "
             f"paths disagree with retained output paths {mismatched_paths!r}",
         )
 

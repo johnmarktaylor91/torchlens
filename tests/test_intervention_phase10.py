@@ -386,7 +386,7 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
         import side_effect_helper_mod
 
         helper = Edit(
-            helper_name="side_effect_helper",
+            name="side_effect_helper",
             portability="import_ref",
             factory=side_effect_helper_mod.make_hook,
         )
@@ -445,7 +445,7 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
 
     backward_records = [record for record in spec.records if record.direction == "backward"]
     assert backward_records
-    assert backward_records[0].backward_pass_index == 1
+    assert backward_records[0].backward_pass_number == 1
     assert backward_records[0].call_index == 1
 
 
@@ -551,13 +551,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp_grad(0, 0),
+        edit=tl.clamp_grad(0, 0),
         site_label="relu_back_1_1",
         timing="post",
         direction="backward",
-        helper_name="clamp_grad",
+        edit_name="clamp_grad",
         timestamp=1.0,
-        backward_pass_index=1,
+        backward_pass_number=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=0,
@@ -567,13 +567,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp_grad(0, 0),
+        edit=tl.clamp_grad(0, 0),
         site_label="relu_back_1_1",
         timing="post",
         direction="backward",
-        helper_name="clamp_grad",
+        edit_name="clamp_grad",
         timestamp=2.0,
-        backward_pass_index=1,
+        backward_pass_number=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=0,
@@ -583,13 +583,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp_grad(0, 0),
+        edit=tl.clamp_grad(0, 0),
         site_label="relu_back_1_1",
         timing="post",
         direction="backward",
-        helper_name="clamp_grad",
+        edit_name="clamp_grad",
         timestamp=1.0,
-        backward_pass_index=1,
+        backward_pass_number=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=1,

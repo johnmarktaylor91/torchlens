@@ -375,7 +375,8 @@ def _graph_entry_order(trace: Any, entries: Iterable[Site]) -> tuple[Site, ...]:
         """Map each ``(layer_label, pass_index)`` address to its graph step."""
 
         return {
-            (op.layer_label, op.pass_index): step for step, op in enumerate(trace._layer_list or ())
+            (op.layer_label, op.pass_number): step
+            for step, op in enumerate(trace._layer_list or ())
         }
 
     order = fail_open(_execution_order, lambda _error: {})
@@ -1116,7 +1117,7 @@ def _act_entry(op: Any, mask: _Mask, relation: str, source: str) -> Site:
     """Build one ACT site entry for a resolved op."""
 
     layer_label = getattr(op, "layer_label", None) or op.label
-    pass_index = getattr(op, "pass_index", 1) or 1
+    pass_index = getattr(op, "pass_number", 1) or 1
     return Site(
         kind="ACT",
         key=(layer_label, pass_index),
@@ -1270,7 +1271,7 @@ def _resolve_facet_term(node: _FacetTerm, trace: Any) -> Selection:
         )
     pass_index = getattr(spec, "pass_index", None)
     if pass_index is not None:
-        matches = tuple(op for op in matches if getattr(op, "pass_index", 1) == pass_index)
+        matches = tuple(op for op in matches if getattr(op, "pass_number", 1) == pass_index)
         if not matches:
             raise _unresolvable(
                 "site_not_in_trace",
@@ -1375,7 +1376,7 @@ def _resolve_unit_term(node: _UnitTerm, trace: Any) -> Selection:
         from .intervention.resolver import multipass_bare_label_message
 
         layer_label = getattr(matches[0], "layer_label", None) or node.site
-        pass_indices = sorted(int(getattr(op, "pass_index", 1) or 1) for op in matches)
+        pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in matches)
         raise _unresolvable(
             "multipass_bare_label",
             multipass_bare_label_message(layer_label, pass_indices),
@@ -1434,7 +1435,7 @@ def _resolve_whole_site_term(node: _WholeSiteTerm, trace: Any) -> Selection:
 
     matches = _find_act_ops(trace, node.site_label)
     if node.pass_index is not None:
-        matches = tuple(op for op in matches if getattr(op, "pass_index", 1) == node.pass_index)
+        matches = tuple(op for op in matches if getattr(op, "pass_number", 1) == node.pass_index)
     if not matches:
         raise _unresolvable(
             "site_not_in_trace",
@@ -1632,7 +1633,7 @@ def _selection_from_op(op: Any) -> Selector:
     """Lift one Op (whole-output, one pass)."""
 
     layer_label = getattr(op, "layer_label", None) or op.label
-    pass_index = getattr(op, "pass_index", 1) or 1
+    pass_index = getattr(op, "pass_number", 1) or 1
     return Selector(_WholeSiteTerm(site_label=layer_label, pass_index=pass_index), kind="ACT")
 
 
@@ -1711,7 +1712,7 @@ def _build_selection_do_plan(
     # A bare tl.subspace(...) target is projection-valued: the edit acts on
     # the component along the basis (resolve() still reports the support).
     projection = subspace_projection_of(selection_like)
-    if projection is None and getattr(edit, "helper_name", None) == "set_affine_coordinates":
+    if projection is None and getattr(edit, "name", None) == "set_affine_coordinates":
         from .intervention._affine_source import needs_subspace
 
         # Refuse at do(), before anything is staged: a [k, d] map needs a basis.
@@ -1744,7 +1745,7 @@ def _build_selection_do_plan(
         ops = [
             op
             for op in _find_act_ops(trace, layer_label)
-            if getattr(op, "pass_index", 1) == pass_index
+            if getattr(op, "pass_number", 1) == pass_index
         ]
         if not ops:
             raise _unresolvable(
@@ -1781,10 +1782,10 @@ def _build_selection_do_plan(
             }
             for entry in resolved
         ],
-        "edit": getattr(edit, "helper_name", getattr(edit, "__name__", repr(type(edit)))),
+        "edit": getattr(edit, "name", getattr(edit, "__name__", repr(type(edit)))),
     }
     source_identity = getattr(edit, "kwargs", None)
-    if getattr(edit, "helper_name", None) == "patch_from" and source_identity:
+    if getattr(edit, "name", None) == "patch_from" and source_identity:
         audit["patch_source"] = dict(source_identity)
     return resolved, plan, audit
 

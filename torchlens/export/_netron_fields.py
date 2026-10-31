@@ -123,7 +123,7 @@ def build_leaf_attrs(
     if params:
         attrs.append(NetronAttr("params", "i", int(params)))
     if rolled_members is None and int(getattr(entry, "num_passes", 1) or 1) > 1:
-        attrs.append(NetronAttr("pass", "i", int(getattr(entry, "pass_index", 0))))
+        attrs.append(NetronAttr("pass", "i", int(getattr(entry, "pass_number", 0))))
     shape = getattr(entry, "shape", None)
     if shape is not None and all(
         isinstance(dim, int) and not isinstance(dim, bool) for dim in shape

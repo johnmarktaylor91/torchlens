@@ -175,7 +175,7 @@ SEQUENCE_LENS = register_lens(
             # Passes ARE the subject: the view pin is the lens's meaning.
             "vis_mode": "unrolled",
             "collapse": "none",
-            "color_by": "pass_index",
+            "color_by": "pass_number",
             "stack_by": "auto",
             "show_containers": "labels",
             "show_legend": True,

@@ -96,7 +96,7 @@ def _fold_key(op: Any) -> tuple[Any, ...]:
     func_name = str(getattr(op, "func_name", "unknown"))
     key: tuple[Any, ...] = (stack, func_name, _op_rank(op), _boundary_role(op))
     if int(getattr(op, "num_passes", 1) or 1) > 1:
-        key = (*key, int(getattr(op, "pass_index", 1) or 1))
+        key = (*key, int(getattr(op, "pass_number", 1) or 1))
     return key
 
 

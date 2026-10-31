@@ -337,7 +337,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "parent_param_ops",
                 "parent_params",
                 "parents",
-                "pass_index",
+                "pass_number",
                 "raw_index",
                 "recurrent_ops",
                 # The synthetic output node RE-DERIVES root_ancestors as
@@ -618,7 +618,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "is_scalar_bool",
                 "is_terminal_conditional_bool",
                 "parents",
-                "pass_index",
+                "pass_number",
                 "terminal_conditional_id",
             )
         ),
@@ -794,7 +794,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "_layer_label_raw",
                 "equivalence_class",
                 "num_passes",
-                "pass_index",
+                "pass_number",
                 "recurrent_ops",
                 # site_key_v1 minting: policy-independent structural-position
                 # identity, minted here on BOTH the full-detection and the
@@ -842,9 +842,9 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
         writes=frozenset(
             (
                 "label",
-                "label_short",
+                "short_label",
                 "layer_label",
-                "layer_label_short",
+                "short_layer_label",
                 "step_index",
                 "type_index",
             )
@@ -855,7 +855,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "label",
                 "layer_label",
                 "num_passes",
-                "pass_index",
+                "pass_number",
                 "recurrent_ops",
                 "step_index",
                 "type",
@@ -1004,9 +1004,9 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "is_orphan",
                 "is_output",
                 "label",
-                "label_short",
+                "short_label",
                 "layer_label",
-                "layer_label_short",
+                "short_layer_label",
                 "module",
                 "module_call_stack",
                 "modules",
@@ -1221,7 +1221,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "modules",
                 "num_autograd_tensors",
                 "parents",
-                "pass_index",
+                "pass_number",
                 "shape",
                 "terminal_bool_for",
                 "terminal_conditional_id",
@@ -1487,9 +1487,9 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "is_transform",
                 "kwargs_template",
                 "label",
-                "label_short",
+                "short_label",
                 "layer_label",
-                "layer_label_short",
+                "short_layer_label",
                 "lookup_keys",
                 "max_distance_from_input",
                 "max_distance_to_output",
@@ -1525,7 +1525,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "parent_param_ops",
                 "parent_params",
                 "parents",
-                "pass_index",
+                "pass_number",
                 "raw_index",
                 "recurrent_ops",
                 "resolver_status",
@@ -1873,7 +1873,7 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                     "code_context",
                     "has_output_descendant",
                     "parents",
-                    "pass_index",
+                    "pass_number",
                     "token:raw_graph_ws",
                 )
             ),
@@ -1940,7 +1940,7 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                     "non_tensor_pos_args",
                     "num_passes",
                     "parents",
-                    "pass_index",
+                    "pass_number",
                     "raw_index",
                     "recurrent_ops",
                     "token:raw_graph_ws",
@@ -1958,7 +1958,7 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                 (
                     "_label_raw",
                     "num_passes",
-                    "pass_index",
+                    "pass_number",
                     "recurrent_ops",
                     "token:raw_graph_ws",
                     "type",
@@ -2125,7 +2125,7 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                     "modules",
                     "num_autograd_tensors",
                     "parents",
-                    "pass_index",
+                    "pass_number",
                     "shape",
                     "transformed_activation_memory",
                     "transformed_out_dtype",
@@ -2250,7 +2250,7 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                     "parent_param_ops",
                     "parent_params",
                     "parents",
-                    "pass_index",
+                    "pass_number",
                     "raw_index",
                     "recurrent_ops",
                     # b9 R71-1: step 1's output-node minting now writes the
@@ -2731,7 +2731,7 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
             frozenset(
                 (
                     "num_passes",
-                    "pass_index",
+                    "pass_number",
                     "recurrent_ops",
                 )
             ),
@@ -2754,7 +2754,7 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
         ),
         ("7", "15.5"): PinnedPair(
             "columns",
-            frozenset(("pass_index",)),
+            frozenset(("pass_number",)),
             "step 15.5 consumes/refines pass_index after step 7 writes",
         ),
         ("7", "16.5"): PinnedPair(
@@ -2769,7 +2769,7 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
                     "_layer_label_raw",
                     "equivalence_class",
                     "num_passes",
-                    "pass_index",
+                    "pass_number",
                     "recurrent_ops",
                     # step 18's whole-record scrub reads the step-7-minted
                     # site_key (DROP under v7, read-then-dropped).
@@ -2805,13 +2805,13 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
             frozenset(
                 (
                     "label",
-                    "label_short",
+                    "short_label",
                     "layer_label",
-                    "layer_label_short",
+                    "short_layer_label",
                     "token:label_maps",
                 )
             ),
-            "step 11 consumes/refines label, label_short, layer_label, layer_label_short, ... after step 8 writes",
+            "step 11 consumes/refines label, short_label, layer_label, short_layer_label, ... after step 8 writes",
         ),
         ("8", "11.75"): PinnedPair(
             "columns",
@@ -2873,14 +2873,14 @@ PINNED_ORDER_PAIRS: Mapping[tuple[str, str], PinnedPair] = MappingProxyType(
             frozenset(
                 (
                     "label",
-                    "label_short",
+                    "short_label",
                     "layer_label",
-                    "layer_label_short",
+                    "short_layer_label",
                     "step_index",
                     "type_index",
                 )
             ),
-            "step 18 consumes/refines label, label_short, layer_label, layer_label_short, ... after step 8 writes",
+            "step 18 consumes/refines label, short_label, layer_label, short_layer_label, ... after step 8 writes",
         ),
         ("9", "10"): PinnedPair(
             "tokens",

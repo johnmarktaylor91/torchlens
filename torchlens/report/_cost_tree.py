@@ -312,7 +312,7 @@ class _TreeBuilder:
         self.max_depth = max_depth
         self.fold_repeats = fold_repeats
         self.partition_total = int(agg.partition_total)
-        self.calls = {str(call.call_label): call for call in trace.module_calls.values()}
+        self.calls = {str(call.label): call for call in trace.module_calls.values()}
         self.model_root_name = str(getattr(trace, "model_class_name", None) or "model")
         self.rows: list[CostTreeRow] = []
         self.hidden_flops = 0
@@ -332,7 +332,7 @@ class _TreeBuilder:
             label = str(getattr(op, "label", None) or getattr(op, "layer_label", ""))
             stack = tuple(getattr(op, "module_call_stack", ()) or ())
             op_owner[label] = str(stack[-1]) if stack else None
-            pass_by_label[label] = int(getattr(op, "pass_index", 1) or 1)
+            pass_by_label[label] = int(getattr(op, "pass_number", 1) or 1)
             for spelling in _label_spellings(op):
                 self.owner_by_any_label.setdefault(spelling, op_owner[label])
         self.self_flops: dict[str | None, int] = {}
@@ -803,7 +803,7 @@ def _label_spellings(op: Any) -> tuple[str, ...]:
 def _call_display(call: Any) -> str:
     """Display label for one module call (address:pass spelling kept)."""
 
-    return str(getattr(call, "call_label", "?"))
+    return str(getattr(call, "label", "?"))
 
 
 def format_cost_tree(tree: CostTree) -> str:

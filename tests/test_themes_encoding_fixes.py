@@ -153,7 +153,7 @@ def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> 
     log = tl.trace(Loop(), torch.randn(1, 4))
     try:
         log.draw(
-            color_by="pass_index",
+            color_by="pass_number",
             vis_mode="rolled",
             path=str(tmp_path / "rolled"),
             file_format="svg",
@@ -165,7 +165,7 @@ def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> 
 
             del _ES  # fall through to the DOT-level assertion below
         graph = log.draw(
-            color_by="pass_index",
+            color_by="pass_number",
             vis_mode="rolled",
             path=str(tmp_path / "rolled2"),
             file_format="svg",

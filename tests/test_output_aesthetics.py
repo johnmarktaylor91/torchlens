@@ -469,8 +469,8 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     if 0 in mod_for_dump.ops:
         out.write(_section("F.5 ModuleCall field dump", level=3))
         mpl_for_dump = mod_for_dump.ops[0]
-        out.write(_code(f"ModuleCall: {mpl_for_dump.call_label}"))
-        out.write(_field_dump(mpl_for_dump, f"ModuleCall: {mpl_for_dump.call_label}"))
+        out.write(_code(f"ModuleCall: {mpl_for_dump.label}"))
+        out.write(_field_dump(mpl_for_dump, f"ModuleCall: {mpl_for_dump.label}"))
 
     # F.6 Param
     if len(log.params) > 0:

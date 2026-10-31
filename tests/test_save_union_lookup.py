@@ -146,7 +146,7 @@ def _decisions(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[Any, ...]
             (
                 ctx.kind,
                 ctx.raw_label,
-                ctx.pass_index,
+                ctx.pass_number,
                 tuple(ctx.output_of_module_calls),
                 getattr(spec, "save_out", None),
                 getattr(spec, "save_metadata", None),
@@ -211,7 +211,7 @@ def _recording_fingerprint(recording: Any) -> tuple[Any, ...]:
         (
             record.ctx.kind,
             record.ctx.raw_label,
-            record.ctx.pass_index,
+            record.ctx.pass_number,
             record.ctx.address,
             tuple(record.ctx.output_of_module_calls),
             record.spec.save_out,

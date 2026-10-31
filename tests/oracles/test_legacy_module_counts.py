@@ -134,8 +134,8 @@ def nest_trace():
 def test_module_call_tree_counts(nest_trace) -> None:
     _model, trace = nest_trace
     for call in trace.module_calls:
-        assert call.num_descendant_calls == NEST_DESCENDANTS[call.call_label], call.call_label
-        assert call.max_descendant_depth == NEST_DEPTH.get(call.call_label, 0), call.call_label
+        assert call.num_descendant_calls == NEST_DESCENDANTS[call.label], call.label
+        assert call.max_descendant_depth == NEST_DEPTH.get(call.label, 0), call.label
     for module in trace.modules:
         calls = [label for label in NEST_DESCENDANTS if label.rsplit(":", 1)[0] == module.address]
         assert module.num_calls == NEST_MODULE_CALLS[module.address], module.address

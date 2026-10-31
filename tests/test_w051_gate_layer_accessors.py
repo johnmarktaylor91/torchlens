@@ -20,9 +20,9 @@ from torchlens._data_classes._layer_accessors import LayerAccessor, OpAccessor
 def _op(label: str) -> SimpleNamespace:
     return SimpleNamespace(
         label=f"{label}:1",
-        label_short=f"{label}:1",
+        short_label=f"{label}:1",
         layer_label=label,
-        layer_label_short=label,
+        short_layer_label=label,
         _label_raw=label,
         raw_label=label,
     )
@@ -60,7 +60,7 @@ def test_setitem_int_is_pinned_as_the_pass_index_basis() -> None:
 
 
 def test_layer_accessor_resolves_short_label_once() -> None:
-    layer = SimpleNamespace(layer_label="linear_1_1", layer_label_short="linear_1", is_buffer=False)
+    layer = SimpleNamespace(layer_label="linear_1_1", short_layer_label="linear_1", is_buffer=False)
     accessor = LayerAccessor({"linear_1_1": layer})
     assert accessor._resolve_substring("linear_1_1") is layer
     assert accessor._resolve_substring("linear_1") is layer

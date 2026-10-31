@@ -207,7 +207,7 @@ class TestRecorderCoverage:
         recording = recorder.recording
         inputs = [r for r in recording.records if r.ctx.kind == "input"]
         assert len(inputs) == 2, "one input record per rollout"
-        passes = sorted(r.ctx.pass_index for r in inputs)
+        passes = sorted(r.ctx.pass_number for r in inputs)
         assert passes == [1, 2], "pass identity kept across rollouts"
         for record in inputs:
             assert record.ram_payload is None

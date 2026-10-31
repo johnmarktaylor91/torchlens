@@ -61,7 +61,7 @@ _LAYER_LOG_CONTEXT_FIELDS = (
     # (recurrence-grouped) layer the bare layer_label alone cannot tell a
     # hook WHICH pass it is firing at.
     "label",
-    "pass_index",
+    "pass_number",
     # L1 structural site key (where minted): the derived-seed law's logical
     # firing coordinate prefers it over the display label (F02, edits memo D6).
     "site_key",
@@ -1359,7 +1359,7 @@ def _multi_call_addresses(record: Any) -> tuple[str, ...] | None:
     """
 
     num_calls = getattr(record, "num_calls", None)
-    if num_calls is None or hasattr(record, "call_label") or not hasattr(record, "calls"):
+    if num_calls is None or hasattr(record, "call_index") or not hasattr(record, "calls"):
         return None
     if num_calls == 1 and len(getattr(record, "ops", ())) == 1:
         return None

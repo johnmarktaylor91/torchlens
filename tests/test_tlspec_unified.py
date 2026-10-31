@@ -646,7 +646,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
     assert refs
     assert isinstance(refs[0], FireRecord)
     assert refs[0].direction == "backward"
-    assert isinstance(refs[0].helper, Edit)
+    assert isinstance(refs[0].edit, Edit)
 
 
 def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
@@ -782,7 +782,7 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
 
     assert isinstance(loaded, tl.Trace)
     assert loaded.has_backward_pass is True
-    assert loaded.autograd.backward_passes.for_pass(1).pass_index == 1
+    assert loaded.autograd.backward_passes.for_pass(1).pass_number == 1
     assert manifest["backward_summary"]["has_backward_pass"] is True
     assert manifest["backward_summary"]["num_backward_passes"] == len(log.autograd.backward_passes)
     assert manifest["backward_summary"]["num_grad_fns"] == len(log.autograd.grad_fns)
@@ -1150,7 +1150,7 @@ def test_intervene_trace_round_trips_transient_dedup_state(
     replaced_ops = [op for op in loaded._layer_list if op.is_edited]
 
     assert replaced_ops
-    assert any(record.helper_name == helper_name for op in replaced_ops for record in op.edits)
+    assert any(record.edit_name == helper_name for op in replaced_ops for record in op.edits)
 
 
 def test_unknown_backend_runtime_version_serializes_as_null() -> None:

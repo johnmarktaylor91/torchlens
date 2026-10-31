@@ -19,12 +19,18 @@ V11_CONTRACT = SCHEMAS / "writer_contract_v11.json"
 #: for every field added over v10. The v11 renames enter under their new
 #: spellings (the old spellings leave with no alias).
 V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
-    "backward_pass": {"_executed_flops_record": "keep"},
+    "backward_pass": {"_executed_flops_record": "keep", "pass_number": "keep"},
     "buffer": {"grad_memory": "keep", "overwrite_index": "keep", "writer_label": "keep"},
-    "grad_fn_call": {"fire_record": "keep"},
-    "layer": {"is_edited": "keep"},
-    "module_call": {"has_pre_hook_input_change": "keep"},
-    "op": {"edits": "keep", "is_edited": "keep"},
+    "grad_fn_call": {"fire_record": "keep", "grad_fn_label": "keep"},
+    "layer": {"is_edited": "keep", "short_layer_label": "keep"},
+    "module_call": {"has_pre_hook_input_change": "keep", "label": "keep"},
+    "op": {
+        "edits": "keep",
+        "is_edited": "keep",
+        "pass_number": "keep",
+        "short_label": "keep",
+        "short_layer_label": "keep",
+    },
     "param": {"grad_memory": "keep"},
     "trace": {
         # Private storage behind the removed public Trace names: the capture

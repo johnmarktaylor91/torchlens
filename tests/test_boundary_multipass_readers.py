@@ -99,7 +99,7 @@ def test_identical_inputs_fold_and_every_pass_matches_its_input() -> None:
 
     trace, (a, b) = _trace("same")
     assert trace.input_layers == ["input_1", "input_1"]
-    passes = sorted(trace["input_1"].ops.values(), key=lambda op: op.pass_index)
+    passes = sorted(trace["input_1"].ops.values(), key=lambda op: op.pass_number)
     assert [torch.equal(op.out, t) for op, t in zip(passes, (a, b), strict=True)] == [True, True]
     assert _geometry(*(op.out for op in passes)) == _geometry(a, b)
 

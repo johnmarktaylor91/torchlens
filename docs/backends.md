@@ -33,7 +33,7 @@ Two cross-backend honesty notes apply to every preview row above:
 - **Recurrence and depth.** Every preview backend now groups recurrent calls into multi-pass
   layers through the same neutral grouper torch and JAX use: a reused submodule or repeated
   structurally identical block becomes one N-pass layer (`layer_label:pass` op labels,
-  `pass_index`/`num_passes`, `recurrent_ops`), with grouped graph edges rewritten to the
+  `pass_number`/`num_passes`, `recurrent_ops`), with grouped graph edges rewritten to the
   pass-qualified labels while raw capture labels stay resolvable. The stored
   `recurrence_detection` flag remains the EFFECTIVE value: `True` where the grouper ran (all
   eager preview captures by default; `recurrence_detection=False` opts back into the historical

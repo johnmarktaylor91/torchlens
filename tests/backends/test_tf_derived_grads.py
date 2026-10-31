@@ -372,6 +372,6 @@ def test_tf_module_tree_call_counts_restored_after_replay() -> None:
     baseline = tl.trace(model, x, backend="tf")
     augmented = tl.trace(model, x, backend="tf", grad_options=GradOptions(loss_fn=_loss))
 
-    baseline_calls = {call.call_label for call in baseline.module_calls}
-    augmented_calls = {call.call_label for call in augmented.module_calls}
+    baseline_calls = {call.label for call in baseline.module_calls}
+    augmented_calls = {call.label for call in augmented.module_calls}
     assert baseline_calls == augmented_calls

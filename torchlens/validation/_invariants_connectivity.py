@@ -330,7 +330,7 @@ def _pass_qualified_label(lpl: Any) -> str | None:
     """Return ``layer_label:pass_index`` when both stored fields are present."""
 
     layer_label = getattr(lpl, "layer_label", None)
-    pass_index = getattr(lpl, "pass_index", None)
+    pass_index = getattr(lpl, "pass_number", None)
     if isinstance(layer_label, str) and isinstance(pass_index, int):
         return f"{layer_label}:{pass_index}"
     return None

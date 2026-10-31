@@ -525,7 +525,7 @@ def _check_multipass_coverage(
         num_passes = int(getattr(child_op, "num_passes", 1) or 1)
         if num_passes > 1:
             covered.setdefault(child_op.layer_label, set()).add(
-                int(getattr(child_op, "pass_index", 0) or 0)
+                int(getattr(child_op, "pass_number", 0) or 0)
             )
             total_passes[child_op.layer_label] = num_passes
     for bare_label, seen in covered.items():
@@ -633,7 +633,7 @@ def _param_fire_record(
         func_call_id=child_op.func_call_id,
         container_path=tuple(child_op.container_path or ()),
         engine="replay",
-        helper=(
+        edit=(
             dataclasses.replace(
                 helper_spec,
                 selection_recipe={
@@ -651,7 +651,7 @@ def _param_fire_record(
         site_label=child_op.layer_label,
         timing="post",
         direction="forward",
-        helper_name=helper_name,
+        edit_name=helper_name,
         # Parameter substitution replaces no node's OUTPUT: the child's
         # output is derived by re-execution, so the node-level
         # corroboration key must not fire (same rule as edge substitution).

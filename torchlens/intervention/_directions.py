@@ -400,7 +400,7 @@ def _site_label(record: Any) -> str:
 
     label = str(record.layer_label)
     num_passes = getattr(record, "num_passes", None)
-    pass_index = getattr(record, "pass_index", None)
+    pass_index = getattr(record, "pass_number", None)
     if isinstance(num_passes, int) and num_passes > 1 and isinstance(pass_index, int):
         return f"{label}:{pass_index}"
     return label

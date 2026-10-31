@@ -114,7 +114,7 @@ def add(delta: torch.Tensor | float | int, *, allow_shape_change: bool = False) 
         return _hook
 
     return Edit(
-        helper_name="add",
+        name="add",
         args=(delta,),
         kwargs=(("allow_shape_change", allow_shape_change),),
         factory=factory,
@@ -166,7 +166,7 @@ def replace_with(
         return _hook
 
     return Edit(
-        helper_name="replace_with",
+        name="replace_with",
         args=(value,),
         kwargs=(("allow_shape_change", allow_shape_change),),
         factory=factory,

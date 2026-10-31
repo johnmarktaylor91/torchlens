@@ -95,7 +95,7 @@ PINNED_NOOP_WRITERS = {
             "out",
             "out_versions_by_child",
             "param_memory",
-            "pass_index",
+            "pass_number",
             "recurrent_ops",
             "shape",
             "transform_chain",

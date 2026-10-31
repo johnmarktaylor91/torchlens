@@ -228,12 +228,12 @@ def short_edit_text(edit: Edit) -> str:
 
     from ..intervention.helpers import builtin_helper_constructor
 
-    constructor = builtin_helper_constructor(edit.helper_name)
+    constructor = builtin_helper_constructor(edit.name)
     parts = [_stand_in(value) for value in edit.args]
     parts.extend(_shown_kwargs(edit, constructor))
     if not parts:
-        return edit.helper_name
-    return f"{edit.helper_name}({', '.join(parts)})"
+        return edit.name
+    return f"{edit.name}({', '.join(parts)})"
 
 
 def _hook_mark(hook: Any, *, full: str | None, detail: str) -> EditMark:
@@ -262,12 +262,12 @@ def _value_mark(value: Any, *, detail: str) -> EditMark:
 
 
 def _fire_mark(record: FireRecord) -> EditMark:
-    """Return the mark for one fire record (``FireRecord.helper`` first, then its name)."""
+    """Return the mark for one fire record (``FireRecord.edit`` first, then its name)."""
 
     detail = ", ".join(str(part) for part in (record.engine, record.timing) if part)
-    if record.helper is not None:
-        return _helper_mark(record.helper, detail=detail)
-    name = str(record.helper_name or "hook")
+    if record.edit is not None:
+        return _helper_mark(record.edit, detail=detail)
+    name = str(record.edit_name or "hook")
     if any(marker in name for marker in _SET_HOOK_MARKERS):
         return EditMark(short="set(v)", full="set(v)", detail=detail)
     leaf = name.rsplit(".", 1)[-1]

@@ -61,7 +61,7 @@ def _assert_structurally_coherent(traced) -> None:
         layers[op.layer_label].append(op)
     for label, ops in layers.items():
         n = len(ops)
-        pass_indices = sorted(op.pass_index for op in ops)
+        pass_indices = sorted(op.pass_number for op in ops)
         assert pass_indices == list(range(1, n + 1)), (
             f"layer {label}: pass_index {pass_indices} is not a bijection onto 1..{n}"
         )
@@ -412,7 +412,7 @@ def test_fused_multi_output_modules_per_slot(kind, used_state: bool) -> None:
     for label, ops in slot_ops.items():
         equivalence_sets = {frozenset(op.equivalent_ops) for op in ops}
         assert len(equivalence_sets) == 1, f"layer {label} spans multiple equivalent_ops sets"
-        by_pass = sorted(ops, key=lambda op: op.pass_index)
+        by_pass = sorted(ops, key=lambda op: op.pass_number)
         raw_orders = [op.raw_index for op in by_pass]
         assert raw_orders == sorted(raw_orders), (
             f"layer {label}: pass numbering does not follow call order"
@@ -421,7 +421,7 @@ def test_fused_multi_output_modules_per_slot(kind, used_state: bool) -> None:
     call_signature: dict[frozenset, set[int]] = defaultdict(set)
     for ops in slot_ops.values():
         for op in ops:
-            call_signature[frozenset(op.parents)].add(op.pass_index)
+            call_signature[frozenset(op.parents)].add(op.pass_number)
     for _parents, pass_indices in call_signature.items():
         assert len(pass_indices) == 1, (
             f"co-outputs of one call carry different pass numbers: {pass_indices}"

@@ -352,12 +352,12 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "_construction_done",
     # Other labeling info
     "label",
-    "label_short",
+    "short_label",
     "layer_label",
-    "layer_label_short",
+    "short_layer_label",
     "type",
     "type_index",
-    "pass_index",
+    "pass_number",
     "num_passes",
     "lookup_keys",
     # Saved tensor info
@@ -571,7 +571,7 @@ LAYER_LOG_FIELD_ORDER = [
     #
     # Identity & labeling
     "layer_label",
-    "layer_label_short",
+    "short_layer_label",
     "layer_type",
     "type_index",
     "step_index",
@@ -765,7 +765,7 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "class_qualname",
     "cls",
     "call_index",
-    "call_label",
+    "label",
     "ordinal_index",
     "ops",
     "input_ops",
@@ -913,7 +913,7 @@ GRAD_FN_PASS_LOG_FIELD_ORDER = [
     "call_index",
     "ordinal",
     "backward_pass_index",
-    "call_label",
+    "label",
     "backward_duration",
     "grad_inputs",
     "grad_outputs",
@@ -980,7 +980,7 @@ GRAD_FN_LOG_FIELD_ORDER = [
 ]
 
 BACKWARD_PASS_FIELD_ORDER = [
-    "pass_index",
+    "pass_number",
     "trigger",
     "implicit",
     "outer_context",
