@@ -381,6 +381,11 @@
 
 ### Bug Fixes
 
+- **capture**: call-site chains no longer include TorchLens's own frames when the package is
+  imported through a relative `sys.path` entry such as `PYTHONPATH=.`; those frames had merged
+  distinct call sites into false loops. The TorchLens-frame test now compares normalised file
+  names.
+
 - **replay**: replay no longer refuses a template parent as "ambiguous across the 2 passes of
   that layer" when a fused multi-pass layer's public raw label equals another op's final label
   (each residual add pair of a Hugging Face Gemma-2 decoder layer); it resolves the exact op the

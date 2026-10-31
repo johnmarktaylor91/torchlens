@@ -1299,7 +1299,6 @@
     "dtype:float32",
     "feat:inplace",
     "feat:internal_source",
-    "feat:multipass",
     "feat:rank_ge5",
     "func:__add__",
     "func:__getitem__",
@@ -1335,8 +1334,7 @@
     "mod:Linear",
     "mod:MultiheadAttention",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "smoke: first to cover 21 feature(s), e.g. func:__or__, in:dict, func:repeat_interleave, func:masked_fill_",
    "census_seconds": 7.2,
@@ -3005,7 +3003,6 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_depth_ge4",
-    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank_ge5",
     "func:__add__",
@@ -3048,8 +3045,7 @@
     "mod:TransformerEncoder",
     "mod:TransformerEncoderLayer",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 7 feature(s), e.g. mod:Transformer, mod:TransformerDecoder, mod:TransformerDecoderLayer, mod:ReflectionPad2d",
    "census_seconds": 21.82,
@@ -6211,7 +6207,6 @@
    "features": [
     "dtype:float32",
     "feat:inplace",
-    "feat:multipass",
     "feat:rank_ge5",
     "func:__truediv__",
     "func:adaptive_avg_pool2d",
@@ -6239,8 +6234,7 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt50",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 1 feature(s), e.g. mod:LocalResponseNorm",
    "census_seconds": 10.09,
@@ -6867,7 +6861,6 @@
     "dtype:bool",
     "dtype:float32",
     "feat:module_depth_ge4",
-    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank_ge5",
     "func:__add__",
@@ -6903,8 +6896,7 @@
     "mod:MultiheadAttention",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 1 feature(s), e.g. func:_native_multi_head_attention",
    "census_seconds": 18.45,
@@ -7044,7 +7036,6 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_depth_ge4",
-    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank_ge5",
     "func:__add__",
@@ -7081,8 +7072,7 @@
     "mod:TransformerEncoder",
     "mod:TransformerEncoderLayer",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for in:dict, func:long, mod:TransformerEncoder, mod:TransformerEncoderLayer",
    "census_seconds": 6.93,
@@ -7399,7 +7389,6 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_depth_ge4",
-    "feat:multipass",
     "feat:param_multi_use",
     "feat:rank_ge5",
     "func:__add__",
@@ -7451,8 +7440,7 @@
     "mod:Sigmoid",
     "mod:Tanh",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for func:new_tensor, func:index_add_, func:unfold, func:type",
    "census_seconds": 13.9,
@@ -9599,7 +9587,6 @@
     "dtype:float32",
     "feat:inplace",
     "feat:module_depth_ge4",
-    "feat:multipass",
     "feat:rank_ge5",
     "func:__add__",
     "func:__getitem__",
@@ -9631,8 +9618,7 @@
     "mod:TransformerEncoder",
     "mod:TransformerEncoderLayer",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for func:logical_not, func:masked_fill_, func:__invert__, mod:TransformerEncoder",
    "census_seconds": 8.57,
@@ -9860,7 +9846,6 @@
    "features": [
     "dtype:float32",
     "feat:inplace",
-    "feat:multipass",
     "feat:rank_ge5",
     "func:__truediv__",
     "func:add",
@@ -9891,8 +9876,7 @@
     "mod:Softmax",
     "mod:Tanh",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for mod:LocalResponseNorm, func:avg_pool3d, func:mul, mod:Softmax",
    "census_seconds": 12.36,
@@ -9964,7 +9948,6 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_depth_ge4",
-    "feat:multipass",
     "feat:rank_ge5",
     "func:__add__",
     "func:__getitem__",
@@ -9995,8 +9978,7 @@
     "mod:TransformerEncoder",
     "mod:TransformerEncoderLayer",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for func:rand, func:__lt__, mod:TransformerEncoder, mod:TransformerEncoderLayer",
    "census_seconds": 9.83,

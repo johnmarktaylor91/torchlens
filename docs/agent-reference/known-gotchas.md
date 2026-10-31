@@ -1,5 +1,12 @@
 ## Known Gotchas
 
+- Frame filters identify TorchLens's own frames through `torchlens._utils._package_frames.is_torchlens_code`
+  (a per-code-object memo of a normalised filename comparison), never a raw `co_filename` prefix
+  test. The import system spells a filename the way it joined it: a `sys.path` entry of `.` leaves
+  `/./` in every TorchLens filename, a raw prefix test then kept TorchLens frames in the call-site
+  chain, and the recursion collapse on the wrapper's repeated code object merged distinct call sites
+  (one MultiheadAttention's two `linear` calls became one two-pass layer). Grouping must not depend
+  on the host process; `tests/test_grouping_host_independence.py` pins it.
 - Intervention-spec loads tolerate foreign `custom` callable keys for safe analysis without importing
   their modules. Resolving one for execution denies by default because imports execute top-level code;
   trusted execution may use `trust_custom_callables=True`, while

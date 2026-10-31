@@ -349,10 +349,10 @@ def test_sibling_package_forward_is_not_torchlens_instrumentation() -> None:
     implementation signature and its edits silently hit the stale cache.
     """
 
-    from torchlens._capture_state_helpers import (
-        _TORCHLENS_PACKAGE_DIR,
-        _is_torchlens_instrumentation,
-    )
+    from torchlens._capture_state_helpers import _is_torchlens_instrumentation
+    from torchlens._utils._package_frames import TORCHLENS_PACKAGE_PREFIX
+
+    package_dir = TORCHLENS_PACKAGE_PREFIX[:-1]  # the prefix ends in one separator
 
     def _function_with_filename(filename: str):
         code = compile("def shim(x):\n    return x\n", filename, "exec")
@@ -360,10 +360,10 @@ def test_sibling_package_forward_is_not_torchlens_instrumentation() -> None:
         exec(code, namespace)  # noqa: S102 - test-owned source
         return namespace["shim"]
 
-    sibling = _function_with_filename(_TORCHLENS_PACKAGE_DIR + "_contrib/model.py")
+    sibling = _function_with_filename(package_dir + "_contrib/model.py")
     assert _is_torchlens_instrumentation(sibling) is False
 
-    interior = _function_with_filename(_TORCHLENS_PACKAGE_DIR + "/wrapped.py")
+    interior = _function_with_filename(package_dir + "/wrapped.py")
     assert _is_torchlens_instrumentation(interior) is True
 
 
