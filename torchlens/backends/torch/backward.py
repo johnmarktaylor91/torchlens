@@ -2043,7 +2043,9 @@ def _resolve_live_grad_fn(trace_ref: Any, grad_fn_object_id: int) -> tuple[Any, 
         return None
     if getattr(live_trace, "_tl_backward_triggers_disarmed", False):
         return None
-    grad_fn_handle = getattr(live_trace, "_grad_fn_logs", {}).get(grad_fn_object_id)
+    grad_fn_handle = (
+        {} if live_trace.__dict__.get("_tl_cleaned_up", False) else live_trace._grad_fn_logs
+    ).get(grad_fn_object_id)
     if grad_fn_handle is None:
         return None
     return live_trace, grad_fn_handle
@@ -2143,7 +2145,12 @@ def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE regi
             getattr(
                 live_trace,
                 "_active_backward_pass_index",
-                getattr(live_trace, "_num_backward_passes", 0) + 1,
+                (
+                    0
+                    if live_trace.__dict__.get("_tl_cleaned_up", False)
+                    else live_trace._num_backward_passes
+                )
+                + 1,
             )
         )
         _set_live_grad_fn_call_backward_pass_index(grad_fn_handle, call_index, pass_index)
@@ -2278,7 +2285,9 @@ def _make_aten_grad_fn_prehook(
         live_trace = trace_ref()
         if live_trace is None:
             return None
-        grad_fn_record = getattr(live_trace, "_grad_fn_logs", {}).get(grad_fn_object_id)
+        grad_fn_record = (
+            {} if live_trace.__dict__.get("_tl_cleaned_up", False) else live_trace._grad_fn_logs
+        ).get(grad_fn_object_id)
         if grad_fn_record is None:
             return None
         pass_index = int(getattr(live_trace, "_active_backward_pass_index", 0) or 0)

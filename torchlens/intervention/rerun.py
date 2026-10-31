@@ -161,7 +161,7 @@ def run(
         trace,
         started_at=started_at,
         old_hash=old_hash,
-        new_hash=getattr(new_log, "_provenance_fingerprint", None),
+        new_hash=new_log._provenance_fingerprint,
         old_raw_hash=old_raw_hash,
         new_raw_hash=getattr(new_log, "_raw_event_shape_hash", None),
         hook_plan=hook_plan,
@@ -429,7 +429,7 @@ def _append_rerun(
         "total_batch_size": total_batch_size,
         "append_sequence_id": log._append_sequence_id,
         "old_graph_shape_hash": old_hash,
-        "new_graph_shape_hash": getattr(new_log, "_provenance_fingerprint", None),
+        "new_graph_shape_hash": new_log._provenance_fingerprint,
     }
     log._append_history.append(dict(log.last_run))
     log._record_operation(
@@ -444,7 +444,7 @@ def _append_rerun(
         total_batch_size=total_batch_size,
         append_sequence_id=log._append_sequence_id,
         old_graph_shape_hash=old_hash,
-        new_graph_shape_hash=getattr(new_log, "_provenance_fingerprint", None),
+        new_graph_shape_hash=new_log._provenance_fingerprint,
     )
     return log
 
@@ -626,8 +626,8 @@ def _validate_append_candidate(
         Active hook entries used to decide grad support.
     """
 
-    old_hash = getattr(old_log, "_provenance_fingerprint", None)
-    new_hash = getattr(new_log, "_provenance_fingerprint", None)
+    old_hash = old_log._provenance_fingerprint
+    new_hash = new_log._provenance_fingerprint
     if old_hash != new_hash:
         raise AppendMismatchError("graph shape changed")
 
@@ -1509,7 +1509,7 @@ def _reconcile_rerun_hook_fires(
     # channel keeps its multiplicity semantics without letting one entry's
     # FireResult-channel fires hide another entry's miss.
     fallback_fired: Counter[str] = Counter()
-    for op in getattr(new_log, "_layer_list", ()):
+    for op in new_log._layer_list:
         fire_results = tuple(getattr(op, "fire_results", None) or ())
         if fire_results:
             fired.update(str(result.plan_id) for result in fire_results)
@@ -1584,8 +1584,8 @@ def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:
         pass) compares pass by pass through the shared per-listing rule.
     """
 
-    source_hash = getattr(source_log, "_provenance_fingerprint", None)
-    if source_hash is None or source_hash != getattr(new_log, "_provenance_fingerprint", None):
+    source_hash = source_log._provenance_fingerprint
+    if source_hash is None or source_hash != new_log._provenance_fingerprint:
         return False
     labels = list(getattr(source_log, "input_layers", None) or ())
     if not labels or labels != list(getattr(new_log, "input_layers", None) or ()):

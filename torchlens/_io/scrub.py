@@ -1199,8 +1199,8 @@ def _scrub_value(
         # so a loaded artifact can never CLAIM verification -- the row can only
         # ever worsen a verdict, preserving the monotonicity the runnable side
         # enforces structurally. rescue_rerun stays session-time as documented.
-        if getattr(value, "_provenance_verified", None) is False:
-            reason = getattr(value, "_provenance_verification_reason", None)
+        if value._provenance_verified is False:
+            reason = value._provenance_verification_reason
             scrubbed_state["_capture_verification"] = {
                 "verified": False,
                 "reason": str(reason) if reason is not None else None,

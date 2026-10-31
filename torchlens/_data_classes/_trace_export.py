@@ -542,7 +542,7 @@ class TraceExportMixin(_TraceMixinBase):
             ``None``.
         """
 
-        postprocessor = getattr(self, "_provenance_output_postprocessor", None)
+        postprocessor = self._provenance_output_postprocessor
         if postprocessor is None or getattr(postprocessor, "style", None) == "hf_text":
             return None
         logits = _retained_output_logits(self)
@@ -567,7 +567,9 @@ class TraceExportMixin(_TraceMixinBase):
             First decoded row summary, or ``None`` when unavailable.
         """
 
-        rows = _decoded_batch_topk_rows(getattr(self, "_decoded_output", None))
+        rows = _decoded_batch_topk_rows(
+            None if self.__dict__.get("_tl_cleaned_up", False) else self._decoded_output
+        )
         if not rows:
             return None
         first_item = int(rows[0].get("batch_item", 0))

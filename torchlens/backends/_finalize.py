@@ -124,7 +124,7 @@ def finalize_single_pass_trace(
             attach_op_params(op_log, trace, seen_param_barcodes)
             if not isinstance(op_log.param_memory, Bytes):
                 op_log.param_memory = Bytes(int(op_log.param_memory))
-        if getattr(op_log, "_param_logs", []):
+        if op_log._param_logs:
             layers_with_params_seen.add(op_log.layer_label)
         if update_param_usage:
             _attach_param_usage(trace, op_log, param_usage_membership)
@@ -783,7 +783,7 @@ def _attach_param_usage(
 
     if membership_by_param is None:
         membership_by_param = {}
-    for param in getattr(op_log, "_param_logs", []):
+    for param in op_log._param_logs:
         membership = membership_by_param.get(id(param))
         if membership is None:
             membership = (

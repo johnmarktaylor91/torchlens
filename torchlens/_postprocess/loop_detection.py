@@ -345,7 +345,7 @@ def _group_by_shared_params(self: "Trace") -> None:
     _rebuild_pass_assignments(self)
     self._options_grouping_policy = build_grouping_policy_stamp(
         ran_recurrence_grouping=False,
-        requested=getattr(self, "_options_grouping", "structural"),
+        requested=self._options_grouping,
     )
 
 
@@ -376,7 +376,7 @@ def _detect_and_label_loops(self: "Trace") -> None:
         detector = "grouper_v1"
     self._options_grouping_policy = build_grouping_policy_stamp(
         ran_recurrence_grouping=True,
-        requested=getattr(self, "_options_grouping", "structural"),
+        requested=self._options_grouping,
         detector=detector,
     )
 

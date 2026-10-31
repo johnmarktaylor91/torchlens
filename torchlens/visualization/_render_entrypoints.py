@@ -251,8 +251,8 @@ def render_backward_graph(
 
     source_text = resolve_code_panel_source(
         code_panel,
-        getattr(self, "_source_code_blob", {}),
-        getattr(self, "_source_model_ref", None),
+        self._source_code_blob,
+        self._source_model_ref,
     )
     # Compose the code panel side by side when the format supports it so it never
     # distorts the backward graph; otherwise fall back to an in-graph subgraph.

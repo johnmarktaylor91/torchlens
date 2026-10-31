@@ -125,7 +125,11 @@ def test_reducer_agreement_and_refusals() -> None:
 def test_trace_backed_population_records_address_identity() -> None:
     """D11: trace-backed populations default to the ADDRESS digest kind."""
 
-    class _TraceLike:
+    from torchlens._data_classes.trace import Trace
+
+    # A Trace instance (built without a capture) with the identity facts the
+    # population reads; ``_looks_like_trace`` accepts live Traces only.
+    class _TraceLike(Trace):
         name = "toy"
         model_class_qualname = "Toy"
         random_seed = 7
@@ -134,7 +138,7 @@ def test_trace_backed_population_records_address_identity() -> None:
         ops: dict[str, object] = {}
         layer_labels: tuple[str, ...] = ()
 
-    ref = population([_TraceLike(), _TraceLike()], origin="two runs")
+    ref = population([object.__new__(_TraceLike), object.__new__(_TraceLike)], origin="two runs")
     assert ref.kind == "trace"
     assert ref.digest_kind == "address"
     assert len(ref) == 2

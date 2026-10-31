@@ -1865,6 +1865,7 @@ def patch_from(
     DOCUMENTED-UNSTABLE spelling pending its naming-session ratification.
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
     from ._patch_mapping import apply_position_map, normalize_positions, resolve_source_site
     from .stochastic import SamplingPlan, plan_patch_helper
 
@@ -1882,7 +1883,9 @@ def patch_from(
     pairs = normalize_positions(positions)
     identity = {
         "source_trace_label": str(getattr(source, "name", "") or ""),
-        "source_model_class": str(getattr(source, "_source_class_qualname", "") or ""),
+        "source_model_class": str(
+            (source._source_class_qualname if is_live_trace(source) else "") or ""
+        ),
         "source_object_id": str(id(source)),
     }
     if source_site is not None:

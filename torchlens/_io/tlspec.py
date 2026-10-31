@@ -559,13 +559,13 @@ class _TlSpecWriter:
 
         spec = get_backend_spec(backend_name)
         runtime_name = spec.serialization_policy.runtime_name or backend_name
-        runtime_config = getattr(source, "_provenance_backend_config", None)
+        runtime_config = source._provenance_backend_config
         if not isinstance(runtime_config, dict):
             runtime_config = {}
         device_summary = getattr(source, "backend_runtime_device_summary", None)
         if not isinstance(device_summary, dict):
             device_summary = {}
-        runtime_version = getattr(source, "_provenance_backend_version", "0.0.metadata")
+        runtime_version = source._provenance_backend_version
         return {
             "name": runtime_name,
             "version": None if runtime_version is None else str(runtime_version),
@@ -620,7 +620,7 @@ class _TlSpecWriter:
             JSON-ready derived-gradient summary, or ``None`` when absent.
         """
 
-        leaf_records = getattr(source, "_autograd_derived_grads", {})
+        leaf_records = source._autograd_derived_grads
         intermediate_records = getattr(
             getattr(source, "autograd", None), "intermediate_derived_grads", {}
         )
@@ -661,14 +661,14 @@ class _TlSpecWriter:
         """
 
         model_signature = cls._model_signature(source, kind="trace")
-        graph_shape_hash = getattr(source, "_provenance_fingerprint", None)
+        graph_shape_hash = source._provenance_fingerprint
         return {
             "backend_fingerprint": {
                 "backend": backend_name,
                 "model_signature": model_signature,
                 "graph_digest": graph_shape_hash or "metadata-only",
                 "module_identity_mode": getattr(source, "module_identity_mode", None),
-                "param_source": getattr(source, "_provenance_param_source", None),
+                "param_source": source._provenance_param_source,
             }
         }
 
@@ -689,9 +689,11 @@ class _TlSpecWriter:
             Module-qualified identity string.
         """
 
+        from .._data_classes._trace_missing_attrs import is_live_trace
+
         if kind == "bundle":
             return "torchlens.intervention.bundle.Bundle"
-        model_class_qualname = getattr(source, "_source_class_qualname", None)
+        model_class_qualname = source._source_class_qualname if is_live_trace(source) else None
         if isinstance(model_class_qualname, str) and model_class_qualname:
             return model_class_qualname
         model = _source_model(source)
@@ -726,6 +728,8 @@ class _TlSpecWriter:
             Fingerprint metadata.
         """
 
+        from .._data_classes._trace_missing_attrs import is_live_trace
+
         if kind == "bundle":
             return cls._bundle_fingerprint(source, model_signature)
 
@@ -738,7 +742,9 @@ class _TlSpecWriter:
             parameter_hash = _hash_named_tensor_meta(model.named_parameters())
             buffer_hash = _hash_named_tensor_meta(model.named_buffers())
         else:
-            raw_parameter_hash = getattr(source, "_provenance_param_hash_quick", None)
+            raw_parameter_hash = (
+                source._provenance_param_hash_quick if is_live_trace(source) else None
+            )
             if isinstance(raw_parameter_hash, str) and len(raw_parameter_hash) == 64:
                 parameter_hash = raw_parameter_hash
             else:
@@ -804,6 +810,8 @@ class _TlSpecWriter:
             Site descriptor objects.
         """
 
+        from .._data_classes._trace_missing_attrs import is_live_trace
+
         if kind == "bundle":
             sites: list[dict[str, Any]] = []
             members = getattr(source, "members", {})
@@ -816,7 +824,7 @@ class _TlSpecWriter:
         layers = (
             source.get("_layer_list", [])
             if isinstance(source, dict)
-            else getattr(source, "_layer_list", [])
+            else (source._layer_list if is_live_trace(source) else [])
         )
         sites = []
         for layer in layers if isinstance(layers, list) else []:
@@ -894,15 +902,21 @@ class _TlSpecWriter:
             JSON-serializable summary of backward records and gradient blobs.
         """
 
+        from .._data_classes._trace_missing_attrs import is_live_trace
+
         grad_kinds = {"grad", "transformed_grad", "grad_fn_grad"}
-        backend_name = str(getattr(source, "_provenance_backend", "torch"))
+        backend_name = str(source._provenance_backend if is_live_trace(source) else "torch")
         saved_grad_records = 0
         if backend_name == "torch":
             saved_grad_records = _safe_len(getattr(source, "saved_grad_ops", None))
         return {
-            "has_backward_pass": bool(getattr(source, "_autograd_has_backward_pass", False)),
-            "num_backward_passes": int(getattr(source, "_num_backward_passes", 0) or 0),
-            "num_grad_fns": _safe_len(getattr(source, "_grad_fn_logs", None)),
+            "has_backward_pass": bool(
+                source._autograd_has_backward_pass if is_live_trace(source) else False
+            ),
+            "num_backward_passes": int(
+                (source._num_backward_passes if is_live_trace(source) else 0) or 0
+            ),
+            "num_grad_fns": _safe_len(source._grad_fn_logs if is_live_trace(source) else None),
             "num_grad_fn_calls": _safe_len(
                 getattr(getattr(source, "autograd", None), "grad_fn_calls", None)
             ),
@@ -1008,7 +1022,9 @@ def _source_model(source: Any) -> torch.nn.Module | None:
         Source model, or ``None`` when unavailable.
     """
 
-    source_ref = getattr(source, "_source_model_ref", None)
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
+    source_ref = source._source_model_ref if is_live_trace(source) else None
     if source_ref is None:
         return None
     model = source_ref()
@@ -1047,11 +1063,17 @@ def _extra_metadata_for_source(source: Any) -> dict[str, Any]:
         Extra metadata object.
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     return {
-        "model_class_name": _json_str_or_none(getattr(source, "_source_class_name", None)),
-        "graph_shape_hash": _json_str_or_none(getattr(source, "_provenance_fingerprint", None)),
+        "model_class_name": _json_str_or_none(
+            source._source_class_name if is_live_trace(source) else None
+        ),
+        "graph_shape_hash": _json_str_or_none(
+            source._provenance_fingerprint if is_live_trace(source) else None
+        ),
         "input_signature_hash": _json_str_or_none(
-            getattr(source, "_provenance_input_signature_hash", None)
+            source._provenance_input_signature_hash if is_live_trace(source) else None
         ),
     }
 

@@ -398,7 +398,7 @@ def _check_param_usage_reciprocal_links(ml: Trace, param: object, name: str) -> 
     address = getattr(param, "address", "<unknown>")
     for op_label in getattr(param, "used_by_ops", ()):
         op = ml[op_label]
-        if not _param_log_list_contains_param(getattr(op, "_param_logs", ()), param):
+        if not _param_log_list_contains_param(op._param_logs, param):
             raise MetadataInvariantError(
                 name,
                 f"Param '{address}' used_by_ops contains '{op_label}' but that Op does "
@@ -406,7 +406,7 @@ def _check_param_usage_reciprocal_links(ml: Trace, param: object, name: str) -> 
             )
     for layer_label in getattr(param, "used_by_layers", ()):
         layer = ml._layer_logs[layer_label]
-        if not _param_log_list_contains_param(getattr(layer, "_param_logs", ()), param):
+        if not _param_log_list_contains_param(layer._param_logs, param):
             raise MetadataInvariantError(
                 name,
                 f"Param '{address}' used_by_layers contains '{layer_label}' but that "
@@ -478,7 +478,7 @@ def _check_layers_with_params_matches_param_usage(ml: Trace, name: str) -> None:
         for layer_label in layer_labels:
             actual_layer_union.add(layer_label)
             layer = ml._layer_logs[layer_label]
-            if not getattr(layer, "_param_logs", ()):
+            if not layer._param_logs:
                 raise MetadataInvariantError(
                     name,
                     f"layers_with_params[{group_key!r}] contains '{layer_label}' but the "
@@ -507,7 +507,7 @@ def _deduped_layers_with_params(ml: Trace) -> int:
         if layer.layer_label in seen_layer_labels:
             continue
         seen_layer_labels.add(layer.layer_label)
-        if getattr(layer, "_param_logs", ()):
+        if layer._param_logs:
             layers_with_params += 1
     return layers_with_params
 
@@ -546,7 +546,7 @@ def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
     # can never consume a parameter the inventory does not declare).
     consumed_by_identity: dict[int, int] = {}
     for layer in ml._layer_list:
-        for pl in getattr(layer, "_param_logs", ()) or ():
+        for pl in layer._param_logs or ():
             consumed_by_identity[id(pl)] = int(pl.num_params)
     consumed_total = sum(consumed_by_identity.values())
     if consumed_total > total_params:

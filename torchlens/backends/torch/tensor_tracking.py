@@ -202,10 +202,12 @@ def _is_fork_relative(trace: "Trace", other: "Trace") -> bool:
         ``True`` when one trace is a fork ancestor of the other.
     """
 
+    from ..._data_classes._trace_missing_attrs import is_live_trace
+
     for start, target in ((trace, other), (other, trace)):
         current: Any = start
         for _ in range(64):
-            parent_ref = getattr(current, "_parent_run", None)
+            parent_ref = current._parent_run if is_live_trace(current) else None
             parent = parent_ref() if callable(parent_ref) else None
             if parent is None:
                 break

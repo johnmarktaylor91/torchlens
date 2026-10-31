@@ -122,7 +122,7 @@ def _resolve_output_parent_labels(
 
         # Lazily index the source model's registered buffers by identity.
         if buffer_addresses_by_id is None:
-            model_ref = getattr(self, "_source_model_ref", None)
+            model_ref = self._source_model_ref
             model = model_ref() if model_ref is not None else None
             buffer_addresses_by_id = (
                 {id(buffer): address for address, buffer in model.named_buffers()}
@@ -645,7 +645,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     # silently loses the mutation. Recording it lets the runnable descriptor stay honestly
     # UNVERIFIABLE instead of VERIFYING a replay that omits the write.
     _record_pruned_alias_mutation(self, orphan_nodes)
-    if getattr(self, "_options_keep_orphans", False):
+    if self._options_keep_orphans:
         for orphan_label in orphan_nodes:
             self._raw_graph_ws.raw_layer_dict[orphan_label].is_orphan = True
         return

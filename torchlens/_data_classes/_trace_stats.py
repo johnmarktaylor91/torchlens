@@ -1405,7 +1405,9 @@ class TraceStatsMixin(_TraceMixinBase):
         # Evidence test, not a load flag: a rehydrated trace owns a fresh
         # EMPTY stream, so backward records without any fire event mean the
         # runtime evidence did not travel (loaded artifact or cleaned trace).
-        if stream is None or (not fired and getattr(self, "_grad_fn_logs", {})):
+        if stream is None or (
+            not fired and ({} if self.__dict__.get("_tl_cleaned_up", False) else self._grad_fn_logs)
+        ):
             raise InvalidArgumentError(
                 "Per-fire backward timing is served from the runtime capture "
                 "event stream, which never persists: this trace (loaded from "
@@ -1420,7 +1422,7 @@ class TraceStatsMixin(_TraceMixinBase):
             )
         timings: OrderedDict[str, Duration | None] = OrderedDict()
         per_object_ordinals: dict[int, int] = {}
-        grad_fn_logs = getattr(self, "_grad_fn_logs", {})
+        grad_fn_logs = {} if self.__dict__.get("_tl_cleaned_up", False) else self._grad_fn_logs
         # Mirrors the _fold_fired_events sort key and per-object ordinal walk
         # so keys line up 1:1 with trace.autograd.grad_fn_calls.
         for event in sorted(fired, key=lambda item: (item.pass_index, item.timestamp, item.seq)):
@@ -1474,8 +1476,12 @@ class TraceStatsMixin(_TraceMixinBase):
         summary: OrderedDict[str | None, dict[str, Any]] = OrderedDict()
         any_op_backed = False
         any_keyed = False
-        layer_lookup = getattr(self, "_layer_dict_all_keys", {})
-        for grad_fn_record in getattr(self, "_grad_fn_logs", {}).values():
+        layer_lookup = (
+            {} if self.__dict__.get("_tl_cleaned_up", False) else self._layer_dict_all_keys
+        )
+        for grad_fn_record in (
+            {} if self.__dict__.get("_tl_cleaned_up", False) else self._grad_fn_logs
+        ).values():
             site_key, op_backed = _grad_fn_site_key(grad_fn_record, layer_lookup)
             any_op_backed = any_op_backed or op_backed
             any_keyed = any_keyed or site_key is not None
@@ -1810,7 +1816,7 @@ class TraceStatsMixin(_TraceMixinBase):
         stored = self.__dict__.get("_uncalled_module_addresses")
         if stored is not None:
             return len(stored)
-        source_ref = getattr(self, "_source_model_ref", None)
+        source_ref = None if self.__dict__.get("_tl_cleaned_up", False) else self._source_model_ref
         if source_ref is None or source_ref() is None:
             return None
         return len(self.uncalled_modules)

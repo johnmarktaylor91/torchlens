@@ -107,7 +107,7 @@ def _validate_chunk_append_candidate(old_trace: Trace, new_trace: Trace) -> None
         Raises when graph metadata is incompatible.
     """
 
-    old_hash = getattr(old_trace, "_provenance_fingerprint", None)
+    old_hash = old_trace._provenance_fingerprint
     new_hash = new_trace._provenance_fingerprint
     if old_hash != new_hash:
         raise AppendMismatchError("graph shape changed")

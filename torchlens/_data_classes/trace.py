@@ -2208,7 +2208,7 @@ class Trace(
             Raises if the tensor is not portable for this trace.
         """
 
-        backend_name = str(getattr(self, "_provenance_backend", "torch"))
+        backend_name = str(self._provenance_backend)
         if backend_name != "torch":
             raise InvalidArgumentError(
                 "annotate(data=torch.Tensor) is supported only for torch traces in this "
@@ -2436,7 +2436,7 @@ class Trace(
         stored = self.__dict__.get("_uncalled_module_addresses")
         if stored is not None:
             return _CallableList(stored)
-        source_ref = getattr(self, "_source_model_ref", None)
+        source_ref = None if self.__dict__.get("_tl_cleaned_up", False) else self._source_model_ref
         model = source_ref() if source_ref is not None else None
         if model is None:
             return _CallableList()
@@ -2479,7 +2479,7 @@ class Trace(
             Runtime class of the source model, or ``None`` after the weakref dies.
         """
 
-        source_ref = getattr(self, "_source_model_ref", None)
+        source_ref = None if self.__dict__.get("_tl_cleaned_up", False) else self._source_model_ref
         model = source_ref() if source_ref is not None else None
         return None if model is None else type(model)
 
@@ -2494,7 +2494,7 @@ class Trace(
             ``None`` for root traces and deserialized traces.
         """
 
-        parent_ref = getattr(self, "_parent_run", None)
+        parent_ref = None if self.__dict__.get("_tl_cleaned_up", False) else self._parent_run
         if isinstance(parent_ref, weakref.ReferenceType):
             parent = parent_ref()
             return parent if isinstance(parent, Trace) else None
@@ -2545,7 +2545,7 @@ class Trace(
             Source model class, or ``None`` if the weakref is unavailable.
         """
 
-        source_ref = getattr(self, "_source_model_ref", None)
+        source_ref = None if self.__dict__.get("_tl_cleaned_up", False) else self._source_model_ref
         model = source_ref() if source_ref is not None else None
         return None if model is None else type(model)
 
@@ -3567,7 +3567,7 @@ class Trace(
             Fresh rerun trace with layer aggregates already postprocessed.
         """
 
-        new_layer_logs = getattr(new_log, "_layer_logs", {}) or {}
+        new_layer_logs = new_log._layer_logs or {}
         for label, layer_log in self._layer_logs.items():
             new_layer_log = new_layer_logs.get(label)
             if new_layer_log is None:

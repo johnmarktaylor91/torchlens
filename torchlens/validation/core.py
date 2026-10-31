@@ -598,12 +598,10 @@ def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
 
     dispatch_count = getattr(self, "_validation_dispatch_op_count", None)
     if dispatch_count is None:
-        if int(getattr(self, "_num_ops", 0)) > 0:
+        if int(self._num_ops) > 0:
             return ValidationCheckResult.unverified("dispatch_op_count_not_collected")
         return ValidationCheckResult.validated("no_dispatchable_ops")
-    captured_count = int(
-        getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "_num_ops", 0))
-    )
+    captured_count = int(getattr(self, "_validation_captured_dispatchable_op_count", self._num_ops))
     # Dispatchable ops captured then intentionally orphan-pruned (dead computation) AND
     # ``.data``-accessor buffer-write view dispatches are accounted for on the captured side:
     # the honest invariant is ``dispatched == captured + orphan-pruned + buffer-writes``. A
@@ -626,7 +624,7 @@ def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
     # requires the witness to record every observed wrapped call, not only the
     # ones that owned a dispatch. ``unverified`` is the honest verdict the check
     # vocabulary already provides, and it never reads as a pass.
-    if dispatch_count == 0 and captured_count == 0 and int(getattr(self, "_num_ops", 0)) > 0:
+    if dispatch_count == 0 and captured_count == 0 and int(self._num_ops) > 0:
         return ValidationCheckResult.unverified("dispatch_op_count_witness_empty")
     if dispatch_count == captured_count + pruned_count + buffer_write_count:
         return ValidationCheckResult.validated("dispatch_op_count_matched")
@@ -652,7 +650,7 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
         return
     unresolved = [
         getattr(layer, "layer_label", "<unknown>")
-        for layer in getattr(self, "_layer_list", [])
+        for layer in self._layer_list
         if getattr(layer, "func", None) is None
         and getattr(layer, "func_name", "none") not in {"none", "input", "output", "buffer"}
     ]
@@ -880,9 +878,7 @@ def validate_saved_outs(
     if dispatch_count_result.failed:
         dispatch_count = getattr(self, "_validation_dispatch_op_count")
         captured_count = int(
-            getattr(
-                self, "_validation_captured_dispatchable_op_count", getattr(self, "_num_ops", 0)
-            )
+            getattr(self, "_validation_captured_dispatchable_op_count", self._num_ops)
         )
         pruned_count = int(getattr(self, "_validation_pruned_dispatchable_op_count", 0))
         buffer_write_count = int(getattr(self, "_validation_buffer_write_dispatch_op_count", 0))
@@ -913,9 +909,7 @@ def validate_saved_outs(
             decision="failed",
             reason=dispatch_count_result.reason,
         )
-        status = decision_recorder.as_status(
-            backend=str(getattr(self, "_provenance_backend", "torch"))
-        )
+        status = decision_recorder.as_status(backend=str(self._provenance_backend))
         setattr(self, "_validation_replay_status", status)
         return status
     if dispatch_count_result.decision == "validated":
@@ -990,9 +984,7 @@ def validate_saved_outs(
                 decision="failed",
                 reason="output_count_mismatch",
             )
-            status = decision_recorder.as_status(
-                backend=str(getattr(self, "_provenance_backend", "torch"))
-            )
+            status = decision_recorder.as_status(backend=str(self._provenance_backend))
             setattr(self, "_validation_replay_status", status)
             return status
         output_label_counts: dict[str, int] = defaultdict(int)
@@ -1018,9 +1010,7 @@ def validate_saved_outs(
                     decision="failed",
                     reason="output_missing",
                 )
-                status = decision_recorder.as_status(
-                    backend=str(getattr(self, "_provenance_backend", "torch"))
-                )
+                status = decision_recorder.as_status(backend=str(self._provenance_backend))
                 setattr(self, "_validation_replay_status", status)
                 return status
             if not _ground_truth_output_matches_saved(
@@ -1049,9 +1039,7 @@ def validate_saved_outs(
                     decision="failed",
                     reason="ground_truth_mismatch",
                 )
-                status = decision_recorder.as_status(
-                    backend=str(getattr(self, "_provenance_backend", "torch"))
-                )
+                status = decision_recorder.as_status(backend=str(self._provenance_backend))
                 setattr(self, "_validation_replay_status", status)
                 return status
             decision_recorder.record(
@@ -1098,9 +1086,7 @@ def validate_saved_outs(
                 decision_recorder,
             )
         if parents_valid.failed:
-            status = decision_recorder.as_status(
-                backend=str(getattr(self, "_provenance_backend", "torch"))
-            )
+            status = decision_recorder.as_status(backend=str(self._provenance_backend))
             setattr(self, "_validation_replay_status", status)
             return status
 
@@ -1134,9 +1120,7 @@ def validate_saved_outs(
             decision="failed",
             reason="bfs_incomplete",
         )
-        status = decision_recorder.as_status(
-            backend=str(getattr(self, "_provenance_backend", "torch"))
-        )
+        status = decision_recorder.as_status(backend=str(self._provenance_backend))
         setattr(self, "_validation_replay_status", status)
         return status
 
@@ -1173,7 +1157,7 @@ def validate_saved_outs(
             raise
     # Source-less tensor args replay fine from saved args; a gap records a failure here.
     check_source_provenance(self, decision_recorder, verbose)
-    status = decision_recorder.as_status(backend=str(getattr(self, "_provenance_backend", "torch")))
+    status = decision_recorder.as_status(backend=str(self._provenance_backend))
     setattr(self, "_validation_replay_status", status)
     return status
 
@@ -2167,7 +2151,7 @@ def _matches_own_parameter(target_layer: Op, value: torch.Tensor) -> bool:
         True when the value matches one of the op's recorded parameters.
     """
 
-    for param_log in getattr(target_layer, "_param_logs", ()) or ():
+    for param_log in target_layer._param_logs or ():
         param_value = getattr(param_log, "value", None)
         if not isinstance(param_value, torch.Tensor):
             continue
@@ -4858,7 +4842,7 @@ def _restore_live_parameter_args_for_replay(input_args: dict[str, Any], layer: O
 
     if getattr(layer, "is_inplace", False):
         return
-    param_logs = tuple(getattr(layer, "_param_logs", ()) or ())
+    param_logs = tuple(layer._param_logs or ())
     if not param_logs:
         return
 

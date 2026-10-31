@@ -30,7 +30,7 @@ import time
 import warnings
 from collections.abc import Callable, Iterator
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from torch import get_default_dtype, nn
 
@@ -623,7 +623,7 @@ def save_new_outs(
     """
     if backward_ready is not None:
         model_detach_saved_activations = self._options_detach_saved_activations
-        model_train_mode = getattr(self, "_options_backward_ready", False)
+        model_train_mode = self._options_backward_ready
         layer_detach_saved_activations = {
             layer_log_entry: layer_log_entry.detach_saved_activations for layer_log_entry in self
         }
@@ -656,7 +656,7 @@ def save_new_outs(
     from ..user_funcs import _run_model_and_save_specified_outs
     from .projectors import RefreshProjector
 
-    save_grads_policy = getattr(self, "_options_save_grads", None)
+    save_grads_policy = self._options_save_grads
     layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
     grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
     refresh_seed = self._options_seed if seed is None else seed
@@ -674,28 +674,28 @@ def save_new_outs(
         input_args=input_args,
         input_kwargs=input_kwargs or {},
         layers_to_save="all" if resolved_layer_nums is None else "none",
-        output_device=getattr(self, "_options_output_device", "same"),
-        activation_transform=getattr(self, "_options_activation_transform", None),
-        grad_transform=getattr(self, "_options_grad_transform", None),
-        save_raw_activations=getattr(self, "_options_save_raw_activations", True),
-        save_raw_grads=getattr(self, "_options_save_raw_grads", True),
-        save_mode=getattr(self, "_options_save_mode", "copy"),
+        output_device=cast('Literal["same", "cpu", "cuda"]', self._options_output_device),
+        activation_transform=self._options_activation_transform,
+        grad_transform=self._options_grad_transform,
+        save_raw_activations=self._options_save_raw_activations,
+        save_raw_grads=self._options_save_raw_grads,
+        save_mode=self._options_save_mode,
         capture_tensor_grad_hooks=getattr(self, "capture_tensor_grad_hooks", True),
-        keep_orphans=getattr(self, "_options_keep_orphans", False),
-        mark_layer_depths=getattr(self, "_options_mark_layer_depths", False),
-        detach_saved_activations=getattr(self, "_options_detach_saved_activations", False),
-        save_args=getattr(self, "_options_save_args", False),
+        keep_orphans=self._options_keep_orphans,
+        mark_layer_depths=self._options_mark_layer_depths,
+        detach_saved_activations=self._options_detach_saved_activations,
+        save_args=self._options_save_args,
         save_grads=save_grads_policy not in (None, False),
         grads_to_save=grad_layers_to_save,
         seed=refresh_seed,
         num_context_lines=getattr(self, "num_context_lines", 7),
         optimizer=getattr(self, "_optimizer", None),
-        save_source_context=getattr(self, "_options_save_source_context", False),
-        save_rng=getattr(self, "_options_save_rng", False),
-        recurrence_detection=getattr(self, "_options_recurrence_detection", True),
-        verbose=getattr(self, "_options_verbose", False),
-        backward_ready=getattr(self, "_options_backward_ready", False),
-        inference_only=getattr(self, "_options_inference_only", False),
+        save_source_context=self._options_save_source_context,
+        save_rng=self._options_save_rng,
+        recurrence_detection=self._options_recurrence_detection,
+        verbose=self._options_verbose,
+        backward_ready=self._options_backward_ready,
+        inference_only=self._options_inference_only,
         # A refresh retains payloads like any capture; dropping the configured
         # budget here silently rebudgeted every refresh/run() forward at the
         # default "auto" (or left a save_budget=None session budgeted).
@@ -703,11 +703,11 @@ def save_new_outs(
         # F2: a refresh re-arms the nonfinite tripwire. The historical refresh
         # forwarded only inference_only, so a raise_on_nan capture silently
         # lost its abort policy on every refreshed forward.
-        raise_on_nan=bool(getattr(self, "_options_on_nonfinite", False)),
+        raise_on_nan=bool(self._options_on_nonfinite),
         # A refresh measures CPU peaks only if the source opted in.
         measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),
         output_transform=getattr(self, "_output_transform", None),
-        save_transformed_output=getattr(self, "_options_save_transformed_output", "small"),
+        save_transformed_output=self._options_save_transformed_output,
         retain_output_parents_for_layers_to_save=True,
         _resolved_layer_nums_to_save=resolved_layer_nums,
         _resolved_grad_layer_nums_to_save=(
@@ -801,7 +801,7 @@ def _select_raw_indexes_by_retention_predicate(
     from ..fastlog.exceptions import PredicateError
 
     selected_raw_indexes: set[int] = set()
-    for layer_entry in getattr(self, "_layer_list", []):
+    for layer_entry in self._layer_list:
         decision = predicate(layer_entry)
         if not isinstance(decision, bool):
             raise PredicateError(
@@ -839,7 +839,7 @@ def _get_op_nums_from_user_labels(
                 for site in self.resolve_sites(
                     which_layers,
                     strict=False,
-                    max_fanout=max(1, len(getattr(self, "_layer_list", []))),
+                    max_fanout=max(1, len(self._layer_list)),
                 )
             }
         )
@@ -857,14 +857,14 @@ def _get_op_nums_from_user_labels(
                 for site in self.resolve_sites(
                     layer_key,
                     strict=False,
-                    max_fanout=max(1, len(getattr(self, "_layer_list", []))),
+                    max_fanout=max(1, len(self._layer_list)),
                 )
             )
             continue
         if isinstance(layer_key, str) and ":" not in layer_key:
             matching_layer_passes = [
                 layer_entry
-                for layer_entry in getattr(self, "_layer_list", [])
+                for layer_entry in self._layer_list
                 if layer_key in {layer_entry.layer_label, layer_entry.short_layer_label}
             ]
             if matching_layer_passes:
@@ -1363,7 +1363,7 @@ def _scrub_failed_capture_transients(self: "Trace") -> None:
     events = self.__dict__.pop("capture_events", None)
     if events is None:
         return
-    if getattr(self, "_options_mode", None) == "predicate":
+    if self._options_mode == "predicate":
         return
     if hasattr(events, "release_runtime_sidecars"):
         events.release_runtime_sidecars()
@@ -1581,7 +1581,7 @@ def run_and_log_inputs_through_model(
     )
     backend.set_capture_producer_policy(self, self._options_mode)
 
-    if getattr(self, "_source_model_ref", None) is None:
+    if self._source_model_ref is None:
         # Needed so unlabeled output tensors that are direct registered-buffer
         # reads (e.g. ``forward`` returning ``self.running_mean`` untouched)
         # can be identified during output extraction. The exhaustive
@@ -1764,13 +1764,13 @@ def run_and_log_inputs_through_model(
         if not isinstance(getattr(self, "_stop_directive", None), StopDirective):
             self._stop_directive = StopDirective(
                 halt_options=getattr(self, "_predicate_save_options", None),
-                raise_on_nan=bool(getattr(self, "_options_on_nonfinite", False)),
+                raise_on_nan=bool(self._options_on_nonfinite),
                 forward_error_mode=getattr(
                     getattr(self, "_predicate_save_options", None),
                     "on_forward_error",
                     "raise",
                 ),
-                inference_only=bool(getattr(self, "_options_inference_only", False)),
+                inference_only=bool(self._options_inference_only),
             )
         self._capture_config = InternalCaptureConfig(
             capture_mode=str(self._options_mode),
@@ -1801,7 +1801,7 @@ def run_and_log_inputs_through_model(
         _vprint(self, f"Model prepared ({self._provenance_setup_duration:.2f s})")
 
         # Print input summary
-        if getattr(self, "_options_verbose", False):
+        if self._options_verbose:
             devices = set()
             for t in input_tensors:
                 if hasattr(t, "device"):

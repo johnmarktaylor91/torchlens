@@ -132,13 +132,17 @@ def _proof_section(trace_like: Any) -> CardSection:
     Rendered OPEN (honesty is never folded).
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     facts: list[CardNode] = []
     outcome = getattr(trace_like, "outcome", None)
     status = getattr(getattr(outcome, "status", None), "name", None)
     facts.append(CardText(f"capture outcome: {status or 'UNKNOWN'}"))
-    verified = getattr(trace_like, "_provenance_verified", None)
+    verified = trace_like._provenance_verified if is_live_trace(trace_like) else None
     if verified is False:
-        reason = getattr(trace_like, "_provenance_verification_reason", None) or "unverified"
+        reason = (
+            trace_like._provenance_verification_reason if is_live_trace(trace_like) else None
+        ) or "unverified"
         facts.append(CardText(f"capture NOT verified: {reason}", role="notice"))
     elif verified is True:
         facts.append(CardText("capture verified"))

@@ -726,9 +726,7 @@ class _FastSparseSession:
                         (),
                         {},
                         False,
-                        activation_transform=getattr(
-                            self.target, "_options_activation_transform", None
-                        ),
+                        activation_transform=self.target._options_activation_transform,
                     )
         if call.control_obligations:
             return _call_witness_checks(self.descriptor, call, slot_values)
