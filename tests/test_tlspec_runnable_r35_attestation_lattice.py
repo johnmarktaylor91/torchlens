@@ -17,7 +17,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import (
-    DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
 )
@@ -54,7 +53,7 @@ def test_r35_device_diverged_run_is_never_attested(tmp_path: Path) -> None:
 
     x = torch.tensor([1.0, 2.0, 3.0])
     path = _save(_AddOneModel().eval(), x, tmp_path / "dev.tlspec")
-    result = tl.load(path).run(inputs=x.cuda(), on_divergence=DivergencePolicy.RETURN_DIVERGED)
+    result = tl.load(path).run(inputs=x.cuda(), on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert result.report.poisoned is True
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
@@ -67,7 +66,7 @@ def test_r35_any_failed_input_contract_caps_attestation(tmp_path: Path) -> None:
     path = _save(_FlagModel().eval(), (x, 2.0), tmp_path / "flag.tlspec")
     result = tl.load(path).run(
         inputs=(x, 3.0),
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE

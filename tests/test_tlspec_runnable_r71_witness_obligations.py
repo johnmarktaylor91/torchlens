@@ -73,14 +73,12 @@ def _mutate(path: Path, mutate: Callable[[dict], None]) -> None:
 def _verdict(path: Path, inputs: Any) -> tuple[str, Any]:
     """Load + run one artifact; classify the outcome without ever masking VERIFIED."""
 
-    from torchlens._runnable import DivergencePolicy
-
     loaded = tl.load(path)
     readiness = loaded._runnable.readiness
     if readiness is not None and readiness.status is ReadinessStatus.UNAVAILABLE:
         return ("refused", {d.code.value for d in readiness.diagnostics})
     try:
-        result = loaded.run(inputs=inputs, on_divergence=DivergencePolicy.RETURN_DIVERGED)
+        result = loaded.run(inputs=inputs, on_divergence="return")
         return ("ran", result.report.path_faithfulness)
     except Exception as exc:  # noqa: BLE001 -- typed refusal classification
         return ("raised", type(exc).__name__)

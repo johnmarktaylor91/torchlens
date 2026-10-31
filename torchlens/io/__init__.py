@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._errors import ArgumentTypeError
 from .._io import JaxPayloadLoadHint, PayloadLoadHints, TorchLensIOError, _json, materialize_nested
-from .._io.bundle import cleanup_tmp, load, save
+from .._io.bundle import cleanup_tmp, load as _load
 from .._io.sidecar import (
     AnalysisOnlySidecar,
     SidecarError,
@@ -267,7 +267,7 @@ def load_intervention_spec(
         If ``path`` does not load as an intervention spec.
     """
 
-    loaded = load(
+    loaded = _load(
         path,
         trust_custom_callables=trust_custom_callables,
         allowed_custom_callable_modules=allowed_custom_callable_modules,
@@ -276,7 +276,7 @@ def load_intervention_spec(
         raise ArgumentTypeError(
             f"load_intervention_spec loaded {type(loaded).__name__}, not InterventionSpec",
             code="artifact_kind_mismatch",
-            remedy="pass the path of an intervention .tlspec artifact or use torchlens.io.load",
+            remedy="pass the path of an intervention .tlspec artifact or use torchlens.load",
             argument="path",
             loaded_type=type(loaded).__name__,
         )
@@ -317,7 +317,6 @@ __all__ = [
     "detect_tlspec_format",
     "inspect_tlspec",
     "list_traces",
-    "load",
     "list_sidecar_families",
     "load_intervention_spec",
     "read_safetensors",
@@ -325,7 +324,6 @@ __all__ = [
     "register_sidecar_family",
     "materialize_nested",
     "reset_naming_counter",
-    "save",
     "save_intervention",
     "suppress_mutate_warnings",
     "unregister_sidecar_family",

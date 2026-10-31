@@ -345,7 +345,7 @@ def test_untainted_archived_mismatch_still_raises(tmp_path: Path) -> None:
     record = archive[victim]
     archive[victim] = dataclasses.replace(record, value=record.value + 0.5)
     with pytest.raises(NumericAttestationError):
-        loaded.run(inputs=x.clone(), on_divergence="return_diverged")
+        loaded.run(inputs=x.clone(), on_divergence="return")
 
 
 def _resize_disposition(model: nn.Module, x: torch.Tensor, tmp_path: Path):

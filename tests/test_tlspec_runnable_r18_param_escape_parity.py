@@ -60,7 +60,7 @@ def _save(model: nn.Module, capture_input: torch.Tensor, path: Path, **save_kwar
 
 
 def _run(path: Path, x: torch.Tensor):
-    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 # --------------------------------------------------------------------------- #

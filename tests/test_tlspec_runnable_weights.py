@@ -444,7 +444,6 @@ def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: P
     """
     import copy
 
-    from torchlens._runnable import DivergencePolicy
     from torchlens.errors import PoisonedRunError
 
     class _M(nn.Module):
@@ -476,9 +475,7 @@ def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: P
     assert copy.deepcopy(ok_fork) is not None
 
     # A DIVERGED fork must round-trip its poison flag through pickle and deepcopy and stay refused.
-    diverged = loaded.run(
-        inputs=torch.ones(5, 3), on_divergence=DivergencePolicy.RETURN_DIVERGED
-    ).trace
+    diverged = loaded.run(inputs=torch.ones(5, 3), on_divergence="return").trace
     for revived in (pickle.loads(pickle.dumps(diverged)), copy.deepcopy(diverged)):
         assert revived._runnable.poisoned is True
         with pytest.raises(PoisonedRunError):

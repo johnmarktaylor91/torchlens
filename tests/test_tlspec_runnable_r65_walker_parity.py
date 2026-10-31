@@ -49,7 +49,6 @@ from torchlens._io.runnable import (
     _UnsupportedLiteralError,
 )
 from torchlens._runnable import (
-    DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
 )
@@ -440,9 +439,7 @@ def test_r64_dataclass_metadata_read_witnessed_and_layout_twin_diverges(
     twin = _layout_twin(x)
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=_LayoutBox(twin))
-    diverged = tl.load(path).run(
-        inputs=_LayoutBox(twin), on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs=_LayoutBox(twin), on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert diverged.report.poisoned

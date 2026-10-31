@@ -12,7 +12,7 @@ Entry points::
     merged = tl.merge_ranks([trace_or_path, ...])   # raises on conflict
     report = tl.merge_report([trace_or_path, ...])  # graph-free diagnostic
     merged.save("run.merged.tlspec")
-    merged = torchlens.merged.load("run.merged.tlspec")  # full rederivation
+    merged = torchlens.load("run.merged.tlspec")  # full rederivation
 
 C1 scope: explicit in-forward c10d python collectives, SPMD, symmetric-issue
 channels. Point-to-point/pipeline pairing is rung C3 and DTensor topologies
@@ -23,7 +23,6 @@ in ``docs/reference/merged_trace_contract.md`` under the ordered-list-equality
 doc-vs-enum gate.
 """
 
-from ._artifact import load_merged as load
 from ._engine import (
     JoinRecord as JoinRecord,
     MergeDerivation as MergeDerivation,
@@ -68,7 +67,6 @@ __all__ = [
     "MergedTrace",
     "MergedTraceError",
     "derive_merge",
-    "load",
     "merge_ranks",
     "merge_report",
 ]

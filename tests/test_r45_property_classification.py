@@ -311,7 +311,7 @@ def test_r45_H_mH_round_trip_verified(
     path = tmp_path / f"{prop}.tlspec"
     trace.save(path, level="runnable")
     loaded = tl.load(path)
-    result = loaded.run(x.clone(), seed=0, on_divergence="return_diverged")
+    result = loaded.run(x.clone(), seed=0, on_divergence="return")
 
     assert loaded.readiness.status is ReadinessStatus.READY
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

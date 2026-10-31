@@ -1,7 +1,7 @@
 """Trace validation and replay mixin."""
 
 from collections.abc import Callable, Iterable
-from typing import TYPE_CHECKING, Any, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Union, cast
 
 import torch
 from torch import nn
@@ -550,7 +550,7 @@ class TraceValidationMixin(_TraceMixinBase):
         carry_state: bool = False,
         until: Any = None,
         save: Any = None,
-        on_divergence: DivergencePolicy = DivergencePolicy.RAISE,
+        on_divergence: Literal["raise", "return"] = "raise",
         chunk_paths: Any | None = None,
         replay: ReplayOptions | None = None,
         transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,

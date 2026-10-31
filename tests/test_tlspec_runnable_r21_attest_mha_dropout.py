@@ -83,7 +83,7 @@ def _run(path: Path, x: torch.Tensor) -> tl.RunResult:
         Sparse replay result.
     """
 
-    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 class DropNet(nn.Module):
@@ -325,7 +325,7 @@ def test_tampered_activation_archive_still_raises(tmp_path: Path) -> None:
     archive[key] = dataclasses.replace(record, value=record.value + 1.0)
 
     with pytest.raises(NumericAttestationError):
-        loaded.run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+        loaded.run(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 def test_large_blas_slot_corruption_is_not_masked_by_fallback(tmp_path: Path) -> None:
@@ -353,4 +353,4 @@ def test_large_blas_slot_corruption_is_not_masked_by_fallback(tmp_path: Path) ->
     archive[linear_keys[0]] = dataclasses.replace(record, value=record.value + 0.5)
 
     with pytest.raises(NumericAttestationError):
-        loaded.run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+        loaded.run(inputs=x.clone(), seed=0, on_divergence="return")

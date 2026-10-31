@@ -431,7 +431,7 @@ def test_e2e_literal_only_view_extent_tamper_refused_under_return_diverged(
 ) -> None:
     """Inflate only the ``expand`` literal (64 -> 1e11 rows) of a capture that did not save
     the view, leaving the recorded slot honest. Run-prep passes (the recorded slot is
-    small) and the run copies nothing for the view, so under ``return_diverged`` the shape
+    small) and the run copies nothing for the view, so under ``on_divergence="return"`` the shape
     divergence alone would let the ``sum`` read 4e11 elements. The produced view must be
     refused typed before any consumer runs."""
 
@@ -443,7 +443,7 @@ def test_e2e_literal_only_view_extent_tamper_refused_under_return_diverged(
     with _rlimit_cap():
         loaded = tl.load(str(bundle))
         with pytest.raises(RunCapabilityUnavailableError) as caught:
-            loaded.run(inputs=x.clone(), on_divergence="return_diverged")
+            loaded.run(inputs=x.clone(), on_divergence="return")
     fields = caught.value.fields
     assert fields.get("detection_stage") == "op_allocation_execution"
     assert int(fields["logical_elements"]) == 4 * 10**11

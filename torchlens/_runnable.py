@@ -177,7 +177,7 @@ class DivergencePolicy(str, Enum):
     """Allowed responses to a detected path divergence."""
 
     RAISE = "raise"
-    RETURN_DIVERGED = "return_diverged"
+    RETURN_DIVERGED = "return"
 
 
 class ReadinessStatus(str, Enum):

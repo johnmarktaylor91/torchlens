@@ -52,7 +52,7 @@ random/non-equivalent-state, and nondeterministic-capture-context runs are `not_
 `attested` always implies `verified`.
 `trace.run(inputs=..., seed=..., on_divergence="raise")` reports readiness, state source,
 `verified|diverged|unverifiable` path faithfulness, and numeric attestation in its `RunResult`.
-Use `return_diverged` only when a permanently poisoned diagnostic result is intended. Match failures
+Use `on_divergence="return"` only when a permanently poisoned diagnostic result is intended. Match failures
 through `RunnableErrorCode`; the complete frozen taxonomy is in
 `docs/reference/runnable_tlspec_contract.md`. r37: overlapping/unprovable distinct-object state
 alias topology and zero-tensor-leaf or instance-stateful container outputs refuse at save

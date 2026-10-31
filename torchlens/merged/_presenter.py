@@ -271,7 +271,7 @@ class MergedTrace:
     """N rank-local captures stitched at their collective boundaries.
 
     Never construct directly: use :func:`merge_ranks` (live/loaded inputs)
-    or :func:`torchlens.merged.load` (a saved ``merged-directory`` artifact).
+    or :func:`torchlens.load` (a saved ``merged-directory`` artifact).
 
     Lifetime contract (R37): the presenter holds its rank traces STRONGLY for
     its own lifetime -- ``merge_ranks([live_a, live_b])`` transitively pins

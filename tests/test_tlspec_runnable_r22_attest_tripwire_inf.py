@@ -135,7 +135,7 @@ def test_mha_benign_fallback_still_checks_later_corrupted_slot(tmp_path: Path) -
     archive[victim] = dataclasses.replace(record, value=record.value + 0.5)
 
     with pytest.raises(NumericAttestationError):
-        loaded.run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+        loaded.run(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 def test_masked_mha_nonfinite_attention_mask_saves_loads_runs(tmp_path: Path) -> None:
@@ -152,7 +152,7 @@ def test_masked_mha_nonfinite_attention_mask_saves_loads_runs(tmp_path: Path) ->
         include_activations=True,
     )
 
-    result = tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    result = tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
 
     assert result.output.shape == x.shape
     assert result.report.numeric_attestation in {

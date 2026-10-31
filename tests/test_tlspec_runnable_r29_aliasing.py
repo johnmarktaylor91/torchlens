@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import DivergencePolicy, NumericAttestationStatus, PathFaithfulness
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.errors import PathDivergenceError
 from torchlens.options import CaptureOptions
 
@@ -74,9 +74,7 @@ def test_r29_view_mediated_input_mutation_aliased_fails_closed(tmp_path: Path) -
     shared = torch.randn(4)
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=(shared, shared))
-    diverged = tl.load(path).run(
-        inputs=(shared, shared), on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs=(shared, shared), on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 

@@ -129,7 +129,7 @@ HYPOTHESIS until discharged against a real capture.
 | CUDA capture uses `cudnn.benchmark=True` or a documented nondeterministic CUDA op without deterministic algorithms. | Path replay may verify, but numeric attestation is `not_applicable` via the positive `attestation_ineligible_context` marker. | Use `torch.use_deterministic_algorithms(True)` and deterministic kernels when byte attestation is required. |
 | A caught in-forward exception changes control flow. | The current runnable contract conservatively ceilings the artifact at `unverifiable`; exception-handler replay proof is not shipped. | Refactor expected branching to explicit tensor/Python inputs instead of exception control flow. |
 | Output uses an opaque/stateful container whose complete instance state cannot be reconstructed. | Runnable save refuses with `missing_output_container_contract`, or a live provider returns a poisoned `unverifiable` result. | Return tensors and supported stateless containers, or register a container with a complete state declaration. |
-| A run diverges from the recorded path. | Default policy raises and rolls back. `on_divergence="return_diverged"` is the only opt-in result, and its Trace is permanently `poisoned=True`. | Treat divergence as a different program/input path and capture that path separately. |
+| A run diverges from the recorded path. | Default policy raises and rolls back. `on_divergence="return"` is the only opt-in result, and its Trace is permanently `poisoned=True`. | Treat divergence as a different program/input path and capture that path separately. |
 
 ## Distributed execution
 

@@ -15,7 +15,6 @@ import torchlens as tl
 from torchlens import _state
 from torchlens._errors import TorchLensCaptureGapWarning
 from torchlens._runnable import (
-    DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
     RunProvider,
@@ -940,7 +939,7 @@ def test_loaded_sparse_preserves_output_container_kind_and_literal_leaves(
     if expected_type is tuple:
         poisoned = loaded.run(
             inputs=torch.ones(4),
-            on_divergence=DivergencePolicy.RETURN_DIVERGED,
+            on_divergence="return",
         )
         assert poisoned.report.path_faithfulness is PathFaithfulness.DIVERGED
         assert poisoned.output[1] == 3.0
@@ -1158,7 +1157,7 @@ def test_shape_divergence_return_mode_finishes_and_poison_marks_result(
     result = loaded.run(
         inputs=torch.ones(3),
         seed=23,
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
 
     assert result.output.shape == (3,)
@@ -1177,7 +1176,7 @@ def test_unfinishable_sparse_call_raises_typed_error_without_leaking_fork(
     """Rollback registry state when a wrong-shape divergent input is inexecutable.
 
     r39 corr2_4: an admitted-but-INEXECUTABLE divergent input (wrong FEATURE shape that fails
-    the native call) under ``return_diverged`` surfaces as ``PathDivergenceError`` carrying the
+    the native call) under ``on_divergence="return"`` surfaces as ``PathDivergenceError`` carrying the
     already-failed ``input_shape`` contract check -- NOT ``RuntimeSignatureDriftError`` (which is
     reserved for genuine resolved-callable/torch-version drift with all input checks passing).
     The transactional fork is still rolled back either way (no leaked log).
@@ -1191,7 +1190,7 @@ def test_unfinishable_sparse_call_raises_typed_error_without_leaking_fork(
     with pytest.raises(PathDivergenceError) as caught:
         loaded.run(
             inputs=torch.ones(2, 4),
-            on_divergence=DivergencePolicy.RETURN_DIVERGED,
+            on_divergence="return",
         )
 
     assert caught.value.fields["path_faithfulness"] is PathFaithfulness.DIVERGED
@@ -1210,7 +1209,7 @@ def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
         tl.load(honesty_artifact)
         .run(
             inputs=torch.zeros(2),
-            on_divergence=DivergencePolicy.RETURN_DIVERGED,
+            on_divergence="return",
         )
         .trace
     )
@@ -1286,13 +1285,13 @@ def test_poison_mark_and_first_mismatch_are_monotonic(honesty_artifact: Path) ->
 
     first = tl.load(honesty_artifact).run(
         inputs=torch.zeros(2),
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
     first_mismatch = first.report.first_mismatch
 
     second = first.trace.run(
         inputs=torch.ones(2),
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
 
     assert second.report.path_faithfulness is PathFaithfulness.DIVERGED

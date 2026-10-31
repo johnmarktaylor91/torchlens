@@ -240,7 +240,7 @@ def test_slot_production_mismatch_on_unproduced_output_source(tmp_path: Path) ->
         lambda orig: lambda *args, **kwargs: {"x": orig(*args, **kwargs)},
     )
     with pytest.raises(RunPreconditionError) as caught:
-        loaded.run(inputs=_branch_input(), on_divergence="return_diverged")
+        loaded.run(inputs=_branch_input(), on_divergence="return")
     assert caught.value.fields["code"] == RunnableErrorCode.SLOT_PRODUCTION_MISMATCH.value
 
 
@@ -254,7 +254,7 @@ def test_missing_tensor_slot_on_consumer_of_unproduced_slot(tmp_path: Path) -> N
         lambda orig: lambda *args, **kwargs: {"x": orig(*args, **kwargs)},
     )
     with pytest.raises(RunPreconditionError) as caught:
-        loaded.run(inputs=_branch_input(), on_divergence="return_diverged")
+        loaded.run(inputs=_branch_input(), on_divergence="return")
     assert caught.value.fields["code"] == RunnableErrorCode.MISSING_TENSOR_SLOT.value
 
 
@@ -327,7 +327,7 @@ def test_poisoned_run_refused_on_faithful_consumers(tmp_path: Path) -> None:
     """A return_diverged poisoned Trace refuses export and tabular consumption typed."""
 
     loaded = tl.load(_save_branch_artifact(tmp_path, "poison.tlspec"))
-    result = loaded.run(inputs=-_branch_input(), on_divergence="return_diverged")
+    result = loaded.run(inputs=-_branch_input(), on_divergence="return")
     assert result.report.poisoned
     with pytest.raises(PoisonedRunError) as export_caught:
         result.trace.save(tmp_path / "poisoned-export.tlspec")

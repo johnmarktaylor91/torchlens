@@ -111,7 +111,7 @@ Numeric attestation is downstream of path settlement:
 - `not_present`: no selected-activation payload exists.
 
 Attestation never upgrades path faithfulness. `attested` implies `verified` and an unpoisoned
-result. A `diverged` result is returned only under the explicit `return_diverged` policy and is
+result. A `diverged` result is returned only under the explicit `on_divergence="return"` policy and is
 monotonically poisoned. Incomplete witness coverage can settle only as `unverifiable`, never as
 `verified`. The result and readiness shapes are frozen in
 [contract section 8](runnable_tlspec_contract.md#8-readiness-and-result-shapes), and settlement
@@ -141,7 +141,7 @@ anchors, XOR rule, and validation order are in
 context, RNG, input binding, sparse calls, output reconstruction, honesty checks, and optional
 numeric attestation settle inside one transaction.
 
-The default divergence policy raises and rolls back. `return_diverged` is the sole opt-in that
+The default divergence policy raises and rolls back. `on_divergence="return"` is the sole opt-in that
 returns a poisoned diagnostic Trace. Both providers use one settlement authority so they cannot
 silently evolve different poison, exception, or report rules. Internal sparse calls run with
 TorchLens logging paused.

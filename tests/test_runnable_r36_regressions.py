@@ -86,9 +86,9 @@ def _save_load(
 
 
 def _verdict(loaded: tl.Trace, inputs: Any, **kwargs: Any) -> tuple[str, str]:
-    """Run with ``return_diverged`` and return (path_faithfulness, attestation) values."""
+    """Run with ``on_divergence="return"`` and return (path_faithfulness, attestation) values."""
 
-    result = loaded.run(inputs=inputs, on_divergence="return_diverged", **kwargs)
+    result = loaded.run(inputs=inputs, on_divergence="return", **kwargs)
     return (
         result.report.path_faithfulness.value,
         result.report.numeric_attestation.value,
@@ -715,7 +715,7 @@ class TestCorr25LivePoisonSpine:
         # next GC pass, making the test GC-timing-dependent).
         model = _LossyLiveModel()
         trace = tl.trace(model, x, capture=_CAPTURE)
-        result = trace.run(inputs=x, on_divergence="return_diverged")
+        result = trace.run(inputs=x, on_divergence="return")
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
         assert result.report.poisoned is True
         with pytest.raises(PoisonedRunError):
@@ -884,7 +884,7 @@ class TestCorr27CloneGradFidelity:
 
         x = torch.randn(3, requires_grad=True)
         loaded = _save_load(_Double(), x, tmp_path, acts=True)
-        result = loaded.run(inputs=x.detach(), on_divergence="return_diverged")
+        result = loaded.run(inputs=x.detach(), on_divergence="return")
         assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
         assert result.output.requires_grad is False
 
@@ -960,7 +960,7 @@ class TestCudaStagingAndReadiness:
             descriptor = loaded.runnable_descriptor
             assert descriptor is not None
             assert descriptor.ambient_context.attestation_ineligible_context is True
-            result = loaded.run(inputs=x, on_divergence="return_diverged")
+            result = loaded.run(inputs=x, on_divergence="return")
         finally:
             torch.use_deterministic_algorithms(deterministic_before)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

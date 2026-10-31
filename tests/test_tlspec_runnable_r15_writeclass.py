@@ -45,7 +45,7 @@ def _status(
     model: nn.Module, cap_x: torch.Tensor, run_x: torch.Tensor, tmp: Path
 ) -> PathFaithfulness:
     loaded = _save_load(model, cap_x, tmp)
-    result = loaded.run(inputs=run_x.clone(), seed=0, on_divergence="return_diverged")
+    result = loaded.run(inputs=run_x.clone(), seed=0, on_divergence="return")
     return result.report.path_faithfulness
 
 
@@ -149,7 +149,7 @@ def test_r15_c2_buffer_numpy_writeback_captures_and_is_unverifiable(tmp_path: Pa
     path = tmp_path / "buf.tlspec"
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_weights=True)
-    result = tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    result = tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
@@ -164,7 +164,7 @@ def test_r15_c3_training_batchnorm_stays_verified_and_value_correct(tmp_path: Pa
     for run_x in (x, x + 10.0):
         model = nn.BatchNorm1d(2, affine=False, track_running_stats=True).train()
         loaded = _save_load(model, x, tmp_path)
-        result = loaded.run(inputs=run_x.clone(), seed=0, on_divergence="return_diverged")
+        result = loaded.run(inputs=run_x.clone(), seed=0, on_divergence="return")
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
         assert torch.allclose(model(run_x.clone()), result.output)
 

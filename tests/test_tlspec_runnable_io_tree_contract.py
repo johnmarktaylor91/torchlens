@@ -35,7 +35,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import (
-    DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
 )
@@ -137,9 +136,7 @@ def test_encodable_exotic_key_scalar_diverges_on_change(
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=[x, {key: 1}])
 
-    diverged = tl.load(path).run(
-        inputs=[x, {key: 1}], on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs=[x, {key: 1}], on_divergence="return")
     assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert diverged.report.poisoned
 
@@ -336,9 +333,7 @@ def test_numpy_float64_literal_identical_verifies_changed_diverges(tmp_path: Pat
     assert plain.report.path_faithfulness is PathFaithfulness.VERIFIED
 
     # A changed numeric value must still diverge honestly.
-    changed = tl.load(path).run(
-        inputs=[t, np.float64(9.0)], on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    changed = tl.load(path).run(inputs=[t, np.float64(9.0)], on_divergence="return")
     assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert changed.report.poisoned
 
@@ -380,7 +375,7 @@ def test_numpy_scalar_control_input_diverges_like_python_int(tmp_path: Path) -> 
 
     diverged = tl.load(path).run(
         inputs=[value, np.int64(1)],
-        on_divergence=DivergencePolicy.RETURN_DIVERGED,
+        on_divergence="return",
     )
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.poisoned

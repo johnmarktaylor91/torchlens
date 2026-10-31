@@ -92,9 +92,7 @@ def run_loaded_sparse_trace(
     try:
         divergence_policy = DivergencePolicy(on_divergence)
     except ValueError as exc:
-        raise ValueError(
-            "on_divergence must be DivergencePolicy.RAISE or DivergencePolicy.RETURN_DIVERGED."
-        ) from exc
+        raise ValueError('on_divergence must be "raise" or "return".') from exc
     descriptor, readiness, callables = _require_loaded_sparse_provider(trace)
     # L4 2.1: resolve the static until= selection against the loaded trace's
     # settled labels BEFORE anything binds or executes; the scheduler cut is

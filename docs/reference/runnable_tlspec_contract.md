@@ -78,7 +78,7 @@ Other fixed sets are:
 | Enum | Values |
 |---|---|
 | `PathFaithfulness` | `verified`, `diverged`, `unverifiable` |
-| `DivergencePolicy` | `raise`, `return_diverged` |
+| `DivergencePolicy` | `raise`, `return` |
 | `ReadinessStatus` | `ready`, `unavailable` |
 | `RunProvider` | `live`, `loaded_sparse`, `loaded_analysis` |
 | `StateSource` | `live_model_state`, `embedded_capture_state`, `user_state_dict`, `random_initialization`, `not_applicable` |
@@ -1603,7 +1603,7 @@ def run(
     *,
     seed: int | None = None,
     fast: bool = False,
-    on_divergence: DivergencePolicy = DivergencePolicy.RAISE,
+    on_divergence: DivergencePolicy = "raise",
 ) -> RunResult: ...
 
 def load_state_dict(self, sd: Mapping[str, Any]) -> None: ...
@@ -1642,7 +1642,7 @@ input shape/dtype, and saved plus model-output structure/shape/dtype on every ca
 change that alters the name sequence, count, shape, or dtype at a requested site cannot be silently
 relabelled as the captured activation: those mismatches raise `PathDivergenceError`. Subject to the
 caller's assertion that unsaved internals remain static, unchanged requested-site observables retain
-their captured labels. `return_diverged` is unavailable in fast mode. Fast iterations
+their captured labels. `on_divergence="return"` is unavailable in fast mode. Fast iterations
 deliberately reuse one result Trace in place, so callers needing immutable per-example results must
 copy the selected tensors. Cleanup removes the cached hooks/session. An explicit `seed` reseeds the
 native call; omitting it leaves native ambient RNG behavior intact.
@@ -1763,7 +1763,7 @@ complete witnesses. `diverged` means an observed contradiction. `unverifiable` m
 without contradiction but incomplete witnesses. No mismatch alone never promotes to verified.
 
 Default `on_divergence=raise` stops at first contradiction, rolls back all updates, and raises
-`PathDivergenceError`. The only opt-in is `return_diverged`: it may finish the recorded schedule but
+`PathDivergenceError`. The only opt-in is `on_divergence="return"`: it may finish the recorded schedule but
 returns a permanently, monotonically poisoned result/Trace. Contradiction is diverged; incomplete
 proof is unverifiable; both have `poisoned=true`. The mark cannot be cleared by another run.
 
@@ -2410,7 +2410,7 @@ Loaded sparse `.run(inputs=...)` must match the captured top-level model input s
 Extra positional arguments or keyword arguments not present in the captured site set are observed
 input-tree contradictions and cannot be ignored or reported `verified`, including for captures of
 Python variadic signatures whose recorded taken path contains only a finite concrete site set
-(`INPUT_ARITY_EXTRA`; default policy raises `PathDivergenceError`, `return_diverged` returns
+(`INPUT_ARITY_EXTRA`; default policy raises `PathDivergenceError`, `on_divergence="return"` returns
 `diverged`). Dataclass model-input containers are traversed by declared fields using the same
 tensor/non-tensor leaf vocabulary as tuples, mappings, and namedtuples; a tensor-only dataclass is
 fully witnessable (`verified`, attestation-eligible), while a genuinely-opaque dataclass field still
@@ -2981,7 +2981,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
   refusal (value-dependent control flow took another branch) is a PATH DIVERGENCE on the live
   provider: it settles through the shared divergence-policy spine with code
   `call_structure_mismatch` (`details["reason"] == "refresh_graph_changed"`, stage
-  `refresh_graph_signature`). `on_divergence=return_diverged` returns the poisoned `diverged`
+  `refresh_graph_signature`). `on_divergence="return"` returns the poisoned `diverged`
   result through the one finalizer (`output` is `None`: no faithful refreshed output exists; the
   returned fork retains the SOURCE capture's values under the poison mark). The default `raise`
   carries `fields["code"]`, `["path_faithfulness"]`, `["first_mismatch"]`, `["contract_check"]`,
@@ -3011,7 +3011,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
   (`provider == loaded_analysis`) carrying STRAY runnable blobs still hard-fails.
 - **Divergence-aware call raise (corr2_4).** Shape/dtype/device input checks stay SOFT so an
   EXECUTABLE divergent input (a changed batch dimension) returns `diverged` + poison under
-  `return_diverged`. But an admitted-but-INEXECUTABLE divergent input (a wrong feature shape that
+  `on_divergence="return"`. But an admitted-but-INEXECUTABLE divergent input (a wrong feature shape that
   fails the native call) surfaces as `PathDivergenceError` carrying the first-failed input check --
   NOT `RuntimeSignatureDriftError`, which stays reserved for genuine resolved-callable / torch-version
   drift with all input checks passing. Both policies roll back the transactional fork. The live

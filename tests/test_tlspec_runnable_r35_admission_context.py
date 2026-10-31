@@ -68,7 +68,7 @@ def _exotic_inputs() -> dict[str, torch.Tensor]:
 
 
 @pytest.mark.parametrize("kind", sorted(_exotic_inputs()))
-@pytest.mark.parametrize("policy", [DivergencePolicy.RAISE, DivergencePolicy.RETURN_DIVERGED])
+@pytest.mark.parametrize("policy", ["raise", "return"])
 def test_r35_exotic_inputs_fail_typed_before_any_byte_touch(
     tmp_path: Path, kind: str, policy: DivergencePolicy
 ) -> None:
@@ -77,7 +77,7 @@ def test_r35_exotic_inputs_fail_typed_before_any_byte_touch(
     corr2_6: previously meta/sparse/named inputs reached
     ``.cpu().contiguous().view(uint8)`` and surfaced raw
     NotImplementedError/RuntimeError before their recorded contract could fire.
-    ``return_diverged`` never bypasses a hard executability precondition.
+    ``on_divergence="return"`` never bypasses a hard executability precondition.
     """
 
     x = torch.randn(2, 3)

@@ -156,7 +156,7 @@
 18. `Trace.run(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
     internal sparse calls under `pause_logging()`, and returns `RunResult(output, trace, report)`.
     Stage 6 enforces input/state, per-call/output, and control-witness honesty before exposure;
-    default divergence raises with rollback, while `return_diverged` is the sole monotonic poisoned
+    default divergence raises with rollback, while `on_divergence="return"` is the sole monotonic poisoned
     opt-in. Incomplete witness coverage is `unverifiable`; sparse-only and ineligible activation
     runs report numeric attestation as `not_applicable`.
 18a. `Trace.run(inputs=..., fast=True)` is an explicit stateful static-loop mode: loaded sparse
@@ -181,7 +181,7 @@
 19. Runnable vocabulary is frozen in the private `torchlens._runnable` (a user reads the report enums as `tl.types.*`): readiness is `ready|unavailable`,
     faithfulness is `verified|diverged|unverifiable`, state source is
     `live_model_state|embedded_capture_state|user_state_dict|random_initialization|not_applicable`,
-    and divergence policy is `raise|return_diverged`. Error handling uses `RunnableErrorCode`, never
+    and divergence policy is `raise|return`. Error handling uses `RunnableErrorCode`, never
     exception-message matching. r37 adds the frozen codes `state_alias_topology_unsupported`
     (save-time refusal of distinct-object overlapping/unprovable bound-state alias topology; tied
     live-identity state stages as ONE alias-group allocation instead) and `context_field_invalid`

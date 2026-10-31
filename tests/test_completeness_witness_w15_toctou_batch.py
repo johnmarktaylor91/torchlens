@@ -37,7 +37,7 @@ def _save_and_run(model: nn.Module, x: torch.Tensor, path: Path) -> tl.RunResult
 
     trace = tl.trace(model, x, capture=_CAPTURE)
     trace.save(path, level="runnable", include_weights=True)
-    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 class ParamRebindMutateRestore(nn.Module):

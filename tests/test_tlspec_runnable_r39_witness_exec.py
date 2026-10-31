@@ -931,7 +931,7 @@ def test_live_opaque_output_never_verified(factory: Any) -> None:
         # torchlens UserWarnings) without weakening the verdict assertion.
         warnings.simplefilter("ignore")
         live = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
-    result = live.run(inputs=x, on_divergence="return_diverged")
+    result = live.run(inputs=x, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert result.report.poisoned is True
 
@@ -1039,7 +1039,7 @@ def test_inexecutable_divergent_input_raises_path_divergence(tmp_path: Path) -> 
     trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
     with pytest.raises(PathDivergenceError) as exc:
-        loaded.run(inputs=torch.randn(3, 5), on_divergence="return_diverged")
+        loaded.run(inputs=torch.randn(3, 5), on_divergence="return")
     assert exc.value.fields.get("path_faithfulness") is PathFaithfulness.DIVERGED
     check = exc.value.fields.get("contract_check")
     assert check is not None and check.name.startswith("input_shape:")
@@ -1054,7 +1054,7 @@ def test_executable_divergent_input_returns_diverged(tmp_path: Path) -> None:
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
-    result = loaded.run(inputs=torch.randn(5, 4), on_divergence="return_diverged")
+    result = loaded.run(inputs=torch.randn(5, 4), on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert result.report.poisoned is True
 

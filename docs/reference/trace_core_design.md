@@ -178,7 +178,7 @@ exposure; partial cores carry `topology_complete=False` and never pretend full
 postprocess ran.
 
 Pack-on-expose dissolves by construction (facades exist from step 0, so `exc.partial_log`
-and `return_diverged` traces are facade-backed automatically), but the escape-path
+and `on_divergence="return"` traces are facade-backed automatically), but the escape-path
 inventory survives: every place a Trace/Op leaves `torchlens.*` mid-postprocess
 (observers, `tap()`, `span()`, validation internals, bridge adapters) is
 inventoried at M0 and covered by oracle scenarios.

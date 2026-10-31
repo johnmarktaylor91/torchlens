@@ -1212,7 +1212,7 @@ def test_live_inexecutable_divergent_input_typed_and_rolls_back() -> None:
     model = _PlainLinear()
     trace = _capture(model, x)
     with pytest.raises(PathDivergenceError) as exc:
-        trace.run(inputs=torch.randn(3, 5), on_divergence="return_diverged")
+        trace.run(inputs=torch.randn(3, 5), on_divergence="return")
     assert exc.value.fields.get("path_faithfulness") is PathFaithfulness.DIVERGED
     check = exc.value.fields.get("contract_check")
     assert check is not None and check.name.startswith("input_shape:")

@@ -73,7 +73,7 @@ input leaves plus staged/random state and executes its resolved taken-path DAG u
 `pause_logging()`. Both return `RunResult(output, trace, report)` and leave the source Trace
 unchanged. Analysis-only loads raise typed `run_capability_unavailable`. Stage 5 populates
 `report.path_faithfulness`; Stage 6 enforces the three-layer honesty transaction. Divergence raises
-and rolls back by default; `return_diverged` is the sole opt-in and returns a monotonic poisoned
+and rolls back by default; `on_divergence="return"` is the sole opt-in and returns a monotonic poisoned
 Trace refused by validation, export, faithful comparison, and path-assuming intervention chaining.
 Incomplete witness coverage is `unverifiable`, never `verified`; numeric attestation is
 `not_applicable` for sparse-only or ineligible activation-payload runs. Model outputs with ZERO
