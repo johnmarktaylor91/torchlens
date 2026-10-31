@@ -111,7 +111,7 @@ def test_list_logs_returns_tuple_snapshot() -> None:
     """The process registry exposes an immutable tuple snapshot."""
 
     log = _capture()
-    logs = tl.io.list_logs()
+    logs = tl.io.list_traces()
 
     assert isinstance(logs, tuple)
     assert log in logs

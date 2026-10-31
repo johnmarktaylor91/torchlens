@@ -16,7 +16,7 @@ import torchlens as tl
 from torchlens import load, save, trace as trace_fn
 from torchlens._io import BlobRef, TorchLensIOError
 from torchlens.data_classes.trace import Trace
-from torchlens.io import rehydrate_nested
+from torchlens.io import materialize_nested
 
 
 class _LazyIOModel(nn.Module):
@@ -347,7 +347,7 @@ def test_rehydrate_nested_materializes_saved_args_blob_refs(tmp_path: Path) -> N
 
     assert _contains_blob_ref(layer.saved_args)
 
-    rehydrate_nested(lazy_log)
+    materialize_nested(lazy_log)
 
     assert not _contains_blob_ref(layer.saved_args)
     assert any(isinstance(arg, torch.Tensor) for arg in layer.saved_args)
@@ -366,7 +366,7 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
 
     with pytest.raises(
         TorchLensIOError,
-        match="Call torchlens.io.rehydrate_nested\\(trace\\) before saving",
+        match="Call torchlens.io.materialize_nested\\(trace\\) before saving",
     ):
         save(lazy_log, tmp_path / "resaved.tl", include_saved_args=True)
 

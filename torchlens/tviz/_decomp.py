@@ -23,7 +23,7 @@ import torch
 
 from ._errors import refuse
 from ._mpl import DIVERGING_CMAP, figure, require_matplotlib, save_figure
-from ._records import Artifact, ScoreDecomposition
+from ._records import SavedFigure, ScoreDecomposition
 
 __all__ = ["render_neuron_card", "score_decomposition"]
 
@@ -137,7 +137,7 @@ def render_neuron_card(
     path: Path | str,
     *,
     svg_fonttype: str = "path",
-) -> Artifact:
+) -> SavedFigure:
     """Render the selected-pair neuron card (family-gated static card, D19).
 
     Three aligned bands -- q vector, k vector, and their per-dimension
@@ -190,13 +190,13 @@ def render_neuron_card(
     fig.suptitle("score decomposition (term-complete)", fontsize=9)
     fig.text(0.01, 0.01, "\n".join(disclosures), fontsize=6, va="bottom")
     written = save_figure(fig, path, svg_fonttype=svg_fonttype)
-    return Artifact(
+    return SavedFigure(
         paths=(written,),
-        format=Path(path).suffix.lstrip(".").lower(),
+        file_format=Path(path).suffix.lstrip(".").lower(),
         title="neuron card",
         disclosure_lines=tuple(disclosures),
         provenance="captured q/k/scores facets",
         fingerprint="",
         svg_fonttype=svg_fonttype,
-        pages_total=1,
+        num_pages=1,
     )

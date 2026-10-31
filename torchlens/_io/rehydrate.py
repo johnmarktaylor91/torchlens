@@ -1247,7 +1247,7 @@ def rehydrate_nested(
 
     >>> import torchlens as tl
     >>> log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
-    >>> tl.io.rehydrate_nested(log)
+    >>> tl.io.materialize_nested(log)
 
     Parameters
     ----------

@@ -107,7 +107,7 @@ features = tl.extract_dataset(
     model,
     images,                             # any iterable of PIL images
     ["avgpool"],
-    output_dir="resnet50_features",
+    path="resnet50_features",
     input_transform=pre,                # applied AND recorded, verdict "verified"
     stimulus_ids=image_ids,
 )

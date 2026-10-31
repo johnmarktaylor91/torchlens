@@ -385,7 +385,7 @@ class MergedTrace:
         return stored
 
     @property
-    def load_degradations(self) -> tuple[str, ...]:
+    def degradations(self) -> tuple[str, ...]:
         """Environment degradations recorded at load (empty on a live merge)."""
 
         return self._load_degradations

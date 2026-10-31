@@ -43,7 +43,7 @@ model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)).eval()
 stimuli = torch.randn(256, 8)
 output_dir = Path("relu-activations")  # any empty directory of yours
 
-tl.extract_dataset(model, stimuli, ["1"], batch_size=64, output_dir=output_dir, progress=False)
+tl.extract_dataset(model, stimuli, ["1"], batch_size=64, path=output_dir, progress=False)
 reader = open_extraction(output_dir)
 dataset = as_torch_dataset(reader)
 key = reader.keys[0]

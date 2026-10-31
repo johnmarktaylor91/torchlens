@@ -8,7 +8,7 @@ during generation", and they cost very different amounts:
 | --- | --- | --- |
 | Hold an edit on every decoding step, new tokens included | `torchlens.intervention.steer_generate(model, ids, spec, ...)`, or `spec.bind(model).generate(...)` | close to a plain forward hook per token; see [the fast-path guide](fast_paths.md#generation-with-hf-generate) |
 | Edit what the cache holds for the prompt, then let generation read it unedited | the bound spec on the prefill call only (recipe below) | one prefill forward |
-| Record every step of a generation as one inspectable product | `tl.trace(..., episode=tl.options.EpisodeSpec(...))` | diagnostic tier: superlinear in the number of steps, so tens of steps, not hundreds ([episode capture](../reference/episode_capture.md)) |
+| Record every step of a generation as one inspectable product | `tl.trace(..., episode=tl.options.EpisodeOptions(...))` | diagnostic tier: superlinear in the number of steps, so tens of steps, not hundreds ([episode capture](../reference/episode_capture.md)) |
 
 `steer_generate` never traces: it runs the model's real `generate()` with the edit installed as a
 hook, so the edit fires once per forward call (`result.report.fire_count`), and the keys and values

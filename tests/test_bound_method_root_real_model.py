@@ -43,7 +43,7 @@ def test_distilgpt2_generate_greedy_episode() -> None:
         model.generate,
         ids,
         input_kwargs=_generate_kwargs(False),
-        episode=tl.options.EpisodeSpec(n_steps=N_NEW),
+        episode=tl.options.EpisodeOptions(num_steps=N_NEW),
     )
     episode = log.annotations["episode"]
     # stepped_module DEFAULTED to the bound method's owner.
@@ -64,7 +64,7 @@ def test_distilgpt2_generate_sampled_episode() -> None:
         model.generate,
         ids,
         input_kwargs=_generate_kwargs(True),
-        episode=tl.options.EpisodeSpec(n_steps=N_NEW),
+        episode=tl.options.EpisodeOptions(num_steps=N_NEW),
     )
     episode = log.annotations["episode"]
     assert len(episode["rows"]) == N_NEW
@@ -124,7 +124,7 @@ def test_identity_arm_rerun_with_owner_refuses() -> None:
         model.generate,
         ids,
         input_kwargs=_generate_kwargs(False),
-        episode=tl.options.EpisodeSpec(n_steps=N_NEW),
+        episode=tl.options.EpisodeOptions(num_steps=N_NEW),
     )
     with pytest.raises(ModelMismatchError) as excinfo:
         log._validate_supplied_model_matches_capture(model)

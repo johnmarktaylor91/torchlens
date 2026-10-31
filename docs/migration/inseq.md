@@ -2,7 +2,7 @@
 
 | Inseq operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
-| Attribute generation outputs | `tl.attribution.text(model, tokenizer, text, target=...)` attributes one target token to the prompt tokens (integrated gradients over input embeddings); a whole generation run can be captured with episode capture (`episode=tl.options.EpisodeSpec(...)`, documented-unstable) | Partial; per-step attribution across every generated token, with step scores, stays in Inseq. |
+| Attribute generation outputs | `tl.attribution.text(model, tokenizer, text, target=...)` attributes one target token to the prompt tokens (integrated gradients over input embeddings); a whole generation run can be captured with episode capture (`episode=tl.options.EpisodeOptions(...)`, documented-unstable) | Partial; per-step attribution across every generated token, with step scores, stays in Inseq. |
 | Step-wise hidden-state access | `log.find_sites(...)` over repeated loop sites | Equivalent when generation loop is visible. |
 | Contrastive inputs | Capture clean/corrupted logs and compare with `Bundle` | Equivalent comparison pattern. |
 | Attribution method selection | `tl.attribution` ships saliency, input x gradient, integrated gradients, SmoothGrad, gradient SHAP, occlusion, layer attribution methods and more; `tl.attribution.text` uses integrated gradients | Partial; Inseq's generation-aware method catalog (including DeepLift, LIME and attention-weight methods) stays in Inseq. |

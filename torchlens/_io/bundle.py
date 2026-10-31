@@ -3855,7 +3855,7 @@ def _raise_for_unmaterialized_nested_blob_refs(
     if _contains_nested_blob_refs(value, set(), allowed_blob_ids):
         raise TorchLensIOError(
             "Trace contains unmaterialized nested blob references. "
-            "Call torchlens.io.rehydrate_nested(trace) before saving."
+            "Call torchlens.io.materialize_nested(trace) before saving."
         )
 
 

@@ -1096,7 +1096,7 @@ def _prepare_disk_run(
             "but no manifest; it predates resumable extraction or lost its "
             "ledger, so completed work cannot be verified.",
             code="extraction_resume_unmanifested_dir",
-            remedy="delete the output directory (or point output_dir at a fresh one) and re-run",
+            remedy="delete the output directory (or point path at a fresh one) and re-run",
             output_dir=str(container_path),
         )
 

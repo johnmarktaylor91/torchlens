@@ -133,9 +133,7 @@ def test_resume_identity_random_init_refuses_t_modelswap(tmp_path: Path) -> None
     # Both variants constructed before the first capture in this process.
     original = _Model(seed=0).eval()
     random_init = _Model(seed=999).eval()
-    tl.extract_dataset(
-        original, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(original, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False)
     _interrupt_after(tmp_path, 1)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
         tl.extract_dataset(
@@ -143,7 +141,7 @@ def test_resume_identity_random_init_refuses_t_modelswap(tmp_path: Path) -> None
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -158,12 +156,10 @@ def test_resume_identity_same_state_resumes_and_completes(tmp_path: Path) -> Non
     """The matching model resumes the prefix and lands terminal totals."""
 
     model = _Model(seed=0).eval()
-    tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False)
     _interrupt_after(tmp_path, 1)
     paths = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False, resume=True
+        model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False, resume=True
     )
     assert [path.name for path in paths] == [f"batch_0000{i}.safetensors" for i in range(3)]
     loaded = load_extraction(tmp_path)
@@ -177,9 +173,7 @@ def test_resume_identity_in_place_weight_edit_refuses(tmp_path: Path) -> None:
     """The LoRA-merge/lesion class: an in-place weight edit changes identity."""
 
     model = _Model(seed=0).eval()
-    tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False)
     _interrupt_after(tmp_path, 1)
     with torch.no_grad():
         model.fc.weight[0, 0] += 1.0
@@ -189,7 +183,7 @@ def test_resume_identity_in_place_weight_edit_refuses(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -200,9 +194,7 @@ def test_resume_identity_cross_level_refuses(tmp_path: Path) -> None:
     """An artifact recorded at 'measured' never compares against 'none'."""
 
     model = _Model(seed=0).eval()
-    tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False)
     _interrupt_after(tmp_path, 1)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
         tl.extract_dataset(
@@ -210,7 +202,7 @@ def test_resume_identity_cross_level_refuses(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
             model_identity="none",
@@ -227,7 +219,7 @@ def test_resume_identity_none_optout_is_recorded_and_resumable(tmp_path: Path) -
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         model_identity="none",
     )
@@ -237,7 +229,7 @@ def test_resume_identity_none_optout_is_recorded_and_resumable(tmp_path: Path) -
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
         model_identity="none",
@@ -257,7 +249,7 @@ def test_resume_identity_assertion_matrix(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         model_identity=claim,
     )
@@ -268,7 +260,7 @@ def test_resume_identity_assertion_matrix(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
             model_identity={"checkpoint": "org/model", "revision": "OTHER"},
@@ -279,7 +271,7 @@ def test_resume_identity_assertion_matrix(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
         model_identity=dict(claim),
@@ -296,7 +288,7 @@ def test_model_identity_kwarg_refuses_outside_the_vocabulary(tmp_path: Path) -> 
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             model_identity="sampled",
         )
@@ -355,7 +347,7 @@ def test_completed_v1_resume_migrates_without_a_forward(tmp_path: Path) -> None:
     _write_v1_artifact(tmp_path, model, "complete")
     calls_before = model.n_forward_calls
     paths = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False, resume=True
+        model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False, resume=True
     )
     assert model.n_forward_calls == calls_before, "migration never runs a forward"
     assert len(paths) == 3
@@ -379,7 +371,7 @@ def test_in_progress_v1_resume_refuses_naming_unprovable_fields(tmp_path: Path) 
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -404,7 +396,7 @@ def test_opaque_complete_class_continuation_resumes_measured(tmp_path: Path) -> 
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         transform=torch.abs,
     )
@@ -414,7 +406,7 @@ def test_opaque_complete_class_continuation_resumes_measured(tmp_path: Path) -> 
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
         transform=torch.abs,
@@ -450,7 +442,7 @@ def test_opaque_partial_continuation_refuses_typed(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         transform=opaque_step,
     )
@@ -461,7 +453,7 @@ def test_opaque_partial_continuation_refuses_typed(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
             transform=opaque_step,
@@ -493,7 +485,7 @@ def test_partial_continuation_with_recorded_pipeline_id_is_asserted(tmp_path: Pa
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         transform=opaque_step,
         pipeline_id="exp-7",
@@ -504,7 +496,7 @@ def test_partial_continuation_with_recorded_pipeline_id_is_asserted(tmp_path: Pa
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
         transform=opaque_step,
@@ -532,7 +524,7 @@ def test_resume_time_invented_pipeline_id_refuses(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         transform=opaque_step,
     )
@@ -543,7 +535,7 @@ def test_resume_time_invented_pipeline_id_refuses(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
             transform=opaque_step,
@@ -562,7 +554,7 @@ def test_registered_spec_chain_continuation_resumes(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         transform=spec_chain,
     )
@@ -572,7 +564,7 @@ def test_registered_spec_chain_continuation_resumes(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
         transform=spec_chain,
@@ -590,7 +582,7 @@ def test_changed_spec_chain_mismatches_the_signature(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         transform=chain(tl.transforms.cast(torch.float16)),
     )
@@ -601,7 +593,7 @@ def test_changed_spec_chain_mismatches_the_signature(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
             transform=chain(tl.transforms.cast(torch.float32)),
@@ -701,7 +693,7 @@ def test_t_c6_frozen_plan_refuses_lying_transform_before_publication(tmp_path: P
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             transform=TransformSpec(name=name, version=1),
         )
@@ -741,7 +733,7 @@ def test_per_site_mapping_with_default_and_unknown_key(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         transform={"relu": "magnitude", DEFAULT: None},
     )
@@ -764,7 +756,7 @@ def test_stimulus_ids_cardinality_refusals(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path / "a",
+            path=tmp_path / "a",
             progress=False,
             stimulus_ids=["only", "two"],
         )
@@ -778,7 +770,7 @@ def test_stimulus_ids_cardinality_refusals(tmp_path: Path) -> None:
             rows,
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path / "b",
+            path=tmp_path / "b",
             progress=False,
             stimulus_ids=[f"s{i}" for i in range(5)],
         )
@@ -797,7 +789,7 @@ def test_ledger_rows_carry_id_range_digests(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         stimulus_ids=ids,
     )

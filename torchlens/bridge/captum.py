@@ -16,7 +16,7 @@ from ._utils import module_for_site, source_model
 
 
 def attribute(
-    log: Any,
+    trace: Any,
     method: Any,
     target: Any | None = None,
     *,
@@ -70,7 +70,7 @@ def attribute(
     if not hasattr(method, "attribute"):
         raise TypeError("Captum bridge expected a method object with an attribute(...) method.")
 
-    captum_inputs = _logged_inputs(log) if inputs is None else inputs
+    captum_inputs = _logged_inputs(trace) if inputs is None else inputs
     if target is not None:
         kwargs["target"] = target
     return method.attribute(captum_inputs, **kwargs)
@@ -147,7 +147,7 @@ def _positional_names(model: nn.Module) -> list[str]:
     return [param.name for param in parameters if param.kind in kinds]
 
 
-def layer(log: Any, site: Any) -> nn.Module:
+def layer(trace: Any, site: Any) -> nn.Module:
     """Resolve a TorchLens module/site to the live PyTorch module Captum expects.
 
     Shares Grad-CAM's resolver: a module address returns that module; an op
@@ -182,7 +182,7 @@ def layer(log: Any, site: Any) -> nn.Module:
             "Captum bridge requires the `captum` extra: install torchlens[captum]."
         ) from exc
 
-    return module_for_site(log, site, bridge="Captum")
+    return module_for_site(trace, site, bridge="Captum")
 
 
 __all__ = ["attribute", "layer"]

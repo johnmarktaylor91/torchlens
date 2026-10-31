@@ -30,7 +30,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 pytest.importorskip("transformers")
 pytest.importorskip("transformers.models.qwen3_moe")
@@ -146,7 +146,7 @@ def moe_episode():
     log = tl.trace(
         runner,
         torch.tensor(PROMPT),
-        episode=EpisodeSpec(stepped_module=capture_model, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=capture_model, num_steps=N_STEPS),
     )
     try:
         yield {"log": log, "hits": hits, "eager_tokens": eager_tokens, "seed": seed}

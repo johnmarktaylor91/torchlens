@@ -17,7 +17,7 @@ from pathlib import Path
 import torch
 
 from ._errors import refuse
-from ._records import Artifact, TokenMetrics, TokenScoreRow, TokenScores, tensor_fingerprint
+from ._records import SavedFigure, TokenMetrics, TokenScoreRow, TokenScores, tensor_fingerprint
 from ._strip import render_token_strip
 
 __all__ = ["metric_strip", "render_metric_strip", "token_metrics"]
@@ -146,7 +146,7 @@ def render_metric_strip(
     path: Path | str,
     *,
     svg_fonttype: str = "path",
-) -> Artifact:
+) -> SavedFigure:
     """Render a loss/entropy strip to paper output.
 
     Parameters

@@ -26,7 +26,7 @@ from torchlens.capture._episode_ledger import (
     episode_ledger_for,
     escalation_spec,
 )
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 
 class TinyLM(nn.Module):
@@ -108,7 +108,7 @@ def test_session_vs_floor_full_surface_differential():
     session = tl.trace(
         GreedyRunner(model, N_STEPS),
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model, num_steps=N_STEPS),
     )
     assert session.outcome.status.name == "COMPLETE"
     ledger = episode_ledger_for(session)
@@ -186,7 +186,7 @@ def test_gap9_guarded_fast_rerun_token_identity():
         runner,
         inputs,
         save=tl.in_module("model") | tl.func("cat"),
-        episode=EpisodeSpec(stepped_module=model, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model, num_steps=N_STEPS),
     )
     ledger = episode_ledger_for(session)
     assert ledger is not None
@@ -207,7 +207,7 @@ def test_escalation_reruns_whole_episode_and_verifies_tokens():
     fidelity discharged at write time."""
 
     model = TinyLM()
-    spec = EpisodeSpec(stepped_module=model, n_steps=N_STEPS)
+    spec = EpisodeOptions(stepped_module=model, num_steps=N_STEPS)
     capture = tl.options.CaptureOptions(random_seed=777)
     producer = tl.trace(SampledRunner(model, N_STEPS), _prompt(), episode=spec, capture=capture)
     producer_ledger = episode_ledger_for(producer)
@@ -239,7 +239,7 @@ def test_escalation_divergence_is_disclosed_never_settled():
     authority (COMPLETE capture of what it actually ran)."""
 
     model = TinyLM()
-    spec = EpisodeSpec(stepped_module=model, n_steps=N_STEPS)
+    spec = EpisodeOptions(stepped_module=model, num_steps=N_STEPS)
     producer = tl.trace(
         SampledRunner(model, N_STEPS),
         _prompt(),

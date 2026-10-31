@@ -121,7 +121,7 @@ def episode_rig() -> dict[str, Any]:
             "step_output_kind": "digest",
         }
         base.update(overrides)
-        return tl.options.EpisodeSpec(**base)
+        return tl.options.EpisodeOptions(**base)
 
     return {"root": root, "example": torch.randn(1, 4), "spec": spec}
 
@@ -319,7 +319,7 @@ def test_episode_kwarg_on_record_is_a_ledgered_untyped_refusal(
 
 
 def test_episode_module_root_requires_stepped_module(episode_rig: dict[str, Any]) -> None:
-    """EpisodeSpec(stepped_module=None) on a module root refuses typed (F41)."""
+    """EpisodeOptions(stepped_module=None) on a module root refuses typed (F41)."""
 
     import torchlens as tl
 
@@ -329,7 +329,7 @@ def test_episode_module_root_requires_stepped_module(episode_rig: dict[str, Any]
         lambda: tl.trace(
             rig["root"],
             rig["example"],
-            episode=tl.options.EpisodeSpec(n_steps=3, step_output_kind="digest"),
+            episode=tl.options.EpisodeOptions(num_steps=3, step_output_kind="digest"),
         ),
     )
 
@@ -363,7 +363,7 @@ def test_bound_method_episode_defaults_stepped_module_to_owner() -> None:
     trace = tl.trace(
         generator.generate,
         example,
-        episode=tl.options.EpisodeSpec(n_steps=3, step_output_kind="digest"),
+        episode=tl.options.EpisodeOptions(num_steps=3, step_output_kind="digest"),
     )
     classification, _ = _expect("bound_method_default_owner")
     assert classification == COUPLED
@@ -402,7 +402,7 @@ def test_episode_declared_steps_that_never_run_quarantine_typed() -> None:
         lambda: tl.trace(
             generator.generate,
             torch.randn(1, 4),
-            episode=tl.options.EpisodeSpec(n_steps=3, step_output_kind="digest"),
+            episode=tl.options.EpisodeOptions(num_steps=3, step_output_kind="digest"),
         ),
     )
 

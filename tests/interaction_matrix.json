@@ -55,12 +55,12 @@
    "options": []
   },
   "episode": {
-   "summary": "Multi-step episode capture (episode=EpisodeSpec)",
+   "summary": "Multi-step episode capture (episode=EpisodeOptions)",
    "trace_kwargs": [
     "episode"
    ],
    "options": [
-    "EpisodeSpec"
+    "EpisodeOptions"
    ]
   },
   "backend": {
@@ -1175,7 +1175,7 @@
    "status": "composes",
    "evidence": "tests/test_b2_extract_intervened.py::test_intervened_disk_artifact_records_the_counterfactual",
    "confidence": "high",
-   "note": "Disk mode is extract_dataset(output_dir=); disk-only options without output_dir refuse extraction_disk_only_option."
+   "note": "Disk mode is extract_dataset(path=); disk-only options without path refuse extraction_disk_only_option."
   },
   {
    "a": "extract",

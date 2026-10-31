@@ -10,7 +10,7 @@ from typing import Any, cast
 from .._io import _json
 
 
-def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
+def join(trace: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
     """Join TorchLens layer records with a PyTorch Kineto trace payload.
 
     Each complete event is assigned to at most one layer:
@@ -55,7 +55,7 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
     # only via the correlation-ID join.
     trace = _load_trace(kineto_trace)
     events = [event for event in _trace_events(trace) if event.get("ph", "X") == "X"]
-    layers = list(getattr(log, "layer_list", []))
+    layers = list(getattr(trace, "layer_list", []))
     assigned: dict[int, list[dict[str, Any]]] = {index: [] for index in range(len(layers))}
     used: set[int] = set()
     _assign_label_ranges(layers, events, assigned, used)

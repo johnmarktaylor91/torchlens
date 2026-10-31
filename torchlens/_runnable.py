@@ -1292,7 +1292,7 @@ class ReplayWitnessStructure:
 
 
 def derive_required_witness_members(
-    structure: ReplayWitnessStructure,
+    input_structure: ReplayWitnessStructure,
 ) -> dict[str, list[str]]:
     """Derive every family's REQUIRED member identities from replay structure (r71 A2).
 
@@ -1326,7 +1326,7 @@ def derive_required_witness_members(
     """
 
     members: dict[str, list[str]] = {family: [] for family in WITNESS_FAMILY_REGISTRY}
-    for call in structure.calls:
+    for call in input_structure.calls:
         for obligation in call.control_obligations:
             family = (
                 "loop_predicate"
@@ -1337,7 +1337,7 @@ def derive_required_witness_members(
         for edge in call.control_dependencies:
             members["conditional_arm_entry"].append(control_dependency_site_label(edge))
     state_names: dict[str, None] = {}
-    for slot in structure.tensor_slots:
+    for slot in input_structure.tensor_slots:
         if slot.host_escape:
             members["tensor_derived_scalar_literal"].append(slot.slot_id)
         if slot.inert_sink:
@@ -1350,16 +1350,16 @@ def derive_required_witness_members(
             elif binding.host_escape_disposition == "inert":
                 members["unbound_state_inert"].append(f"{binding.state_dict_name}::{slot.slot_id}")
     metadata_prefix = WITNESS_FAMILY_REGISTRY["model_input_metadata"].site_prefix
-    for site in structure.input_boundary:
+    for site in input_structure.input_boundary:
         members["input_structure"].append(site.position)
         position = decode_input_site_position(site.position)
         for tensor_site in site.tensor_sites:
             members["model_input_metadata"].append(
                 f"{metadata_prefix}{position!r}:{list(tensor_site.container_path)!r}"
             )
-    registry_by_id = {entry.registry_id: entry for entry in structure.callable_registry}
+    registry_by_id = {entry.registry_id: entry for entry in input_structure.callable_registry}
     mode_sensitive = False
-    for call in structure.calls:
+    for call in input_structure.calls:
         entry = registry_by_id.get(call.registry_id)
         if entry is not None and is_mode_sensitive_qualname(entry.key.qualname):
             mode_sensitive = True
@@ -1370,8 +1370,8 @@ def derive_required_witness_members(
     for name in state_names:
         members["state_metadata"].append(f"{name}::grad_fn")
         members["state_metadata"].append(f"{name}::requires_grad")
-    if structure.container_members is not None:
-        members["container"].extend(structure.container_members)
+    if input_structure.container_members is not None:
+        members["container"].extend(input_structure.container_members)
     return members
 
 

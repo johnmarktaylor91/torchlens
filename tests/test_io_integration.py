@@ -17,7 +17,7 @@ import torchlens as tl  # noqa: E402
 from torchlens import load, save, trace as trace_fn  # noqa: E402
 from torchlens._io import BlobRef  # noqa: E402
 from torchlens.data_classes.trace import Trace  # noqa: E402
-from torchlens.io import rehydrate_nested  # noqa: E402
+from torchlens.io import materialize_nested  # noqa: E402
 
 PYARROW_AVAILABLE = importlib.util.find_spec("pyarrow") is not None
 
@@ -196,7 +196,7 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     assert nested_blob_layer.out_ref is not None
     assert _contains_blob_ref(nested_blob_layer.saved_args)
 
-    rehydrate_nested(lazy_log)
+    materialize_nested(lazy_log)
 
     assert not _contains_blob_ref(nested_blob_layer.saved_args)
     save(lazy_log, resaved_path, include_saved_args=True)

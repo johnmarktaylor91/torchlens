@@ -183,7 +183,7 @@ class LazyImportRef:
 
 
 def save_intervention(
-    log: Any,
+    trace: Any,
     path: str | Path,
     *,
     level: str | SaveLevel = SaveLevel.EXECUTABLE_WITH_CALLABLES,
@@ -217,14 +217,14 @@ def save_intervention(
     # and ordering as tl.save(): outcome gate first, then the poison gate.
     from ..capture.outcome import require_capture_capability
 
-    require_capture_capability(log, "save_analysis")
+    require_capture_capability(trace, "save_analysis")
     from .._runnable import refuse_poisoned_trace
 
-    refuse_poisoned_trace(log, "intervention export")
+    refuse_poisoned_trace(trace, "intervention export")
     save_level = _coerce_save_level(level)
-    _enforce_direct_write_policy(log, save_level, allow_direct_writes=allow_direct_writes)
+    _enforce_direct_write_policy(trace, save_level, allow_direct_writes=allow_direct_writes)
     # The recipe must be the one that produced the trace, not a later in-place edit.
-    refuse_changed_staged_helpers(log._intervention_spec, door="save_intervention")
+    refuse_changed_staged_helpers(trace._intervention_spec, door="save_intervention")
     target_path = Path(path)
     _reject_symlink_path(target_path, context="intervention spec target")
     tmp_path = target_path.parent / f"tmp.{uuid.uuid4().hex}"
@@ -238,11 +238,11 @@ def save_intervention(
         tmp_path.mkdir(parents=True)
         (tmp_path / _TENSOR_DIR).mkdir()
 
-        spec = getattr(log, "_intervention_spec", None) or InterventionSpec()
-        _sync_spec_records_from_log(spec, log)
+        spec = getattr(trace, "_intervention_spec", None) or InterventionSpec()
+        _sync_spec_records_from_log(spec, trace)
         serialized_spec = _serialize_intervention_spec(spec, save_level, state)
-        function_keys = _serialize_function_registry_keys(log)
-        target_manifest = _build_target_manifest(log, spec, save_level)
+        function_keys = _serialize_function_registry_keys(trace)
+        target_manifest = _build_target_manifest(trace, spec, save_level)
         _write_tensor_sidecars(
             tmp_path,
             state.tensor_refs,
@@ -269,7 +269,7 @@ def save_intervention(
             "helper_registry_version": HELPER_REGISTRY_VERSION,
             "save_level": save_level.value,
             "executable": save_level != SaveLevel.AUDIT and not _spec_has_opaque(serialized_spec),
-            "append_state": _append_state_for_json(log),
+            "append_state": _append_state_for_json(trace),
             "target_manifest": target_manifest,
             "helpers": _collect_helpers(serialized_spec),
             "intervention_spec": serialized_spec,
@@ -279,7 +279,7 @@ def save_intervention(
         _write_json_file(tmp_path / _SPEC_FILE, spec_json)
         _TlSpecWriter.write_intervention_manifest(
             path=tmp_path / _MANIFEST_FILE,
-            log=log,
+            log=trace,
             spec_json=spec_json,
             tensor_entries=tensor_entries,
             legacy_format_version=TLSPEC_FORMAT_VERSION,

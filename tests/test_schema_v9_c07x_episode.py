@@ -76,7 +76,7 @@ def _capture_episode(n_steps: int = 3):
     return tl.trace(
         root,
         ids,
-        episode=tl.options.EpisodeSpec(stepped_module=root.block, n_steps=n_steps),
+        episode=tl.options.EpisodeOptions(stepped_module=root.block, num_steps=n_steps),
     )
 
 

@@ -71,7 +71,7 @@ def artifact(tmp_path):
         stimuli,
         ["conv"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         stimulus_ids=[f"img{i}" for i in range(4)],
         progress=False,
     )

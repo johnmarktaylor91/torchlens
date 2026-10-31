@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
 
 def run(
-    log: Trace,
+    trace: Trace,
     model: nn.Module,
     x: Any = None,
     *,
@@ -104,7 +104,7 @@ def run(
                 "rerun(chunk_size=...) cannot be combined with append=True."
             )
         return _chunked_rerun(
-            log,
+            trace,
             model,
             x,
             chunk_size=replay_options.chunk_size,
@@ -113,23 +113,23 @@ def run(
             output_transform=output_transform,
         )
     if replay_options.append:
-        return _append_rerun(log, model, x, strict=replay_options.strict)
-    _preflight(log, model, x)
+        return _append_rerun(trace, model, x, strict=replay_options.strict)
+    _preflight(trace, model, x)
     model = _unwrap_compiled_model(model)
-    _warn_if_direct_writes_will_be_overlaid(log)
+    _warn_if_direct_writes_will_be_overlaid(trace)
 
-    spec = getattr(log, "_intervention_spec", None)
+    spec = getattr(trace, "_intervention_spec", None)
     refuse_changed_staged_helpers(spec, door="rerun")
-    spec_plan = plan_rerun_spec(log, spec)
+    spec_plan = plan_rerun_spec(trace, spec)
     refuse_unmatchable_staged_labels(spec_plan.capture_spec)
     hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
     started_at = time.monotonic()
-    old_hash = getattr(log, "graph_shape_hash", None)
-    old_raw_hash = getattr(log, "_raw_event_shape_hash", None)
+    old_hash = getattr(trace, "graph_shape_hash", None)
+    old_raw_hash = getattr(trace, "_raw_event_shape_hash", None)
 
     with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
         new_log = _capture_with_active_spec(
-            log,
+            trace,
             model,
             x,
             intervention_spec=spec_plan.capture_spec,
@@ -137,28 +137,28 @@ def run(
             output_transform=output_transform,
             intervene_predicate=spec_plan.intervene_predicate,
         )
-    _refuse_shifted_raw_index_resave(log, new_log)
+    _refuse_shifted_raw_index_resave(trace, new_log)
     settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
+    new_log.facet_registry_snapshot = getattr(trace, "facet_registry_snapshot", None)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(
-        new_log, hook_plan, source_log=log
+        new_log, hook_plan, source_log=trace
     )
 
-    divergence_count = _validate_rerun_result(new_log, log, strict=replay_options.strict)
+    divergence_count = _validate_rerun_result(new_log, trace, strict=replay_options.strict)
     fast_refresh = False
     if divergence_count == 0:
-        fast_refresh = log._refresh_matching_rerun_state_from(new_log)
+        fast_refresh = trace._refresh_matching_rerun_state_from(new_log)
     if fast_refresh:
-        _merge_rerun_host_rng_verdict(log, new_log)
+        _merge_rerun_host_rng_verdict(trace, new_log)
         _release_discarded_capture(new_log)
     else:
-        log.replace_state_from(new_log)
-    log.is_appended = False
-    log._append_sequence_id = 0
-    log.append_history = []
+        trace.replace_state_from(new_log)
+    trace.is_appended = False
+    trace._append_sequence_id = 0
+    trace.append_history = []
 
     history_record = _build_ledger_record(
-        log,
+        trace,
         started_at=started_at,
         old_hash=old_hash,
         new_hash=getattr(new_log, "graph_shape_hash", None),
@@ -171,13 +171,13 @@ def run(
         hook_fire_count=hook_fire_count,
         unfired_hook_count=len(unfired_hook_ids),
     )
-    log.state = TraceState.RERUN_PROPAGATED
-    log.last_run = {
+    trace.state = TraceState.RERUN_PROPAGATED
+    trace.last_run = {
         "engine": "rerun",
         "timestamp": time.monotonic(),
         "started_at": started_at,
         "duration_s": time.monotonic() - started_at,
-        "spec_revision": getattr(log, "_spec_revision", 0),
+        "spec_revision": getattr(trace, "_spec_revision", 0),
         "strict": replay_options.strict,
         "append": False,
         "hooks": len(hook_plan),
@@ -188,14 +188,14 @@ def run(
         "fast_refused": fast_refused,
         "shape_varied": False,
         "old_graph_shape_hash": old_hash,
-        "new_graph_shape_hash": getattr(log, "graph_shape_hash", None),
+        "new_graph_shape_hash": getattr(trace, "graph_shape_hash", None),
         "old_raw_event_shape_hash": old_raw_hash,
-        "new_raw_event_shape_hash": getattr(log, "_raw_event_shape_hash", None),
+        "new_raw_event_shape_hash": getattr(trace, "_raw_event_shape_hash", None),
     }
-    log._record_operation(**history_record)
-    log._has_direct_writes = False
-    log._out_recipe_revision = getattr(log, "_spec_revision", 0)
-    return log
+    trace._record_operation(**history_record)
+    trace._has_direct_writes = False
+    trace._out_recipe_revision = getattr(trace, "_spec_revision", 0)
+    return trace
 
 
 def _release_discarded_capture(new_log: Trace) -> None:

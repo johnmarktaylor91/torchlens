@@ -29,7 +29,7 @@ from torchlens.capture._episode_coupling import (
     settlement_fire_counts,
 )
 from torchlens.errors.episode import EpisodeCaptureError
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 
 class Step(nn.Module):
@@ -57,8 +57,8 @@ def _episode_trace(model: Root, x: torch.Tensor, **kwargs) -> tl.Trace:
     return tl.trace(
         model,
         x,
-        episode=EpisodeSpec(
-            stepped_module=model.step, n_steps=model.n_steps, step_output_kind="digest"
+        episode=EpisodeOptions(
+            stepped_module=model.step, num_steps=model.n_steps, step_output_kind="digest"
         ),
         **kwargs,
     )

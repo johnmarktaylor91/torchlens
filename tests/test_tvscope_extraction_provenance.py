@@ -93,7 +93,7 @@ def test_resolution_backed_run_stamps_verified_block(model, resolution, tmp_path
         _stimuli(),
         ["conv"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         input_transform=resolution,
         stimulus_ids=[f"s{i}" for i in range(5)],
         progress=False,
@@ -116,9 +116,7 @@ def test_undeclared_run_carries_honest_unknown_block(model, tmp_path) -> None:
     """No input path declared -> the block still exists and says unknown."""
 
     out_dir = tmp_path / "plain"
-    tl.extract_dataset(
-        model, _stimuli(), ["conv"], batch_size=2, output_dir=out_dir, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), ["conv"], batch_size=2, path=out_dir, progress=False)
     manifest = json.loads((out_dir / "manifest.json").read_text())
     block = manifest["input_preprocessing"]
     assert block["verdict"] == "unknown"
@@ -175,7 +173,7 @@ def test_opaque_input_transform_applies_and_refuses_continuation(model, tmp_path
         _stimuli(4),
         ["conv"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         input_transform=lambda batch: batch * 2.0,
         progress=False,
     )
@@ -192,7 +190,7 @@ def test_opaque_input_transform_applies_and_refuses_continuation(model, tmp_path
             _stimuli(4),
             ["conv"],
             batch_size=2,
-            output_dir=out_dir,
+            path=out_dir,
             input_transform=lambda batch: batch * 2.0,
             resume=True,
             progress=False,
@@ -233,7 +231,7 @@ def test_provenance_only_stamp_records_applied_not_audited(model, resolution, tm
         _stimuli(),
         ["conv"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         input_provenance=resolution,
         progress=False,
     )
@@ -254,7 +252,7 @@ def test_audit_provenance_stamp_carries_its_verdict(model, resolution, tmp_path)
         _stimuli(),
         ["conv"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         input_provenance=report,
         progress=False,
     )
@@ -274,7 +272,7 @@ def test_declaration_only_resolution_as_transform_refuses(model, tmp_path) -> No
             model,
             _stimuli(),
             ["conv"],
-            output_dir=tmp_path / "x",
+            path=tmp_path / "x",
             input_transform=declaration_only,
             progress=False,
         )
@@ -321,7 +319,7 @@ def test_pil_iterable_with_item_level_authority_transform(model, tmp_path) -> No
         images,
         ["avgpool"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         input_transform=resolution,
         stimulus_ids=["a", "b"],
         progress=False,

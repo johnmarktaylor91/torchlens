@@ -10,7 +10,7 @@ misattribute a tool token to the step before the injection.
 The fix derives the column at the MEASURED entry-chain positions -- each
 step's emission is the position right after its own measured entry, the
 root must reproduce every entry as a prefix, and a surplus is admitted only
-at a step declared in ``EpisodeSpec(crossings=...)`` -- and DISCLOSES the
+at a step declared in ``EpisodeOptions(crossings=...)`` -- and DISCLOSES the
 positions read in the header (``step_output_positions``, bound by the
 capture digest) so a loaded product re-derives without the live session.
 An undeclared surplus stays refused: measured alone it is indistinguishable
@@ -38,7 +38,7 @@ from torchlens.capture._episode_ledger import (
 )
 from torchlens.errors import TorchLensWarning
 from torchlens.errors.episode import EpisodeDeclarationError
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 V = 16
 PROMPT = torch.tensor([[1, 2, 3, 4]])
@@ -100,7 +100,7 @@ def _header(trace: tl.Trace) -> dict:
 
 def _trace(model: nn.Module, **spec) -> tl.Trace:
     return tl.trace(
-        model, PROMPT, episode=EpisodeSpec(stepped_module=model.step, n_steps=3, **spec)
+        model, PROMPT, episode=EpisodeOptions(stepped_module=model.step, num_steps=3, **spec)
     )
 
 

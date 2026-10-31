@@ -35,7 +35,7 @@ def test_fresh_run_sweeps_higher_index_stale_shards(tmp_path: Path) -> None:
         torch.randn(20, 3),
         {"h": "relu_1_2"},
         batch_size=5,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
     )
     assert len(list(tmp_path.glob("batch_*.safetensors"))) == 4
@@ -44,7 +44,7 @@ def test_fresh_run_sweeps_higher_index_stale_shards(tmp_path: Path) -> None:
         torch.randn(10, 3),
         {"h": "relu_1_2"},
         batch_size=5,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
     )
     names = sorted(p.name for p in tmp_path.iterdir())
@@ -66,7 +66,7 @@ def test_fresh_run_sweeps_the_other_native_format_too(tmp_path: Path) -> None:
         torch.randn(10, 3),
         {"h": "relu_1_2"},
         batch_size=5,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         shard_format="pt",
     )
@@ -76,7 +76,7 @@ def test_fresh_run_sweeps_the_other_native_format_too(tmp_path: Path) -> None:
         torch.randn(5, 3),
         {"h": "relu_1_2"},
         batch_size=5,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
     )
     assert not list(tmp_path.glob("batch_*.pt"))
@@ -147,7 +147,7 @@ def test_hard_process_death_mid_safetensors_write_then_resume(tmp_path: Path) ->
     stimuli = torch.arange(30, dtype=torch.float32).reshape(10, 3)
     layers = {"relu": "relu", "logits": "output_1"}
     tl.extract_dataset(
-        model, stimuli, layers, batch_size=2, output_dir=tmp_path, progress=False, resume=True
+        model, stimuli, layers, batch_size=2, path=tmp_path, progress=False, resume=True
     )
     assert not list(tmp_path.glob("*.tmp")), "resume sweeps orphan temp files"
     loaded = load_extraction(tmp_path)

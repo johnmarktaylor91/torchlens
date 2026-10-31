@@ -118,7 +118,7 @@ def test_row_count_is_input_derived_and_refuses_drift(tmp_path: Path) -> None:
             [torch.randn(3) for _ in range(4)],
             ["relu"],
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             collate=lying_collate,
             progress=False,
         )
@@ -168,7 +168,7 @@ def test_pool_kills_raggedness_across_batches(tmp_path: Path) -> None:
         _TEXTS,
         {"h": "proj"},
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         collate=_collate_right,
         pool="token_mean",
         progress=False,
@@ -212,7 +212,7 @@ def test_bf16_fp8_store_byte_exact_roundtrip(tmp_path: Path, dtype_name: str) ->
         stimuli,
         ["relu"],
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         dtype=dtype_name,
         progress=False,
     )
@@ -239,7 +239,7 @@ def test_ragged_refuse_preserves_only_committed_prefix(tmp_path: Path) -> None:
             _TEXTS,
             {"h": "proj"},
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             collate=_collate_right,
             progress=False,
         )
@@ -265,7 +265,7 @@ def test_trim_rows_equal_solo_forwards_under_left_padding(tmp_path: Path) -> Non
             _TEXTS,
             {"h": "proj"},
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             collate=_collate_left,
             ragged="trim",
             progress=False,
@@ -293,7 +293,7 @@ def test_row_geometry_ledgered_regardless_of_regime(tmp_path: Path) -> None:
         _TEXTS[:2],
         {"h": "proj"},
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         collate=_collate_right,
         pool="token_mean",
         progress=False,
@@ -319,7 +319,7 @@ def test_capture_warnings_deduplicate_with_manifest_counts(tmp_path: Path) -> No
             _TEXTS,
             {"h": "proj"},
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             collate=_collate_left,
             pool="token_mean",
             progress=False,
@@ -355,7 +355,7 @@ def test_surplus_iterable_ids_refuse_before_completion(tmp_path: Path) -> None:
             gen(),
             ["relu"],
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             stimulus_ids=["a", "b", "c", "d"],
             progress=False,
         )
@@ -374,7 +374,7 @@ def test_duplicate_ids_are_legal_and_recorded(tmp_path: Path) -> None:
         torch.randn(4, 3),
         ["relu"],
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         stimulus_ids=["a", "b", "a", "c"],
         progress=False,
     )
@@ -406,7 +406,7 @@ def test_resume_input_digest_catches_reordered_iterable(tmp_path: Path) -> None:
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(3, 4), nn.ReLU()).eval()
     rows = [torch.arange(3, dtype=torch.float32) + i for i in range(6)]
-    extract_dataset(model, rows, ["relu"], batch_size=2, output_dir=tmp_path, progress=False)
+    extract_dataset(model, rows, ["relu"], batch_size=2, path=tmp_path, progress=False)
     _interrupt_after(tmp_path, 1)
     reordered = [rows[1], rows[0]] + rows[2:]
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
@@ -415,7 +415,7 @@ def test_resume_input_digest_catches_reordered_iterable(tmp_path: Path) -> None:
             reordered,
             ["relu"],
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -443,7 +443,7 @@ def test_resume_complete_class_callable_digest_mismatch_refuses(tmp_path: Path) 
         torch.randn(6, 3),
         ["relu"],
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         transform=scale_two,
         progress=False,
     )
@@ -454,7 +454,7 @@ def test_resume_complete_class_callable_digest_mismatch_refuses(tmp_path: Path) 
             torch.randn(6, 3),
             ["relu"],
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             transform=scale_three,
             progress=False,
             resume=True,
@@ -471,7 +471,7 @@ def test_resume_policy_matrix_names_exact_fields(tmp_path: Path) -> None:
         _TEXTS,
         {"h": "proj"},
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         collate=_collate_right,
         pool="token_mean",
         progress=False,
@@ -488,7 +488,7 @@ def test_resume_policy_matrix_names_exact_fields(tmp_path: Path) -> None:
                 _TEXTS,
                 {"h": "proj"},
                 batch_size=4,
-                output_dir=tmp_path,
+                path=tmp_path,
                 collate=_collate_right,
                 progress=False,
                 resume=True,

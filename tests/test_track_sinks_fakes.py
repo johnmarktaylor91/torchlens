@@ -227,5 +227,5 @@ def test_aim_export_refuses_a_run_without_parity_methods_before_tracking(trace: 
 
     run = _TrackOnly()
     with pytest.raises(TypeError, match="add_tag"):
-        tl.export.aim(trace, run=run)
+        tl.export.aim(trace, to=run)
     assert run.tracked == []

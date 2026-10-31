@@ -2,7 +2,7 @@
 
 This module is the public face of the extraction v2 runtime (extract memo
 items 4-19; the engine lives in :mod:`torchlens._extraction`). In disk mode
-(``output_dir=``) the artifact directory is the v2 layout (extract D1): a
+(``path=``) the artifact directory is the v2 layout (extract D1): a
 BOUNDED ``manifest.json`` (written at creation, once when batch zero freezes
 the plan, and at terminal status — never per shard), an APPEND-ONLY fsynced
 ``ledger.jsonl`` with one line per committed shard, a write-once ordered
@@ -158,11 +158,11 @@ def _refuse_disk_only_options(kwargs_in_memory: dict[str, Any]) -> None:
         return
     raise InvalidArgumentError(
         f"Options {sorted(kwargs_in_memory)} affect only the disk artifact "
-        "(shards, ledger, resume signature); without output_dir= they could "
+        "(shards, ledger, resume signature); without path= they could "
         "neither affect nor accompany the in-memory result — a false "
         "affordance.",
         code="extraction_disk_only_option",
-        remedy="pass output_dir= (disk mode), or drop these options",
+        remedy="pass path= (disk mode), or drop these options",
         options={key: repr(value) for key, value in kwargs_in_memory.items()},
     )
 
@@ -244,10 +244,10 @@ def _validate_run_options(  # noqa: PLR0913 - validates the public knob surface 
         raise ValueError("batch_size must be positive.")
     if resume and output_dir is None:
         raise InvalidArgumentError(
-            "resume=True requires output_dir: only disk-mode extraction leaves "
+            "resume=True requires path: only disk-mode extraction leaves "
             "a shard ledger to resume from.",
             code="extraction_resume_requires_output_dir",
-            remedy="pass output_dir= (disk mode) or drop resume=True",
+            remedy="pass path= (disk mode) or drop resume=True",
         )
     if stimulus_ids is not None and output_dir is None:
         raise InvalidArgumentError(
@@ -256,8 +256,7 @@ def _validate_run_options(  # noqa: PLR0913 - validates the public knob surface 
             "neither affect nor accompany the result (a false affordance).",
             code="extraction_stimulus_ids_in_memory_unsupported",
             remedy=(
-                "pass output_dir= to record stimulus identity in the manifest, "
-                "or drop stimulus_ids="
+                "pass path= to record stimulus identity in the manifest, or drop stimulus_ids="
             ),
         )
     ragged_mode = validate_ragged_mode(ragged)
@@ -299,7 +298,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     layers: Any,
     batch_size: int = 32,
     device: torch.device | str | None = None,
-    output_dir: str | Path | None = None,
+    path: str | Path | None = None,
     transform: Any = None,
     progress: bool = True,
     *,
@@ -479,7 +478,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
 
     ragged_mode, checksums_level = _validate_run_options(
         batch_size=batch_size,
-        output_dir=output_dir,
+        output_dir=path,
         resume=resume,
         stimulus_ids=stimulus_ids,
         collate=collate,
@@ -489,7 +488,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         pipeline_id=pipeline_id,
         acknowledge_v1_prefix=acknowledge_v1_prefix,
     )
-    if input_provenance is not None and output_dir is None:
+    if input_provenance is not None and path is None:
         raise InvalidArgumentError(
             "input_provenance= requires output_dir: in-memory extraction "
             "returns bare tensors with no manifest, so a provenance stamp "
@@ -497,7 +496,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
             "affordance; tvscope B4).",
             code="extraction_input_provenance_in_memory_unsupported",
             remedy=(
-                "pass output_dir= to record input-preprocessing provenance in "
+                "pass path= to record input-preprocessing provenance in "
                 "the manifest, or drop input_provenance="
             ),
         )
@@ -591,9 +590,9 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         intervention=intervention,
         store_input_ids=keep_input_ids,
     )
-    if output_dir is None:
+    if path is None:
         return run_in_memory(plan)
-    return run_to_disk(plan, Path(output_dir), resume)
+    return run_to_disk(plan, Path(path), resume)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -633,7 +632,7 @@ class LoadedExtraction:
 
 
 def load_extraction(
-    output_dir: str | Path,
+    path: str | Path,
     layers: Iterable[str] | None = None,
     *,
     max_bytes: int | None = None,
@@ -669,7 +668,7 @@ def load_extraction(
         override); ``extraction_reader_key_unknown`` for unknown keys.
     """
 
-    container_path = Path(output_dir)
+    container_path = Path(path)
     manifest = _load_manifest(container_path / MANIFEST_FILENAME)
     if manifest.get("schema") == MANIFEST_SCHEMA_V1:
         return _load_v1_extraction(container_path, manifest, layers)
@@ -759,7 +758,7 @@ def _load_v1_extraction(
     return LoadedExtraction(manifest=manifest, activations=activations, batch_paths=batch_paths)
 
 
-def relabel_extraction(output_dir: str | Path, new_ids: Iterable[str]) -> dict[str, Any]:
+def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, Any]:
     """Relabel a COMPLETE artifact's stimulus ids (the audited verb, D2).
 
     Relabeling is deliberately OUT of resume — the sidecar is write-once
@@ -789,7 +788,7 @@ def relabel_extraction(output_dir: str | Path, new_ids: Iterable[str]) -> dict[s
         ``extraction_stimulus_ids_invalid`` for malformed identifiers.
     """
 
-    container_path = Path(output_dir)
+    container_path = Path(path)
     manifest = _load_manifest(container_path / MANIFEST_FILENAME)
     if manifest.get("schema") == MANIFEST_SCHEMA_V1:
         manifest, _rows = migrate_v1_artifact(container_path, manifest)

@@ -388,7 +388,7 @@ def architecture_fingerprint(sites: dict[str, SiteRecord]) -> str:
 
 
 def build_manifest(
-    run: RunRecord,
+    to: RunRecord,
     sites: dict[str, SiteRecord],
     grammar: TagGrammar,
     *,
@@ -404,13 +404,13 @@ def build_manifest(
     emission schema version.
     """
 
-    descriptor = run.descriptor
+    descriptor = to.descriptor
     payload: dict[str, object] = {
         "kind": "torchlens.trackers.manifest",
         "version": EMISSION_SCHEMA_VERSION,
         "history_schema_version": HISTORY_SCHEMA_VERSION,
-        "run_id": run.run_id,
-        "segment_id": run.segment_id,
+        "run_id": to.run_id,
+        "segment_id": to.segment_id,
         "architecture_fingerprint": architecture_fingerprint(sites),
         "edge_policy": {
             "base": descriptor.base,

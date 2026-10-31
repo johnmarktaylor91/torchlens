@@ -103,7 +103,7 @@ def test_load_extraction_passes_mmap_and_weights_only(
         stimuli,
         ["relu"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         progress=False,
         shard_format="pt",
     )
@@ -149,7 +149,7 @@ def test_pt_shard_reader_mmaps_a_path_object(tmp_path: Path) -> None:
         stimuli,
         ["relu"],
         batch_size=4,
-        output_dir=out_dir,
+        path=out_dir,
         progress=False,
         shard_format="pt",
     )
@@ -328,7 +328,7 @@ def test_completed_resume_is_a_true_noop(tmp_path: Path) -> None:
     stimuli = torch.randn(4, 3)
     out_dir = tmp_path / "artifact"
     extract_dataset(
-        model, stimuli, ["relu"], batch_size=2, output_dir=out_dir, device="cpu", progress=False
+        model, stimuli, ["relu"], batch_size=2, path=out_dir, device="cpu", progress=False
     )
     n_forwards = len(forward_calls)
     n_moves = len(to_calls)
@@ -340,7 +340,7 @@ def test_completed_resume_is_a_true_noop(tmp_path: Path) -> None:
         stimuli,
         ["relu"],
         batch_size=2,
-        output_dir=out_dir,
+        path=out_dir,
         device="cpu",
         resume=True,
         progress=False,

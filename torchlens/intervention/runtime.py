@@ -1856,7 +1856,7 @@ def _site_name(hook_context: HookContext | None) -> str:
     return str(layer_label)
 
 
-def do(log: Any, *args: Any, **kwargs: Any) -> Any:
+def do(trace: Any, *args: Any, **kwargs: Any) -> Any:
     """Apply a one-shot intervention operation to a model log.
 
     Parameters
@@ -1874,7 +1874,7 @@ def do(log: Any, *args: Any, **kwargs: Any) -> Any:
         Operation result from ``log.do``.
     """
 
-    return log.do(*args, **kwargs)
+    return trace.do(*args, **kwargs)
 
 
 __all__ = [

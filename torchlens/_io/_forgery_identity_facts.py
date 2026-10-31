@@ -159,7 +159,7 @@ def _validate_episode_step_stamps(trace: Trace) -> None:
                 field="Op.episode_step",
                 reason="stamp_without_declaration",
                 remedy=(
-                    "re-capture with episode=EpisodeSpec(...) or drop the "
+                    "re-capture with episode=EpisodeOptions(...) or drop the "
                     "forged stamps by re-saving from the source capture"
                 ),
             )

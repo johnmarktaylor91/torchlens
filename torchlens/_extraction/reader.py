@@ -1191,7 +1191,7 @@ def _default_byte_budget() -> int:
 
 
 def open_extraction(
-    output_dir: str | Path,
+    path: str | Path,
     *,
     verify: str = "structural",
     in_progress: bool = False,
@@ -1244,7 +1244,7 @@ def open_extraction(
         _load_manifest,
     )
 
-    container = Path(output_dir)
+    container = Path(path)
     manifest = _load_manifest(container / MANIFEST_FILENAME)
     if manifest.get("schema") != MANIFEST_SCHEMA_V2:
         from .._data_substrate import migrate_v1_artifact

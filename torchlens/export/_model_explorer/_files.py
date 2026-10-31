@@ -23,7 +23,7 @@ __tl_layer__ = "L8"
 
 
 def model_explorer(
-    log: Any,
+    trace: Any,
     path: str | Path,
     *,
     overlays: tuple[str, ...] | list[str] | None = None,
@@ -58,12 +58,12 @@ def model_explorer(
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    payload = to_model_explorer_dict(log, **options)
+    payload = to_model_explorer_dict(trace, **options)
     validate_model_explorer_payload(payload, strict=True)
     atomic_write_text(destination, json.dumps(payload, indent=2))
     if overlays:
         profile = ModelExplorerOptions(**options).privacy_profile
-        _write_overlay_sidecars(log, destination, payload, tuple(overlays), profile)
+        _write_overlay_sidecars(trace, destination, payload, tuple(overlays), profile)
     return destination
 
 

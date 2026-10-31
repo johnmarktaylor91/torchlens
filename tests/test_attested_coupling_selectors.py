@@ -19,7 +19,7 @@ from torchlens._errors import ArgumentTypeError
 from torchlens.intervention import at_step
 from torchlens.intervention.errors import SelectorCapabilityError, SiteResolutionError
 from torchlens.ir.selector_eval import normalize_selector_like
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 
 class Step(nn.Module):
@@ -51,8 +51,8 @@ def _episode_trace(model: Root, x: torch.Tensor, **kwargs) -> tl.Trace:
     return tl.trace(
         model,
         x,
-        episode=EpisodeSpec(
-            stepped_module=model.step, n_steps=model.n_steps, step_output_kind="digest"
+        episode=EpisodeOptions(
+            stepped_module=model.step, num_steps=model.n_steps, step_output_kind="digest"
         ),
         **kwargs,
     )

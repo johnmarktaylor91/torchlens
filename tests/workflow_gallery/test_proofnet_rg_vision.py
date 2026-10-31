@@ -93,7 +93,7 @@ def test_rg10_extraction_memory_and_disk_agree_and_reload(
         torch.stack(stimuli),
         [EXTRACT_SITE],
         batch_size=2,
-        output_dir=str(output_dir),
+        path=str(output_dir),
         progress=False,
         stimulus_ids=stimulus_ids,
     )

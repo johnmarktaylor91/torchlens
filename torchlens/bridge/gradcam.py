@@ -13,7 +13,7 @@ from ._utils import first_input_tensor, module_for_site, source_model
 
 
 def cam(  # noqa: PLR0913 -- bridge door mirroring pytorch-grad-cam's constructor and call options
-    log: Any,
+    trace: Any,
     site: Any,
     *,
     inputs: Any | None = None,
@@ -68,9 +68,9 @@ def cam(  # noqa: PLR0913 -- bridge door mirroring pytorch-grad-cam's constructo
             "Grad-CAM bridge requires the `gradcam` extra: install torchlens[gradcam]."
         ) from exc
 
-    model = source_model(log)
-    target_layer = layer(log, site)
-    input_tensor = first_input_tensor(log) if inputs is None else inputs
+    model = source_model(trace)
+    target_layer = layer(trace, site)
+    input_tensor = first_input_tensor(trace) if inputs is None else inputs
     factory = getattr(pytorch_grad_cam, "GradCAM") if cam_class is None else cam_class
     init_names = _named_parameters(factory)
     init_kwargs = {key: value for key, value in kwargs.items() if key in init_names}
@@ -147,7 +147,7 @@ def _call_cam(
     return cam_runner(input_tensor=input_tensor, targets=targets, **call_kwargs)
 
 
-def layer(log: Any, site: Any) -> nn.Module:
+def layer(trace: Any, site: Any) -> nn.Module:
     """Resolve a TorchLens site to a pytorch-grad-cam target layer.
 
     A module address returns that module. An op label returns the outermost
@@ -173,7 +173,7 @@ def layer(log: Any, site: Any) -> nn.Module:
         runs more than once (see :func:`torchlens.bridge._utils.module_for_site`).
     """
 
-    return module_for_site(log, site, bridge="Grad-CAM")
+    return module_for_site(trace, site, bridge="Grad-CAM")
 
 
 __all__ = ["cam", "layer"]

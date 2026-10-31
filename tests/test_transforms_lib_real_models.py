@@ -160,7 +160,7 @@ def test_resnet50_heterogeneous_extraction_end_to_end(tmp_path) -> None:
         stimuli,
         layers=["layer2", "layer3", "layer4", "avgpool"],
         batch_size=4,
-        output_dir=out_dir,
+        path=out_dir,
         transform=dict(chains),
         progress=False,
     )
@@ -384,7 +384,7 @@ def test_opaque_chain_discloses_identification_only(tmp_path) -> None:
         stimuli,
         layers=["avgpool"],
         batch_size=4,
-        output_dir=out_dir,
+        path=out_dir,
         transform=lambda tensor: tensor.flatten(1),
         progress=False,
     )

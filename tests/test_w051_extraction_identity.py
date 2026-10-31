@@ -81,19 +81,17 @@ def test_resume_refuses_same_weights_different_architecture(tmp_path: Path, vari
     x = torch.randn(20, 3, 8, 8)
     layers = {"c1": "conv1", "c2": "conv2"}
     with pytest.raises(_Interrupt):
-        extract_dataset(a, _dying(x, 10), layers, batch_size=5, output_dir=tmp_path, progress=False)
+        extract_dataset(a, _dying(x, 10), layers, batch_size=5, path=tmp_path, progress=False)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
         extract_dataset(
-            other, list(x), layers, batch_size=5, output_dir=tmp_path, progress=False, resume=True
+            other, list(x), layers, batch_size=5, path=tmp_path, progress=False, resume=True
         )
     fields = excinfo.value.fields
     assert fields["code"] == "extraction_resume_model_identity_mismatch"
     assert fields["mismatched_fields"] == ["model_structure"]
     assert fields["recorded_structure"]["digest"] != fields["requested_structure"]["digest"]
     # The matching construction still resumes, row-exact against the interrupted prefix.
-    extract_dataset(
-        a, list(x), layers, batch_size=5, output_dir=tmp_path, progress=False, resume=True
-    )
+    extract_dataset(a, list(x), layers, batch_size=5, path=tmp_path, progress=False, resume=True)
     got = open_extraction(tmp_path).materialize()
     with torch.no_grad():
         assert torch.equal(got["c1"], a.conv1(x))
@@ -106,14 +104,14 @@ def test_resume_of_a_manifest_without_structure_record_discloses(tmp_path: Path)
     x = torch.randn(10, 3, 8, 8)
     with pytest.raises(_Interrupt):
         extract_dataset(
-            a, _dying(x, 5), {"c1": "conv1"}, batch_size=5, output_dir=tmp_path, progress=False
+            a, _dying(x, 5), {"c1": "conv1"}, batch_size=5, path=tmp_path, progress=False
         )
     manifest_path = tmp_path / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
     del manifest["signature"]["model_structure"]
     manifest_path.write_text(json.dumps(manifest))
     extract_dataset(
-        a, list(x), {"c1": "conv1"}, batch_size=5, output_dir=tmp_path, progress=False, resume=True
+        a, list(x), {"c1": "conv1"}, batch_size=5, path=tmp_path, progress=False, resume=True
     )
     manifest = json.loads(manifest_path.read_text())
     assert manifest["status"] == "complete"
@@ -170,7 +168,7 @@ def test_resume_with_a_comprehension_transform_completes(tmp_path: Path) -> None
             _dying(x, 10),
             {"h": "relu_1_2"},
             batch_size=5,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             transform=transform,
         )
@@ -180,7 +178,7 @@ def test_resume_with_a_comprehension_transform_completes(tmp_path: Path) -> None
         list(x),
         {"h": "relu_1_2"},
         batch_size=5,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         transform=_compile(_NESTED_SOURCES["listcomp"]),
         resume=True,
@@ -204,7 +202,7 @@ def test_v1_callable_record_refuses_as_incomparable_not_as_behavior_change(
             _dying(x, 10),
             {"h": "relu_1_2"},
             batch_size=5,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             transform=transform,
         )
@@ -223,7 +221,7 @@ def test_v1_callable_record_refuses_as_incomparable_not_as_behavior_change(
             list(x),
             {"h": "relu_1_2"},
             batch_size=5,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             transform=transform,
             resume=True,
@@ -271,7 +269,7 @@ def test_low_precision_stimuli_extract_on_both_paths(tmp_path: Path, dtype: torc
     model = nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2)).to(dtype).eval()
     x = torch.randn(7, 3).to(dtype)
     disk = extract_dataset(
-        model, x, {"h": "relu_1_2"}, batch_size=3, output_dir=tmp_path / "t", progress=False
+        model, x, {"h": "relu_1_2"}, batch_size=3, path=tmp_path / "t", progress=False
     )
     assert len(disk) == 3
     extract_dataset(
@@ -279,7 +277,7 @@ def test_low_precision_stimuli_extract_on_both_paths(tmp_path: Path, dtype: torc
         [x[i] for i in range(7)],
         {"h": "relu_1_2"},
         batch_size=3,
-        output_dir=tmp_path / "i",
+        path=tmp_path / "i",
         progress=False,
     )
     memory = extract_dataset(model, x, {"h": "relu_1_2"}, batch_size=3, progress=False)

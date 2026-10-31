@@ -172,7 +172,7 @@ def test_live_truncation_leaves_no_halted_trace_registered():
     ]
     assert not halted_fresh, (
         "the truncated live run left a HALTED trace enumerable through "
-        "tl.io.list_logs(); the internal halt settle must stay invisible"
+        "tl.io.list_traces(); the internal halt settle must stay invisible"
     )
     assert any(entry is result.trace for entry in fresh)
 

@@ -34,7 +34,7 @@ stimuli = torch.randn(64, 8)
 output_dir = Path(DOCS_TMPDIR) / "relu-activations"  # any empty directory of yours
 
 # 1. Extract the ReLU output for every stimulus, 16 per forward.
-tl.extract_dataset(model, stimuli, ["1"], batch_size=16, output_dir=output_dir, progress=False)
+tl.extract_dataset(model, stimuli, ["1"], batch_size=16, path=output_dir, progress=False)
 
 # 2. Open the artifact and wrap it as a torch Dataset.
 reader = open_extraction(output_dir)

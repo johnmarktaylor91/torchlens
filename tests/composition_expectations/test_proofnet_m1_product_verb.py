@@ -202,8 +202,8 @@ def build_episode_products() -> dict[str, Any]:
     example = torch.randn(1, 4)
 
     def _spec() -> Any:
-        return tl.options.EpisodeSpec(
-            stepped_module=root.step, n_steps=3, step_output_kind="digest"
+        return tl.options.EpisodeOptions(
+            stepped_module=root.step, num_steps=3, step_output_kind="digest"
         )
 
     episode = tl.trace(root, example, episode=_spec())

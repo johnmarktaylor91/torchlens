@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._errors import ArgumentTypeError
-from .._io import JaxPayloadLoadHint, PayloadLoadHints, TorchLensIOError, _json, rehydrate_nested
+from .._io import JaxPayloadLoadHint, PayloadLoadHints, TorchLensIOError, _json, materialize_nested
 from .._io.bundle import cleanup_tmp, load, save
 from .._io.sidecar import (
     AnalysisOnlySidecar,
@@ -27,7 +27,7 @@ from ..intervention.types import InterventionSpec
 from ..options import suppress_mutate_warnings
 
 
-def list_logs() -> tuple[Any, ...]:
+def list_traces() -> tuple[Any, ...]:
     """Return a snapshot of currently live TorchLens traces."""
 
     from .. import user_funcs
@@ -325,7 +325,7 @@ __all__ = [
     "detect_tlspec_format",
     "inspect_state_contract",
     "inspect_tlspec",
-    "list_logs",
+    "list_traces",
     "load",
     "list_sidecar_families",
     "load_intervention_spec",
@@ -333,7 +333,7 @@ __all__ = [
     "read_safetensors",
     "read_sidecar",
     "register_sidecar_family",
-    "rehydrate_nested",
+    "materialize_nested",
     "reset_naming_counter",
     "save",
     "save_intervention",

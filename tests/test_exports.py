@@ -454,7 +454,7 @@ def test_tracker_exports_accept_existing_objects(export_log: Any, tmp_path: Path
     assert tracker.metrics
 
     aim_tracker = _Tracker()
-    assert tl.export.aim(export_log, run=aim_tracker, prefix="tl")["num_layers"] > 0
+    assert tl.export.aim(export_log, to=aim_tracker, prefix="tl")["num_layers"] > 0
     assert aim_tracker.metrics
 
     pytest.importorskip("wandb")
@@ -531,7 +531,7 @@ def test_tracker_exports_reject_paths_with_clear_type_errors(
     with pytest.raises(TypeError, match="mlflow expects an existing tracker object"):
         tl.export.mlflow(export_log, client=tmp_path / "mlruns")
     with pytest.raises(TypeError, match="aim expects an existing tracker object"):
-        tl.export.aim(export_log, run=tmp_path / "aim")
+        tl.export.aim(export_log, to=tmp_path / "aim")
 
 
 def test_emit_nvtx_capture_option_does_not_change_capture(

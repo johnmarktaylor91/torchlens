@@ -22,7 +22,7 @@ from torchlens.capture._annotations_travel import (
 )
 from torchlens.errors import TorchLensError
 from torchlens.intervention import at_step
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 V = 16
 N_STEPS = 3
@@ -61,7 +61,7 @@ def _episode(model: _Greedy, **extra) -> tl.Trace:
     return tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
         **extra,
     )
 

@@ -141,7 +141,7 @@ applied, see the [conditional steering recipe](../recipes/conditional_steering.m
 
 `steer_generate` is always routed through the binding: it never traces, so it records nothing
 beyond the fire counts in its report. To record what generation computed, capture the whole run
-as an episode (`tl.trace(..., episode=tl.options.EpisodeSpec(...))`), which is diagnostic tier:
+as an episode (`tl.trace(..., episode=tl.options.EpisodeOptions(...))`), which is diagnostic tier:
 its cost grows faster than the number of steps, so plan for tens of steps, never hundreds
 ([episode capture](../reference/episode_capture.md)). To edit what the KV cache holds for the
 prompt rather than every step, see [the KV-cache recipe](kv_cache.md).

@@ -85,7 +85,7 @@ def test_late_mask_shaped_drift_refuses_instead_of_late_admitting(tmp_path: Path
             iter(_SEQS),
             {"h": "proj"},
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             collate=_mask_omitting_collate,
             ragged="trim",
@@ -115,7 +115,7 @@ def test_mask_shaped_from_batch_zero_stores_trimmed_and_reads_every_row(tmp_path
         iter(_SEQS),
         {"h": "proj"},
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         collate=_masked_collate,
         ragged="trim",
@@ -141,7 +141,7 @@ def test_reader_refuses_manifest_layout_contradicting_the_ledger(tmp_path: Path)
         iter(_SEQS),
         {"h": "proj"},
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         collate=_masked_collate,
         ragged="trim",
@@ -171,7 +171,7 @@ def test_materialize_belt_refuses_a_key_in_both_layouts(tmp_path: Path, monkeypa
         torch.randn(4, 3),
         {"h": "relu_1_2"},
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
     )
     reader = open_extraction(tmp_path)
@@ -220,7 +220,7 @@ def test_resume_rehydrates_the_ragged_gate_from_the_manifest(tmp_path: Path) -> 
             iter(items),
             {"c1": "conv1"},
             batch_size=1,
-            output_dir=control_dir,
+            path=control_dir,
             progress=False,
         )
     assert control.value.fields["code"] == "extraction_ragged_refused"
@@ -228,7 +228,7 @@ def test_resume_rehydrates_the_ragged_gate_from_the_manifest(tmp_path: Path) -> 
     out = tmp_path / "resumed"
     with pytest.raises(_Die):
         extract_dataset(
-            model, _dying(items, 2), {"c1": "conv1"}, batch_size=1, output_dir=out, progress=False
+            model, _dying(items, 2), {"c1": "conv1"}, batch_size=1, path=out, progress=False
         )
     manifest = json.loads((out / "manifest.json").read_text())
     assert manifest["layers"]["c1"]["pooled_per_stimulus_shape"] == [4, 8, 8]
@@ -238,7 +238,7 @@ def test_resume_rehydrates_the_ragged_gate_from_the_manifest(tmp_path: Path) -> 
             iter(items),
             {"c1": "conv1"},
             batch_size=1,
-            output_dir=out,
+            path=out,
             progress=False,
             resume=True,
         )
@@ -265,7 +265,7 @@ def test_resume_rehydrates_from_stored_shape_on_a_manifest_without_pooled_shape(
             _dying(items, 2),
             {"c1": "conv1"},
             batch_size=1,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
         )
     manifest_path = tmp_path / "manifest.json"
@@ -278,7 +278,7 @@ def test_resume_rehydrates_from_stored_shape_on_a_manifest_without_pooled_shape(
             iter(items),
             {"c1": "conv1"},
             batch_size=1,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -297,7 +297,7 @@ def test_resume_continues_a_trimmed_key_trimmed(tmp_path: Path) -> None:
             _dying(_SEQS, 4),
             {"h": "proj"},
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             collate=_masked_collate,
             ragged="trim",
@@ -307,7 +307,7 @@ def test_resume_continues_a_trimmed_key_trimmed(tmp_path: Path) -> None:
         iter(_SEQS),
         {"h": "proj"},
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         collate=_masked_collate,
         ragged="trim",
@@ -325,7 +325,7 @@ def test_resume_continues_a_trimmed_key_trimmed(tmp_path: Path) -> None:
         iter(_SEQS),
         {"h": "proj"},
         batch_size=2,
-        output_dir=clean_dir,
+        path=clean_dir,
         progress=False,
         collate=_masked_collate,
         ragged="trim",

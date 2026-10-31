@@ -90,7 +90,7 @@ paths = tl.extract_dataset(
     images,                       # any iterable: PIL images, tensors, a Dataset
     ["avgpool", "layer3"],
     batch_size=32,
-    output_dir="features_run",
+    path="features_run",
     input_transform=pre,          # the authority's OWN transform, applied + recorded
     stimulus_ids=image_ids,       # row-order authority, digested into the manifest
     resume=True,                  # continue an interrupted run from its ledger

@@ -30,7 +30,7 @@ tl.extract_dataset(
     stimuli[torch.as_tensor(chosen)],
     ["1"],  # the ReLU output
     batch_size=4,
-    output_dir="subsample",
+    path="subsample",
     stimulus_ids=[image_ids[i] for i in chosen],  # original ids, not 0..11
     progress=False,
 )

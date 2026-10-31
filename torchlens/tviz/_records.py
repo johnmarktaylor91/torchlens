@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 __all__ = [
     "ANNOTATION_KINDS",
     "Annotation",
-    "Artifact",
+    "SavedFigure",
     "AttentionView",
     "CausalReceipt",
     "CropInfo",
@@ -1142,7 +1142,7 @@ class Annotation:
 
 
 @dataclass(frozen=True)
-class Artifact:
+class SavedFigure:
     """The result of saving a picture: paths + everything the figure said.
 
     Parameters
@@ -1168,10 +1168,10 @@ class Artifact:
     """
 
     paths: tuple[Path, ...]
-    format: str
+    file_format: str
     title: str
     disclosure_lines: tuple[str, ...]
     provenance: str
     fingerprint: str
     svg_fonttype: str | None = None
-    pages_total: int = 1
+    num_pages: int = 1

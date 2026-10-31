@@ -30,13 +30,13 @@ __tl_layer__ = "L7"
 EXPORT_TARGET_TIERS = frozenset({"present", "bridge"})
 
 _EXPORT_REGISTRY = create_registry(
-    "export_targets",
+    "list_targets",
     kind_label="export target",
     missing_provider_behavior="typed_refusal",
 )
 
 
-def register_export_target(
+def register_target(
     name: str,
     fn: Callable[..., Any],
     *,
@@ -101,25 +101,25 @@ def register_export_target(
     )
 
 
-def unregister_export_target(name: str) -> None:
+def unregister_target(name: str) -> None:
     """Remove one export-target registration."""
 
     _EXPORT_REGISTRY.unregister(name)
 
 
-def export_targets() -> tuple[str, ...]:
+def list_targets() -> tuple[str, ...]:
     """Return the registered export-target names."""
 
     return _EXPORT_REGISTRY.list_ids()
 
 
-def export_target_info(name: str) -> RegistrationInfo:
+def describe_target(name: str) -> RegistrationInfo:
     """Return one export target's registration metadata (tier row included)."""
 
     return _EXPORT_REGISTRY.info(name)
 
 
-def resolve_export_target(name: str) -> Callable[..., Any]:
+def resolve_target(name: str) -> Callable[..., Any]:
     """Return one registered exporter callable; unknown names refuse teaching."""
 
     return _EXPORT_REGISTRY.get(name)

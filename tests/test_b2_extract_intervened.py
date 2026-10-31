@@ -96,7 +96,7 @@ def test_intervened_disk_artifact_records_the_counterfactual(tmp_path: Path) -> 
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         intervene=spec,
     )
@@ -124,7 +124,7 @@ def test_clean_disk_artifact_declares_policy_none(tmp_path: Path) -> None:
     """A clean harvest says so explicitly (never "written before the schema")."""
 
     extract_dataset(
-        _Chain().eval(), _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
+        _Chain().eval(), _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False
     )
     manifest = _manifest(tmp_path)
     assert validate_harvest_block(manifest[HARVEST_BLOCK_KEY]).policy == "none"
@@ -292,7 +292,7 @@ def test_malformed_harvest_block_refuses_typed(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         intervene=_spec(),
     )

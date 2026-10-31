@@ -13,7 +13,7 @@ from ._deprecations import (
     MISSING,
     MissingType,
 )
-from ._episode_spec import EpisodeSpec
+from ._episode_spec import EpisodeOptions
 from ._errors import (
     ArgumentConflictError,
     ArgumentTypeError,
@@ -1953,7 +1953,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
 __all__ = [
     "CaptureOptions",
     "EchoOptions",
-    "EpisodeSpec",
+    "EpisodeOptions",
     "InterventionOptions",
     "OptionReceiptEntry",
     "ReplayOptions",

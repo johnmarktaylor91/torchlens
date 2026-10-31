@@ -23,7 +23,7 @@ import torch.nn.functional as F
 import torchlens as tl
 from torchlens.errors.episode import EpisodeCaptureError, EpisodeDeclarationError, EpisodeJoinError
 from torchlens.intervention import at_step
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 pytest.importorskip("transformers")
 
@@ -104,7 +104,7 @@ def _coupled_trace(runner: nn.Module, intervene, **kwargs) -> tl.Trace:
     return tl.trace(
         runner,
         _prompt(),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=runner.n_steps),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=runner.n_steps),
         intervene=intervene,
         capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
         **kwargs,
@@ -145,7 +145,7 @@ def _baseline_and_coupled():
     baseline = tl.trace(
         runner,
         _prompt(),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=N_STEPS),
         capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
     )
     runner2 = _Generate(build_distilgpt2("eager"), N_STEPS)
@@ -244,7 +244,7 @@ def test_distilgpt2_declared_crossing_scopes_facts_per_segment():
     log = tl.trace(
         runner,
         _prompt(),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=N_STEPS, crossings=(1,)),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=N_STEPS, crossings=(1,)),
         intervene=tl.when(tl.func("softmax"), tl.scale(0.5)),
         capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
     )
@@ -283,7 +283,7 @@ def test_distilgpt2_feed_closed_strict_arm_halts_coupled_capture():
         tl.trace(
             runner,
             _prompt(),
-            episode=EpisodeSpec(stepped_module=runner.model, n_steps=N_STEPS, feed="closed"),
+            episode=EpisodeOptions(stepped_module=runner.model, num_steps=N_STEPS, feed="closed"),
             intervene=tl.when(tl.func("softmax"), tl.scale(0.5)),
             capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
         )
@@ -310,7 +310,7 @@ def test_diffusion_shaped_perturbed_episode():
     log = tl.trace(
         runner,
         torch.randn(1, 6),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=4, step_output_kind="digest"),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=4, step_output_kind="digest"),
         intervene=tl.when(tl.func("linear") & at_step(2), tl.zero_ablate()),
         capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
     )

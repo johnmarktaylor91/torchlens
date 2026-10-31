@@ -22,7 +22,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.errors.episode import EpisodeCaptureError
 from torchlens.intervention import at_step
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 SEED = 1234
 
@@ -109,7 +109,7 @@ def _ids() -> torch.Tensor:
 
 
 def _coupled(runner: nn.Module, ids: torch.Tensor, intervene: object, **spec_kwargs):
-    spec = EpisodeSpec(stepped_module=runner.model, **spec_kwargs)
+    spec = EpisodeOptions(stepped_module=runner.model, **spec_kwargs)
     return tl.trace(
         runner,
         ids,
@@ -220,7 +220,7 @@ def test_changed_output_and_changed_step_count():
     baseline = tl.trace(
         EosRunner(model, eos=int(model(ids).argmax(-1)[0]), max_steps=5),
         ids,
-        episode=EpisodeSpec(stepped_module=model),
+        episode=EpisodeOptions(stepped_module=model),
         capture=tl.options.CaptureOptions(random_seed=SEED),
     )
     baseline_steps = len(baseline.annotations["episode"]["rows"])
@@ -234,7 +234,7 @@ def test_changed_output_and_changed_step_count():
     perturbed = tl.trace(
         EosRunner(model2, eos=eos2, max_steps=5),
         ids,
-        episode=EpisodeSpec(stepped_module=model2),
+        episode=EpisodeOptions(stepped_module=model2),
         intervene=tl.when(tl.func("tanh"), tl.zero_ablate()),
         capture=tl.options.CaptureOptions(random_seed=SEED),
     )
@@ -297,7 +297,7 @@ def test_uncoupled_episode_replay_never_carries_the_ledger():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=3),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=3),
         capture=tl.options.CaptureOptions(random_seed=SEED),
     )
     # The new input has the captured length, so every pass keeps its captured
@@ -346,7 +346,7 @@ def test_forced_feed_couples_with_perturbation_disclosed():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=model, forced_tokens=forced),
+        episode=EpisodeOptions(stepped_module=model, forced_tokens=forced),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
         capture=tl.options.CaptureOptions(random_seed=SEED),
     )
@@ -379,7 +379,7 @@ def test_halt_mid_episode_keeps_measured_fire_counts():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=4),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=4),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
         halt=stop_at_third_step,
         capture=tl.options.CaptureOptions(random_seed=SEED),
@@ -409,7 +409,7 @@ def test_selective_save_couples_and_keeps_evidence():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=3),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=3),
         intervene=tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)),
         save=tl.func("tanh"),
         capture=tl.options.CaptureOptions(random_seed=SEED),
@@ -461,7 +461,7 @@ def test_exogenous_join_couples_with_per_segment_facts():
     log = tl.trace(
         runner,
         _ids(),
-        episode=EpisodeSpec(stepped_module=runner.model, n_steps=5),
+        episode=EpisodeOptions(stepped_module=runner.model, num_steps=5),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
         capture=tl.options.CaptureOptions(random_seed=SEED),
     )
@@ -499,7 +499,7 @@ def test_failed_forward_coupled_episode_attaches_partial_evidence():
         tl.trace(
             runner,
             _ids(),
-            episode=EpisodeSpec(stepped_module=model, n_steps=4),
+            episode=EpisodeOptions(stepped_module=model, num_steps=4),
             intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
             capture=tl.options.CaptureOptions(random_seed=SEED),
         )

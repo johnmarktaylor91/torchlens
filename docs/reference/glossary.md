@@ -125,7 +125,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `type(owner).__name__`, `Trace.root_entry_point` records
   `"bound_method:<owner_qualname>.<method>"`, and the root op record (the output-boundary ops)
   carries `tl_authored_root=True` — both persisted with fail-closed load validation. On
-  bound-method episode captures `EpisodeSpec.stepped_module` defaults to the owner. Bound-method
+  bound-method episode captures `EpisodeOptions.stepped_module` defaults to the owner. Bound-method
   captures refuse rerun/append at the identity gate (`rerun_entry_point_unsupported`; an absent
   fact on a legacy artifact refuses `root_entry_point_unavailable`); replay engines are
   unaffected. Other callables (closures, bare functions) refuse `model_type_unsupported`. All
@@ -133,7 +133,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **Episode capture**
 : One wrapped multi-step generation run captured as a single product
-  (`capture_kind=episode`): `tl.trace(episode_root, x, episode=EpisodeSpec(stepped_module=...))`
+  (`capture_kind=episode`): `tl.trace(episode_root, x, episode=EpisodeOptions(stepped_module=...))`
   stamps the declaration and lands a per-step status ledger (grammar v2,
   `episode_ledger_version=2`: header with the declared `step_output_kind`
   (`tokens`/`digest`/`none`), the `step_output_from` source disclosure, the
@@ -1197,7 +1197,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   epoch, so whole-model pickle / `torch.save` survive later wrap-state changes (a capture
   itself leaves no TorchLens callable on the model: submodule `forward` wrappers are
   session-scoped); `tl.clear_capture_cache`
-  empties the capture cache; `tl.io.list_logs` / `tl.io.reset_naming_counter` manage log
+  empties the capture cache; `tl.io.list_traces` / `tl.io.reset_naming_counter` manage log
   bookkeeping.
 
 ## Persistence, containers, and namespaces

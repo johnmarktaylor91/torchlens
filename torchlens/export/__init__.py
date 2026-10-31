@@ -29,11 +29,11 @@ from ..utils.display import atomic_write_text
 from ._common import _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import NETRON_DISCLAIMER, netron
 from ._registry import (
-    export_target_info,
-    export_targets,
-    register_export_target,
-    resolve_export_target,
-    unregister_export_target,
+    describe_target,
+    list_targets,
+    register_target,
+    resolve_target,
+    unregister_target,
 )
 from ._trackers import aim, mlflow, tensorboard, wandb
 
@@ -65,7 +65,7 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def model_explorer(log: Any, path: str | Path, **kwargs: Any) -> Path:
+def model_explorer(trace: Any, path: str | Path, **kwargs: Any) -> Path:
     """Export one log as a Model Explorer JSON graph collection.
 
     Thin deferred door: the L8 bridge implementation
@@ -90,10 +90,10 @@ def model_explorer(log: Any, path: str | Path, **kwargs: Any) -> Path:
 
     from ._model_explorer import model_explorer as _impl
 
-    return _impl(log, path, **kwargs)
+    return _impl(trace, path, **kwargs)
 
 
-def model_explorer_diff(members: Any, out_dir: str | Path, **kwargs: Any) -> Path:
+def model_explorer_diff(members: Any, path: str | Path, **kwargs: Any) -> Path:
     """Export a Model Explorer side-by-side diff collection for N members.
 
     Thin deferred door over
@@ -117,7 +117,7 @@ def model_explorer_diff(members: Any, out_dir: str | Path, **kwargs: Any) -> Pat
 
     from ._model_explorer import model_explorer_diff as _impl
 
-    return _impl(members, out_dir, **kwargs)
+    return _impl(members, path, **kwargs)
 
 
 def model_explorer_serve(source: Any, **kwargs: Any) -> Path:
@@ -206,7 +206,7 @@ def _bundle_member_honesty(bundle: Any) -> dict[str, Any]:
     return {"members": members}
 
 
-def svg(log: Any, path: str | Path, *, editable: bool = True) -> Path:
+def svg(trace: Any, path: str | Path, *, editable: bool = True) -> Path:
     """Export a Trace graph as a lightweight SVG file.
 
     Parameters
@@ -226,18 +226,18 @@ def svg(log: Any, path: str | Path, *, editable: bool = True) -> Path:
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    data = _static_graph_data(log)
+    data = _static_graph_data(trace)
     rendered = _render_svg(data, editable=editable)
     # The honesty comment must sit AFTER the XML declaration (a comment before
     # it is invalid XML) and before the <svg> root.
     declaration_end = rendered.index("?>\n") + len("?>\n")
-    rendered = rendered[:declaration_end] + _honesty_xml_comment(log) + rendered[declaration_end:]
+    rendered = rendered[:declaration_end] + _honesty_xml_comment(trace) + rendered[declaration_end:]
     atomic_write_text(destination, rendered)
     return destination
 
 
 def html(
-    log: Any,
+    trace: Any,
     path: str | Path,
     *,
     arrays: Any = "frontier",
@@ -279,7 +279,7 @@ def html(
 
     from ._report import write_report
 
-    return write_report(log, path, arrays=arrays, graph=graph, options=options)
+    return write_report(trace, path, arrays=arrays, graph=graph, options=options)
 
 
 #: The clock-basis disclosure every TorchLens host-clock export carries
@@ -294,7 +294,7 @@ CLOCK_BASIS_DISCLOSURE = (
 )
 
 
-def chrome_trace(log: Any, path: str | Path) -> Path:
+def chrome_trace(trace: Any, path: str | Path) -> Path:
     """Export a Chrome tracing JSON timeline for one TorchLens log.
 
     Timestamps are ``CLOCK_BASIS_DISCLOSURE``: host wall time around wrapped
@@ -317,17 +317,17 @@ def chrome_trace(log: Any, path: str | Path) -> Path:
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
-    _require_structure_only_capability(log, "measurement_exports")
+    _require_structure_only_capability(trace, "measurement_exports")
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "traceEvents": _chrome_trace_events(log),
+        "traceEvents": _chrome_trace_events(trace),
         "displayTimeUnit": "ms",
         "metadata": {
             "schema": "torchlens.chrome_trace.v1",
             "clock_basis": CLOCK_BASIS_DISCLOSURE,
-            "torchlens_capture_honesty": capture_honesty_facts(log),
+            "torchlens_capture_honesty": capture_honesty_facts(trace),
         },
     }
     atomic_write_text(destination, _json.dumps(payload, indent=2))
@@ -367,7 +367,7 @@ def chrome_trace_diff(bundle: Any, path: str | Path) -> Path:
     return destination
 
 
-def speedscope(log: Any, path: str | Path) -> Path:
+def speedscope(trace: Any, path: str | Path) -> Path:
     """Export a speedscope evented profile for one TorchLens log.
 
     Timestamps are host wall time around wrapped calls under TorchLens
@@ -389,14 +389,14 @@ def speedscope(log: Any, path: str | Path) -> Path:
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
-    _require_structure_only_capability(log, "measurement_exports")
+    _require_structure_only_capability(trace, "measurement_exports")
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    frames = [{"name": _layer_display_name(layer)} for layer in _iter_layers(log)]
+    frames = [{"name": _layer_display_name(layer)} for layer in _iter_layers(trace)]
     events: list[dict[str, int | str]] = []
     cursor_us = 0
-    for index, layer in enumerate(_iter_layers(log)):
+    for index, layer in enumerate(_iter_layers(trace)):
         duration_us = _duration_us(layer)
         events.append({"type": "O", "frame": index, "at": cursor_us})
         cursor_us += duration_us
@@ -405,12 +405,12 @@ def speedscope(log: Any, path: str | Path) -> Path:
     payload = {
         "$schema": "https://www.speedscope.app/file-format-schema.json",
         "clock_basis": CLOCK_BASIS_DISCLOSURE,
-        "torchlens_capture_honesty": capture_honesty_facts(log),
+        "torchlens_capture_honesty": capture_honesty_facts(trace),
         "shared": {"frames": frames},
         "profiles": [
             {
                 "type": "evented",
-                "name": getattr(log, "model_class_name", "TorchLens forward"),
+                "name": getattr(trace, "model_class_name", "TorchLens forward"),
                 "unit": "microseconds",
                 "startValue": 0,
                 "endValue": cursor_us,
@@ -423,7 +423,7 @@ def speedscope(log: Any, path: str | Path) -> Path:
     return destination
 
 
-def flamegraph(log: Any, path: str | Path) -> Path:
+def flamegraph(trace: Any, path: str | Path) -> Path:
     """Export a folded-stack flamegraph text file for one TorchLens log.
 
     Frame weights are host wall time around wrapped calls under TorchLens
@@ -447,17 +447,17 @@ def flamegraph(log: Any, path: str | Path) -> Path:
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
-    _require_structure_only_capability(log, "measurement_exports")
+    _require_structure_only_capability(trace, "measurement_exports")
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     lines = []
-    model_class_name = str(getattr(log, "model_class_name", "TorchLens"))
+    model_class_name = str(getattr(trace, "model_class_name", "TorchLens"))
     # The folded-stack format has no comment/metadata slot, so the honesty
     # facts ride a ZERO-WEIGHT synthetic frame: standard flamegraph tools
     # accept the line and render nothing for weight 0, but the exported file
     # still carries the facts.
-    facts = capture_honesty_facts(log)
+    facts = capture_honesty_facts(trace)
     honesty_stack = ";".join(
         _sanitize_flamegraph_frame(f"{key}={facts[key]}".replace(" ", "_"))
         for key in ("capture_status", "capture_verified", "structure_only", "poisoned")
@@ -466,7 +466,7 @@ def flamegraph(log: Any, path: str | Path) -> Path:
     lines.append(
         f"torchlens_clock_basis;{_sanitize_flamegraph_frame(CLOCK_BASIS_DISCLOSURE.replace(' ', '_'))} 0"
     )
-    for layer in _iter_layers(log):
+    for layer in _iter_layers(trace):
         stack = [model_class_name]
         stack.extend(str(module) for module in (getattr(layer, "modules", None) or []))
         stack.append(_layer_display_name(layer))
@@ -476,7 +476,7 @@ def flamegraph(log: Any, path: str | Path) -> Path:
     return destination
 
 
-def memory_timeline(log: Any, path: str | Path) -> Path:
+def memory_timeline(trace: Any, path: str | Path) -> Path:
     """Export a tensor-scope memory timeline for one TorchLens log.
 
     This reports bytes for tensors observed and retained by TorchLens. It is
@@ -499,13 +499,13 @@ def memory_timeline(log: Any, path: str | Path) -> Path:
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
-    _require_structure_only_capability(log, "measurement_exports")
+    _require_structure_only_capability(trace, "measurement_exports")
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     live_bytes = 0
     events: list[dict[str, Any]] = []
-    for layer in _iter_layers(log):
+    for layer in _iter_layers(trace):
         bytes_value = int(getattr(layer, "activation_memory", 0) or 0)
         live_bytes += bytes_value
         events.append(
@@ -528,14 +528,14 @@ def memory_timeline(log: Any, path: str | Path) -> Path:
             "torchlens.memory_timeline.v1 is superseded by the categorized "
             "memory_timeline_v2 export; v1 ships for one more release"
         ),
-        "torchlens_capture_honesty": capture_honesty_facts(log),
+        "torchlens_capture_honesty": capture_honesty_facts(trace),
         "events": events,
     }
     atomic_write_text(destination, _json.dumps(payload, indent=2))
     return destination
 
 
-def memory_timeline_v2(log: Any, path: str | Path) -> Path:
+def memory_timeline_v2(trace: Any, path: str | Path) -> Path:
     """Export the categorized module-contained memory timeline v2 artifact.
 
     The typed replacement for :func:`memory_timeline` (observe item 11):
@@ -561,7 +561,7 @@ def memory_timeline_v2(log: Any, path: str | Path) -> Path:
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    artifact = _build_v2(log)
+    artifact = _build_v2(trace)
     atomic_write_text(destination, _json.dumps(artifact, indent=2))
     return destination
 
@@ -626,7 +626,7 @@ def _layer_label(layer: Any) -> str:
     return str(getattr(layer, "layer_label", getattr(layer, "label", "<unknown>")))
 
 
-def xarray(log: Any) -> Any:
+def xarray(trace: Any) -> Any:
     """Return an xarray Dataset: the NeuroidAssembly of saved outs plus module state.
 
     Parameters
@@ -660,7 +660,7 @@ def xarray(log: Any) -> Any:
     """
     # D15: xarray's product IS saved tensor values -- it refuses through the
     # EXISTING value-payload capability (a marked empty array would be synthetic).
-    _require_structure_only_capability(log, "value_payloads")
+    _require_structure_only_capability(trace, "value_payloads")
 
     try:
         import numpy as np
@@ -678,7 +678,7 @@ def xarray(log: Any) -> Any:
     skipped_unsaved: list[str] = []
     buffers: list[tuple[Any, Any]] = []
     presentation_count: int | None = None
-    for layer in _iter_layers(log):
+    for layer in _iter_layers(trace):
         label = _layer_label(layer)
         # a partial trace's unsaved placeholders raise on ``.out``;
         # skip them and disclose the skip in ``attrs``.
@@ -715,7 +715,7 @@ def xarray(log: Any) -> Any:
         raise ValueError("No saved tensor outs are available for xarray export.")
 
     data = np.concatenate(arrays, axis=1)
-    honesty = capture_honesty_facts(log)
+    honesty = capture_honesty_facts(trace)
     assembly = xr.DataArray(
         data,
         dims=("presentation", "neuroid"),
@@ -746,7 +746,7 @@ def xarray(log: Any) -> Any:
     )
 
 
-def csv(log: Any, path: str | Path, **kwargs: Any) -> Path:
+def csv(trace: Any, path: str | Path, **kwargs: Any) -> Path:
     """Write ``Trace.to_pandas()`` to CSV.
 
     Parameters
@@ -768,12 +768,12 @@ def csv(log: Any, path: str | Path, **kwargs: Any) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
     # CSV has no metadata slot: the honesty facts ride ``#`` comment lines
     # before the header. Read back with pd.read_csv(path, comment="#").
-    table_text = log.to_pandas().to_csv(None, index=False, **kwargs)
-    atomic_write_text(destination, _honesty_comment_block(log, "# ") + table_text)
+    table_text = trace.to_pandas().to_csv(None, index=False, **kwargs)
+    atomic_write_text(destination, _honesty_comment_block(trace, "# ") + table_text)
     return destination
 
 
-def parquet(log: Any, path: str | Path, **kwargs: Any) -> Path:
+def parquet(trace: Any, path: str | Path, **kwargs: Any) -> Path:
     """Write ``Trace.to_pandas()`` to Parquet.
 
     Parameters
@@ -805,18 +805,18 @@ def parquet(log: Any, path: str | Path, **kwargs: Any) -> Path:
         ) from exc
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    table = pyarrow.Table.from_pandas(_parquet_safe_dataframe(log.to_pandas()))
+    table = pyarrow.Table.from_pandas(_parquet_safe_dataframe(trace.to_pandas()))
     # Honesty facts ride the parquet file-level schema metadata (readable via
     # pyarrow.parquet.read_schema(path).metadata); read_parquet is unaffected.
     metadata = dict(table.schema.metadata or {})
-    metadata[b"torchlens_capture_honesty"] = _json.dumps(capture_honesty_facts(log)).encode()
+    metadata[b"torchlens_capture_honesty"] = _json.dumps(capture_honesty_facts(trace)).encode()
     table = table.replace_schema_metadata(metadata)
     pyarrow_parquet.write_table(table, destination, **kwargs)
     return destination
 
 
 def json(
-    log: Any,
+    trace: Any,
     path: str | Path,
     *,
     orient: str = "records",
@@ -843,10 +843,10 @@ def json(
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    rows_json = _parquet_safe_dataframe(log.to_pandas()).to_json(None, orient=orient, **kwargs)
+    rows_json = _parquet_safe_dataframe(trace.to_pandas()).to_json(None, orient=orient, **kwargs)
     payload = {
         "schema": "torchlens.table_export.v1",
-        "capture_honesty": capture_honesty_facts(log),
+        "capture_honesty": capture_honesty_facts(trace),
         "orient": orient,
         "rows": loads_bounded(rows_json),
     }
@@ -1186,7 +1186,7 @@ def _safe_id(value: str) -> str:
     return "".join(char if char.isalnum() else "-" for char in value).strip("-")
 
 
-def safetensors(log: Any, path: str | Path) -> Path:
+def safetensors(trace: Any, path: str | Path) -> Path:
     """Export one Trace to a single safetensors file (DOCUMENTED-UNSTABLE).
 
     Every tensor-valued op payload (``out``, ``transformed_out``, ``grad``,
@@ -1212,7 +1212,7 @@ def safetensors(log: Any, path: str | Path) -> Path:
 
     from .._extraction.trace_safetensors import write_trace_safetensors
 
-    return write_trace_safetensors(log, path)
+    return write_trace_safetensors(trace, path)
 
 
 # ---------------------------------------------------------------------------
@@ -1266,7 +1266,7 @@ _BUILTIN_EXPORT_TARGETS: tuple[tuple[str, Any, str, dict[str, Any]], ...] = (
 )
 
 for _name, _fn, _tier, _caps in _BUILTIN_EXPORT_TARGETS:
-    register_export_target(_name, _fn, tier=_tier, capabilities=_caps)
+    register_target(_name, _fn, tier=_tier, capabilities=_caps)
 del _name, _fn, _tier, _caps
 
 __all__ = [
@@ -1276,8 +1276,8 @@ __all__ = [
     "chrome_trace",
     "chrome_trace_diff",
     "csv",
-    "export_target_info",
-    "export_targets",
+    "describe_target",
+    "list_targets",
     "flamegraph",
     "html",
     "json",
@@ -1289,14 +1289,14 @@ __all__ = [
     "model_explorer_serve",
     "netron",
     "parquet",
-    "register_export_target",
-    "resolve_export_target",
+    "register_target",
+    "resolve_target",
     "safetensors",
     "speedscope",
     "svg",
     "tensorboard",
     "to_model_explorer_dict",
-    "unregister_export_target",
+    "unregister_target",
     "validate_model_explorer_payload",
     "wandb",
     "xarray",

@@ -1331,7 +1331,7 @@ def _episode_step_matches(value: Any, subject: Any, lifecycle: str) -> bool:
                 "at_step(...) names an episode step, but this capture carries "
                 "no episode declaration: there are no steps to qualify. "
                 "Declare the episode -- tl.trace(model, x, "
-                "episode=tl.options.EpisodeSpec(stepped_module=..., ...), "
+                "episode=tl.options.EpisodeOptions(stepped_module=..., ...), "
                 "...) -- or drop the step qualifier.",
                 code="episode_step_selector_without_episode",
                 remedy="declare episode= on the capture, or drop at_step()",

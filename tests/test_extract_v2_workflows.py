@@ -49,7 +49,7 @@ def test_rg10_shape_resnet18_memory_disk_reload_export_agree(tmp_path: Path) -> 
         images,
         layers,
         batch_size=2,
-        output_dir=out,
+        path=out,
         progress=False,
         stimulus_ids=ids,
     )
@@ -165,7 +165,7 @@ def test_v1_in_progress_acknowledgment_flows_to_export_contract(tmp_path: Path) 
             stimuli,
             {"relu": "relu"},
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -176,7 +176,7 @@ def test_v1_in_progress_acknowledgment_flows_to_export_contract(tmp_path: Path) 
         stimuli,
         {"relu": "relu"},
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
         acknowledge_v1_prefix=True,

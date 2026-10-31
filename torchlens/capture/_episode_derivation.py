@@ -152,7 +152,7 @@ def _resolve_step_output_op(trace: Any, resolved: Any) -> Any:
             raise _declaration_error(
                 "episode step-output derivation found "
                 f"{len(output_ops)} root output layers and no declared source; "
-                "declare EpisodeSpec.step_output_from naming the slot the "
+                "declare EpisodeOptions.step_output_from naming the slot the "
                 "per-step evidence derives from"
                 + (f" (available slots: {available})" if available else "")
                 + ".",
@@ -164,7 +164,7 @@ def _resolve_step_output_op(trace: Any, resolved: Any) -> Any:
         if not matches:
             available = sorted(p for p in paths.values() if p)
             raise _declaration_error(
-                f"EpisodeSpec.step_output_from={resolved.step_output_from!r} "
+                f"EpisodeOptions.step_output_from={resolved.step_output_from!r} "
                 "names no root-output slot on this capture"
                 + (
                     f"; available slots: {available}"
@@ -297,7 +297,7 @@ def _measured_chain_positions(
       entry's width are what the next step received from outside;
     - each join appends at least the one emission (``w_{k+1} >= w_k + 1``);
       a SURPLUS (``w_{k+1} - w_k - 1 > 0`` positions) is admitted only when
-      step k+1 is a DECLARED crossing (``EpisodeSpec(crossings=...)``, the
+      step k+1 is a DECLARED crossing (``EpisodeOptions(crossings=...)``, the
       tool-call disclosure) -- an undeclared surplus is indistinguishable
       from multi-token decoding and stays refused; and the root ends
       exactly one emission after the last entry (``W == w_{n-1} + 1``).
@@ -379,7 +379,7 @@ def _licensed_positions(resolved: ResolvedEpisode, out: Any, axis: int, n_rows: 
         "positions injected from outside mid-loop). Positions a tool call "
         "injected at step k's entry are admitted when the root returns the "
         "full fed id sequence (every measured entry as a prefix) and "
-        "EpisodeSpec(crossings=(k, ...)) declares the crossing; otherwise "
+        "EpisodeOptions(crossings=(k, ...)) declares the crossing; otherwise "
         "declare step_output_from naming a per-step slot, declare "
         "step_output_kind='none' for a status-only ledger, or restructure the "
         "root to return one position per step.",
@@ -504,7 +504,7 @@ def _derive_step_column(
     column, and a hand-shaped emitted-only root is the ``axis size ==
     n_rows`` special case of the same rule. The one other alignment is the
     DECLARED-CROSSING chain arm (:func:`_measured_chain_positions`): with
-    tool-call positions declared via ``EpisodeSpec(crossings=...)`` the
+    tool-call positions declared via ``EpisodeOptions(crossings=...)`` the
     emissions sit right after each MEASURED entry, not at the tail.
 
     Raises

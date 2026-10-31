@@ -404,7 +404,7 @@ def _source_kind(source: Any) -> str:
         code="neuro_source_invalid",
         remedy=(
             "capture with tl.trace(...) or extract to disk with "
-            "tl.extract_dataset(..., output_dir=...) and pass the directory"
+            "tl.extract_dataset(..., path=...) and pass the directory"
         ),
         source_type=type(source).__name__,
     )

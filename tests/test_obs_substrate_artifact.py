@@ -65,7 +65,7 @@ class TestRoundTrip:
             writer.append_block(_block(step, with_sketch=step == 1))
         reader = HistoryReader(tmp_path / "hist")
         assert reader.run.run_id == "run-a"
-        assert reader.n_chunks == 3
+        assert reader.num_chunks == 3
         assert [b.global_step for b in reader.step_blocks()] == [0, 1, 2]
         rows = reader.observations(step=1)
         assert len(rows) == 1
@@ -111,7 +111,7 @@ class TestCrashRecovery:
         # no index row for it.
         (art / "chunk-000002.npz.tmp").write_bytes(b"partial garbage")
         reader = HistoryReader(art)
-        assert reader.n_chunks == 2
+        assert reader.num_chunks == 2
         assert len(reader.observations()) == 2
 
     def test_committed_chunk_corruption_refuses_typed(self, tmp_path: Path) -> None:

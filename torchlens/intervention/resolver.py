@@ -959,7 +959,7 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
 
 
 def resolve_sites(
-    log: Trace,
+    trace: Trace,
     query: SelectorInput,
     *,
     strict: bool = False,
@@ -1004,14 +1004,14 @@ def resolve_sites(
     selector = _normalize_query(query)
     matched: tuple[Any, ...]
     if isinstance(selector, FacetSelector):
-        matched = _resolve_facet_sites(log, selector, query)
+        matched = _resolve_facet_sites(trace, selector, query)
     else:
-        _guard_episode_step_query(log, selector)
-        refuse_trace_alias_spellings(log, selector)
+        _guard_episode_step_query(trace, selector)
+        refuse_trace_alias_spellings(trace, selector)
         direction = _selector_resolution_direction(selector)
-        indexed = _indexed_label_match(log, direction, selector)
+        indexed = _indexed_label_match(trace, direction, selector)
         if indexed is None:
-            sites = tuple(_iter_sites(log, direction))
+            sites = tuple(_iter_sites(trace, direction))
             indexed = _resolve_unchecked(sites, selector, strict=strict)
         matched = indexed
         if not matched:
@@ -1292,7 +1292,7 @@ def _guard_episode_step_query(log: Trace, selector: Any) -> None:
         raise SiteResolutionError(
             "at_step(...) names an episode step, but this product carries no "
             "episode declaration: there are no steps to qualify. Re-capture "
-            "with tl.trace(model, x, episode=tl.options.EpisodeSpec(...)), or "
+            "with tl.trace(model, x, episode=tl.options.EpisodeOptions(...)), or "
             "drop the step qualifier.",
             code="episode_step_selector_without_episode",
             remedy="re-capture with episode=, or drop at_step()",

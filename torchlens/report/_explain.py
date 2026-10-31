@@ -23,7 +23,7 @@ Audience = Literal["researcher", "practitioner", "auto"]
 
 
 def explain(
-    log: Any,
+    trace: Any,
     audience: Audience = "auto",
     *,
     max_tokens: int | None = None,
@@ -64,7 +64,7 @@ def explain(
     ``format="json"`` form of this report is removed.
     """
 
-    refuse_presenter_subject(log, "tl.report.explain")
+    refuse_presenter_subject(trace, "tl.report.explain")
     if audience not in {"researcher", "practitioner", "auto"}:
         raise ValueError("audience must be 'researcher', 'practitioner', or 'auto'.")
     if max_tokens is not None and (
@@ -75,20 +75,20 @@ def explain(
             "text report; omit it for the full report."
         )
 
-    if _is_partial_trace(log):
-        diagnosis = _partial_diagnosis(log)
+    if _is_partial_trace(trace):
+        diagnosis = _partial_diagnosis(trace)
         return _budgeted_report(_partial_sections(diagnosis), max_tokens, drop_order=())
 
     sections = [
-        ("Capture status", _capture_status_lines(log)),
-        ("Model summary", _model_summary_lines(log)),
-        ("Capture summary", _capture_summary_lines(log)),
-        ("Backward summary", _backward_summary_lines(log)),
-        ("Anomalies", _anomaly_lines(log)),
-        ("Interventions", _intervention_lines(log)),
-        ("Notable patterns", _pattern_lines(log, audience=audience)),
+        ("Capture status", _capture_status_lines(trace)),
+        ("Model summary", _model_summary_lines(trace)),
+        ("Capture summary", _capture_summary_lines(trace)),
+        ("Backward summary", _backward_summary_lines(trace)),
+        ("Anomalies", _anomaly_lines(trace)),
+        ("Interventions", _intervention_lines(trace)),
+        ("Notable patterns", _pattern_lines(trace, audience=audience)),
     ]
-    logged_value_lines = _logged_value_lines(log)
+    logged_value_lines = _logged_value_lines(trace)
     if logged_value_lines:
         sections.append(("Logged values", logged_value_lines))
     return _budgeted_report(sections, max_tokens, drop_order=_SECTION_DROP_ORDER)
