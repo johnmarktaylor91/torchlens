@@ -13,6 +13,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+#: Stored attribute of each pass's peak-memory reason (the forward reason is a v11 group key;
+#: the backward reason keeps its stored name).
+_PEAK_REASON_ATTR = {
+    "forward": "_cost_forward_peak_memory_reason",
+    "backward": "backward_peak_memory_reason",
+}
+
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -220,7 +228,7 @@ def _validate_peak_memory_reason(trace: Trace, which: str, *, code: str) -> None
     refusal code for the forward or the backward peak.
     """
 
-    reason_value = getattr(trace, f"_cost_{which}_peak_memory_reason", None)
+    reason_value = getattr(trace, _PEAK_REASON_ATTR[which], None)
     if reason_value is None:
         return
     reason = None

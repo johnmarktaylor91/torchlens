@@ -27,6 +27,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+#: Stored attribute of each pass's peak-memory reason (the forward reason is a v11 group key;
+#: the backward reason keeps its stored name).
+_PEAK_REASON_ATTR = {
+    "forward": "_cost_forward_peak_memory_reason",
+    "backward": "backward_peak_memory_reason",
+}
+
+
 __all__ = ["PassPeakFacts", "format_pass_peak", "pass_peak_facts"]
 
 
@@ -83,7 +91,7 @@ def pass_peak_facts(trace: Any, which: str = "forward") -> PassPeakFacts:
         # a CPU peak that was not requested or read 0 is recorded
         # as None WITH the reason naming the opt-in; surface it verbatim.
         # The reason explains a CPU measurement only, never an unknown backend.
-        reason = getattr(trace, f"_cost_{which}_peak_memory_reason", None)
+        reason = getattr(trace, _PEAK_REASON_ATTR[which], None)
         explained = backend == "cpu" and isinstance(reason, str) and bool(reason)
         return PassPeakFacts(
             which=which,

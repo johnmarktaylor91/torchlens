@@ -354,7 +354,7 @@ def test_runnable_producer_gate_reads_save_levels() -> None:
 
 class _StubTrace:
     def __init__(self, backend: str) -> None:
-        self.backend = backend
+        self._provenance_backend = backend
 
 
 @pytest.mark.parametrize("name", ("jax", "mlx", "tinygrad", "paddle", "tf"))
