@@ -318,3 +318,25 @@ def test_qualified_and_unresolved_shapes_keep_reporting(tmp_path: Path, example:
     findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
     assert "docs/reference/glossary.md:1" in _stale_locations(findings)
     assert any(location.startswith("examples/demo.py:") for location in _stale_locations(findings))
+
+
+# --- a renamed keyword reports its real old spelling -----------------------------------
+
+
+def test_a_renamed_keyword_reports_the_old_spelling_with_its_equals_sign(tmp_path: Path) -> None:
+    """``corrupt=`` renamed to ``corrupted_graph=`` is reported as ``corrupt=``, not ``ccorrupt``."""
+
+    old = _row("param:corrupt", "param", "corrupt", "corrupt=", "f-c")
+    new = _row("param:corrupted_graph", "param", "corrupted_graph", "corrupted_graph=", "f-c")
+    base, head = _inventory(TRACE, old), _inventory(TRACE, new)
+    corpus = _corpus(
+        tmp_path,
+        glossary="`corrupted_graph=` names the corrupted run.\n",
+        example="tl.trace(model, corrupt=run)\n",
+    )
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    stale = [f for f in findings if f.problem == "stale"]
+    assert [(f.spelling, f.location) for f in stale] == [("corrupt=", "examples/demo.py:1")]
+    assert check._old_path({"kind": "member", "path": "Trace.ops"}, "ops", "layer_list") == (
+        "Trace.layer_list"
+    )

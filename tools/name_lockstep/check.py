@@ -362,11 +362,37 @@ def check_lockstep(
         new_row = head_rows[rename.new_id]
         findings += _missing(corpus, new_row, "renamed")
         old_row = {**new_row, "id": rename.old_id, "name": rename.old_name}
-        old_row["path"] = str(new_row["path"])[: -len(rename.new_name)] + rename.old_name
+        old_row["path"] = _old_path(new_row, rename.new_name, rename.old_name)
         findings += _residue(corpus, old_row, rename.new_id, "renamed", leaves, claims)
     for row in surface_diff.removed:
         findings += _residue(corpus, row, row["id"], "removed", leaves, claims)
     return sorted(findings, key=dataclasses.astuple)
+
+
+def _old_path(new_row: dict[str, Any], new_name: str, old_name: str) -> str:
+    """Return the head row's path with its leaf respelled to the old name.
+
+    A keyword's path is ``name=``, so the leaf sits before the trailing ``=``; every
+    other kind ends in the leaf.
+
+    Parameters
+    ----------
+    new_row
+        Head row of a renamed name.
+    new_name, old_name
+        Head and base leaf spellings.
+
+    Returns
+    -------
+    str
+        The old spelling as a path (``Owner.old``, ``tl.ns.old``, ``old=``).
+    """
+
+    path = str(new_row["path"])
+    suffix = "=" if new_row["kind"] == "param" else ""
+    if not path.endswith(new_name + suffix):
+        raise ValueError(f"path {path!r} does not end with {new_name + suffix!r}")
+    return path[: len(path) - len(new_name) - len(suffix)] + old_name + suffix
 
 
 def _missing(corpus: Corpus, row: dict[str, Any], change: str) -> list[Finding]:
