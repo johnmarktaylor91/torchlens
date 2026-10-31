@@ -19,8 +19,9 @@ metadata invariants, intervention readiness, and unified `.tlspec` manifest sche
 | `_pristine.py` | Pristine-oracle helpers (fixwave-5 R75-1): the untouched-baseline capture the replay oracle compares against |
 | `exemptions.py` | Replay/perturbation exemption registries and dynamic checks |
 | `_index_domain.py` | Index-domain slot/domain facts and in-domain index perturbations (rotation, single-entry move) for the gather/scatter/embedding/cross_entropy family |
-| `_destination_coverage.py` | Destination-overwrite coverage proofs for indexed writes (`__setitem__`, `index_put`, `scatter`): exact-once coverage and unique targets |
+| `_destination_coverage.py` | Destination-overwrite coverage proofs for indexed writes (`__setitem__`, `index_put`, `scatter`): exact-once coverage and unique targets; the pure `out=` destination predicate (`_perturbed_parents_only_occupy_out_kwarg`) |
 | `_value_predicates.py` | Saved-value predicates (all zero / inf / NaN / finite, constant along a dim) read by the posthoc value-proof decisions |
+| `_script_metadata_proof.py` | TorchScript-graph proof (nested scripted calls inlined) that a `jitscript` boundary call reads a perturbed tensor argument only through `aten::size`, `aten::dim`, `aten::numel`, `prim::dtype` or `prim::device`; recorded as exemption reason `torchscript_metadata_only_argument` with its proof; any other use, or an argument type that can hold a tensor below the recorded slot map, keeps the perturbation check |
 | `_integer_mod_proof.py` | Saved-call proof that an integer `% +-1` is identically zero (used by the `integer_mod_unit_divisor` posthoc decision) |
 | `_replay_device.py` | Replay device alignment when an `output_device` capture keeps saved payloads off the op's device: parent payloads move to the slot's saved-argument device, recomputed outputs to the saved output's device |
 | `_shift_probe.py` | `VALUE_STEP_STRATEGIES` (the value-step retry rungs, in order) and `lift_min_entry_values`: the non-uniform `lift_min_entry` perturbation retry (lifts one entry above the max), the probe uniform steps cannot give a shift-invariant child such as a saturated softmax |
