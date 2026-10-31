@@ -65,7 +65,7 @@ class NarrationEvent:
 
     ``label`` is TIER-HONEST: the spelling THE OBJECT RETURNED BY THIS CALL
     will accept for lookup (the raw in-flight label on both live tiers;
-    post-hoc rendering re-derives final labels natively). ``direction`` is
+    post-hoc rendering re-derives final labels natively). ``signal`` is
     reserved for backward narration and is always ``"forward"`` in V1.
     """
 

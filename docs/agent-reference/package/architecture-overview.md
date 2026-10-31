@@ -2,7 +2,7 @@
 
 ```
 import torchlens
-  |- exposes 116 top-level public names in __all__
+  |- exposes 114 top-level public names in __all__
   |- eagerly imports ONLY the light spine: options, errors/_state, ir.*,
   |  captured_run, observers, quantities, _deprecations, _errors, _io,
   |  _literals, _save_budget, utils,

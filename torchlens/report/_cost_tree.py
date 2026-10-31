@@ -112,9 +112,9 @@ class CostTreeRow:
     self_pct / subtree_pct:
         The same families as percents of the whole-capture KNOWN partition
         total (D4/D6) -- never of a visible-row sum.
-    n_ops:
+    num_ops:
         Compute ops owned directly (self scope).
-    n_unknown_ops:
+    num_unknown_ops:
         Directly-owned ops with no cost rule (an EVENT count, D4).
     passes:
         Distinct pass count over directly-owned ops (annotated, never

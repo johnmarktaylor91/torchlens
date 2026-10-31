@@ -47,7 +47,7 @@ class RosterModel:
         ``"pretrained"`` (pinned checkpoint with digest evidence) or
         ``"config_built"`` (random weights). Only pretrained rows can earn
         a claim -- toys earn nothing, not even suffixed.
-    build:
+    builder:
         Zero-arg factory returning ``(model, example_input)``.
     checkpoint_evidence:
         Pinned checkpoint revision/digest for pretrained rows, else ``""``.

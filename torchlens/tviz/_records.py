@@ -683,7 +683,7 @@ class PredictionTrajectory:
         Per-layer probability and ONE-BASED rank of the tracked token.
     lens_source:
         ``"model_head"`` or ``"user"``.
-    validated:
+    is_validated:
         Whether the reconstructed lens passed numeric validation; ``False``
         for user lenses, rendered as unvalidated.
     tie_convention:

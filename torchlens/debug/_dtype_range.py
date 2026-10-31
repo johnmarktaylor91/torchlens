@@ -24,9 +24,9 @@ class DTypeRangeAudit(DebugReport):
     ----------
     findings:
         Evidence-backed findings following the :class:`AuditFinding` shape.
-    n_ops_audited:
+    num_audited_ops:
         Operations with one saved native tensor payload that was inspected.
-    n_ops_total:
+    num_ops:
         Compute and output operations present in the trace.
     """
 

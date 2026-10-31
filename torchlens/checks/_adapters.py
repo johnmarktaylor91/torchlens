@@ -32,7 +32,7 @@ _KNOWN_OPTIMIZERS: dict[str, bool] = {
 class OptimizerFacts:
     """Adapter-read facts about one optimizer (memo item 4).
 
-    ``known`` gates every derived band: an unknown optimizer yields
+    ``is_known`` gates every derived band: an unknown optimizer yields
     ``band_reason`` instead of a guessed decay/momentum model.
     """
 

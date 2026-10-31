@@ -37,7 +37,7 @@ class ScanRow:
 
     ``name`` is the canonical qualified name; ``aliases`` preserves every
     other name bound to the SAME tensor object (tied weights, double-
-    registered buffers) -- deduped by identity, no alias lost. ``audited``
+    registered buffers) -- deduped by identity, no alias lost. ``is_audited``
     is False exactly when ``skip_reason`` says why.
     """
 

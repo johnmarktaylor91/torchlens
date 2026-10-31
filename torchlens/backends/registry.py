@@ -257,7 +257,7 @@ class BackendCapabilities:
     ----------
     backward_capture:
         Whether true backward graph capture is supported.
-    validation_replay:
+    has_validation_replay:
         Whether the backend can perform replay validation.
     fastlog:
         Whether sparse ``tl.record`` capture is supported.

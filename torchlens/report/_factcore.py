@@ -192,8 +192,8 @@ class ParamFacts:
 class MemoryFacts:
     """Payload byte figures under the D8 scope law.
 
-    ``at_capture_bytes`` is the immutable capture fact (what the capture
-    retained when it ran); ``retained_now_bytes`` is what THIS object holds
+    ``captured_bytes`` is the immutable capture fact (what the capture
+    retained when it ran); ``retained_bytes`` is what THIS object holds
     (present or lazily materializable payloads) -- zero on a
     payload-stripped artifact even though the capture once held 64 MB.
     """

@@ -50,15 +50,15 @@ class InterventionValidationReport:
 
     Parameters
     ----------
-    invariance:
+    is_invariant:
         Whether a baseline forward validation succeeds.
-    specificity:
+    is_specific:
         Whether hook targets can be represented without ambiguity.
-    completeness:
+    is_complete:
         Whether the validation exercised all requested axes.
-    consistency:
+    is_consistent:
         Whether repeated validation decisions agree.
-    locality:
+    is_local:
         Whether intervention checks stay local to the requested model/input.
     details:
         Human-readable axis details.

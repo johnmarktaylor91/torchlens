@@ -42,7 +42,7 @@ class CompatRow:
         Compatibility status for this model/input pair.
     severity:
         User-facing severity for the row.
-    detected:
+    is_detected:
         Whether the row's condition was detected in the supplied model/input.
     details:
         Explanation of the finding.
@@ -69,7 +69,7 @@ class CompatReport:
         Qualified type name for the inspected model.
     torch_version:
         PyTorch version used for the inspection.
-    rows:
+    checks:
         Truth-table rows for the inspected model/input pair.
     """
 

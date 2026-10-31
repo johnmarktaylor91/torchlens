@@ -85,7 +85,7 @@ class CheckFinding:
     """One immutable check finding (memo 4.5).
 
     ``values`` carries the measured numbers (already-reduced floats only);
-    ``names`` the offending parameter/site names with every alias of a tied
+    ``param_names`` the offending parameter/site names with every alias of a tied
     tensor preserved; ``follow_up`` the call that localizes the culprit
     (memo D3: the finding names a cone, the frontier names the culprit).
     """

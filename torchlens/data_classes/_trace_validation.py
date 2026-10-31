@@ -588,7 +588,7 @@ class TraceValidationMixin(_TraceMixinBase):
             the run, so repeated ``run()`` calls leave the model bit-identical.
             ``True`` skips the restore: declared-state mutations persist on the
             live model (episode/rollout state accumulation). The report
-            discloses the choice (``report.state_carried``); verification is
+            discloses the choice (``report.has_carried_state``); verification is
             untouched -- the NEXT run from mutated state faces every gate as
             usual. Refuses typed with ``fast=True`` and on loaded providers
             (staged clones have no live model for state to carry into).

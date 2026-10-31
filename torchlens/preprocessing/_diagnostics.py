@@ -50,7 +50,7 @@ class DiagnosticFinding:
 
     Attributes
     ----------
-    check:
+    check_name:
         Check name (``"nonfinite"`` / ``"dtype_regime"`` / ``"layout"`` /
         ``"confinement"``).
     outcome:

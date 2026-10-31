@@ -71,7 +71,7 @@ CHECK_RETRACE_MISMATCH = "retrace_mismatch"
 class ValidationFailure:
     """A structured description of the first surfaced validation mismatch.
 
-    Every field is optional so partial information is still useful. ``check`` is
+    Every field is optional so partial information is still useful. ``check_name`` is
     always populated and names which validation phase fired. The tensor-shaped
     fields (``saved_shape`` etc.) are filled in only for the numeric replay /
     ground-truth paths where a saved-vs-expected tensor pair exists.
@@ -168,7 +168,7 @@ class ValidationDiagnostic:
 
     Parameters
     ----------
-    check:
+    check_name:
         Stable name for the validation diagnostic source.
     message:
         Human-readable explanation of the diagnostic.

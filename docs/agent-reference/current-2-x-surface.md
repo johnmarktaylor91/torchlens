@@ -1,6 +1,6 @@
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 116 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 114 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,

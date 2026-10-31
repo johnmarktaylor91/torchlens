@@ -83,7 +83,7 @@ class ConformanceReport:
         Families executed per realism class.
     earned_tier:
         Highest tier every executed case passed, or ``""`` when none.
-    claim_eligible:
+    is_claim_eligible:
         ``True`` only when the pretrained-family floor is met; toys earn
         nothing regardless of pass rate.
     environment:

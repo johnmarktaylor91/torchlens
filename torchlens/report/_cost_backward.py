@@ -18,7 +18,7 @@ states:
   compute is COUNTED over the ATen calls that backward dispatched (each
   pass's ``BackwardPass.dispatched_ops``), exact for the matmul and
   convolution families at fma2 (FlopCounterMode's convention); every
-  recorded op outside those families is named in ``uncounted_ops``, never
+  recorded op outside those families is named in ``uncounted_op_counts``, never
   zeroed or estimated. Each pass's count is attributed to the GradFn calls
   and forward ops that did the work, with a named unattributed bucket
   (``BackwardStatus.flops_attributions``); a loaded trace reads the count saved
@@ -163,13 +163,13 @@ class BackwardStatus:
     (exact) in the ``grad_disabled`` state; ``None`` (unknown) in the
     ``grad_enabled_unobserved`` state; in the ``backward_observed`` state the
     count over the ATen calls the observed backward dispatched, exact for
-    the matmul and convolution families (``counting_convention``), or
+    the matmul and convolution families (``convention``), or
     ``None`` when a pass has no dispatch record on this object.
     ``executed_flops_per_pass`` pairs each observed pass index with its
-    count (``None`` where unrecorded); ``uncounted_ops`` names every recorded
+    count (``None`` where unrecorded); ``uncounted_op_counts`` names every recorded
     op kind outside the counted families with its call count -- never
     zeroed, never estimated. ``measured_seconds`` is per-fire backward
-    timing when the live trace recorded it. ``attributions`` holds one
+    timing when the live trace recorded it. ``flops_attributions`` holds one
     ``BackwardFlopsAttribution`` per counted pass (rows by GradFn call and
     forward op); ``unattributed_flops`` is the counted work that ran under no
     recorded node, so the rows plus it equal ``executed_flops`` exactly;
@@ -249,7 +249,7 @@ class BackwardStatus:
         names = [name for name, _count in self.uncounted_op_counts]
         shown = ", ".join(names[:_STATUS_LINE_NAME_LIMIT])
         more = len(names) - _STATUS_LINE_NAME_LIMIT
-        tail = f" (+{more} more; read .uncounted_ops)" if more > 0 else ""
+        tail = f" (+{more} more; read .uncounted_op_counts)" if more > 0 else ""
         return f"; {len(names)} op kind(s) outside those families not counted: {shown}{tail}"
 
 
