@@ -37,10 +37,14 @@ class InputGradientInForward(nn.Module):
 
 
 class InplaceOnNonLeaf(nn.Module):
-    """An in-place op whose receiver is a non-leaf activation."""
+    """An in-place op whose receiver is a non-leaf activation with a live node."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = torch.relu(x)
+        h = torch.relu(self.fc(x))
         h.add_(1.0)
         return h * 2.0
 
