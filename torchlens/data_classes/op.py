@@ -2675,18 +2675,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         return len(self.parents) > 0
 
     @property
-    def num_parents(self) -> int:
-        """Number of distinct parent Ops feeding this Op."""
-
-        return len(self.parents)
-
-    @property
-    def num_children(self) -> int:
-        """Number of distinct child Ops fed by this Op."""
-
-        return len(self.children)
-
-    @property
     def edge_uses(self) -> tuple[EdgeUseRecord, ...]:
         """Per-edge parent-use records captured for this Op.
 
@@ -2839,11 +2827,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def has_params(self) -> bool:
         """Whether this operation used model parameters."""
         return len(self._param_barcodes) > 0
-
-    @property
-    def num_param_tensors(self) -> int:
-        """Number of parameter tensors used by this operation."""
-        return len(self._param_barcodes)
 
     @property
     def input_ops(self) -> "OpAccessor":
@@ -3070,12 +3053,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         """
 
         return bool(self.has_grad)
-
-    @property
-    def tensor(self) -> Any:
-        """Alias for the raw saved out."""
-
-        return self.out
 
     @property
     def ops(self) -> tuple["Op", ...]:

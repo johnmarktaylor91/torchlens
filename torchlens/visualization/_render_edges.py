@@ -569,7 +569,7 @@ def _collapsed_module_remainder_stats(
 
     module = trace.modules[address]
     stats = {
-        "num_layers": int(getattr(module, "num_layers", 0) or 0),
+        "num_layers": len(getattr(module, "layer_labels", ()) or ()),
         "num_params": int(getattr(module, "num_params", 0) or 0),
         "num_params_trainable": int(getattr(module, "num_params_trainable", 0) or 0),
         "num_params_frozen": int(getattr(module, "num_params_frozen", 0) or 0),

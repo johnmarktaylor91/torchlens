@@ -49,7 +49,7 @@ def test_activation_transform_keeps_raw_tensor_and_transformed_metadata() -> Non
     trace = tl.trace(_TinyModel(), x, save=SaveOptions(activation_transform=lambda t: t.mean()))
     layer = _first_transformed_layer(trace)
 
-    assert layer.tensor is layer.out
+    assert not hasattr(layer, "tensor")
     assert layer.out.shape == layer.shape
     assert layer.transformed_out.shape == torch.Size([])
     assert layer.transformed_out_shape == ()
@@ -83,7 +83,7 @@ def test_save_raw_outs_false_keeps_raw_metadata_only() -> None:
     layer = _first_transformed_layer(trace)
 
     assert layer.out is None
-    assert layer.tensor is None
+    assert layer.out is None
     assert layer.shape is not None
     assert layer.dtype is not None
     assert layer.activation_memory > 0

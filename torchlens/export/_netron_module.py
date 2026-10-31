@@ -257,7 +257,7 @@ def _module_call_attrs(scope: _Scope, display: str) -> list[NetronAttr]:
             attrs.append(
                 NetronAttr("observed_duration_inclusive_us", "i", int(float(duration) * 1e6))
             )
-    ops_inside = getattr(call, "num_ops", None)
+    ops_inside = len(call.ops) if hasattr(call, "ops") else None
     if ops_inside:
         attrs.append(NetronAttr("ops_inside", "i", int(ops_inside)))
     param_bytes = getattr(call, "internal_param_memory", None)

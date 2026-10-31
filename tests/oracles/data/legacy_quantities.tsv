@@ -24,7 +24,6 @@ Layer.macs_forward	Macs	quantity	macs_forward	green	tests/test_numbers_truth_com
 Layer.module_call_depth	int	quantity	module_call_depth	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
 Layer.num_args_total	int	quantity	num_args_total	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Layer.num_autograd_tensors	int	quantity	num_autograd_tensors	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
-Layer.num_children	int	quantity	num_children	green	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts (I2)	-
 Layer.num_kwargs	int	quantity	num_kwargs	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Layer.num_ops	int	quantity	num_ops	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
 Layer.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
@@ -33,7 +32,6 @@ Layer.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	green
 Layer.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Layer.num_params_frozen	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Layer.num_params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
-Layer.num_parents	int	quantity	num_parents	green	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts (I2)	-
 Layer.num_passes	int	quantity	num_passes	green	tests/test_loop_module_rolling.py::test_reused_single_op_module_stays_a_loop (I2)	-
 Layer.num_pos_args	int	quantity	num_pos_args	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Layer.ordinal_index	int	identifier	-	-	-	id/index/line
@@ -138,7 +136,6 @@ Op.min_distance_to_output	int	quantity	min_distance_to_output	green	tests/oracle
 Op.module_call_depth	int	quantity	module_call_depth	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
 Op.num_args_total	int	quantity	num_args_total	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Op.num_autograd_tensors	int	quantity	num_autograd_tensors	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
-Op.num_children	int	quantity	num_children	green	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts (I2)	-
 Op.num_inputs	int	quantity	num_inputs	green	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts (I2)	-
 Op.num_kwargs	int	quantity	num_kwargs	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Op.num_param_tensors	int	quantity	num_param_tensors	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
@@ -147,7 +144,6 @@ Op.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	green	te
 Op.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Op.num_params_frozen	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Op.num_params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
-Op.num_parents	int	quantity	num_parents	green	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts (I2)	-
 Op.num_passes	int	quantity	num_passes	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
 Op.num_pos_args	int	quantity	num_pos_args	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Op.ordinal_index	int	identifier	-	-	-	id/index/line

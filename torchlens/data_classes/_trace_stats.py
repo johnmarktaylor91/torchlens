@@ -1244,19 +1244,19 @@ class TraceStatsMixin(_TraceMixinBase):
         compute_ops = list(self.compute_ops)
         if not compute_ops:
             return 0.0
-        return sum(op.num_children for op in compute_ops) / len(compute_ops)
+        return sum(len(op.children) for op in compute_ops) / len(compute_ops)
 
     @property
     def max_in_degree(self: "Trace") -> int:
         """Maximum number of parents over compute Ops."""
 
-        return max((op.num_parents for op in self.compute_ops), default=0)
+        return max((len(op.parents) for op in self.compute_ops), default=0)
 
     @property
     def max_out_degree(self: "Trace") -> int:
         """Maximum number of children over compute Ops."""
 
-        return max((op.num_children for op in self.compute_ops), default=0)
+        return max((len(op.children) for op in self.compute_ops), default=0)
 
     @property
     def num_saved_grad_ops(self: "Trace") -> int:

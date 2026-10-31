@@ -106,10 +106,6 @@ BND-Q-093	OBL-Q-NUM-INTERNAL-SOURCE-OPS	torchlens.Trace.num_internal_source_ops	
 BND-Q-094	OBL-Q-NUM-INTERNAL-SOURCE-LAYERS	torchlens.Trace.num_internal_source_layers	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_graph_counts.py::test_internal_source_and_sink_counts
 BND-Q-095	OBL-Q-NUM-INTERNAL-SINK-OPS	torchlens.Trace.num_internal_sink_ops	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_graph_counts.py::test_internal_source_and_sink_counts
 BND-Q-096	OBL-Q-NUM-INTERNAL-SINK-LAYERS	torchlens.Trace.num_internal_sink_layers	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_graph_counts.py::test_internal_source_and_sink_counts
-BND-Q-097	OBL-Q-NUM-PARENTS	torchlens.Layer.num_parents	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts
-BND-Q-098	OBL-Q-NUM-PARENTS	torchlens.Op.num_parents	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts
-BND-Q-099	OBL-Q-NUM-CHILDREN	torchlens.Layer.num_children	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts
-BND-Q-100	OBL-Q-NUM-CHILDREN	torchlens.Op.num_children	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts
 BND-Q-101	OBL-Q-NUM-INPUTS	torchlens.Op.num_inputs	CR1	declared	untouched	no		n/a	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts
 BND-Q-102	OBL-Q-NUM-INTERNAL-EDGES	torchlens.data_classes.module.Module.num_internal_edges	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts
 BND-Q-103	OBL-Q-NUM-INTERNAL-EDGES	torchlens.data_classes.module.ModuleCall.num_internal_edges	CR1	submodule	untouched	no		n/a	tests/oracles/test_legacy_graph_counts.py::test_module_scope_edge_and_layer_counts

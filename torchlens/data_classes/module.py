@@ -531,14 +531,8 @@ class ModuleCall:
 
     @property
     def num_layers(self) -> int:
-        """Number of distinct Layers among this call's Ops (``num_ops`` counts each pass)."""
+        """Number of distinct Layers among this call's Ops (``len(ops)`` counts each pass)."""
         return len({str(op_label).rsplit(":", 1)[0] for op_label in self.ops})
-
-    @property
-    def num_ops(self) -> int:
-        """Number of Ops in this module call."""
-
-        return len(self.ops)
 
     @property
     def name(self) -> str:
@@ -616,7 +610,7 @@ class ModuleCall:
     def num_param_tensors(self) -> int:
         """Number of parameter tensors owned by the called Module."""
 
-        return self.module.num_param_tensors
+        return len(self.module.params)
 
     @property
     def num_param_tensors_trainable(self) -> int:
@@ -1595,11 +1589,6 @@ class Module:
         return len(self.all_addresses) > 1
 
     @property
-    def num_layers(self) -> int:
-        """Number of unique layers in this module."""
-        return len(self.layer_labels)
-
-    @property
     def layers(self) -> list[Any]:
         """Layer records belonging to this Module."""
 
@@ -1758,12 +1747,6 @@ class Module:
         """
 
         return Bytes(sum(int(param.param_memory or 0) for param in self.params))
-
-    @property
-    def total_param_memory(self) -> Bytes:
-        """Bytes used by this Module's own-address parameters."""
-
-        return self.param_memory
 
     @property
     def internal_param_memory(self) -> Bytes:
@@ -2158,12 +2141,6 @@ class Module:
             )
 
     @property
-    def num_param_tensors(self) -> int:
-        """Number of parameter tensors owned by this Module (the root owns all)."""
-
-        return len(self.params)
-
-    @property
     def num_param_tensors_trainable(self) -> int:
         """Number of trainable parameter tensors owned by this Module (the root owns all)."""
 
@@ -2384,7 +2361,7 @@ class Module:
 
     def __len__(self) -> int:
         """Return the total number of layers across all ops of this module."""
-        return self.num_layers
+        return len(self.layer_labels)
 
     def __getitem__(self, ix: int | str) -> Any:
         """Return the Op at position ix within this module's layer list.
@@ -2487,7 +2464,7 @@ class Module:
         for label in self.layer_labels:
             entry = self._source_trace[label]
             row = _layer_log_to_row(entry)
-            row["num_ops"] = getattr(entry, "num_ops", 1)
+            row["num_ops"] = len(entry.ops)
             rows.append(row)
         return pd.DataFrame(rows, columns=columns)
 

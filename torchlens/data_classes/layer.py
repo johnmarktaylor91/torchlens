@@ -751,11 +751,6 @@ class Layer(_SelectionOperand):
         return len(self._param_barcodes) > 0
 
     @property
-    def num_param_tensors(self) -> int:
-        """Number of parameter tensors used by this layer."""
-        return len(self._param_barcodes)
-
-    @property
     def num_param_tensors_trainable(self) -> int:
         """Number of trainable parameter tensors used by this Layer."""
 
@@ -790,12 +785,6 @@ class Layer(_SelectionOperand):
         """Whether any Op in this Layer is disconnected from the main graph."""
 
         return any(op.is_orphan for op in self.ops.values())
-
-    @property
-    def num_ops(self) -> int:
-        """Number of Ops aggregated by this Layer."""
-
-        return len(self.ops)
 
     @property
     def fx_label(self) -> str | None:
@@ -1234,13 +1223,6 @@ class Layer(_SelectionOperand):
         return self._single_pass_or_error("out")
 
     @property
-    def tensor(self) -> Any:
-        """Alias for the raw saved out on single-pass layers."""
-
-        self._warn_synthesized_read("Layer.tensor")
-        return self._single_pass_or_error("tensor")
-
-    @property
     def transformed_out(self) -> Any:
         """Transformed out on single-pass layers."""
 
@@ -1431,18 +1413,6 @@ class Layer(_SelectionOperand):
             ``True`` when at least one pass has graph parents.
         """
         return any(p.has_parents for p in self.ops.values())
-
-    @property
-    def num_parents(self) -> int:
-        """Number of distinct parent Layers feeding this Layer."""
-
-        return len(self.parents)
-
-    @property
-    def num_children(self) -> int:
-        """Number of distinct child Layers fed by this Layer."""
-
-        return len(self.children)
 
     @property
     def siblings(self) -> list[str]:

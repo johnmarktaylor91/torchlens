@@ -145,23 +145,16 @@ _SUMMED_FIELDS = frozenset(
         "total_macs_backward",
         "total_macs_total",
         "total_func_duration",
-        # Aggregate distinct-union cardinalities (exact on the rolled node).
-        "num_children",
-        "num_parents",
     }
 )
 
 #: Legend wording per summed-family source (default: "total across passes").
-_AGGREGATE_LEGEND_WORDING = {
-    "num_children": "distinct across all passes",
-    "num_parents": "distinct across all passes",
-}
+_AGGREGATE_LEGEND_WORDING: dict[str, str] = {}
 
 _STRUCTURAL_FIELDS = frozenset(
     {
         "type_index",  # inherited from pass 1 for every pass (labeling step 8)
         "num_passes",  # group-level, assigned to every member
-        "num_ops",  # == number of passes
         "num_args_total",
         "num_pos_args",
         "num_kwargs",
@@ -170,7 +163,6 @@ _STRUCTURAL_FIELDS = frozenset(
         "num_params_trainable",
         "num_params_frozen",
         "total_param_memory",
-        "num_param_tensors",
         "num_param_tensors_trainable",
         "num_param_tensors_frozen",
     }
