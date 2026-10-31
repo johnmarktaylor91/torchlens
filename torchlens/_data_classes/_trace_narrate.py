@@ -17,7 +17,7 @@ class TraceNarrateMixin:
     def narrate(self, last: int | None = None, *, select: Any = None) -> str:
         """Render this trace's events in the live-narration grammar (snoop D5).
 
-        Post-hoc narration works when ``echo=`` was never enabled: the same
+        Post-hoc narration works when ``narrate=`` was never enabled: the same
         renderer serves ``Trace``, ``PartialTrace``, and ``Recording``. Final
         labels render natively here; ``trace.nonfinite_ops`` evidence (when
         available) flags the first nonfinite op in the footer.

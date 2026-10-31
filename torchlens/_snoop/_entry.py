@@ -23,7 +23,7 @@ def resolve_echo_capture_options(
     capture_options: Any,
     chunked: bool,
 ) -> Any:
-    """Normalize ``echo=`` and refuse unsupported option compositions.
+    """Normalize ``narrate=`` and refuse unsupported option compositions.
 
     Runs on EVERY torch trace entry, echo armed or not: an ``EchoOptions``
     routed into ``save=``/``hooks=`` refuses with the measured receipts
@@ -34,7 +34,7 @@ def resolve_echo_capture_options(
     Parameters
     ----------
     echo:
-        Raw ``echo=`` value from the facade (``None``/``False`` disarm).
+        Raw ``narrate=`` value from the facade (``None``/``False`` disarm).
     save:
         The ``save=`` predicate, checked for echo-shaped routing.
     capture_options:
@@ -57,7 +57,7 @@ def resolve_echo_capture_options(
         return None
     if bool(getattr(capture_options, "cache", False)):
         raise NarrationConfigError(
-            "echo= cannot combine with cache=True: a cache hit replays a stored "
+            "narrate= cannot combine with cache=True: a cache hit replays a stored "
             "product and runs NO forward, so there is nothing live to narrate. "
             "Remedy: drop cache=True, or narrate the cached trace post-hoc via "
             "trace.narrate().",
@@ -66,9 +66,9 @@ def resolve_echo_capture_options(
         )
     if chunked:
         raise NarrationConfigError(
-            "echo= cannot combine with chunked forwards (chunk_size=): the chunk "
+            "narrate= cannot combine with chunked forwards (chunk_size=): the chunk "
             "fan-out runs several forwards into one Trace and per-chunk narration "
-            "interleaves. Remedy: trace chunks individually with echo=, or narrate "
+            "interleaves. Remedy: trace chunks individually with narrate=, or narrate "
             "the assembled trace post-hoc via trace.narrate().",
             code="echo_chunked_unsupported",
             remedy="trace chunks individually, or use trace.narrate() post-hoc",
@@ -85,16 +85,16 @@ def resolve_echo_capture_options(
 
 
 def refuse_echo_non_torch(echo: Any, resolved_spec: Any) -> None:
-    """Refuse ``echo=`` on a non-torch backend, never a silent no-op.
+    """Refuse ``narrate=`` on a non-torch backend, never a silent no-op.
 
     The echo seams are torch-only in wave 1; a preview backend swallowing
-    ``echo=`` would read as "nothing matched". Mirrors the episode refusal's
+    ``narrate=`` would read as "nothing matched". Mirrors the episode refusal's
     spec-name spelling (`_refuse_non_torch_episode`).
 
     Parameters
     ----------
     echo:
-        Raw ``echo=`` value from the facade (``None``/``False`` disarm).
+        Raw ``narrate=`` value from the facade (``None``/``False`` disarm).
     resolved_spec:
         Resolved ``BackendSpec`` for the capture.
     """
@@ -105,7 +105,7 @@ def refuse_echo_non_torch(echo: Any, resolved_spec: Any) -> None:
     if spec_name == "torch":
         return
     raise NarrationConfigError(
-        f"echo= live narration is torch-only in this release; backend "
+        f"narrate= live narration is torch-only in this release; backend "
         f"{spec_name!r} has no narration seams. Remedy: capture on "
         "the torch backend, or narrate post-hoc via trace.narrate().",
         code="echo_backend_unsupported",

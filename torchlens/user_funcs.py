@@ -2826,7 +2826,7 @@ def trace(
         )
         from ._snoop._entry import refuse_echo_non_torch
 
-        # Never a silent no-op: echo= is torch-only in wave 1 (typed refusal).
+        # Never a silent no-op: narrate= is torch-only in wave 1 (typed refusal).
         refuse_echo_non_torch(narrate, resolved_spec)
         _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
         _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
@@ -3059,7 +3059,7 @@ def _trace_torch_model(
             remedy="bundle positional inputs into one tuple; use save= for selection",
         )
     _reject_unsupported_torch_trace_option_values(capture_options)
-    # Echo teaching refusals fire whether or not echo= is armed: EchoOptions
+    # Echo teaching refusals fire whether or not narrate= is armed: EchoOptions
     # routed into save=/hooks= refuses with the measured receipts, and
     # echo x cache/chunked/structure_only composition refuses typed (snoop D1).
     from ._snoop._entry import resolve_echo_capture_options

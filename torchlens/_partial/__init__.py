@@ -168,7 +168,7 @@ class PartialTrace:
     def narrate(self, last: int | None = None, *, select: Any = None) -> str:
         """Render the recorded frontier in the live-narration grammar.
 
-        The headline crash workflow (snoop D5, tail 1): works when ``echo=``
+        The headline crash workflow (snoop D5, tail 1): works when ``narrate=``
         was never enabled, because the partial the library already attaches
         to the exception carries everything a line needs. The op that raised
         is ABSENT from the record (it never produced an output); the footer

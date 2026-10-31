@@ -1,4 +1,4 @@
-"""``echo=`` normalization and the entry-time typed refusals (snoop D1/D3).
+"""``narrate=`` normalization and the entry-time typed refusals (snoop D1/D3).
 
 One normalizer serves every mount (``tl.trace``, ``tl.record``,
 ``fastlog.Recorder``): the accepted spellings are ``True`` (everything plus
@@ -41,7 +41,7 @@ def _refuse_finalized_selector(selector: Any) -> None:
     if blocked:
         blocked_names = sorted(str(kind) for kind in blocked)
         raise NarrationConfigError(
-            f"echo= selector needs finalized graph facts ({blocked_names}) that do not "
+            f"narrate= selector needs finalized graph facts ({blocked_names}) that do not "
             "exist during a live forward; TorchLens will not silently run a second pass "
             "and narrate the replay as though it were live. Remedy: narrate post-hoc via "
             "trace.narrate(select=...), or scope live echo with tl.func/tl.in_module.",
@@ -51,12 +51,12 @@ def _refuse_finalized_selector(selector: Any) -> None:
 
 
 def normalize_echo(narrate: Any) -> NarrationOptions | None:
-    """Normalize one ``echo=`` value to a grouped ``EchoOptions`` (or off).
+    """Normalize one ``narrate=`` value to a grouped ``EchoOptions`` (or off).
 
     Parameters
     ----------
     narrate:
-        The user's ``echo=`` value on any mount.
+        The user's ``narrate=`` value on any mount.
 
     Returns
     -------
@@ -88,7 +88,7 @@ def normalize_echo(narrate: Any) -> NarrationOptions | None:
 
 
 def _coerce_echo_value(echo: Any) -> NarrationOptions:
-    """Coerce one armed ``echo=`` spelling to ``EchoOptions``, or refuse typed."""
+    """Coerce one armed ``narrate=`` spelling to ``EchoOptions``, or refuse typed."""
 
     if isinstance(echo, NarrationOptions):
         return echo
@@ -98,9 +98,9 @@ def _coerce_echo_value(echo: Any) -> NarrationOptions:
         if echo == "modules":
             return NarrationOptions(select="modules")
         raise NarrationConfigError(
-            f"echo={echo!r} is not a live narration scope: label/substring selections "
+            f"narrate={echo!r} is not a live narration scope: label/substring selections "
             "resolve against FINAL labels, which do not exist during a live forward. "
-            "Remedy: pass echo=True, echo='modules', a live selector such as "
+            "Remedy: pass narrate=True, narrate='modules', a live selector such as "
             "tl.in_module(...), or narrate post-hoc via trace.narrate(select=...).",
             code="echo_argument_invalid",
             remedy="pass True, 'modules', a live selector, or EchoOptions",
@@ -108,7 +108,7 @@ def _coerce_echo_value(echo: Any) -> NarrationOptions:
     if callable(echo):
         return NarrationOptions(select=echo)
     raise NarrationConfigError(
-        f"echo= received unsupported type {type(echo).__name__}. Remedy: pass True, "
+        f"narrate= received unsupported type {type(echo).__name__}. Remedy: pass True, "
         "'modules', a live selector/callable, or tl.options.NarrationOptions.",
         code="echo_argument_invalid",
         remedy="pass True, 'modules', a live selector, or EchoOptions",
@@ -167,18 +167,18 @@ def refuse_echo_shaped_predicate(value: Any, *, slot: str) -> None:
         raise NarrationConfigError(
             "EchoOptions is not a save predicate: the save slot is evaluated twice per "
             "declined op (the measured 554-evaluations-for-277-events alias retry), and a "
-            "narrator that saves nothing declines everything. Remedy: pass echo=EchoOptions "
+            "narrator that saves nothing declines everything. Remedy: pass narrate=EchoOptions "
             "(narration) and keep save= for retention -- the two scopes are independent.",
             code="echo_as_save_predicate",
-            remedy="pass it via echo=; keep save= for retention",
+            remedy="pass it via narrate=; keep save= for retention",
         )
     raise NarrationConfigError(
         "EchoOptions is not a hook: narration through hooks= pays the intervention "
         "runtime's content probes and provenance records (+101% measured trace cost) and "
-        "cannot render module path, depth, or pass. Remedy: pass echo=EchoOptions -- the "
+        "cannot render module path, depth, or pass. Remedy: pass narrate=EchoOptions -- the "
         "read-only observer slot is the one narration mechanism.",
         code="echo_via_hooks_unsupported",
-        remedy="pass it via echo=",
+        remedy="pass it via narrate=",
     )
 
 

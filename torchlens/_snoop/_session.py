@@ -122,7 +122,7 @@ def _describe_attempt_inputs(
 
 
 class EchoSession:
-    """Per-capture narration state machine behind ``echo=`` (both tiers).
+    """Per-capture narration state machine behind ``narrate=`` (both tiers).
 
     Parameters
     ----------
@@ -468,7 +468,7 @@ class EchoSession:
                 self._module_stack.append(frame)
                 if self._select_all:
                     # Unscoped narration prints structure lines immediately
-                    # (default ON with echo=True; the review's op-only default is a
+                    # (default ON with narrate=True; the review's op-only default is a
                     # recorded dissent, snoop s10 D3).
                     frame.printed = True
                     self._deliver(
@@ -613,7 +613,7 @@ class EchoSession:
                     TorchLensWarning(
                         f"echo narrated zero events: selector {self._selector!r} matched "
                         f"nothing across {self.ops_seen} op events in a {status} capture. "
-                        "Remedy: check the selector against trace labels, or use echo=True",
+                        "Remedy: check the selector against trace labels, or use narrate=True",
                         code="echo_zero_match",
                     ),
                     stacklevel=2,

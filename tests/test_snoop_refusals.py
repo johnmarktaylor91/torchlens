@@ -35,7 +35,7 @@ def _code(excinfo: pytest.ExceptionInfo) -> str:
 
 
 def test_echo_string_selection_refuses_with_post_hoc_remedy() -> None:
-    """Label/substring echo= spellings refuse: final labels are not live."""
+    """Label/substring narrate= spellings refuse: final labels are not live."""
 
     with pytest.raises(NarrationConfigError) as excinfo:
         tl.trace(OneOp(), torch.randn(2, 4), narrate="relu_1_1")
@@ -44,7 +44,7 @@ def test_echo_string_selection_refuses_with_post_hoc_remedy() -> None:
 
 
 def test_echo_unsupported_type_refuses() -> None:
-    """Non-callable echo= objects refuse typed."""
+    """Non-callable narrate= objects refuse typed."""
 
     with pytest.raises(NarrationConfigError) as excinfo:
         normalize_echo(123)
@@ -144,7 +144,7 @@ def test_record_with_only_echo_is_a_legal_capture() -> None:
 
 
 def test_echo_on_non_torch_backend_refuses_typed() -> None:
-    """echo= on a preview backend refuses typed, never a silent no-op."""
+    """narrate= on a preview backend refuses typed, never a silent no-op."""
 
     from types import SimpleNamespace
 

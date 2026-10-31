@@ -1,4 +1,4 @@
-"""W051-TRACK / AUD-CODE 2.15: an ``echo=`` sink-open failure must release the
+"""W051-TRACK / AUD-CODE 2.15: an ``narrate=`` sink-open failure must release the
 capture reservation on the error path.
 
 The echo sink opens its path eagerly; before the fix the open ran between the

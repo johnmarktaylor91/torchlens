@@ -59,9 +59,9 @@ def validate_postprocess(postprocess: str) -> None:
 def _validate_non_empty_capture(options: RecordingOptions) -> None:
     """Reject statically empty fastlog configurations.
 
-    An armed ``echo=`` narrator is a legal capture on its own ("narrate
+    An armed ``narrate=`` narrator is a legal capture on its own ("narrate
     everything, keep nothing" is the narrate-only fast path, snoop D1): the
-    echo term keeps ``tl.record(model, x, echo=...)`` from being refused as
+    echo term keeps ``tl.record(model, x, narrate=...)`` from being refused as
     capturing nothing.
     """
 

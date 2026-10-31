@@ -126,9 +126,9 @@ _ECHO_FIELDS: Final[tuple[str, ...]] = (
 
 @dataclass(frozen=True, init=False)
 class NarrationOptions:
-    """Grouped live-narration options for ``echo=`` (lane F28, snoop memo D1).
+    """Grouped live-narration options for ``narrate=`` (lane F28, snoop memo D1).
 
-    ``echo=`` on ``tl.trace``, ``tl.record``, and ``fastlog.Recorder``
+    ``narrate=`` on ``tl.trace``, ``tl.record``, and ``fastlog.Recorder``
     narrates capture events -- one line per event -- through one read-only
     observer slot. Narration and retention are fully independent: "narrate
     everything, keep nothing" is legal and is the fast path. All spellings

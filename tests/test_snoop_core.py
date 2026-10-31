@@ -119,7 +119,7 @@ def test_save_scope_and_echo_scope_are_independent() -> None:
 
 
 def test_echo_modules_is_structure_only() -> None:
-    """echo='modules' is the cheap flight recorder: structure lines only."""
+    """narrate='modules' is the cheap flight recorder: structure lines only."""
 
     sink = io.StringIO()
     tl.trace(TwoBlock(), torch.randn(2, 4), narrate=NarrationOptions(select="modules", sink=sink))

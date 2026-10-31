@@ -15,7 +15,7 @@ __tl_layer__ = "L5"
 
 
 class NarrationConfigError(ConfigurationError):
-    """Raised for ``echo=`` configuration refusals at capture entry."""
+    """Raised for ``narrate=`` configuration refusals at capture entry."""
 
 
 class NarrationStatsError(CaptureError):

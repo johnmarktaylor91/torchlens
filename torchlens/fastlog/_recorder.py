@@ -317,7 +317,7 @@ class Recorder:
             or not (save_grads is MISSING or save_grads is None or save_grads is False)
             or not (default_grad is MISSING or default_grad is False)
         )
-        # echo= normalization runs at construction so the typed refusals
+        # narrate= normalization runs at construction so the typed refusals
         # (bad spellings, finalized-label selectors) fire BEFORE any forward.
         if narrate is MISSING or narrate is None or narrate is False:
             echo_normalized = None

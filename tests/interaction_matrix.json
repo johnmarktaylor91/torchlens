@@ -295,7 +295,7 @@
    "evidence": "docs/reference/error_refusal_contract.md",
    "code": "echo_backend_unsupported",
    "confidence": "high",
-   "note": "echo= is torch only; profile=True is also unsupported on previews (tests/test_snoop_refusals.py::test_echo_on_non_torch_backend_refuses_typed)."
+   "note": "narrate= is torch only; profile=True is also unsupported on previews (tests/test_snoop_refusals.py::test_echo_on_non_torch_backend_refuses_typed)."
   },
   {
    "a": "backend",

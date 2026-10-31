@@ -247,7 +247,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # without a raise.
     # 4290 -> 4350 (2026-08-29 F28 re-reconcile): merge union -- the F41
     # bound-method-root mass (4274) fits 4290 alone, and the F28 echo facade
-    # residual (+40: the echo= entry param, docstring, and the four thin
+    # residual (+40: the narrate= entry param, docstring, and the four thin
     # snoop._entry seam calls; the lane already paid its extraction to
     # torchlens/_snoop/_entry.py at its own gate debt commit) rode the F28
     # branch; the union measures 4314. Next 50-line step, conscious raise
