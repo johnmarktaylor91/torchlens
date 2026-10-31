@@ -42,11 +42,22 @@ from __future__ import annotations
 import hashlib
 import random as _random_module
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
+from ._selection_mask import (
+    _Mask,
+    _mask_complement,
+    _mask_difference,
+    _mask_equal,
+    _mask_from_dense,
+    _mask_from_slices,
+    _mask_intersect,
+    _mask_union,
+    _mask_whole,
+)
 from .errors._base import ConfigurationError, TorchLensError
 
 if TYPE_CHECKING:
@@ -136,169 +147,6 @@ class SelectionProvenance:
             raise ValueError(
                 f"provenance relation must be one of {_RELATIONS}; got {self.relation!r}."
             )
-
-
-# ---------------------------------------------------------------------------
-# Canonical internal mask representation. NEVER handed out: any user-facing
-# tensor access returns a FRESH materialization (mask immutability pin).
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class _Mask:
-    """Internal canonical mask over one site's output index space."""
-
-    shape: tuple[int, ...]
-    form: str  # "whole" | "empty" | "slices" | "dense"
-    slice_bounds: tuple[tuple[int, int, int], ...] | None = None
-    dense: torch.Tensor | None = field(default=None, compare=False)
-
-    def numel(self) -> int:
-        """Return the site's index-space size."""
-
-        total = 1
-        for extent in self.shape:
-            total *= extent
-        return total
-
-    def to_dense(self) -> torch.Tensor:
-        """Return a FRESH dense bool tensor (safe to hand out)."""
-
-        if self.form == "whole":
-            return torch.ones(self.shape, dtype=torch.bool)
-        if self.form == "empty":
-            return torch.zeros(self.shape, dtype=torch.bool)
-        if self.form == "slices":
-            if self.slice_bounds is None:
-                raise RuntimeError("slices-form mask lost its slice_bounds")
-            mask = torch.zeros(self.shape, dtype=torch.bool)
-            mask[tuple(slice(*bounds) for bounds in self.slice_bounds)] = True
-            return mask
-        if self.dense is None:
-            raise RuntimeError("dense-form mask lost its dense tensor")
-        return self.dense.clone()
-
-    def _dense_ro(self) -> torch.Tensor:
-        """Return the dense form for internal composition (never handed out)."""
-
-        if self.form == "dense":
-            if self.dense is None:
-                raise RuntimeError("dense-form mask lost its dense tensor")
-            return self.dense
-        return self.to_dense()
-
-    def count(self) -> int:
-        """Return the number of selected elements."""
-
-        if self.form == "whole":
-            return self.numel()
-        if self.form == "empty":
-            return 0
-        if self.form == "slices":
-            if self.slice_bounds is None:
-                raise RuntimeError("slices-form mask lost its slice_bounds")
-            total = 1
-            for start, stop, step in self.slice_bounds:
-                total *= max(0, (stop - start + step - 1) // step)
-            return total
-        if self.dense is None:
-            raise RuntimeError("dense-form mask lost its dense tensor")
-        return int(self.dense.sum().item())
-
-    def canonical_bytes(self) -> bytes:
-        """Return canonical identity bytes (dense packing, form-independent)."""
-
-        return self._dense_ro().to(torch.uint8).numpy().tobytes()
-
-
-def _mask_whole(shape: tuple[int, ...]) -> _Mask:
-    """Build the whole-form mask (every element of ``shape`` selected)."""
-
-    return _Mask(shape=shape, form="whole")
-
-
-def _mask_empty(shape: tuple[int, ...]) -> _Mask:
-    """Build the empty-form mask (no element of ``shape`` selected)."""
-
-    return _Mask(shape=shape, form="empty")
-
-
-def _mask_from_dense(shape: tuple[int, ...], dense: torch.Tensor) -> _Mask:
-    """Build a canonical mask from a dense bool tensor (normalizing extremes)."""
-
-    selected = int(dense.sum().item())
-    if selected == 0:
-        return _mask_empty(shape)
-    if selected == dense.numel():
-        return _mask_whole(shape)
-    return _Mask(shape=shape, form="dense", dense=dense.clone())
-
-
-def _mask_from_slices(shape: tuple[int, ...], slices: tuple[slice, ...]) -> _Mask:
-    """Build a canonical mask from a slice tuple over ``shape``."""
-
-    bounds: list[tuple[int, int, int]] = []
-    for one_slice, extent in zip(slices, shape, strict=True):
-        start, stop, step = one_slice.indices(extent)
-        if stop <= start:
-            return _mask_empty(shape)
-        bounds.append((start, stop, step))
-    if all(
-        start == 0 and stop == extent and step == 1
-        for (start, stop, step), extent in zip(bounds, shape, strict=True)
-    ):
-        return _mask_whole(shape)
-    return _Mask(shape=shape, form="slices", slice_bounds=tuple(bounds))
-
-
-def _mask_union(a: _Mask, b: _Mask) -> _Mask:
-    """Union two same-shape masks (whole/empty fast paths, else dense OR)."""
-
-    if a.form == "whole" or b.form == "empty":
-        return a if a.form == "whole" else (a if b.form == "empty" else b)
-    if b.form == "whole" or a.form == "empty":
-        return b if b.form == "whole" else (b if a.form == "empty" else a)
-    return _mask_from_dense(a.shape, a._dense_ro() | b._dense_ro())
-
-
-def _mask_intersect(a: _Mask, b: _Mask) -> _Mask:
-    """Intersect two same-shape masks (whole/empty fast paths, else dense AND)."""
-
-    if a.form == "empty" or b.form == "whole":
-        return a
-    if b.form == "empty" or a.form == "whole":
-        return b
-    return _mask_from_dense(a.shape, a._dense_ro() & b._dense_ro())
-
-
-def _mask_difference(a: _Mask, b: _Mask) -> _Mask:
-    """Subtract ``b`` from ``a`` (set difference on same-shape masks)."""
-
-    if a.form == "empty" or b.form == "empty":
-        return a
-    if b.form == "whole":
-        return _mask_empty(a.shape)
-    return _mask_from_dense(a.shape, a._dense_ro() & ~b._dense_ro())
-
-
-def _mask_complement(a: _Mask) -> _Mask:
-    """Complement a mask within its own index space."""
-
-    if a.form == "whole":
-        return _mask_empty(a.shape)
-    if a.form == "empty":
-        return _mask_whole(a.shape)
-    return _mask_from_dense(a.shape, ~a._dense_ro())
-
-
-def _mask_equal(a: _Mask, b: _Mask) -> bool:
-    """Compare two masks as element sets (form-independent equality)."""
-
-    if a.shape != b.shape:
-        return False
-    if a.form == b.form == "whole" or a.form == b.form == "empty":
-        return True
-    return bool(torch.equal(a._dense_ro(), b._dense_ro()))
 
 
 # ---------------------------------------------------------------------------
@@ -1756,9 +1604,10 @@ def _apply_invalid(
     return SelectionError(message, code=code, reason=reason, **fields)
 
 
-# _validate_edited / _masked_factory / _derive_masked_edit moved to
-# torchlens/intervention/masked_edit.py (R43 file-size ratchet); the
-# do-plan below imports the derivation lazily.
+# _validate_edited / _masked_factory / _derive_masked_edit live in
+# torchlens/intervention/masked_edit.py; the plan builder itself
+# (_build_selection_do_plan, _resolve_do_target) lives in
+# torchlens/_selection_do_plan.py and is imported lazily below.
 
 
 def build_selection_do_plan(
@@ -1773,139 +1622,13 @@ def build_selection_do_plan(
     EDGE selections are stage-3 edge-substitution territory.
     """
 
+    from ._selection_do_plan import _build_selection_do_plan
     from .intervention.resolver import _label_index_scope
 
     # Building the plan adds, removes and relabels no op, so plain-label terms
     # resolve through one label index per trace for the whole plan.
     with _label_index_scope():
         return _build_selection_do_plan(trace, selection_like, edit)
-
-
-def _build_selection_do_plan(
-    trace: Any, selection_like: Any, edit: Any
-) -> tuple[Selection, list[dict[str, Any]], dict[str, Any]]:
-    """Build :func:`build_selection_do_plan`'s result inside its label-index scope."""
-
-    if edit is None:
-        raise ValueError(
-            "do(selection, edit) requires an edit: pass an Edit/Edit "
-            "(e.g. tl.zero_ablate()), a hook callable, or a replacement tensor."
-        )
-    from .intervention._subspace_projection import subspace_projection_of
-
-    # A bare tl.subspace(...) target is projection-valued: the edit acts on
-    # the component along the basis (resolve() still reports the support).
-    projection = subspace_projection_of(selection_like)
-    if projection is None and getattr(edit, "helper_name", None) == "set_affine_coordinates":
-        from .intervention._affine_source import needs_subspace
-
-        # Refuse at do(), before anything is staged: a [k, d] map needs a basis.
-        raise needs_subspace(repr(selection_like), code="affine_source_needs_subspace")
-    resolved = _resolve_do_target(trace, selection_like)
-
-    from .intervention.masked_edit import _derive_masked_edit
-    from .intervention.types import Edit
-
-    if not isinstance(edit, Edit) and not callable(edit):
-        # Raw replacement TENSORS route through the shipped replace_with helper and
-        # obey the scatter contract; anything else refuses with the string-label
-        # path's validation (a scalar lifted through the tensor-only helper used to
-        # crash bare at push time).
-        if not isinstance(edit, torch.Tensor):
-            raise ValueError(
-                f"do(selection, edit) got a {type(edit).__name__} replacement value; "
-                "replacement values must be tensors matching the site output. For a "
-                "constant fill over the selected elements pass a full-shape tensor "
-                "(e.g. torch.full_like(site_out, c)), or use an edit helper such as "
-                "tl.zero_ablate() or tl.scale()."
-            )
-        from .intervention.predicates import replace_with
-
-        edit = replace_with(edit)
-
-    plan: list[dict[str, Any]] = []
-    for entry in resolved:
-        layer_label, pass_index = entry.key
-        ops = [
-            op
-            for op in _find_act_ops(trace, layer_label)
-            if getattr(op, "pass_index", 1) == pass_index
-        ]
-        if not ops:
-            raise _unresolvable(
-                "site_not_in_trace",
-                f"resolved site {entry.key!r} is not present on this trace.",
-                site=layer_label,
-            )
-        op = ops[0]
-        site_edit = edit if projection is None else projection.derive(edit, entry, op.label)
-        plan.append(
-            {
-                "op": op,
-                "entry": entry,
-                "is_leaf": getattr(op, "func", None) is None,
-                "edit": _derive_masked_edit(site_edit, entry, resolved.digest, op.label),
-            }
-        )
-
-    # The per-site "source" disclosure (the A04 dense-subspace point-of-use
-    # stamp) is admitted as an OPTIONAL string field in the closed
-    # load-validator site schema as of tlspec v9 (C07 amendment; the pre-v9
-    # validator refused it, so a saved selection-intervened artifact refused
-    # its own load -- C03 measured defect, field_intent.tsv row).
-    audit: dict[str, Any] = {
-        "kind": resolved.kind,
-        "selection_repr": repr(selection_like),
-        "resolve_digest": resolved.digest,
-        "sites": [
-            {
-                "site_key": repr(entry.key),
-                "relation": entry.provenance.relation,
-                "selected": entry.num_selected,
-                "source": entry.provenance.source + ("" if projection is None else projection.note),
-            }
-            for entry in resolved
-        ],
-        "edit": getattr(edit, "helper_name", getattr(edit, "__name__", repr(type(edit)))),
-    }
-    source_identity = getattr(edit, "kwargs", None)
-    if getattr(edit, "helper_name", None) == "patch_from" and source_identity:
-        audit["patch_source"] = dict(source_identity)
-    return resolved, plan, audit
-
-
-def _resolve_do_target(trace: Any, selection_like: Any) -> Selection:
-    """Resolve the ``do()`` target on this trace, refusing PARAM/EDGE kinds."""
-
-    lifted = _lift(selection_like)
-    if lifted is None:
-        raise RuntimeError("build_selection_do_plan requires a selection-shaped input")
-    if isinstance(lifted, Selection):
-        if lifted._trace is not trace:
-            raise SelectionError(
-                "the resolved selection is bound to a different trace; resolve "
-                "against this trace first, or bridge explicitly with "
-                "resolved.align_to(trace) (cross-run alignment on L1 site "
-                "keys, same-policy captures only).",
-                code="selection_trace_mismatch",
-            )
-        resolved = lifted
-    else:
-        resolved = lifted._resolve(trace)
-    if resolved.kind == "PARAM":
-        raise _apply_invalid(
-            "not_maskable",
-            "learned-parameter edits do not ride the node-edit plan: PARAM "
-            "selections apply through parameter SUBSTITUTION on the replay "
-            "engine (do(tl.param(...), edit) substitutes the value each "
-            "consuming op sees; the live parameter is never written).",
-        )
-    if resolved.kind == "EDGE":
-        raise _apply_invalid(
-            "not_maskable",
-            "edge selections address edge substitution (stage 3), not node edits.",
-        )
-    return resolved
 
 
 # ---------------------------------------------------------------------------

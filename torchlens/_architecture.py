@@ -129,6 +129,8 @@ PACKAGE_LAYERS: dict[str, str] = {
     "intervention": "L4",
     "bundle": "L4",
     "_selection": "L4",
+    "_selection_mask": "L4",
+    "_selection_do_plan": "L4",
     "_selection_values": "L4",
     "_selection_compare": "L4",
     "_selection_graph": "L4",
