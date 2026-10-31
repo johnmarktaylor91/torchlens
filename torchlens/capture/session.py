@@ -130,7 +130,8 @@ class LiveGradientReference:
     Parameters
     ----------
     tensor
-        Live tensor that took gradient ownership of the op's label.
+        Live tensor that took gradient ownership of the op's label (after a
+        refresh projection, the logged copy standing in for it).
     grad_fn
         Autograd node of ``tensor`` right after the op.
     output_nr
