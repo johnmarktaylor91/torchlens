@@ -407,7 +407,7 @@ def _check_backward_pass_record_consistency(
             if call.backward_pass_index != pass_index:
                 raise MetadataInvariantError(
                     name,
-                    f"{call.call_label} is attached to pass {pass_index} but records "
+                    f"{call.label} is attached to pass {pass_index} but records "
                     f"pass {call.backward_pass_index}",
                 )
     for grad_fn_handle in trace.grad_fn_logs.values():
@@ -415,7 +415,7 @@ def _check_backward_pass_record_consistency(
             if call.backward_pass_index not in valid_pass_indices:
                 raise MetadataInvariantError(
                     name,
-                    f"{call.label} references missing backward pass {call.backward_pass_index}",
+                    f"{call.grad_fn_label} references missing backward pass {call.backward_pass_index}",
                 )
 
 

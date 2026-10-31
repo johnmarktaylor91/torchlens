@@ -376,7 +376,7 @@ class GradFn:
         else:
             self.calls._label = self.label
         for call in self.calls.values():
-            call.label = self.label
+            call.grad_fn_label = self.label
             call.source_trace = self.trace
 
     def __getstate__(self) -> dict[str, Any]:
@@ -695,7 +695,7 @@ class GradFn:
         call_index = len(self.calls) + 1
         self.calls[call_index] = GradFnCall(
             call_index=call_index,
-            label=self.label,
+            grad_fn_label=self.label,
             grad_inputs=_clone_grad_value(grad_inputs),
             grad_outputs=_clone_grad_value(grad_outputs),
             _time_started=timestamp,

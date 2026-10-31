@@ -368,7 +368,7 @@ class _LedgerWalk:
 def _classify_call(trace: Trace, nodes_by_label: dict[str, Any], call: Any) -> BackwardTransition:
     """Classify one GradFnCall into its five-word transition verdict."""
 
-    label = str(getattr(call, "label", ""))
+    label = str(getattr(call, "grad_fn_label", ""))
     node = nodes_by_label.get(label)
     fire_index = _fire_index(node) if node is not None else 0
     grad_fn_class = str(getattr(node, "class_name", "")) if node is not None else ""
@@ -519,7 +519,9 @@ def bisect_nan_backward(
     nodes_by_label = _grad_fn_rows(trace)
     calls = sorted(
         selected.grad_fn_calls,
-        key=lambda call: _fire_index(nodes_by_label.get(getattr(call, "label", ""), None) or call),
+        key=lambda call: _fire_index(
+            nodes_by_label.get(getattr(call, "grad_fn_label", ""), None) or call
+        ),
     )
 
     walk = _LedgerWalk()

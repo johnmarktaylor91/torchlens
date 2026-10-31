@@ -72,7 +72,7 @@ def test_timing_keys_align_with_grad_fn_calls() -> None:
     timings = trace.autograd.grad_fn_fire_timings
     # Timings iterate in fire order, grad_fn_calls in discovery order; the
     # key SETS are identical 1:1.
-    assert set(timings.keys()) == {call.call_label for call in trace.autograd.grad_fn_calls}
+    assert set(timings.keys()) == {call.label for call in trace.autograd.grad_fn_calls}
 
 
 def test_repeat_fires_get_independent_spans_and_monotone_wall_stamps() -> None:
@@ -238,7 +238,7 @@ def test_plain_v8_save_persists_per_fire_timing_semantics(tmp_path) -> None:
     timed = untimed = 0
     for call in loaded.autograd.grad_fn_calls:
         span = call.backward_duration
-        live_span = live_spans[f"{call.label}:{call.call_index}"]
+        live_span = live_spans[f"{call.grad_fn_label}:{call.call_index}"]
         if span is None:
             untimed += 1
             assert call._time_started is None and call._time_finished is None
@@ -283,7 +283,7 @@ def test_fold_sort_key_unchanged_and_projection_count_matches() -> None:
     # timestamp stays the separate event-ordering stamp and is never a
     # duration operand.
     for call in trace.autograd.grad_fn_calls:
-        span = trace.autograd.grad_fn_fire_timings[f"{call.label}:{call.call_index}"]
+        span = trace.autograd.grad_fn_fire_timings[f"{call.grad_fn_label}:{call.call_index}"]
         if span is None:
             assert call._time_started is None and call._time_finished is None
         else:

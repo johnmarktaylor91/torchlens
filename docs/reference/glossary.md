@@ -3203,12 +3203,16 @@ describe each surface in depth.
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
+| `backward_pass_number=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
 | `draw_index=` | keyword of `tl.attribution.CausalAuditSet` |
+| `edit=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
+| `edit_name=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
 | `extra_facets=` | keyword of `tl.facets.snapshot` |
 | `frozen_sites=` | keyword of `tl.attribution.AttributionGraph` |
 | `function_id=` | keyword of `FacetSpec.computed`, `FacetSpec.from_home`, `tl.facets.FacetSpec` |
 | `function_version=` | keyword of `FacetSpec.computed`, `FacetSpec.from_home`, `tl.facets.FacetSpec` |
 | `functions=` | Immutable active recipe entries |
+| `grad_fn_label=` | field and constructor keyword of `GradFnCall` |
 | `has_demeaned_logits=` | keyword of `tl.attribution.AttributionGraph` |
 | `has_fused_qkv=` | keyword of `tl.mechinterp.ProjectionSource` |
 | `has_semantic_values=` | True only when the values are caller-supplied real data. Gates derived-semantics claims |
@@ -3222,6 +3226,7 @@ describe each surface in depth.
 | `is_magnitude_based=` | keyword of `tl.stats.TensorStats` |
 | `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
 | `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
+| `module_pass_number=` | field and constructor keyword of `RecordContext` |
 | `num_examples=` | keyword of `tl.mechinterp.TrajectoryStats` |
 | `num_kv_heads=` | keyword of `tl.mechinterp.HeadWeightViews` |
 | `num_nan=` | keyword of `tl.stats.TensorStats` |
@@ -3232,6 +3237,7 @@ describe each surface in depth.
 | `num_stimuli=` | keyword of `tl.neuro.ExtractionPlan`, `tl.neuro.plan_extraction` |
 | `num_true=` | keyword of `tl.stats.TensorStats` |
 | `num_zero=` | keyword of `tl.stats.TensorStats` |
+| `pass_number=` | field and constructor keyword of `BackwardPass`, `DiffRow`, `GradRecordContext`, `ModuleStackFrame`, `RecordContext`, `SiteRow` |
 | `run_record=` | keyword of `tl.trackers.HistoryView` |
 | `signal=` | keyword of `tl.stats.NarrationObserver` |
 | `std_evidence=` | keyword of `tl.stats.TensorStats` |
@@ -3392,6 +3398,7 @@ The sections above describe each surface in depth.
 | `BackwardNanReport.transitions` | The full transition ledger in measured fire order |
 | `BackwardNanReport.unchecked_calls` | Calls without saved or checkable gradient payloads |
 | `BackwardNanReport.verdict_scope` | `"complete"` when every earlier call was checkable, else `"found_first_among_checked"` |
+| `BackwardPass.pass_number` | 1-based number of this backward pass |
 | `BackwardStatus.num_backward_passes` | Number of backward passes observed |
 | `BackwardStatus.num_grad_fn_records` | Number of GradFn records the status read |
 | `BackwardStatus.uncounted_op_counts` | Every recorded op kind outside the counted families with its call count, never zeroed or estimated |
@@ -3431,7 +3438,9 @@ The sections above describe each surface in depth.
 | `DeterminismReport.first_problem` | Project the first divergence into the shared vocabulary |
 | `DiagnosticFinding.check_name` | Check name (`"nonfinite"`, `"dtype_regime"`, `"layout"` or `"confinement"`) |
 | `DiffReport.rows_with_status` | Return the rows carrying one closed-vocabulary status |
+| `DiffRow.pass_number` | Pass number of the compared op |
 | `DryRun.filter` | Return a new trace with decisions from a new op predicate |
+| `Edit.name` | The edit's public name (the builder that made it, such as `zero_ablate`) |
 | `EffectsView.rank_changes` | Rank candidates by the size of their change from baseline, descending |
 | `EffectsView.to_selection` | Convert the view to a selection: the union of its WHERE regions |
 | `EpisodeOptions.acknowledge_step_cost` | Accept a step declaration beyond the cost ceiling |
@@ -3451,8 +3460,13 @@ The sections above describe each surface in depth.
 | `FindNanReport.found` | Whether a NaN or Inf was found |
 | `FindNanReport.label_status` | Whether the reported label is final (`"final"`) or absent (`"none"`) |
 | `FindNanReport.message` | Human-readable diagnostic summary |
+| `FireRecord.backward_pass_number` | Backward pass the edit fired in, or `None` for a forward fire |
+| `FireRecord.edit` | The `Edit` that fired, or `None` for a raw hook |
+| `FireRecord.edit_name` | Name of the edit or hook that fired |
 | `GqaInfo.num_query_heads` | Number of query heads |
 | `GradFnCall.fire_record` | The fire record of the edit that produced this grad-fn call, or `None` |
+| `GradFnCall.grad_fn_label` | Label of the grad_fn this call belongs to |
+| `GradFnCall.label` | Pass-qualified call label (`<grad_fn_label>:<call_index>`) |
 | `GradFnSketch.num_nodes` | Number of walked nodes |
 | `GradReceptiveField.batch_support` | Batch indices the influence set reaches, or `None` |
 | `GradReceptiveField.cross_batch_influence` | Whether the influence crosses batch elements |
@@ -3467,6 +3481,7 @@ The sections above describe each surface in depth.
 | `GradReceptiveField.target_key` | Return the direction-stable key of the target graph point |
 | `GradReceptiveField.unit_shape` | Shape of the target unit |
 | `GradReceptiveField.warnings` | Warnings raised while measuring |
+| `GradRecordContext.pass_number` | Pass number of the op whose gradient is recorded |
 | `GuessInputShapeReport.attempts` | Probe diary as `(shape, outcome)` tuples |
 | `GuessInputShapeReport.constraining_module` | Module qualname that constrained the inferred shape, when known |
 | `GuessInputShapeReport.constraining_op` | Operation name that constrained the inferred shape, when known |
@@ -3496,6 +3511,7 @@ The sections above describe each surface in depth.
 | `KernelProfileReport.join` | The profiler join result that maps kernels to ops |
 | `KernelProfileReport.session_facts` | Facts about the profiler session |
 | `Layer.is_edited` | Whether a user edit replaced the output of any pass of this layer |
+| `Layer.short_label` | Short pass-qualified label of a single-pass layer |
 | `LedgerEntry.is_draft` | Whether the entry is still a draft (no hypothesis declared yet) |
 | `LineageReport.message` | Human-readable status |
 | `LineageReport.start_label` | Resolved starting op label, or the requested label when lookup failed |
@@ -3511,9 +3527,14 @@ The sections above describe each surface in depth.
 | `MergedFinding.from_dict` | Rebuild a finding from `to_payload` output |
 | `MergedTrace.at` | Return the SPMD fan: the ops matching `label` on every rank |
 | `MergedTrace.degradations` | Environment degradations recorded at load (empty on a live merge) |
+| `ModuleCall.label` | Pass-qualified module call label (`address:call_index`) |
 | `ModuleCall.parent_label` | Label of the parent ModuleCall in the dynamic call tree |
+| `ModuleStackFrame.pass_number` | Call number of this module in the stack |
 | `NarrationEvent.has_intervention` | Whether an intervention acted at this event |
 | `Op.is_edited` | Whether a user edit replaced this op's output |
+| `Op.pass_number` | 1-based pass of this op within its layer |
+| `Op.short_label` | Short pass-qualified op label |
+| `Op.short_layer_label` | Short layer label (no pass suffix) |
 | `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
 | `PreprocessingComparison.applied_source` | How the applied side was obtained: `"resolution"` / `"declaration"` / `"parsed_transform"` / `"undeclared"` / `"opaque_transform"` |
 | `PreprocessingComparison.authority_status` | The authority's standing (`authoritative` / `unverified_fallback` / `unknown`); a non-authoritative reference caps the verdict below `verified` |
@@ -3528,6 +3549,8 @@ The sections above describe each surface in depth.
 | `Recipe.decision` | The sole rule's normalized decision (`None` on multi-clause specs) |
 | `Recipe.door_pairs` | Lower the spec to `(site, action)` pairs for the hook doors |
 | `Recipe.match` | Return the single rule matching one op context, or `None` |
+| `RecordContext.module_pass_number` | Call number of the innermost module, or `None` |
+| `RecordContext.pass_number` | Pass number of the recorded op |
 | `Recording.num_predicate_failure_overflows` | Predicate failures beyond the kept list (counted, not stored) |
 | `RooflineRow.is_cache_resident_hint` | Whether the row's working set likely fits in cache (a hint, not a measurement) |
 | `RosterModel.builder` | Zero-arg factory returning `(model, example_input)` |
@@ -3554,6 +3577,7 @@ The sections above describe each surface in depth.
 | `Session.to_bundle` | Return a bundle containing all captured invocation logs |
 | `Site.num_selected` | Return the number of selected elements at this site |
 | `Site.structural_site_key` | The structural site key when present, else `None` |
+| `SiteRow.pass_number` | Pass number of the site |
 | `SixNDFacts.num_params` | Parameter count used by the 6ND estimate |
 | `SpecCompat.has_identical_target_resolution` | Whether the spec resolves to the same targets on both sides |
 | `SummaryTotals.captured_bytes` | Bytes the capture retained when it ran |

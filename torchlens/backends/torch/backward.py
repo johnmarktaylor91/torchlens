@@ -1202,7 +1202,7 @@ def _order_attribution_coverage(
     labels_with_order = {
         grad_fn.label for grad_fn in grad_fn_logs.values() if grad_fn.order is not None
     }
-    covered = sum(1 for call in calls if call.label in labels_with_order)
+    covered = sum(1 for call in calls if call.grad_fn_label in labels_with_order)
     return covered / len(calls)
 
 
@@ -1231,7 +1231,9 @@ def _max_call_order(
         for grad_fn in grad_fn_logs.values()
         if grad_fn.order is not None
     }
-    call_orders = [label_to_order[call.label] for call in calls if call.label in label_to_order]
+    call_orders = [
+        label_to_order[call.grad_fn_label] for call in calls if call.grad_fn_label in label_to_order
+    ]
     return max(call_orders) if call_orders else None
 
 
@@ -1815,7 +1817,7 @@ def _fold_fired_events(
             call_index=ordinal,
             ordinal=ordinal,
             backward_pass_index=event.pass_index,
-            label=grad_fn_record.label,
+            grad_fn_label=grad_fn_record.label,
             grad_inputs=event.grad_input_refs,
             grad_outputs=event.grad_output_refs,
             fire_record=event.fire_record,

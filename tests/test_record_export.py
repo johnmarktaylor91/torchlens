@@ -131,4 +131,4 @@ def test_backward_record_exports_round_trip(record_export_trace: tl.Trace, tmp_p
     assert list(grad_fn_call.to_pandas().columns) == GRAD_FN_PASS_LOG_FIELD_ORDER
 
     _assert_round_trip(grad_fn, ["label", "class_name", "num_calls"], tmp_path)
-    _assert_round_trip(grad_fn_call, ["call_index", "call_label"], tmp_path)
+    _assert_round_trip(grad_fn_call, ["call_index", "label"], tmp_path)

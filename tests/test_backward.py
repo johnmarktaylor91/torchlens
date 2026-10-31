@@ -323,7 +323,7 @@ def _backward_projection_snapshot(trace: tl.Trace) -> dict:
         for object_id, grad_fn in trace.grad_fn_logs.items()
     }
     calls = {
-        (object_id, ordinal): (call.label, call.backward_pass_index)
+        (object_id, ordinal): (call.grad_fn_label, call.backward_pass_index)
         for object_id, grad_fn in trace.grad_fn_logs.items()
         for ordinal, call in grad_fn.calls.items()
     }
