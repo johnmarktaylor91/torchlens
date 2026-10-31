@@ -18,7 +18,7 @@ The oracle deliberately separates two categories:
   side effects, the predicate producer's lossy/defaulted event metadata, and only the
   `train_batchnorm__two_pass_negative` failed outcome caused by its stateful second pass. A wart
   diff is accepted only after the legacy producer disappears and a wart-specific validator
-  confirms the intended fix (for example, exactly one forward, no `edge_use="unknown"`, or a
+  confirms the intended fix (for example, exactly one forward, no `_edge_use="unknown"`, or a
   clean exactly-once success for the train-mode BatchNorm case).
 
 Run the oracle from the worktree root:

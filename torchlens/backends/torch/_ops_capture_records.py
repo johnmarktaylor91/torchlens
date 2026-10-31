@@ -592,7 +592,7 @@ def _parent_edges_from_fields(fields_dict: dict[str, Any]) -> tuple[ParentEdge, 
         ParentEdge(
             parent_label_raw=label,
             arg_position=positions_by_label.get(label, (None, "arg"))[0],
-            edge_use=positions_by_label.get(label, (None, "arg"))[1],
+            _edge_use=positions_by_label.get(label, (None, "arg"))[1],
         )
         for label in fields_dict["parents"]
     )

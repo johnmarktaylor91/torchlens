@@ -449,7 +449,7 @@ def test_graph_edge_insertion_folds_parents(leg: str, leg_templates: dict[str, l
 
     new_parents = (
         *child.parents,
-        ParentEdge(parent_label_raw=parent.label_raw, arg_position=None, edge_use="output"),
+        ParentEdge(parent_label_raw=parent.label_raw, arg_position=None, _edge_use="output"),
     )
     positions = {"args": {0: parent.label_raw}}
     journal.append_amendment(

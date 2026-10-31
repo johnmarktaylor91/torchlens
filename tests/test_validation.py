@@ -5824,7 +5824,7 @@ def test_edge_use_invariant_rejects_invalid_existing_record_kind() -> None:
     log = _make_clean_log()
     try:
         layer = next(layer for layer in log.layer_list if layer._edge_uses)
-        layer._edge_uses = (replace(layer._edge_uses[0], edge_use="bogus"),) + tuple(
+        layer._edge_uses = (replace(layer._edge_uses[0], _edge_use="bogus"),) + tuple(
             layer._edge_uses[1:]
         )
 

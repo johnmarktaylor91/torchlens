@@ -129,7 +129,7 @@ def _build_ir_instances() -> dict[str, object]:
     parent_edge = ParentEdge(
         parent_label_raw="input_1_0_raw",
         arg_position=0,
-        edge_use="arg",
+        _edge_use="arg",
     )
     param_ref = ParamRef(
         barcode="param-0",

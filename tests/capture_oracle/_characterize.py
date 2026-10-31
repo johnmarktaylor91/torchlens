@@ -368,7 +368,7 @@ def _is_predicate_wart_path(path: str) -> bool:
     """
 
     if path.startswith("parents["):
-        return path.endswith(".arg_position") or path.endswith(".edge_use")
+        return path.endswith(".arg_position") or path.endswith("._edge_use")
     return path.startswith(_PREDICATE_WART_PREFIXES[1:])
 
 
@@ -397,7 +397,7 @@ def _project_event(event: OpEvent) -> dict[str, Any]:
             "params_count": len(event.params),
             "parent_params_count": len(event.parent_params),
             "parent_arg_positions": [edge.arg_position for edge in event.parents],
-            "parent_edge_uses": [edge.edge_use for edge in event.parents],
+            "parent_edge_uses": [edge._edge_use for edge in event.parents],
             "is_inplace": event.function.is_inplace,
         },
     }

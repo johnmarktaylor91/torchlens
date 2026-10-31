@@ -40,7 +40,7 @@ def _op_event(label: str, parents: tuple[str, ...] = ()) -> OpEvent:
     """Build an ``OpEvent`` with a given raw label and parent labels."""
 
     edges = tuple(
-        ParentEdge(parent_label_raw=parent, arg_position=index, edge_use="arg")
+        ParentEdge(parent_label_raw=parent, arg_position=index, _edge_use="arg")
         for index, parent in enumerate(parents)
     )
     return dataclasses.replace(_base_op_event(), label_raw=label, parents=edges)

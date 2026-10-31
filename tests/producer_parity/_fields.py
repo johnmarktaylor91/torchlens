@@ -223,7 +223,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     # ---- ParentEdge --------------------------------------------------------
     "ParentEdge.parent_label_raw": "F",
     "ParentEdge.arg_position": "F",
-    "ParentEdge.edge_use": "F",
+    "ParentEdge._edge_use": "F",
     # ---- ParamRef ----------------------------------------------------------
     "ParamRef.barcode": "F",  # random token: volatile bucket, portable shape
     "ParamRef.address": "F",

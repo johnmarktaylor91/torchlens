@@ -149,7 +149,7 @@ def test_phase0_op_event_fields_are_populated(monkeypatch: pytest.MonkeyPatch) -
     assert {edge.arg_kind for edge in add_event._edge_uses} == {"positional", "keyword"}
     assert any(parent.arg_position == (0, 0) for parent in cat_event.parents)
     assert any(
-        parent.arg_position == "other" and parent.edge_use == "kwarg"
+        parent.arg_position == "other" and parent._edge_use == "kwarg"
         for parent in add_event.parents
     )
 

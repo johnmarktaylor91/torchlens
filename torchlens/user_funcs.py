@@ -1508,7 +1508,7 @@ def _register_live_tensor_connection(
             child_label,
             parents=(
                 *event.parents,
-                ParentEdge(parent_label_raw=parent_label, arg_position=None, edge_use="output"),
+                ParentEdge(parent_label_raw=parent_label, arg_position=None, _edge_use="output"),
             ),
             parent_arg_positions=parent_arg_positions,
         )

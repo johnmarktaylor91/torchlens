@@ -405,7 +405,7 @@ class ParentEdge:
 
     parent_label_raw: str
     arg_position: object
-    edge_use: str
+    _edge_use: str
 
 
 def edge_use_kind(record: object) -> str | None:
@@ -415,7 +415,7 @@ def edge_use_kind(record: object) -> str | None:
     ----------
     record
         Edge-use record. Current backends may provide an object with an
-        ``edge_use`` attribute or the legacy tuple shape
+        ``_edge_use`` attribute or the legacy tuple shape
         ``(parent_label, arg_position, edge_use)``.
 
     Returns
@@ -424,7 +424,7 @@ def edge_use_kind(record: object) -> str | None:
         Semantic edge-use kind, or ``None`` when the record does not expose one.
     """
 
-    attr_kind = getattr(record, "edge_use", None)
+    attr_kind = getattr(record, "_edge_use", None)
     if isinstance(attr_kind, str):
         return attr_kind
     if isinstance(record, tuple) and len(record) >= 3 and isinstance(record[2], str):

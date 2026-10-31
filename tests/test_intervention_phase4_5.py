@@ -89,7 +89,7 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     assert edge_layers
     for layer in edge_layers:
         assert {edge.parent_label for edge in layer._edge_uses} == set(layer.parents)
-        assert {edge.edge_use for edge in layer._edge_uses} <= {"arg", "kwarg"}
+        assert {edge._edge_use for edge in layer._edge_uses} <= {"arg", "kwarg"}
     assert all(layer.container_path == () for layer in log.layer_list)
 
 

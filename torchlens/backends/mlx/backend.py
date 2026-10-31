@@ -2236,7 +2236,7 @@ class MLXBackend:
 
             if any(edge.parent_label_raw == label for edge in edges):
                 return
-            edges.append(ParentEdge(parent_label_raw=label, arg_position=position, edge_use=use))
+            edges.append(ParentEdge(parent_label_raw=label, arg_position=position, _edge_use=use))
             edge_uses.append((label, position, use))
 
         for index, value in enumerate(args):

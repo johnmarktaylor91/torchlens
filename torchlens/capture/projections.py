@@ -780,7 +780,7 @@ def _record_from_record_context(
         step_index=ctx.step_index or 0,
         pass_index=ctx.pass_index,
         parents=tuple(
-            ParentEdge(parent_label_raw=parent, arg_position=None, edge_use="unknown")
+            ParentEdge(parent_label_raw=parent, arg_position=None, _edge_use="unknown")
             for parent in ctx.parent_labels
         ),
         output=_sparse_output_ref(

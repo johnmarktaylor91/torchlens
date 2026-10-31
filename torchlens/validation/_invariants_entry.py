@@ -508,7 +508,7 @@ def check_func_call_id_invariant(trace: Trace) -> InvariantResult:
     Precondition contract: torch exhaustive and predicate captures populate
     ``func_call_id`` for non-synthetic compute outputs. Synthetic input,
     output, buffer, and internal placeholder nodes are exempt. Sparse recording
-    projections may have empty templates, ``edge_use='unknown'`` records, and
+    projections may have empty templates, ``_edge_use='unknown'`` records, and
     ``container_spec=None``; those fields are not required for this invariant.
     When a ``func_call_id`` group is populated, members must agree only on the
     plain-capture-stable function name and container spec, and populated

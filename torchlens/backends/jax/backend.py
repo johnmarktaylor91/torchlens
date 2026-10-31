@@ -994,7 +994,7 @@ class JAXBackend:
                 )
                 continue
             data_parents = tuple(
-                ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
+                ParentEdge(parent_label_raw=label, arg_position=index, _edge_use="arg")
                 for index, value in enumerate(equation.input_values)
                 if (label := label_by_value_id.get(id(value))) is not None
             )
@@ -1002,7 +1002,7 @@ class JAXBackend:
                 ParentEdge(
                     parent_label_raw=label_by_capture_index[control_index],
                     arg_position=f"control:{control_index}",
-                    edge_use="control",
+                    _edge_use="control",
                 )
                 for control_index in equation.control_capture_indices
                 if control_index in label_by_capture_index
@@ -1081,7 +1081,7 @@ class JAXBackend:
         if capture.kind == "region":
             trace.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
             data_parents = tuple(
-                ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
+                ParentEdge(parent_label_raw=label, arg_position=index, _edge_use="arg")
                 for index, value in enumerate(capture.input_values)
                 if (label := label_by_value_id.get(id(value))) is not None
             )
@@ -1129,7 +1129,7 @@ class JAXBackend:
                 ParentEdge(
                     parent_label_raw=boundary_label,
                     arg_position=f"region_output:{capture.output_index}",
-                    edge_use="control",
+                    _edge_use="control",
                 ),
             )
             output = capture.output_values[0]
@@ -1296,7 +1296,7 @@ class JAXBackend:
             parents=parents,
             parent_arg_positions=parent_arg_positions,
             _edge_uses=tuple(
-                (edge.parent_label_raw, edge.arg_position, edge.edge_use) for edge in parents
+                (edge.parent_label_raw, edge.arg_position, edge._edge_use) for edge in parents
             ),
             params=(),
             parent_params=(),

@@ -804,7 +804,7 @@ class TinygradBackend:
                 continue
             op_name = _uop_name(uop)
             parents = tuple(
-                ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
+                ParentEdge(parent_label_raw=label, arg_position=index, _edge_use="arg")
                 for index, src in enumerate(getattr(uop, "src", ()) or ())
                 if (label := uop_labels.get(id(src))) is not None
             )
@@ -977,7 +977,7 @@ class TinygradBackend:
             parents=parents,
             parent_arg_positions=parent_arg_positions,
             _edge_uses=tuple(
-                (edge.parent_label_raw, edge.arg_position, edge.edge_use) for edge in parents
+                (edge.parent_label_raw, edge.arg_position, edge._edge_use) for edge in parents
             ),
             params=params,
             parent_params=(),
