@@ -481,7 +481,7 @@ def test_module_call_count_prefers_the_module_record_and_never_swallows_errors()
     assert _module_num_calls(_FakeLog(layers), "a") == 2
     # A module mapping without the address falls back the same way.
     with_records = types.SimpleNamespace(
-        layer_list=layers, modules={"b": types.SimpleNamespace(num_calls=5)}
+        _layer_list=layers, modules={"b": types.SimpleNamespace(num_calls=5)}
     )
     assert _module_num_calls(with_records, "a") == 2
     assert _module_num_calls(with_records, "b") == 5
@@ -490,7 +490,7 @@ def test_module_call_count_prefers_the_module_record_and_never_swallows_errors()
         def __contains__(self, key: object) -> bool:
             raise RuntimeError("module table corrupted")
 
-    broken = types.SimpleNamespace(layer_list=layers, modules=BrokenModules())
+    broken = types.SimpleNamespace(_layer_list=layers, modules=BrokenModules())
     with pytest.raises(RuntimeError, match="module table corrupted"):
         _module_num_calls(broken, "a")
 

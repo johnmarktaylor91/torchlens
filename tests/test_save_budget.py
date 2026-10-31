@@ -179,7 +179,7 @@ def test_disabled_budget_allows_what_a_tiny_budget_refuses() -> None:
 
     model = _model()
     x = _input()
-    assert tl.trace(model, x, capture=CaptureOptions(save_budget=None)).num_saved_ops > 0
+    assert len(tl.trace(model, x, capture=CaptureOptions(save_budget=None)).saved_ops) > 0
     with pytest.raises(SaveBudgetExceededError):
         tl.trace(model, x, capture=CaptureOptions(save_budget=64))
 

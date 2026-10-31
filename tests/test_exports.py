@@ -423,7 +423,7 @@ def test_xarray_export_names_mismatched_presentation_layer() -> None:
     pytest.importorskip("xarray")
 
     fake_log = SimpleNamespace(
-        layer_list=[
+        _layer_list=[
             SimpleNamespace(layer_label="first", out=torch.randn(2, 3)),
             SimpleNamespace(layer_label="bad_layer", out=torch.randn(1, 3)),
         ]

@@ -381,7 +381,7 @@ def test_instrumented_rate_all_cuda_refuses_typed(small_trace, monkeypatch) -> N
     class _FakeTrace:
         """Trace stub whose one timed op executed on CUDA."""
 
-        layer_list = (_FakeCudaOp(),)
+        _layer_list = (_FakeCudaOp(),)
 
     with pytest.raises(InvalidArgumentError) as excinfo:
         _cost_perf.instrumented_rate(_FakeTrace())

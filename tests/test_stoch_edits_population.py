@@ -130,7 +130,7 @@ def test_trace_backed_population_records_address_identity() -> None:
         model_class_qualname = "Toy"
         random_seed = 7
         num_operations = 3
-        layer_dict_all_keys: dict[str, object] = {}
+        _layer_dict_all_keys: dict[str, object] = {}
         ops: dict[str, object] = {}
         layer_labels: tuple[str, ...] = ()
 

@@ -176,7 +176,7 @@ def _stub_trace(op_names: list[str], *, signal: bool = False) -> Any:
         escape_diagnostics=[],
         _had_unattributed_tensor_args=signal,
         ops=rows,
-        layer_list=rows,
+        _layer_list=rows,
         modules=[],
         capture_verification_reason=None,
     )

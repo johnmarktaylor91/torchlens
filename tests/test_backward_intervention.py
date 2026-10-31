@@ -75,7 +75,7 @@ class _IdentityReluModel(nn.Module):
 class _TraceStub:
     """Weakref-able trace stub for direct hook-factory tests."""
 
-    grad_fn_logs: dict[int, GradFn]
+    _grad_fn_logs: dict[int, GradFn]
     _grad_op_nums_to_save: str = "all"
     last_run: dict[str, Any] | None = None
     # A live trace always owns its capture event stream; hooks refuse typed

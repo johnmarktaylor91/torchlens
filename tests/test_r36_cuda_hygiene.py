@@ -112,12 +112,12 @@ def test_capture_touched_cuda_consults_recorded_op_devices() -> None:
     cuda_op = SimpleNamespace(device_ref="cuda:0")
     assert (
         capture_touched_cuda(
-            SimpleNamespace(forward_memory_backend="cpu", layer_list=[cpu_op, cuda_op])
+            SimpleNamespace(forward_memory_backend="cpu", _layer_list=[cpu_op, cuda_op])
         )
         is True
     )
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu", layer_list=[cpu_op]))
+        capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu", _layer_list=[cpu_op]))
         is False
     )
 
@@ -128,7 +128,7 @@ def test_capture_touched_cuda_consults_recorded_op_devices() -> None:
     # Consult failure keeps the stamped fact's verdict (adds flushes only).
     assert (
         capture_touched_cuda(
-            SimpleNamespace(forward_memory_backend="cpu", layer_list=_RaisingOps())
+            SimpleNamespace(forward_memory_backend="cpu", _layer_list=_RaisingOps())
         )
         is False
     )

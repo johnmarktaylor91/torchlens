@@ -201,7 +201,7 @@ def test_multi_parent_input_side_stays_visible() -> None:
 
     class StubTrace:
         backend = "torch"
-        layer_logs: dict[str, Any] = {}
+        _layer_logs: dict[str, Any] = {}
 
     keys = suppressed_arg_keys_for_record(StubTrace(), Stub(), {})
     assert keys == frozenset({"out_features"})
@@ -210,7 +210,7 @@ def test_multi_parent_input_side_stays_visible() -> None:
 def test_non_torch_backend_never_candidates() -> None:
     class StubTrace:
         backend = "tf"
-        layer_list = ()
+        _layer_list = ()
 
     class StubUniverse:
         units = ()
@@ -227,7 +227,7 @@ def test_unrecognized_layer_type_not_candidate() -> None:
 
     class StubTrace:
         backend = "torch"
-        layer_logs: dict[str, Any] = {}
+        _layer_logs: dict[str, Any] = {}
 
     assert suppressed_arg_keys_for_record(StubTrace(), Stub(), {}) == frozenset()
 

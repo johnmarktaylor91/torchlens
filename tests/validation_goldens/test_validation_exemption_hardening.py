@@ -2375,7 +2375,7 @@ def test_branching_invariant_fires_on_stale_is_branching_flag() -> None:
 
     fake_trace = SimpleNamespace(
         graph=SimpleNamespace(is_branching=True),
-        layer_list=[SimpleNamespace(children=[]), SimpleNamespace(children=["only_child"])],
+        _layer_list=[SimpleNamespace(children=[]), SimpleNamespace(children=["only_child"])],
     )
 
     with pytest.raises(MetadataInvariantError, match="branching_invariants"):
@@ -2390,7 +2390,7 @@ def test_layer_pass_layer_log_xrefs_fires_on_label_key_mismatch() -> None:
         num_passes=1,
         ops={1: SimpleNamespace(pass_index=1, layer_label="real_label_1_1")},
     )
-    fake_trace = SimpleNamespace(layer_logs={"stale_key_1_1": mismatched_layer})
+    fake_trace = SimpleNamespace(_layer_logs={"stale_key_1_1": mismatched_layer})
 
     with pytest.raises(MetadataInvariantError, match="layer_pass_layer_log_xrefs"):
         _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
@@ -2410,7 +2410,7 @@ def test_layer_pass_layer_log_xrefs_fires_on_ops_key_mismatch() -> None:
         num_passes=1,
         ops={2: SimpleNamespace(pass_index=2, layer_label=matching_label)},
     )
-    fake_trace = SimpleNamespace(layer_logs={matching_label: layer_with_wrong_keys})
+    fake_trace = SimpleNamespace(_layer_logs={matching_label: layer_with_wrong_keys})
 
     with pytest.raises(MetadataInvariantError, match="layer_pass_layer_log_xrefs"):
         _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
@@ -2428,7 +2428,7 @@ def test_pass_count_consistency_fires_on_ops_key_mismatch() -> None:
     """
 
     fake_trace = SimpleNamespace(
-        layer_logs={
+        _layer_logs={
             "layer_1_1": SimpleNamespace(
                 ops={1: SimpleNamespace(pass_index=1, num_passes=2)},
                 num_passes=2,
@@ -2458,7 +2458,7 @@ def test_non_torch_backward_inert_fires_on_populated_grad_fn_logs() -> None:
     later arm needs its own scenario where every EARLIER arm stays silent.
     """
 
-    fake_trace = SimpleNamespace(has_backward_pass=False, grad_fn_logs={"relu_1_1": object()})
+    fake_trace = SimpleNamespace(has_backward_pass=False, _grad_fn_logs={"relu_1_1": object()})
 
     with pytest.raises(MetadataInvariantError, match="non_torch_backward_inert"):
         _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
@@ -2472,9 +2472,9 @@ def test_non_torch_backward_inert_fires_on_nonzero_backward_pass_count() -> None
 
     fake_trace = SimpleNamespace(
         has_backward_pass=False,
-        grad_fn_logs=None,
+        _grad_fn_logs=None,
         grad_fn_order=None,
-        backward_pass_logs=None,
+        _backward_pass_logs=None,
         backward_root_grad_fn_object_ids=None,
         num_backward_passes=2,
     )
@@ -2496,7 +2496,7 @@ def test_site_key_invariants_fires_on_malformed_key() -> None:
     """A retained op's non-``None`` site_key must be well-formed and prefixed."""
 
     fake_trace = SimpleNamespace(
-        layer_list=[SimpleNamespace(site_key="not-a-real-site-key", label="op_1_1")],
+        _layer_list=[SimpleNamespace(site_key="not-a-real-site-key", label="op_1_1")],
     )
 
     with pytest.raises(MetadataInvariantError, match="site_key_invariants"):

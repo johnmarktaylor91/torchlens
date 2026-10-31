@@ -597,7 +597,7 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
     )
     spec = InterventionSpec(records=[first, duplicate, distinct_tuple])
 
-    _sync_spec_records_from_log(spec, SimpleNamespace(layer_list=[], grad_fn_logs={}))
+    _sync_spec_records_from_log(spec, SimpleNamespace(_layer_list=[], _grad_fn_logs={}))
 
     assert spec.records == [first, distinct_tuple]
 

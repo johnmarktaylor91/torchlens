@@ -2301,7 +2301,7 @@ def _backstop_trace(
     """Wrap census inputs in a trace-shaped object for the backstop helper."""
 
     return SimpleNamespace(
-        layer_list=layer_list,
+        _layer_list=layer_list,
         completeness_decompositions=decompositions,
         completeness_diagnostics=diagnostics or [],
     )
@@ -5352,7 +5352,7 @@ def test_remainder_divisor_not_exempt_when_output_differs_from_dividend() -> Non
         # NOT be exempt when the saved dividend differs from the output.
         assert posthoc_perturb_check(trace, remainder_layer, [divisor_parent]).exempt is False
 
-        remainder_op = remainder_layer.ops[0]
+        remainder_op = remainder_layer  # an Op from the private layer list; Op.ops is gone
         remainder_op.out = remainder_op.out + 100.0
         result = trace.validate_forward_pass(ground_truth, validate_metadata=False)
         assert bool(result) is False

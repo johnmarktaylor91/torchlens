@@ -135,7 +135,7 @@ def _graph(parents_of_c: list[str]) -> SimpleNamespace:
     """Two input layers feeding a noncommutative op with the given parent order."""
 
     return SimpleNamespace(
-        layer_list=[
+        _layer_list=[
             _mk_layer("a", [], func="input"),
             _mk_layer("b", [], func="input"),
             _mk_layer("c", parents_of_c),

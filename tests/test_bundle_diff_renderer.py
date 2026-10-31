@@ -232,9 +232,9 @@ def test_bundle_diff_uses_each_members_own_delta() -> None:
     left_layer = SimpleNamespace(layer_label="left_1", func_name="op", parents=[], shape=None)
     right_layer = SimpleNamespace(layer_label="right_1", func_name="op", parents=[], shape=None)
     bundle = {
-        "baseline": SimpleNamespace(layer_list=[]),
-        "left": SimpleNamespace(layer_list=[left_layer]),
-        "right": SimpleNamespace(layer_list=[right_layer]),
+        "baseline": SimpleNamespace(_layer_list=[]),
+        "left": SimpleNamespace(_layer_list=[left_layer]),
+        "right": SimpleNamespace(_layer_list=[right_layer]),
     }
 
     dot = _build_dot(

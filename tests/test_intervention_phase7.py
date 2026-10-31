@@ -260,7 +260,7 @@ def test_rerun_colliding_hook_identifiers_do_not_hide_misses() -> None:
     # Entry 1 fires twice (two sites), entry 2 never fires: the audit must
     # report the miss instead of letting the shared string absorb it.
     stub_log = SimpleNamespace(
-        layer_list=[SimpleNamespace(fire_results=[_fire(plan_ids[0]), _fire(plan_ids[0])])]
+        _layer_list=[SimpleNamespace(fire_results=[_fire(plan_ids[0]), _fire(plan_ids[0])])]
     )
     with pytest.warns(UserWarning, match="fired at zero sites on the new inputs"):
         fired, unfired = _reconcile_rerun_hook_fires(stub_log, plan)
@@ -688,7 +688,7 @@ def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:
         fire_results=(SimpleNamespace(plan_id=ids[0]), SimpleNamespace(plan_id=ids[0])),
         interventions=(),
     )
-    log = SimpleNamespace(layer_list=[fired_twice])
+    log = SimpleNamespace(_layer_list=[fired_twice])
     with pytest.warns(UserWarning, match="fired at zero sites"):
         total, unfired = _reconcile_rerun_hook_fires(log, plan)
     assert total == 2

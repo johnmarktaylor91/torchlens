@@ -205,7 +205,7 @@ def _backstop_trace(
     """Wrap census inputs in a trace-shaped object for the backstop helper."""
 
     return SimpleNamespace(
-        layer_list=layer_list,
+        _layer_list=layer_list,
         completeness_decompositions=decompositions,
         completeness_diagnostics=diagnostics,
     )

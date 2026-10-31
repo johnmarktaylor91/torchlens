@@ -1278,7 +1278,7 @@ def test_downstream_intervening_inference_builds_reverse_edges_once() -> None:
     )
     trace = SimpleNamespace(
         autograd=SimpleNamespace(grad_fns=grad_fns),
-        grad_fn_logs={fn.grad_fn_object_id: fn for fn in grad_fns},
+        _grad_fn_logs={fn.grad_fn_object_id: fn for fn in grad_fns},
     )
     handle = SimpleNamespace(grad_fn_object_id=3, next_grad_fn_ids=[4], op=None)
 

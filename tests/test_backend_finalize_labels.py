@@ -30,11 +30,11 @@ def _stub_trace() -> SimpleNamespace:
 
     return SimpleNamespace(
         _layer_list=[],
-        layer_dict_main_keys={},
-        layer_dict_all_keys={},
+        _layer_dict_main_keys={},
+        _layer_dict_all_keys={},
         op_labels=[],
         layer_labels=[],
-        layer_num_calls={},
+        _layer_num_calls={},
         _lookup_keys_to_layer_num_dict={},
         _layer_num_to_lookup_keys_dict=defaultdict(list),
     )

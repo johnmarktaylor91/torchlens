@@ -247,7 +247,7 @@ def test_derivation_rule(backend: str, version: int, history: list[Any], expecte
         intervention_audit=[],
         state=TraceState.RERUN_PROPAGATED,
         _has_direct_writes=False,
-        layer_list=[],
+        _layer_list=[],
     )
     assert derive_pristine(stub) is expected
 
@@ -263,7 +263,7 @@ def test_non_torch_backends_read_not_recorded_never_pristine() -> None:
             intervention_audit=[],
             state=TraceState.PRISTINE,
             _has_direct_writes=False,
-            layer_list=[],
+            _layer_list=[],
         )
         expected = True if name == "torch" else None
         assert records_intervention_evidence(name) is (name == "torch")
@@ -289,7 +289,7 @@ def test_each_evidence_kind_reads_not_pristine(field: str, value: Any) -> None:
         intervention_audit=[],
         state=TraceState.PRISTINE,
         _has_direct_writes=False,
-        layer_list=[],
+        _layer_list=[],
     )
     setattr(stub, field, value)
     assert derive_pristine(stub) is False
