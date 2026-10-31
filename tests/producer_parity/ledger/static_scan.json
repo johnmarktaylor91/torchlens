@@ -476,7 +476,7 @@
   "field": "modules",
   "file": "torchlens/_data_classes/module.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -484,7 +484,7 @@
   "field": "params",
   "file": "torchlens/_data_classes/module.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -1860,7 +1860,7 @@
   "field": "source_trace",
   "file": "torchlens/_ir/selector_eval.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {
