@@ -441,6 +441,7 @@ def test_unmet_step_postcondition_raises_typed_error(
     with pytest.raises(MetadataInvariantError) as excinfo:
         tl.trace(_TinyModel().eval(), torch.randn(2, 3))
     assert excinfo.value.check_name == "postprocess_step_postcondition"
+    assert excinfo.value.fields["code"] == "postprocess_step_postcondition"
     text = str(excinfo.value)
     assert re.search(rf"\bStep {re.escape(step)} ", text), text
     assert message in text, text

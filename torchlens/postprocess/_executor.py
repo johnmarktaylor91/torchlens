@@ -491,8 +491,8 @@ def _check_step_postconditions(ctx: StepContext, step: str) -> None:
     Raises
     ------
     MetadataInvariantError
-        With check name ``postprocess_step_postcondition`` and a message
-        naming the step.
+        With check name and refusal code ``postprocess_step_postcondition``
+        and a message naming the step.
     """
 
     check = STEP_POSTCONDITIONS.get(step)
@@ -500,7 +500,11 @@ def _check_step_postconditions(ctx: StepContext, step: str) -> None:
     if violation is not None:
         from ..validation.invariants import MetadataInvariantError
 
-        raise MetadataInvariantError("postprocess_step_postcondition", violation)
+        raise MetadataInvariantError(
+            "postprocess_step_postcondition",
+            f"{violation}. Remedy: report this as a TorchLens bug.",
+            code="postprocess_step_postcondition",
+        )
 
 
 def run_pipeline(ctx: StepContext) -> None:
