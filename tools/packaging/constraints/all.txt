@@ -1,0 +1,4 @@
+# Generated from tools/packaging/matrix.toml by tools/packaging/generate_constraints.py.
+# Do not edit: change matrix.toml and rerun the generator.
+# set: all; extras: all; python: 3.10; expect: install
+torch==2.13.0+cpu

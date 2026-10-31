@@ -1,0 +1,290 @@
+# The one reviewed input for the clean-environment packaging tests.
+#
+# tools/packaging/generate_constraints.py turns this file into
+# tools/packaging/constraints/<set>.txt (sorted, no timestamps) and into the CI
+# matrix of the `packaging` leg in .github/workflows/pr.yml; `--check` exits 1
+# when a generated file is stale. tests/packaging/ installs the built wheel and
+# sdist into a fresh venv per set under that set's constraints and probes it.
+#
+# Every extra declared in pyproject.toml must appear in a set or in `aliases`;
+# the generator refuses the file otherwise, so a new extra cannot be forgotten.
+
+schema = 1
+
+[defaults]
+python = "3.10"
+# The pinned environment's torch, served CPU-only by the PyTorch index.
+index_url = "https://download.pytorch.org/whl/cpu"
+extra_index_url = "https://pypi.org/simple"
+
+[constraints]
+# Applied to every set.
+common = ["torch==2.13.0+cpu"]
+
+# Per-set pins beyond `common`, keyed by extra. Each pin here is one CI already
+# holds exact elsewhere (pyproject.toml comments name them).
+[constraints.extra]
+netron = ["netron==9.2.2"]
+model-explorer = ["ai-edge-model-explorer==0.1.33"]
+
+[aliases]
+# Spellings that request exactly another extra (pyproject.toml rolls them up
+# with a self-reference), so the aliased extra's set covers them.
+all-stretch = "all"
+tensorflow = "tf"
+
+# Typed refusals asserted per set. A gate is expected PRESENT when its extra is
+# in the set (and the interpreter meets `python_min`), ABSENT otherwise. Absent:
+# the access raises torchlens.errors.MissingDependencyError with fields["code"]
+# equal to `code` (and fields["dependency"] equal to `dependency` when given).
+# Present: `module` imports and the access resolves (`present = "import"` checks
+# only the import, for entry points that need real arguments).
+[gates.neuro]
+extra = "neuro"
+access = "torchlens.neuro:rdms"
+code = "facade_dependency_missing"
+dependency = "rsatoolbox"
+module = "rsatoolbox"
+
+[gates.brainscore]
+extra = "brainscore"
+access = "torchlens.neuro:activations_extractor"
+code = "facade_dependency_missing"
+dependency = "brainscore_vision"
+module = "brainscore_vision"
+# The extra is empty below 3.11 (brainscore_vision requires >=3.11).
+python_min = "3.11"
+
+[gates.treescope]
+extra = "treescope"
+call = "torchlens.bridge.treescope:register"
+cleanup = "torchlens.bridge.treescope:unregister"
+code = "treescope_bridge_unavailable"
+module = "treescope"
+
+[gates.lit]
+extra = "lit"
+call = "torchlens.bridge.lit:dataset"
+call_args = [[]]
+code = "lit_dependency_missing"
+module = "lit_nlp"
+present = "import"
+
+# Sets. `group = "pr"` runs on every pull request; `group = "extended"` runs on
+# manual dispatch and workflow_call. `expect` is "install" (installs and every
+# probe passes); the incompatible sets at the end use the two other values.
+[sets.none]
+extras = []
+group = "pr"
+
+[sets.all]
+# `all` is pyproject's "everything that installs together" rollup.
+extras = ["all"]
+group = "pr"
+
+[sets.neuro]
+extras = ["neuro"]
+group = "pr"
+
+[sets.tabular]
+extras = ["tabular"]
+group = "pr"
+
+[sets.viz]
+extras = ["viz"]
+group = "pr"
+
+[sets.treescope]
+extras = ["treescope"]
+group = "pr"
+
+[sets.extraction-export]
+extras = ["extraction-export"]
+group = "pr"
+
+[sets.brainscore]
+extras = ["brainscore"]
+python = "3.11"
+group = "extended"
+
+[sets.notebook]
+extras = ["notebook"]
+group = "extended"
+
+[sets.netron]
+extras = ["netron"]
+group = "extended"
+
+[sets.model-explorer]
+extras = ["model-explorer"]
+group = "extended"
+
+[sets.deploy]
+extras = ["deploy"]
+group = "extended"
+
+[sets.tlens-oracle]
+extras = ["tlens-oracle"]
+group = "extended"
+
+[sets.trackers-relay-test]
+extras = ["trackers-relay-test"]
+group = "extended"
+
+[sets.captum]
+extras = ["captum"]
+group = "extended"
+
+[sets.mcp]
+extras = ["mcp"]
+group = "extended"
+
+[sets.sae]
+extras = ["sae"]
+group = "extended"
+
+[sets.lightning]
+extras = ["lightning"]
+group = "extended"
+
+[sets.wandb]
+extras = ["wandb"]
+group = "extended"
+
+[sets.mlx]
+extras = ["mlx"]
+group = "extended"
+
+[sets.jax]
+extras = ["jax"]
+group = "extended"
+
+[sets.tinygrad]
+extras = ["tinygrad"]
+python = "3.11"
+group = "extended"
+
+[sets.paddle]
+extras = ["paddle"]
+group = "extended"
+
+[sets.tf]
+extras = ["tf"]
+group = "extended"
+
+[sets.tensorboard]
+extras = ["tensorboard"]
+group = "extended"
+
+[sets.hf]
+extras = ["hf"]
+group = "extended"
+
+[sets.gradcam]
+extras = ["gradcam"]
+group = "extended"
+
+[sets.shap]
+extras = ["shap"]
+group = "extended"
+
+[sets.inseq]
+extras = ["inseq"]
+group = "extended"
+
+[sets.steering]
+extras = ["steering"]
+group = "extended"
+
+[sets.repeng]
+extras = ["repeng"]
+group = "extended"
+
+[sets.dialz]
+extras = ["dialz"]
+group = "extended"
+
+[sets.lit]
+extras = ["lit"]
+group = "extended"
+
+[sets.depyf]
+extras = ["depyf"]
+group = "extended"
+
+[sets.compat-shims]
+extras = ["compat-shims"]
+group = "extended"
+
+[sets.vision-shims]
+extras = ["vision-shims"]
+group = "extended"
+
+[sets.dev]
+extras = ["dev"]
+group = "extended"
+
+[sets.test]
+extras = ["test"]
+group = "extended"
+
+# Intentionally incompatible combinations. Found by resolving every pair of
+# the user-facing and heavy extras with `uv pip compile` on python 3.10 and
+# 3.11 (Linux x86_64); every pair below failed on both interpreters except
+# neuro + brainscore, which pyproject.toml names.
+#
+# expect = "install_fails": the resolver refuses the combination.
+# expect = "install_or_refuse": either the resolver refuses it, or it installs
+# and every gate in `refuses` raises its typed MissingDependencyError.
+
+# neuro + brainscore: named in pyproject.toml's neuro comment and
+# docs/reference/neuro.md (brainscore_vision pins scikit-learn<1.6, rsatoolbox
+# 0.3.x needs scikit-learn>=1.6). On 3.11 the resolver backs rsatoolbox off to
+# an older release and installs, so the conflict surfaces at import. Below 3.11
+# the brainscore extra is empty, so the pair runs on 3.11.
+[sets.neuro-brainscore]
+extras = ["neuro", "brainscore"]
+python = "3.11"
+expect = "install_or_refuse"
+refuses = ["neuro"]
+group = "pr"
+
+# sae-lens>=6.45 and inseq>=0.6 have no common transformers band.
+[sets.sae-inseq]
+extras = ["sae", "inseq"]
+expect = "install_fails"
+group = "pr"
+
+# `all` carries inseq, so it inherits the sae + inseq conflict.
+[sets.all-sae]
+extras = ["all", "sae"]
+expect = "install_fails"
+group = "pr"
+
+# tlens-oracle is a test-only extra (transformer-lens==3.8.0); its conflicts
+# are with the extras whose transformers or sentence-transformers bands
+# exclude transformers 5.x.
+[sets.all-tlens-oracle]
+extras = ["all", "tlens-oracle"]
+expect = "install_fails"
+group = "extended"
+
+[sets.tlens-oracle-inseq]
+extras = ["tlens-oracle", "inseq"]
+expect = "install_fails"
+group = "extended"
+
+[sets.tlens-oracle-dialz]
+extras = ["tlens-oracle", "dialz"]
+expect = "install_fails"
+group = "extended"
+
+[sets.tlens-oracle-steering]
+extras = ["tlens-oracle", "steering"]
+expect = "install_fails"
+group = "extended"
+
+[sets.tlens-oracle-compat-shims]
+extras = ["tlens-oracle", "compat-shims"]
+expect = "install_fails"
+group = "extended"
