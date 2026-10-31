@@ -104,8 +104,11 @@ class MetadataInvariantError(_ActionableErrorMixin, ValidationError, ValueError)
             carried on ``fields["code"]``.
         """
 
-        payload: dict[str, object] = {} if code is None else {"code": code}
-        super().__init__(f"[{check_name}] {message}", **payload)
+        text = f"[{check_name}] {message}"
+        if code is None:
+            super().__init__(text)
+        else:
+            super().__init__(text, code=code)
         self.check_name = check_name
 
 
