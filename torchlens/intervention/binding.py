@@ -1225,7 +1225,7 @@ class BoundModel:
     def __init__(self, spec: Recipe, model: Any, *, on_zero_fire: str) -> None:
         """Preflight + lower the spec against the model (no forward runs).
 
-        Use :meth:`InterventionSpec.bind`; this constructor is the engine.
+        Use :meth:`Recipe.bind`; this constructor is the engine.
         """
 
         object.__setattr__(self, "_spec", spec)

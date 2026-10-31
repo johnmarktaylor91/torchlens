@@ -626,7 +626,7 @@ def swap_with(
         label -> tensor lookup table, so a string label can never resolve
         to another site's captured activation today. Pass a
         ``torch.Tensor`` or an Op-like object with a resolved ``out``
-        tensor instead (e.g. ``tl.swap_with(other_log['layer_x'].out)``).
+        tensor instead (e.g. ``swap_with(other_log['layer_x'].out)``).
     """
 
     if isinstance(other_label, str):
@@ -636,8 +636,8 @@ def swap_with(
             "that would resolve a string label to another site's captured "
             "tensor. Pass a torch.Tensor or an Op-like object with an "
             "already-resolved `out` tensor instead, e.g. "
-            "tl.swap_with(other_log['layer_x'].out) or "
-            "tl.swap_with(other_log['layer_x'])."
+            "swap_with(other_log['layer_x'].out) or "
+            "swap_with(other_log['layer_x'])."
         )
 
     def factory() -> Callable[..., torch.Tensor]:

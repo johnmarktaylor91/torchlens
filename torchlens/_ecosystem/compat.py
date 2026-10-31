@@ -48,6 +48,14 @@ class CompatWindow:
     promise: dict[str, Any]
     rows: tuple[LedgerRow, ...]
 
+    def __repr__(self) -> str:
+        """Bounded identity card (D31): rows and facts are counted, never dumped."""
+
+        return (
+            f"CompatWindow({len(self.rows)} ledger row(s), {len(self.runtime)} runtime fact(s), "
+            f"{len(self.promise)} promise fact(s); read .to_markdown())"
+        )
+
     def to_markdown(self) -> str:
         """Render the report as a compact markdown table.
 

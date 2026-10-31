@@ -12,7 +12,7 @@ is never silent (FORCED-SILENTLY is banned as a steady state).
 The ``_explicit_fields`` / ``_field_is_explicit`` readers over
 ``_specified_fields`` live here because the receipt is built on them, and the
 frozen-group construction kit (``_resolve_option_value`` /
-``_set_frozen_fields``) plus :class:`EchoOptions` (lane F28) complete the set;
+``_set_frozen_fields``) plus :class:`NarrationOptions` (lane F28) complete the set;
 ``options.py`` imports them back (one-directional -- this module never
 imports ``options``).
 """
@@ -171,7 +171,7 @@ class NarrationOptions:
 
     Examples
     --------
-    >>> opts = EchoOptions(select=True, stats="off", tail_on_error=20)
+    >>> opts = NarrationOptions(select=True, stats="off", tail_on_error=20)
     >>> opts.stats
     'off'
     """

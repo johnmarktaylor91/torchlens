@@ -127,7 +127,7 @@ class EchoSession:
     Parameters
     ----------
     options:
-        Normalized ``EchoOptions``.
+        Normalized ``NarrationOptions``.
     tier:
         ``"trace"`` or ``"record"`` -- disclosure only; the rendered lines
         are field-identical across tiers by construction (tier parity gate).

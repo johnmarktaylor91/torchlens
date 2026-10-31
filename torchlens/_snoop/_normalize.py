@@ -3,7 +3,7 @@
 One normalizer serves every mount (``tl.trace``, ``tl.record``,
 ``fastlog.Recorder``): the accepted spellings are ``True`` (everything plus
 structure lines), ``"modules"`` (structure-only flight recorder), any
-LIVE-EVALUABLE selector or callable, a grouped ``EchoOptions``, and
+LIVE-EVALUABLE selector or callable, a grouped ``NarrationOptions``, and
 ``False``/``None`` (off). String/label/index selections are REFUSED with the
 remedy naming post-hoc ``.narrate()``: final labels do not exist during a
 live forward, and the panel deleted the two-pass fallback (narrating a
@@ -51,7 +51,7 @@ def _refuse_finalized_selector(selector: Any) -> None:
 
 
 def normalize_echo(narrate: Any) -> NarrationOptions | None:
-    """Normalize one ``narrate=`` value to a grouped ``EchoOptions`` (or off).
+    """Normalize one ``narrate=`` value to a grouped ``NarrationOptions`` (or off).
 
     Parameters
     ----------
@@ -60,7 +60,7 @@ def normalize_echo(narrate: Any) -> NarrationOptions | None:
 
     Returns
     -------
-    EchoOptions | None
+    NarrationOptions | None
         Normalized options, or ``None`` when narration is off.
 
     Raises
@@ -79,7 +79,7 @@ def normalize_echo(narrate: Any) -> NarrationOptions | None:
     _validate_select(select)
     if normalized.stats not in ("off", "reuse", "sampled", "exact"):
         raise NarrationConfigError(
-            f"EchoOptions.stats={normalized.stats!r} is not a rung. Remedy: use 'off', "
+            f"NarrationOptions.stats={normalized.stats!r} is not a rung. Remedy: use 'off', "
             "'reuse', 'sampled', or 'exact' (the four measured cost classes).",
             code="echo_argument_invalid",
             remedy="use stats='off'|'reuse'|'sampled'|'exact'",
@@ -88,7 +88,7 @@ def normalize_echo(narrate: Any) -> NarrationOptions | None:
 
 
 def _coerce_echo_value(echo: Any) -> NarrationOptions:
-    """Coerce one armed ``narrate=`` spelling to ``EchoOptions``, or refuse typed."""
+    """Coerce one armed ``narrate=`` spelling to ``NarrationOptions``, or refuse typed."""
 
     if isinstance(echo, NarrationOptions):
         return echo
@@ -103,7 +103,7 @@ def _coerce_echo_value(echo: Any) -> NarrationOptions:
             "Remedy: pass narrate=True, narrate='modules', a live selector such as "
             "tl.in_module(...), or narrate post-hoc via trace.narrate(select=...).",
             code="echo_argument_invalid",
-            remedy="pass True, 'modules', a live selector, or EchoOptions",
+            remedy="pass True, 'modules', a live selector, or NarrationOptions",
         )
     if callable(echo):
         return NarrationOptions(select=echo)
@@ -111,16 +111,16 @@ def _coerce_echo_value(echo: Any) -> NarrationOptions:
         f"narrate= received unsupported type {type(echo).__name__}. Remedy: pass True, "
         "'modules', a live selector/callable, or tl.options.NarrationOptions.",
         code="echo_argument_invalid",
-        remedy="pass True, 'modules', a live selector, or EchoOptions",
+        remedy="pass True, 'modules', a live selector, or NarrationOptions",
     )
 
 
 def _validate_select(select: Any) -> None:
-    """Refuse non-live ``EchoOptions.select`` spellings typed."""
+    """Refuse non-live ``NarrationOptions.select`` spellings typed."""
 
     if isinstance(select, str) and select != "modules":
         raise NarrationConfigError(
-            f"EchoOptions.select={select!r} is not a live narration scope. Remedy: use "
+            f"NarrationOptions.select={select!r} is not a live narration scope. Remedy: use "
             "True, 'modules', or a live selector; post-hoc narrate() accepts substrings.",
             code="echo_argument_invalid",
             remedy="use True, 'modules', or a live selector",
@@ -131,7 +131,7 @@ def _validate_select(select: Any) -> None:
         _refuse_finalized_selector(select)
     elif select is not True and not callable(select) and select != "modules":
         raise NarrationConfigError(
-            f"EchoOptions.select received unsupported type {type(select).__name__}. "
+            f"NarrationOptions.select received unsupported type {type(select).__name__}. "
             "Remedy: pass True, 'modules', or a live selector/callable.",
             code="echo_argument_invalid",
             remedy="pass True, 'modules', or a live selector/callable",
@@ -139,7 +139,7 @@ def _validate_select(select: Any) -> None:
 
 
 def refuse_echo_shaped_predicate(value: Any, *, slot: str) -> None:
-    """Teaching refusal: an ``EchoOptions`` routed into ``save=``/``hooks=``.
+    """Teaching refusal: an ``NarrationOptions`` routed into ``save=``/``hooks=``.
 
     Narration through the save-predicate slot is evaluated TWICE per
     declined op (measured: 554 evaluations for 277 events -- the alias
@@ -157,7 +157,7 @@ def refuse_echo_shaped_predicate(value: Any, *, slot: str) -> None:
     Raises
     ------
     NarrationConfigError
-        When ``value`` is (or contains) an ``EchoOptions``.
+        When ``value`` is (or contains) an ``NarrationOptions``.
     """
 
     values: tuple[Any, ...] = tuple(value) if isinstance(value, (list, tuple)) else (value,)
@@ -165,17 +165,17 @@ def refuse_echo_shaped_predicate(value: Any, *, slot: str) -> None:
         return
     if slot == "save":
         raise NarrationConfigError(
-            "EchoOptions is not a save predicate: the save slot is evaluated twice per "
+            "NarrationOptions is not a save predicate: the save slot is evaluated twice per "
             "declined op (the measured 554-evaluations-for-277-events alias retry), and a "
-            "narrator that saves nothing declines everything. Remedy: pass narrate=EchoOptions "
+            "narrator that saves nothing declines everything. Remedy: pass narrate=NarrationOptions "
             "(narration) and keep save= for retention -- the two scopes are independent.",
             code="echo_as_save_predicate",
             remedy="pass it via narrate=; keep save= for retention",
         )
     raise NarrationConfigError(
-        "EchoOptions is not a hook: narration through hooks= pays the intervention "
+        "NarrationOptions is not a hook: narration through hooks= pays the intervention "
         "runtime's content probes and provenance records (+101% measured trace cost) and "
-        "cannot render module path, depth, or pass. Remedy: pass narrate=EchoOptions -- the "
+        "cannot render module path, depth, or pass. Remedy: pass narrate=NarrationOptions -- the "
         "read-only observer slot is the one narration mechanism.",
         code="echo_via_hooks_unsupported",
         remedy="pass it via narrate=",

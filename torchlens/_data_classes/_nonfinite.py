@@ -387,7 +387,7 @@ def has_scan_evidence(log: Any, kind: str = "saved") -> bool:
     zero read cost) or a prior saved-payload scan left its memo on this
     log. Render surfaces bound by the D4 cost-attribution law (no
     implicit payload scans) branch on THIS before reading health facts;
-    the explicit ``tl.report.health_facts(trace)`` door stays the one
+    the explicit ``trace.health_facts`` door stays the one
     spelling that may pay for a first scan.
     """
 

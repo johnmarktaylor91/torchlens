@@ -193,6 +193,16 @@ class MergeReport:
     findings: tuple[MergedFinding, ...]
     degradations: tuple[str, ...] = ()
 
+    def __repr__(self) -> str:
+        """Bounded identity card (D31): verdicts lead; ranks and findings are counted."""
+
+        return (
+            f"MergeReport({len(self.ranks)} rank(s), alignment={self.alignment.value!r}, "
+            f"value_status={self.value_status.value!r}, {self.num_joins} join(s), "
+            f"{len(self.findings)} finding(s), {len(self.degradations)} degradation(s); "
+            "read .to_markdown())"
+        )
+
     @property
     def gaps(self) -> tuple[MergedFinding, ...]:
         """The ``presence_gap`` findings: boundaries a rank never recorded."""

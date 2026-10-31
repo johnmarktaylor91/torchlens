@@ -274,7 +274,7 @@ def _health_summary(log: Any) -> dict[str, Any]:
 
     D4 (F09 item 13): a machine dump never implicitly pays for a payload
     scan -- this serves the basis in hand and reads NOT-CHECKED otherwise
-    (the explicit scan spelling is ``tl.report.health_facts(trace)``).
+    (the explicit scan spelling is ``trace.health_facts``).
     """
 
     from ._health import health_facts

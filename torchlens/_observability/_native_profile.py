@@ -63,6 +63,15 @@ class KernelProfileReport:
     join: KinetoJoinResult
     session_facts: dict[str, Any]
 
+    def __repr__(self) -> str:
+        """Bounded identity card (D31): availability leads; the trace is never dumped."""
+
+        return (
+            f"KernelProfileReport(availability={self.availability!r}, "
+            f"trace={type(self.trace).__name__}, {len(self.session_facts)} session fact(s); "
+            "read .device_time_table())"
+        )
+
     @property
     def availability(self) -> str:
         """Five-state session availability (missing is None, never zero)."""

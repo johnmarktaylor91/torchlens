@@ -222,7 +222,7 @@ def attach_provenance(trace: Any, provenance: InputProvenance) -> None:
     already reads as gold everywhere in the capability gate -- so a gold
     record would disturb a shipped contract to encode information absence
     already encodes. Gold provenance still travels in-memory on quickstart
-    results (RenderResult.provenance).
+    results (Drawing.provenance).
 
     Nests any pre-existing preprocessing record (e.g. the HF tokenizer
     provenance written by the string-input bridge) inside the input record

@@ -773,7 +773,7 @@ def _anomaly_lines(log: Any) -> list[str]:
         ),
         (
             "- To scan retained payloads (payload_scan cost): "
-            "tl.report.health_facts(trace) or trace.nonfinite_ops."
+            "trace.health_facts or trace.nonfinite_ops."
         ),
         *_track_nonfinite_hint_lines(log),
     ]

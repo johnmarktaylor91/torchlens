@@ -1,6 +1,6 @@
 """Cross-run selection alignment (L6 stage 4a).
 
-``ResolvedSelection.align_to(target)`` re-binds a selection resolved on
+``Selection.align_to(target)`` re-binds a selection resolved on
 trace A onto trace B, keyed on the L1 STRUCTURAL SITE KEYS (``op.site_key``,
 ``site_key_v1``) that every ACT :class:`~torchlens._selection.Site`
 records as its bridging relation. This is the sanctioned cross-run door:
@@ -211,8 +211,8 @@ def _join_verdict_for_key(source_trace: Any, target: Any, structural_key: str) -
 def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
     """Re-bind a resolved selection onto ``target``, keyed on L1 site keys.
 
-    Implementation home of ``ResolvedSelection.align_to``. Returns a NEW
-    frozen ``ResolvedSelection`` bound to ``target`` whose entries carry the
+    Implementation home of ``Selection.align_to``. Returns a NEW
+    frozen ``Selection`` bound to ``target`` whose entries carry the
     source masks unchanged, with per-entry provenance disclosing the
     cross-run origin. ``target is source`` returns ``resolved`` itself
     (alignment is the identity there).

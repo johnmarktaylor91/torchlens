@@ -35,7 +35,7 @@ __tl_layer__ = "FACADE"
 #: True = branch A: a bare render call in a plain script writes a
 #: collision-safe ``<ModelClass>-graph.<format>`` and prints the path on one
 #: line. False = branch B: no implicit filesystem action ever; the caller
-#: uses ``file=`` or ``RenderResult.save()``.
+#: uses ``file=`` or ``Drawing.save()``.
 BARE_RENDER_WRITES_FILE_IN_SCRIPTS = True
 
 #: The curated call surface (D12). Everything else passes through to
@@ -311,14 +311,14 @@ def render(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input l
     return_trace:
         Retain the metadata-only trace on the result (the EXACT verified
         trace on the zero-argument rung); cleanup transfers to
-        ``RenderResult.close()``.
+        ``Drawing.close()``.
     **draw_kwargs:
         Passed through to ``Trace.draw`` unchanged; colliding with the
         curated dials refuses typed (``render_kwarg_collision``).
 
     Returns
     -------
-    RenderResult
+    Drawing
         The detached result (memo D13). Never ``None``.
     """
 

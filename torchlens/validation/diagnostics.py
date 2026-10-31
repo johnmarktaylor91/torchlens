@@ -92,6 +92,12 @@ class ValidationFailure:
     reduction_depth: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
+    def __repr__(self) -> str:
+        """Bounded identity card (D31): the summary line leads, ``extra`` is counted."""
+
+        extra = f", {len(self.extra)} extra key(s)" if self.extra else ""
+        return f"ValidationFailure({self.summary()!r}{extra})"
+
     def summary(self) -> str:
         """Return a compact single-line human-readable summary.
 
@@ -179,6 +185,15 @@ class ValidationDiagnostic:
     check_name: str
     message: str
     extra: dict[str, Any] = field(default_factory=dict)
+
+    def __repr__(self) -> str:
+        """Bounded identity card (D31): the check and a clipped message, ``extra`` counted."""
+
+        message = self.message if len(self.message) <= 160 else f"{self.message[:157]}..."
+        return (
+            f"ValidationDiagnostic({self.check_name!r}, message={message!r}, "
+            f"{len(self.extra)} extra key(s))"
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly representation of this diagnostic.

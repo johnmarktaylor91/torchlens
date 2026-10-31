@@ -134,7 +134,7 @@ _REFUSALS: dict[str, tuple[str, str]] = {
     "set_direction_mean": (
         _NESTED_WHY,
         "set the component to the population mean with "
-        "fork.do(tl.subspace(site, basis, origin=...), tl.intervention.mean_from(ref))",
+        "fork.do(tl.subspace(site, basis, origin=...), torchlens.intervention.stochastic.mean_from(reference))",
     ),
     **dict.fromkeys(
         sorted(_NESTED_PROJECTIONS - {"set_direction_mean"}),

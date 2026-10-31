@@ -592,7 +592,7 @@ def _value_tree_from_leaves(
     Returns
     -------
     AttributionValueTree
-        Public ``AttributionResult.values`` structure.
+        Public ``Attribution.values`` structure.
     """
 
     if len(values) == 1:

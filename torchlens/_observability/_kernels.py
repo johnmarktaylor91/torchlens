@@ -3,7 +3,7 @@
 These are the two reduction kernels every per-step history observation is
 built from:
 
-- :class:`Spine` -- the always-on scalar spine: exact integer counts
+- :class:`RunningStats` -- the always-on scalar spine: exact integer counts
   (total / finite / zero / negative / NaN / +inf / -inf), finite min / max /
   absmax, sum, sum-of-squares, sum-of-abs, plus stable-merge moments
   (Chan's parallel mean/M2). Integer counts merge EXACTLY; floating fields
@@ -314,9 +314,9 @@ class RunningStats:
 
         if not isinstance(other, RunningStats):
             raise StatKernelError(
-                f"Spine.merge expects a Spine, got {type(other).__name__}.",
+                f"RunningStats.merge expects a RunningStats, got {type(other).__name__}.",
                 code="stat_merge_incompatible",
-                remedy="Merge Spine accumulators with Spine accumulators only.",
+                remedy="Merge RunningStats accumulators with RunningStats accumulators only.",
             )
         if other._count_total == 0:
             return

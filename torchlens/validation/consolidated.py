@@ -71,6 +71,18 @@ class InterventionValidationReport:
     is_local: bool
     details: dict[str, Any]
 
+    def __repr__(self) -> str:
+        """Bounded identity card (D31): the five verdicts lead, ``details`` is counted."""
+
+        verdicts = ", ".join(
+            f"{name}={getattr(self, name)}"
+            for name in ("is_invariant", "is_specific", "is_complete", "is_consistent", "is_local")
+        )
+        return (
+            f"InterventionValidationReport(passed={self.passed}, {verdicts}; "
+            f"{len(self.details)} detail key(s) in .details)"
+        )
+
     @property
     def passed(self) -> bool:
         """Return the aggregate pass/fail result.

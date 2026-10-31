@@ -25,7 +25,7 @@ def resolve_echo_capture_options(
 ) -> Any:
     """Normalize ``narrate=`` and refuse unsupported option compositions.
 
-    Runs on EVERY torch trace entry, echo armed or not: an ``EchoOptions``
+    Runs on EVERY torch trace entry, echo armed or not: an ``NarrationOptions``
     routed into ``save=``/``hooks=`` refuses with the measured receipts
     (double evaluation / +101% hooks tax), and echo cannot combine with
     ``cache=True``, chunked forwards, or a value-reading stats rung under
@@ -45,7 +45,7 @@ def resolve_echo_capture_options(
 
     Returns
     -------
-    EchoOptions | None
+    NarrationOptions | None
         The normalized options, or ``None`` when echo is disarmed.
     """
 
@@ -124,7 +124,7 @@ def open_echo_session(trace: Any, echo_options: Any) -> EchoSession | None:
     trace:
         The in-flight Trace under capture.
     echo_options:
-        Normalized ``EchoOptions``, or ``None`` (returns ``None``).
+        Normalized ``NarrationOptions``, or ``None`` (returns ``None``).
 
     Returns
     -------

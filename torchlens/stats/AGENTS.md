@@ -30,14 +30,14 @@ Streaming statistics over activations and dataloaders (`tl.stats`, lazy).
   `_trace_selector_helpers._route_save_label_selection` turns `"stats"` into
   `SaveOptions(activation_transform=<summary-role reducer>,
   save_raw_activations=False)`, so the capture's reduce-only path keeps one
-  packed 16-slot `Spine` vector per op in `transformed_out` and no payload.
+  packed 16-slot `RunningStats` vector per op in `transformed_out` and no payload.
   `site_stats(trace)` decodes them. `Op.out` on such a trace refuses
   (`activation_reduced_to_stats`) and the replay/validation entry gates in
   `data_classes/_trace_validation.py` refuse (`stats_capture_not_replayable`).
-  The reducer is `lean_spine`, not `Spine.update`: same state, bounded
+  The reducer is `lean_spine`, not `RunningStats.update`: same state, bounded
   float64 working chunks (`_CHUNK`).
 - `measure_trajectory(model, data, ...)` (`_trajectory.py`): logit-lens
-  trajectory statistics folded into `Spine`s per statistic and layer. It
+  trajectory statistics folded into `RunningStats` accumulators per statistic and layer. It
   projects through `semantic.logit_lens._prepare_lens` / `_iter_layer_logits`,
   the one lens setup shared with `logit_lens` and `logit_lens_predictions`.
 

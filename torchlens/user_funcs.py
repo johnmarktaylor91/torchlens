@@ -3059,7 +3059,7 @@ def _trace_torch_model(
             remedy="bundle positional inputs into one tuple; use save= for selection",
         )
     _reject_unsupported_torch_trace_option_values(capture_options)
-    # Echo teaching refusals fire whether or not narrate= is armed: EchoOptions
+    # Echo teaching refusals fire whether or not narrate= is armed: NarrationOptions
     # routed into save=/hooks= refuses with the measured receipts, and
     # echo x cache/chunked/structure_only composition refuses typed (snoop D1).
     from ._snoop._entry import resolve_echo_capture_options
