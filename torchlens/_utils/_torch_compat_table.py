@@ -204,6 +204,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_JIT_SCHEMA_ENUMERATION"),
     _row("HAS_KINETO_EVENT_SCOPE", measured=False),
     _row("HAS_KINETO_INMEMORY_EVENTS", measured=False),
+    _row("HAS_LAZY_MODULE_ALLOWED_METHODS"),
     _row("HAS_LEGACY_CONSTRUCTOR_NEW_PATCH"),
     _row("HAS_MEMORY_PROFILE", measured=False),
     _row("HAS_META_ITEM_GUARD", measured=False),

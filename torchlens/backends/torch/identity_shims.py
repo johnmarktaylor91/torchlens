@@ -57,8 +57,15 @@ by a meta-path import hook, so a module first imported WHILE wrappers are
 installed is shimmed the moment it executes — never left broken until the
 next capture entry. Site availability is feature-detected in
 ``torchlens._utils._torch_compat`` (``HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG``,
-``HAS_ATTENTION_CAUSAL_BIAS``, ``HAS_EXPANDED_WEIGHTS_CONV_PICKER``) and is
-visible through the doctor/compat capability snapshot.
+``HAS_ATTENTION_CAUSAL_BIAS``, ``HAS_EXPANDED_WEIGHTS_CONV_PICKER``,
+``HAS_LAZY_MODULE_ALLOWED_METHODS``) and is visible through the doctor/compat
+capability snapshot. A ninth site is the membership shape the census grep
+cannot see, found by the stress matrix: the lazy-module
+``UninitializedTensorMixin._allowed_methods`` list, consulted from a
+``__torch_function__`` whose ``func`` operand is the CURRENT ``torch.Tensor``
+class attribute (the wrapper) for tensor methods; it gets a ledger-resolving
+view so a plain ``model.to(...)`` on an un-run lazy module keeps working
+outside capture.
 """
 
 from __future__ import annotations
@@ -328,6 +335,7 @@ def install_identity_shims() -> None:
         _install_fx_trace_shim(records)
         _install_overrides_membership_shims(records)
         _install_protocol_identity_shims(records)
+        _install_lazy_module_allowlist_shim(records)
     except Exception:
         _restore(records)
         raise
@@ -958,6 +966,40 @@ def _install_overrides_membership_shims(records: list[tuple[Any, str, Any]]) -> 
         _register_shim(shim)
         setattr(overrides_module, accessor_name, shim)
         records.append((overrides_module, accessor_name, orig_accessor))
+
+
+# ---------------------------------------------------------------------------
+# Site 9: torch.nn.parameter.UninitializedTensorMixin._allowed_methods
+# ---------------------------------------------------------------------------
+
+
+def _install_lazy_module_allowlist_shim(records: list[tuple[Any, str, Any]]) -> None:
+    """Resolve wrappers in the lazy-module materialization allowlist.
+
+    ``UninitializedTensorMixin.__torch_function__`` admits only the methods in
+    its class-level ``_allowed_methods`` list (``size``, ``is_floating_point``,
+    ``to``, ``copy_``, ...), built at import time from the pristine
+    ``torch.Tensor`` attributes. For a TENSOR METHOD the C-level protocol
+    hands the handler the CURRENT ``torch.Tensor.<name>`` class attribute,
+    which is the torchlens wrapper once wrappers are installed, so the
+    membership check missed and torch raised its own "uninitialized
+    parameter" ``ValueError`` from a plain ``model.to(...)`` on any model
+    holding an un-run lazy module, outside any capture (wave-3 stress F2).
+    Swapping the list for a ledger-resolving view keeps upstream's decision
+    (the ``in`` test and the error for every other method are torch's own)
+    while the wrapper alias resolves to its original.
+    """
+
+    if not _torch_compat.HAS_LAZY_MODULE_ALLOWED_METHODS:
+        return
+    mixin = torch.nn.parameter.UninitializedTensorMixin
+    current = vars(mixin).get("_allowed_methods")
+    if current is None or _is_shimmed(current):
+        return
+    view = _LedgerResolvingMembers(current)
+    _register_shim(view)
+    mixin._allowed_methods = view  # type: ignore[assignment]
+    records.append((mixin, "_allowed_methods", current))
 
 
 # ---------------------------------------------------------------------------

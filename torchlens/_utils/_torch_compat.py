@@ -128,6 +128,7 @@ __all__ = [
     "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
+    "HAS_LAZY_MODULE_ALLOWED_METHODS",
     "HAS_DETERMINISTIC_FILL_FLAG",
     "HAS_FP32_PRECISION_CONTROLS",
     "HAS_AMP_GRADSCALER",
@@ -646,6 +647,9 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_JIT_BUILTIN_TABLE": ("torch.jit._builtins:_builtin_table",),
     "HAS_JIT_BOOLEAN_DISPATCH_TABLE": ("torch._jit_internal:boolean_dispatched",),
     "HAS_JIT_OVERLOAD_RESOLVER": ("torch.jit._script:_get_overloads",),
+    "HAS_LAZY_MODULE_ALLOWED_METHODS": (
+        "torch.nn.parameter:UninitializedTensorMixin._allowed_methods",
+    ),
     "HAS_DEVICE_CONTEXT_DISPATCH": (
         "torch.utils._device:DeviceContext",
         "torch.overrides:_get_current_function_mode_stack",
@@ -1714,6 +1718,7 @@ HAS_CODE_QUALNAME: bool = _probe_code_qualname()
 HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG: bool = _probe_transformer_activation_fastpath_flag()
 HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
+HAS_LAZY_MODULE_ALLOWED_METHODS: bool = _probe_attribute_paths("HAS_LAZY_MODULE_ALLOWED_METHODS")
 HAS_DISABLED_TORCH_FUNCTION_IMPL: bool = _probe_disabled_torch_function_impl()
 HAS_GRADIENT_EDGE: bool = False
 _GRADIENT_EDGE_PROBED: bool = False
@@ -1920,6 +1925,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
+    "HAS_LAZY_MODULE_ALLOWED_METHODS",
     "HAS_GRADIENT_EDGE",
     "HAS_NODE_PREHOOK",
     "HAS_DETERMINISTIC_FILL_FLAG",

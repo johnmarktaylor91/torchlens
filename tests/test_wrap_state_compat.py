@@ -880,8 +880,12 @@ _MEMBERSHIP_TABLE_REVIEWED: dict[tuple[str, str], str] = {
     ),
     ("torch.nn.parameter", "UninitializedTensorMixin._allowed_methods"): (
         "Lazy-module materialization allowlist consulted from "
-        "UninitializedTensorMixin.__torch_function__, where the C-level "
-        "protocol supplies the ORIGINAL func operand; eagerly imported."
+        "UninitializedTensorMixin.__torch_function__. For TENSOR METHODS the "
+        "C-level protocol hands the handler the CURRENT torch.Tensor class "
+        "attribute (the wrapper during the wrap epoch), so the list is shimmed "
+        "with a ledger-resolving view while wrappers are installed "
+        "(identity_shims._install_lazy_module_allowlist_shim; wave-3 stress F2, "
+        "tests/test_identity_shims.py::TestLazyModuleAllowlist)."
     ),
     # The two torch._export sym-op tables surface only when a suite test
     # imports torch._export pre-wrap (lazy, not eagerly imported with torch).
@@ -913,10 +917,11 @@ _MEMBERSHIP_TABLE_REVIEWED: dict[tuple[str, str], str] = {
         "DLPack read-only-export allowlist keyed by torch.Tensor.__dlpack__ / "
         "__dlpack_device__; eagerly imported with torch (torch/__init__.py "
         "imports torch.utils.dlpack), so keys are pre-wrap originals. "
-        "Membership is checked inside ReadOnlyTensorWrapper.__torch_function__, "
-        "where the C-level __torch_function__ protocol supplies the ORIGINAL "
-        "func operand -- same basis as UninitializedTensorMixin._allowed_methods "
-        "and the MaskedTensor reduce maps above."
+        "Membership is checked inside ReadOnlyTensorWrapper.__torch_function__; "
+        "TorchLens never wraps Tensor.__dlpack__ / __dlpack_device__ on the "
+        "class (the function-boundary export patch is capture-scoped), so the "
+        "func operand the protocol hands the handler is the pre-wrap original "
+        "outside capture -- same basis as the MaskedTensor reduce maps above."
     ),
 }
 
