@@ -114,7 +114,7 @@ def test_payload_parse_rejects_non_mapping() -> None:
 
 
 @pytest.mark.parametrize(
-    ("status", "derived", "halted", "finished", "coherent"),
+    ("status", "derived", "is_stopped", "finished", "coherent"),
     [
         (CaptureStatus.COMPLETE, False, False, True, True),
         (CaptureStatus.COMPLETE, False, True, True, False),
@@ -151,13 +151,13 @@ def test_coherence_matrix(
 @pytest.mark.parametrize(
     ("state", "expected"),
     [
-        ({"_tracing_finished": True, "halted": True}, CaptureStatus.STOPPED),
-        ({"_tracing_finished": True, "halted": False}, CaptureStatus.UNATTESTED),
+        ({"_tracing_finished": True, "is_stopped": True}, CaptureStatus.STOPPED),
+        ({"_tracing_finished": True, "is_stopped": False}, CaptureStatus.UNATTESTED),
         ({"_tracing_finished": True}, CaptureStatus.UNATTESTED),
-        ({"_tracing_finished": False, "halted": True}, CaptureStatus.UNKNOWN),
-        ({"_tracing_finished": None, "halted": True}, CaptureStatus.UNKNOWN),
-        ({"halted": True}, CaptureStatus.UNKNOWN),
-        ({"_tracing_finished": False, "halted": False}, CaptureStatus.UNKNOWN),
+        ({"_tracing_finished": False, "is_stopped": True}, CaptureStatus.UNKNOWN),
+        ({"_tracing_finished": None, "is_stopped": True}, CaptureStatus.UNKNOWN),
+        ({"is_stopped": True}, CaptureStatus.UNKNOWN),
+        ({"_tracing_finished": False, "is_stopped": False}, CaptureStatus.UNKNOWN),
         ({"_tracing_finished": None}, CaptureStatus.UNKNOWN),
         ({}, CaptureStatus.UNKNOWN),
     ],
@@ -174,7 +174,7 @@ def test_derivation_carries_halt_detail() -> None:
     outcome = derive_outcome_from_structural_state(
         {
             "_tracing_finished": True,
-            "halted": True,
+            "is_stopped": True,
             "stop_reason": "relu_1_2_raw",
             "halt_frontier": "relu_1_2_raw",
         }
@@ -194,7 +194,7 @@ def test_resolve_loaded_adopts_coherent_attestation() -> None:
     state = {
         "_capture_outcome": attested.to_payload(),
         "_tracing_finished": True,
-        "halted": False,
+        "is_stopped": False,
     }
     assert resolve_loaded_outcome(state) == attested
 
@@ -204,7 +204,7 @@ def test_resolve_loaded_degrades_incoherent_attestation_to_unknown() -> None:
     state = {
         "_capture_outcome": attested.to_payload(),
         "_tracing_finished": False,
-        "halted": False,
+        "is_stopped": False,
     }
     with pytest.warns(RuntimeWarning, match="contradicts"):
         resolved = resolve_loaded_outcome(state)
@@ -217,7 +217,7 @@ def test_resolve_loaded_degrades_unparseable_attestation_to_unknown() -> None:
     state = {
         "_capture_outcome": {"status": "not_in_vocabulary"},
         "_tracing_finished": True,
-        "halted": False,
+        "is_stopped": False,
     }
     with pytest.warns(RuntimeWarning, match="could not parse"):
         resolved = resolve_loaded_outcome(state)
@@ -226,7 +226,7 @@ def test_resolve_loaded_degrades_unparseable_attestation_to_unknown() -> None:
 
 
 def test_resolve_loaded_without_attestation_uses_lattice() -> None:
-    resolved = resolve_loaded_outcome({"_tracing_finished": True, "halted": False})
+    resolved = resolve_loaded_outcome({"_tracing_finished": True, "is_stopped": False})
     assert resolved.status is CaptureStatus.UNATTESTED
 
 

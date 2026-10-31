@@ -315,7 +315,7 @@ def graph_fired_addresses(trace: Any) -> frozenset[str]:
 
     fired: set[str] = set()
     for op in getattr(trace, "layer_list", ()):
-        for record in getattr(op, "interventions", None) or ():
+        for record in getattr(op, "edits", None) or ():
             for attr in ("site_label", "target_label"):
                 label = getattr(record, attr, None)
                 if isinstance(label, str) and label:

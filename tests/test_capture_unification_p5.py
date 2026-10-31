@@ -170,9 +170,9 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
         assert relu_layer.out is not None
         assert torch.equal(stashed(log, "latest"), relu_layer.out)
         assert torch.count_nonzero(relu_layer.out) == 0
-        assert len(relu_layer.interventions) == 1
-        assert relu_layer.interventions[0].timing == "post"
-        assert relu_layer.interventions[0].direction == "forward"
+        assert len(relu_layer.edits) == 1
+        assert relu_layer.edits[0].timing == "post"
+        assert relu_layer.edits[0].direction == "forward"
     else:
         output, recording = cast(
             tuple[torch.Tensor, Recording],
@@ -218,7 +218,7 @@ def test_intervene_only_mutates_forward_output_without_saving_site() -> None:
             layers_to_save="none", output_transform=lambda output: output
         ),
     )
-    output = log.raw_output
+    output = log.transformed_output
 
     assert isinstance(output, torch.Tensor)
     assert torch.equal(output, torch.zeros_like(output))

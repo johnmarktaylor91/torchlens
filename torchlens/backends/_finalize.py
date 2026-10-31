@@ -1240,7 +1240,7 @@ def new_preview_function_trace(
         module_filter=None,
         emit_nvtx=False,
         input_transform=None,
-        raw_input=raw_input,
+        input=raw_input,
         save_raw_input=save_raw_input,
         batch_render=batch_render,
         output_transform=cast("Callable[[Any], Any] | None", output_transform),

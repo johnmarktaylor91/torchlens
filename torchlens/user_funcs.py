@@ -1394,7 +1394,9 @@ def _warn_zero_match_capture_selectors(
                 "no intervention fired.",
                 selector=repr(intervene_selector),
             )
-        if isinstance(halt_selector, BaseSelector) and not bool(getattr(trace, "halted", False)):
+        if isinstance(halt_selector, BaseSelector) and not bool(
+            getattr(trace, "is_stopped", False)
+        ):
             _record_unmatched("halt", halt_selector)
             warnings.warn(
                 f"Capture-time halt selector {halt_selector!r} matched zero sites; "
@@ -1945,7 +1947,7 @@ def _run_model_and_save_specified_outs(
             distributed_witness=distributed_witness,
             save_budget=save_budget,
             input_transform=transform,
-            raw_input=raw_input,
+            input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
@@ -4083,7 +4085,7 @@ def _trace_torch_model(
                 # masking the user's exception.
                 attach_failed_episode_ledger(capture_exc, episode_resolved)
             raise
-    if stop_after_site is not None and not bool(getattr(trace, "halted", False)):
+    if stop_after_site is not None and not bool(getattr(trace, "is_stopped", False)):
         # Never-fired policy split by provenance (brainpipe D-16): a
         # selector-shaped site that never fired is a typo-shaped wrong result
         # (the full forward ran; the caller asked for a frontier) and refuses

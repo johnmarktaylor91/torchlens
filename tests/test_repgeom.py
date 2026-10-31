@@ -145,7 +145,7 @@ def _trace_with_mds_and_images() -> Any:
     """
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    trace.raw_input = _pil_stimuli(8)
+    trace.input = _pil_stimuli(8)
     repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     return trace
 
@@ -621,7 +621,7 @@ def test_rdm_node_spec_sets_one_draw_time_heatmap_for_annotated_layer() -> None:
     """The RDM hook should set one bounded heatmap image for annotated layers."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    trace.raw_input = _pil_stimuli(8)
+    trace.input = _pil_stimuli(8)
     repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
     hook = tl.viz.nodes.rdm(max_stimuli=8)
@@ -758,7 +758,7 @@ def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
     """RDM SVG output should inline one heatmap image per annotated node after reload."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    trace.raw_input = _pil_stimuli(8)
+    trace.input = _pil_stimuli(8)
     repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     annotated_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
     bundle_path = tmp_path / "rdm_source.tlspec"
@@ -867,7 +867,7 @@ def test_mds_scatter_fallback_renders_points_without_raw_images() -> None:
     """Coords without matching raw PIL images should render a points fallback."""
 
     trace = _trace_with_mds_and_images()
-    trace.raw_input = None
+    trace.input = None
     layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
     hook = tl.viz.nodes.mds_scatter(max_thumbnails=8)
 

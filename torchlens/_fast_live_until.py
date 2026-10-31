@@ -181,7 +181,7 @@ def truncate_after(
             op._internal_set("transformed_out", None)
             op._internal_set("has_saved_activation", False)
             cleared.append(op.label)
-    trace.raw_output = None
+    trace.transformed_output = None
     truncation = RunTruncation(
         regime="live_stop_after",
         requested_sites=(str(until),),

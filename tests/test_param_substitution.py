@@ -204,7 +204,7 @@ def test_recurrent_reused_param_substitutes_every_pass(recurrent_capture):
         relu_op = fork.layer_dict_all_keys[f"relu_1_2:{k}"]
         assert torch.allclose(lin_op.out, lin, atol=1e-6), f"pass {k} linear out is stale/wrong"
         assert torch.allclose(relu_op.out, relu, atol=1e-6), f"pass {k} relu out is stale/wrong"
-        fires = [r for r in lin_op.interventions if r.edge_address is not None]
+        fires = [r for r in lin_op.edits if r.edge_address is not None]
         assert len(fires) == 1, f"pass {k} must carry its OWN occurrence FireRecord"
         payload = lin_op.edge_substitutions[next(iter(lin_op.edge_substitutions))]
         assert payload["substitution_kind"] == "param"
@@ -339,9 +339,7 @@ def test_multipass_validation_tamper_strip_fire_record_fails(recurrent_capture):
     fork = trace.fork()
     fork.do(tl.param("cell.weight"), tl.scale(0.5))
     tampered = fork.layer_dict_all_keys["linear_1_1:1"]
-    tampered._internal_set(
-        "interventions", [r for r in tampered.interventions if not r.edge_address]
-    )
+    tampered._internal_set("edits", [r for r in tampered.edits if not r.edge_address])
     verdict = _check_edge_intervention_boundary(fork, tampered)
     assert verdict is not None and verdict.failed
     assert verdict.reason == "edge_substitution_uncorroborated"
@@ -421,7 +419,7 @@ def test_fire_record_and_store_mark_param_kind(capture):
     assert payload["param_address"] == "fc1.weight"
     stamp = child.edge_replacement_stamps[store_key]
     assert stamp["substitution_kind"] == "param"
-    fire = next(r for r in child.interventions if r.edge_address is not None)
+    fire = next(r for r in child.edits if r.edge_address is not None)
     assert fire.replaced is False  # substitution replaces no node's OUTPUT
     assert fire.engine == "replay"
 
@@ -445,7 +443,7 @@ def test_validation_tamper_strip_fire_record_fails(capture):
     fork = trace.fork()
     fork.do(tl.param("fc1.weight"), tl.scale(0.5))
     child = fork["fc1"].ops[0]
-    child._internal_set("interventions", [r for r in child.interventions if not r.edge_address])
+    child._internal_set("edits", [r for r in child.edits if not r.edge_address])
     verdict = _check_edge_intervention_boundary(fork, child)
     assert verdict is not None and verdict.failed
     assert verdict.reason == "edge_substitution_uncorroborated"

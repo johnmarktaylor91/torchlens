@@ -697,13 +697,13 @@ def _scrub_intervention_fields_after_removal(
         )
         interventions = [
             record
-            for record in getattr(layer_entry, "interventions", [])
+            for record in getattr(layer_entry, "edits", [])
             if not _record_mentions_removed_label(record, labels_to_remove)
         ]
         if hasattr(layer_entry, "_internal_set"):
-            layer_entry._internal_set("interventions", interventions)
+            layer_entry._internal_set("edits", interventions)
         else:
-            layer_entry.interventions = interventions
+            layer_entry.edits = interventions
 
     self.state_history = [
         record

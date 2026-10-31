@@ -897,8 +897,8 @@ def is_record_derived_image_node(trace: Trace, node: Any) -> bool:
     if _annotation_image_path_for_node(trace, node) is not None:
         return True
     # Raw-input visual branch (montage / preview): input nodes whose label is
-    # decorated from trace.raw_input by the post-user raw merge.
-    return bool(getattr(node, "is_input", False)) and getattr(trace, "raw_input", None) is not None
+    # decorated from trace.input by the post-user raw merge.
+    return bool(getattr(node, "is_input", False)) and getattr(trace, "input", None) is not None
 
 
 def _coerce_scalar(

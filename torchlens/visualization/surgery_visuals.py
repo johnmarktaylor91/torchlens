@@ -277,7 +277,7 @@ def _fire_marks(trace: Any) -> list[SurgeryMark]:
     marks: list[SurgeryMark] = []
     for label in getattr(trace, "op_labels", ()) or ():
         op = trace.ops[label]
-        for record in getattr(op, "interventions", None) or ():
+        for record in getattr(op, "edits", None) or ():
             helper = getattr(record, "helper_name", None) or "user_hook"
             engine = getattr(record, "engine", None) or "unknown"
             verb = "spliced" if helper == "splice_module" else "edited"

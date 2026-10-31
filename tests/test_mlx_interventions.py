@@ -124,7 +124,7 @@ def test_mlx_halt_returns_partial_trace_at_frontier() -> None:
     model = _TwoLayerMLP()
     trace = tl.trace(model, _input(), backend="mlx", halt=tl.func("relu"))
 
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert str(trace.stop_reason).startswith("relu")
     labels = [op._label_raw for op in trace.layer_list]
     # Save-then-halt: the relu frontier is captured; the second linear is not.
@@ -264,7 +264,7 @@ def test_mlx_interventions_flag_false_refuses_the_surface() -> None:
     refuses trace(intervene=) typed — the table stays load-bearing on MLX."""
 
     spec = tl.backends.spec("mlx")
-    object.__setattr__(spec.capabilities, "interventions", False)
+    object.__setattr__(spec.capabilities, "can_intervene", False)
     try:
         with pytest.raises(BackendUnsupportedError, match="interventions=False"):
             tl.trace(
@@ -274,7 +274,7 @@ def test_mlx_interventions_flag_false_refuses_the_surface() -> None:
                 intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
             )
     finally:
-        object.__setattr__(spec.capabilities, "interventions", True)
+        object.__setattr__(spec.capabilities, "can_intervene", True)
 
 
 def test_mlx_in_module_intervention_site() -> None:

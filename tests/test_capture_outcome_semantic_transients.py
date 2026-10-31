@@ -94,7 +94,7 @@ def test_halted_capture_drops_the_semantic_output_scratch() -> None:
         halt=tl.func("relu"),
         capture=tl.options.CaptureOptions(output_style="classification"),
     )
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert _leaked(trace) == []
 
 

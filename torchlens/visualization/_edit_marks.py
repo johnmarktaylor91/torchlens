@@ -370,7 +370,7 @@ def edit_marks_by_site(trace: Trace, sites: Sequence[Op]) -> dict[str, tuple[Edi
     result: dict[str, tuple[EditMark, ...]] = {}
     for site in sites:
         key = _op_key(site)
-        records = list(getattr(site, "interventions", None) or ())
+        records = list(getattr(site, "edits", None) or ())
         if records:
             ordered = sorted(
                 enumerate(records),

@@ -81,7 +81,7 @@ def test_capture_pools_op_and_kind_cells() -> None:
     core = stack_trace.__dict__["_trace_core"]
     op_counts = _pooled_cells_by_field(core.ops)
     n_ops = len(stack_trace.ops.keys())
-    for field in ("annotations", "interventions", "var_names", "func_autocast_state"):
+    for field in ("annotations", "edits", "var_names", "func_autocast_state"):
         assert op_counts.get(field, 0) >= n_ops - 1, (field, op_counts)
     module_counts = _pooled_cells_by_field(core.kind_rows["module"])
     assert module_counts.get("forward_hooks", 0) >= 2, module_counts

@@ -590,7 +590,7 @@ def _rng_note_summary(trace: Trace) -> str:
 
     notes = []
     for layer in getattr(trace, "layer_list", []) or []:
-        for record in getattr(layer, "interventions", []) or []:
+        for record in getattr(layer, "edits", []) or []:
             note = getattr(record, "determinism_note", None)
             if note:
                 notes.append(str(note))

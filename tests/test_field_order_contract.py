@@ -142,7 +142,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "input_memory",
                 "input_ops",
                 "input_shapes",
-                # "interventions" became a KEEP (portable) ordered field in
+                # "edits" became a KEEP (portable) ordered field in
                 # cert10, so it is no longer a documented DROP display field.
                 # The public computed flag flipped KEEP->DROP in 00bc67d3; the
                 # raw _is_in_conditional_body datum stays KEEP (portable-only

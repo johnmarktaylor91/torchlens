@@ -126,7 +126,7 @@ def test_intervention_api_replaces_op_output_preserves_graph() -> None:
 
     assert relu_layer.is_edited is True
     assert relu_layer.parents == (fc1_layer.layer_label,)
-    assert len(relu_layer.interventions) == 1
+    assert len(relu_layer.edits) == 1
     assert torch.count_nonzero(relu_layer.out) == 0
 
 
@@ -145,7 +145,7 @@ def test_output_hook_replaces_discarded_inplace_return_storage() -> None:
     assert torch.equal(log[log.output_layers[0]].out, torch.ones(2))
     assert torch.equal(relu_layer.out, torch.zeros(2))
     assert relu_layer.is_edited is True
-    assert relu_layer.interventions[-1].replaced is True
+    assert relu_layer.edits[-1].replaced is True
 
 
 def test_raw_forward_hook_replaces_module_output_does_not_crash() -> None:

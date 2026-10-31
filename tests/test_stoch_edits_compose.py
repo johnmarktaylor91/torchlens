@@ -83,7 +83,7 @@ def test_one_fire_one_record_with_ordered_leaves() -> None:
     log = _toy_trace()
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), compose(tl.scale(3.0), tl.clamp(high=1.0)))
-    fires = list(fork.ops["relu_1_2"].interventions or ())
+    fires = list(fork.ops["relu_1_2"].edits or ())
     assert len(fires) == 1, "one composed fire, never one record per leaf"
     assert fires[0].helper is not None
     assert fires[0].helper.helper_name == "compose"

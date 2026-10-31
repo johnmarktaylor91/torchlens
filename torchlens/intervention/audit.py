@@ -174,7 +174,7 @@ def fire_records_since(trace: Any, t0: float) -> list[FireRecord]:
     collected: list[FireRecord] = []
     for label in getattr(trace, "op_labels", ()) or ():
         op = trace.ops[label]
-        for record in getattr(op, "interventions", None) or ():
+        for record in getattr(op, "edits", None) or ():
             stamp = getattr(record, "timestamp", None)
             if stamp is not None and stamp >= t0:
                 collected.append(record)

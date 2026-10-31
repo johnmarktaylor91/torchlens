@@ -1516,7 +1516,7 @@ def _reconcile_rerun_hook_fires(
             continue
         fallback_fired.update(
             str(record.helper_name)
-            for record in (getattr(op, "interventions", None) or ())
+            for record in (getattr(op, "edits", None) or ())
             if getattr(record, "direction", None) == "forward"
             and getattr(record, "helper_name", None) is not None
         )

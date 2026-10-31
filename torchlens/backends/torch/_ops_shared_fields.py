@@ -127,7 +127,7 @@ def _build_shared_fields_dict(
     fields_dict["detach_saved_activations"] = self.detach_saved_activations
     fields_dict["output_device"] = self.output_device
     fields_dict["_construction_done"] = False
-    fields_dict["interventions"] = []
+    fields_dict["edits"] = []
     should_capture_template = bool(
         getattr(self, "is_replayable", False) or getattr(self, "save_arg_templates", False)
     )

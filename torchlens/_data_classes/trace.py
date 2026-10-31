@@ -195,11 +195,11 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_buffer_persistence": {},
     "is_replayable": False,
     "save_arg_templates": False,
-    "raw_input": None,
+    "input": None,
     "_transform": None,
     "save_raw_input": "small",
     "batch_render": "auto",
-    "raw_output": None,
+    "transformed_output": None,
     "_output_transform": None,
     "save_raw_output": "small",
     "layer_visualizers": None,
@@ -1179,7 +1179,7 @@ class Trace(
         "capture_thread_count_end": FieldPolicy.DROP,
         "capture_thread_activity_detected": FieldPolicy.DROP,
         "capture_guard_passes": FieldPolicy.DROP,
-        "halted": FieldPolicy.KEEP,
+        "is_stopped": FieldPolicy.KEEP,
         "stop_reason": FieldPolicy.KEEP,
         "halt_frontier": FieldPolicy.KEEP,
         "_layers_logged": FieldPolicy.KEEP,
@@ -1187,13 +1187,13 @@ class Trace(
         "keep_orphans": FieldPolicy.KEEP,
         "is_replayable": FieldPolicy.KEEP,
         "save_arg_templates": FieldPolicy.KEEP,
-        "raw_input": FieldPolicy.KEEP,
+        "input": FieldPolicy.KEEP,
         "input_preprocessor": FieldPolicy.KEEP,
         "_transform": FieldPolicy.DROP,
         "transform_repr": FieldPolicy.KEEP,
         "save_raw_input": FieldPolicy.KEEP,
         "batch_render": FieldPolicy.KEEP,
-        "raw_output": FieldPolicy.KEEP,
+        "transformed_output": FieldPolicy.KEEP,
         "decoded_output": FieldPolicy.KEEP,
         "output_postprocessor": FieldPolicy.KEEP,
         "output_id2label": FieldPolicy.KEEP,
@@ -1610,11 +1610,11 @@ class Trace(
         save_budget: SaveBudgetOption = "auto",
         facet_functions: Any | None = None,
         input_transform: Callable[[Any], Any] | None = None,
-        raw_input: Any | None = None,
+        input: Any | None = None,
         save_raw_input: str | bool = "small",
         batch_render: str = "auto",
         output_transform: Callable[[Any], Any] | None = None,
-        raw_output: Any | None = None,
+        transformed_output: Any | None = None,
         save_transformed_output: str | bool = "small",
         layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None,
         save_visualizations: bool = False,
@@ -1673,13 +1673,13 @@ class Trace(
                 this trace.
             input_transform: Optional callable used to convert raw user input into
                 model-ready input.
-            raw_input: Original user input before ``input_transform`` was applied.
-            save_raw_input: Portable save policy for ``raw_input``.
+            input: Original user input before ``input_transform`` was applied.
+            save_raw_input: Portable save policy for ``input``.
             batch_render: Raw-input batch rendering policy for visualization.
             output_transform: Optional callable used to convert model output into
                 human-readable metadata.
-            raw_output: Human-readable model output after ``output_transform``.
-            save_transformed_output: Portable save policy for ``raw_output``.
+            transformed_output: Human-readable model output after ``output_transform``.
+            save_transformed_output: Portable save policy for ``transformed_output``.
             layer_visualizers: Optional mapping of selectors to visualizer callables.
             save_visualizations: Whether rendered visualizations should persist in bundles.
         """
@@ -1734,7 +1734,7 @@ class Trace(
         # journal for armed captures (census criteria 2-4 evidence). DROP
         # under its private name; never survives save/load. DOCUMENTED-UNSTABLE.
         self._distributed_plane_p: Any | None = None
-        self.halted = False
+        self.is_stopped = False
         self.stop_reason: str | None = None
         self.halt_frontier: str | None = None
         self._layers_logged = False
@@ -1742,13 +1742,13 @@ class Trace(
         self.keep_orphans = keep_orphans
         self.is_replayable = False
         self.save_arg_templates = False
-        self.raw_input = raw_input
+        self.input = input
         self.input_preprocessor: ResolvedPreprocessing | None = None
         self._transform = input_transform
         self.transform_repr = repr(input_transform) if input_transform is not None else None
         self.save_raw_input = save_raw_input
         self.batch_render = batch_render
-        self.raw_output = raw_output
+        self.transformed_output = transformed_output
         self.decoded_output: Any | None = None
         self.output_postprocessor: ResolvedPostprocessing | None = None
         self.output_id2label: dict[int, str] | None = None
@@ -3117,7 +3117,7 @@ class Trace(
             "_optimizer": None,
             "save_raw_activations": True,
             "save_mode": "copy",
-            "raw_output": None,
+            "transformed_output": None,
             "_output_transform": None,
             "save_raw_output": "small",
             "layer_visualizers": None,
@@ -3594,7 +3594,7 @@ class Trace(
             "_pending_grad_blob_id",
             "_pending_transformed_grad_blob_id",
             "annotations",
-            "interventions",
+            "edits",
             "container_spec",
             "args_template",
             "kwargs_template",
@@ -3697,7 +3697,7 @@ class Trace(
         """
 
         field_names = (
-            "raw_output",
+            "transformed_output",
             "save_raw_output",
             "has_gradients",
             "random_seed",
@@ -3864,7 +3864,7 @@ class Trace(
             "is_inplace",
             "grad_fn_class_name",
             "grad_fn_object_id",
-            "interventions",
+            "edits",
             "annotations",
         ):
             if hasattr(new_layer, field_name):

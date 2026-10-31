@@ -303,7 +303,7 @@ class TFBackend:
                 save_predicate=save_predicate,
             )
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-            trace.raw_output = (
+            trace.transformed_output = (
                 output_transform(static_result.output) if callable(output_transform) else None
             )
             trace.capture_events = static_result.events
@@ -427,7 +427,9 @@ class TFBackend:
             # silently with zero payloads (R17 parity with sibling previews).
             warn_zero_match_save_predicate("tf")
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        trace.raw_output = output_transform(result.output) if callable(output_transform) else None
+        trace.transformed_output = (
+            output_transform(result.output) if callable(output_transform) else None
+        )
         trace.capture_events = result.events
         trace._tf_unresolved_producers = result.unresolved_producers
         trace._tf_init_op_labels = result.init_op_labels
@@ -641,7 +643,7 @@ class TFBackend:
             module_filter=cast(Any, module_filter),
             emit_nvtx=False,
             input_transform=cast(Any, transform),
-            raw_input=raw_input,
+            input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast(Any, output_transform),

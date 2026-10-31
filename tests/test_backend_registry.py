@@ -200,7 +200,7 @@ def _register_fake_backend(name: str = "fake", *, priority: int = 50) -> None:
                 backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
-                interventions=False,
+                can_intervene=False,
                 rng_replay=False,
                 payload_materialization=False,
                 has_streaming=False,
@@ -297,7 +297,7 @@ def test_capture_backend_factory_checked_at_registration() -> None:
                     backward_capture=False,
                     has_validation_replay=False,
                     fastlog=False,
-                    interventions=False,
+                    can_intervene=False,
                     rng_replay=False,
                     payload_materialization=False,
                     has_streaming=False,
@@ -327,7 +327,7 @@ def test_capture_backend_factory_import_error_is_not_exempted() -> None:
                     backward_capture=False,
                     has_validation_replay=False,
                     fastlog=False,
-                    interventions=False,
+                    can_intervene=False,
                     rng_replay=False,
                     payload_materialization=False,
                     has_streaming=False,
@@ -353,7 +353,7 @@ def test_replace_backend_spec_removes_stale_aliases() -> None:
             backward_capture=False,
             has_validation_replay=False,
             fastlog=False,
-            interventions=False,
+            can_intervene=False,
             rng_replay=False,
             payload_materialization=False,
             has_streaming=False,
@@ -394,7 +394,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         jax_spec.capabilities.has_validation_replay == jax_capabilities.supports_validation_replay
     )
     assert jax_spec.capabilities.fastlog == jax_capabilities.supports_fastlog
-    assert jax_spec.capabilities.interventions == jax_capabilities.supports_intervention
+    assert jax_spec.capabilities.can_intervene == jax_capabilities.supports_intervention
     assert (
         jax_spec.capabilities.intermediate_derived_grads
         == jax_capabilities.supports_intermediate_derived_grads
@@ -424,7 +424,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         mlx_spec.capabilities.has_validation_replay == mlx_capabilities.supports_validation_replay
     )
     assert mlx_spec.capabilities.fastlog == mlx_capabilities.supports_fastlog
-    assert mlx_spec.capabilities.interventions == mlx_capabilities.supports_intervention
+    assert mlx_spec.capabilities.can_intervene == mlx_capabilities.supports_intervention
     assert (
         mlx_spec.capabilities.intermediate_derived_grads
         == mlx_capabilities.supports_intermediate_derived_grads
@@ -455,7 +455,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         == tinygrad_capabilities.supports_validation_replay
     )
     assert tinygrad_spec.capabilities.fastlog == tinygrad_capabilities.supports_fastlog
-    assert tinygrad_spec.capabilities.interventions == tinygrad_capabilities.supports_intervention
+    assert tinygrad_spec.capabilities.can_intervene == tinygrad_capabilities.supports_intervention
     assert (
         tinygrad_spec.capabilities.intermediate_derived_grads
         == tinygrad_capabilities.supports_intermediate_derived_grads
@@ -488,7 +488,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         == paddle_capabilities.supports_validation_replay
     )
     assert paddle_spec.capabilities.fastlog == paddle_capabilities.supports_fastlog
-    assert paddle_spec.capabilities.interventions == paddle_capabilities.supports_intervention
+    assert paddle_spec.capabilities.can_intervene == paddle_capabilities.supports_intervention
     assert (
         paddle_spec.capabilities.intermediate_derived_grads
         == paddle_capabilities.supports_intermediate_derived_grads

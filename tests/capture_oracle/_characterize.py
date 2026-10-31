@@ -972,7 +972,7 @@ def _outcome_projection(product: Any, exception: BaseException | None) -> dict[s
             "error_type": type(exception).__name__,
             "error_message": str(exception),
         }
-    halted = bool(getattr(product, "halted", False))
+    halted = bool(getattr(product, "is_stopped", False))
     return {
         "status": "halted" if halted else "complete",
         "failed": False,

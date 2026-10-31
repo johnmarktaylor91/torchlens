@@ -438,7 +438,7 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
     # so a stale ``_tl_live_fire_results`` leak into a plain capture carries
     # records but no armed spec and stays refused.
     if _intervention_spec_is_armed(getattr(trace, "_intervention_spec", None)):
-        for record in getattr(layer, "interventions", ()) or ():
+        for record in getattr(layer, "edits", ()) or ():
             if getattr(record, "replaced", False):
                 return True
     # A live capture with NO corroborating replacement evidence: any op

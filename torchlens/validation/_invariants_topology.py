@@ -324,7 +324,7 @@ def _check_capture_edge_survival(trace: Trace) -> None:
         edges = truth.get(raw_label) if raw_label is not None else None
         if not edges:
             continue
-        if getattr(op, "interventions", None):
+        if getattr(op, "edits", None):
             continue
         positions = getattr(op, "parent_arg_positions", None) or {}
         recorded = set(op.parents or ())

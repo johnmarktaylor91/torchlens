@@ -54,7 +54,7 @@ _TORCHLENS_ROOT = Path(tl.__file__).resolve().parent
 
 _PREVIEW_NAMES = ("mlx", "jax", "tinygrad", "paddle", "tf")
 
-EXPECTED_GATED_CAPABILITIES_MEMBERSHIP_UNUSED = frozenset({("tf", "interventions")})
+EXPECTED_GATED_CAPABILITIES_MEMBERSHIP_UNUSED = frozenset({("tf", "can_intervene")})
 """Preview ``(name, gated-flag)`` pairs lifted with REAL dispatch plus
 conformance coverage (parity-C: tf static-label interventions through the
 writable wrap layer). Lifting a preview capability is a one-line diff here;
@@ -92,7 +92,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
     "torch": {
         "backward_capture": True,
         "fastlog": True,
-        "interventions": True,
+        "can_intervene": True,
         "rng_replay": True,
         "has_streaming": True,
         # Lifted 2026-08 (L7a wave 0): structure-only capture with the typed
@@ -107,7 +107,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         # Lifted 2026-08: static-label intervene=/halt= dispatch for real
         # (tests/test_mlx_interventions.py); value-dependent predicates and
         # recipes= keep typed refusals inside the dispatch path.
-        "interventions": True,
+        "can_intervene": True,
         "rng_replay": False,
         "has_streaming": False,
         "structure_only_capture": False,
@@ -115,7 +115,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
     "jax": {
         "backward_capture": False,
         "fastlog": False,
-        "interventions": False,
+        "can_intervene": False,
         "rng_replay": False,
         "has_streaming": False,
         "structure_only_capture": False,
@@ -123,7 +123,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
     "tinygrad": {
         "backward_capture": False,
         "fastlog": False,
-        "interventions": False,
+        "can_intervene": False,
         "rng_replay": False,
         "has_streaming": False,
         "structure_only_capture": False,
@@ -134,7 +134,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         # Lifted 2026-08: live intervene=/halt= dispatch through the eager
         # capture wrapper, forward-only (tests/test_paddle_backend_interventions.py);
         # value-dependent predicates and recipes= keep typed refusals.
-        "interventions": True,
+        "can_intervene": True,
         "rng_replay": False,
         "has_streaming": False,
         "structure_only_capture": False,
@@ -145,7 +145,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         # Lifted 2026-08: static-label intervene= for eager entries via the
         # two-level writable wrap layer (tests/backends/test_tf_interventions.py);
         # halt= and value-dependent predicates keep typed refusals.
-        "interventions": True,
+        "can_intervene": True,
         "rng_replay": False,
         "has_streaming": False,
         "structure_only_capture": False,
@@ -195,7 +195,7 @@ def test_extra_kwarg_gates_are_fail_closed_biconditional(name: str) -> None:
     policy = _EXTRA_POLICIES[name]
     sentinel = object()
     for option, flag in (
-        ("intervene", "interventions"),
+        ("intervene", "can_intervene"),
         ("storage", "has_streaming"),
         ("streaming", "has_streaming"),
     ):
@@ -424,7 +424,7 @@ def test_backward_accessors_raise_for_all_non_backward_backends() -> None:
 @pytest.mark.parametrize(
     ("flag", "trace_kwargs"),
     [
-        ("interventions", {"intervene": "PREDICATE"}),
+        ("can_intervene", {"intervene": "PREDICATE"}),
         ("rng_replay", {"capture": tl.options.CaptureOptions(seed=0)}),
         ("rng_replay", {"capture": tl.options.CaptureOptions(save_rng=True)}),
         ("backward_capture", {"capture": tl.options.CaptureOptions(backward_ready=True)}),

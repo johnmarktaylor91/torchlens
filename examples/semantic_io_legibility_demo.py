@@ -161,7 +161,7 @@ def main() -> None:
         description="comma-separated text -> rank-2 float tensor",
     )
     print("\n## original input + preprocessing provenance")
-    print(f"raw_input: {text_trace.raw_input!r}")
+    print(f"raw_input: {text_trace.input!r}")
     print(f"input_preprocessor: {text_trace.input_preprocessor.description}")
     with tempfile.TemporaryDirectory(prefix="torchlens_semantic_io_") as tmpdir:
         outpath = Path(tmpdir) / "semantic_io_input"

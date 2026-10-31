@@ -133,7 +133,7 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
     fired_records: list[Any] = []
     for label in trace.op_labels:
         op = trace.ops[label]
-        records = getattr(op, "interventions", None) or ()
+        records = getattr(op, "edits", None) or ()
         if records:
             fired_labels.append(label)
             fire_count += len(records)

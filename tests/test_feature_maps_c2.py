@@ -235,7 +235,7 @@ def test_feature_map_node_spec_renders_one_image_and_overlay_differs_from_fallba
     """Node spec should render one contained image and support overlay fallback."""
 
     trace = _conv_trace(n_stimuli=3)
-    trace.raw_input = _pil_stimuli(3)
+    trace.input = _pil_stimuli(3)
     feature_maps(trace, max_stimuli=2)
     dot = trace.draw(
         node_spec_fn=feature_map_node_spec(max_stimuli=2, max_channels=1),
@@ -265,7 +265,7 @@ def test_feature_map_node_spec_renders_one_image_and_overlay_differs_from_fallba
         maps[:1],
         stimulus_indices[:1],
         channel_ids[:1],
-        raw_images=trace.raw_input,
+        raw_images=trace.input,
         overlay=True,
         alpha=0.55,
         cmap="magma",

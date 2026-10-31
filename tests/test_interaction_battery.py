@@ -91,7 +91,7 @@ def test_intervene_x_rerun_applies_the_edit_once() -> None:
     log.run(model, X2)
     relu = _relu_op(log)
     assert torch.equal(relu.out, torch.zeros(1, 4))
-    assert len(relu.interventions) == 1
+    assert len(relu.edits) == 1
 
 
 def test_fork_do_x_index_edits_the_fork_only() -> None:

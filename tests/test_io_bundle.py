@@ -1054,15 +1054,15 @@ def test_bundle_save_raw_input_stringifies_unpicklable_value_keeps_tensors(
             input_transform=lambda d: d["tensor"], save_raw_input=True, seed=0
         ),
     )
-    assert isinstance(trace.raw_input["meta"], type(make_generator()))
+    assert isinstance(trace.input["meta"], type(make_generator()))
 
     bundle_path = tmp_path / "raw_input_bundle.tl"
     trace.save(bundle_path)
 
     loaded = load(bundle_path)
-    assert isinstance(loaded.raw_input["tensor"], torch.Tensor)
-    assert torch.equal(loaded.raw_input["tensor"], raw_input["tensor"])
-    assert loaded.raw_input["meta"] == "<scrubbed:generator>"
+    assert isinstance(loaded.input["tensor"], torch.Tensor)
+    assert torch.equal(loaded.input["tensor"], raw_input["tensor"])
+    assert loaded.input["meta"] == "<scrubbed:generator>"
 
 
 def test_bundle_save_raw_input_large_tensor_skips_picklability_probe(
@@ -1110,8 +1110,8 @@ def test_bundle_save_raw_input_large_tensor_skips_picklability_probe(
     assert tensor_dumps_calls == 0
 
     loaded = load(bundle_path)
-    assert isinstance(loaded.raw_input["tensor"], torch.Tensor)
-    assert torch.equal(loaded.raw_input["tensor"], large_tensor)
+    assert isinstance(loaded.input["tensor"], torch.Tensor)
+    assert torch.equal(loaded.input["tensor"], large_tensor)
 
 
 def test_bundle_save_raw_input_numeric_ndarray_skips_picklability_probe(
@@ -1150,8 +1150,8 @@ def test_bundle_save_raw_input_numeric_ndarray_skips_picklability_probe(
     assert ndarray_dumps_calls == 0
 
     loaded = load(bundle_path)
-    assert isinstance(loaded.raw_input["array"], np.ndarray)
-    np.testing.assert_array_equal(loaded.raw_input["array"], numeric_array)
+    assert isinstance(loaded.input["array"], np.ndarray)
+    np.testing.assert_array_equal(loaded.input["array"], numeric_array)
 
 
 def test_bundle_save_raw_input_object_dtype_ndarray_stringifies_unpicklable_element(
@@ -1188,7 +1188,7 @@ def test_bundle_save_raw_input_object_dtype_ndarray_stringifies_unpicklable_elem
     trace.save(bundle_path)
 
     loaded = load(bundle_path)
-    assert loaded.raw_input["array"] == "<scrubbed:ndarray>"
+    assert loaded.input["array"] == "<scrubbed:ndarray>"
 
 
 def test_bundle_save_raw_input_structured_ndarray_object_field_stringifies_unpicklable_element(
@@ -1233,7 +1233,7 @@ def test_bundle_save_raw_input_structured_ndarray_object_field_stringifies_unpic
     trace.save(bundle_path)
 
     loaded = load(bundle_path)
-    assert loaded.raw_input["array"] == "<scrubbed:ndarray>"
+    assert loaded.input["array"] == "<scrubbed:ndarray>"
 
 
 def test_bundle_save_rejects_symlink_target(tmp_path: Path) -> None:

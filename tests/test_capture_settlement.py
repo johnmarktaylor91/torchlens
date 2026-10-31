@@ -90,7 +90,7 @@ def test_halted_trace_analysis_save_round_trips(tmp_path) -> None:
     bundle = tmp_path / "halted_analysis.tlspec"
     trace.save(bundle, overwrite=True)
     loaded = tl.load(bundle)
-    assert loaded.halted is True
+    assert loaded.is_stopped is True
     assert loaded.stop_reason == trace.stop_reason
 
 

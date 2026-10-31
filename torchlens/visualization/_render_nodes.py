@@ -665,7 +665,7 @@ def _build_layer_node(
     if node.is_input:
         raw_input_attrs = _render_raw_input(
             self,
-            getattr(self, "raw_input", None),
+            getattr(self, "input", None),
             batch_render=getattr(self, "batch_render", "auto"),
         )
         if raw_input_attrs is not None:
@@ -675,7 +675,7 @@ def _build_layer_node(
     elif node.is_output:
         raw_output_attrs = _render_raw_output(getattr(self, "decoded_output", None))
         if raw_output_attrs is None:
-            raw_output_attrs = _render_raw_output(getattr(self, "raw_output", None))
+            raw_output_attrs = _render_raw_output(getattr(self, "transformed_output", None))
         if raw_output_attrs is not None:
             node_args.update(raw_output_attrs)
     node_args["name"] = _render_node_name(node, vis_mode)

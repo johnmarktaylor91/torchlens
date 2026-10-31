@@ -74,7 +74,7 @@ ENTRY_FIELD_USAGE: dict[str, str] = {
     "is_module_output": "Rectangle/module-output shape override.",
     "is_atomic_module": "Rectangle/module-output shape override.",
     "has_grad": "Backward-edge inclusion in unrolled mode.",
-    "interventions": "Per-node intervention fire-record summary.",
+    "edits": "Per-node intervention fire-record summary.",
 }
 
 MODULE_FIELD_USAGE: dict[str, str] = {
@@ -454,7 +454,7 @@ def _interventions_summary(entry: Any) -> str:
         are attached.
     """
 
-    records = list(getattr(entry, "interventions", ()) or ())
+    records = list(getattr(entry, "edits", ()) or ())
     if not records:
         return ""
     engines = sorted({str(getattr(record, "engine", "") or "unknown") for record in records})

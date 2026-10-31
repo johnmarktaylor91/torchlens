@@ -60,7 +60,7 @@ TOUCH_STATES = frozenset(
 
 #: Op fields that record an intervention on the graph itself.
 OP_TOUCH_FIELDS = (
-    "interventions",
+    "edits",
     "is_edited",
     "edge_substitutions",
     "edge_replacement_stamps",

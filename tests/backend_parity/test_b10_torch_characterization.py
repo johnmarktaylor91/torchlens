@@ -242,7 +242,7 @@ def test_halt_signal_returns_partial_trace_from_predicate_capture() -> None:
         halt=lambda ctx: ctx.label.startswith("relu"),
     )
 
-    assert trace.halted is True
+    assert trace.is_stopped is True
     # stop_reason/halt_frontier are now remapped from raw to FINAL labels in
     # postprocess Step 10 (_rename_model_history_layer_names), consistently for
     # both the exhaustive tl.trace(halt=...) and cooked Recording.to_trace()

@@ -500,7 +500,7 @@ def test_layers_to_save_supports_intervene_halt_and_save_predicate() -> None:
     )
     saved_types = {op.layer_type for op in union_saved.layer_list if op.has_saved_activation}
     assert {"linear", "relu"}.issubset(saved_types)
-    assert getattr(halted, "halted", False) is True
+    assert getattr(halted, "is_stopped", False) is True
 
 
 def test_orphan_records_expose_saved_payload_when_pruned_or_retained() -> None:

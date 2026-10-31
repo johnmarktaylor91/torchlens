@@ -791,11 +791,11 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
         trace.save(path, level="runnable")
     with (path / "metadata.pkl").open("rb") as handle:
         metadata = pickle.load(handle)
-    assert metadata["raw_input"] is None
-    assert metadata["raw_output"] is None
+    assert metadata["input"] is None
+    assert metadata["transformed_output"] is None
     loaded = tl.load(path)
-    assert loaded.raw_input is None
-    assert loaded.raw_output is None
+    assert loaded.input is None
+    assert loaded.transformed_output is None
 
 
 def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
@@ -814,7 +814,7 @@ def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
     trace.save(path)
     with (path / "metadata.pkl").open("rb") as handle:
         metadata = pickle.load(handle)
-    raw = metadata["raw_input"]
+    raw = metadata["input"]
     assert isinstance(raw, list) and len(raw) == 2
     assert torch.is_tensor(raw[0])
     assert raw[1] == {"mode": "fast"}
@@ -838,13 +838,13 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
         metadata = pickle.load(handle)
     loaded = tl.load(path)
 
-    raw_image_record = metadata["raw_input"]
+    raw_image_record = metadata["input"]
     assert raw_image_record[_RAW_IMAGE_SENTINEL] is True
     assert isinstance(raw_image_record["data"], bytes)
     assert len(raw_image_record["data"]) <= _RAW_INPUT_IMAGE_BYTES_LIMIT
-    assert loaded.raw_input is not None
-    assert loaded.raw_input.size[0] <= 256
-    assert loaded.raw_input.size[1] <= 256
+    assert loaded.input is not None
+    assert loaded.input.size[0] <= 256
+    assert loaded.input.size[1] <= 256
 
 
 @pytest.mark.smoke

@@ -144,7 +144,7 @@ _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
         "transformed_out",
         "grad",
         "transformed_grad",
-        "interventions",
+        "edits",
     }
 )
 # ``Op.__getattribute__``/``__setattr__`` run on EVERY attribute touch during
@@ -196,7 +196,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "container_path": (),
     "multi_output_name": None,
     "is_edited": False,
-    "interventions": [],
+    "edits": [],
     "container_spec": None,
     "args_template": None,
     "kwargs_template": None,
@@ -405,7 +405,7 @@ _UNPOOLED_SLOTS = frozenset(
         "out_versions_by_child",
         "func_rng_states",
         "activation_transform",
-        "interventions",
+        "edits",
         # Per-op UNIQUE injected-op identity record (tlspec v9 entry-dark
         # slot): a mutable mapping distinct per injected op, never a shared
         # internable value. None on every model op until F01 writes it.
@@ -464,7 +464,7 @@ _POOL_MAX_DEPTH = 2
 _POOLED_CONTAINER_FIELDS = frozenset(
     {
         "annotations",
-        "interventions",
+        "edits",
         "var_names",
         "_grad_records",
         "out_versions_by_child",
@@ -539,7 +539,7 @@ _OUTPUT_NODE_REPLACED_FIELDS = frozenset(
         "input_to_module_calls",
         "internal_source_parents",
         "is_edited",
-        "interventions",
+        "edits",
         "io_role",
         "is_atomic_module",
         "is_buffer",
@@ -1456,7 +1456,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         has_saved_activation: Any
         output_device: Any
         activation_transform: Any
-        interventions: Any
+        edits: Any
         is_edited: Any
         detach_saved_activations: Any
         has_saved_args: Any
@@ -1622,7 +1622,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         "output_device": FieldPolicy.KEEP,
         "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
-        "interventions": FieldPolicy.KEEP,
+        "edits": FieldPolicy.KEEP,
         "is_edited": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "has_saved_args": FieldPolicy.KEEP,

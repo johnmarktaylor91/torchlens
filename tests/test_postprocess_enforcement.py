@@ -120,7 +120,7 @@ PINNED_NOOP_WRITERS = {
             "conditional_else_children",
             "conditional_entry_children",
             "conditional_then_children",
-            "interventions",
+            "edits",
             "kwargs_template",
         )
     ),
@@ -153,7 +153,7 @@ PINNED_NOOP_WRITERS = {
             # output-reaching duplicate makes e12aa996's child-direction
             # reach repair content-effective, exactly the retirement pattern
             # this ledger describes for conditional_elif_else and var_names.
-            "interventions",
+            "edits",
             "kwargs_template",
         )
     ),

@@ -1233,7 +1233,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert spec.capabilities.backward_capture is False
     assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is False
-    assert spec.capabilities.interventions is False
+    assert spec.capabilities.can_intervene is False
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.input_container_structure == "paths_only"
     assert spec.capabilities.output_container_structure == "paths_only"
@@ -1319,7 +1319,7 @@ def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
         return jnp.tanh(x @ jnp.ones((4, 3)))
 
     spec = tl.backends.spec("jax")
-    object.__setattr__(spec.capabilities, "interventions", True)
+    object.__setattr__(spec.capabilities, "can_intervene", True)
     try:
         with pytest.raises(BackendCapabilityConformanceError):
             tl.trace(
@@ -1329,4 +1329,4 @@ def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
                 intervene=tl.when(tl.func("tanh"), tl.zero_ablate()),
             )
     finally:
-        object.__setattr__(spec.capabilities, "interventions", False)
+        object.__setattr__(spec.capabilities, "can_intervene", False)

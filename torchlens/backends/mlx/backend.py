@@ -1151,7 +1151,7 @@ class MLXBackend:
         halt_selector = None
         if intervene is not None or halt is not None:
             spec = get_backend_spec("mlx")
-            if not spec.capabilities.interventions:
+            if not spec.capabilities.can_intervene:
                 raise BackendUnsupportedError(
                     "MLX backend capability table declares interventions=False; "
                     "refusing trace(intervene=/halt=) instead of silently "
@@ -1160,7 +1160,7 @@ class MLXBackend:
             # The registered binding IS the dispatch surface: resolution and
             # application come from the capability implementation, so a bound-
             # but-unregistered or in-place-flipped table refuses typed.
-            resolve = cast(Any, require_capability_implementation(spec, "interventions"))
+            resolve = cast(Any, require_capability_implementation(spec, "can_intervene"))
             intervention_plan, halt_selector = resolve(intervene, halt, self.mx)
             if grad_options is not None:
                 raise BackendUnsupportedError(
@@ -1203,7 +1203,7 @@ class MLXBackend:
             module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
             input_transform=cast("Callable[[Any], Any] | None", transform),
-            raw_input=raw_input,
+            input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
@@ -1270,7 +1270,7 @@ class MLXBackend:
                 # appended before the signal, so the partial graph ends at it.
                 halt_signal = signal
                 output = signal.frontier_output
-                trace.halted = True
+                trace.is_stopped = True
                 trace.stop_reason = signal.reason
                 trace.halt_frontier = signal.reason
             # Forward-time-only state: the emit path reads these during the
@@ -1299,9 +1299,11 @@ class MLXBackend:
                 )
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
             if halt_signal is not None:
-                trace.raw_output = None
+                trace.transformed_output = None
             else:
-                trace.raw_output = output_transform(output) if callable(output_transform) else None
+                trace.transformed_output = (
+                    output_transform(output) if callable(output_transform) else None
+                )
             self.finalize_forward_session(trace, trace._raw_graph_ws)
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)

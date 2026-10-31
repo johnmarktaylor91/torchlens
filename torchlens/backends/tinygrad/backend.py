@@ -508,7 +508,7 @@ class TinygradBackend:
                 "tinygrad backend preview requires at least one tinygrad Tensor output."
             )
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        trace.raw_output = output_transform(output) if callable(output_transform) else None
+        trace.transformed_output = output_transform(output) if callable(output_transform) else None
         uop_labels = self._emit_input_sources(trace, args)
         captures = self._emit_uop_graph(
             trace,

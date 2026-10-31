@@ -230,9 +230,7 @@ def test_w32_genuine_intervene_capture_keeps_exemption() -> None:
     assert replaced_ops, "zero_ablate must stamp its site"
     assert getattr(trace, "_intervention_spec", None) is not None
     assert any(
-        getattr(record, "replaced", False)
-        for op in replaced_ops
-        for record in (op.interventions or [])
+        getattr(record, "replaced", False) for op in replaced_ops for record in (op.edits or [])
     )
     assert check_metadata_invariants(trace) is True
     ground_truth = [trace[label].out for label in trace.output_layers]
@@ -256,7 +254,7 @@ def test_w32_stale_fire_leak_in_plain_capture_stays_refused() -> None:
 
     trace, _ground_truth = _capture(_Tiny(), torch.randn(3, 4))
     relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
-    relu_op.interventions.append(FireRecord(target_label=relu_op.label, replaced=True))
+    relu_op.edits.append(FireRecord(target_label=relu_op.label, replaced=True))
     # A plain capture may own an EMPTY InterventionSpec object; that must not
     # count as an armed spec for the fallback.
     assert _intervention_spec_is_armed(getattr(trace, "_intervention_spec", None)) is False

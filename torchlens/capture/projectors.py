@@ -187,7 +187,7 @@ _RERUN_EXTRA_OP_FIELDS = (
     "_pending_grad_blob_id",
     "_pending_transformed_grad_blob_id",
     "annotations",
-    "interventions",
+    "edits",
     "container_spec",
     "args_template",
     "kwargs_template",

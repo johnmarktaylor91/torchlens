@@ -109,7 +109,7 @@ def _metadata(path: Path) -> dict[str, Any]:
     return value
 
 
-@pytest.mark.parametrize("field_name", ("annotations", "interventions"))
+@pytest.mark.parametrize("field_name", ("annotations", "edits"))
 def test_runnable_save_rejects_tensor_in_slotted_keep_field(
     tmp_path: Path,
     field_name: str,

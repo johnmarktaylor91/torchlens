@@ -701,9 +701,7 @@ def _trace_fire_records(log: Any) -> list[FireRecord]:
     records: list[FireRecord] = []
     for layer in getattr(log, "layer_list", []) or []:
         records.extend(
-            record
-            for record in getattr(layer, "interventions", []) or []
-            if isinstance(record, FireRecord)
+            record for record in getattr(layer, "edits", []) or [] if isinstance(record, FireRecord)
         )
     for grad_fn in getattr(log, "grad_fn_logs", {}).values():
         for call in getattr(getattr(grad_fn, "calls", None), "_list", []):

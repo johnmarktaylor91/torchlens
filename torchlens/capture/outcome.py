@@ -748,7 +748,7 @@ def derive_outcome_from_structural_state(state: Mapping[str, Any]) -> CaptureOut
     """
 
     finished = bool(state.get("_tracing_finished"))
-    halted = bool(state.get("halted"))
+    halted = bool(state.get("is_stopped"))
     inference_only = bool(state.get("inference_only"))
     if halted and finished:
         reason = state.get("stop_reason")
@@ -802,7 +802,7 @@ def resolve_loaded_outcome(state: Mapping[str, Any]) -> CaptureOutcome:
             is_derived=True,
             note=f"attestation_parse_failed: {exc}",
         )
-    halted = bool(state.get("halted"))
+    halted = bool(state.get("is_stopped"))
     finished = bool(state.get("_tracing_finished"))
     # b8-sol: the refusal names the rule that ACTUALLY failed. An internally
     # contradictory record (cross-field layer) used to be blamed on the
@@ -976,7 +976,7 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
 
 _TERMINAL_STATE_FOR_STATUS: dict[CaptureStatus, str] = {
     CaptureStatus.COMPLETE: "complete",
-    CaptureStatus.STOPPED: "halted",
+    CaptureStatus.STOPPED: "is_stopped",
     CaptureStatus.ABORTED_NONFINITE: "failed",
     CaptureStatus.FAILED: "failed",
     CaptureStatus.UNATTESTED: "failed",
@@ -1329,7 +1329,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
     HALT-AWARE BY CONSTRUCTION (B1-01). A preview backend that supports
     ``halt=`` (paddle's shipped capability, MLX's ``_mlx_halt_selector``)
     catches its ``HaltSignal``, writes the structural halt fields, and then
-    falls through the SAME tail to this one stamp. Reading ``trace.halted``
+    falls through the SAME tail to this one stamp. Reading ``trace.is_stopped``
     here mirrors :func:`settle_halted` at the chokepoint, so no preview
     backend can stamp a halted product COMPLETE -- a wrongly-blessed settled
     status that the load-time coherence matrix would have to degrade to
@@ -1348,7 +1348,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
     """
 
     stop_request = trace.__dict__.pop("_stop_requested", None)
-    if isinstance(stop_request, StopRequest) and not bool(getattr(trace, "halted", False)):
+    if isinstance(stop_request, StopRequest) and not bool(getattr(trace, "is_stopped", False)):
         swallowed = StopSignalSwallowedError(
             "TorchLens raised a halt stop signal during this forward, but the "
             "capture reached its settlement stamp un-halted: user code "
@@ -1361,7 +1361,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
         )
         settle_failed(trace, None, swallowed)
         raise swallowed
-    if bool(getattr(trace, "halted", False)):
+    if bool(getattr(trace, "is_stopped", False)):
         reason = getattr(trace, "stop_reason", None)
         frontier_label = getattr(trace, "halt_frontier", None)
         # The preview tail ran to completion (module attachment, relation

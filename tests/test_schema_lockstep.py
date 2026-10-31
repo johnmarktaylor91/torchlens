@@ -1152,7 +1152,7 @@ def test_the_axis_sweep_is_not_vacuous() -> None:
     """
 
     names = _postprocess_axis_names()
-    assert "halted" in names
+    assert "is_stopped" in names
     assert "intervention" in names
     assert len(names) >= 20
 

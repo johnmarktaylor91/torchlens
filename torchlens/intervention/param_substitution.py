@@ -595,7 +595,7 @@ def _propagate_staged(trace: Trace, staging: _Staging, *, strict: bool) -> None:
         preserve_origins=False,
     )
     for label, records in staging.pending_records.items():
-        trace.layer_dict_all_keys[label].ops[0].interventions.extend(records)
+        trace.layer_dict_all_keys[label].ops[0].edits.extend(records)
 
 
 def _stamp_param_kind(child_op: Any, store_key: tuple[Any, ...], param_address: str) -> None:

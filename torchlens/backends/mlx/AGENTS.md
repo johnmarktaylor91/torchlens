@@ -10,7 +10,7 @@ Tier-1 standalone spec (no `capture_backend`); the `BackendSpec` in
   intermediates (`_MLXIntermediateTapObserver`, `intermediate_derived_grads=True`).
 - Static-label `intervene=` AND `halt=` both ship; combining either with
   `grad_options=` refuses typed (derived-grad replay would misrepresent the
-  intervened forward). Halted traces set `halted` / `stop_reason` /
+  intervened forward). Halted traces set `is_stopped` / `stop_reason` /
   `halt_frontier`; a halt selector matching zero sites warns.
 - `mx.compile` / `mx.grad` / `mx.vmap` traced-transform entries refuse typed at
   capture entry (`_find_mlx_compiled_attributes`, `_mlx_traced_transform_type`);

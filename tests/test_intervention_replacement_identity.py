@@ -108,7 +108,7 @@ def test_inplace_mutating_hook_records_replaced_true() -> None:
     )
     op = log["relu_1_2"]
     assert op.is_edited is True
-    fire_records = list(op.interventions)
+    fire_records = list(op.edits)
     assert fire_records and fire_records[-1].replaced is True
     assert bool((op.out == 0).all())
 
@@ -139,6 +139,6 @@ def test_data_alias_mutating_hook_records_replaced_true() -> None:
     )
     op = log["relu_1_2"]
     assert op.is_edited is True
-    fire_records = list(op.interventions)
+    fire_records = list(op.edits)
     assert fire_records and fire_records[-1].replaced is True
     assert bool((op.out == 0).all())

@@ -150,7 +150,7 @@ def _call_args(inputs: Any, whole: bool) -> tuple[list[Any], dict[str, Any] | No
 
 
 def _same(output: Any) -> Any:
-    """Keep the live model output on ``trace.raw_output`` (the loss leaves)."""
+    """Keep the live model output on ``trace.transformed_output`` (the loss leaves)."""
 
     return output
 
@@ -221,7 +221,9 @@ def _check_entry(entry: CorpusEntry) -> None:
         assert backward_census.grouped_dw_excess == GROUPED_DW_EXCESS.get(entry.id, 0)
         assert _forward_family_flops(trace) == row["fcm_fwd"] + beyond_fwd, entry.id
 
-        leaves = [tensor for tensor in _float_leaves(trace.raw_output) if tensor.requires_grad]
+        leaves = [
+            tensor for tensor in _float_leaves(trace.transformed_output) if tensor.requires_grad
+        ]
         if row["fcm_bwd"] is None and entry.id not in BACKWARD_RAISES:
             # No loss leaf needs a gradient: no backward runs, and none is counted.
             assert not leaves

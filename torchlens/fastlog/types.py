@@ -1203,10 +1203,10 @@ class Recording(TraceLike):
         if self.is_stopped:
             frontier_label, frontier_tensor = self._recover_halt_frontier()
             projection.bind_halt_frontier(frontier_tensor, frontier_label)
-            trace.halted = True
+            trace.is_stopped = True
             trace.stop_reason = self.stop_reason
             trace.halt_frontier = self.stop_reason
-            trace.raw_output = None
+            trace.transformed_output = None
             trace.output_layers = [frontier_label]
             halt_output_tensors = [frontier_tensor]
             halt_output_addresses = [""]

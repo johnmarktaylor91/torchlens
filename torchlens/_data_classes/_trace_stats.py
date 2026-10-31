@@ -650,15 +650,15 @@ class TraceStatsMixin(_TraceMixinBase):
             if self.output_id2label is not None
             else self.output_num_classes
         )
-        has_raw_images = _raw_input_contains_images(self.raw_input)
-        input_modality = _infer_input_modality(self.raw_input, input_source)
+        has_raw_images = _raw_input_contains_images(self.input)
+        input_modality = _infer_input_modality(self.input, input_source)
         return ModelProfile(
             input_modality=input_modality,
             input_preprocessing_source=input_source,
             output_postprocessing_source=output_source,
             output_label_count=output_label_count,
             has_output_labels=has_output_labels,
-            num_stimuli=_raw_input_num_stimuli(self.raw_input),
+            num_stimuli=_raw_input_num_stimuli(self.input),
             has_raw_images=has_raw_images,
             keystone_applicable=bool(
                 input_modality == "image"

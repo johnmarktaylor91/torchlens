@@ -108,8 +108,10 @@ def rehydrate_trace(
     # like the metadata unpickler arms it for nested records.
     with governed_artifact_load():
         trace.__setstate__(state_for_load)
-    trace.raw_input = _rehydrate_small_raw_images(getattr(trace, "raw_input", None))
-    trace.raw_output = _rehydrate_small_raw_images(getattr(trace, "raw_output", None))
+    trace.input = _rehydrate_small_raw_images(getattr(trace, "input", None))
+    trace.transformed_output = _rehydrate_small_raw_images(
+        getattr(trace, "transformed_output", None)
+    )
     _apply_manifest_backend(trace, manifest)
     _drop_capture_only_trace_fields(trace)
 

@@ -60,7 +60,7 @@ CELL_SOURCES: dict[str, str] = {
     "output_device": "CORE",
     "activation_transform": "CORE",
     "annotations": "FACET:annotations",
-    "interventions": "FACET:intervention",
+    "edits": "FACET:intervention",
     "is_edited": "FACET:intervention",
     "detach_saved_activations": "CORE",
     "has_saved_args": "FACET:templates",
@@ -366,7 +366,7 @@ def scatter_record_to_cells(record: OpRecord, extras: IngestExtras, owning_trace
         "output_device": output.output_device,
         "activation_transform": output.activation_transform,
         "annotations": dict(annotations_facet.annotations),
-        "interventions": [
+        "edits": [
             result.fire_record
             for result in intervention.fire_results
             if getattr(result, "fire_record", None) is not None

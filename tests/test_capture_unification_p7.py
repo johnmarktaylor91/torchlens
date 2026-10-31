@@ -472,8 +472,8 @@ def test_recording_to_trace_halted_produces_valid_halted_trace() -> None:
     cooked = tl.record(_HaltNested().eval(), x, save=tl.func("relu"), halt=halt, seed=9).to_trace()
 
     # .halted must be TRUE (not silently False) and match exhaustive exactly.
-    assert cooked.halted is True
-    assert cooked.halted == exhaustive.halted
+    assert cooked.is_stopped is True
+    assert cooked.is_stopped == exhaustive.is_stopped
     assert cooked.stop_reason == exhaustive.stop_reason
     assert cooked.halt_frontier == exhaustive.halt_frontier
     assert list(cooked.output_layers) == list(exhaustive.output_layers)
@@ -654,7 +654,7 @@ def test_recording_to_trace_halt_labels_match_exhaustive_across_buffer() -> None
         seed=11,
     ).to_trace()
 
-    assert cooked.halted is True
+    assert cooked.is_stopped is True
     # Final labels (not raw) -- and they match exhaustive exactly.
     assert cooked.stop_reason == exhaustive.stop_reason
     assert cooked.halt_frontier == exhaustive.halt_frontier

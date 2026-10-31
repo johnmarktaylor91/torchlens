@@ -582,7 +582,7 @@ class JAXBackend:
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        trace.raw_output = output_transform(output) if callable(output_transform) else None
+        trace.transformed_output = output_transform(output) if callable(output_transform) else None
         self._emit_arg_sources(trace, args)
         self._emit_equations(trace, result)
         trace.jax_outvar_key_to_capture_index = dict(result.outvar_key_to_capture_index)

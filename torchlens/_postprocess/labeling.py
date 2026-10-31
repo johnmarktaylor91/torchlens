@@ -602,10 +602,10 @@ def _replace_layer_names_for_layer_entry(
     kwargs_template = getattr(layer_entry, "kwargs_template", None)
     if kwargs_template is not None:
         set_entry_field("kwargs_template", _rename_template_parent_refs(kwargs_template, mapping))
-    interventions = getattr(layer_entry, "interventions", None)
+    interventions = getattr(layer_entry, "edits", None)
     if interventions:
         set_entry_field(
-            "interventions",
+            "edits",
             [_rename_label_dataclass(record, mapping) for record in interventions],
         )
 

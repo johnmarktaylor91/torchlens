@@ -613,9 +613,7 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
 
     assert isinstance(loaded, tl.Trace)
     records = [
-        record
-        for layer in loaded.layer_list
-        for record in getattr(layer, "interventions", []) or []
+        record for layer in loaded.layer_list for record in getattr(layer, "edits", []) or []
     ]
     assert records
     assert all(isinstance(record, FireRecord) for record in records)
@@ -1150,9 +1148,7 @@ def test_intervene_trace_round_trips_transient_dedup_state(
     replaced_ops = [op for op in loaded.layer_list if op.is_edited]
 
     assert replaced_ops
-    assert any(
-        record.helper_name == helper_name for op in replaced_ops for record in op.interventions
-    )
+    assert any(record.helper_name == helper_name for op in replaced_ops for record in op.edits)
 
 
 def test_unknown_backend_runtime_version_serializes_as_null() -> None:

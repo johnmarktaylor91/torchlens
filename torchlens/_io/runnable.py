@@ -2796,7 +2796,7 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
     for op in getattr(trace, "layer_list", ()) or ():
         if not getattr(op, "is_edited", False):
             continue
-        for record in getattr(op, "interventions", ()) or ():
+        for record in getattr(op, "edits", ()) or ():
             direction = getattr(record, "direction", None)
             if bool(getattr(record, "replaced", False)) and direction == "forward":
                 return True

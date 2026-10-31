@@ -475,7 +475,7 @@ class PaddleBackend:
             module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
             input_transform=cast("Callable[[Any], Any] | None", transform),
-            raw_input=raw_input,
+            input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
@@ -562,14 +562,16 @@ class PaddleBackend:
                 for address in self._param_write_guard.written_addresses(trace)
             )
             if halt_signal is not None:
-                trace.halted = True
+                trace.is_stopped = True
                 trace.stop_reason = halt_signal.reason
                 trace.halt_frontier = halt_signal.reason
-                trace.raw_output = None
+                trace.transformed_output = None
             elif intervention_runtime is not None:
                 intervention_runtime.warn_if_zero_matches()
             if halt_signal is None:
-                trace.raw_output = output_transform(output) if callable(output_transform) else None
+                trace.transformed_output = (
+                    output_transform(output) if callable(output_transform) else None
+                )
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
@@ -2005,7 +2007,7 @@ def _paddle_intervention_corroborated(trace: Trace, capture: Any, op: Any) -> bo
         return True
     if not bool(getattr(op, "is_edited", False)):
         return False
-    for record in getattr(op, "interventions", ()) or ():
+    for record in getattr(op, "edits", ()) or ():
         if not bool(getattr(record, "replaced", False)):
             continue
         record_call_id = getattr(record, "func_call_id", None)

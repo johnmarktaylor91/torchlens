@@ -720,7 +720,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             return ()
         records = []
         for layer in getattr(self, "layer_list", []) or []:
-            for record in getattr(layer, "interventions", []) or []:
+            for record in getattr(layer, "edits", []) or []:
                 record_timestamp = getattr(record, "timestamp", None)
                 if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
                     records.append(record)

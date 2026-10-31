@@ -202,8 +202,8 @@ def test_replay_hook_updates_downstream_cone_and_run_state() -> None:
     assert not torch.equal(log[log.output_layers[0]].out, original_output)
     assert log.state is TraceState.REPLAY_PROPAGATED
     assert log.last_run["engine"] == "replay"
-    assert relu_site.interventions[-1].engine == "replay"
-    assert relu_site.interventions[-1].replaced is True
+    assert relu_site.edits[-1].engine == "replay"
+    assert relu_site.edits[-1].replaced is True
     assert relu_site.is_edited is True
 
 
@@ -321,7 +321,7 @@ def test_differentiable_replay_forks_isolated_records() -> None:
     assert source_cone_labels < all_labels
     assert replayed[outside_cone_label] is not log[outside_cone_label]
     assert replayed[outside_cone_label].source_trace is replayed
-    assert replayed[outside_cone_label].interventions is not log[outside_cone_label].interventions
+    assert replayed[outside_cone_label].edits is not log[outside_cone_label].edits
 
 
 def test_replay_failure_rolls_back_partial_out_updates(
@@ -336,7 +336,7 @@ def test_replay_failure_rolls_back_partial_out_updates(
         for layer in log.layer_list
         if isinstance(layer.out, torch.Tensor)
     }
-    original_records = {layer.layer_label: list(layer.interventions) for layer in log.layer_list}
+    original_records = {layer.layer_label: list(layer.edits) for layer in log.layer_list}
     original_state = log.state
     real_execute = replay_mod._execute_replay_func_strict
     execute_count = 0
@@ -359,7 +359,7 @@ def test_replay_failure_rolls_back_partial_out_updates(
     for layer in log.layer_list:
         if layer.layer_label in original_tensors:
             assert torch.equal(layer.out, original_tensors[layer.layer_label])
-        assert list(layer.interventions) == original_records[layer.layer_label]
+        assert list(layer.edits) == original_records[layer.layer_label]
 
 
 def test_replay_from_preserves_origin_out_and_recomputes_children() -> None:

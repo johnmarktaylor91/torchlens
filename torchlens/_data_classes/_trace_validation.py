@@ -1076,7 +1076,7 @@ class TraceValidationMixin(_TraceMixinBase):
                     self, run_model, transformed_input, output_transform=resolved_output_transform
                 )
                 if fast_done:
-                    self.raw_input = user_input
+                    self.input = user_input
                     refuse_unfired_fast_run(self)
                     return self
             result = _impl(
@@ -1091,7 +1091,7 @@ class TraceValidationMixin(_TraceMixinBase):
         # Atomic swap rebuilds Trace state; restore raw_input to the new
         # user-supplied value so visualization / save-load report the
         # current input rather than the prior trace's.
-        result.raw_input = user_input
+        result.input = user_input
         return result
 
     def _apply_rerun_transform(

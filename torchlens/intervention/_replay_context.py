@@ -170,7 +170,7 @@ _JOURNAL_OP_FIELDS = (
     "activation_memory",
     "transformed_activation_memory",
     "has_saved_activation",
-    "interventions",
+    "edits",
     "is_edited",
     "edge_substitutions",
     "edge_replacement_stamps",

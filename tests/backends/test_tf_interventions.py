@@ -87,7 +87,7 @@ def test_tf_op_level_zero_ablation_changes_downstream_and_marks_site() -> None:
     relu_op = next(op for op in trace.layer_list if op.func_name == "Relu")
     add_op = next(op for op in trace.layer_list if op.func_name == "AddV2")
     assert relu_op.is_edited is True
-    assert relu_op.interventions and relu_op.interventions[0]["backend"] == "tf"
+    assert relu_op.edits and relu_op.edits[0]["backend"] == "tf"
     assert np.allclose(np.asarray(relu_op.out), [1.0, 0.0, 2.0])
     assert np.allclose(np.asarray(add_op.out), [10.0, 10.0, 10.0])
 

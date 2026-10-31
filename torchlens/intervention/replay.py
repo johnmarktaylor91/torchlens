@@ -1309,7 +1309,7 @@ def _commit_replay_updates(
                 "transformed_out_dtype": site.transformed_out_dtype,
                 "memory": site.activation_memory,
                 "transformed_activation_memory": site.transformed_activation_memory,
-                "interventions": list(site.interventions),
+                "edits": list(site.edits),
                 "is_edited": site.is_edited,
             }
             _apply_out_update(site, tensor)
@@ -1321,7 +1321,7 @@ def _commit_replay_updates(
                 # two records, never three). Live-door records (capture
                 # facts), edge records (tier-(ii) corroboration), and
                 # records on sites this push did not fire at survive.
-                old_records = list(site.interventions or ())
+                old_records = list(site.edits or ())
                 surviving = [
                     record
                     for record in old_records
@@ -1332,7 +1332,7 @@ def _commit_replay_updates(
                 # preserve exactly that component across the replacement.
                 record_replaced_before = any(record.replaced for record in old_records)
                 nonrecord_component = bool(site.is_edited) and (not record_replaced_before)
-                site._internal_set("interventions", surviving + new_records)
+                site._internal_set("edits", surviving + new_records)
                 site._internal_set(
                     "is_edited",
                     bool(

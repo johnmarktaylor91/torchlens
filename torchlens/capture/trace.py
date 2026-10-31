@@ -1500,10 +1500,10 @@ def _finalize_halted_trace(
             "trace(halt=...) could not identify a tensor frontier for the halted partial graph."
         ) from halt_exc
 
-    self.halted = True
+    self.is_stopped = True
     self.stop_reason = halt_exc.reason
     self.halt_frontier = halt_exc.reason
-    self.raw_output = None
+    self.transformed_output = None
     if not postprocess:
         self.__dict__.pop("_output_attribution_input_tensors", None)
         self.capture_end_time = time.time()
@@ -2039,7 +2039,9 @@ def run_and_log_inputs_through_model(
         backend.finalize_forward_session(self, self._raw_graph_ws)
 
         output_transform = getattr(self, "_output_transform", None)
-        self.raw_output = output_transform(outputs) if output_transform is not None else None
+        self.transformed_output = (
+            output_transform(outputs) if output_transform is not None else None
+        )
         from .._autoroute._builtin_output import decode_outputs_for_trace
 
         decode_outputs_for_trace(

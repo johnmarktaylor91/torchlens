@@ -182,7 +182,7 @@ _TO_PANDAS_EXCLUDED_OP_FIELDS: frozenset[str] = frozenset(
         "grad_fn_handle",
         "grad_fn_object_id",
         "activation_transform",
-        "interventions",
+        "edits",
         "code_context",
         "transform_fn_source",
         "args_template",

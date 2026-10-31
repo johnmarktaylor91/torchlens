@@ -298,7 +298,7 @@ def maybe_finalize_nonfinite_prefix(
             backend,
         )
         trace.__dict__.pop("_output_attribution_input_tensors", None)
-        trace.raw_output = None
+        trace.transformed_output = None
         trace._postprocess(output_tensors, output_tensor_addresses)
         trace.__dict__["_nonfinite_prefix_finalized"] = True
     except Exception as finalize_exc:  # noqa: BLE001 - secondary evidence, never the primary error.

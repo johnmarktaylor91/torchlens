@@ -347,7 +347,7 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
     replaced: list[str] = []
     fires = 0
     for layer in getattr(log, "layer_list", None) or ():
-        records = getattr(layer, "interventions", None) or ()
+        records = getattr(layer, "edits", None) or ()
         fires += len(records)
         if bool(getattr(layer, "is_edited", False)):
             label = getattr(layer, "layer_label", None)

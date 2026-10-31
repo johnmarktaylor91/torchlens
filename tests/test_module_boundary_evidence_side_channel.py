@@ -104,9 +104,9 @@ def test_boundary_evidence_survives_attr_rejecting_replacement() -> None:
     boundary = next(
         op for op in log.layer_list if str(op.layer_label).startswith("interventionreplacement")
     )
-    assert boundary.interventions
+    assert boundary.edits
     assert boundary.is_edited
-    assert any(record.replaced for record in boundary.interventions)
+    assert any(record.replaced for record in boundary.edits)
     # Replaced-parent provenance (fc1's real output) survived the rejection.
     assert tuple(boundary.parents)
     # The replacement is never laundered into an untraceable internal source.
@@ -129,7 +129,7 @@ def test_rejecting_and_plain_replacements_classify_identically() -> None:
         return [
             (
                 str(op.layer_label),
-                bool(op.interventions),
+                bool(op.edits),
                 bool(getattr(op, "is_edited", False)),
             )
             for op in log.layer_list

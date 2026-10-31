@@ -351,9 +351,7 @@ def _base_image(
     if trace is not None:
         from ..repgeom import _matching_pil_image_batch
 
-        batch = _matching_pil_image_batch(
-            getattr(trace, "raw_input", None), descriptor.input_shape[0]
-        )
+        batch = _matching_pil_image_batch(getattr(trace, "input", None), descriptor.input_shape[0])
         if batch:
             return batch[0].convert("RGB")
         try:

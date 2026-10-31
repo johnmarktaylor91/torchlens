@@ -620,7 +620,7 @@ def _selection_recipes(trace: Trace) -> tuple[tuple[str, Mapping[str, Any]], ...
 
     recipes: list[tuple[str, Mapping[str, Any]]] = []
     for op in _trace_ops(trace):
-        for record in getattr(op, "interventions", ()) or ():
+        for record in getattr(op, "edits", ()) or ():
             helper = getattr(record, "helper", None)
             recipe = getattr(helper, "selection_recipe", None) if helper is not None else None
             if recipe is None:

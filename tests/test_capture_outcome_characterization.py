@@ -195,7 +195,7 @@ def test_halted_trace_basic_shape() -> None:
     """A halted capture finishes postprocess: finished truthy, halted truthy."""
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert trace._tracing_finished is True
     assert trace.halt_frontier == trace.stop_reason
 

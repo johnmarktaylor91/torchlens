@@ -287,7 +287,7 @@ def batch_receipt(trace: Any) -> dict[str, Any]:
     fired: list[str] = []
     fire_count = 0
     for label in trace.op_labels:
-        records = getattr(trace.ops[label], "interventions", None) or ()
+        records = getattr(trace.ops[label], "edits", None) or ()
         if records:
             fired.append(label)
             fire_count += len(records)

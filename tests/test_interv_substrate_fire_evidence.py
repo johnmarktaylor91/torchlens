@@ -236,7 +236,7 @@ def test_fire_records_carry_uniform_timestamps() -> None:
     records = [
         record
         for label in fork.op_labels
-        for record in (getattr(fork.ops[label], "interventions", None) or ())
+        for record in (getattr(fork.ops[label], "edits", None) or ())
     ]
     assert records
     assert all(record.timestamp is not None for record in records)

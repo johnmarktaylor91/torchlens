@@ -258,7 +258,7 @@ def feature_map_node_spec(
 
         from ..repgeom import _matching_pil_image_batch
 
-        raw_images = _matching_pil_image_batch(getattr(trace, "raw_input", None), total_stimuli)
+        raw_images = _matching_pil_image_batch(getattr(trace, "input", None), total_stimuli)
         overlay_available = overlay and raw_images is not None
         grid = _render_feature_map_grid(
             maps,

@@ -1165,7 +1165,7 @@ def _scrub_value(
             scrubbed_state[field_name] = None
             continue
         if policy is FieldPolicy.KEEP and not (
-            owner_is_trace and (field_name == "raw_input" or field_name == "raw_output")
+            owner_is_trace and (field_name == "input" or field_name == "transformed_output")
         ):
             scrubbed_state[field_name] = _scrub_value(
                 field_value,
@@ -1435,8 +1435,8 @@ def _effective_policy(
         "out_versions_by_child",
         "parent_params",
         "payload",
-        "raw_input",
-        "raw_output",
+        "input",
+        "transformed_output",
         "saved_args",
         "saved_kwargs",
         "transformed_grad",
@@ -1515,7 +1515,7 @@ def _scrub_field(
 
     if policy in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}:
         return None
-    if isinstance(owner, Trace) and field_name in {"raw_input", "raw_output"}:
+    if isinstance(owner, Trace) and field_name in {"input", "transformed_output"}:
         return _scrub_raw_value_for_save(
             owner,
             field_name,
@@ -1628,13 +1628,15 @@ def _small_raw_value(value: Any, *, field_name: str) -> Any:
     if value is None:
         return None
     if isinstance(value, str):
-        text_limit = _RAW_OUTPUT_TEXT_LIMIT if field_name == "raw_output" else _RAW_INPUT_TEXT_LIMIT
+        text_limit = (
+            _RAW_OUTPUT_TEXT_LIMIT if field_name == "transformed_output" else _RAW_INPUT_TEXT_LIMIT
+        )
         return value[:text_limit]
     if isinstance(value, torch.Tensor):
         tensor_bytes = value.nelement() * value.element_size()
         tensor_limit = (
             _RAW_OUTPUT_TENSOR_BYTES_LIMIT
-            if field_name == "raw_output"
+            if field_name == "transformed_output"
             else _RAW_INPUT_TENSOR_BYTES_LIMIT
         )
         if tensor_bytes <= tensor_limit:
@@ -1643,7 +1645,7 @@ def _small_raw_value(value: Any, *, field_name: str) -> Any:
             "Dropping %s tensor over small-policy cap: %s bytes", field_name, tensor_bytes
         )
         return None
-    if field_name == "raw_input":
+    if field_name == "input":
         small_image = _small_raw_image_value(value)
         if small_image is not None:
             return small_image

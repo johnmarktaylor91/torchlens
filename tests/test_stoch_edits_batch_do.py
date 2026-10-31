@@ -177,7 +177,7 @@ def _fingerprint(log: tl.Trace) -> dict:
         store = op.edge_substitutions or {}
         ops[op.label] = (
             None if op.out is None else op.out.clone(),
-            tuple(repr(record) for record in op.interventions or ()),
+            tuple(repr(record) for record in op.edits or ()),
             bool(op.is_edited),
             tuple(sorted(repr(key) for key in store)),
         )

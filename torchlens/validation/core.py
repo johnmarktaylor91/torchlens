@@ -960,7 +960,7 @@ def validate_saved_outs(
 
     # Initial check: logged outputs must match a fresh forward pass. Halted traces
     # deliberately stop at an internal frontier, so no full-model output exists.
-    if not getattr(self, "halted", False):
+    if not getattr(self, "is_stopped", False):
         if len(self.output_layers) != len(ground_truth_output_tensors):
             message = (
                 "Trace output boundary count does not match ground truth: "
@@ -1446,8 +1446,7 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
     if not (getattr(layer, "is_edited", False) and not getattr(layer, "is_internal_source", False)):
         return False
     has_own_live_replacement = any(
-        getattr(record, "replaced", False)
-        for record in (getattr(layer, "interventions", None) or ())
+        getattr(record, "replaced", False) for record in (getattr(layer, "edits", None) or ())
     ) or any(
         getattr(result, "replaced", False)
         for result in (getattr(layer, "fire_results", None) or ())

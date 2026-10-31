@@ -124,7 +124,7 @@ MULTI_WRITER_GOLDEN = {
     # L4's D1 buffer-merge hardening added buffer_source's step-6 write.
     "buffer_source": ("6", "9"),
     "internal_source_parents": ("1", "6", "9"),
-    "interventions": ("1", "3", "6", "9"),
+    "edits": ("1", "3", "6", "9"),
     "is_buffer": ("1", "9"),
     "is_input": ("1", "9"),
     "is_output": ("1", "9"),

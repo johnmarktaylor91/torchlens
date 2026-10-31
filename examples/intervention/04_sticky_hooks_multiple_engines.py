@@ -54,9 +54,7 @@ def main() -> None:
 
     assert torch.allclose(replayed.layer_list[-1].out, rerun.layer_list[-1].out)
     assert replayed.last_run_records()[-1].engine == "replay"
-    rerun_records = [
-        record for layer in rerun.layer_list for record in getattr(layer, "interventions", ())
-    ]
+    rerun_records = [record for layer in rerun.layer_list for record in getattr(layer, "edits", ())]
     assert rerun_records[-1].engine == "live"
 
 
