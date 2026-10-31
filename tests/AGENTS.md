@@ -52,7 +52,7 @@ Run memory-heavy real-world tests sequentially. Optional dependency tests should
 | `heavy` | Mid-cost (5-20s) tests, excluded from smoke and the mid backstop. |
 | `slow` | Long-running (>20s) real-world tests. |
 | `serial` | Load-sensitive tests that should run away from parallel worker load. NOT a budget exemption: serial items resolve their heavy/smoke/unmarked duration budget normally. |
-| (none) | Unmarked tests — a large majority (20,538/24,471, 84%, measured 2026-10-16) — run only in the backstops, never the commit gate, but are budgeted at the same <5s tier as smoke. |
+| (none) | Unmarked tests — a majority (22,253/37,865, 59%, measured 2026-10-31) — run only in the backstops, never the commit gate, but are budgeted at the same <5s tier as smoke. |
 | `rare` | Always excluded by default unless explicitly selected. |
 | `optional` | Requires an optional dependency or runtime. |
 | `requires_assertions` | Needs Python `assert`; skipped under `python -O`. |
@@ -96,7 +96,8 @@ env-fingerprinted golden family (those enforce
 only on the canonical smoke CI row). Everything else that used to be smoke is unmarked or
 `heavy` and still runs in the backstops and the nightly and weekly CI tiers. A new test stays
 unmarked unless it covers a critical path nothing in smoke reaches; the size ceiling keeps the
-tier from regrowing.
+tier from regrowing. The tier holds 1,485 tests (`tests/tiers/collection.json`, collected
+2026-10-31; per-tier counts, wall estimates and the collect commands are there).
 
 Under `-m smoke` (or `-m "smoke and ..."`) `tests/conftest.py` skips, before import, every
 test module whose source never spells `mark.smoke` or `mark.smoke_cells`; whole-tree
