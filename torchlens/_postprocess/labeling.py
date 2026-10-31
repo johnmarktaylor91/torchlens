@@ -532,7 +532,7 @@ def _replace_layer_names_for_layer_entry(
 
     # Scalar label-bearing fields. ``buffer_source`` names the producer of a buffer's
     # current value and is a portable ``FieldPolicy.KEEP`` field read by the public
-    # ``Buffer.buffer_source`` accessor -- but it was absent from every rename list, so
+    # ``Buffer.writer_label`` accessor -- but it was absent from every rename list, so
     # it survived into FINISHED traces as a DANGLING RAW label (``add_1_4_raw`` while
     # the producer's final label is ``add_1_2``), handed users an unresolvable lookup
     # key, and persisted that dead label into ``.tlspec`` artifacts. The buffer-merge

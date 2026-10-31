@@ -260,7 +260,7 @@ def test_buffer_write_descendant_ancestry_survives_the_validation_path() -> None
 
 
 def test_buffer_source_is_a_resolvable_final_label() -> None:
-    """``Buffer.buffer_source`` must be a live lookup key, not a dead raw label."""
+    """``Buffer.writer_label`` must be a live lookup key, not a dead raw label."""
 
     trace = tl.trace(_WriteThenRead(), torch.ones(2))
     sources = [op.buffer_source for op in trace.layer_list if op.is_buffer and op.buffer_source]

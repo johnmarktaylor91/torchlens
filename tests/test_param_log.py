@@ -490,8 +490,8 @@ class TestGradientTracking:
             assert pl.has_grad is True
             assert pl.grad_shape == pl.shape
             assert pl.grad_dtype == pl.dtype
-            assert pl.gradient_memory > 0
-            assert len(str(pl.gradient_memory)) > 0
+            assert pl.grad_memory > 0
+            assert len(str(pl.grad_memory)) > 0
 
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()
