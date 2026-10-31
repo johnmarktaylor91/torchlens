@@ -249,7 +249,7 @@ def test_replay_lane_wording_never_borrows_live_text(chain_capture) -> None:
 
     _model, _x, log = chain_capture
     fork = _edited_fork(log)
-    text = surgery_census(fork).to_markdown()
+    text = surgery_census(fork).to_text()
     assert _REPLAY_WORDING in text
     assert _LIVE_WORDING not in text
     _assert_no_banned_verbs(text)
@@ -267,7 +267,7 @@ def test_live_lane_wording_never_borrows_replay_text() -> None:
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
-    text = surgery_census(log).to_markdown()
+    text = surgery_census(log).to_text()
     assert _LIVE_WORDING in text
     assert _REPLAY_WORDING not in text
     _assert_no_banned_verbs(text)
@@ -284,7 +284,7 @@ def test_zero_fire_rule_is_disclosed(chain_capture) -> None:
             intervene=tl.when(tl.func("sigmoid"), tl.zero_ablate()),
             capture=tl.options.CaptureOptions(intervention_ready=True),
         )
-    text = surgery_census(log).to_markdown()
+    text = surgery_census(log).to_text()
     assert "declared and never fired" in text
     assert "a misfire is data, not silence" in text
 
@@ -301,7 +301,7 @@ def test_region_do_marks_carry_recorded_effect(chain_capture) -> None:
     assert "region_member" in kinds
     assert "region_exit" in kinds
     assert all(mark.basis == "fact" for mark in facts.marks)
-    text = surgery_census(fork).to_markdown()
+    text = surgery_census(fork).to_text()
     # region rows carry execution_effect verbatim -> source "recorded".
     assert "(recorded)" in text
     assert _REPLAY_WORDING in text
@@ -327,7 +327,7 @@ def test_injection_hosts_mark_and_census_count() -> None:
     assert host_marks[0].basis == "fact"
     fire_rows = [mark.row for mark in facts.marks if mark.kind == "fire"]
     assert any("spliced: splice_module" in row for row in fire_rows)
-    assert "injected ops recorded: 1" in surgery_census(log).to_markdown()
+    assert "injected ops recorded: 1" in surgery_census(log).to_text()
 
 
 # ---------------------------------------------------------------------------
@@ -429,7 +429,7 @@ def test_diff_absence_is_disclosed_never_ghosted(chain_capture) -> None:
     assert len(only_rows) == 1
     assert only_rows[0].subject_label == "sigmoid_1_5:1"
     assert only_rows[0].notes == ("not recorded in the reference capture",)
-    text = diff.to_markdown()
+    text = diff.to_text()
     _assert_no_banned_verbs(text)
     assert "ghost" not in text.lower()
 

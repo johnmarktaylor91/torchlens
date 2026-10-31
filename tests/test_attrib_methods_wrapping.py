@@ -265,13 +265,13 @@ def test_noise_tunnel_gradient_shap_substreams_disclosed() -> None:
         method=attribution.gradient_shap,
         model=model,
         target=0,
-        method_kwargs={"baselines": pool, "n_samples": 3},
+        method_kwargs={"baselines": pool, "num_samples": 3},
         num_samples=2,
         stdevs=0.05,
         seed=11,
     )
     assert result.extra["child_method"] == "gradient_shap"
-    assert result.extra["method_kwargs"]["n_samples"] == 3
+    assert result.extra["method_kwargs"]["num_samples"] == 3
     assert len(result.extra["child_seeds"]) == 2
     assert len(set(result.extra["child_seeds"])) == 2
     assert result.extra["child_n_samples"] == 3
@@ -282,7 +282,7 @@ def test_noise_tunnel_gradient_shap_substreams_disclosed() -> None:
         method=attribution.gradient_shap,
         model=model,
         target=0,
-        method_kwargs={"baselines": pool, "n_samples": 3},
+        method_kwargs={"baselines": pool, "num_samples": 3},
         num_samples=2,
         stdevs=0.05,
         seed=11,

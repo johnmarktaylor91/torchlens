@@ -218,7 +218,7 @@ def noise_tunnel(
         ``extra["method_kwargs"]``.
     target
         Target for the ``method=`` sugar route.
-    n_samples
+    num_samples
         Number of noised copies (logical child calls).
     stdevs
         ABSOLUTE Gaussian noise scale: one nonnegative float for every
@@ -331,7 +331,7 @@ def noise_tunnel(
     if bound.model_identity is not None:
         extra["model_identity"] = bound.model_identity
     if derived_child_seeds:
-        child_n_samples = bound.settings.get("n_samples", 25)
+        child_n_samples = bound.settings.get("num_samples", 25)
         extra["child_seeds"] = list(derived_child_seeds)
         extra["child_n_samples"] = child_n_samples
         extra["multiplicative_cost_logical"] = num_samples * int(child_n_samples)

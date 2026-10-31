@@ -42,7 +42,7 @@ def show(
     image: Image.Image | None = None,
     gradient: bool = False,
     retain_graph: bool = False,
-    slice: tuple[int, int] | None = None,
+    plane: tuple[int, int] | None = None,
     box_color: str = "#FF3B30",
     alpha: float = 0.6,
     cmap: str = "magma",
@@ -64,7 +64,7 @@ def show(
     retain_graph:
         Whether the empirical gradient probe retains autograd buffers, so a
         later backward over the same captured graph stays possible.
-    slice:
+    plane:
         Required ``(input_axis, index)`` plane selection for three spatial axes.
     box_color:
         RGB/CSS color for the geometric-box outline.
@@ -99,10 +99,10 @@ def show(
         else None
     )
     spatial_axes = _spatial_axes(descriptor, gradient_result)
-    rendered_axes = _rendered_axes(spatial_axes, slice)
+    rendered_axes = _rendered_axes(spatial_axes, plane)
     base = _base_image(view, descriptor, image, rendered_axes)
     if gradient_result is not None:
-        heatmap = _gradient_image(gradient_result, rendered_axes, slice, base.size, cmap)
+        heatmap = _gradient_image(gradient_result, rendered_axes, plane, base.size, cmap)
         base = _blend_heatmap(base, heatmap, alpha=alpha)
     if box is not None and box.status in {
         ReceptiveFieldStatus.EXACT,
@@ -325,7 +325,7 @@ def _rendered_axes(
     if rank == 3:
         if slice_spec is None:
             raise ReceptiveFieldError(
-                "3-D receptive-field visualization requires slice=(axis, index)."
+                "3-D receptive-field visualization requires plane=(axis, index)."
             )
         axis, _ = slice_spec
         if axis not in spatial_axes:

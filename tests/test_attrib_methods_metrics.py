@@ -213,7 +213,7 @@ def test_sensitivity_seeded_stochastic_passes_structurally() -> None:
         method=attribution.smoothgrad,
         model=model,
         target=0,
-        method_kwargs={"seed": 11, "n_samples": 3},
+        method_kwargs={"seed": 11, "num_samples": 3},
         num_samples=3,
         seed=6,
     )

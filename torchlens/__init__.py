@@ -289,7 +289,7 @@ _REDIRECTS: dict[str, str] = {
     "Param": "use torchlens.types.Param",
     "peek": "use torchlens.pluck",
     "PreHookEffect": "use torchlens.data_classes.PreHookEffect",
-    "preview_fastlog": "use torchlens.fastlog.preview",
+    "preview_fastlog": "removed from the public surface",
     "record_span": "use torchlens.span",
     "rehydrate_nested": "use torchlens.io.rehydrate_nested",
     "render_graph": "use torchlens.visualization.show_model_graph, or trace.draw()",

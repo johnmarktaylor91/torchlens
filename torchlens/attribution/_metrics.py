@@ -377,7 +377,7 @@ def infidelity(
         both returns mirror the attributed-leaf tuple.
     noise_std
         Gaussian scale, disclosed in every result (default 0.003).
-    n_samples
+    num_samples
         Number of perturbation samples (default 10, reference parity).
     seed
         Optional deterministic seed.
@@ -662,7 +662,7 @@ def sensitivity(
         seed or stored bank in here refuses BEFORE any work (ladder rung 1).
     target
         Target for the sugar route.
-    n_samples
+    num_samples
         Number of perturbed evaluations (default 10).
     radius
         L-infinity perturbation radius (default 0.02).

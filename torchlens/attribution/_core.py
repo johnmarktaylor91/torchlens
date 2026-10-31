@@ -1432,7 +1432,7 @@ def smoothgrad(
         selected values, a callable ``output -> scalar tensor``, or a
         :class:`SiteTarget` naming a hidden layer's output (and unit) to
         attribute instead of the model output.
-    n_samples
+    num_samples
         Number of noised saliency samples to average.
     noise_level
         Standard deviation of Gaussian noise added to each input copy; must be

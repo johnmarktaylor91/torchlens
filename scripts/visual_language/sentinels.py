@@ -20,7 +20,7 @@ from typing import Any
 from scripts.visual_language.slides import Panel, Slide
 
 #: Only what every sentinel render needs to be written as an SVG file and not opened.
-OUTPUT: Mapping[str, Any] = {"vis_fileformat": "svg", "vis_save_only": True}
+OUTPUT: Mapping[str, Any] = {"file_format": "svg", "vis_save_only": True}
 SKINS = ("torchlens", "paper", "dark", "colorblind", "high_contrast")
 
 
@@ -293,7 +293,7 @@ def sentinel_slides() -> tuple[Slide, ...]:
                         p.name,
                         p.fixture,
                         call=p.call,
-                        kwargs={**p.kwargs, "vis_theme": skin},
+                        kwargs={**p.kwargs, "theme": skin},
                         label=f"{p.label}, {skin}",
                         conventions=False,
                     )

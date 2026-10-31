@@ -627,7 +627,7 @@ class ReceptiveFieldView:
             Whether the empirical gradient probe retains autograd buffers, so
             repeated ``show(gradient=True)`` or later ``gradient()`` calls over
             the same captured graph stay possible.
-        slice:
+        plane:
             Required plane selector for three-dimensional inputs.
         box_color:
             Geometric-box overlay color.

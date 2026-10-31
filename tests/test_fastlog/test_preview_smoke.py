@@ -10,6 +10,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.fastlog.exceptions import RecordContextFieldError
 from torchlens.fastlog.types import RecordContext
+from torchlens.visualization.fastlog_preview import preview_fastlog
 
 
 def _mlp() -> nn.Module:
@@ -45,7 +46,7 @@ def test_preview_fastlog_catches_record_context_field_error(tmp_path: Path) -> N
             raise
         return True
 
-    dot = tl.fastlog.preview(
+    dot = preview_fastlog(
         trace,
         predicate=bad_predicate,
         color_predicate_error="#FF7AB6",

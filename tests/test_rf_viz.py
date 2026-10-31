@@ -186,7 +186,7 @@ def test_show_3d_requires_explicit_slice() -> None:
     descriptor = _descriptor(3)
     with pytest.raises(
         ReceptiveFieldError,
-        match=r"3-D receptive-field visualization requires slice=\(axis, index\)\.",
+        match=r"3-D receptive-field visualization requires plane=\(axis, index\)\.",
     ):
         show(_View(descriptor), (0, 0, 3, 3, 3), image=Image.new("RGB", (80, 60)))
 

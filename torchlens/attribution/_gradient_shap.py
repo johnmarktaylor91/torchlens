@@ -376,7 +376,7 @@ def gradient_shap(
         baseline examples (single attributed leaf), or a tree mirroring the
         input structure whose leaves share one pool size. Each example draws
         ONE pool index per sample, shared across every leaf (modality).
-    n_samples
+    num_samples
         Number of Monte-Carlo samples (default 25, captum parity).
     stdevs
         ABSOLUTE Gaussian input-noise scale (default 0.0 -- zero noise).

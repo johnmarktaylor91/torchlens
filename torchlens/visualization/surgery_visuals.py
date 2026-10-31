@@ -614,7 +614,7 @@ def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
     if len(lines) > _MAX_CAPTION_LINES:
         lines = lines[: _MAX_CAPTION_LINES - 1] + (
             f"+{len(lines) - (_MAX_CAPTION_LINES - 1)} more census line(s): "
-            "see the .census.txt sidecar or surgery_census(trace).to_markdown()",
+            "see the .census.txt sidecar or surgery_census(trace).to_text()",
         )
     return make_surgery_mark_spec_fn(trace, facts), lines
 
