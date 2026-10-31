@@ -127,7 +127,6 @@ def _layer_shape(trace: Any) -> list[tuple[str, int]]:
     return sorted(seen.values())
 
 
-@pytest.mark.smoke
 def test_is_torchlens_code_ignores_filename_spelling() -> None:
     """The frame filter answers by location, not by how the path is spelled."""
 
@@ -158,7 +157,6 @@ def test_is_torchlens_code_ignores_filename_spelling() -> None:
     assert not is_torchlens_code(outside)
 
 
-@pytest.mark.smoke
 def test_no_torchlens_frame_in_any_code_context() -> None:
     """Every recorded frame of an op lies outside the package, in-process."""
 
