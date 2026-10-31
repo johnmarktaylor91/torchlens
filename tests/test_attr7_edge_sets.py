@@ -107,8 +107,8 @@ def _check_sets(audit: Any, case: _Case, table: Any) -> int:
         spanning += len(receivers) > 1
         want = case.reference_effect(audit, names)
         assert abs(item.measured_effect - want) <= _BOUND, (item, want)
-        assert len(item.intervention) == len(receivers)
-        replayed = case.replayed(audit, item.intervention) - audit.original_score
+        assert len(item.build_interventions) == len(receivers)
+        replayed = case.replayed(audit, item.build_interventions) - audit.original_score
         assert replayed == item.measured_effect, item
     for row in audit.units:
         want = case.reference_effect(audit, [row.component])
@@ -203,7 +203,12 @@ def test_tiny_gpt2_sets_across_receivers_match_the_reference_and_replay() -> Non
     table = torchlens.mechinterp.edge_scores(
         model, clean, corrupted_input=corrupt, metric=_logit_difference, method="eap"
     )
-    common = {"claim": table, "corrupted": corrupt, "metric": _logit_difference, "edges": EDGES}
+    common = {
+        "claim": table,
+        "corrupted_input": corrupt,
+        "metric": _logit_difference,
+        "edges": EDGES,
+    }
     audit = attribution.causal_audit(
         model, clean, k=3, num_random_draws=2, per_unit=False, **common
     )

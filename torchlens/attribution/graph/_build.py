@@ -256,9 +256,9 @@ def _logit_targets(
     if target is None:
         if max_n_logits < 1 or not 0.0 < desired_logit_prob <= 1.0:
             raise _graph_refusal(
-                f"max_n_logits={max_n_logits!r} and desired_logit_prob="
-                f"{desired_logit_prob!r} select no logits. Remedy: pass max_n_logits=10, "
-                "desired_logit_prob=0.95 (the defaults).",
+                f"max_num_logits={max_n_logits!r} and logit_probability_coverage="
+                f"{desired_logit_prob!r} select no logits. Remedy: pass max_num_logits=10, "
+                "logit_probability_coverage=0.95 (the defaults).",
                 code="attribution_graph_target_invalid",
             )
         ids = _salient(probabilities, max_n_logits, desired_logit_prob)

@@ -137,7 +137,7 @@ class TestOpLabelReadSite:
         assert identity(by_op, to_module) == identity(by_module, {})
         assert torch.equal(by_op.active_feature_indices, by_module.active_feature_indices)
         _close(by_op.adjacency_matrix, by_module.adjacency_matrix)
-        for name in ("node_values", "activation_values", "error_vectors"):
+        for name in ("node_values", "feature_activations", "error_vectors"):
             _close(getattr(by_op, name), getattr(by_module, name))
         _close(by_op.constants["decoder_bias"], by_module.constants["decoder_bias"])
         torch.testing.assert_close(

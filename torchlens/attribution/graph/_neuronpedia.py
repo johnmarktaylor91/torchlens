@@ -339,7 +339,7 @@ def _check_arguments(
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
             raise _export_refusal(
                 f"{name}={value!r} is not a share between 0 and 1. "
-                "Remedy: pass node_threshold=0.8, edge_threshold=0.98 (the defaults).",
+                "Remedy: pass node_influence_coverage=0.8, edge_influence_coverage=0.98 (the defaults).",
                 code="attribution_graph_export_argument_invalid",
             )
 

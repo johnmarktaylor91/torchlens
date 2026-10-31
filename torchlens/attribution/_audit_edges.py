@@ -22,7 +22,7 @@ the forward as patched so far (the MIB circuit-track convention), and the
 recorded edits are the values that fork wrote, one per receiver.
 
 An EDGE table records neither its corrupted inputs nor its metric (its rows
-are not re-scorable), so the caller passes the ``corrupted=`` and
+are not re-scorable), so the caller passes the ``corrupted_input=`` and
 ``metric=`` it was scored with, keeping ``edge_scores``' meanings; the table's
 example count, reduction, method, edge names and sender shapes are checked
 against the component graph rebuilt on the audit's trace. Rows whose status
@@ -246,8 +246,8 @@ def _check_request(request: _AuditRequest, rows: tuple[Any, ...]) -> str:
         )
     if not (isinstance(request.ablation, str) and request.ablation == "zero"):
         raise _edge_refusal(
-            f"ablation={request.ablation!r} was given; an edge is tested by patching in the "
-            "sender's corrupted value, so ablation= does not apply",
+            f"edit={request.ablation!r} was given; an edge is tested by patching in the "
+            "sender's corrupted value, so edit= does not apply",
             _AUDIT_CALL,
             code="attribution_eval_setting_invalid",
         )
@@ -291,8 +291,8 @@ def _graphs(request: _AuditRequest) -> tuple[Any, Any, Any]:
             found = None if other is None else tuple(other.value.shape)
             raise _edge_refusal(
                 f"node {name!r} is {tuple(node.value.shape)} on the clean inputs and {found} on "
-                "corrupted=; edge scores compare one node on two inputs of one shape",
-                "pass the corrupted= torchlens.mechinterp.edge_scores was given, the same shape as x, "
+                "corrupted_input=; edge scores compare one node on two inputs of one shape",
+                "pass the corrupted_input= torchlens.mechinterp.edge_scores was given, the same shape as x, "
                 f"e.g. {_AUDIT_CALL}",
                 code="attribution_audit_claim_misaligned",
             )

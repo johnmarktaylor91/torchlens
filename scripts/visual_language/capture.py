@@ -206,7 +206,7 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         from torchlens.viz import intervention_diff
 
         diff = intervention_diff(fork, trace)
-        diff.draw(str(outpath), file_format="svg", vis_save_only=True)
+        diff.draw(str(outpath), vis_fileformat="svg", vis_save_only=True)
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)
     if panel.call == "bundle_graph":

@@ -102,7 +102,7 @@ def _readout(graph, node, ins, logits, transcoders):
         return ins[_layer(node.site)][node.position] @ reader.W_enc.double()[:, node.feature_index]
     direction = torch.zeros(fx.VOCAB, dtype=torch.float64)
     direction[node.token_id] = 1.0
-    if graph.demeaned_logits:
+    if graph.has_demeaned_logits:
         direction = direction - 1.0 / fx.VOCAB
     return logits[-1] @ direction
 

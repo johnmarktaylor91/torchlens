@@ -196,7 +196,7 @@ def _validate_settings(request: _AuditRequest) -> None:
     if not numeric and ablation not in ("zero", "mean"):
         raise _setting_error(
             f"ablation must be 'zero', 'mean', or a number or tensor baseline; got {ablation!r}",
-            f"{base}, k=1)" if request.metric is not None else f"{base}, ablation='mean')",
+            f"{base}, k=1)" if request.metric is not None else f"{base}, edit='mean')",
             code=code,
         )
     controls = request.controls
@@ -209,7 +209,7 @@ def _validate_settings(request: _AuditRequest) -> None:
     if not _is_count(request.random_draws):
         raise _setting_error(
             f"random_draws must be a positive int; got {request.random_draws!r}",
-            f"{base}, random_draws=10)",
+            f"{base}, num_random_draws=10)",
             code=code,
         )
 

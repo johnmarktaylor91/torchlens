@@ -301,7 +301,7 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
         own logits, and for an EDGE table, whose target is ``metric``.
     corrupted
         For an EDGE table only: the corrupted inputs it was scored with
-        (``edge_scores``' ``corrupted=``), the same shape as ``inputs``.
+        (``edge_scores``' ``corrupted_input=``), the same shape as ``inputs``.
     metric
         For an EDGE table only: the metric it was scored with
         (``edge_scores``' ``metric=``, ``logits -> values``, one value per
@@ -423,7 +423,7 @@ def _plan_any(request: _AuditRequest) -> _Plan:
 
 
 def _refuse_edge_inputs(request: _AuditRequest) -> None:
-    """Refuse ``corrupted=``, ``metric=`` or ``edges=`` for a claim that is not an EDGE table."""
+    """Refuse ``corrupted_input=``, ``metric=`` or ``edges=`` for a claim that is not an EDGE table."""
 
     given = [
         name

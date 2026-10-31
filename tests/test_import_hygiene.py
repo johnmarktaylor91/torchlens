@@ -406,7 +406,11 @@ assert collisions == {
     "types": [], "user_funcs": [],
     # F29: tl.utils gained a root row (the docs teach tl.utils.doctor()).
     "utils": [],
-    "validation": [], "visualization": [], "viz": [],
+    "validation": [], "visualization": [],
+    # Visuals rename: tl.viz exports its nodes child module (the node-visual
+    # factories namespace), and the feature_maps function shares its module's
+    # name; the package imports the function eagerly, so the root keeps it.
+    "viz": ["feature_maps", "nodes"],
 }
 
 """

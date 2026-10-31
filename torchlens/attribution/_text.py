@@ -21,8 +21,8 @@ content tokens while KEEPING special tokens at their true embeddings
 token, or special mask falls back to zeros-all with a NAMED disclosure --
 a missing pad token is never guessed.
 
-``n_steps=128`` is the fixed default (D24, the recorded 2-1);
-``n_steps="auto"`` opts into the dual-criterion ladder 64 -> 128 -> 256 ->
+``num_steps=128`` is the fixed default (D24, the recorded 2-1);
+``num_steps="auto"`` opts into the dual-criterion ladder 64 -> 128 -> 256 ->
 512, stopping ONLY when residual_rel <= 1% AND max(L1, L2) successive-grid
 change <= 1% (residual-only stopping is measured-unsound and may never
 return; 5%/5% falsely certifies -- never ship 5%). Rank stability is BANNED
@@ -613,7 +613,7 @@ class TokenAttribution:
         if self.converged is None:
             lines.append(
                 "convergence: not evaluated (fixed n_steps; pass "
-                "n_steps='auto' for the dual-criterion certificate)"
+                "num_steps='auto' for the dual-criterion certificate)"
             )
         elif self.converged:
             lines.append(
@@ -870,7 +870,7 @@ def text(
         raise AttributionError(
             "n_steps must be a positive int or 'auto'. Remedy: keep the "
             "default 128, or opt into the dual-criterion ladder with "
-            "n_steps='auto'.",
+            "num_steps='auto'.",
             code="text_input_invalid",
         )
 
@@ -1024,7 +1024,7 @@ def text(
                 f"text() achieved residual_rel "
                 f"{completeness['residual_rel']:.2%} under the explicit "
                 f"baseline {baseline_disclosure['policy']!r}, above the 1% "
-                "tolerance. Remedy: raise n_steps (or pass n_steps='auto'), "
+                "tolerance. Remedy: raise num_steps (or pass num_steps='auto'), "
                 "or choose a task-appropriate baseline (baseline='auto').",
                 code="text_residual_above_tolerance",
             ),
