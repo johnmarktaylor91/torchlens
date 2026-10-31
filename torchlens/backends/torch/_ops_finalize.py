@@ -275,7 +275,7 @@ def _make_layer_log_entry(
                     predicate_ctx,
                     activation_transform,
                 )
-    if predicate_spec is not None and self.save_arg_values and not fields_dict["has_saved_args"]:
+    if predicate_spec is not None and self._options_save_args and not fields_dict["has_saved_args"]:
         # Admit BEFORE the clones allocate (r8 R34, sol 2).
         arg_reservations = _admit_saved_args_budget(self, fields_dict, t_args, t_kwargs)
         fields_dict["has_saved_args"] = True
@@ -400,7 +400,7 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
     Raises
     ------
     CaptureError
-        If ``self.raise_on_nan`` is enabled and ``tensor`` contains NaN or Inf.
+        If ``self._options_on_nonfinite`` is enabled and ``tensor`` contains NaN or Inf.
     """
 
     if not getattr(self, "_options_on_nonfinite", False):

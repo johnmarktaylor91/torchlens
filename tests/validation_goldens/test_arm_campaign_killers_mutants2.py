@@ -86,7 +86,7 @@ def test_backend_identity_invariants_fires_on_invalid_param_source() -> None:
     fake_trace = SimpleNamespace(
         backend="torch",
         module_identity_mode="torch_module",
-        param_source="bogus_source",
+        _provenance_param_source="bogus_source",
         num_param_tensors=0,
     )
 
@@ -130,7 +130,7 @@ def test_distance_invariants_fires_on_nonzero_output_distance() -> None:
         output_descendants=frozenset(),
     )
     fake_trace = SimpleNamespace(
-        mark_layer_depths=True,
+        _options_mark_layer_depths=True,
         input_layers=[],
         output_layers=["out_1_1"],
         layer_list=[layer],
@@ -161,7 +161,7 @@ def test_distance_invariants_fires_on_output_descendant_outside_output_layers() 
         output_descendants=frozenset({"ghost_output_9_9"}),
     )
     fake_trace = SimpleNamespace(
-        mark_layer_depths=True,
+        _options_mark_layer_depths=True,
         input_layers=[],
         output_layers=["real_output_1_1"],
         layer_list=[layer],
@@ -208,7 +208,7 @@ def test_edge_use_parent_arg_consistency_fires_on_unresolved_child_label() -> No
 def test_equivalence_symmetry_fires_on_registry_label_outside_op_labels() -> None:
     """Arm 1: an op_equivalence_classes member must exist in op_labels."""
 
-    fake_trace = SimpleNamespace(op_labels=[], op_equivalence_classes={"t": {"ghost_op"}})
+    fake_trace = SimpleNamespace(op_labels=[], _graph_op_equivalence_classes={"t": {"ghost_op"}})
 
     with pytest.raises(MetadataInvariantError, match=r"op_equivalence_classes\[.*\] contains"):
         _check_equivalence_symmetry(fake_trace)  # type: ignore[arg-type]
@@ -230,7 +230,7 @@ def test_equivalence_symmetry_fires_on_layer_pass_mismatch() -> None:
     )
     fake_trace = SimpleNamespace(
         op_labels=["op_1_1", "op_2_2"],
-        op_equivalence_classes={},
+        _graph_op_equivalence_classes={},
         layer_list=[op],
         layer_logs={"layer_1_1": layer},
     )

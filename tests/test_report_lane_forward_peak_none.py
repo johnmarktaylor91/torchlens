@@ -116,12 +116,14 @@ def test_cuda_mps_and_backward_semantics_are_unchanged() -> None:
     assert forward_peak_value("mps", 0, python_peak_measured=False) == (0, None)
     assert forward_peak_value("cpu", 512, python_peak_measured=False) == (512, None)
 
-    cuda = SimpleNamespace(forward_memory_backend="cuda", forward_peak_memory=0)
+    cuda = SimpleNamespace(_provenance_forward_memory_backend="cuda", _cost_forward_peak_memory=0)
     assert pass_peak_facts(cuda).value_bytes == 0
     assert "high-water" in pass_peak_facts(cuda).meaning
-    mps = SimpleNamespace(forward_memory_backend="mps", forward_peak_memory=0)
+    mps = SimpleNamespace(_provenance_forward_memory_backend="mps", _cost_forward_peak_memory=0)
     assert pass_peak_facts(mps).value_bytes == 0
-    backward = SimpleNamespace(backward_memory_backend="cpu", backward_peak_memory=0)
+    backward = SimpleNamespace(
+        _provenance_backward_memory_backend="cpu", _cost_backward_peak_memory=0
+    )
     assert pass_peak_facts(backward, "backward").value_bytes == 0
 
 

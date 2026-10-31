@@ -1310,7 +1310,7 @@ class BufferWriteTracker:
     ) -> str | None:
         """Log the graph node representing one written buffer version."""
 
-        if self.trace.capture_mode != "exhaustive":
+        if self.trace._options_mode != "exhaustive":
             return None
         from .sources import log_source_tensor
 

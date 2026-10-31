@@ -591,9 +591,9 @@ def _report_escape(
     }
     reports = guard.trace.__dict__.setdefault("escape_diagnostics", [])
     reports.append(detail)
-    guard.trace.escape_detector_verified = False
-    guard.trace.capture_verified = False
-    guard.trace.capture_verification_reason = "callable_escape_shadow_report"
+    guard.trace._health_escape_detector_verified = False
+    guard.trace._provenance_verified = False
+    guard.trace._provenance_verification_reason = "callable_escape_shadow_report"
     callable_name = _safe_qualname(original)
     warnings.warn(
         "TorchLens shadow detector observed a raw torch callable outside its registered "

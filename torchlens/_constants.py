@@ -194,7 +194,7 @@ MODEL_LOG_FIELD_ORDER = [
     "_code_context_cache",
     "_replay_arg_version_data_complete",
     "_options_save_args",
-    "_options_source_context_lines",
+    "num_context_lines",
     "_options_save_grads",
     "capture_tensor_grad_hooks",
     "_grad_op_nums_to_save",

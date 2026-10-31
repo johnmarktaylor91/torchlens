@@ -217,7 +217,7 @@ def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
     raw_dict = {"producer_1_1_raw": producer, "consumer_1_2_raw": consumer}
     trace = SimpleNamespace(
         _raw_graph_ws=SimpleNamespace(raw_layer_dict=raw_dict),
-        op_equivalence_classes={},
+        _graph_op_equivalence_classes={},
         input_layers=["producer_1_1_raw"],
         output_layers=["consumer_1_2_raw"],
     )

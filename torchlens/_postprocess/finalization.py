@@ -88,12 +88,12 @@ def _log_time_elapsed(self: "Trace") -> None:
     pass times from total elapsed time. Also computes torchlens_logging overhead
     as total time minus actual function call time.
     """
-    self.capture_end_time = time.time()
-    self.cleanup_duration = Duration(
-        self.capture_end_time
-        - self.capture_start_time
-        - self.setup_duration
-        - self.forward_duration
+    self._provenance_end_time = time.time()
+    self._provenance_cleanup_duration = Duration(
+        self._provenance_end_time
+        - self._provenance_start_time
+        - self._provenance_setup_duration
+        - self._cost_forward_duration
     )
 
 
@@ -204,7 +204,7 @@ def _build_root_module_log(
         all_addresses=root_meta.get("all_addresses", ["self"]),
         name="self",
         cls=root_meta.get("cls"),
-        class_name=root_meta.get("class_name", self.model_class_name),
+        class_name=root_meta.get("class_name", self._source_class_name),
         class_qualname=root_meta.get("class_qualname", ""),
         class_source_file=root_meta.get("class_source_file"),
         class_source_line=root_meta.get("class_source_line"),
@@ -269,10 +269,10 @@ def _build_root_module_log(
         call_children=_root_call_children(mbd),
         all_addresses=root_meta.get("all_addresses", ["self"]),
         cls=root_meta.get("cls"),
-        class_name=root_meta.get("class_name", self.model_class_name),
+        class_name=root_meta.get("class_name", self._source_class_name),
         class_qualname=root_meta.get("class_qualname", ""),
         ordinal_index=0,
-        forward_duration=float(self.forward_duration or 0.0),
+        forward_duration=float(self._cost_forward_duration or 0.0),
         code_context=list(getattr(self, "_source_frames", [])),
         module_call_stack=[],
         _source_trace=self,
@@ -615,14 +615,14 @@ def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
         Model log being finalized.
     """
     if getattr(self, "_graph_conditional_edge_call_indices", None):
-        self.conditional_edge_call_indices = {
+        self._graph_conditional_edge_call_indices = {
             edge_key: sorted(dict.fromkeys(call_indexs))
-            for edge_key, call_indexs in self.conditional_edge_call_indices.items()
+            for edge_key, call_indexs in self._graph_conditional_edge_call_indices.items()
         }
         return
 
     conditional_edge_call_indices: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
-    for (conditional_id, branch_kind), edge_list in self.conditional_arm_entry_edges.items():
+    for (conditional_id, branch_kind), edge_list in self._graph_conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             parent_no_pass = _strip_pass_suffix(parent_label)
             child_no_pass = _strip_pass_suffix(child_label)
@@ -636,7 +636,7 @@ def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
             if child_call_index not in conditional_edge_call_indices[edge_key]:
                 conditional_edge_call_indices[edge_key].append(child_call_index)
 
-    self.conditional_edge_call_indices = {
+    self._graph_conditional_edge_call_indices = {
         edge_key: sorted(call_indexs)
         for edge_key, call_indexs in conditional_edge_call_indices.items()
     }
@@ -1285,18 +1285,18 @@ def _build_layer_logs(self: "Trace") -> None:
         ]
         if pass_autograd_bytes:
             layer_log.autograd_memory = Bytes(sum(int(value) for value in pass_autograd_bytes))
-            layer_log._cost_total_autograd_memory = layer_log.autograd_memory
+            layer_log.total_autograd_memory = layer_log.autograd_memory
             layer_log.num_autograd_tensors = sum(pass_autograd_tensor_counts)
             autograd_memory += layer_log.autograd_memory
             has_autograd_saved_value = True
         else:
             layer_log.autograd_memory = None
-            layer_log._cost_total_autograd_memory = None
+            layer_log.total_autograd_memory = None
             layer_log.num_autograd_tensors = None
         _reconcile_multipass_layer_fields(layer_log)
         _rebuild_layer_log_conditional_views(layer_log)
 
-    self.total_autograd_memory = Bytes(autograd_memory) if has_autograd_saved_value else None
+    self._cost_total_autograd_memory = Bytes(autograd_memory) if has_autograd_saved_value else None
     self.layer_logs = layer_logs
     _rebuild_conditional_edge_call_indices(self)
     _build_conditional_records(self)
@@ -1313,10 +1313,10 @@ def _build_conditional_records(self: "Trace") -> None:
     )
 
     conditionals: list[Conditional] = []
-    event_by_id = {event.id: event for event in self.conditional_records}
-    conditional_id_by_event_id = _make_public_conditional_ids(self.conditional_records)
+    event_by_id = {event.id: event for event in self._graph_conditional_records}
+    conditional_id_by_event_id = _make_public_conditional_ids(self._graph_conditional_records)
     role_labels_by_cond_arm: dict[tuple[str, int, str], list[str]] = defaultdict(list)
-    for event in self.conditional_records:
+    for event in self._graph_conditional_records:
         terminal_bool_label = event.bool_layers[0] if event.bool_layers else str(event.id)
         conditional_id = conditional_id_by_event_id[event.id]
         # Use AST-derived branch_ranges so every static arm is materialized,
@@ -1348,7 +1348,9 @@ def _build_conditional_records(self: "Trace") -> None:
         arms: list[ConditionalArm] = []
         for branch_kind in ordered_branch_kinds:
             kind = "elif" if branch_kind.startswith("elif_") else branch_kind
-            edge_list = list(self.conditional_arm_entry_edges.get((event.id, branch_kind), []))
+            edge_list = list(
+                self._graph_conditional_arm_entry_edges.get((event.id, branch_kind), [])
+            )
             execution_labels = list(dict.fromkeys(child for _parent, child in edge_list))
             if kind not in {"then", "elif"}:
                 evaluation_labels = []
@@ -1477,7 +1479,7 @@ def _build_conditional_records(self: "Trace") -> None:
             layer.terminal_bool_for = None
     bind_layer_conditional_roles(self, roles_by_label)
 
-    self.conditionals = ConditionalAccessor(conditionals)
+    self._graph_conditionals = ConditionalAccessor(conditionals)
 
 
 def _make_public_conditional_ids(condition_events: list[Any]) -> dict[int, str]:
@@ -1683,8 +1685,8 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
             self,
             include_outs=True,
             include_grads=_has_retained_gradient_payloads(self),
-            include_saved_args=self.save_arg_values,
-            include_rng_states=self.save_rng_states,
+            include_saved_args=self._options_save_args,
+            include_rng_states=self._options_save_rng,
             include_custom_attributes=getattr(writer, "include_custom_attributes", True),
             include_buffer_values=getattr(writer, "include_buffer_values", True),
         )

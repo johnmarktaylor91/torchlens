@@ -2302,7 +2302,7 @@ def _backstop_trace(
 
     return SimpleNamespace(
         layer_list=layer_list,
-        completeness_decompositions=decompositions,
+        _health_completeness_decompositions=decompositions,
         completeness_diagnostics=diagnostics or [],
     )
 

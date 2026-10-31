@@ -323,7 +323,7 @@ def _emit_exhaustive_operation_events(
                 fields_dict=fields_dict_onetensor,
                 t_args=arg_copies,
                 t_kwargs=kwarg_copies,
-                activation_transform=self.activation_transform,
+                activation_transform=self._options_activation_transform,
                 event_module_stack=event_module_stack,
                 call_ref_box=call_ref_box,
             ),

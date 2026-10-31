@@ -232,7 +232,7 @@ def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
                 file=frame.f_code.co_filename,
                 line_number=frame.f_lineno,
                 func_name=func_name,
-                num_context_lines_requested=int(getattr(trace, "_options_source_context_lines", 7)),
+                num_context_lines_requested=int(getattr(trace, "num_context_lines", 7)),
                 _frame_func_obj=(
                     frame.f_locals.get(func_name) or frame.f_globals.get(func_name)
                     if source_loading_enabled

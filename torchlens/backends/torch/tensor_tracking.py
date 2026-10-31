@@ -988,7 +988,7 @@ def _log_tensor_grad(
             selection, disarmed sidecar), the slot's payloads are built and
             charged per layer through the same chokepoint.
     """
-    self.has_gradients = True
+    self._autograd_has_grads = True
     if _label_raw not in self._raw_to_final_layer_labels:
         return
     if not self.layer_dict_all_keys:
@@ -1028,8 +1028,8 @@ def _log_tensor_grad(
             # Retention policy denies a payload for this label through the
             # charged chokepoint; keep the historical bare slot write.
             layer._log_tensor_grad(grad)
-        self.saved_gradient_memory += layer.gradient_memory
-        self.total_gradient_memory += layer.gradient_memory
+        self._cost_saved_grad_memory += layer.gradient_memory
+        self._cost_total_grad_memory += layer.gradient_memory
 
 
 def _locate_parent_tensors_in_args(

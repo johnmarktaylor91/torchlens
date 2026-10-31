@@ -186,7 +186,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_code_context_cache": "graph",
     "_replay_arg_version_data_complete": "witness",
     "_options_save_args": "capture_config",
-    "_options_source_context_lines": "capture_config",
+    "num_context_lines": "capture_config",
     "_options_save_grads": "capture_config",
     "capture_tensor_grad_hooks": "capture_config",
     "_grad_op_nums_to_save": "capture_config",

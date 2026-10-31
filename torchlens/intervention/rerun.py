@@ -987,7 +987,7 @@ def _capture_with_active_spec(
             save_grads=save_grads_policy not in (None, False),
             grads_to_save=grads_to_save,
             seed=getattr(log, "_options_seed", None),
-            num_context_lines=getattr(log, "_options_source_context_lines", 7),
+            num_context_lines=getattr(log, "num_context_lines", 7),
             optimizer=getattr(log, "_optimizer", None),
             save_source_context=getattr(log, "_options_save_source_context", False),
             save_rng=getattr(log, "_options_save_rng", False),

@@ -1160,7 +1160,7 @@ def test_finalize_census_keeps_dispatch_reason_across_later_guard_passes() -> No
                 "operator": "aten.relu.default",
             }
         ],
-        completeness_decompositions=[],
+        _health_completeness_decompositions=[],
     )
     state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=2)
 
@@ -1189,7 +1189,7 @@ def test_index_boundary_excuses_only_the_scalar_read_under_its_token() -> None:
         func_name="__index__",
         func_call_id=1,
     )
-    trace = SimpleNamespace(completeness_diagnostics=[], completeness_decompositions=[])
+    trace = SimpleNamespace(completeness_diagnostics=[], _health_completeness_decompositions=[])
     state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=1)
     state.events.extend(
         [

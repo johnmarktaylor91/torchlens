@@ -1129,7 +1129,7 @@ class Trace(
         "_options_module_identity_mode": FieldPolicy.KEEP,
         "_provenance_param_source": FieldPolicy.KEEP,
         "_autograd_derived_grads": FieldPolicy.KEEP,
-        "_options_source_context_lines": FieldPolicy.KEEP,
+        "num_context_lines": FieldPolicy.KEEP,
         "_optimizer": FieldPolicy.DROP,
         "tlspec_version": FieldPolicy.KEEP,
         "_tracing_finished": FieldPolicy.KEEP,
@@ -1700,7 +1700,7 @@ class Trace(
             "native-module"
         )
         self._autograd_derived_grads = DerivedGradAccessor()
-        self._options_source_context_lines = num_context_lines
+        self.num_context_lines = num_context_lines
         self._optimizer = optimizer
         self.tlspec_version = TLSPEC_VERSION
         # _tracing_finished is the master behavioural switch: False during logging,

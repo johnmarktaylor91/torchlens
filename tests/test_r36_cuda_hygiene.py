@@ -83,16 +83,18 @@ def test_capture_touched_cuda_predicate_gates_on_trace_fact() -> None:
 
     from torchlens._utils.tensor_utils import capture_touched_cuda
 
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu")) is False
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="mps")) is False
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="cuda")) is True
+    assert capture_touched_cuda(SimpleNamespace(_provenance_forward_memory_backend="cpu")) is False
+    assert capture_touched_cuda(SimpleNamespace(_provenance_forward_memory_backend="mps")) is False
+    assert capture_touched_cuda(SimpleNamespace(_provenance_forward_memory_backend="cuda")) is True
     # Unknown/missing fails toward the historical flush, never toward skipping.
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="unknown")) is True
+    assert (
+        capture_touched_cuda(SimpleNamespace(_provenance_forward_memory_backend="unknown")) is True
+    )
     assert capture_touched_cuda(SimpleNamespace()) is True
     # Other KNOWN accelerator homes must not flush the CUDA allocator (the
     # old blanket `not in ("cpu", "mps")` over-broadly flushed for them).
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="xpu")) is False
-    assert capture_touched_cuda(SimpleNamespace(forward_memory_backend="hpu")) is False
+    assert capture_touched_cuda(SimpleNamespace(_provenance_forward_memory_backend="xpu")) is False
+    assert capture_touched_cuda(SimpleNamespace(_provenance_forward_memory_backend="hpu")) is False
 
 
 def test_capture_touched_cuda_consults_recorded_op_devices() -> None:
@@ -112,12 +114,14 @@ def test_capture_touched_cuda_consults_recorded_op_devices() -> None:
     cuda_op = SimpleNamespace(device_ref="cuda:0")
     assert (
         capture_touched_cuda(
-            SimpleNamespace(forward_memory_backend="cpu", layer_list=[cpu_op, cuda_op])
+            SimpleNamespace(_provenance_forward_memory_backend="cpu", layer_list=[cpu_op, cuda_op])
         )
         is True
     )
     assert (
-        capture_touched_cuda(SimpleNamespace(forward_memory_backend="cpu", layer_list=[cpu_op]))
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend="cpu", layer_list=[cpu_op])
+        )
         is False
     )
 
@@ -128,7 +132,7 @@ def test_capture_touched_cuda_consults_recorded_op_devices() -> None:
     # Consult failure keeps the stamped fact's verdict (adds flushes only).
     assert (
         capture_touched_cuda(
-            SimpleNamespace(forward_memory_backend="cpu", layer_list=_RaisingOps())
+            SimpleNamespace(_provenance_forward_memory_backend="cpu", layer_list=_RaisingOps())
         )
         is False
     )

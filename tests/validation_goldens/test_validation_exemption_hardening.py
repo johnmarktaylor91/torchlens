@@ -2443,7 +2443,7 @@ def test_pass_count_consistency_fires_on_ops_key_mismatch() -> None:
 def test_non_torch_backward_inert_fires_on_populated_backward_flag() -> None:
     """A non-torch trace declaring ``has_backward_pass`` must raise."""
 
-    fake_trace = SimpleNamespace(has_backward_pass=True)
+    fake_trace = SimpleNamespace(_autograd_has_backward_pass=True)
 
     with pytest.raises(MetadataInvariantError, match="non_torch_backward_inert"):
         _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
@@ -2458,7 +2458,9 @@ def test_non_torch_backward_inert_fires_on_populated_grad_fn_logs() -> None:
     later arm needs its own scenario where every EARLIER arm stays silent.
     """
 
-    fake_trace = SimpleNamespace(has_backward_pass=False, grad_fn_logs={"relu_1_1": object()})
+    fake_trace = SimpleNamespace(
+        _autograd_has_backward_pass=False, grad_fn_logs={"relu_1_1": object()}
+    )
 
     with pytest.raises(MetadataInvariantError, match="non_torch_backward_inert"):
         _check_non_torch_backward_inert(fake_trace)  # type: ignore[arg-type]
@@ -2471,11 +2473,11 @@ def test_non_torch_backward_inert_fires_on_nonzero_backward_pass_count() -> None
     """
 
     fake_trace = SimpleNamespace(
-        has_backward_pass=False,
+        _autograd_has_backward_pass=False,
         grad_fn_logs=None,
-        grad_fn_order=None,
+        _autograd_grad_fn_order=None,
         backward_pass_logs=None,
-        backward_root_grad_fn_object_ids=None,
+        _autograd_backward_root_grad_fn_object_ids=None,
         num_backward_passes=2,
     )
 

@@ -464,7 +464,7 @@ def _check_postprocess_contract(
     elif step == "16":
         assert getattr(self, "_module_logs", None) is not None, "Step 16 must build module logs"
     elif step == "16.5":
-        assert self.graph_shape_hash is not None, "Step 16.5 must compute graph_shape_hash"
+        assert self._provenance_fingerprint is not None, "Step 16.5 must compute graph_shape_hash"
     elif step == "17":
         assert self._tracing_finished is True, "Step 17 must mark tracing finished"
 
@@ -688,7 +688,7 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
     # this same aggregate: it counts the payloads capture actually kept.
     from .._save_budget import retained_activation_bytes
 
-    self.saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
+    self._cost_saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
     self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
     refresh_saved_module_call_count(self, {layer_entry.label for layer_entry in saved_layers})
     refresh_pinned_autograd_memory(self, saved_layers)

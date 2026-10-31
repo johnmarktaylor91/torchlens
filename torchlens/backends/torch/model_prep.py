@@ -1207,7 +1207,7 @@ def _record_module_entry_metadata(
         code_context_cache = {}
         trace._code_context_cache = code_context_cache
     code_context = _get_code_context(
-        num_context_lines=trace._options_source_context_lines,
+        num_context_lines=trace.num_context_lines,
         source_loading_enabled=trace._options_save_source_context,
         context_cache=code_context_cache,
     )

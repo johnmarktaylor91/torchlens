@@ -814,7 +814,7 @@ class RefreshProjector:
                 "out",
                 safe_copy(
                     output.out,
-                    detach_tensor=self.target.detach_saved_activations,
+                    detach_tensor=self.target._options_detach_saved_activations,
                 ),
             )
 

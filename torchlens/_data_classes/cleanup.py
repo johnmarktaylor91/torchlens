@@ -589,17 +589,17 @@ def _scrub_conditional_fields_after_removal(
 
     _scrub_layer_log_conditional_fields(self, labels_to_remove_no_pass, replacements_no_pass)
 
-    self.conditional_arm_entry_edges = _filter_conditional_arm_entry_edges(
-        self.conditional_arm_entry_edges,
+    self._graph_conditional_arm_entry_edges = _filter_conditional_arm_entry_edges(
+        self._graph_conditional_arm_entry_edges,
         labels_to_remove,
         replacement_labels,
     )
-    self.conditional_edge_call_indices = _filter_conditional_edge_call_indices(
-        self.conditional_edge_call_indices,
+    self._graph_conditional_edge_call_indices = _filter_conditional_edge_call_indices(
+        self._graph_conditional_edge_call_indices,
         labels_to_remove_no_pass,
         replacements_no_pass,
     )
-    for conditional_event in self.conditional_records:
+    for conditional_event in self._graph_conditional_records:
         if replacement_labels is not None:
             # Substitute IN PLACE (never drop): ``_arm_bool_indices`` and
             # ``_bool_layers_raw`` are index-aligned with ``bool_layers``, so
@@ -872,8 +872,8 @@ def _remove_log_entry_references(
 
     _scrub_conditional_fields_after_removal(self, {layer_to_remove}, self, replacement_labels)
 
-    self.conditional_branch_edges = _substitute_conditional_branch_edges(
-        self.conditional_branch_edges, {layer_to_remove}, replacement_labels
+    self._graph_conditional_branch_edges = _substitute_conditional_branch_edges(
+        self._graph_conditional_branch_edges, {layer_to_remove}, replacement_labels
     )
     # Now any nested fields.
 
@@ -886,12 +886,12 @@ def _remove_log_entry_references(
         if len(tensor_labels) > 0
     }
 
-    for _equiv_group, equiv_tensor_labels in self.op_equivalence_classes.items():
+    for _equiv_group, equiv_tensor_labels in self._graph_op_equivalence_classes.items():
         if layer_to_remove in equiv_tensor_labels:
             equiv_tensor_labels.remove(layer_to_remove)
-    self.op_equivalence_classes = {
+    self._graph_op_equivalence_classes = {
         equiv_group: tensor_labels
-        for equiv_group, tensor_labels in self.op_equivalence_classes.items()
+        for equiv_group, tensor_labels in self._graph_op_equivalence_classes.items()
         if len(tensor_labels) > 0
     }
 

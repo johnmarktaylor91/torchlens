@@ -200,7 +200,9 @@ def test_trace_text_explicit_tokenizer_end_to_end(monkeypatch: Any) -> None:
         def __call__(self, text: Any, **kwargs: Any) -> Any:
             return {"input_ids": text}
 
-    monkeypatch.setattr(tl, "trace", lambda *a, **k: SimpleNamespace(input_preprocessor=None))
+    monkeypatch.setattr(
+        tl, "trace", lambda *a, **k: SimpleNamespace(_provenance_input_preprocessor=None)
+    )
     log = hf.trace_text(Model(), "hello", tokenizer=ExplicitCustomTokenizer())
     record = log.provenance.input_preprocessor
 

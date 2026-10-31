@@ -297,15 +297,15 @@ def _str_after_pass(self: "Trace") -> str:
     Returns:
         String summarizing the model.
     """
-    s = f"Log of {self.model_class_name} forward pass:"
+    s = f"Log of {self._source_class_name} forward pass:"
 
     for header_line in _honesty_header_lines(self):
         s += f"\n{header_line}"
 
     # General info
 
-    s += f"\n\tRandom seed: {self.random_seed}"
-    s += f"\n\tTime elapsed: {self.capture_duration} ({self.cost.overhead_duration} spent logging)"
+    s += f"\n\tRandom seed: {self._options_seed}"
+    s += f"\n\tTime elapsed: {self._provenance_duration} ({self.cost.overhead_duration} spent logging)"
 
     # Overall model structure. An unverified capture (severed
     # provenance) may have missed ops, so it never claims "purely
@@ -319,10 +319,10 @@ def _str_after_pass(self: "Trace") -> str:
 
     s += "\n\tTensor info:"
     s += (
-        f"\n\t\t- {bound}{len(self)} total tensors ({self.total_activation_memory}) "
+        f"\n\t\t- {bound}{len(self)} total tensors ({self._cost_total_activation_memory}) "
         f"computed in forward pass{' (lower bound: capture unverified)' if unverified else ''}."
     )
-    s += f"\n\t\t- {self.num_saved_ops} tensors ({self.saved_activation_memory}) with saved outs."
+    s += f"\n\t\t- {self.num_saved_ops} tensors ({self._cost_saved_activation_memory}) with saved outs."
     nonfinite = self.first_nonfinite()
     if not nonfinite.startswith("No non-finite"):
         s += f"\n\t\t- NaN/Inf: {nonfinite}"
@@ -331,7 +331,7 @@ def _str_after_pass(self: "Trace") -> str:
 
     s += (
         f"\n\tParameters: {bound}{self.num_layers_with_params} parameter operations "
-        f"({bound}{self.num_params} params total; {self.total_param_memory})"
+        f"({bound}{self.num_params} params total; {self._cost_total_param_memory})"
     )
     if unverified:
         s += " (lower bounds: capture unverified)"
@@ -427,8 +427,8 @@ def _str_during_pass(self: "Trace") -> str:
     Returns:
         String summarizing the model.
     """
-    s = f"Log of {self.model_class_name} forward pass (pass still ongoing):"
-    s += f"\n\tRandom seed: {self.random_seed}"
+    s = f"Log of {self._source_class_name} forward pass (pass still ongoing):"
+    s += f"\n\tRandom seed: {self._options_seed}"
     s += f"\n\tInput tensors: {self.input_layers}"
     s += f"\n\tOutput tensors: {self.output_layers}"
     s += f"\n\tInternally initialized tensors: {self.internal_source_ops}"

@@ -143,7 +143,7 @@ def _emit_predicate_operation_events(
                 pass_index=state.pass_index,
                 event_index=state.event_index,
                 step_index=state.step_index,
-                capture_start_time=self.capture_start_time,
+                capture_start_time=self._provenance_start_time,
                 include_source_events=state.options.include_source_events,
                 sample_id=state.sample_id,
                 address=module_frame.address if module_frame else None,

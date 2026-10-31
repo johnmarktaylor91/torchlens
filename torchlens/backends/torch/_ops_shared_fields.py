@@ -124,8 +124,8 @@ def _build_shared_fields_dict(
 
     # General info
     fields_dict["type"] = layer_type
-    fields_dict["detach_saved_activations"] = self.detach_saved_activations
-    fields_dict["output_device"] = self.output_device
+    fields_dict["detach_saved_activations"] = self._options_detach_saved_activations
+    fields_dict["output_device"] = self._options_output_device
     fields_dict["_construction_done"] = False
     fields_dict["interventions"] = []
     should_capture_template = bool(
@@ -168,7 +168,7 @@ def _build_shared_fields_dict(
     call_site_out: list[Any] = []
     fields_dict["code_context"] = _get_code_context(
         self.num_context_lines,
-        source_loading_enabled=self.save_code_context,
+        source_loading_enabled=self._options_save_source_context,
         disable_col_offset=False,
         context_cache=code_context_cache,
         call_site_out=call_site_out,
@@ -351,7 +351,7 @@ def _get_parent_output_version_snapshot(
     # Cheap gate first: without save_arg_values this function always returns
     # None, so the per-parent contract scan below was pure waste on the
     # default capture path.
-    if not self.save_arg_values:
+    if not self._options_save_args:
         return None
     contract_positions = tuple(mutated_input_positions) + tuple(aliased_output_inputs)
     should_snapshot_by_contract = parent_label_has_alias_contract(

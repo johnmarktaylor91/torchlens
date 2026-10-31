@@ -178,11 +178,11 @@ def _apply_live_hooks_to_outputs_legacy(
     if (
         not _st._active_hook_plan
         and not predicate_intervene_active
-        or self.capture_mode not in {"exhaustive", "predicate"}
+        or self._options_mode not in {"exhaustive", "predicate"}
     ):
         return out_orig
     if (
-        self.capture_mode == "predicate"
+        self._options_mode == "predicate"
         and predicate_intervene_active
         and not _st._active_hook_plan
     ):

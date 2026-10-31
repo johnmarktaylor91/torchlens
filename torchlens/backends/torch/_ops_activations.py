@@ -256,10 +256,10 @@ def _log_output_tensor_info(
     # Defensive: if equivalence_class isn't yet registered (e.g. user-injected
     # tensor through intervention/raw-hook with a fresh hash), create the
     # set on demand rather than crashing with KeyError.
-    if base_equivalence_class not in self.op_equivalence_classes:
-        self.op_equivalence_classes[base_equivalence_class] = set()
-    self.op_equivalence_classes[base_equivalence_class].add(_label_raw)
-    fields_dict["equivalent_ops"] = self.op_equivalence_classes[base_equivalence_class]
+    if base_equivalence_class not in self._graph_op_equivalence_classes:
+        self._graph_op_equivalence_classes[base_equivalence_class] = set()
+    self._graph_op_equivalence_classes[base_equivalence_class].add(_label_raw)
+    fields_dict["equivalent_ops"] = self._graph_op_equivalence_classes[base_equivalence_class]
 
     # In-place ops return the same tensor object, which already has a raw label -- but so
     # does a NON-mutating identity return (``x.cpu()`` on CPU, ``x.contiguous()`` on a
@@ -408,7 +408,7 @@ def _log_output_tensor_info(
     fields_dict["out"] = None
     fields_dict["transformed_out"] = None
     fields_dict["has_saved_activation"] = False
-    fields_dict["activation_transform"] = self.activation_transform
+    fields_dict["activation_transform"] = self._options_activation_transform
     # Collective boundary nodes carry their portable collective_boundary_v1
     # payload in the reserved "collective" annotations namespace; the wrapper
     # stamps it on the replay callable (same channel as the __tl_transform_*

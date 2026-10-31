@@ -328,13 +328,13 @@ def _add_output_layers(
         new_output_node.flops_backward = None
         new_output_node.code_context = _get_code_context(
             self.num_context_lines,
-            source_loading_enabled=self.save_code_context,
+            source_loading_enabled=self._options_save_source_context,
             disable_col_offset=False,
         )
         new_output_node.var_names = []
         new_output_node.func_duration = Duration(0)
         new_output_node.func_rng_states = (
-            log_current_rng_states(torch_only=True) if self.save_rng_states else {}
+            log_current_rng_states(torch_only=True) if self._options_save_rng else {}
         )
         new_output_node.arg_names = ()
         new_output_node.num_args_total = 0
@@ -443,7 +443,7 @@ def _add_output_layers(
             f"{str(new_output_node.dtype)}"
         )
         new_output_node.equivalence_class = equiv_type
-        self.op_equivalence_classes[equiv_type].add(new_output_node._label_raw)
+        self._graph_op_equivalence_classes[equiv_type].add(new_output_node._label_raw)
 
         # Track child tensor variations for output nodes.
         new_output_node.has_out_variations = False
@@ -475,10 +475,10 @@ def _add_output_layers(
                 if output_node.output_device not in [str(actual_output_raw.device), "same"]:
                     actual_output_raw = safe_to(actual_output_raw, output_node.output_device)
             actual_output_transformed = None
-            if self.activation_transform is not None:
+            if self._options_activation_transform is not None:
                 actual_output_transformed = output_node._apply_transform(
                     actual_output_raw,
-                    self.activation_transform,
+                    self._options_activation_transform,
                     transform_kind="out",
                     streaming_active=getattr(self, "_out_writer", None) is not None,
                 )
@@ -949,7 +949,7 @@ def _mark_layer_depths(self: "Trace") -> None:
     min_distance_from_{input,output} and max_distance_from_{input,output} on
     every reachable node.
 
-    This step is CONDITIONAL on ``self.mark_layer_depths`` — it is
+    This step is CONDITIONAL on ``self._options_mark_layer_depths`` — it is
     skipped when the user doesn't need distance metadata.
     """
     _flood_graph_from_input_or_output_nodes(self, "input")

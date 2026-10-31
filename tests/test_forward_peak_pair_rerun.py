@@ -103,7 +103,7 @@ def test_cuda_bracket_clears_a_stale_reason(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(torch.cuda, "max_memory_allocated", lambda *args: next(allocated))
     monkeypatch.setattr(torch.cuda, "max_memory_reserved", lambda *args: 0)
     trace = SimpleNamespace(
-        forward_peak_memory=None, forward_peak_memory_reason=CPU_ZERO_PEAK_REASON
+        _cost_forward_peak_memory=None, _cost_forward_peak_memory_reason=CPU_ZERO_PEAK_REASON
     )
 
     with capture_trace._forward_peak_memory_bracket(trace, SimpleNamespace(type="cuda")):

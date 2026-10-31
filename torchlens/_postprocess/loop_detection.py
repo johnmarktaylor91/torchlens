@@ -342,7 +342,7 @@ def _group_by_shared_params(self: "Trace") -> None:
             self[label]._layer_label_raw = leader_raw
 
     _rebuild_pass_assignments(self)
-    self.grouping_policy = build_grouping_policy_stamp(
+    self._options_grouping_policy = build_grouping_policy_stamp(
         ran_recurrence_grouping=False,
         requested=getattr(self, "_options_grouping", "structural"),
     )
@@ -373,7 +373,7 @@ def _detect_and_label_loops(self: "Trace") -> None:
         assignments = group_recurrent_nodes(grouping_graph)
         _apply_recurrence_assignments(self, assignments)
         detector = "grouper_v1"
-    self.grouping_policy = build_grouping_policy_stamp(
+    self._options_grouping_policy = build_grouping_policy_stamp(
         ran_recurrence_grouping=True,
         requested=getattr(self, "_options_grouping", "structural"),
         detector=detector,
