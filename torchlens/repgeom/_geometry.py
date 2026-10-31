@@ -916,7 +916,7 @@ def classical_mds(
     """
 
     if num_components < 1:
-        raise ValueError("n_components must be at least 1.")
+        raise ValueError("num_components must be at least 1.")
     if min_stimuli < 3:
         raise ValueError("min_stimuli must be at least 3.")
     if input_kind not in ("auto", "distances", "features"):

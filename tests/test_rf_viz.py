@@ -118,7 +118,7 @@ class _View:
         _ = unit, input_op
         return self._box
 
-    def gradient(
+    def probe_grad(
         self, unit: Sequence[int], *, input_op: Any | None = None, retain_graph: bool = False
     ) -> GradReceptiveField:
         """Return the configured empirical result."""

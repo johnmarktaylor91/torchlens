@@ -892,6 +892,12 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         -1,
     ): "apply",
     (
+        "tests/test_repgeom_validation_edges.py",
+        'with pytest.raises(ValueError, match="n_components"):',
+        "n_components",
+        0,
+    ): "apply",
+    (
         "tests/test_report_lane_summary_hub.py",
         '"""U04.4: ``tl.summary("<hub name>", input_size=...)`` builds on the meta path.',
         "input_size",
@@ -1066,6 +1072,7 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         "gradient",
         0,
     ): "apply",
+    ("tests/test_rf_viz.py", "def gradient(", "gradient", 0): "apply",
     (
         "tests/test_rf_viz.py",
         "op.receptive_field.gradient(unit, retain_graph=False)",
@@ -1156,6 +1163,44 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         "edges",
         -1,
     ): "apply",
+    ("tests/test_transforms_lib_srp.py", '{"n_components": 0},', "n_components", 0): "apply",
+    (
+        "tests/test_transforms_lib_srp.py",
+        '{"n_components": 16, "construction": "gaussian"},',
+        "n_components",
+        0,
+    ): "apply",
+    (
+        "tests/test_transforms_lib_srp.py",
+        '{"n_components": 16, "density": "high"},',
+        "n_components",
+        0,
+    ): "apply",
+    (
+        "tests/test_transforms_lib_srp.py",
+        '{"n_components": 16, "density": 1.5},',
+        "n_components",
+        0,
+    ): "apply",
+    (
+        "tests/test_transforms_lib_srp.py",
+        '{"n_components": 16, "mode": "rows"},',
+        "n_components",
+        0,
+    ): "apply",
+    (
+        "tests/test_transforms_lib_srp.py",
+        '{"n_components": 16, "seed": 1.5},',
+        "n_components",
+        0,
+    ): "apply",
+    (
+        "tests/test_transforms_lib_srp.py",
+        '{"n_components": 16, "share": "by_vibes"},',
+        "n_components",
+        0,
+    ): "apply",
+    ("tests/test_transforms_lib_srp.py", '{"n_components": None},', "n_components", 0): "apply",
     (
         "tests/test_tviz_realmodel.py",
         "== model.model.layers[0].self_attn.v_proj.out_features",
@@ -1574,6 +1619,12 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         0,
     ): "apply",
     ("torchlens/repgeom/_geometry.py", '"n_components": n_components,', "n_components", 0): "skip",
+    (
+        "torchlens/repgeom/_geometry.py",
+        'raise ValueError("n_components must be at least 1.")',
+        "n_components",
+        0,
+    ): "apply",
     (
         "torchlens/report/_summary_hub.py",
         '``tl.summary("gpt2", input_size=(1, 8))`` fetches the model\'s CONFIG only,',
@@ -2793,7 +2844,43 @@ def classify(
         if decided is not None:
             site.verdict, site.why = decided, f"override ({site.why})"
         final.append(site)
+    final.extend(listed_sites({s.key() for s in final}, texts, notebooks))
     return final, texts, notebooks, targets
+
+
+def listed_sites(
+    known: set[tuple[str, str, str, int]], texts: dict[str, str], notebooks: dict[str, dict]
+) -> Iterator[Site]:
+    """Hand-listed ``apply`` overrides the static pass cannot see (``**kwargs`` dicts,
+    test doubles standing in for an owner): renamed where the listed line still stands."""
+
+    for key, verdict in OVERRIDES.items():
+        path, text, old, occurrence = key
+        if verdict != "apply" or key in known or occurrence < 0:
+            continue
+        if path not in texts:
+            continue  # the file is gone or outside the scanned trees
+        row = next((r for r in ROWS + PARAM_ROWS if r.old == old), None)
+        if row is None:
+            continue
+        pattern = re.compile(WORD.format(re.escape(old)))
+        for loc, line in _text_lines(texts[path], notebooks.get(path)):
+            if line.strip() != text:
+                continue
+            starts = [m.start() for m in pattern.finditer(line)]
+            if occurrence < len(starts):
+                site = Site(
+                    path,
+                    loc,
+                    line,
+                    starts[occurrence],
+                    old,
+                    row.new,
+                    row_id(row),
+                    "apply",
+                    "listed site",
+                )
+                yield site
 
 
 def apply_edits(sites: list[Site], texts: dict[str, str], notebooks: dict[str, dict]) -> int:

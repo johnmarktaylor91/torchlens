@@ -33,7 +33,7 @@ def _receipt(**kwargs) -> tviz.CausalReceipt:
     """Build a valid receipt with both controls passing."""
 
     defaults: dict = {
-        "layer": "blk.0.attn",
+        "module_address": "blk.0.attn",
         "heads": (0, 1),
         "effects": (1.5, -0.5),
         "metric": "logit",
