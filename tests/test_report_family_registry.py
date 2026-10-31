@@ -148,7 +148,7 @@ def test_capability_card_is_metadata_only(family_trace, monkeypatch) -> None:
     card = family_trace.capability_card()
     text = str(card)
     assert "capability card" in text
-    assert any(row.available for row in card.rows)
+    assert any(row.is_available for row in card.rows)
 
 
 def test_capability_card_on_partial_names_remedies(partial_trace) -> None:

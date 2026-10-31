@@ -1,6 +1,5 @@
 name	classification
 ActivationLookup	declared
-AmbiguousOpLookupError	declared
 AtenOp	declared
 Bundle	declared
 Bytes	declared
@@ -16,7 +15,6 @@ Op	declared
 PayloadLoadHints	declared
 Quantity	declared
 Recording	declared
-ReentrantTraceError	declared
 ResolvedSelection	declared
 Selection	declared
 Trace	declared

@@ -284,7 +284,7 @@ def test_profile_surfaces_unverified_capture() -> None:
     profile = tl.report.build_profile(log)
     assert profile.is_capture_verified is False
     assert profile.capture_verification_reason == "mode_rescue_rerun"
-    assert profile.rescue_rerun is True
+    assert profile.has_rescue_rerun is True
     assert profile.frame.attrs["capture_verified"] is False
     assert profile.evidence_labels().attrs["capture_verified"] is False
     rendered = repr(profile)

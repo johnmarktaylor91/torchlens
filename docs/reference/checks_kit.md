@@ -161,9 +161,10 @@ or inferred evidence never produces an exact pass.
 ## One-shot parameter auditing: `param_health`
 
 ```python
+import torchlens as tl
 import torchlens.checks as checks
 
-audit = torchlens.report.param_health(model)          # also: tl.debug.param_health(model)
+audit = tl.report.param_health(model)          # also: tl.debug.param_health(model)
 print(audit)                                # notebook-style summary
 assert not audit.findings                    # healthy fresh model
 ```
@@ -188,7 +189,7 @@ optimizer_state = {
     if isinstance(value, torch.Tensor)
 }
 if optimizer_state:
-    print(torchlens.report.param_health(optimizer_state))
+    print(tl.report.param_health(optimizer_state))
 ```
 
 ```python
@@ -196,7 +197,7 @@ if optimizer_state:
 optimizer.zero_grad()
 model(torch.randn(4, 8)).square().mean().backward()
 grads = {f"grad.{n}": p.grad for n, p in model.named_parameters() if p.grad is not None}
-grad_audit = torchlens.report.param_health(grads)
+grad_audit = tl.report.param_health(grads)
 print(f"{len(grad_audit.rows)} gradient tensors scanned, {len(grad_audit.findings)} findings")
 optimizer.zero_grad()
 ```
