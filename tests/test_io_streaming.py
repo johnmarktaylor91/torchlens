@@ -610,3 +610,37 @@ def test_streaming_bundle_discloses_custom_attributes_channel(tmp_path: Path) ->
     assert disclosure["included"] is True
     assert disclosure["module_count"] >= 1
     assert "api_token" in disclosure["top_level_keys"]
+
+
+class _OrphanThenOutputModel(nn.Module):
+    """Stream a disconnected op chain that postprocess prunes as an orphan."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the model under test."""
+
+        torch.ones(2) * 3  # computed and streamed, connected to neither input nor output
+        return x * 2
+
+
+def test_streamed_bundle_blob_ids_never_alias_an_orphan_shifted_stream(tmp_path: Path) -> None:
+    """Save-time blob ids start past the capture-time stream ids.
+
+    An op streamed during capture and then pruned as an orphan leaves the save-time
+    blob numbering behind the stream's, so an output row (never streamed during
+    capture) used to take an id the stream had already written. Staging skips an
+    existing id, so the output silently pointed at the orphan's payload.
+    """
+
+    model = _OrphanThenOutputModel()
+    x = torch.rand(2, 3)
+    expected = model(x)
+    bundle_path = tmp_path / "orphan_stream.tlspec"
+    trace = tl.trace(model, x, storage=tl.to_disk(bundle_path))
+
+    output_op = trace.output_ops[0]
+    assert tuple(output_op.materialize_out().shape) == (2, 3)
+    assert torch.equal(output_op.materialize_out(), expected)
+    refs = [op.out_ref.blob_id for op in trace.ops if op.out_ref is not None]
+    assert len(refs) == len(set(refs))
+    loaded = tl.load(bundle_path)
+    assert torch.equal(loaded.output_ops[0].materialize_out(), expected)
