@@ -239,6 +239,40 @@ _CODE_RUNNING_TORCH_CALLABLES = (
     (torch.Tensor, "register_post_accumulate_grad_hook"),
 )
 
+# Every entry of the explicit callable-name list. Like the module list it is a
+# declared floor; most entries also match a structural rule, so only this pin
+# notices one being dropped.
+_EXPLICIT_NAME_FLOOR = frozenset(
+    {
+        # File I/O, (de)serialization and module import (round 5).
+        "from_file",
+        "PyTorchFileReader",
+        "PyTorchFileWriter",
+        "FileCheck",
+        "ScriptModuleSerializer",
+        "SerializationStorageContext",
+        "DeserializationStorageContext",
+        "get_file_path",
+        "import_ir_module",
+        "import_ir_module_from_buffer",
+        "save",
+        "load",
+        # Arbitrary import and dynamic-library load.
+        "_import_device_backends",
+        "_import_dotted_name",
+        "_load_global_deps",
+        "_preload_cuda_deps",
+        # Run or compile a caller-supplied callable (r26, r39).
+        "compile",
+        "apply_",
+        "map_",
+        "map2_",
+        "vmap",
+        "register_hook",
+        "register_post_accumulate_grad_hook",
+    }
+)
+
 # The elementwise runners, reachable through the unpickler's restricted getattr.
 _CALLABLE_RUNNER_NAMES = ("apply_", "map_", "map2_")
 
@@ -283,12 +317,18 @@ def test_explicit_module_list_never_drops_an_entry(module_name: str) -> None:
     assert _safe_unpickle._module_denied(module_name + ".submodule")
 
 
-@pytest.mark.parametrize(("owner", "name"), _CODE_RUNNING_TORCH_CALLABLES)
-def test_code_running_torch_names_stay_on_explicit_list(owner: object, name: str) -> None:
-    """Each code-running torch callable stays on the explicit name list."""
+@pytest.mark.parametrize("name", sorted(_EXPLICIT_NAME_FLOOR))
+def test_explicit_name_list_never_drops_an_entry(name: str) -> None:
+    """Each floor name stays on the explicit callable-name list."""
 
-    assert hasattr(owner, name)
     assert name in _callable_safety._DENIED_CALLABLE_NAMES
+
+
+@pytest.mark.parametrize(("owner", "name"), _CODE_RUNNING_TORCH_CALLABLES)
+def test_code_running_torch_callables_exist(owner: object, name: str) -> None:
+    """The pinned code-running callables still exist, so the pins test something real."""
+
+    assert callable(getattr(owner, name))
 
 
 @pytest.mark.parametrize("import_path", _SOLE_LAYER_REFS)
