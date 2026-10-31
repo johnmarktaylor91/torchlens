@@ -18,8 +18,6 @@ import torch
 
 import torchlens as tl
 
-pytestmark = pytest.mark.smoke
-
 
 def _cooked(model: torch.nn.Module, x: torch.Tensor) -> Any:
     """Record one forward pass of every op and cook it into a Trace."""
