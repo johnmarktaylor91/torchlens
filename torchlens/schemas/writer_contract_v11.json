@@ -887,6 +887,8 @@
     "_num_backward_passes": "keep",
     "_num_layers_with_params": "keep",
     "_num_ops": "keep",
+    "_num_param_tensors": "keep",
+    "_num_saved_ops": "keep",
     "_op_accessor_cache": "drop",
     "_optimizer": "drop",
     "_orphan_labels": "keep",
@@ -3333,6 +3335,8 @@
      "_num_backward_passes": "keep",
      "_num_layers_with_params": "keep",
      "_num_ops": "keep",
+     "_num_param_tensors": "keep",
+     "_num_saved_ops": "keep",
      "_op_accessor_cache": "drop",
      "_optimizer": "drop",
      "_orphan_labels": "keep",
@@ -3629,6 +3633,8 @@
      "_num_backward_passes": "fact",
      "_num_layers_with_params": "fact",
      "_num_ops": "fact",
+     "_num_param_tensors": "fact",
+     "_num_saved_ops": "fact",
      "_orphan_labels": "fact",
      "_orphan_logs": "fact",
      "_orphan_records": "fact",
@@ -3812,6 +3818,8 @@
      "_num_backward_passes",
      "_num_layers_with_params",
      "_num_ops",
+     "_num_param_tensors",
+     "_num_saved_ops",
      "_orphan_labels",
      "_orphan_logs",
      "_orphan_records",
@@ -3996,5 +4004,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "a31223cc8e81d5eab204777536666e2b290de520b5547b4404ae4d1c8995068b"
+ "writer_contract_digest": "0cea950f764a6c5acda638e96d815b2826b2c62a21e2845cd5c19fb716839b61"
 }

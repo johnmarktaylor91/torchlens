@@ -976,10 +976,14 @@ def test_module_hierarchy_fires_on_unresolvable_call_child() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_module_layer_containment_fires_on_num_layers_mismatch() -> None:
-    """Arm 1: Module.num_layers must equal len(layer_labels)."""
+def test_module_layer_containment_fires_on_duplicate_layer_label() -> None:
+    """Arm 1: len(Module.layer_labels) must equal its distinct layer labels.
 
-    mod = SimpleNamespace(address="self", layer_labels=["relu_1"], num_layers=5, ops={})
+    ``Module.num_layers`` was removed; ``len(layer_labels)`` is the Module's
+    layer count, honest only when no Layer is listed twice.
+    """
+
+    mod = SimpleNamespace(address="self", layer_labels=["relu_1", "relu_1"], ops={})
     fake_trace = SimpleNamespace(
         modules=_AddrIndexed([mod]),
         op_labels=["relu_1"],
@@ -987,7 +991,7 @@ def test_module_layer_containment_fires_on_num_layers_mismatch() -> None:
         _layer_logs={"relu_1": SimpleNamespace()},
         _layer_list=[],
     )
-    with pytest.raises(MetadataInvariantError, match="num_layers=5"):
+    with pytest.raises(MetadataInvariantError, match="distinct layer labels=1"):
         _check_module_layer_containment(fake_trace)  # type: ignore[arg-type]
 
 

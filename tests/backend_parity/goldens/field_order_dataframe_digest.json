@@ -357,9 +357,11 @@
       "total_backward_memory",
       "total_autograd_memory",
       "pinned_autograd_memory",
+      "_num_saved_ops",
       "saved_activation_memory",
       "saved_gradient_memory",
       "_param_logs",
+      "_num_param_tensors",
       "_num_layers_with_params",
       "num_params",
       "num_params_trainable",
@@ -900,6 +902,8 @@
       "_num_backward_passes",
       "_num_layers_with_params",
       "_num_ops",
+      "_num_param_tensors",
+      "_num_saved_ops",
       "_orphan_labels",
       "_orphan_logs",
       "_orphan_records",
@@ -1053,13 +1057,13 @@
     ]
   },
   "sha256_chunks": [
-    "e8969393",
-    "8e52afea",
-    "c026e194",
-    "854c75b1",
-    "af96942d",
-    "4ec78024",
-    "b38fc6fa",
-    "cc4e1200"
+    "c433377a",
+    "7025e9cc",
+    "d3eefb16",
+    "0456746c",
+    "546e3ca0",
+    "32994cb5",
+    "7911f09d",
+    "7757ba59"
   ]
 }

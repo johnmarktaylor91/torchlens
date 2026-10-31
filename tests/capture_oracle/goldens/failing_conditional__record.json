@@ -839,20 +839,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 393735,
+      "python_peak_memory_median_bytes": 394563,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 40.39551084861159
+      "wall_time_median_ms": 70.58738125488162
     }
   },
   "sha256_chunks": [
-    "aa3e2a0c",
-    "fbfcf320",
-    "2ea9c357",
-    "567ee38e",
-    "54824991",
-    "78230797",
-    "6f63333f",
-    "af405fcc"
+    "28db0442",
+    "8c7ae5bd",
+    "1a170915",
+    "c7807b13",
+    "68f8f113",
+    "5a52e64c",
+    "befe6d36",
+    "adf9fb8e"
   ]
 }

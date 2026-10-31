@@ -44,6 +44,8 @@ V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
         "_num_backward_passes": "keep",
         "_num_layers_with_params": "keep",
         "_num_ops": "keep",
+        "_num_param_tensors": "keep",
+        "_num_saved_ops": "keep",
         "_orphan_records": "blob_recursive",
         "_param_logs": "keep",
         "_parent_run": "drop",

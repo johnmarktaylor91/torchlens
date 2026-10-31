@@ -6784,6 +6784,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/fastlog/types.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/fastlog/types.py",
@@ -9032,14 +9040,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "params",
-  "file": "torchlens/validation/_invariants_entry.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
   "ambiguous": false,
   "field": "equivalence_class",
   "file": "torchlens/validation/_invariants_equivalence.py",
@@ -9190,14 +9190,6 @@
   "has_default": true,
   "sites": 3,
   "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "params",
-  "file": "torchlens/validation/_invariants_topology.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
  },
  {
   "ambiguous": false,
