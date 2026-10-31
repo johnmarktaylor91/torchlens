@@ -35,7 +35,7 @@ from typing import Any, cast
 from .._errors import _actionable_message, _ActionableErrorMixin
 from .._io import _json
 from .._io._durability import fsync_dir, fsync_file
-from .._utils.hashing import update_hasher_from_file
+from .._utils.hashing import sha256_canonical_json, update_hasher_from_file
 from ..errors._base import ConfigurationError
 
 __tl_layer__ = "L3"
@@ -208,7 +208,7 @@ def stimulus_ids_digest(ids: list[str] | None) -> str | None:
 
     if ids is None:
         return None
-    return "sha256:" + hashlib.sha256(_canonical_dumps(list(ids)).encode()).hexdigest()
+    return "sha256:" + sha256_canonical_json(list(ids), default=None)
 
 
 def _crc32_file(path: Path) -> int:
