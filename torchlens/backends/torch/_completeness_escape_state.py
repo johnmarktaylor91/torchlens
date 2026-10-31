@@ -258,6 +258,14 @@ def _register_authorized_caller_namespace(namespace: Mapping[str, Any], module_f
     caller still authenticates.
     """
 
+    # Imported here, not from this module's bottom block: this runs during the
+    # completeness_witness module's import (its roster collection), which can happen
+    # while this module is still executing its bottom imports.
+    from .completeness_witness import (
+        _AUTHORIZED_INTERNAL_CALLER_CODE,
+        _AUTHORIZED_INTERNAL_CALLER_CODE_IDS,
+    )
+
     def _collect(code: types.CodeType) -> None:
         """Register one module-local code object and its nested code constants."""
 
@@ -383,7 +391,6 @@ from ._completeness_origins import (  # noqa: E402
 )
 from .completeness_witness import (  # noqa: E402
     _ALIAS_MUTATION_CANDIDATE_LABELS,
-    _AUTHORIZED_INTERNAL_CALLER_CODE,
     _AUTHORIZED_INTERNAL_CALLER_CODE_IDS,
     _DATA_ALIAS_MUTATION_TRACES,
     _HOST_ESCAPE_BOOL_CONSUMER_LOCATIONS,

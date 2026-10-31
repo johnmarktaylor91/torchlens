@@ -548,7 +548,11 @@ def _collect_authorized_internal_caller_modules() -> None:
     import importlib
     import pkgutil
 
+    # Imported here, not from this module's bottom block: the completeness_witness
+    # module runs this at its own import, which can happen while a split module
+    # (this one included) is still executing its bottom imports.
     from . import buffer_writes as _buffer_writes_module
+    from ._completeness_escape_state import _register_authorized_caller_namespace
 
     _register_authorized_caller_namespace(globals(), __file__)
     buffer_writes_file = _buffer_writes_module.__file__
@@ -576,9 +580,6 @@ from ._completeness_dispatch import (  # noqa: E402
     _event_is_capture_accounted,
     _finalize_runnable_ledger,
     _whole_storage_uint8,
-)
-from ._completeness_escape_state import (  # noqa: E402
-    _register_authorized_caller_namespace,
 )
 from ._completeness_patches import (  # noqa: E402
     _observe_invisible_host_escapes,
