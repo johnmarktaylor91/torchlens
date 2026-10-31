@@ -309,7 +309,7 @@
   `completion_divergence`, `lengths`, `shared` span rows, `intervened`); unbound members refuse
   `bundle_token_divergence_unavailable`. TorchLens never runs the harness; no `paired_rerun`.
   `b.upstream(name)` / `b.downstream(name)` (helper-table methods) walk the ordering kinds;
-  `b.node(site, members=[...])` scopes the gate to a subset; `delta_map`/`norm_delta`/
+  `b.at(site)` takes a label or a selector (a member subset is a bundle of those members); `delta_map`/`norm_delta`/
   `output_delta`/`compare` (and `store_comparison`) now run the comparison gate on every
   (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
   `b.token_pairs("critique", "draft")` (helper-table method, relate's argument order) is the one

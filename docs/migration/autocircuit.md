@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | Identify circuit nodes | `log.find_sites(...)`, graph metadata, and visualization | TorchLens exposes raw graph sites; automated circuit search is separate. |
 | Patch edges/nodes | `.set(...)` and `.attach_hooks(...)` on a forked trace, then `.push()` (replay) or `.run(...)` | Node patching equivalent; edges patch with `torchlens.mechinterp.patch_edges` (one or several receivers per call). |
-| Run path patching sweeps | Fork logs or loop over selectors and compute an explicit metric (or use `Bundle.joint_metric`) | Manual but supported. |
+| Run path patching sweeps | Fork logs or loop over selectors and compute an explicit metric (or call your metric on the `tl.Bundle`) | Manual but supported. |
 | Compare clean/corrupted datasets | Capture logs and group them with `Bundle` | Equivalent container workflow. |
 | Automatic circuit discovery | Recipe: `docs/recipes/acdc_ioi.md` (ACDC as a driver loop); edge scores: `torchlens.mechinterp.edge_scores` | Recipe-level; no built-in pruning optimizer. |
 | Prune/score circuit components | Use explicit metrics over intervention variants | Partial; no built-in pruning optimizer. |

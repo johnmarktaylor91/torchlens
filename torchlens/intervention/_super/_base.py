@@ -305,6 +305,12 @@ class _TensorBearing:
     #: member carries immutable parameter evidence (A-CKPT; foldB D7).
     _cross_member_param_claim: ClassVar[bool] = False
 
+    #: Comparison gate installed by ``Bundle.at``: called before
+    #: :meth:`compare` reads any tensor, so the site-axis comparison carries
+    #: the same claim check (shared graph, same input values) as the
+    #: member-pair form. ``None`` for views built outside ``Bundle.at``.
+    _compare_gate: Callable[[], None] | None = None
+
     @property
     def op_type(self) -> str:
         """Return the representative operation type.
@@ -409,6 +415,8 @@ class _TensorBearing:
             Pairwise distance matrix.
         """
 
+        if self._compare_gate is not None:
+            self._compare_gate()
         metric_fn = resolve_metric(metric)
         tensor_dict = self._tensor_dict(on)
         names = [name for name, tensor in tensor_dict.items() if isinstance(tensor, torch.Tensor)]

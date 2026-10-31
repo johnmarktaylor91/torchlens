@@ -494,7 +494,7 @@ def test_bundle_member_error_raised_for_missing_bundle_site() -> None:
     bundle = tl.Bundle({"first": first, "second": second})
 
     with pytest.raises(terrors.BundleMemberError, match="failed to resolve"):
-        bundle.node(tl.func("missing"))
+        bundle.at(tl.func("missing"))
 
 
 def test_graph_shape_mismatch_error_raised_for_executable_spec(

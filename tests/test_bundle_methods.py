@@ -139,8 +139,8 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
     # (effects, measure_members; item 8).
     assert len(members) <= 44
     assert "relate" in members
-    assert "joint_metric" in members
-    assert "set_capacity" in members
+    for removed in ("joint_metric", "set_capacity", "help", "cluster", "node", "compare_at"):
+        assert removed not in members, removed
     assert "save" in members
     assert "remove_except" in members
     assert "supergraph" in members

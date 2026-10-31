@@ -95,7 +95,7 @@ def test_bundle_getitem_returns_modellog_and_nodeview_accessor() -> None:
     assert isinstance(bundle["a"], type(log_a))
     assert bundle._supergraph is None
 
-    node = bundle.node(tl.func("relu"))
+    node = bundle.at(tl.func("relu"))
     assert set(node.members) == {"a", "b"}
     assert set(node.names) == {"a", "b"}
     assert node.absent_names == set()
@@ -103,8 +103,8 @@ def test_bundle_getitem_returns_modellog_and_nodeview_accessor() -> None:
     assert bundle._supergraph is not None
 
 
-def test_metric_and_joint_metric_contracts() -> None:
-    """metric is per-member and joint_metric receives the bundle."""
+def test_map_is_per_member() -> None:
+    """map applies the function to each member, keyed by member name."""
 
     bundle = tl.Bundle({"a": _log(), "b": _log()})
 
@@ -112,10 +112,9 @@ def test_metric_and_joint_metric_contracts() -> None:
         "a": len(bundle["a"].layer_list),
         "b": len(bundle["b"].layer_list),
     }
-    assert bundle.joint_metric(lambda b: b.names) == ["a", "b"]
 
 
-def test_set_capacity_preserves_baseline() -> None:
+def test_capacity_eviction_preserves_baseline() -> None:
     """Capacity eviction never removes the configured baseline."""
 
     clean = _log()
@@ -123,13 +122,13 @@ def test_set_capacity_preserves_baseline() -> None:
     b = _log()
     bundle = tl.Bundle({"clean": clean, "a": a, "b": b}, baseline="clean")
 
-    bundle.set_capacity(2)
+    bundle.capacity = 2
 
     assert "clean" in bundle
     assert len(bundle) == 2
 
 
-def test_relationship_matrix_gates_node_operations() -> None:
+def test_relationship_matrix_gates_at_operations() -> None:
     """Insufficient relationships fail lazily at operation time."""
 
     good = _log(_ReluModel())
@@ -144,8 +143,8 @@ def test_relationship_matrix_gates_node_operations() -> None:
     bundle = tl.Bundle({"good": good, "different": different})
 
     assert bundle.comparability("good", "different") is Relationship.UNKNOWN
-    with pytest.raises(BundleComparisonError, match="node"):
-        bundle.node(tl.func("relu"))
+    with pytest.raises(BundleComparisonError, match="'at'"):
+        bundle.at(tl.func("relu"))
 
     assert bundle.map(lambda member: member.trace_label) == {
         "good": good.trace_label,
@@ -166,7 +165,7 @@ def test_relationship_derivation_shared_graph_same_input() -> None:
         Relationship.SAME_MODEL_OBJECT_AT_CAPTURE,
         Relationship.SHARED_GRAPH_SAME_INPUT,
     }
-    matrix = bundle.compare_at(tl.func("relu"))
+    matrix = bundle.at(tl.func("relu")).compare()
     assert matrix.shape == (2, 2)
 
 
@@ -185,28 +184,11 @@ def test_baseline_auto_detect_and_ambiguity() -> None:
         ambiguous.rank_changes()
 
 
-def test_cluster_deferred_and_tracebundle_not_top_level() -> None:
-    """cluster is explicitly deferred and TraceBundle is not publicly exported."""
+def test_cluster_removed_and_tracebundle_not_top_level() -> None:
+    """Bundle has no cluster placeholder and TraceBundle is not publicly exported."""
 
     bundle = tl.Bundle({"a": _log(), "b": _log()})
 
-    with pytest.raises(NotImplementedError, match="v1"):
-        bundle.cluster()
+    assert not hasattr(bundle, "cluster")
     with pytest.raises(AttributeError):
         getattr(tl, "TraceBundle")
-
-
-def test_bundle_help_lists_readiness() -> None:
-    """help includes per-member run-state and baseline status."""
-
-    clean = _log()
-    dirty = _log()
-    dirty.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
-    bundle = tl.Bundle({"clean": clean, "dirty": dirty}, baseline="clean")
-
-    text = bundle.help()
-
-    assert "Bundle (2 members):" in text
-    assert "clean: baseline" in text
-    assert "dirty:" in text
-    assert "SPEC_STALE" in text

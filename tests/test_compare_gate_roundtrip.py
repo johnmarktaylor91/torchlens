@@ -110,7 +110,7 @@ def test_leg1_refusal_survives_save_load(tmp_path: Path) -> None:
         }
     )
     with pytest.raises(BundleComparisonError) as excinfo:
-        loaded.compare_at(tl.func("relu"))
+        loaded.at(tl.func("relu")).compare()
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
 
 
@@ -128,7 +128,7 @@ def test_leg4_success_survives_save_load(tmp_path: Path) -> None:
             "b": _round_trip(_capture(model_b, x), tmp_path / "b.tlspec"),
         }
     )
-    matrix = loaded.compare_at(tl.func("relu"))
+    matrix = loaded.at(tl.func("relu")).compare()
     assert matrix.shape == (2, 2)
     assert torch.isfinite(matrix).all()
 
@@ -158,7 +158,7 @@ def test_unproven_after_payload_free_round_trip(tmp_path: Path) -> None:
         }
     )
     with pytest.raises(BundleComparisonError) as excinfo:
-        loaded.compare_at(tl.func("relu"))
+        loaded.at(tl.func("relu")).compare()
     assert excinfo.value.fields["code"] == "bundle_gate_input_identity_unproven"
     assert excinfo.value.fields["unproven_members"] == ["a", "b"]
 

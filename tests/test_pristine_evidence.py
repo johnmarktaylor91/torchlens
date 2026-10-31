@@ -301,8 +301,8 @@ def test_bundle_auto_baseline_reads_the_derived_flag() -> None:
     ablated = _ablated(model)
     bundle = tl.Bundle({"clean": clean, "ablated": ablated})
     assert bundle.baseline_name == "clean"
-    assert "pristine" in bundle.help().splitlines()[1]
-    assert "pristine" not in bundle.help().splitlines()[2]
+    assert derive_pristine(bundle["clean"]) is True
+    assert derive_pristine(bundle["ablated"]) is False
 
 
 def test_bundle_without_a_pristine_member_refuses_typed() -> None:

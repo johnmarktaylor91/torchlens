@@ -291,10 +291,10 @@ Common operations:
 | --- | --- |
 | `bundle.names` | Member names in order. |
 | `bundle["clean"]` | Access one `Trace`. |
-| `bundle.node(site)` | Return a `SuperOp` across members after relationship checks. |
-| `bundle.compare_at(site)` | Pairwise comparison matrix at a shared site. |
-| `bundle.joint_metric(fn)` | Apply a metric to the whole bundle. |
-| `bundle.do(...)`, `bundle.attach_hooks(...)`, `bundle.push()`, `bundle.run(model, x)` | Apply mutator/propagation calls to each member (the former `replay`/`rerun` aliases are removed). |
+| `bundle.at(site)` | Return the `Super*` view of one site (a label or a selector) across members after relationship checks. |
+| `bundle.at(site).compare()` | Pairwise comparison matrix at a shared site, after the comparison gate. |
+| `fn(bundle)` | A metric over the whole bundle is a plain call; `bundle.map(fn)` is the per-member door. |
+| `bundle.do(...)`, `bundle.run(model, x)` | Apply an edit (do applies and replays it) or a re-run to each member. |
 | `bundle.fork(name=None)` | Fork all members into a new bundle. |
 
 Site reads (`most_changed`, `compare`) pair ops across members through the

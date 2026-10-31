@@ -820,10 +820,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   common case), `changed` (both changed), `added` (only the second run made the call) and
   `dropped` (only the original made it).
 
-**Bundle.node** *(members= spelling documented-unstable)*
-: `b.node(site, members=None)` returns a `SuperOp` view of one site across the members, or across
-  the named subset, gated pairwise inside that subset (`same_param_shapes` floor), so one foreign
-  member no longer disables the view for the rest.
+**Bundle.at**
+: `b.at(site)` returns the cross-member `Super*` view of one site. A string is a label from any
+  Bundle accessor family; any other selector-like site (`tl.func("relu")`, `tl.module(address)`)
+  resolves to one op in every member after the model-axis floor (`same_param_shapes`) passes for
+  every member pair (a view read, so different inputs are allowed). `b.at(site).compare()` is the
+  member-by-member matrix at that site and first runs the comparison gate over the members it
+  reads. To read a subset of members, build a bundle of them:
+  `tl.Bundle({name: b[name] for name in names}).at(site)`, so one foreign member does not disable
+  the view for the rest.
 
 **Bundle.compare**
 : `bundle.compare(a, b, *, metric="cosine", on="out")` returns the per-site differences between
@@ -837,7 +842,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Bundle delta family** *(`delta_map`, `norm_delta`, `output_delta`)*
 : Per-node and per-output distances from a baseline member (the configured baseline, else the
   first member). Every (baseline, member) pair goes through the comparison gate first, the same
-  predicates as `compare_at`: no ordering path between them, a shared graph, and proven-equal
+  predicates as `bundle.at(site).compare()`: no ordering path between them, a shared graph, and proven-equal
   input values; otherwise the read refuses with the gate's `bundle_gate_*` code.
 
 **Bundle.episode_status** *(spelling documented-unstable)*
