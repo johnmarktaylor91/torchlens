@@ -599,10 +599,18 @@ def _run_replay(
                     continue
                 threaded = _threaded_buffer_value(member, log, overlay, strict=strict)
                 if threaded is None:
-                    continue
+                    # Nothing threads into this version (an initial read, or
+                    # an undisclosed gap kept its captured value). A hook
+                    # aimed AT the record still fires, on the captured value:
+                    # that value is what the version's consumers read, so the
+                    # edit propagates through the cone from here. Without a
+                    # hook there is nothing to recompute.
+                    if member_key not in hook_targets or not isinstance(member.out, torch.Tensor):
+                        continue
+                    threaded = member.out
                 # Clone: buffer records keep their own storage at capture, so
                 # the committed buffer out must not alias the writing op's
-                # committed out.
+                # committed out (nor the captured payload a hook edits).
                 tensor = threaded.clone()
                 tensor, records = _apply_replay_hooks(
                     tensor,
