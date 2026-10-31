@@ -3237,3 +3237,423 @@ describe each surface in depth.
 | `std_evidence=` | keyword of `tl.stats.TensorStats` |
 | `std_se=` | keyword of `tl.stats.TensorStats` |
 | `value_fn=` | keyword of `FacetSpec.computed` |
+
+## Current spellings: namespaces, members and keywords
+Public names whose spelling or home changed, and names new to the public surface, one line each.
+The sections above describe each surface in depth.
+### Namespace names
+| Spelling | Meaning |
+| --- | --- |
+| `tl.debug.BackwardNanReport` | Result of `tl.debug.bisect_nan_backward`: the backward pass walked, the earliest provable non-finite birth and the full transition ledger |
+| `tl.debug.BisectNanReport` | Result of `tl.debug.bisect_nan` |
+| `tl.debug.BisectPrecisionReport` | Result of `tl.debug.bisect_precision` |
+| `tl.debug.GuessInputShapeReport` | Result of `tl.debug.guess_input_shape` |
+| `tl.debug.LineageReport` | Result of `tl.debug.lineage` |
+| `tl.debug.guess_input_shape` | Infer a synthetic input shape while leaving the caller's global RNG untouched |
+| `tl.differential.DiffReport` | The settled two-capture differential: rows plus honest totals |
+| `tl.differential.diff` | Settle two captures into the guarded differential projection |
+| `tl.distributed.is_vetted_build` | Capability probe: does this torch build match a censused snapshot? |
+| `tl.distributed.verify_membership_lineages` | Audit per-membership lineage evidence across rank cores |
+| `tl.errors.AmbiguousAxisError` | Raised when a helper cannot infer a feature axis safely |
+| `tl.errors.AmbiguousBackendError` | Raised when backend auto-resolution has multiple equal-priority matches |
+| `tl.errors.AmbiguousBatchInputError` | Raised when `chunk_size` cannot infer which input leaf is batched |
+| `tl.errors.AmbiguousCallError` | Raised when a module-level query has multiple executed calls |
+| `tl.errors.AmbiguousLabelError` | Raised when `Bundle.at` finds a label in multiple accessors |
+| `tl.errors.AmbiguousPassError` | Raised when a layer-level query has multiple executed passes |
+| `tl.errors.AmbiguousTargetError` | Raised when a projective query has more than one reachable target |
+| `tl.errors.AppendStreamingUnsupportedError` | Raised when append rerun would need to mutate active streamed activation blobs |
+| `tl.errors.ArtifactTooNewError` | Raised when an artifact declares a schema newer than this runtime's ceiling |
+| `tl.errors.ArtifactTooOldError` | Raised when an artifact predates the supported rehydration floor |
+| `tl.errors.BundleComparisonError` | Raised when bundle members fail a gated operation's comparison gate |
+| `tl.errors.CaptureGapError` | Reserved enforcement error for an unrepresented torch invocation |
+| `tl.errors.CaptureGapWarning` | Shadow-mode report for a possible unrepresented torch invocation |
+| `tl.errors.CaptureNotActiveError` | Raised when a capture-only operation is called outside an active capture |
+| `tl.errors.DatasetExtractionResumeError` | Raised when a resumable extraction artifact cannot be safely continued |
+| `tl.errors.DirectWriteSaveError` | Raised when executable spec save sees direct out writes |
+| `tl.errors.InterventionWarning` | Base class for TorchLens intervention warnings |
+| `tl.errors.LiveIndexWindowError` | Raised when a live-index query targets an unavailable raw label |
+| `tl.errors.MLXValueUnavailableError` | Raised when MLX lazy evaluation makes a predicate value unavailable |
+| `tl.errors.MergeConflictError` | The presented rank cores structurally contradict each other |
+| `tl.errors.MergeInputError` | A merge input is unusable: not a rank capture, duplicate rank, missing distributed evidence, or an out-of-scope (C1) boundary |
+| `tl.errors.MergedArtifactError` | Merged artifact save/load failure: schema, integrity, or tamper |
+| `tl.errors.MergedSurfaceUnsupportedError` | A refused surface on a merged trace (run/export/validate/selectors) |
+| `tl.errors.MergedTraceError` | Base class for merged-trace errors; `fields["code"]` is frozen |
+| `tl.errors.NarrationConfigError` | Raised for `echo=` configuration refusals at capture entry |
+| `tl.errors.NarrationStatsError` | Raised when an armed echo stats rung refuses a value computation |
+| `tl.errors.NoInfluencePathError` | Raised when two graph points have no directed influence path |
+| `tl.errors.OpaqueCallableError` | Raised when an executable intervention save would require opaque code |
+| `tl.errors.ParamEvidenceMissingError` | Cross-member parameter read refused: no immutable capture-time evidence |
+| `tl.errors.ParamReleasedError` | Raised when a released Param cannot re-fetch its live model parameter |
+| `tl.errors.ReceptiveFieldConfigurationError` | Raised when a receptive-field call is misconfigured by its caller |
+| `tl.errors.ReceptiveFieldError` | Base class for receptive-field failures |
+| `tl.errors.ReceptiveFieldUnavailableError` | Raised when a receptive-field result requires unavailable capture state |
+| `tl.errors.ReceptiveFieldValidationError` | Raised when receptive-field cross-validation detects a violation |
+| `tl.errors.RenderError` | Raised when a transformer picture cannot be honestly produced |
+| `tl.errors.ReplayValueMismatchError` | A recomputed selected activation differed from its archived bytes |
+| `tl.errors.SidecarError` | Raised for sidecar-family registration and payload refusals |
+| `tl.errors.TensorSubclassUnsupportedError` | A strict Tensor subclass could not be constructed while a mode was active here |
+| `tl.errors.TraceMutationWarning` | First root-log mutation; Trace mutators operate in place |
+| `tl.errors.TransformContractError` | Raised when a transform spec, chain, or plan violates its contract |
+| `tl.errors.UserTransformError` | Raised when activation_transform or grad_transform raises |
+| `tl.experiment.sweep_sites` | Ablate every candidate site, one member per candidate, baseline first |
+| `tl.export.describe_target` | Return one export target's registration metadata (tier row included) |
+| `tl.export.list_targets` | Return the registered export-target names |
+| `tl.export.register_target` | Register one export target through the public door |
+| `tl.export.resolve_target` | Return one registered exporter callable; unknown names refuse teaching |
+| `tl.export.unregister_target` | Remove one export-target registration |
+| `tl.fingerprint.StructuralHashMismatchError` | Raised when a model's provisional structural hash differs from its pin |
+| `tl.fingerprint.content` | Return a deterministic SHA-256 digest of nested tensor content |
+| `tl.intervention.BundleComparisonError` | The same class as `tl.errors.BundleComparisonError` |
+| `tl.intervention.label_contains` | Create a label-substring selector |
+| `tl.intervention.label_matches` | Create a label regex-pattern selector |
+| `tl.intervention.model_input` | Create a nested model-input path selector |
+| `tl.intervention.model_output` | Create an output selector |
+| `tl.options.HtmlReportOptions` | Options for emitting the offline HTML report (thumbnail budgets, determinism, share-safe stripping) |
+| `tl.receptive_field.GradReceptiveField` | Empirical receptive-field influence set measured by autograd |
+| `tl.report.CompatWindow` | Frozen compatibility-window report |
+| `tl.report.DiffReport` | The same class as `tl.differential.DiffReport` |
+| `tl.report.InterventionValidationReport` | Five-axis intervention validation result |
+| `tl.report.KernelProfileReport` | One door call: one execution, one trace, one joined result |
+| `tl.report.MergeReport` | Graph-free diagnostic summary of how rank captures were merged |
+| `tl.report.ValidationDiagnostic` | Structured non-failing diagnostic emitted by validation |
+| `tl.report.ValidationFailure` | A structured description of the first surfaced validation mismatch |
+| `tl.report.ValidationStatus` | Machine-readable replay-validation availability or result |
+| `tl.report.compare_topology` | Compare two Traces structurally |
+| `tl.report.diff` | The same function as `tl.differential.diff` |
+| `tl.report.doctor` | Run a TorchLens startup health check (no arguments) |
+| `tl.report.kernel_profile` | Run one save-nothing capture under the owned session and join it |
+| `tl.trackers.HistoryReader` | Read one artifact without loading the run or importing a model |
+| `tl.trackers.correct_running_stats` | Apply the closed-form unscale correction to one spine record |
+| `tl.trackers.corrected_grad_block` | Return `block` with every scaled gradient observation corrected |
+| `tl.trackers.running_stats_scalars` | Derive the portable scalar statistics from one spine record |
+| `tl.transformer.ANNOTATION_KINDS` | The closed set of transformer annotation kinds: `descriptive_head_score`, `additive_logit_contribution`, `screening_estimate`, `intervention_effect` |
+| `tl.transformer.AttentionView` | One attention pattern in canonical coordinates |
+| `tl.transformer.CropInfo` | Crop disclosure: cropping never renormalizes |
+| `tl.transformer.EpisodeCoordinates` | Episode coordinates (step and position) carried by transformer view records |
+| `tl.transformer.MaskInfo` | Mask provenance for an attention view |
+| `tl.transformer.PredictionTable` | Top-k tokens per position |
+| `tl.transformer.PredictionTrajectory` | Per-layer prediction trajectory record |
+| `tl.transformer.ScoreDecomposition` | Term-complete score decomposition for one (head, dst, src) pair |
+| `tl.transformer.TokenAxis` | One labeled token axis |
+| `tl.transformer.TokenMetrics` | Per-token metric strip record |
+| `tl.transformer.TokenScoreRow` | One labeled row of per-token scores (strip row) |
+| `tl.transformer.TokenScores` | Colored-token strip record, single- or multi-row |
+| `tl.transformer.attention_view` | Extract one layer's attention pattern as a typed view |
+| `tl.transformer.attention_views` | Extract every (or the named) attention layer's view, in trace order |
+| `tl.transformer.bertviz_tuple` | Return attention in the BertViz and Hugging Face `output_attentions` tuple format |
+| `tl.transformer.circuitsvis_attention` | Hand the payload to circuitsvis's attention component (notebook only) |
+| `tl.transformer.circuitsvis_payload` | Build the CircuitsVis attention payload from typed views |
+| `tl.transformer.metric_strip` | Convert a metric record to a strip record for rendering |
+| `tl.transformer.prediction_table` | Build the per-position top-k table from the native lens row |
+| `tl.transformer.prediction_table_html` | Emit the zero-dependency HTML top-k table |
+| `tl.transformer.prediction_trajectory` | Build the trajectory record from a streaming lens result |
+| `tl.transformer.receipt_from_patch_grid` | Build a validated receipt from a mech-interp patch grid row |
+| `tl.transformer.render_answer_trajectory` | Render the tracked answer token's probability + rank panels |
+| `tl.transformer.render_neuron_card` | Render the selected-pair neuron card |
+| `tl.transformer.render_prediction_ribbon` | Render the layer-prediction ribbon |
+| `tl.transformer.score_decomposition` | Decompose one attention score into its per-dimension terms |
+| `tl.transformer.token_metrics` | Compute the loss and entropy strips from ONE logits source |
+| `tl.transformer.token_strip_html` | Emit the zero-dependency, self-contained HTML token strip |
+| `tl.types.Accessor` | Generic dict-like accessor for ordered TorchLens log objects |
+| `tl.types.ContainerLeafOccurrence` | One tensor occurrence at one container path |
+| `tl.types.ContainerSpec` | Portable description of an output container seen during capture |
+| `tl.types.ContractCheck` | One contract check recorded in a run report |
+| `tl.types.InputSpec` | Explicit per-slot input override for the quickstart input grammar |
+| `tl.types.MergedFinding` | One structured merge finding |
+| `tl.types.NarrationEvent` | One immutable narration record |
+| `tl.types.NumericAttestationStatus` | Result states for the optional saved-activation oracle |
+| `tl.types.PathFaithfulness` | Honesty states reported by a completed sparse run |
+| `tl.types.ReadinessReport` | Complete non-executing readiness report for a Trace provider |
+| `tl.types.ReadinessStatus` | Overall non-executing runnable readiness states |
+| `tl.types.RunProvider` | Providers selected by the `Trace.run` contract |
+| `tl.types.RunReport` | Honesty, state, resolution, and contract metadata for one run |
+| `tl.types.RunnableCompatibility` | Producer/runtime versions recorded for readiness diagnostics |
+| `tl.types.RunnableDiagnostic` | Structured diagnostic shared by preflight, readiness, and run reports |
+| `tl.user_funcs.CaptureNotActiveError` | The same class as `tl.errors.CaptureNotActiveError` |
+| `tl.user_funcs.UserTransformError` | The same class as `tl.errors.UserTransformError` |
+### Members
+| Spelling | Meaning |
+| --- | --- |
+| `Accessor.search` | Return records whose lookup key contains `needle` |
+| `AmbiguousBackendError.default_remedy` | The remedy the error names when none is passed |
+| `BackendCapabilities.has_validation_replay` | Whether the backend can perform replay validation |
+| `BackwardEstimate.is_freeze_pattern_captured` | Whether the parameter freeze pattern was captured |
+| `BackwardEstimate.is_grad_disabled_at_capture` | Whether grad was disabled when the forward was captured |
+| `BackwardEstimate.num_frozen_weight_ops` | Ops whose weight gradient is skipped because the weight is frozen |
+| `BackwardEstimate.num_multiplied_ops` | Ops whose backward cost the estimate multiplies from the forward cost |
+| `BackwardNanReport.amp_hint` | The GradScaler hint when every finding is an `inf` and no `grad_scale` was given; else `None` |
+| `BackwardNanReport.backward_pass` | The one-based backward pass walked |
+| `BackwardNanReport.birth` | The earliest provable birth transition (finite in, non-finite out), or `None` |
+| `BackwardNanReport.checked_calls` | Calls with saved, checkable gradient payloads |
+| `BackwardNanReport.first_bad_thing` | Project this result into the shared first-bad-thing vocabulary |
+| `BackwardNanReport.found` | Whether any non-finite gradient was observed in the walked pass |
+| `BackwardNanReport.healed` | Labels of transitions where a non-finite arrival was erased (non-finite in, finite out) |
+| `BackwardNanReport.message` | Human-readable summary headlining the earliest provable birth |
+| `BackwardNanReport.transitions` | The full transition ledger in measured fire order |
+| `BackwardNanReport.unchecked_calls` | Calls without saved or checkable gradient payloads |
+| `BackwardNanReport.verdict_scope` | `"complete"` when every earlier call was checkable, else `"found_first_among_checked"` |
+| `BackwardStatus.num_backward_passes` | Number of backward passes observed |
+| `BackwardStatus.num_grad_fn_records` | Number of GradFn records the status read |
+| `BackwardStatus.uncounted_op_counts` | Every recorded op kind outside the counted families with its call count, never zeroed or estimated |
+| `BasisProvenance.num_vectors` | Number of basis vectors |
+| `BindReport.is_grad_enabled` | Whether grad mode was on when the bound run executed |
+| `BindReport.is_model_training` | Whether the model was in training mode when the bound run executed |
+| `BindReport.num_fires` | How many times the bound intervention fired |
+| `BisectNanReport.first_bad_thing` | Project this result into the shared first-bad-thing vocabulary |
+| `BisectNanReport.found` | Whether a saved activation containing NaN or Inf was found |
+| `BisectNanReport.message` | Actionable human-readable result summary |
+| `BisectPrecisionReport.found` | Whether any compared op diverged beyond tolerance |
+| `BisectPrecisionReport.max_abs_err` | First divergent op's maximum absolute error, or `None` |
+| `BisectPrecisionReport.max_rel_err` | First divergent op's maximum relative error, or `None` |
+| `BisectPrecisionReport.message` | Human-readable summary |
+| `Bundle.comparability` | Return the derived relationship for a pair of members |
+| `Bundle.comparability_table` | Return pairwise relationships for all member pairs |
+| `Bundle.map` | Apply a function independently to each member |
+| `Bundle.rank_changes` | Rank sites by their distance from a baseline member |
+| `BundleComparisonError.severity` | The error's severity class |
+| `CapabilityRow.is_available` | Whether the capability is available in this environment |
+| `CaptureFacts.is_structure_only` | Whether the capture kept structure only, without payloads |
+| `CaptureFacts.is_verified` | Whether the capture was verified (`None` when not checked) |
+| `CausalReceipt.num_measured_heads` | Return how many displayed heads carry a measured effect |
+| `CheckFinding.check_name` | Name of the check that produced the finding |
+| `CheckFinding.param_names` | The offending parameter or site names, with every alias of a tied tensor kept |
+| `ChecksSession.register_nonfinite_grad_check` | Register the live parameter-gradient nonfinite check |
+| `ClipLedgerSnapshot.has_constancy_hint` | Whether the clip ledger saw a constant clipping pattern worth hinting |
+| `CloseReport.is_disabled` | Whether the watcher was disabled |
+| `CloseReport.is_final_sample_forced` | Whether close forced a final sample |
+| `CompatReport.check` | Return one report row by stable key |
+| `CompatReport.checks` | Truth-table rows for the inspected model/input pair |
+| `CompatRow.is_detected` | Whether the row's condition was detected in the supplied model/input |
+| `CompatWindow.promise` | The promise text and window status |
+| `CompatWindow.runtime` | Current runtime identity facts (torchlens version, schema ceiling and floor, live writer contract digest) |
+| `ConformanceReport.is_claim_eligible` | `True` only when the pretrained-family floor is met; toys earn nothing regardless of pass rate |
+| `CostTreeRow.num_unknown_ops` | Directly-owned ops with no cost rule |
+| `DeterminismReport.first_problem` | Project the first divergence into the shared vocabulary |
+| `DiagnosticFinding.check_name` | Check name (`"nonfinite"`, `"dtype_regime"`, `"layout"` or `"confinement"`) |
+| `DiffReport.rows_with_status` | Return the rows carrying one closed-vocabulary status |
+| `DryRun.filter` | Return a new trace with decisions from a new op predicate |
+| `EffectsView.rank_changes` | Rank candidates by the size of their change from baseline, descending |
+| `EffectsView.to_selection` | Convert the view to a selection: the union of its WHERE regions |
+| `EpisodeOptions.acknowledge_step_cost` | Accept a step declaration beyond the cost ceiling |
+| `EpisodeOptions.crossings` | Declared exogenous crossings: step indices whose inputs come from outside the capture |
+| `EpisodeOptions.escalated_from` | Digest of the cheaper capture this capture escalates, when escalating |
+| `EpisodeOptions.expected_tokens` | The cheaper capture's per-step tokens, carried so the escalated capture can check fidelity |
+| `EpisodeOptions.feed` | Join strictness: `"open"` (default) captures across feed breaks and grades every join; `"closed"` holds joins strict |
+| `EpisodeOptions.forced_tokens` | Teacher-forced token sequence fed instead of model emissions |
+| `EpisodeOptions.on_feed_break` | What a feed break does: `"disclose"` (default) returns the trace with the break disclosed; `"refuse"` raises |
+| `EpisodeOptions.rng` | Seeding discipline; only `"managed"` ships |
+| `EpisodeOptions.step_input_from` | Which stepped-call argument carries the step input: a position, a keyword name, or `None` |
+| `ExperimentLedger.begin_step` | Write the durable started event before the step's work |
+| `ExperimentLedger.end_step` | Finalize one step after its work |
+| `ExperimentLedger.open_entry` | Open the next entry (one question per entry) |
+| `FindNanReport.bad_tensors` | Tensor positions found non-finite (`("output",)` for an eager finding) |
+| `FindNanReport.first_bad_thing` | Project this result into the shared first-bad-thing vocabulary |
+| `FindNanReport.found` | Whether a NaN or Inf was found |
+| `FindNanReport.label_status` | Whether the reported label is final (`"final"`) or absent (`"none"`) |
+| `FindNanReport.message` | Human-readable diagnostic summary |
+| `GqaInfo.num_query_heads` | Number of query heads |
+| `GradFnSketch.num_nodes` | Number of walked nodes |
+| `GradReceptiveField.batch_support` | Batch indices the influence set reaches, or `None` |
+| `GradReceptiveField.cross_batch_influence` | Whether the influence crosses batch elements |
+| `GradReceptiveField.io_role` | The input role (model input name or op label) the gradient was taken with respect to |
+| `GradReceptiveField.nonfinite_count` | Number of NaN or Inf gradient entries; nonzero makes validation indeterminate |
+| `GradReceptiveField.rtol` | Relative tolerance for the support threshold |
+| `GradReceptiveField.signed_grad` | The signed gradient, kept so a sign-disagreeing adjoint can be checked |
+| `GradReceptiveField.source_key` | Return the direction-stable key of the source graph point |
+| `GradReceptiveField.spatial_support_mask` | The support mask reduced to the spatial axes, when the layout has them |
+| `GradReceptiveField.support_mask` | Boolean mask of input elements above the tolerance threshold |
+| `GradReceptiveField.support_ranges` | Per-axis index ranges of the support, or `None` |
+| `GradReceptiveField.target_key` | Return the direction-stable key of the target graph point |
+| `GradReceptiveField.unit_shape` | Shape of the target unit |
+| `GradReceptiveField.warnings` | Warnings raised while measuring |
+| `GuessInputShapeReport.attempts` | Probe diary as `(shape, outcome)` tuples |
+| `GuessInputShapeReport.constraining_module` | Module qualname that constrained the inferred shape, when known |
+| `GuessInputShapeReport.constraining_op` | Operation name that constrained the inferred shape, when known |
+| `GuessInputShapeReport.example_input` | Ready-to-use input object |
+| `GuessInputShapeReport.flexible_dims` | Dimensions that are expected to tolerate other sizes |
+| `GuessInputShapeReport.found` | Whether a verified input was found |
+| `GuessInputShapeReport.message` | Actionable human-readable summary |
+| `GuessInputShapeReport.shapes` | Multi-input shapes, when applicable |
+| `GuessInputShapeReport.strategy` | Strategy that produced the winning input |
+| `GuessInputShapeReport.value_range` | Synthetic value recipe: `("uniform", 0, 1)` or `("randint", 0, vocab)` |
+| `HealthFacts.num_nonfinite_ops` | Nonfinite ops in the identity partition (alias rows excluded) |
+| `HealthFacts.num_unmapped_ops` | Ops the health partition could not map |
+| `HistoryReader.num_chunks` | Number of committed chunks |
+| `HtmlReportOptions.deterministic` | Suppress the manifest timestamp for byte-exact regeneration |
+| `HtmlReportOptions.max_array_bytes` | Thumbnail byte budget, enforced before payloads are written |
+| `HtmlReportOptions.max_array_sites` | Thumbnail site budget, enforced before payloads are written |
+| `HtmlReportOptions.share_safe` | Strip every embedded value |
+| `InterventionValidationReport.is_complete` | Whether the validation exercised all requested axes |
+| `InterventionValidationReport.is_consistent` | Whether repeated validation decisions agree |
+| `InterventionValidationReport.is_invariant` | Whether a baseline forward validation succeeds |
+| `InterventionValidationReport.is_local` | Whether intervention checks stay local to the requested model/input |
+| `InterventionValidationReport.is_specific` | Whether hook targets can be represented without ambiguity |
+| `InterventionWarning.severity` | The warning's severity class (`"recoverable"` by default) |
+| `KernelProfileReport.availability` | Profiler session availability in five states (missing is `None`, never zero) |
+| `KernelProfileReport.device_time_ns` | Exact-attribution device nanoseconds for one op label |
+| `KernelProfileReport.device_time_table` | Per-op exact device time, descending; refuses when unjoined |
+| `KernelProfileReport.join` | The profiler join result that maps kernels to ops |
+| `KernelProfileReport.session_facts` | Facts about the profiler session |
+| `LedgerEntry.is_draft` | Whether the entry is still a draft (no hypothesis declared yet) |
+| `LineageReport.message` | Human-readable status |
+| `LineageReport.start_label` | Resolved starting op label, or the requested label when lookup failed |
+| `MachineBalance.peak_bytes_per_s` | Peak memory bandwidth used for the roofline, in bytes per second |
+| `MachineBalance.peak_flops_per_s` | Peak compute rate used for the roofline, in FLOPs per second |
+| `MemoryFacts.captured_bytes` | Bytes the capture retained when it ran (an immutable capture fact) |
+| `MemoryFacts.captured_saved_ops` | Ops whose payload the capture saved |
+| `MemoryFacts.retained_bytes` | Bytes this object holds now (present or lazily loadable payloads); zero on a payload-stripped artifact |
+| `MemoryFacts.retained_lazy_ops` | Ops whose payload this object can load lazily |
+| `MemoryFacts.retained_present_ops` | Ops whose payload is present in memory |
+| `MergeReport.degradations` | Environment degradations recorded for the merge |
+| `MergeReport.num_joins` | Number of cross-rank joins made |
+| `MergedFinding.from_dict` | Rebuild a finding from `to_payload` output |
+| `MergedTrace.at` | Return the SPMD fan: the ops matching `label` on every rank |
+| `MergedTrace.degradations` | Environment degradations recorded at load (empty on a live merge) |
+| `ModuleCall.parent_label` | Label of the parent ModuleCall in the dynamic call tree |
+| `NarrationEvent.has_intervention` | Whether an intervention acted at this event |
+| `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
+| `PreprocessingComparison.applied_source` | How the applied side was obtained: `"resolution"` / `"declaration"` / `"parsed_transform"` / `"undeclared"` / `"opaque_transform"` |
+| `PreprocessingComparison.authority_status` | The authority's standing (`authoritative` / `unverified_fallback` / `unknown`); a non-authoritative reference caps the verdict below `verified` |
+| `PreprocessingComparison.mismatched_fields` | Names of every mismatched field, in field order |
+| `PreprocessingComparison.unknown_fields` | Names of every uncomparable field, in field order |
+| `PreprocessingComparison.unknown_reasons` | Deduplicated reasons behind every unknown field, in field order |
+| `PreprocessingComparison.verdict` | `"verified"` / `"mismatch"` / `"unknown"` |
+| `ProfileReport.has_rescue_rerun` | Whether the profile needed a rescue rerun |
+| `ProfileReport.is_structure_only` | Whether the profiled capture kept structure only |
+| `ReceptiveFieldValidation.num_violations` | Number of cross-validation violations found |
+| `Recipe.address_class` | Most restrictive address class over all rules (worst wins) |
+| `Recipe.decision` | The sole rule's normalized decision (`None` on multi-clause specs) |
+| `Recipe.door_pairs` | Lower the spec to `(site, action)` pairs for the hook doors |
+| `Recipe.match` | Return the single rule matching one op context, or `None` |
+| `Recording.num_predicate_failure_overflows` | Predicate failures beyond the kept list (counted, not stored) |
+| `RooflineRow.is_cache_resident_hint` | Whether the row's working set likely fits in cache (a hint, not a measurement) |
+| `RosterModel.builder` | Zero-arg factory returning `(model, example_input)` |
+| `Rule.action_repr` | Canonical rendering of the action over its current tensor content |
+| `Rule.address_class` | How the rule addresses its sites (value-dependent by default) |
+| `Rule.decision` | The rule's normalized decision, or `None` |
+| `Rule.payload_fidelity` | Audit fidelity of this rule's action payload |
+| `Rule.rule_id` | Content-derived rule identity over WHERE, action and direction |
+| `Rule.where_repr` | Canonical rendering of the rule's WHERE clause |
+| `RunReport.has_carried_state` | Whether mutations were deliberately left on the live model; the default run restores declared state and reports `False` |
+| `RunReport.is_poisoned` | Whether the run left the provider unusable for further runs |
+| `RunnableDiagnostic.is_analysis_load_available` | Whether the artifact can still load for analysis only |
+| `SavedFigure.disclosure_lines` | Every honesty line the artifact rendered, in order |
+| `SavedFigure.num_pages` | Total page count (equals `len(paths)` for file output) |
+| `SavedFigure.svg_fonttype` | The matplotlib `svg.fonttype` used (`"path"` by default) |
+| `ScaleLedger.is_enabled` | Whether a live, enabled GradScaler is attached |
+| `ScaleLedger.observe_accepted_step` | Record one accepted optimizer step |
+| `ScaleLedger.observe_backward` | Record one backward's scale reading; count decrements exactly |
+| `ScaleLedgerSnapshot.has_scaler` | Whether a GradScaler was attached |
+| `ScaleLedgerSnapshot.is_enabled` | Whether the attached GradScaler was enabled |
+| `ScanRow.is_audited` | False exactly when `skip_reason` says why the row was not audited |
+| `ScanRow.is_constant` | Whether the scanned value stayed constant (`None` when unknown) |
+| `Selection.align_to` | Re-bind a resolved selection onto another trace |
+| `Session.to_bundle` | Return a bundle containing all captured invocation logs |
+| `Site.num_selected` | Return the number of selected elements at this site |
+| `Site.structural_site_key` | The structural site key when present, else `None` |
+| `SixNDFacts.num_params` | Parameter count used by the 6ND estimate |
+| `SpecCompat.has_identical_target_resolution` | Whether the spec resolves to the same targets on both sides |
+| `SummaryTotals.captured_bytes` | Bytes the capture retained when it ran |
+| `SummaryTotals.retained_bytes` | Bytes this object holds now |
+| `Super.absent_names` | Return bundle member names not represented by this view |
+| `Super.is_complete` | Return whether every bundle member is represented |
+| `Trace.random_seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
+| `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
+| `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
+| `ValidationFailure.check_name` | Which validation phase fired (always set) |
+| `ValidationStatus.available_live` | Build the default status for a live trace with validation support |
+| `ValidationStatus.exempted_reason_counts` | Stable reason-code counts for nodes whose replay/perturbation check had a provable exemption |
+| `ValidationStatus.from_replay_counts` | Fold replay outcome counts into a trace-level status |
+| `ValidationStatus.is_available` | Whether replay validation can run for this trace |
+| `ValidationStatus.message` | Human-readable status explanation |
+| `ValidationStatus.num_effect_region_ops` | Number of effectful or stateful nodes excluded from pure per-op replay |
+| `ValidationStatus.num_failed_ops` | Number of replay-validation failures contributing to a failed result |
+| `ValidationStatus.num_pure_unverified_ops` | Number of pure value nodes that classified cleanly but were not replayed, usually because no faithful backend raw-op replay is available |
+| `ValidationStatus.num_replayed_ops` | Number of ops or regions replay-validated for a completed result |
+| `ValidationStatus.num_unverified_ops` | Aggregate number of nodes or regions excluded from per-op replay |
+| `ValidationStatus.payload_load_status` | Optional payload materialization status attached by `tl.load` |
+| `ValidationStatus.unavailable_loaded_runtime_stripped` | Build the loaded non-torch unavailable status |
+| `ValidationStatus.unavailable_unsupported` | Build an unavailable status for a backend without replay validation |
+| `ValidationStatus.unverified_reason_counts` | Stable reason-code counts for nodes that replay could not verify |
+| `WatchdogSnapshot.is_tripped` | Whether the watchdog fired |
+### Keywords
+| Spelling | Meaning |
+| --- | --- |
+| `breakdown_k=` | keyword of `tl.report.flops`: how many rows the breakdown lists |
+| `builder=` | field of `RosterModel`: zero-argument factory returning `(model, example_input)` |
+| `captured_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
+| `captured_saved_ops=` | field and constructor keyword of `MemoryFacts` |
+| `degradations=` | field and constructor keyword of `MergeReport` |
+| `flops_attributions=` | field and constructor keyword of `BackwardStatus` |
+| `has_carried_state=` | field and constructor keyword of `RunReport` |
+| `has_constancy_hint=` | field and constructor keyword of `ClipLedgerSnapshot` |
+| `has_identical_target_resolution=` | field and constructor keyword of `SpecCompat` |
+| `has_intervention=` | field and constructor keyword of `NarrationEvent` |
+| `has_rescue_rerun=` | field and constructor keyword of `ProfileReport` |
+| `has_scaler=` | field and constructor keyword of `ScaleLedgerSnapshot` |
+| `has_validation_replay=` | field and constructor keyword of `BackendCapabilities` |
+| `history_id=` | keyword of `Bundle.effects`: which recorded history to read |
+| `input_op=` | keyword of the receptive-field queries (`Trace.receptive_fields`, `Trace.projective_fields`): the input op to measure against |
+| `input_route=` | keyword of `tl.splice_module`: the route name for the spliced input |
+| `is_analysis_load_available=` | field and constructor keyword of `RunnableDiagnostic` |
+| `is_audited=` | field and constructor keyword of `ScanRow` |
+| `is_available=` | field and constructor keyword of `CapabilityRow`, `ValidationStatus` |
+| `is_cache_resident_hint=` | field and constructor keyword of `RooflineRow` |
+| `is_capture_verified=` | field and constructor keyword of `ProfileReport` |
+| `is_claim_eligible=` | field and constructor keyword of `ConformanceReport` |
+| `is_complete=` | field and constructor keyword of `InterventionValidationReport` |
+| `is_consistent=` | field and constructor keyword of `InterventionValidationReport` |
+| `is_constant=` | field and constructor keyword of `ScanRow` |
+| `is_detected=` | field and constructor keyword of `CompatRow` |
+| `is_disabled=` | field and constructor keyword of `CloseReport` |
+| `is_enabled=` | field and constructor keyword of `ScaleLedgerSnapshot` |
+| `is_final_sample_forced=` | field and constructor keyword of `CloseReport` |
+| `is_freeze_pattern_captured=` | field and constructor keyword of `BackwardEstimate` |
+| `is_grad_disabled_at_capture=` | field and constructor keyword of `BackwardEstimate` |
+| `is_grad_enabled=` | field and constructor keyword of `BindReport` |
+| `is_invariant=` | field and constructor keyword of `InterventionValidationReport` |
+| `is_known=` | field and constructor keyword of `OptimizerFacts` |
+| `is_local=` | field and constructor keyword of `InterventionValidationReport` |
+| `is_model_training=` | field and constructor keyword of `BindReport` |
+| `is_poisoned=` | field and constructor keyword of `RunReport` |
+| `is_specific=` | field and constructor keyword of `InterventionValidationReport` |
+| `is_structure_only=` | field and constructor keyword of `CaptureFacts`, `ProfileReport` |
+| `is_tripped=` | field and constructor keyword of `WatchdogSnapshot` |
+| `is_verified=` | field and constructor keyword of `CaptureFacts` |
+| `item_list=` | keyword of `tl.types.Accessor`: the ordered records |
+| `min_stimuli=` | keyword of the `tl.repgeom` geometry functions (`classical_mds`, `effective_dimensionality`, `scree`): fewest stimuli accepted |
+| `num_audited_ops=` | field and constructor keyword of `DTypeRangeReport` |
+| `num_backward_passes=` | field and constructor keyword of `BackwardStatus`, `BackwardStyleInventory` |
+| `num_checked_ops=` | field and constructor keyword of `HealthFacts`, `NonfiniteReport` |
+| `num_effect_region_ops=` | field and constructor keyword of `ValidationStatus` |
+| `num_failed_ops=` | field and constructor keyword of `ValidationStatus` |
+| `num_failures=` | keyword of `tl.errors.PredicateError`: total predicate failures, including ones beyond the kept list |
+| `num_fires=` | field and constructor keyword of `BindReport` |
+| `num_forward_runs=` | field and constructor keyword of `CleanStepTime`, `OverheadReport` |
+| `num_frozen_weight_ops=` | field and constructor keyword of `BackwardEstimate` |
+| `num_grad_fn_records=` | field and constructor keyword of `BackwardStatus` |
+| `num_joins=` | field and constructor keyword of `MergeReport` |
+| `num_multiplied_ops=` | field and constructor keyword of `BackwardEstimate` |
+| `num_pages=` | field and constructor keyword of `SavedFigure` |
+| `num_predicate_failure_overflows=` | field and constructor keyword of `Recording` |
+| `num_pure_unverified_ops=` | field and constructor keyword of `ValidationStatus` |
+| `num_query_heads=` | field and constructor keyword of `GqaInfo` |
+| `num_replayed_ops=` | field and constructor keyword of `ValidationStatus` |
+| `num_unchecked_ops=` | field and constructor keyword of `HealthFacts`, `NonfiniteReport` |
+| `num_unexamined_ops=` | field and constructor keyword of `HealthFacts`, `NonfiniteReport` |
+| `num_unknown_ops=` | field and constructor keyword of `CostTreeRow` |
+| `num_unmapped_ops=` | field and constructor keyword of `HealthFacts` |
+| `num_unverified_ops=` | field and constructor keyword of `ValidationStatus` |
+| `num_vectors=` | field and constructor keyword of `BasisProvenance` |
+| `num_violations=` | field and constructor keyword of `ReceptiveFieldValidation` |
+| `output_route=` | keyword of `tl.splice_module`: the route name for the spliced output |
+| `param_names=` | field and constructor keyword of `CheckFinding` |
+| `peak_bytes_per_s=` | field and constructor keyword of `MachineBalance` |
+| `peak_flops_per_s=` | field and constructor keyword of `MachineBalance` |
+| `retained_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
+| `retained_lazy_ops=` | field and constructor keyword of `MemoryFacts` |
+| `retained_present_ops=` | field and constructor keyword of `MemoryFacts` |
+| `serve=` | keyword of `tl.export.netron`: open the exported graph in a local viewer |
+| `source_ref=` | keyword of `tl.types.Accessor`: weak reference to the owning trace |
+| `state_dict=` | keyword of `Trace.load_state_dict`: the sparse-run state to stage |
+| `uncounted_op_counts=` | field and constructor keyword of `BackwardStatus` |
