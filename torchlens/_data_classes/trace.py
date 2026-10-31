@@ -2135,36 +2135,6 @@ class Trace(
         target._annotate_in_place(selector, data=data, image=image, max_fanout=max_fanout)
         return target
 
-    def with_annotations(
-        self,
-        selector: Any,
-        *,
-        data: Any = None,
-        image: str | Path | None = None,
-        max_fanout: int = 1_000_000,
-    ) -> "Trace":
-        """Return an owned annotated copy of this trace.
-
-        Parameters
-        ----------
-        selector:
-            Selector, target spec, frozen target spec, or non-strict bare string.
-        data:
-            JSON-serializable metadata or a portable tensor payload.
-        image:
-            Optional local image path used by the existing ``NodeSpec.image``
-            render hook.
-        max_fanout:
-            Explicit maximum number of selected sites.
-
-        Returns
-        -------
-        Trace
-            Forked trace carrying the requested annotations.
-        """
-
-        return self.annotate(selector, data=data, image=image, max_fanout=max_fanout, copy=True)
-
     def _annotate_in_place(
         self,
         selector: Any,
