@@ -118,7 +118,7 @@ def test_fork_pickle_round_trip(parent_trace: tl.Trace) -> None:
 
 
 def test_fork_save_load_round_trip(parent_trace: tl.Trace, tmp_path) -> None:
-    """``trace.save(fork)`` must produce an artifact ``tl.load`` accepts.
+    """``fork.save(path)`` must produce an artifact ``tl.load`` accepts.
 
     Pre-fix this was the silent-dead-artifact case: save succeeded and load
     ALWAYS refused (blocked internal ``PooledCell`` type).

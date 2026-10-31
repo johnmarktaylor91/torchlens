@@ -845,7 +845,7 @@ class _PropertyTrapTensor(torch.Tensor):
 class TestCorr26SubclassAdmission:
     """Unsupported subclasses fail typed at phase 0 under both policies."""
 
-    @pytest.mark.parametrize("policy", ("raise", "return_diverged"))
+    @pytest.mark.parametrize("policy", ("raise", "return"))
     def test_property_trap_subclass_fails_typed(self, policy: str, tmp_path: Path) -> None:
         x = torch.randn(2, 3)
         loaded = _save_load(_AddPair(), (x, x.clone()), tmp_path, acts=True)

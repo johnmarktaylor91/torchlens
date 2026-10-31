@@ -13,7 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import load, save, trace as trace_fn
+from torchlens import load, trace as trace_fn
 from torchlens._io import BlobRef, TorchLensIOError
 from torchlens.data_classes.trace import Trace
 from torchlens.io import materialize_nested
@@ -125,8 +125,7 @@ def _save_bundle(
         save_rng_states=save_rng_states,
     )
     bundle_path = tmp_path / path_name
-    save(
-        trace,
+    trace.save(
         bundle_path,
         include_saved_args=include_saved_args,
         include_rng_states=include_rng_states,
@@ -295,7 +294,7 @@ def test_lazy_resave_detects_manifest_level_drift(tmp_path: Path) -> None:
     _write_manifest(bundle_path, manifest)
 
     with pytest.raises(TorchLensIOError, match="source bundle manifest has changed since load"):
-        save(lazy_log, tmp_path / "resaved.tl")
+        lazy_log.save(tmp_path / "resaved.tl")
 
 
 def test_lazy_resave_detects_blob_level_drift(tmp_path: Path) -> None:
@@ -306,7 +305,7 @@ def test_lazy_resave_detects_blob_level_drift(tmp_path: Path) -> None:
     _corrupt_one_blob(bundle_path)
 
     with pytest.raises(TorchLensIOError, match="sha256 mismatch"):
-        save(lazy_log, tmp_path / "resaved.tl")
+        lazy_log.save(tmp_path / "resaved.tl")
 
 
 def test_lazy_resave_fast_copy_produces_valid_bundle(tmp_path: Path) -> None:
@@ -316,7 +315,7 @@ def test_lazy_resave_fast_copy_produces_valid_bundle(tmp_path: Path) -> None:
     lazy_log = load(bundle_path, lazy=True)
     resaved_path = tmp_path / "resaved.tl"
 
-    save(lazy_log, resaved_path)
+    lazy_log.save(resaved_path)
     restored = load(resaved_path, lazy=False)
 
     live_tensor = _first_saved_layer(live_log).out
@@ -368,7 +367,7 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
         TorchLensIOError,
         match="Call torchlens.io.materialize_nested\\(trace\\) before saving",
     ):
-        save(lazy_log, tmp_path / "resaved.tl", include_saved_args=True)
+        lazy_log.save(tmp_path / "resaved.tl", include_saved_args=True)
 
 
 def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
@@ -387,8 +386,7 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
     lazy_log = load(bundle_path, lazy=True, materialize_nested=False)
     resaved_path = tmp_path / "resaved_without_nested_fields.tl"
 
-    save(
-        lazy_log,
+    lazy_log.save(
         resaved_path,
         include_saved_args=False,
         include_rng_states=False,

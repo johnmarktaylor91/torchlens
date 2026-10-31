@@ -4,7 +4,7 @@ Three entry-time guards that run before (or instead of) the per-trace save
 pipeline: the two PERMANENT erasure-prevention invariants (edge-substitution
 carriers and the shard-local disclosure, both keyed on the ACTIVE SCHEMA so a
 regression re-fires them), and the Bundle container-door delegation that
-routes ``trace.save(bundle, ...)`` through ``Bundle.save`` (foldB D8/D9). Split
+routes ``bundle.save(path, ...)`` through ``Bundle.save`` (foldB D8/D9). Split
 out of ``torchlens/_io/bundle.py`` to respect its size ceiling (R43
 split-never-raise); ``bundle.py`` re-exports these names, so the monkeypatch
 surface ``torchlens._io.bundle._refuse_*`` is unchanged.
@@ -126,7 +126,7 @@ def _save_bundle_via_container_door(
     overwrite: bool,
     trace_only_options: dict[str, bool | None],
 ) -> None:
-    """Route ``trace.save(bundle, ...)`` through the one container door.
+    """Route ``bundle.save(path, ...)`` through the one container door.
 
     Both public save doors resolve to ``Bundle.save`` (the container door),
     so they agree on every settled bundle by construction: the N1 capture-
@@ -162,14 +162,14 @@ def _save_bundle_via_container_door(
     )
     if unsupported:
         raise InvalidArgumentError(
-            "trace.save(bundle, ...) routes through the Bundle container door, "
+            "bundle.save(path, ...) routes through the Bundle container door, "
             "which supports only 'level' and 'overwrite'; it cannot honor "
             f"per-trace save options: {', '.join(unsupported)}.",
             code="bundle_save_option_unsupported",
             remedy=(
                 "Drop the per-trace options (or call bundle.save(path, "
                 "level=..., overwrite=...)); for per-member payload control, "
-                "save one member with trace.save(bundle[name], path, ...)."
+                "save one member with bundle[name].save(path, ...)."
             ),
             options=tuple(unsupported),
         )

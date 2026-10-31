@@ -52,7 +52,7 @@ absent phase; no gate consults it.
   driving member. The fold is a DISCLOSURE reported beside results, never a
   settlement and never a per-member gate: capability gating applies at the
   member whose facts a read cites (foldB D8). Both public save doors agree
-  by construction — `trace.save(bundle, ...)` delegates to the container door
+  by construction — `bundle.save(path, ...)` delegates to the container door
   (`Bundle.save`), whose member writes run the N1 gate per member; per-trace
   payload options refuse typed (`bundle_save_option_unsupported`).
 - `Trace.fork().outcome` — a DERIVED record settled by `stamp_forked`, never

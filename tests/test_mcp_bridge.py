@@ -74,7 +74,7 @@ def test_call_tool_refusals_teach_the_fix() -> None:
     with pytest.raises(ValueError, match="requires 'path'") as args_exc:
         tlmcp.call_tool("torchlens_dump", {})
     assert args_exc.value.fields["code"] == "agent_argument_invalid"
-    with pytest.raises(ValueError, match="Trace.save") as path_exc:
+    with pytest.raises(ValueError, match=r"trace\.save") as path_exc:
         tlmcp.call_tool("torchlens_dump", {"path": "/nonexistent/file.tlspec"})
     assert path_exc.value.fields["code"] == "agent_artifact_unreadable"
 

@@ -733,7 +733,7 @@
    "status": "asymmetry",
    "asymmetry": "A13",
    "confidence": "high",
-   "note": "trace.save(bundle) accepts only level and overwrite; per-trace payload options refuse bundle_save_option_unsupported."
+   "note": "bundle.save(path) accepts only level and overwrite; per-trace payload options refuse bundle_save_option_unsupported."
   },
   {
    "a": "bundle",

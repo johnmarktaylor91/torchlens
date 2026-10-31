@@ -99,7 +99,7 @@ def test_load_and_recover_rehydrate_disk_payload_contents(tmp_path: Path) -> Non
     }
     assert original_values, "sanity: at least one record should have captured a raw payload"
 
-    for reload_fn in (tl.fastlog.load, tl.fastlog.recover):
+    for reload_fn in (tl.load, tl.fastlog.recover):
         reloaded = reload_fn(bundle_path)
         rehydrated = [record for record in reloaded.records if record.disk_payload is not None]
         assert rehydrated, f"{reload_fn.__name__} dropped every disk_payload on reload"

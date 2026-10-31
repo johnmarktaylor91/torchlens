@@ -24,7 +24,7 @@ Phase 1 (Python, your process): create and annotate evidence.
 
     import torchlens as tl
     log = tl.trace(model, x, save=tl.func("relu"))
-    trace.save("run.tlspec")
+    log.save("run.tlspec")
 
 Record prompt ids, experiment labels, and share-safe token strings BEFORE
 saving (tl.observers.log_value) -- never make a reader infer them from a

@@ -3,7 +3,7 @@
 Bundle is the THIRD instance of the "two answers for one product"
 outcome-authority disease (PartialTrace: ``_OUTCOME_DELEGATE_FIELD``;
 Recording: ``_OUTCOME_SELF_AUTHORITY``): ``outcome_for(bundle)`` returned
-``None`` while every member was COMPLETE, so ``trace.save(bundle)`` false-refused
+``None`` while every member was COMPLETE, so ``bundle.save(path)`` false-refused
 EVERY bundle (N1 status 'unknown' + a RuntimeWarning blaming the user for
 hand-building an object ``tl.bundle()`` built) while ``bundle.save()`` worked.
 
@@ -191,7 +191,7 @@ def test_capability_gate_on_bundle_no_false_hand_built_warning(complete_pair: Bu
 
 
 def test_both_doors_save_a_complete_bundle(tmp_path, complete_pair: Bundle) -> None:
-    """trace.save(bundle) stops false-refusing; both doors round-trip identically."""
+    """bundle.save(path) stops false-refusing; both doors round-trip identically."""
 
     door_tl = tmp_path / "door_tl.tlspec"
     door_method = tmp_path / "door_method.tlspec"
@@ -287,12 +287,18 @@ def test_runnable_level_refuses_identically_at_both_doors(tmp_path, complete_pai
 
 
 def test_trace_only_save_options_refuse_typed(tmp_path, complete_pair: Bundle) -> None:
-    """trace.save(bundle) honors exactly the container door's surface; per-trace
+    """bundle.save(path) honors exactly the container door's surface; per-trace
     payload options refuse typed instead of being silently dropped."""
 
+    from torchlens._io.bundle import save as _save_bundle
+
     for kwargs in ({"include_weights": True}, {"include_outs": False}, {"strict": False}):
-        with pytest.raises(InvalidArgumentError) as excinfo:
+        # Bundle.save takes no per-trace options at all; the private save door
+        # still refuses them typed rather than dropping them.
+        with pytest.raises(TypeError):
             complete_pair.save(tmp_path / "opt.tlspec", **kwargs)
+        with pytest.raises(InvalidArgumentError) as excinfo:
+            _save_bundle(complete_pair, tmp_path / "opt.tlspec", **kwargs)
         assert excinfo.value.fields["code"] == "bundle_save_option_unsupported"
     # Explicitly passing a value equal to the trace-door default is honored.
     complete_pair.save(tmp_path / "default_ok.tlspec", strict=True, overwrite=True)

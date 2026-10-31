@@ -428,7 +428,7 @@ def test_tampered_manifest_dtype_refuses_without_import(hazard: str, tmp_path: P
         import torch, torch.nn as nn, torchlens as tl
         m = nn.Linear(4, 4)
         log = tl.trace(m, torch.randn(1, 4))
-        trace.save({str(bundle)!r})
+        log.save({str(bundle)!r})
         print("BUILT")
         """
     )

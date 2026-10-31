@@ -72,7 +72,7 @@ def measure_entry(entry: Any, workdir: Path) -> dict[str, Any]:
     start = time.monotonic()
     trace = tl.trace(model, inputs, save="all")
     path = workdir / f"{entry.id}.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     record: dict[str, Any] = {"entry": entry.id, "num_ops": trace.num_ops}
     manifest, _ = read_manifest(path)
     total_bytes, blob_count = declared_bytes_and_count(manifest)

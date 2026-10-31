@@ -744,7 +744,7 @@ class TestHaltedMemberArtifactRoundTrip:
 
 
 class TestModuleLevelSaveRefusesTyped:
-    """trace.save(merged, ...) is a contract-promised typed refusal, not an AttributeError."""
+    """The bundle save door refuses a MergedTrace typed, not with an AttributeError."""
 
     @pytest.mark.smoke
     def test_tl_save_merged_trace_refuses_typed(self, tmp_path):
@@ -760,7 +760,9 @@ class TestModuleLevelSaveRefusesTyped:
         merged = MergedTrace(
             derivation, {0: _RankHandle(0, trace=None), 1: _RankHandle(1, trace=None)}
         )
+        from torchlens._io.bundle import save as _save_bundle
+
         with pytest.raises(MergedSurfaceUnsupportedError) as excinfo:
-            merged.save(tmp_path / "merged_refused.tlspec")
+            _save_bundle(merged, tmp_path / "merged_refused.tlspec")
         assert excinfo.value.fields["code"] == "merged_surface_unsupported"
         assert not (tmp_path / "merged_refused.tlspec").exists()

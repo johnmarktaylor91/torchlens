@@ -14,7 +14,7 @@ from torch import nn
 pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
-from torchlens import load, save, trace as trace_fn  # noqa: E402
+from torchlens import load, trace as trace_fn  # noqa: E402
 from torchlens._io import BlobRef  # noqa: E402
 from torchlens.data_classes.trace import Trace  # noqa: E402
 from torchlens.io import materialize_nested  # noqa: E402
@@ -185,7 +185,7 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
         ),
     )
 
-    save(live_log, source_path, include_saved_args=True)
+    live_log.save(source_path, include_saved_args=True)
     lazy_log = load(source_path, lazy=True, materialize_nested=False)
 
     nested_blob_layer = next(
@@ -199,7 +199,7 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     materialize_nested(lazy_log)
 
     assert not _contains_blob_ref(nested_blob_layer.saved_args)
-    save(lazy_log, resaved_path, include_saved_args=True)
+    lazy_log.save(resaved_path, include_saved_args=True)
     restored = load(resaved_path, lazy=False)
 
     live_layer = _first_saved_layer(live_log)

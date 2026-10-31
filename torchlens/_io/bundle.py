@@ -417,7 +417,7 @@ def save(
         raise MergedSurfaceUnsupportedError(
             "trace.save() does not support MergedTrace. Write the merged-directory "
             "artifact with merged.save(path), or save a single rank core with "
-            "trace.save(merged.ranks[r], path).",
+            "merged.ranks[r].save(path).",
             code=MergedErrorCode.MERGED_SURFACE_UNSUPPORTED,
         )
     # A TraceSlice is likewise a presenter, never a Trace: a slice has
@@ -432,7 +432,7 @@ def save(
         raise SelectionError(
             "trace.save() does not support TraceSlice: a slice is a VIEW with "
             "declared dangling boundary edges, not a self-contained capture. "
-            "Save the underlying trace (trace.save(slice.source_trace, path)) "
+            "Save the underlying trace (slice.source_trace.save(path)) "
             "and re-derive the view after loading.",
             code="slice_save_unsupported",
         )
