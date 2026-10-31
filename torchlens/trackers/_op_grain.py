@@ -45,9 +45,9 @@ from .._observability import (
     WatchSettings,
     measure_overhead,
 )
+from .._observability._artifact import CommittedBlock
 from .._observability._collector import StepTruth
 from .._observability._overhead import RefusalPredicate
-from ..observability._artifact import CommittedBlock
 from ._errors import WatchConfigError
 
 if TYPE_CHECKING:

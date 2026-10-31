@@ -13,7 +13,6 @@ import xml.etree.ElementTree as ET
 
 import pytest
 import torch
-from torchlens.observability._artifact import CommittedBlock
 
 from torchlens._observability import (
     Histogram,
@@ -32,6 +31,7 @@ from torchlens._observability import (
     observation_row,
     rank_sites,
 )
+from torchlens._observability._artifact import CommittedBlock
 from torchlens.trackers import HistoryView
 from torchlens.viz import contact_sheet, histogram_waterfall, quantile_fan, site_detail
 

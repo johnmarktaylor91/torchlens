@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 import torch
-from torchlens.observability._artifact import CommittedBlock, HistoryWriter, RamRing, coarsen_pair
 
 from torchlens._observability import (
     Histogram,
@@ -18,6 +17,7 @@ from torchlens._observability import (
     SiteRecord,
     StepBlockRecord,
 )
+from torchlens._observability._artifact import CommittedBlock, HistoryWriter, RamRing, coarsen_pair
 from torchlens.errors import HistoryArtifactError
 from torchlens.trackers import HistoryReader
 

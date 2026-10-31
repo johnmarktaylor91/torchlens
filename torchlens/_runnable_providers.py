@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 
-from torchlens.runnable import ContractCheck, ReadinessReport, RunnableDiagnostic
+from torchlens._runnable import ContractCheck, ReadinessReport, RunnableDiagnostic
 
 from . import _state
 from ._runnable import (

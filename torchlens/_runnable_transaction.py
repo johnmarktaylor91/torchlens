@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from torchlens.runnable import ContractCheck, ReadinessReport
+from torchlens._runnable import ContractCheck, ReadinessReport
 
 from . import _state
 from ._runnable import (

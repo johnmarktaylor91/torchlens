@@ -367,7 +367,7 @@ def test_intermediate_derived_grad_accessor_and_op_filter_unverified() -> None:
         provenance={"status": "unverified"},
     )
 
-    from torchlens.data_classes._trace_stats import set_intermediate_derived_grads
+    from torchlens._data_classes._trace_stats import set_intermediate_derived_grads
 
     set_intermediate_derived_grads(trace, IntermediateDerivedGradAccessor({op.label: record}))
 

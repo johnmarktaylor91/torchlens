@@ -187,7 +187,7 @@ def _metadata_props(
 
     rows: list[tuple[str, str]] = [
         ("torchlens.lossy_export", "true"),
-        ("torchlens.runnable", "false"),
+        ("torchlens._runnable", "false"),
         ("torchlens.netron_schema", NETRON_SCHEMA_VERSION),
         ("torchlens.capture_honesty", _json.dumps(capture_honesty_facts(log))),
     ]

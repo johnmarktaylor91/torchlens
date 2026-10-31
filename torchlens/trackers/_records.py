@@ -39,7 +39,7 @@ from .._observability import (
     RunRecord,
     SiteRecord,
 )
-from ..observability._artifact import CommittedBlock
+from .._observability._artifact import CommittedBlock
 from ._errors import TagGrammarError
 
 __tl_layer__ = "L8"

@@ -47,18 +47,18 @@ __all__ = [
 #: watch-history and timeline renderers, resolved on first access so importing
 #: this namespace does not import those kits.
 _LAZY_RENDERERS: dict[str, tuple[str, str]] = {
-    "ablation_grid": ("torchlens.tviz._receipts", "render_receipt_grid"),
-    "attention": ("torchlens.tviz._render_attention", "render_attention"),
-    "attention_atlas": ("torchlens.tviz._render_attention", "render_attention_atlas"),
-    "logit_lens": ("torchlens.tviz._lens_heatmap", "render_logit_lens_heatmap"),
-    "metric_strip": ("torchlens.tviz._metrics", "render_metric_strip"),
-    "prediction_table": ("torchlens.tviz._predictions", "render_prediction_table"),
-    "token_strip": ("torchlens.tviz._strip", "render_token_strip"),
-    "contact_sheet": ("torchlens.observability._render", "render_contact_sheet"),
-    "histogram_waterfall": ("torchlens.observability._render", "render_waterfall"),
-    "quantile_fan": ("torchlens.observability._render", "render_fan"),
-    "site_detail": ("torchlens.observability._render", "render_detail"),
-    "timeline": ("torchlens.observe._svg", "render_timeline_svg"),
+    "ablation_grid": ("torchlens.transformer._receipts", "render_receipt_grid"),
+    "attention": ("torchlens.transformer._render_attention", "render_attention"),
+    "attention_atlas": ("torchlens.transformer._render_attention", "render_attention_atlas"),
+    "logit_lens": ("torchlens.transformer._lens_heatmap", "render_logit_lens_heatmap"),
+    "metric_strip": ("torchlens.transformer._metrics", "render_metric_strip"),
+    "prediction_table": ("torchlens.transformer._predictions", "render_prediction_table"),
+    "token_strip": ("torchlens.transformer._strip", "render_token_strip"),
+    "contact_sheet": ("torchlens._observability._render", "render_contact_sheet"),
+    "histogram_waterfall": ("torchlens._observability._render", "render_waterfall"),
+    "quantile_fan": ("torchlens._observability._render", "render_fan"),
+    "site_detail": ("torchlens._observability._render", "render_detail"),
+    "timeline": ("torchlens._observe._svg", "render_timeline_svg"),
     "intervention_diff": ("torchlens.visualization._surgery_diff", "surgery_diff"),
 }
 

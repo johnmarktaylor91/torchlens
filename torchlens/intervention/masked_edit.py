@@ -5,7 +5,7 @@ behavior unchanged (recipe disclosure stamped); element masks wrap the hook
 factory with the EDIT-THEN-SCATTER step on a fresh tensor (stored capture
 truth is never written through). Consumers: the ACT selection do-plan
 (``torchlens._selection.build_selection_do_plan``) and the edge/param
-substitution doors. Moved out of ``torchlens/selection.py`` under the R43
+substitution doors. Moved out of ``torchlens/_selection.py`` under the R43
 file-size ratchet; semantics unchanged.
 """
 

@@ -14,7 +14,6 @@ import dataclasses
 import pytest
 import torch
 from torch import nn
-from torchlens.quickstart._primitive import state_dict_hash
 
 import torchlens as tl
 from torchlens._quickstart import (
@@ -23,6 +22,7 @@ from torchlens._quickstart import (
     resolve_inputs,
     trace_input_provenance,
 )
+from torchlens._quickstart._primitive import state_dict_hash
 from torchlens.user_funcs import render
 
 

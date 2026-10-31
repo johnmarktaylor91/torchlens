@@ -886,8 +886,8 @@
   resolve); relation `exact`; PARAM/EDGE refuse
   `selection_kind_incompatible`. New extension seam:
   `torchlens._selection.register_term_resolver` (producer modules register
-  frozen AST terms at import; `torchlens/selection_values.py`,
-  `torchlens/selection_graph.py`, `torchlens/selection_subspace.py`).
+  frozen AST terms at import; `torchlens/_selection_values.py`,
+  `torchlens/_selection_graph.py`, `torchlens/_selection_subspace.py`).
   GRAPH-STRUCTURAL PRODUCERS + SLICE VIEW (graph wave; DOCUMENTED-UNSTABLE):
   `tl.neighborhood(of, hops=, direction='both'|'upstream'|'downstream')`
   (every op within N recorded dataflow hops of the seed region; `hops=0` =
@@ -910,7 +910,7 @@
   back into the algebra (slices compose and feed `do()`).
   `trace.subgraph(selection)` is the general door presenting ANY ACT region
   as the same view. Session-time only; never persisted.
-  `torchlens/selection_compare.py`).
+  `torchlens/_selection_compare.py`).
   CROSS-RUN (L6 stage 4a; DOCUMENTED-UNSTABLE): `resolved.align_to(target)`
   re-binds an ACT selection onto another trace keyed on the L1 structural
   site keys each `Site` records (`structural_site_key`, now live data),

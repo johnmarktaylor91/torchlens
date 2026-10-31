@@ -103,7 +103,7 @@ def _assert_netron_structure(payload: dict[str, Any]) -> None:
     honesty_value = props["torchlens.capture_honesty"]
     assert json.loads(honesty_value)["schema"] == "torchlens.capture_honesty.v1"
     assert props["torchlens.lossy_export"] == "true"
-    assert props["torchlens.runnable"] == "false"
+    assert props["torchlens._runnable"] == "false"
     assert props["torchlens.netron_schema"] == "2"
     assert props["torchlens.granularity"] in {"op", "module", "rolled"}
     graph = payload["graph"]

@@ -16,7 +16,7 @@ from typing import Any
 
 import torch
 
-from torchlens.runnable import RunnableDiagnostic
+from torchlens._runnable import RunnableDiagnostic
 
 from . import _state
 from ._runnable import (

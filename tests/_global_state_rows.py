@@ -170,7 +170,7 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/_io/prerelease.py", "_ANNOTATIONS_KEY_REGISTRY"),
         ("torchlens/_io/prerelease.py", "_REGISTRY"),
         # Selection-AST term dispatch: import-time table, sibling producers register at import.
-        ("torchlens/selection.py", "_TERM_RESOLVERS"),
+        ("torchlens/_selection.py", "_TERM_RESOLVERS"),
         # F40a annotations travel policy: DECLARATION table populated at import
         # by register_travel_policy (closed drop_mode vocabulary; sub-key owners
         # register at import of their owning modules, the _ANNOTATIONS_KEY_REGISTRY
@@ -1031,7 +1031,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_trace_core/__init__.py", "__all__"),
         ("torchlens/_trace_state.py", "__all__"),
         ("torchlens/_vocab/trace_state.py", "__all__"),
-        ("torchlens/accessors/__init__.py", "__all__"),
+        ("torchlens/appliances/__init__.py", "__all__"),
         ("torchlens/agent/__init__.py", "__all__"),
         ("torchlens/attribution/__init__.py", "__all__"),
         ("torchlens/attribution/_binder.py", "__all__"),
@@ -1374,11 +1374,11 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/repgeom/__init__.py", "__all__"),
         ("torchlens/report/__init__.py", "__all__"),
         ("torchlens/_runnable.py", "__all__"),
-        ("torchlens/selection.py", "__all__"),
-        ("torchlens/selection_compare.py", "__all__"),
-        ("torchlens/selection_graph.py", "__all__"),
-        ("torchlens/selection_subspace.py", "__all__"),
-        ("torchlens/selection_values.py", "__all__"),
+        ("torchlens/_selection.py", "__all__"),
+        ("torchlens/_selection_compare.py", "__all__"),
+        ("torchlens/_selection_graph.py", "__all__"),
+        ("torchlens/_selection_subspace.py", "__all__"),
+        ("torchlens/_selection_values.py", "__all__"),
         ("torchlens/semantic/__init__.py", "__all__"),
         ("torchlens/semantic/_hops.py", "__all__"),
         ("torchlens/semantic/_norm_reconstruction.py", "__all__"),

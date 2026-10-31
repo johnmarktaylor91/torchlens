@@ -48,11 +48,11 @@ from .._observability import (
     ObserverEvent,
     WatchSettings,
 )
+from .._observability._artifact import CommittedBlock
 from .._observability._collector import StepTruth
 from .._observability._kernels import spine_result_from_vector, spine_vector
 from .._observability._schema import validate_step_order
 from .._utils.env_flags import closed_bool_env
-from ..observability._artifact import CommittedBlock
 from ._amp import correct_running_stats, corrected_grad_block, observed_grad_scale, unscale_stage
 from ._errors import SinkProtocolError, TrackersError, WatchConfigError, WatchRuntimeError
 from ._op_grain import (

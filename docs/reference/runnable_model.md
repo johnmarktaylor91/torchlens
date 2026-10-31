@@ -184,7 +184,7 @@ without notice.
 
 **Binding rule.** `torchlens/_runnable_execution.py` is a namespace-aggregator facade over
 its slice modules; slice modules have no importers besides the aggregator. Every extension
-point below is named on ONE of `torchlens/runnable.py`, `torchlens/_runnable_seam.py`,
+point below is named on ONE of `torchlens/_runnable.py`, `torchlens/_runnable_seam.py`,
 `torchlens/_runnable_execution.py`, or `torchlens/_runnable_state.py` (the coordinator
 verbs additionally have their transport-side homes in `torchlens/_io/runnable.py` and
 `torchlens/_io/runnable_load.py`, reached through the coordinator boundary). Consumers

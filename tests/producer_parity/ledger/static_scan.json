@@ -8234,7 +8234,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/selection.py",
+  "file": "torchlens/_selection.py",
   "has_default": false,
   "sites": 10,
   "via_getattr": false
@@ -8242,7 +8242,7 @@
  {
   "ambiguous": true,
   "field": "params",
-  "file": "torchlens/selection.py",
+  "file": "torchlens/_selection.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8250,7 +8250,7 @@
  {
   "ambiguous": false,
   "field": "pass_index",
-  "file": "torchlens/selection.py",
+  "file": "torchlens/_selection.py",
   "has_default": false,
   "sites": 5,
   "via_getattr": false
@@ -8258,7 +8258,7 @@
  {
   "ambiguous": false,
   "field": "pass_index",
-  "file": "torchlens/selection.py",
+  "file": "torchlens/_selection.py",
   "has_default": true,
   "sites": 7,
   "via_getattr": true
@@ -8266,7 +8266,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/selection_compare.py",
+  "file": "torchlens/_selection_compare.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -8274,7 +8274,7 @@
  {
   "ambiguous": false,
   "field": "layer_type",
-  "file": "torchlens/selection_compare.py",
+  "file": "torchlens/_selection_compare.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8282,7 +8282,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/selection_graph.py",
+  "file": "torchlens/_selection_graph.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -8290,7 +8290,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/selection_graph.py",
+  "file": "torchlens/_selection_graph.py",
   "has_default": false,
   "sites": 4,
   "via_getattr": false
@@ -8298,7 +8298,7 @@
  {
   "ambiguous": false,
   "field": "pass_index",
-  "file": "torchlens/selection_graph.py",
+  "file": "torchlens/_selection_graph.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8306,7 +8306,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/selection_values.py",
+  "file": "torchlens/_selection_values.py",
   "has_default": false,
   "sites": 6,
   "via_getattr": false
@@ -8314,7 +8314,7 @@
  {
   "ambiguous": false,
   "field": "pass_index",
-  "file": "torchlens/selection_values.py",
+  "file": "torchlens/_selection_values.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true

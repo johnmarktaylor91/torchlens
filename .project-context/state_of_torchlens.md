@@ -103,7 +103,7 @@ validation, and core data-class names for the current 2.x surface.
 | `torchlens/_partial/` | Partial capture wrapper for failed forwards | Debugging failed captures |
 | `torchlens/experimental/` | Unstable helpers, Dagua opt-in, node styles | Experimental APIs |
 | `torchlens/viz/` | Convenience visual namespace | Bundle diff and heatmap helpers |
-| `torchlens/accessors/` | Moved accessor aliases | Non-top-level public accessor imports |
+| `torchlens/appliances/` | Moved accessor aliases | Non-top-level public accessor imports |
 | `torchlens/types.py` | Moved type aliases | Public types not in top-level `__all__` |
 | `torchlens/agent/` | Read-only agent inspection surface: registry, envelope, overview, query, stats, compare, torch-free CLI | Agent and MCP tooling |
 | `torchlens/attribution/onebackward/` | One-backward `(node, slot)` attribution reads | Gradient reads over existing op fields |

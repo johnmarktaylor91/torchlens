@@ -182,7 +182,7 @@ TIMED: dict[str, tuple[str, str]] = {
     "origin_sites_for_hooks": ("torchlens/intervention/replay.py", "_origin_sites_for_hooks"),
     "hook_targets_by_label": ("torchlens/intervention/replay.py", "_hook_targets_by_label"),
     "group_for_site": ("torchlens/intervention/replay.py", "_group_for_site"),
-    "build_selection_do_plan": ("torchlens/selection.py", "build_selection_do_plan"),
+    "build_selection_do_plan": ("torchlens/_selection.py", "build_selection_do_plan"),
     "run_replay": ("torchlens/intervention/replay.py", "_run_replay"),
 }
 

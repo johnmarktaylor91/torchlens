@@ -18,7 +18,7 @@ from typing import Any, cast
 
 import torch
 
-from torchlens.runnable import ReadinessReport, RunnableCompatibility, RunnableDiagnostic
+from torchlens._runnable import ReadinessReport, RunnableCompatibility, RunnableDiagnostic
 
 from .. import _state
 from .._constants import get_orig_torch_funcs
