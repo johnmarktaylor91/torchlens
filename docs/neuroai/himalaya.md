@@ -121,6 +121,6 @@ RESULT = (
 - For many targets (voxels, electrodes), use himalaya's GPU backends
   (`set_backend("torch_cuda")`) and its batching options; the numpy backend
   here is for small examples.
-- For large stimulus sets, write the extraction to disk (`output_dir=`,
+- For large stimulus sets, write the extraction to disk (`path=`,
   `stimulus_ids=`) and build the bank from the stored artifact, so the rows
   stay tied to stimulus ids.

@@ -3,10 +3,10 @@
 TorchLens does not train sparse autoencoders or transcoders; it extracts the activations and hands
 them to the trainer you choose, such as SAELens or your own loop. The hand-off has three steps:
 
-1. `tl.extract_dataset(model, stimuli, layers, output_dir=...)` runs the model over the dataset in
+1. `tl.extract_dataset(model, stimuli, layers, path=...)` runs the model over the dataset in
    batches and writes the named layers to disk, one immutable shard per batch, with a manifest
    that records the model's identity and the input order.
-2. `torchlens.dataset_extraction.open_extraction(output_dir)` opens the artifact lazily, and
+2. `torchlens.dataset_extraction.open_extraction(path)` opens the artifact lazily, and
    `reader.to_torch_dataset(keys=[...])` wraps it as a map-style
    `torch.utils.data.Dataset` whose items are `{layer: activation}` rows.
 3. A `DataLoader` over that dataset feeds the trainer: your own loop, dictionary_learning's

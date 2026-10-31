@@ -9,7 +9,7 @@ research repo's own loader), then hand the `nn.Module` to TorchLens.
 | --- | --- | --- |
 | `get_extractor(model_name="resnet18", source="torchvision", pretrained=True)` | `model = torchvision.models.resnet18(weights=...)` | Any loader that returns an `nn.Module` works. |
 | `extractor.show_model()` | `tl.trace(model, x)` then `trace.modules` and `trace.layers` | Lists module addresses and executed ops. |
-| `extractor.extract_features(batches, module_name="layer4")` | `tl.extract(model, x, ["layer4"])`, or `tl.extract_dataset(model, stimuli, ["layer4"], output_dir=...)` for a dataset | |
+| `extractor.extract_features(batches, module_name="layer4")` | `tl.extract(model, x, ["layer4"])`, or `tl.extract_dataset(model, stimuli, ["layer4"], path=...)` for a dataset | |
 | Built-in preprocessing for each zoo model | Use the library's own transforms (`weights.transforms()`, the timm data config, the HF processor) | TorchLens records the preprocessing it recognizes, such as torchvision weight presets and HF processors. |
 | gLocal (aligned) transforms | Fit and apply them yourself after extraction | See `docs/neuroai/byo_alignment.md`. |
 | Reduce dimensions while extracting | `transform=` on `tl.extract_dataset`, for example `tl.transforms.srp(...)` | See below. |

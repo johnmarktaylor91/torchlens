@@ -54,7 +54,7 @@ RESULT = torch.allclose(loaded.activations[key], direct)
 
 ## Limits
 
-- `stimulus_ids=` needs disk mode (`output_dir=`); in-memory extraction
+- `stimulus_ids=` needs disk mode (`path=`); in-memory extraction
   refuses it with `extraction_stimulus_ids_in_memory_unsupported`.
 - The manifest records the identifiers, not your sampling seed. If a reader
   needs to redraw the same subsample, store the seed beside the artifact.

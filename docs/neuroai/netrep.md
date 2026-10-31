@@ -91,5 +91,5 @@ RESULT = (bool(cka.score(X, X_rotated) < 1e-5), bool(cka.score(X, Y) > 1e-2))
   `pool="spatial_mean"` on `tl.extract_dataset`) when the layout should not
   count as features.
 - For a stored artifact with stimulus ids, write the extraction to disk with
-  `output_dir=` and `stimulus_ids=`, and join on the ids before comparing
+  `path=` and `stimulus_ids=`, and join on the ids before comparing
   models run on separately ordered stimuli.

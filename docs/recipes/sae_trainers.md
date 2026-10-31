@@ -4,7 +4,7 @@ TorchLens extracts the activations, a trainer fits the sparse autoencoder,
 and TorchLens splices the trained SAE back into the model to measure it. The
 hand-off is four steps:
 
-1. `tl.extract_dataset(model, stimuli, layers, output_dir=...)` writes the
+1. `tl.extract_dataset(model, stimuli, layers, path=...)` writes the
    site's activations to disk, one shard per batch.
 2. `reader.to_torch_dataset()` wraps them as a
    `torch.utils.data.Dataset`; a `DataLoader` batches them.

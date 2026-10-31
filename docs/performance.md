@@ -268,7 +268,7 @@ materializes it. Disk-backed chunk accumulation is a future item.
 For activation extraction without a `Trace`, use `tl.extract_dataset(...)` (the old
 former `tl.batched_extract` alias is removed); that path returns
 tensors or `.pt` files rather than accumulated graph metadata. `chunk_size=` covers the remaining
-"dataloader wrapper" case for stacked multi-pass trace capture. Disk mode (`output_dir=`) writes
+"dataloader wrapper" case for stacked multi-pass trace capture. Disk mode (`path=`) writes
 atomic shards plus a self-describing `manifest.json` (site identity, stimulus provenance, axis
 semantics, dtypes); an interrupted long extraction continues from its last completed shard with
 `resume=True`, and `torchlens.load(path)` reads the artifact back
@@ -355,7 +355,7 @@ to keep before the first long capture:
   projects one layer at a time and keeps only top-k summaries.
 - For many forwards or generation, a bound spec (and its `generate`) saves nothing at all; editing
   the cached past of a long prompt is the [KV-cache recipe](guides/kv_cache.md).
-- For a dataset of long sequences, `tl.extract_dataset(..., output_dir=...)` writes the named
+- For a dataset of long sequences, `tl.extract_dataset(..., path=...)` writes the named
   layers to disk batch by batch.
 
 ## Counting the backward that ran
