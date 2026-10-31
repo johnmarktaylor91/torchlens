@@ -100,7 +100,7 @@ def _resolve(value: Any) -> Any:
 
 def _fork_edit(trace: Any) -> Any:
     fork = trace.fork()
-    fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
+    fork.do(tl.units("linear_1_1:1", [(0, 0)]), tl.zero_ablate())
     return fork
 
 
@@ -207,9 +207,11 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         diff.draw(str(outpath), vis_fileformat="svg", vis_save_only=True)
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)
-    if panel.call == "bundle_graph":
-        return str(_visualization.show_bundle_graph(_bundle(trace), **kwargs))
-    if panel.call == "bundle_diff":
+    if panel.call in ("bundle_graph", "bundle_diff"):
+        # The bundle doors keep the engine spelling of the viewer switch.
+        kwargs["vis_save_only"] = not kwargs.pop("open_viewer", False)
+        if panel.call == "bundle_graph":
+            return str(_visualization.show_bundle_graph(_bundle(trace), **kwargs))
         return str(tl.viz.bundle_diff(_bundle(trace), **kwargs))
     raise ValueError(f"unknown call {panel.call!r}")
 
