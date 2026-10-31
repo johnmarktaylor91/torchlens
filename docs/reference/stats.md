@@ -274,9 +274,9 @@ reference.update(full[label].out)
 print(reference.result() == spines[label].result())
 ```
 
-## Trajectory statistics: `tl.stats.measure_trajectory`
+## Trajectory statistics: `tl.mechinterp.measure_trajectory`
 
-`tl.stats.measure_trajectory(model, data)` measures the logit-lens
+`tl.mechinterp.measure_trajectory(model, data)` measures the logit-lens
 trajectory: each block's hidden state projected through the model's own
 final norm and head (the lens `torchlens.semantic.logit_lens` builds and
 validates, or a user `lens=` such as a tuned lens), one distribution per
@@ -287,7 +287,7 @@ reduces it to the named statistics and drops it, so only one
 distribution to the layer's), `max_prob`, and, when a batch is
 `(input_ids, target_ids)`, `cross_entropy` and `target_rank` of the target
 token (rank 1 is the top token; tied logits share the smallest rank). The
-result is a `tl.stats.TrajectoryStats`: `position_means[statistic]` is a
+result is a `tl.mechinterp.TrajectoryStats`: `position_means[statistic]` is a
 float64 `[layers, positions]` tensor of means over every example, and
 `running_stats[statistic][layer]` is a `Spine` pooled over examples and positions
 (`summary(statistic)` returns their results). `mask_input=True` bans each
@@ -339,7 +339,7 @@ def doc_head(module):
 lm = DocLM().eval()
 ids = torch.randint(0, 20, (4, 6))
 data = [(ids, ids.roll(-1, dims=1))]          # (input_ids, next-token targets)
-traj = tl.stats.measure_trajectory(lm, data, mask_input=False)
+traj = tl.mechinterp.measure_trajectory(lm, data, mask_input=False)
 print(traj)
 print(traj.position_means["entropy"].shape)    # [layers, positions]
 print(traj.compute_stats("target_rank")["blocks.1"].mean)

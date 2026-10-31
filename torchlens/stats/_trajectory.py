@@ -1,4 +1,4 @@
-"""Logit-lens trajectory statistics in one call (``tl.stats.measure_trajectory``).
+"""Logit-lens trajectory statistics in one call (``tl.mechinterp.measure_trajectory``).
 
 A trajectory is the logit-lens prediction path through depth: each block's
 hidden state projected through the model's own head (or a user ``lens=``),
@@ -158,9 +158,9 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
     batches = [data] if isinstance(data, torch.Tensor) else data
     if not isinstance(batches, Iterable):
         raise ArgumentTypeError(
-            f"tl.stats.measure_trajectory(model, data) got data of type {type(data).__name__}",
+            f"tl.mechinterp.measure_trajectory(model, data) got data of type {type(data).__name__}",
             code="stats_trajectory_data_type",
-            remedy="pass an iterable of batches, e.g. tl.stats.measure_trajectory(model, [ids])",
+            remedy="pass an iterable of batches, e.g. tl.mechinterp.measure_trajectory(model, [ids])",
             argument="data",
         )
     from ..semantic.logit_lens import _LensRequest
@@ -178,9 +178,9 @@ def _check_flags(*, mask_input: Any, validate: Any) -> None:
     for name, value in (("mask_input", mask_input), ("validate", validate)):
         if not isinstance(value, bool):
             raise ArgumentTypeError(
-                f"tl.stats.measure_trajectory({name}={value!r}) needs True or False",
+                f"tl.mechinterp.measure_trajectory({name}={value!r}) needs True or False",
                 code="stats_trajectory_flag_type",
-                remedy=f"spell it tl.stats.measure_trajectory(model, data, {name}=True)",
+                remedy=f"spell it tl.mechinterp.measure_trajectory(model, data, {name}=True)",
                 argument=name,
             )
 
@@ -192,7 +192,7 @@ def _split_batch(batch: Any) -> tuple[Any, torch.Tensor | None]:
         targets = batch[1]
         if not isinstance(targets, torch.Tensor) or targets.is_floating_point():
             raise ArgumentTypeError(
-                "tl.stats.measure_trajectory got a (model_input, targets) batch whose targets "
+                "tl.mechinterp.measure_trajectory got a (model_input, targets) batch whose targets "
                 f"are {type(targets).__name__}, not an integer token-id tensor",
                 code="stats_trajectory_targets_type",
                 remedy="yield (input_ids, target_ids) with target_ids a [batch, positions] "
@@ -214,7 +214,7 @@ class _TrajectoryFolder:
             unknown = [name for name in names if name not in TRAJECTORY_STATISTICS]
             if unknown or not names or isinstance(statistics, str):
                 raise InvalidArgumentError(
-                    f"tl.stats.measure_trajectory(statistics={statistics!r}) names "
+                    f"tl.mechinterp.measure_trajectory(statistics={statistics!r}) names "
                     f"{unknown or 'no statistic'}; known: {list(TRAJECTORY_STATISTICS)}",
                     code="stats_trajectory_statistic_unknown",
                     remedy="pass a list of known names, e.g. statistics=['entropy', 'kl_to_final']",
@@ -243,7 +243,7 @@ class _TrajectoryFolder:
                 self.names = self.requested
         if not has_targets and any(name in _TARGETED for name in self.names):
             raise InvalidArgumentError(
-                "tl.stats.measure_trajectory measures cross_entropy/target_rank, but a batch "
+                "tl.mechinterp.measure_trajectory measures cross_entropy/target_rank, but a batch "
                 "carries no targets",
                 code="stats_trajectory_targets_missing",
                 remedy="yield (input_ids, target_ids) batches, or pass "
@@ -299,7 +299,7 @@ class _TrajectoryFolder:
             self.lens_source, self.validated = lens_source, validated
         elif self.module_addresses != addresses:
             raise InvalidArgumentError(
-                "tl.stats.measure_trajectory: a later batch exposes different layers "
+                "tl.mechinterp.measure_trajectory: a later batch exposes different layers "
                 f"({list(addresses)}) than the first ({list(self.module_addresses)})",
                 code="stats_trajectory_layers_changed",
                 remedy="pass layers= explicitly so every batch projects the same blocks",
@@ -316,7 +316,7 @@ class _TrajectoryFolder:
                 self.num_positions = positions
             elif positions != self.num_positions:
                 raise InvalidArgumentError(
-                    f"tl.stats.measure_trajectory: a batch has {positions} positions after "
+                    f"tl.mechinterp.measure_trajectory: a batch has {positions} positions after "
                     f"batches of {self.num_positions}",
                     code="stats_trajectory_positions_changed",
                     remedy="pad or truncate every batch to one sequence length",
@@ -338,9 +338,9 @@ class _TrajectoryFolder:
 
         if self.module_addresses is None or self.names is None or self.num_examples == 0:
             raise InvalidArgumentError(
-                "tl.stats.measure_trajectory folded no examples (empty data or no layers)",
+                "tl.mechinterp.measure_trajectory folded no examples (empty data or no layers)",
                 code="stats_trajectory_empty",
-                remedy="pass at least one batch, e.g. tl.stats.measure_trajectory(model, [ids])",
+                remedy="pass at least one batch, e.g. tl.mechinterp.measure_trajectory(model, [ids])",
                 examples=self.num_examples,
             )
         means = {name: self.sums[name] / self.num_examples for name in self.names}
@@ -363,12 +363,12 @@ def _input_ids(model_input: Any) -> torch.Tensor:
 
     if not isinstance(model_input, torch.Tensor) or model_input.is_floating_point():
         raise InvalidArgumentError(
-            "tl.stats.measure_trajectory(mask_input=True) bans the input's own token ids, "
+            "tl.mechinterp.measure_trajectory(mask_input=True) bans the input's own token ids, "
             f"but the model input is {type(model_input).__name__}"
             + (" of floats" if isinstance(model_input, torch.Tensor) else "")
             + ", not an integer token-id tensor",
             code="stats_trajectory_mask_input_unavailable",
-            remedy="feed token ids, e.g. tl.stats.measure_trajectory(model, [input_ids], "
+            remedy="feed token ids, e.g. tl.mechinterp.measure_trajectory(model, [input_ids], "
             "mask_input=True), or drop mask_input=True",
             argument="mask_input",
         )
@@ -386,7 +386,7 @@ def _as_bpv(logits: torch.Tensor) -> torch.Tensor:
         work = work.reshape(-1, work.shape[-2], work.shape[-1])
     if work.ndim != 3:
         raise InvalidArgumentError(
-            f"tl.stats.measure_trajectory: projected logits have shape {tuple(logits.shape)}",
+            f"tl.mechinterp.measure_trajectory: projected logits have shape {tuple(logits.shape)}",
             code="stats_trajectory_projection_rank",
             remedy="use a lens= that returns [batch, positions, vocab] logits",
             shape=tuple(logits.shape),
@@ -406,7 +406,7 @@ def _final_log_probs(
         return None
     if final_logits is None:
         raise InvalidArgumentError(
-            "tl.stats.measure_trajectory measures kl_to_final, but the trace has no readable "
+            "tl.mechinterp.measure_trajectory measures kl_to_final, but the trace has no readable "
             "captured output logits to compare against",
             code="stats_trajectory_final_unavailable",
             remedy="drop it: statistics=['entropy', 'max_prob'], or register the head's "
@@ -461,7 +461,7 @@ def _align_final(final_log_probs: torch.Tensor, work: torch.Tensor) -> torch.Ten
 
     if tuple(final_log_probs.shape) != tuple(work.shape):
         raise InvalidArgumentError(
-            "tl.stats.measure_trajectory measures kl_to_final, but the captured output logits "
+            "tl.mechinterp.measure_trajectory measures kl_to_final, but the captured output logits "
             f"{tuple(final_log_probs.shape)} do not cover every projected position "
             f"{tuple(work.shape)} (a logits_to_keep-sliced head)",
             code="stats_trajectory_final_unavailable",
@@ -481,7 +481,7 @@ def _target_index(targets: torch.Tensor, work: torch.Tensor) -> torch.Tensor:
     vocab = int(work.shape[-1])
     if tuple(ids.shape) != tuple(work.shape[:-1]) or bool(((ids < 0) | (ids >= vocab)).any()):
         raise InvalidArgumentError(
-            f"tl.stats.measure_trajectory: targets {tuple(ids.shape)} must be token ids in "
+            f"tl.mechinterp.measure_trajectory: targets {tuple(ids.shape)} must be token ids in "
             f"[0, {vocab}) shaped like the projections {tuple(work.shape[:-1])}",
             code="stats_trajectory_targets_type",
             remedy="yield (input_ids, target_ids) with one target id per batch row and position",

@@ -1302,11 +1302,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   keeps no payload (one 16-slot float64 vector per op); `tl.stats.site_stats(trace)`
   returns `{op label: Spine}`, payload reads refuse `activation_reduced_to_stats`, and
   replay or validation on the trace refuses `stats_capture_not_replayable`. Trajectory
-  statistics (DOCUMENTED-UNSTABLE): `tl.stats.measure_trajectory(model, data, *,
+  statistics (DOCUMENTED-UNSTABLE): `tl.mechinterp.measure_trajectory(model, data, *,
   statistics=None, facet="resid_post", layers=None, lens=None, mask_input=False,
   verify=True)` traces each batch and folds the logit-lens trajectory's `entropy`,
   `kl_to_final`, `max_prob` and, for `(input_ids, target_ids)` batches,
-  `cross_entropy` and `target_rank` into a `tl.stats.TrajectoryStats`
+  `cross_entropy` and `target_rank` into a `tl.mechinterp.TrajectoryStats`
   (`position_means[statistic]`, a float64 `[layers, positions]` tensor;
   `running_stats[statistic][layer]`; `summary(statistic)`; `examples`, the number of examples
   (batch rows) folded; `validated`, whether the default lens was numerically validated;
@@ -2559,7 +2559,7 @@ deprecation shim owed*
   and requested-token values; its keyword-only `mask_input=True` bans the
   model input's own token ids before those reductions (the trace's first input
   must be saved integer token ids, else `logit_lens_mask_input_unavailable`).
-  Trajectory statistics over many batches: `tl.stats.measure_trajectory`. See
+  Trajectory statistics over many batches: `tl.mechinterp.measure_trajectory`. See
   [facets](../facets.md).
 
 **render_logit_lens_heatmap (torchlens.tviz)** — *unstable — no deprecation shim owed*

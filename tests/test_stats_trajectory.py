@@ -1,4 +1,4 @@
-"""One-call logit-lens trajectory statistics (``tl.stats.measure_trajectory``).
+"""One-call logit-lens trajectory statistics (``tl.mechinterp.measure_trajectory``).
 
 The call must equal a hand loop of per-batch captures, logit-lens
 projections and hand-written statistics folded into ``Spine``s, exactly in
@@ -192,7 +192,7 @@ def test_trajectory_equals_hand_loop_float64(mask: bool) -> None:
     """Every statistic equals the hand loop exactly (means and Spine fields)."""
 
     model, batches = _model(), _batches()
-    got = tl.stats.measure_trajectory(model, batches, mask_input=mask)
+    got = tl.mechinterp.measure_trajectory(model, batches, mask_input=mask)
     want = _hand_loop(model, batches, mask=mask)
     assert got.statistics == tl.stats._trajectory.TRAJECTORY_STATISTICS
     assert got.num_examples == want["n"] == 6 and got.num_positions == SEQ
@@ -209,11 +209,11 @@ def test_trajectory_default_statistics_without_targets() -> None:
 
     model = _model()
     ids = [batch[0] for batch in _batches(2)]
-    got = tl.stats.measure_trajectory(model, ids)
+    got = tl.mechinterp.measure_trajectory(model, ids)
     assert got.statistics == ("entropy", "kl_to_final", "max_prob")
     assert set(got.compute_stats("entropy")) == {"b0", "b1"}
     assert "2 layers x 5 positions" in repr(got)
-    single = tl.stats.measure_trajectory(model, ids[0], statistics=["entropy"])
+    single = tl.mechinterp.measure_trajectory(model, ids[0], statistics=["entropy"])
     assert single.num_examples == 2 and single.statistics == ("entropy",)
 
 
@@ -223,9 +223,9 @@ def test_masked_tokens_carry_zero_probability() -> None:
     model = _model()
     ids = torch.tensor([[0, 1, 2, 3, 4]])
     target = torch.tensor([[1, 1, 1, 1, 1]])
-    got = tl.stats.measure_trajectory(model, [(ids, target)], mask_input=True)
+    got = tl.mechinterp.measure_trajectory(model, [(ids, target)], mask_input=True)
     assert torch.isinf(got.position_means["cross_entropy"]).all()
-    plain = tl.stats.measure_trajectory(model, [(ids, target)])
+    plain = tl.mechinterp.measure_trajectory(model, [(ids, target)])
     assert torch.isfinite(plain.position_means["cross_entropy"]).all()
 
 
@@ -310,23 +310,23 @@ def test_trajectory_refusals(case: str, code: str) -> None:
     model = _model()
     ids = _batches(1)[0][0]
     calls = {
-        "targets_missing": lambda: tl.stats.measure_trajectory(
+        "targets_missing": lambda: tl.mechinterp.measure_trajectory(
             model, [ids], statistics=["cross_entropy"]
         ),
-        "mask_floats": lambda: tl.stats.measure_trajectory(
+        "mask_floats": lambda: tl.mechinterp.measure_trajectory(
             EmbedFedLM().double().eval(),
             [torch.randn(1, SEQ, D_MODEL, dtype=torch.float64)],
             mask_input=True,
         ),
-        "unknown_statistic": lambda: tl.stats.measure_trajectory(
+        "unknown_statistic": lambda: tl.mechinterp.measure_trajectory(
             model, [ids], statistics=["perplexity"]
         ),
-        "positions_changed": lambda: tl.stats.measure_trajectory(model, [ids, ids[:, :3]]),
-        "flag_type": lambda: tl.stats.measure_trajectory(model, [ids], mask_input="yes"),
-        "empty": lambda: tl.stats.measure_trajectory(model, []),
-        "data_type": lambda: tl.stats.measure_trajectory(model, 5),
-        "targets_float": lambda: tl.stats.measure_trajectory(model, [(ids, ids.double())]),
-        "targets_out_of_vocab": lambda: tl.stats.measure_trajectory(
+        "positions_changed": lambda: tl.mechinterp.measure_trajectory(model, [ids, ids[:, :3]]),
+        "flag_type": lambda: tl.mechinterp.measure_trajectory(model, [ids], mask_input="yes"),
+        "empty": lambda: tl.mechinterp.measure_trajectory(model, []),
+        "data_type": lambda: tl.mechinterp.measure_trajectory(model, 5),
+        "targets_float": lambda: tl.mechinterp.measure_trajectory(model, [(ids, ids.double())]),
+        "targets_out_of_vocab": lambda: tl.mechinterp.measure_trajectory(
             model, [(ids, ids + VOCAB)], statistics=["cross_entropy"]
         ),
     }
@@ -370,7 +370,7 @@ def test_trajectory_internal_refusals(case: str, code: str) -> None:
 def test_trajectory_spines_save_and_reload(tmp_path: Any) -> None:
     """The result's Spines are ordinary accumulators: they save and reload."""
 
-    got = tl.stats.measure_trajectory(_model(), _batches(1))
+    got = tl.mechinterp.measure_trajectory(_model(), _batches(1))
     spine = got.running_stats["entropy"]["b1"]
     path = tl.stats.save_fitted(spine, tmp_path / "entropy-b1.safetensors")
     assert tl.stats.load_fitted(path).result() == spine.result()

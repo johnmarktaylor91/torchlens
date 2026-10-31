@@ -1444,11 +1444,11 @@
   `validate_forward_pass`, `save_new_outs`, `push`, `push_from` on the trace),
   `stats_capture_not_reduced` (`site_stats` on another trace). Doc of record:
   `docs/reference/stats.md`, Reduce and discard.
-- Trajectory statistics (DOCUMENTED-UNSTABLE): `tl.stats.measure_trajectory(model, data, *,
+- Trajectory statistics (DOCUMENTED-UNSTABLE): `tl.mechinterp.measure_trajectory(model, data, *,
   statistics=None, facet="resid_post", layers=None, lens=None, mask_input=False,
   verify=True)` traces each batch, projects the logit lens one layer at a time and folds
   `entropy`, `kl_to_final`, `max_prob` and, for `(input_ids, target_ids)` batches,
-  `cross_entropy` and `target_rank` into `tl.stats.TrajectoryStats` (`position_means`,
+  `cross_entropy` and `target_rank` into `tl.mechinterp.TrajectoryStats` (`position_means`,
   `running_stats`, `summary(statistic)`); refusals `stats_trajectory_*`.
   `torchlens.semantic.logit_lens_predictions(..., mask_input=False)` bans the input's own
   token ids before its reductions (`logit_lens_mask_input_unavailable`). Doc of record:

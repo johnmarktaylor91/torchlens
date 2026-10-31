@@ -575,7 +575,7 @@ def _prepare_lens(trace: Any, request: _LensRequest) -> _LensSetup:
     """Resolve the head, the layers and the lens, and check the lens once.
 
     The one home of the lens rule for :func:`logit_lens`,
-    :func:`logit_lens_predictions` and ``tl.stats.measure_trajectory``.
+    :func:`logit_lens_predictions` and ``tl.mechinterp.measure_trajectory``.
     """
 
     facet, layers, lens = request.facet, request.layers, request.lens

@@ -63,7 +63,6 @@ from ._tensor_stats import (  # noqa: E402
     TensorStats,
     tensor_stats,
 )
-from ._trajectory import TrajectoryStats, measure_trajectory  # noqa: E402
 
 # F10 lovely surfaces (items 10-11): glance (FORK-C function form; submodule
 # spelling, root budget frozen), the summary-cell/treescope seam adapters,
@@ -91,14 +90,12 @@ __all__ = [
     "StreamingStat",
     "TensorStats",
     "TopK",
-    "TrajectoryStats",
     "UnitTopK",
     "aggregate",
     "cka",
     "narrate",
     "glance",
     "load_fitted",
-    "measure_trajectory",
     "save_fitted",
     "site_stats",
     "tensor_stats",

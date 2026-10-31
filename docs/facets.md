@@ -432,7 +432,7 @@ denominator, probabilities and ranks are taken), the one masking that cannot be
 redone on the retained rows afterwards; the trace's first input must be a saved
 integer token-id tensor (`logit_lens_mask_input_unavailable` otherwise). For
 entropy, KL to the final output, cross-entropy and rank along the trajectory in
-one call, see `tl.stats.measure_trajectory` in
+one call, see `tl.mechinterp.measure_trajectory` in
 [docs/reference/stats.md](reference/stats.md).
 
 It shares `facet=` / `layers=` / `lens=` / `verify=` semantics (and the
