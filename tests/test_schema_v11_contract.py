@@ -80,3 +80,15 @@ def test_v11_admissions_name_only_real_additions() -> None:
         assert stale == set(), (
             f"{record_key}: admission(s) {sorted(stale)} are not fields added at v11"
         )
+
+
+def test_v11_reader_floor_is_the_v11_stamp() -> None:
+    """The v11 contract reads only stamp 11: the floor moved with the contract."""
+
+    from torchlens._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION
+
+    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION == 11
+    v11 = json.loads(V11_CONTRACT.read_text(encoding="utf-8"))
+    v10 = json.loads(V10_CONTRACT.read_text(encoding="utf-8"))
+    assert v11["contract"]["min_tlspec_version"] == 11
+    assert v10["contract"]["min_tlspec_version"] == 6, "v10 stays frozen"

@@ -177,7 +177,7 @@ def test_old_style_pickle_without_io_format_version_refuses_typed(
 
     from torchlens._io import ArtifactTooOldError
 
-    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
         with pickle_path.open("rb") as handle:
             pickle.load(handle)
 

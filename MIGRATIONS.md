@@ -15,7 +15,7 @@ format.
 load 2.16.0 intervention specs, but they refuse 2.16.0 portable `ModelLog`
 bundles (`io_format_version` 2) with `tl.errors.ArtifactVersionBelowFloorError`
 (code `artifact_version_below_floor`): saved traces older than `tlspec_version`
-6 are below the rehydration floor. To read such a bundle, load it with
+11, every file saved by torchlens 2.x, are below the rehydration floor. To read such a bundle, load it with
 TorchLens 2.17.0 (`pip install torchlens==2.17.0` in a separate environment), the
 verified reader for that format; `torchlens.ecosystem.compat_window()` lists the
 verified reader for each retired format.

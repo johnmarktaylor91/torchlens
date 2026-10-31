@@ -46,7 +46,12 @@ from typing import Any
 from packaging.version import InvalidVersion, Version
 
 from ._json import read_bounded
-from .format_contract import MIN_TLSPEC_VERSION, TLSPEC_VERSION, below_floor_error
+from .format_contract import (
+    MIN_TLSPEC_VERSION,
+    MIN_TORCHLENS_VERSION_TEXT,
+    TLSPEC_VERSION,
+    below_floor_error,
+)
 from .format_errors import ArtifactError
 
 __tl_layer__ = "L1"
@@ -763,7 +768,7 @@ def floor_metadata() -> dict[str, Any]:
     return {
         "floor_tlspec_version": MIN_TLSPEC_VERSION,
         "ceiling_tlspec_version": TLSPEC_VERSION,
-        "producer_floor_writer": "2.31.0",
+        "producer_floor_writer": MIN_TORCHLENS_VERSION_TEXT,
         "golden_corpus_sha256": GOLDEN_CORPUS_SHA256,
         "promise_window_months": PROMISE_WINDOW_MONTHS,
         "promise_window_status": (

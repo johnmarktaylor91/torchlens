@@ -1,0 +1,303 @@
+{
+  "tlspec_version": 6,
+  "torchlens_version": "2.34.1",
+  "torch_version": "2.13.0+cu130",
+  "python_version": "3.10.20",
+  "platform": "linux-x86_64",
+  "created_at": "2026-08-12T00:57:00Z",
+  "bundle_format": "directory",
+  "n_layers": 6,
+  "n_out_blobs": 6,
+  "n_grad_blobs": 0,
+  "n_auxiliary_blobs": 0,
+  "tensors": [
+    {
+      "blob_id": "0000000001",
+      "kind": "out",
+      "label": "input_1:1",
+      "relative_path": "blobs/0000000001.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        1,
+        4,
+        4
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 64,
+      "sha256": "88ff3533b2f5674a7f80d2f291cc857a0a173803500bda6afda6282401c6baf1",
+      "requires_grad": false
+    },
+    {
+      "blob_id": "0000000002",
+      "kind": "out",
+      "label": "conv2d_1_1:1",
+      "relative_path": "blobs/0000000002.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        2,
+        4,
+        4
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 128,
+      "sha256": "db152b84a4004cf513063e54b294f7f3fe5747e2060835e85ad4ffc9ba18f690",
+      "requires_grad": true
+    },
+    {
+      "blob_id": "0000000003",
+      "kind": "out",
+      "label": "relu_1_2:1",
+      "relative_path": "blobs/0000000003.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        2,
+        4,
+        4
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 128,
+      "sha256": "cf366adcd11e000c31555eb0b725ab3a1bcbb76bdf2c3722f1348eb6590039d0",
+      "requires_grad": true
+    },
+    {
+      "blob_id": "0000000004",
+      "kind": "out",
+      "label": "mean_1_3:1",
+      "relative_path": "blobs/0000000004.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        2
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 8,
+      "sha256": "702102e8f70d64150cfe4f7cf823cce47a8b7c149618785ccdec6c8c8bc2361f",
+      "requires_grad": true
+    },
+    {
+      "blob_id": "0000000005",
+      "kind": "out",
+      "label": "linear_1_4:1",
+      "relative_path": "blobs/0000000005.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        3
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 12,
+      "sha256": "0cfdb39e69cfa20fbbcccc8ccd885f73ef5091c01097ef45a5f353ec67b80da6",
+      "requires_grad": true
+    },
+    {
+      "blob_id": "0000000006",
+      "kind": "out",
+      "label": "output_1:1",
+      "relative_path": "blobs/0000000006.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        3
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 12,
+      "sha256": "0cfdb39e69cfa20fbbcccc8ccd885f73ef5091c01097ef45a5f353ec67b80da6",
+      "requires_grad": true
+    }
+  ],
+  "unsupported_tensors": [],
+  "provenance": {
+    "provenance_version": 1,
+    "capture_devices": [
+      "cpu"
+    ],
+    "dtype_policy": {
+      "default_dtype": "torch.float32",
+      "observed_autocast": [
+        {
+          "__execution__": {
+            "enabled": false,
+            "dtype": null,
+            "grad_enabled": true,
+            "inference_mode": false
+          },
+          "cpu": {
+            "enabled": false,
+            "dtype": "torch.bfloat16"
+          },
+          "cuda": {
+            "enabled": false,
+            "dtype": "torch.float16"
+          }
+        }
+      ]
+    },
+    "rng_state_digests": {
+      "torch": "6ae64467c8e30960e4db46ba142828be883519e011b7864496029ede6ba9d4b7"
+    },
+    "input_hash": "21a4980ed9b1c04de2f21fcc9691530093452b00c3005ae58486941fb558b94c",
+    "model_structure_hash": "891bd2d0da996799fdd9628a08a442fa969d458f6fbc67d60dfbfc3e7e0fb5e9",
+    "git_commit_hash": "db2bc7a573decde94570afaebf21773211194903"
+  },
+  "kind": "trace",
+  "schema_version": 1,
+  "model_signature": "godobject_oracle.test_aliases._AliasCNN",
+  "model_fingerprint": {
+    "parameter_meta_hash": "455c94b1bbb8892d0d324e7873791143da1782b66cbcb449bb70f0a61e93180b",
+    "buffer_meta_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "class_qualname": "godobject_oracle.test_aliases._AliasCNN",
+    "extra_metadata": {
+      "model_class_name": "_AliasCNN",
+      "graph_shape_hash": "c797ac839a48a1e41b2d6ce6daaaf9602b745e5179e6d3ae9bd52eae3f4c27bc",
+      "input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab"
+    }
+  },
+  "sites": [
+    {
+      "function_path": "none",
+      "module_path": null,
+      "layer_label": "input_1",
+      "pass_index": null,
+      "op_kind": "input_1_1_4_4_torch.float32"
+    },
+    {
+      "function_path": "conv2d",
+      "module_path": "conv:1",
+      "layer_label": "conv2d_1_1",
+      "pass_index": null,
+      "op_kind": "conv2d_NKMFo9VQ_bBE1pjGkconv"
+    },
+    {
+      "function_path": "relu",
+      "module_path": null,
+      "layer_label": "relu_1_2",
+      "pass_index": null,
+      "op_kind": "relu_43c01414e3d13308"
+    },
+    {
+      "function_path": "mean",
+      "module_path": null,
+      "layer_label": "mean_1_3",
+      "pass_index": null,
+      "op_kind": "mean_51d57cc28d6e70a2"
+    },
+    {
+      "function_path": "linear",
+      "module_path": "head:1",
+      "layer_label": "linear_1_4",
+      "pass_index": null,
+      "op_kind": "linear_B5Ah2aKC_UvuJV9zxhead"
+    },
+    {
+      "function_path": "none",
+      "module_path": null,
+      "layer_label": "output_1",
+      "pass_index": null,
+      "op_kind": "output_1_1_3_torch.float32"
+    }
+  ],
+  "spec_compat_info": null,
+  "body_format": "safetensors",
+  "body_index": [
+    {
+      "filename": "blobs/0000000001.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        1,
+        4,
+        4
+      ],
+      "num_elements": 16,
+      "intended_use": "out",
+      "sha256": "88ff3533b2f5674a7f80d2f291cc857a0a173803500bda6afda6282401c6baf1"
+    },
+    {
+      "filename": "blobs/0000000002.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        2,
+        4,
+        4
+      ],
+      "num_elements": 32,
+      "intended_use": "out",
+      "sha256": "db152b84a4004cf513063e54b294f7f3fe5747e2060835e85ad4ffc9ba18f690"
+    },
+    {
+      "filename": "blobs/0000000003.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        2,
+        4,
+        4
+      ],
+      "num_elements": 32,
+      "intended_use": "out",
+      "sha256": "cf366adcd11e000c31555eb0b725ab3a1bcbb76bdf2c3722f1348eb6590039d0"
+    },
+    {
+      "filename": "blobs/0000000004.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        2
+      ],
+      "num_elements": 2,
+      "intended_use": "out",
+      "sha256": "702102e8f70d64150cfe4f7cf823cce47a8b7c149618785ccdec6c8c8bc2361f"
+    },
+    {
+      "filename": "blobs/0000000005.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        3
+      ],
+      "num_elements": 3,
+      "intended_use": "out",
+      "sha256": "0cfdb39e69cfa20fbbcccc8ccd885f73ef5091c01097ef45a5f353ec67b80da6"
+    },
+    {
+      "filename": "blobs/0000000006.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        3
+      ],
+      "num_elements": 3,
+      "intended_use": "out",
+      "sha256": "0cfdb39e69cfa20fbbcccc8ccd885f73ef5091c01097ef45a5f353ec67b80da6"
+    }
+  ],
+  "backward_summary": {
+    "has_backward_pass": false,
+    "num_backward_passes": 0,
+    "num_grad_fns": 0,
+    "num_grad_fn_calls": 0,
+    "num_saved_grad_records": 0,
+    "gradient_blob_count": 0,
+    "gradient_blob_kinds": [],
+    "old_bundle_policy": "legacy class remaps are accepted at load; removed backward gradient configuration fields are dropped during Trace state normalization"
+  },
+  "save_level": "portable",
+  "optional_dependencies": [],
+  "intervention_compat_metadata": null
+}

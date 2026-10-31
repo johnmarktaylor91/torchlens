@@ -196,7 +196,7 @@ def test_old_writers_direction_on_harvested_bytes(corpus_dir: Path, tmp_path: Pa
         # Below-floor stamps refuse typed. The genuine v2.16 bundle predates
         # the integer stamp entirely, so it refuses through the same typed
         # family; this pins that it cannot crash untyped or load wrong.
-        assert MIN_TLSPEC_VERSION == 6
+        assert MIN_TLSPEC_VERSION == 11
         with pytest.raises(ArtifactError):
             tl.load(corpus_dir / "art_v2.16.0_portable")
         # An integer stamp below the floor refuses with the floor-specific type.

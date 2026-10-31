@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, NamedTuple
 
+from ._pre3_module_paths import pre_3_artifact_error
 from .format_errors import (
     ArtifactError,
     ArtifactTooNewError,
@@ -81,19 +82,13 @@ __tl_layer__ = "L1"
 # v10 contract of record stays frozen byte-for-byte beside the v11 one.
 TLSPEC_VERSION = 11
 
-# Rehydration floor: artifacts older than tlspec_version 6 refuse to load
-# instead of being resurrected through legacy field-alias ladders. The FIRST
-# tlspec-6 writer was released v2.31.0 (measured on genuine wheels, ecosystem
-# panel r3 -- the historical "first shipped in torchlens 2.33" comment here
-# was false and backed the producer inequality that orphaned lawful
-# v2.31.0/v2.32.4 artifacts; producer pair-consistency now lives in the
-# governed ledger, ``torchlens._io.compat_ledger``, gate G5).
-# ``MIN_TORCHLENS_VERSION_TEXT`` is the floor release text stamped into the
-# writer contract and the below-floor refusal; it is never matched against a
-# manifest. The v9 contract of record keeps its frozen "2.33"; from v10 the
-# text is the ledger's producer floor writer (``compat_ledger.floor_metadata``).
-MIN_TLSPEC_VERSION = 6
-MIN_TORCHLENS_VERSION_TEXT = "2.31.0"
+# Rehydration floor: this release reads only its own format. Every stamp below
+# the current one was written by torchlens 2.x and refuses with the one error in
+# ``_pre3_module_paths``. ``MIN_TORCHLENS_VERSION_TEXT`` is the floor release
+# text stamped into the writer contract (the first tlspec-11 writer); it is never
+# matched against a manifest. The frozen v9 and v10 contracts keep their texts.
+MIN_TLSPEC_VERSION = 11
+MIN_TORCHLENS_VERSION_TEXT = "3.0.0"
 
 # Reserved generation step-score vocabulary, credited to inseq: the
 # keys of inseq's ``STEP_SCORES_MAP`` (``inseq/attr/step_functions.py``,
@@ -123,19 +118,6 @@ RESERVED_STEP_SCORE_CREDIT = (
 )
 
 
-# Ledger-derived honesty (gate G6): a below-floor remedy must never NAME a
-# release without verified read evidence -- the shipped ">= 2.33" remedy told
-# genuine v2.16 ModelLog holders to use releases proven unable to read their
-# artifacts. Callers with ledger context pass a derived ``remedy=``; this
-# default stays honest for unknown pre-floor eras by pointing at the ledger
-# instead of asserting a reader.
-_BELOW_FLOOR_REMEDY = (
-    "Re-save the artifact with a torchlens release verified to read it; "
-    "torchlens._ecosystem.compat_window() lists the governed rows and their "
-    "verified readers."
-)
-
-
 def below_floor_error(
     *,
     observed: str,
@@ -144,13 +126,13 @@ def below_floor_error(
     remedy: str | None = None,
     code: str = "artifact_version_below_floor",
 ) -> ArtifactTooOldError:
-    """Build the typed rehydration-floor refusal with structured fields.
+    """Build the typed refusal for an artifact older than the supported format.
 
-    Every below-floor refusal was hand-copied at its raise site with an empty
-    ``fields`` payload, and four of the six omitted the artifact path they held
-    in scope (R65). This one constructor gives all of them a stable
-    ``fields["code"]``, the ``observed`` version, the floor, a ``remedy``, and
-    the ``path`` when the caller has one.
+    This release reads only the current format; anything older was saved by
+    torchlens 2.x, so every below-floor site raises the one 2.x refusal
+    (:func:`torchlens._io._pre3_module_paths.pre_3_artifact_error`) with a stable
+    ``fields["code"]``, the ``observed`` version, the floor, a ``remedy`` and the
+    ``path`` when the caller has one.
 
     Parameters
     ----------
@@ -158,14 +140,13 @@ def below_floor_error(
         Rendered source version (``"tlspec_version=N"`` or a description of an
         unversioned state).
     subject:
-        Human-readable subject named in the message (e.g. ``"Bundle manifest"``).
+        Accepted for the raise sites that still name one; the 2.x refusal wording
+        does not use it.
     path:
         Artifact path, when the caller has it in scope.
     remedy:
-        Ledger-derived remedy override (gate G6). Callers that can classify
-        the artifact pass the verified-reader remedy from
-        ``torchlens._io.compat_ledger.bridge_reader_remedy``; the default
-        stays honest by pointing at the ledger instead of naming a reader.
+        Optional extra sentence appended to the 2.x remedy (the 2.16 ModelLog
+        format names its one reader this way).
     code:
         Always ``"artifact_version_below_floor"``; raise sites pass it
         explicitly so the S-17 census sees the code where the raise happens,
@@ -177,21 +158,8 @@ def below_floor_error(
         The typed refusal, ready to raise.
     """
 
-    effective_remedy = _BELOW_FLOOR_REMEDY if remedy is None else remedy
-    message = (
-        f"{subject} has {observed}, below the supported rehydration floor "
-        f"tlspec_version={MIN_TLSPEC_VERSION} (torchlens "
-        f"{MIN_TORCHLENS_VERSION_TEXT}). Remedy: {effective_remedy}"
-    )
-    return ArtifactTooOldError(
-        message,
-        code=code,
-        observed=observed,
-        floor_tlspec_version=MIN_TLSPEC_VERSION,
-        floor_torchlens_version=MIN_TORCHLENS_VERSION_TEXT,
-        path=path,
-        remedy=effective_remedy,
-    )
+    del subject
+    return pre_3_artifact_error(observed, path=path, remedy_note=remedy or "", code=code)
 
 
 def raise_if_manifest_below_floor(raw_version: Any, path: str) -> None:
@@ -443,13 +411,13 @@ def read_tlspec_version(state: dict[str, Any], *, cls_name: str, cls: type | Non
     Returns
     -------
     int
-        The decoded version, always ``MIN_TLSPEC_VERSION`` or newer.
+        The decoded version, always the current ``TLSPEC_VERSION``.
 
     Raises
     ------
     ArtifactTooOldError
-        If the state predates the ``tlspec_version >= MIN_TLSPEC_VERSION``
-        rehydration floor (including unversioned pre-sprint states).
+        If the state predates the current ``tlspec_version`` (a torchlens 2.x file,
+        including unversioned pre-sprint states).
     UnknownPersistedFieldError
         If ``cls`` is provided, a governed artifact load is in progress, and
         the state carries fields outside the class's declared contract

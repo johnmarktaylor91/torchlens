@@ -1,0 +1,181 @@
+{
+  "tlspec_version": 7,
+  "torchlens_version": "2.34.1",
+  "torch_version": "2.13.0+cu130",
+  "python_version": "3.10.20",
+  "platform": "linux-x86_64",
+  "created_at": "2026-08-17T08:37:26Z",
+  "bundle_format": "directory",
+  "n_layers": 4,
+  "n_out_blobs": 2,
+  "n_grad_blobs": 0,
+  "n_auxiliary_blobs": 0,
+  "tensors": [
+    {
+      "blob_id": "0000000001",
+      "kind": "out",
+      "label": "relu_1_2:1",
+      "relative_path": "blobs/0000000001.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 24,
+      "sha256": "010a5b782a0e3b8a4ea8a1c52445e9d4ccc1da2737be2b82cfd5e26c92e436f0",
+      "requires_grad": false
+    },
+    {
+      "blob_id": "0000000002",
+      "kind": "out",
+      "label": "output_1:1",
+      "relative_path": "blobs/0000000002.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        3
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 24,
+      "sha256": "010a5b782a0e3b8a4ea8a1c52445e9d4ccc1da2737be2b82cfd5e26c92e436f0",
+      "requires_grad": false
+    }
+  ],
+  "unsupported_tensors": [],
+  "provenance": {
+    "provenance_version": 1,
+    "capture_devices": [
+      "cpu"
+    ],
+    "dtype_policy": {
+      "default_dtype": "torch.float32",
+      "observed_autocast": [
+        {
+          "__execution__": {
+            "enabled": false,
+            "dtype": null,
+            "grad_enabled": true,
+            "inference_mode": false
+          },
+          "cpu": {
+            "enabled": false,
+            "dtype": "torch.bfloat16"
+          },
+          "cuda": {
+            "enabled": false,
+            "dtype": "torch.float16"
+          }
+        }
+      ]
+    },
+    "rng_state_digests": {
+      "torch": "ff794c0c612de80851f4a498e6990e4072a481a8c09b49f835360664edbae667"
+    },
+    "input_hash": "unavailable:PayloadUnavailableError",
+    "model_structure_hash": "3834a557a618e2a09f957bfaa95a714de0f52aab1407d9368f8d5411cd2ba621",
+    "git_commit_hash": "316f294dc00c88fd7031f6a16e191dbed3303120"
+  },
+  "custom_attributes_disclosure": {
+    "included": true,
+    "module_count": 2,
+    "top_level_keys": [
+      "in_features",
+      "inplace",
+      "out_features"
+    ],
+    "top_level_keys_truncated": false
+  },
+  "buffer_values_disclosure": {
+    "included": true,
+    "buffer_count": 0,
+    "buffer_names": [],
+    "buffer_names_truncated": false
+  },
+  "kind": "trace",
+  "schema_version": 1,
+  "model_signature": "__main__.Tiny",
+  "model_fingerprint": {
+    "parameter_meta_hash": "4a1c4c5dd6e0cc984f4edc948f334989a50cd9eab2b9309ec73bf265f965ca80",
+    "buffer_meta_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "class_qualname": "__main__.Tiny",
+    "extra_metadata": {
+      "model_class_name": "Tiny",
+      "graph_shape_hash": "8f33020a195b716c8bda106e3104f2706cccefc452c7da5e535c8b7d24bf75f7",
+      "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38"
+    }
+  },
+  "sites": [
+    {
+      "function_path": "none",
+      "module_path": null,
+      "layer_label": "input_1",
+      "pass_index": null,
+      "op_kind": "input_2_4_torch.float32"
+    },
+    {
+      "function_path": "linear",
+      "module_path": "fc:1",
+      "layer_label": "linear_1_1",
+      "pass_index": null,
+      "op_kind": "linear_param_000001_param_000002fc"
+    },
+    {
+      "function_path": "relu",
+      "module_path": "act:1",
+      "layer_label": "relu_1_2",
+      "pass_index": null,
+      "op_kind": "relu_a0b9c1e0d2979aaa_moduleactact"
+    },
+    {
+      "function_path": "none",
+      "module_path": null,
+      "layer_label": "output_1",
+      "pass_index": null,
+      "op_kind": "output_1_2_3_torch.float32"
+    }
+  ],
+  "spec_compat_info": null,
+  "body_format": "safetensors",
+  "body_index": [
+    {
+      "filename": "blobs/0000000001.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3
+      ],
+      "num_elements": 6,
+      "intended_use": "out",
+      "sha256": "010a5b782a0e3b8a4ea8a1c52445e9d4ccc1da2737be2b82cfd5e26c92e436f0"
+    },
+    {
+      "filename": "blobs/0000000002.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3
+      ],
+      "num_elements": 6,
+      "intended_use": "out",
+      "sha256": "010a5b782a0e3b8a4ea8a1c52445e9d4ccc1da2737be2b82cfd5e26c92e436f0"
+    }
+  ],
+  "backward_summary": {
+    "has_backward_pass": false,
+    "num_backward_passes": 0,
+    "num_grad_fns": 0,
+    "num_grad_fn_calls": 0,
+    "num_saved_grad_records": 0,
+    "gradient_blob_count": 0,
+    "gradient_blob_kinds": [],
+    "old_bundle_policy": "legacy class remaps are accepted at load; removed backward gradient configuration fields are dropped during Trace state normalization"
+  },
+  "save_level": "portable",
+  "optional_dependencies": [],
+  "intervention_compat_metadata": null
+}

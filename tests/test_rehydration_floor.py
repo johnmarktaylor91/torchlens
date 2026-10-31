@@ -27,7 +27,7 @@ from torchlens._io import (
 from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens.errors import ArtifactTooOldError
 
-FLOOR_MATCH = "torchlens 2.31.0"
+FLOOR_MATCH = "saved by torchlens 2.x"
 
 
 def _stamp_between_floor(path: Path, version: int) -> None:
@@ -68,7 +68,7 @@ def test_floor_error_is_typed_and_public() -> None:
 
     assert issubclass(ArtifactTooOldError, ArtifactError)
     assert tl.errors.ArtifactTooOldError is ArtifactTooOldError
-    assert MIN_TLSPEC_VERSION == 6
+    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION == 11
 
 
 def test_current_artifacts_load_clean(tmp_path: Path) -> None:

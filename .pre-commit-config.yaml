@@ -36,6 +36,7 @@ repos:
             tests/godobject_oracle/goldens/|
             tests/snapshots/|
             tests/release_goldens/|
+            tests/goldens/legacy/|
             docs/images/|
             tests/real_model/vendored/|
             tests/classics_corpus/models/|
@@ -107,6 +108,7 @@ repos:
             tests/fixtures/tlspec_v7/.*|
             tests/fixtures/tlspec_v9/.*|
             tests/release_goldens/.*|
+            tests/goldens/legacy/.*|
             tests/agent_surface_goldens/.*|
             torchlens/schemas/writer_contract_v[0-9]+\.json|
             tests/real_model/artifact_registry\.jsonl|

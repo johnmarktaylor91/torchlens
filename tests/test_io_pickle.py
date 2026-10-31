@@ -132,7 +132,7 @@ def test_trace_setstate_refuses_pre_versioning_state() -> None:
     old_state.pop("tlspec_version", None)
 
     restored = Trace.__new__(Trace)
-    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
         restored.__setstate__(old_state)
 
 

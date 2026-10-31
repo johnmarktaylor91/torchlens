@@ -210,7 +210,8 @@ def test_contract_versions_floor_text_and_digests() -> None:
     assert v9["contract"]["min_torchlens_version"] == "2.33", "v9 stays frozen"
     assert v10["contract"]["min_torchlens_version"] == "2.31.0"
     assert floor_metadata()["producer_floor_writer"] == MIN_TORCHLENS_VERSION_TEXT
-    assert v10["contract"]["min_tlspec_version"] == MIN_TLSPEC_VERSION == 6
+    assert v10["contract"]["min_tlspec_version"] == 6, "v10 stays frozen"
+    assert MIN_TLSPEC_VERSION == 11
     assert v9["writer_contract_digest"] != v10["writer_contract_digest"]
 
 
@@ -238,9 +239,9 @@ def test_below_floor_refusal_names_the_corrected_floor() -> None:
         read_tlspec_version(state, cls_name="Trace")
     fields = excinfo.value.fields
     assert fields["code"] == "artifact_version_below_floor"
-    assert fields["floor_tlspec_version"] == 6
-    assert fields["floor_torchlens_version"] == "2.31.0"
-    assert "(torchlens 2.31.0)" in str(excinfo.value)
+    assert fields["floor_tlspec_version"] == 11
+    assert fields["floor_torchlens_version"] == "3.0.0"
+    assert "saved by torchlens 2.x" in str(excinfo.value)
     assert "2.33" not in str(excinfo.value)
 
 

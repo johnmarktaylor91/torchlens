@@ -386,7 +386,7 @@ def test_older_version_refuses_at_rehydration_floor(tmp_path: Path) -> None:
     manifest_dict = _manifest(path)
     manifest_dict["tlspec_version"] = MIN_TLSPEC_VERSION - 1
 
-    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
         Manifest.from_dict(manifest_dict)
 
 

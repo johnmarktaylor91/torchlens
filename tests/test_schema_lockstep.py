@@ -1221,7 +1221,7 @@ VERSION_AUTHORITY_PINS: dict[str, int] = {
     # tests/release_goldens/writer_contract_v8.json). MERGED_TLSPEC_VERSION
     # versions the merged ROOT manifest independently and did not move.
     "TLSPEC_VERSION": 11,
-    "MIN_TLSPEC_VERSION": 6,
+    "MIN_TLSPEC_VERSION": 11,
     "MERGED_TLSPEC_VERSION": 7,
 }
 

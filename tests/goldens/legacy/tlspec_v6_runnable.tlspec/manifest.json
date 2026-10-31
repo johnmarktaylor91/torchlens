@@ -1,0 +1,1835 @@
+{
+  "tlspec_version": 6,
+  "torchlens_version": "2.34.1",
+  "torch_version": "2.13.0+cu130",
+  "python_version": "3.10.20",
+  "platform": "linux-x86_64",
+  "created_at": "2026-08-12T00:58:09Z",
+  "bundle_format": "directory",
+  "n_layers": 6,
+  "n_out_blobs": 0,
+  "n_grad_blobs": 0,
+  "n_auxiliary_blobs": 10,
+  "tensors": [
+    {
+      "blob_id": "runnable_weight_00000",
+      "kind": "runnable_weight",
+      "label": "conv.bias",
+      "relative_path": "blobs/runnable_weight_00000.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 8,
+      "sha256": "0801e4e1b773fa6c31593f84318e560b31cb18b20085beeee6b287faeac3a7a9",
+      "requires_grad": false
+    },
+    {
+      "blob_id": "runnable_weight_00001",
+      "kind": "runnable_weight",
+      "label": "conv.weight",
+      "relative_path": "blobs/runnable_weight_00001.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        1,
+        3,
+        3
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 72,
+      "sha256": "adbf3d93cab67d36ced6ed17d2cad54092d0afe76791a003a65d48abae9efb75",
+      "requires_grad": false
+    },
+    {
+      "blob_id": "runnable_weight_00002",
+      "kind": "runnable_weight",
+      "label": "head.bias",
+      "relative_path": "blobs/runnable_weight_00002.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 12,
+      "sha256": "cfe33536966097c3aa0bc3b9ca7357573e928e8f75ef54bbb8bd42ae812e57d7",
+      "requires_grad": false
+    },
+    {
+      "blob_id": "runnable_weight_00003",
+      "kind": "runnable_weight",
+      "label": "head.weight",
+      "relative_path": "blobs/runnable_weight_00003.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        3,
+        2
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 24,
+      "sha256": "41a982de8ffa79faa3ac170d2b39844057872caf6cebab4fdc38f6709f52f02d",
+      "requires_grad": false
+    },
+    {
+      "blob_id": "runnable_activation_00000",
+      "kind": "runnable_activation",
+      "label": "input_1:1",
+      "relative_path": "blobs/runnable_activation_00000.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        1,
+        4,
+        4
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 64,
+      "sha256": "88ff3533b2f5674a7f80d2f291cc857a0a173803500bda6afda6282401c6baf1",
+      "requires_grad": false
+    },
+    {
+      "blob_id": "runnable_activation_00001",
+      "kind": "runnable_activation",
+      "label": "conv2d_1_1:1",
+      "relative_path": "blobs/runnable_activation_00001.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        2,
+        4,
+        4
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 128,
+      "sha256": "db152b84a4004cf513063e54b294f7f3fe5747e2060835e85ad4ffc9ba18f690",
+      "requires_grad": true
+    },
+    {
+      "blob_id": "runnable_activation_00002",
+      "kind": "runnable_activation",
+      "label": "relu_1_2:1",
+      "relative_path": "blobs/runnable_activation_00002.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        2,
+        4,
+        4
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 128,
+      "sha256": "cf366adcd11e000c31555eb0b725ab3a1bcbb76bdf2c3722f1348eb6590039d0",
+      "requires_grad": true
+    },
+    {
+      "blob_id": "runnable_activation_00003",
+      "kind": "runnable_activation",
+      "label": "mean_1_3:1",
+      "relative_path": "blobs/runnable_activation_00003.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        2
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 8,
+      "sha256": "702102e8f70d64150cfe4f7cf823cce47a8b7c149618785ccdec6c8c8bc2361f",
+      "requires_grad": true
+    },
+    {
+      "blob_id": "runnable_activation_00004",
+      "kind": "runnable_activation",
+      "label": "linear_1_4:1",
+      "relative_path": "blobs/runnable_activation_00004.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        3
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 12,
+      "sha256": "0cfdb39e69cfa20fbbcccc8ccd885f73ef5091c01097ef45a5f353ec67b80da6",
+      "requires_grad": true
+    },
+    {
+      "blob_id": "runnable_activation_00005",
+      "kind": "runnable_activation",
+      "label": "output_1:1",
+      "relative_path": "blobs/runnable_activation_00005.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        1,
+        3
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 12,
+      "sha256": "0cfdb39e69cfa20fbbcccc8ccd885f73ef5091c01097ef45a5f353ec67b80da6",
+      "requires_grad": true
+    }
+  ],
+  "unsupported_tensors": [],
+  "provenance": {
+    "provenance_version": 1,
+    "capture_devices": [
+      "cpu"
+    ],
+    "dtype_policy": {
+      "default_dtype": "torch.float32",
+      "observed_autocast": [
+        {
+          "__execution__": {
+            "enabled": false,
+            "dtype": null,
+            "grad_enabled": true,
+            "inference_mode": false
+          },
+          "cpu": {
+            "enabled": false,
+            "dtype": "torch.bfloat16"
+          },
+          "cuda": {
+            "enabled": false,
+            "dtype": "torch.float16"
+          }
+        }
+      ]
+    },
+    "rng_state_digests": {
+      "torch": "9e304cb8ec736edaed19dffd6594de9972b5a3cd59ed846b86f77fa05551f175"
+    },
+    "input_hash": "21a4980ed9b1c04de2f21fcc9691530093452b00c3005ae58486941fb558b94c",
+    "model_structure_hash": "891bd2d0da996799fdd9628a08a442fa969d458f6fbc67d60dfbfc3e7e0fb5e9",
+    "git_commit_hash": "db2bc7a573decde94570afaebf21773211194903"
+  },
+  "kind": "trace",
+  "schema_version": 2,
+  "model_signature": "godobject_oracle.test_aliases._AliasCNN",
+  "model_fingerprint": {
+    "backend_fingerprint": {
+      "backend": "torch",
+      "model_signature": "godobject_oracle.test_aliases._AliasCNN",
+      "graph_digest": "c797ac839a48a1e41b2d6ce6daaaf9602b745e5179e6d3ae9bd52eae3f4c27bc",
+      "module_identity_mode": "torch_module",
+      "param_source": "native-module"
+    }
+  },
+  "sites": [
+    {
+      "function_path": "none",
+      "module_path": null,
+      "layer_label": "input_1",
+      "pass_index": null,
+      "op_kind": "input_1_1_4_4_torch.float32"
+    },
+    {
+      "function_path": "conv2d",
+      "module_path": "conv:1",
+      "layer_label": "conv2d_1_1",
+      "pass_index": null,
+      "op_kind": "conv2d_RHXLjRLN_kO2MKDZQconv"
+    },
+    {
+      "function_path": "relu",
+      "module_path": null,
+      "layer_label": "relu_1_2",
+      "pass_index": null,
+      "op_kind": "relu_43c01414e3d13308"
+    },
+    {
+      "function_path": "mean",
+      "module_path": null,
+      "layer_label": "mean_1_3",
+      "pass_index": null,
+      "op_kind": "mean_51d57cc28d6e70a2"
+    },
+    {
+      "function_path": "linear",
+      "module_path": "head:1",
+      "layer_label": "linear_1_4",
+      "pass_index": null,
+      "op_kind": "linear_di1hxV3Y_s4P12gg5head"
+    },
+    {
+      "function_path": "none",
+      "module_path": null,
+      "layer_label": "output_1",
+      "pass_index": null,
+      "op_kind": "output_1_1_3_torch.float32"
+    }
+  ],
+  "spec_compat_info": null,
+  "body_format": "safetensors",
+  "body_index": [
+    {
+      "filename": "blobs/runnable_weight_00000.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2
+      ],
+      "num_elements": 2,
+      "intended_use": "runnable_weight",
+      "sha256": "0801e4e1b773fa6c31593f84318e560b31cb18b20085beeee6b287faeac3a7a9"
+    },
+    {
+      "filename": "blobs/runnable_weight_00001.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2,
+        1,
+        3,
+        3
+      ],
+      "num_elements": 18,
+      "intended_use": "runnable_weight",
+      "sha256": "adbf3d93cab67d36ced6ed17d2cad54092d0afe76791a003a65d48abae9efb75"
+    },
+    {
+      "filename": "blobs/runnable_weight_00002.safetensors",
+      "dtype": "float32",
+      "shape": [
+        3
+      ],
+      "num_elements": 3,
+      "intended_use": "runnable_weight",
+      "sha256": "cfe33536966097c3aa0bc3b9ca7357573e928e8f75ef54bbb8bd42ae812e57d7"
+    },
+    {
+      "filename": "blobs/runnable_weight_00003.safetensors",
+      "dtype": "float32",
+      "shape": [
+        3,
+        2
+      ],
+      "num_elements": 6,
+      "intended_use": "runnable_weight",
+      "sha256": "41a982de8ffa79faa3ac170d2b39844057872caf6cebab4fdc38f6709f52f02d"
+    },
+    {
+      "filename": "blobs/runnable_activation_00000.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        1,
+        4,
+        4
+      ],
+      "num_elements": 16,
+      "intended_use": "runnable_activation",
+      "sha256": "88ff3533b2f5674a7f80d2f291cc857a0a173803500bda6afda6282401c6baf1"
+    },
+    {
+      "filename": "blobs/runnable_activation_00001.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        2,
+        4,
+        4
+      ],
+      "num_elements": 32,
+      "intended_use": "runnable_activation",
+      "sha256": "db152b84a4004cf513063e54b294f7f3fe5747e2060835e85ad4ffc9ba18f690"
+    },
+    {
+      "filename": "blobs/runnable_activation_00002.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        2,
+        4,
+        4
+      ],
+      "num_elements": 32,
+      "intended_use": "runnable_activation",
+      "sha256": "cf366adcd11e000c31555eb0b725ab3a1bcbb76bdf2c3722f1348eb6590039d0"
+    },
+    {
+      "filename": "blobs/runnable_activation_00003.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        2
+      ],
+      "num_elements": 2,
+      "intended_use": "runnable_activation",
+      "sha256": "702102e8f70d64150cfe4f7cf823cce47a8b7c149618785ccdec6c8c8bc2361f"
+    },
+    {
+      "filename": "blobs/runnable_activation_00004.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        3
+      ],
+      "num_elements": 3,
+      "intended_use": "runnable_activation",
+      "sha256": "0cfdb39e69cfa20fbbcccc8ccd885f73ef5091c01097ef45a5f353ec67b80da6"
+    },
+    {
+      "filename": "blobs/runnable_activation_00005.safetensors",
+      "dtype": "float32",
+      "shape": [
+        1,
+        3
+      ],
+      "num_elements": 3,
+      "intended_use": "runnable_activation",
+      "sha256": "0cfdb39e69cfa20fbbcccc8ccd885f73ef5091c01097ef45a5f353ec67b80da6"
+    }
+  ],
+  "backward_summary": null,
+  "save_level": "runnable",
+  "optional_dependencies": [],
+  "intervention_compat_metadata": null,
+  "backend": "torch",
+  "backend_runtime": {
+    "name": "torch",
+    "version": null,
+    "runtime_config": {},
+    "device_summary": {},
+    "compat_policy": {
+      "policy": "metadata-only"
+    }
+  },
+  "derived_gradient_summary": null,
+  "payload_policy": {
+    "policy": "full",
+    "materialization_supported": true,
+    "payload_kinds": [
+      "runnable_activation",
+      "runnable_weight"
+    ]
+  },
+  "run": {
+    "capability": "sparse_recorded_taken_path_v2",
+    "backend": "torch",
+    "call_recipe": "non_tensor_args_tensor_slots_context_and_obligations_v3",
+    "callable_ref_schema": 1,
+    "state_binding": "module_path_role_v1",
+    "input_binding": "model_site_io_role_v1",
+    "control_witness": "scalar_bool_and_arm_entry_v1",
+    "initializer_policy_version": "torchlens_role_init_v2",
+    "payload_layers": {
+      "weights": {
+        "present": true,
+        "schema": "state_dict_v1"
+      },
+      "nonpersistent_buffers": {
+        "present": false,
+        "schema": "runnable_nonpersistent_buffer_v1"
+      },
+      "activations": {
+        "present": true,
+        "schema": "selected_activation_v2",
+        "members": [
+          {
+            "blob_id": "runnable_activation_00000",
+            "slot_id": "slot:input_1:1",
+            "call_id": null,
+            "op_label": "input_1:1",
+            "field": "out",
+            "byte_digest": "e5a33ef67eb0ddee6963cbf27b09353e78b8d34ea6415587aed913b8ce2998f4"
+          },
+          {
+            "blob_id": "runnable_activation_00001",
+            "slot_id": "slot:conv2d_1_1:1",
+            "call_id": "call:1",
+            "op_label": "conv2d_1_1:1",
+            "field": "out",
+            "byte_digest": "80d6692832746b604e35cf1203ba719a81224922b80a043e5555e2b43052b827"
+          },
+          {
+            "blob_id": "runnable_activation_00002",
+            "slot_id": "slot:relu_1_2:1",
+            "call_id": "call:11",
+            "op_label": "relu_1_2:1",
+            "field": "out",
+            "byte_digest": "a3d54fee818d95fa126157645ca88f6f763f1d71bba3cb7ee45525db66101eaf"
+          },
+          {
+            "blob_id": "runnable_activation_00003",
+            "slot_id": "slot:mean_1_3:1",
+            "call_id": "call:16",
+            "op_label": "mean_1_3:1",
+            "field": "out",
+            "byte_digest": "2f2b9ecf575a900410c3bb7eec90ffb81de8235d6e11caed68fd5bd081fd0360"
+          },
+          {
+            "blob_id": "runnable_activation_00004",
+            "slot_id": "slot:linear_1_4:1",
+            "call_id": "call:20",
+            "op_label": "linear_1_4:1",
+            "field": "out",
+            "byte_digest": "881ca656714fcf18fd0c53e4e6c61871d600cc0f73e5fa825a8ee7500827ee65"
+          },
+          {
+            "blob_id": "runnable_activation_00005",
+            "slot_id": "slot:output_1:1",
+            "call_id": null,
+            "op_label": "output_1:1",
+            "field": "out",
+            "byte_digest": "881ca656714fcf18fd0c53e4e6c61871d600cc0f73e5fa825a8ee7500827ee65"
+          }
+        ],
+        "original_input_digests": [
+          {
+            "slot_id": "slot:input_1:1",
+            "byte_digest": "e5a33ef67eb0ddee6963cbf27b09353e78b8d34ea6415587aed913b8ce2998f4"
+          }
+        ],
+        "capture_state_digests": [
+          {
+            "state_dict_name": "conv.bias",
+            "byte_digest": "b1a1e576adf0aae113258eb4f215381f72508da45c6b27529f3b1c2853381798"
+          },
+          {
+            "state_dict_name": "conv.weight",
+            "byte_digest": "c7c613194225f5d60004d0e52d61570999d320ecd5baa66656fbf07c0e342e10"
+          },
+          {
+            "state_dict_name": "head.bias",
+            "byte_digest": "a08f6e0b46c9acb48b5191760dde88063ea9f2b6d8df6cab00031b2b49317336"
+          },
+          {
+            "state_dict_name": "head.weight",
+            "byte_digest": "33d0bb618be6689ae231f53243d4a004a238207b344287bee98bac3615bcc54c"
+          }
+        ],
+        "input_fingerprints": [
+          {
+            "slot_id": "slot:input_1:1",
+            "byte_digest": "e5a33ef67eb0ddee6963cbf27b09353e78b8d34ea6415587aed913b8ce2998f4",
+            "device_type": "cpu",
+            "device_index": null,
+            "layout": "torch.strided",
+            "sizes": [
+              1,
+              1,
+              4,
+              4
+            ],
+            "strides": [
+              16,
+              16,
+              4,
+              1
+            ],
+            "storage_offset": 0,
+            "is_contiguous": true,
+            "is_channels_last": true,
+            "is_channels_last_3d": false,
+            "is_conj": false,
+            "is_neg": false,
+            "tensor_class": "Tensor",
+            "requires_grad": false,
+            "is_inference": false,
+            "alignment_class": 0
+          }
+        ]
+      }
+    },
+    "callable_registry": [
+      {
+        "registry_id": "callable:1",
+        "key": {
+          "namespace": "torch",
+          "qualname": "conv2d",
+          "dispatch_kind": "function",
+          "version": 1,
+          "import_path": null
+        }
+      },
+      {
+        "registry_id": "callable:2",
+        "key": {
+          "namespace": "torch",
+          "qualname": "relu",
+          "dispatch_kind": "function",
+          "version": 1,
+          "import_path": null
+        }
+      },
+      {
+        "registry_id": "callable:3",
+        "key": {
+          "namespace": "torch.Tensor",
+          "qualname": "mean",
+          "dispatch_kind": "method",
+          "version": 1,
+          "import_path": null
+        }
+      },
+      {
+        "registry_id": "callable:4",
+        "key": {
+          "namespace": "torch.nn.functional",
+          "qualname": "linear",
+          "dispatch_kind": "function",
+          "version": 1,
+          "import_path": null
+        }
+      }
+    ],
+    "calls": [
+      {
+        "call_id": "call:1",
+        "op_labels": [
+          "conv2d_1_1:1"
+        ],
+        "registry_id": "callable:1",
+        "dispatch_kind": "function",
+        "argument_names": [
+          "input",
+          "weight",
+          "bias",
+          "stride",
+          "padding",
+          "dilation",
+          "groups"
+        ],
+        "num_positional_args": 7,
+        "num_keyword_args": 0,
+        "tensor_arguments": [
+          {
+            "argument_path": [
+              "args",
+              0
+            ],
+            "slot_id": "slot:input_1:1"
+          },
+          {
+            "argument_path": [
+              "args",
+              1
+            ],
+            "slot_id": "state:conv.weight"
+          },
+          {
+            "argument_path": [
+              "args",
+              2
+            ],
+            "slot_id": "state:conv.bias"
+          }
+        ],
+        "literal_arguments": [
+          {
+            "argument_path": [
+              "args",
+              3
+            ],
+            "value": {
+              "kind": "tuple",
+              "items": [
+                {
+                  "kind": "int",
+                  "value": 1
+                },
+                {
+                  "kind": "int",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          {
+            "argument_path": [
+              "args",
+              4
+            ],
+            "value": {
+              "kind": "tuple",
+              "items": [
+                {
+                  "kind": "int",
+                  "value": 1
+                },
+                {
+                  "kind": "int",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          {
+            "argument_path": [
+              "args",
+              5
+            ],
+            "value": {
+              "kind": "tuple",
+              "items": [
+                {
+                  "kind": "int",
+                  "value": 1
+                },
+                {
+                  "kind": "int",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          {
+            "argument_path": [
+              "args",
+              6
+            ],
+            "value": {
+              "kind": "int",
+              "value": 1
+            }
+          }
+        ],
+        "output_slot_ids": [
+          "slot:conv2d_1_1:1"
+        ],
+        "parent_call_ids": [],
+        "is_inplace": false,
+        "runtime_fingerprint": "75ee3a4e1575eed712b9fba2b6ccee460e58075f59030628bf52d500c27e150f",
+        "execution_context": {
+          "autocast": [
+            {
+              "device_type": "cpu",
+              "enabled": false,
+              "dtype": "torch.bfloat16"
+            },
+            {
+              "device_type": "cuda",
+              "enabled": false,
+              "dtype": "torch.float16"
+            }
+          ],
+          "grad_enabled": true,
+          "inference_mode": false
+        },
+        "control_obligations": [],
+        "control_dependencies": []
+      },
+      {
+        "call_id": "call:11",
+        "op_labels": [
+          "relu_1_2:1"
+        ],
+        "registry_id": "callable:2",
+        "dispatch_kind": "function",
+        "argument_names": [
+          "input",
+          "inplace"
+        ],
+        "num_positional_args": 1,
+        "num_keyword_args": 0,
+        "tensor_arguments": [
+          {
+            "argument_path": [
+              "args",
+              0
+            ],
+            "slot_id": "slot:conv2d_1_1:1"
+          }
+        ],
+        "literal_arguments": [],
+        "output_slot_ids": [
+          "slot:relu_1_2:1"
+        ],
+        "parent_call_ids": [
+          "call:1"
+        ],
+        "is_inplace": false,
+        "runtime_fingerprint": "64c731aa9060161c8804b892dfc7731452054356dc735c1fe35424d3e1e4d027",
+        "execution_context": {
+          "autocast": [
+            {
+              "device_type": "cpu",
+              "enabled": false,
+              "dtype": "torch.bfloat16"
+            },
+            {
+              "device_type": "cuda",
+              "enabled": false,
+              "dtype": "torch.float16"
+            }
+          ],
+          "grad_enabled": true,
+          "inference_mode": false
+        },
+        "control_obligations": [],
+        "control_dependencies": []
+      },
+      {
+        "call_id": "call:16",
+        "op_labels": [
+          "mean_1_3:1"
+        ],
+        "registry_id": "callable:3",
+        "dispatch_kind": "method",
+        "argument_names": [
+          "input",
+          "dtype"
+        ],
+        "num_positional_args": 1,
+        "num_keyword_args": 1,
+        "tensor_arguments": [
+          {
+            "argument_path": [
+              "args",
+              0
+            ],
+            "slot_id": "slot:relu_1_2:1"
+          }
+        ],
+        "literal_arguments": [
+          {
+            "argument_path": [
+              "kwargs",
+              "dim"
+            ],
+            "value": {
+              "kind": "tuple",
+              "items": [
+                {
+                  "kind": "int",
+                  "value": 2
+                },
+                {
+                  "kind": "int",
+                  "value": 3
+                }
+              ]
+            }
+          }
+        ],
+        "output_slot_ids": [
+          "slot:mean_1_3:1"
+        ],
+        "parent_call_ids": [
+          "call:11"
+        ],
+        "is_inplace": false,
+        "runtime_fingerprint": "af9cc96be4d90d5192b0db79ac85770fa0809f5b5f28bd46630178f603b45474",
+        "execution_context": {
+          "autocast": [
+            {
+              "device_type": "cpu",
+              "enabled": false,
+              "dtype": "torch.bfloat16"
+            },
+            {
+              "device_type": "cuda",
+              "enabled": false,
+              "dtype": "torch.float16"
+            }
+          ],
+          "grad_enabled": true,
+          "inference_mode": false
+        },
+        "control_obligations": [],
+        "control_dependencies": []
+      },
+      {
+        "call_id": "call:20",
+        "op_labels": [
+          "linear_1_4:1"
+        ],
+        "registry_id": "callable:4",
+        "dispatch_kind": "function",
+        "argument_names": [
+          "input",
+          "weight",
+          "bias"
+        ],
+        "num_positional_args": 3,
+        "num_keyword_args": 0,
+        "tensor_arguments": [
+          {
+            "argument_path": [
+              "args",
+              0
+            ],
+            "slot_id": "slot:mean_1_3:1"
+          },
+          {
+            "argument_path": [
+              "args",
+              1
+            ],
+            "slot_id": "state:head.weight"
+          },
+          {
+            "argument_path": [
+              "args",
+              2
+            ],
+            "slot_id": "state:head.bias"
+          }
+        ],
+        "literal_arguments": [],
+        "output_slot_ids": [
+          "slot:linear_1_4:1"
+        ],
+        "parent_call_ids": [
+          "call:16"
+        ],
+        "is_inplace": false,
+        "runtime_fingerprint": "1f33ca198cae2f0286b208543131018a66d5f83d418bbf417a5d2c576aa580f4",
+        "execution_context": {
+          "autocast": [
+            {
+              "device_type": "cpu",
+              "enabled": false,
+              "dtype": "torch.bfloat16"
+            },
+            {
+              "device_type": "cuda",
+              "enabled": false,
+              "dtype": "torch.float16"
+            }
+          ],
+          "grad_enabled": true,
+          "inference_mode": false
+        },
+        "control_obligations": [],
+        "control_dependencies": []
+      }
+    ],
+    "tensor_slots": [
+      {
+        "slot_id": "slot:input_1:1",
+        "role": "model_input",
+        "use_sites": [
+          {
+            "call_id": "call:1",
+            "argument_path": [
+              "args",
+              0
+            ]
+          }
+        ],
+        "shape": [
+          1,
+          1,
+          4,
+          4
+        ],
+        "dtype": "torch.float32",
+        "rank": 4,
+        "device_type": "cpu",
+        "device_index": null,
+        "mutable": false,
+        "version_of": null,
+        "producer_slot_id": null,
+        "output_path": null,
+        "input_binding": {
+          "io_role": "model_input",
+          "model_ref": "self:1",
+          "model_site_position": [
+            "arg",
+            0
+          ],
+          "container_record_id": -1,
+          "container_path": []
+        },
+        "state_binding": null,
+        "host_escape": false,
+        "inert_sink": false
+      },
+      {
+        "slot_id": "slot:conv2d_1_1:1",
+        "role": "intermediate",
+        "use_sites": [
+          {
+            "call_id": "call:11",
+            "argument_path": [
+              "args",
+              0
+            ]
+          }
+        ],
+        "shape": [
+          1,
+          2,
+          4,
+          4
+        ],
+        "dtype": "torch.float32",
+        "rank": 4,
+        "device_type": "cpu",
+        "device_index": null,
+        "mutable": false,
+        "version_of": null,
+        "producer_slot_id": null,
+        "output_path": null,
+        "input_binding": null,
+        "state_binding": null,
+        "host_escape": false,
+        "inert_sink": false
+      },
+      {
+        "slot_id": "slot:relu_1_2:1",
+        "role": "intermediate",
+        "use_sites": [
+          {
+            "call_id": "call:16",
+            "argument_path": [
+              "args",
+              0
+            ]
+          }
+        ],
+        "shape": [
+          1,
+          2,
+          4,
+          4
+        ],
+        "dtype": "torch.float32",
+        "rank": 4,
+        "device_type": "cpu",
+        "device_index": null,
+        "mutable": false,
+        "version_of": null,
+        "producer_slot_id": null,
+        "output_path": null,
+        "input_binding": null,
+        "state_binding": null,
+        "host_escape": false,
+        "inert_sink": false
+      },
+      {
+        "slot_id": "slot:mean_1_3:1",
+        "role": "intermediate",
+        "use_sites": [
+          {
+            "call_id": "call:20",
+            "argument_path": [
+              "args",
+              0
+            ]
+          }
+        ],
+        "shape": [
+          1,
+          2
+        ],
+        "dtype": "torch.float32",
+        "rank": 2,
+        "device_type": "cpu",
+        "device_index": null,
+        "mutable": false,
+        "version_of": null,
+        "producer_slot_id": null,
+        "output_path": null,
+        "input_binding": null,
+        "state_binding": null,
+        "host_escape": false,
+        "inert_sink": false
+      },
+      {
+        "slot_id": "slot:linear_1_4:1",
+        "role": "intermediate",
+        "use_sites": [],
+        "shape": [
+          1,
+          3
+        ],
+        "dtype": "torch.float32",
+        "rank": 2,
+        "device_type": "cpu",
+        "device_index": null,
+        "mutable": false,
+        "version_of": null,
+        "producer_slot_id": null,
+        "output_path": null,
+        "input_binding": null,
+        "state_binding": null,
+        "host_escape": false,
+        "inert_sink": false
+      },
+      {
+        "slot_id": "slot:output_1:1",
+        "role": "output",
+        "use_sites": [],
+        "shape": [
+          1,
+          3
+        ],
+        "dtype": "torch.float32",
+        "rank": 2,
+        "device_type": "cpu",
+        "device_index": null,
+        "mutable": false,
+        "version_of": null,
+        "producer_slot_id": "slot:linear_1_4:1",
+        "output_path": [],
+        "input_binding": null,
+        "state_binding": null,
+        "host_escape": false,
+        "inert_sink": false
+      },
+      {
+        "slot_id": "state:conv.weight",
+        "role": "parameter",
+        "use_sites": [
+          {
+            "call_id": "call:1",
+            "argument_path": [
+              "args",
+              1
+            ]
+          }
+        ],
+        "shape": [
+          2,
+          1,
+          3,
+          3
+        ],
+        "dtype": "torch.float32",
+        "rank": 4,
+        "device_type": "cpu",
+        "device_index": null,
+        "mutable": false,
+        "version_of": null,
+        "producer_slot_id": null,
+        "output_path": null,
+        "input_binding": null,
+        "state_binding": {
+          "module_path": "conv",
+          "state_dict_name": "conv.weight",
+          "semantic_role": "weight",
+          "trainable": true,
+          "persistent": true,
+          "alias_group": null,
+          "captured_requires_grad": true,
+          "captured_grad_fn": false,
+          "host_escape_disposition": null
+        },
+        "host_escape": false,
+        "inert_sink": false
+      },
+      {
+        "slot_id": "state:conv.bias",
+        "role": "parameter",
+        "use_sites": [
+          {
+            "call_id": "call:1",
+            "argument_path": [
+              "args",
+              2
+            ]
+          }
+        ],
+        "shape": [
+          2
+        ],
+        "dtype": "torch.float32",
+        "rank": 1,
+        "device_type": "cpu",
+        "device_index": null,
+        "mutable": false,
+        "version_of": null,
+        "producer_slot_id": null,
+        "output_path": null,
+        "input_binding": null,
+        "state_binding": {
+          "module_path": "conv",
+          "state_dict_name": "conv.bias",
+          "semantic_role": "bias",
+          "trainable": true,
+          "persistent": true,
+          "alias_group": null,
+          "captured_requires_grad": true,
+          "captured_grad_fn": false,
+          "host_escape_disposition": null
+        },
+        "host_escape": false,
+        "inert_sink": false
+      },
+      {
+        "slot_id": "state:head.weight",
+        "role": "parameter",
+        "use_sites": [
+          {
+            "call_id": "call:20",
+            "argument_path": [
+              "args",
+              1
+            ]
+          }
+        ],
+        "shape": [
+          3,
+          2
+        ],
+        "dtype": "torch.float32",
+        "rank": 2,
+        "device_type": "cpu",
+        "device_index": null,
+        "mutable": false,
+        "version_of": null,
+        "producer_slot_id": null,
+        "output_path": null,
+        "input_binding": null,
+        "state_binding": {
+          "module_path": "head",
+          "state_dict_name": "head.weight",
+          "semantic_role": "weight",
+          "trainable": true,
+          "persistent": true,
+          "alias_group": null,
+          "captured_requires_grad": true,
+          "captured_grad_fn": false,
+          "host_escape_disposition": null
+        },
+        "host_escape": false,
+        "inert_sink": false
+      },
+      {
+        "slot_id": "state:head.bias",
+        "role": "parameter",
+        "use_sites": [
+          {
+            "call_id": "call:20",
+            "argument_path": [
+              "args",
+              2
+            ]
+          }
+        ],
+        "shape": [
+          3
+        ],
+        "dtype": "torch.float32",
+        "rank": 1,
+        "device_type": "cpu",
+        "device_index": null,
+        "mutable": false,
+        "version_of": null,
+        "producer_slot_id": null,
+        "output_path": null,
+        "input_binding": null,
+        "state_binding": {
+          "module_path": "head",
+          "state_dict_name": "head.bias",
+          "semantic_role": "bias",
+          "trainable": true,
+          "persistent": true,
+          "alias_group": null,
+          "captured_requires_grad": true,
+          "captured_grad_fn": false,
+          "host_escape_disposition": null
+        },
+        "host_escape": false,
+        "inert_sink": false
+      }
+    ],
+    "input_boundary": [
+      {
+        "position": "arg:0",
+        "tensor_sites": [
+          {
+            "container_path": [],
+            "slot_id": "slot:input_1:1",
+            "metadata_reads": []
+          }
+        ]
+      }
+    ],
+    "control_witnesses": [
+      {
+        "witness_id": "witness:1",
+        "kind": "shape_structure_fact",
+        "order": 0,
+        "call_id": null,
+        "site_label": "model_input_metadata:('arg', 0):[]",
+        "observed_value": {
+          "entries": [
+            {
+              "key": {
+                "kind": "str",
+                "value": "model_input_metadata"
+              },
+              "value": {
+                "kind": "bool",
+                "value": true
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "position"
+              },
+              "value": {
+                "kind": "list",
+                "items": [
+                  {
+                    "kind": "str",
+                    "value": "arg"
+                  },
+                  {
+                    "kind": "int",
+                    "value": 0
+                  }
+                ]
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "path"
+              },
+              "value": {
+                "kind": "list",
+                "items": []
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "facts"
+              },
+              "value": {
+                "entries": []
+              }
+            }
+          ]
+        }
+      },
+      {
+        "witness_id": "witness:2",
+        "kind": "shape_structure_fact",
+        "order": 1,
+        "call_id": null,
+        "site_label": "input_structure:['arg', 0]",
+        "observed_value": {
+          "entries": [
+            {
+              "key": {
+                "kind": "str",
+                "value": "input_structure"
+              },
+              "value": {
+                "kind": "bool",
+                "value": true
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "position"
+              },
+              "value": {
+                "kind": "list",
+                "items": [
+                  {
+                    "kind": "str",
+                    "value": "arg"
+                  },
+                  {
+                    "kind": "int",
+                    "value": 0
+                  }
+                ]
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "site_count"
+              },
+              "value": {
+                "kind": "int",
+                "value": 1
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "nodes"
+              },
+              "value": {
+                "kind": "list",
+                "items": [
+                  {
+                    "entries": [
+                      {
+                        "key": {
+                          "kind": "str",
+                          "value": "path"
+                        },
+                        "value": {
+                          "kind": "list",
+                          "items": []
+                        }
+                      },
+                      {
+                        "key": {
+                          "kind": "str",
+                          "value": "kind"
+                        },
+                        "value": {
+                          "kind": "str",
+                          "value": "tensor"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "witness_id": "witness:3",
+        "kind": "shape_structure_fact",
+        "order": 2,
+        "call_id": null,
+        "site_label": "module_training_mode:",
+        "observed_value": {
+          "entries": [
+            {
+              "key": {
+                "kind": "str",
+                "value": "module_training_mode"
+              },
+              "value": {
+                "kind": "bool",
+                "value": true
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "modes"
+              },
+              "value": {
+                "entries": [
+                  {
+                    "key": {
+                      "kind": "str",
+                      "value": "self"
+                    },
+                    "value": {
+                      "kind": "bool",
+                      "value": true
+                    }
+                  },
+                  {
+                    "key": {
+                      "kind": "str",
+                      "value": "conv"
+                    },
+                    "value": {
+                      "kind": "bool",
+                      "value": true
+                    }
+                  },
+                  {
+                    "key": {
+                      "kind": "str",
+                      "value": "head"
+                    },
+                    "value": {
+                      "kind": "bool",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "witness_id": "witness:4",
+        "kind": "shape_structure_fact",
+        "order": 3,
+        "call_id": null,
+        "site_label": "state_metadata:conv.bias",
+        "observed_value": {
+          "entries": [
+            {
+              "key": {
+                "kind": "str",
+                "value": "state_metadata"
+              },
+              "value": {
+                "kind": "bool",
+                "value": true
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "state"
+              },
+              "value": {
+                "kind": "str",
+                "value": "conv.bias"
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "facts"
+              },
+              "value": {
+                "entries": [
+                  {
+                    "key": {
+                      "kind": "str",
+                      "value": "grad_fn"
+                    },
+                    "value": {
+                      "kind": "bool",
+                      "value": false
+                    }
+                  },
+                  {
+                    "key": {
+                      "kind": "str",
+                      "value": "requires_grad"
+                    },
+                    "value": {
+                      "kind": "bool",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "witness_id": "witness:5",
+        "kind": "shape_structure_fact",
+        "order": 4,
+        "call_id": null,
+        "site_label": "state_metadata:conv.weight",
+        "observed_value": {
+          "entries": [
+            {
+              "key": {
+                "kind": "str",
+                "value": "state_metadata"
+              },
+              "value": {
+                "kind": "bool",
+                "value": true
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "state"
+              },
+              "value": {
+                "kind": "str",
+                "value": "conv.weight"
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "facts"
+              },
+              "value": {
+                "entries": [
+                  {
+                    "key": {
+                      "kind": "str",
+                      "value": "grad_fn"
+                    },
+                    "value": {
+                      "kind": "bool",
+                      "value": false
+                    }
+                  },
+                  {
+                    "key": {
+                      "kind": "str",
+                      "value": "requires_grad"
+                    },
+                    "value": {
+                      "kind": "bool",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "witness_id": "witness:6",
+        "kind": "shape_structure_fact",
+        "order": 5,
+        "call_id": null,
+        "site_label": "state_metadata:head.bias",
+        "observed_value": {
+          "entries": [
+            {
+              "key": {
+                "kind": "str",
+                "value": "state_metadata"
+              },
+              "value": {
+                "kind": "bool",
+                "value": true
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "state"
+              },
+              "value": {
+                "kind": "str",
+                "value": "head.bias"
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "facts"
+              },
+              "value": {
+                "entries": [
+                  {
+                    "key": {
+                      "kind": "str",
+                      "value": "grad_fn"
+                    },
+                    "value": {
+                      "kind": "bool",
+                      "value": false
+                    }
+                  },
+                  {
+                    "key": {
+                      "kind": "str",
+                      "value": "requires_grad"
+                    },
+                    "value": {
+                      "kind": "bool",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "witness_id": "witness:7",
+        "kind": "shape_structure_fact",
+        "order": 6,
+        "call_id": null,
+        "site_label": "state_metadata:head.weight",
+        "observed_value": {
+          "entries": [
+            {
+              "key": {
+                "kind": "str",
+                "value": "state_metadata"
+              },
+              "value": {
+                "kind": "bool",
+                "value": true
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "state"
+              },
+              "value": {
+                "kind": "str",
+                "value": "head.weight"
+              }
+            },
+            {
+              "key": {
+                "kind": "str",
+                "value": "facts"
+              },
+              "value": {
+                "entries": [
+                  {
+                    "key": {
+                      "kind": "str",
+                      "value": "grad_fn"
+                    },
+                    "value": {
+                      "kind": "bool",
+                      "value": false
+                    }
+                  },
+                  {
+                    "key": {
+                      "kind": "str",
+                      "value": "requires_grad"
+                    },
+                    "value": {
+                      "kind": "bool",
+                      "value": true
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "coverage_gaps": [],
+    "required_witness_inventory": {
+      "registry_version": "witness_family_registry_v2",
+      "families": [
+        {
+          "family": "scalar_bool",
+          "disposition": "inventory_indexed",
+          "members": []
+        },
+        {
+          "family": "loop_predicate",
+          "disposition": "inventory_indexed",
+          "members": []
+        },
+        {
+          "family": "conditional_arm_entry",
+          "disposition": "inventory_indexed",
+          "members": []
+        },
+        {
+          "family": "tensor_derived_scalar_literal",
+          "disposition": "inventory_indexed",
+          "members": []
+        },
+        {
+          "family": "input_structure",
+          "disposition": "inventory_indexed",
+          "members": [
+            "arg:0"
+          ]
+        },
+        {
+          "family": "model_input_literal",
+          "disposition": "independent_ceiling",
+          "members": []
+        },
+        {
+          "family": "model_input_metadata",
+          "disposition": "inventory_indexed",
+          "members": [
+            "model_input_metadata:('arg', 0):[]"
+          ]
+        },
+        {
+          "family": "module_training_mode",
+          "disposition": "inventory_indexed",
+          "members": [
+            "module_training_mode:"
+          ]
+        },
+        {
+          "family": "state_metadata",
+          "disposition": "inventory_indexed",
+          "members": [
+            "conv.bias::grad_fn",
+            "conv.bias::requires_grad",
+            "conv.weight::grad_fn",
+            "conv.weight::requires_grad",
+            "head.bias::grad_fn",
+            "head.bias::requires_grad",
+            "head.weight::grad_fn",
+            "head.weight::requires_grad"
+          ]
+        },
+        {
+          "family": "container",
+          "disposition": "inventory_indexed",
+          "members": []
+        },
+        {
+          "family": "unbound_state_escape",
+          "disposition": "inventory_indexed",
+          "members": []
+        },
+        {
+          "family": "inert_sink",
+          "disposition": "claim_only",
+          "members": []
+        },
+        {
+          "family": "unbound_state_inert",
+          "disposition": "claim_only",
+          "members": []
+        }
+      ]
+    },
+    "witness_completeness": "complete",
+    "rng_profile": {
+      "host_rng_consumed": false,
+      "capture_seed": 2890138518
+    },
+    "ambient_context": {
+      "default_dtype": "torch.float32",
+      "default_device": "cpu",
+      "float32_matmul_precision": "highest",
+      "deterministic_algorithms": false,
+      "deterministic_algorithms_warn_only": false,
+      "cuda_matmul_allow_tf32": false,
+      "cudnn_allow_tf32": true,
+      "cudnn_deterministic": false,
+      "cudnn_benchmark": false,
+      "cudnn_enabled": true,
+      "flash_sdp_enabled": true,
+      "mem_efficient_sdp_enabled": true,
+      "math_sdp_enabled": true,
+      "grad_enabled": true,
+      "inference_mode": false,
+      "fill_uninitialized_memory": true,
+      "attestation_ineligible_context": false
+    },
+    "compatibility": {
+      "torchlens_version": "2.34.1",
+      "python_version": "3.10.20",
+      "backend_version": "2.13.0+cu130",
+      "descriptor_version": "sparse_recorded_taken_path_v2",
+      "call_recipe_version": "non_tensor_args_tensor_slots_context_and_obligations_v3",
+      "callable_ref_schema_version": 1,
+      "initializer_policy_version": "torchlens_role_init_v2"
+    },
+    "preflight": {
+      "passed": true,
+      "diagnostics": []
+    },
+    "unsupported_sites": []
+  }
+}
