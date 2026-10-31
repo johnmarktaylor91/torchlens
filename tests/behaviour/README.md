@@ -75,8 +75,10 @@ Add a row, never a file.
   `TOY_CASES` in `cases.py`. Tags the features consult: `child_module`,
   `float_output`, `recurrent`, `stochastic` (the forward draws random
   numbers, so second-run comparisons are not applicable; a corpus case gets it
-  when a `func:` feature is on the hand list or torch tags the ATen operator
-  `nondeterministic_seeded`), `containers` (the
+  when a `func:` feature is on the hand list or names an ATen sampler that
+  always draws: torch tags it `nondeterministic_seeded`, it takes a `Generator?`
+  argument and no `train`/`training` gate, so `exponential_` counts and
+  eval-mode `lstm` or `dropout_` do not), `containers` (the
   inputs are not one tensor), `inplace`, `views`, `branching`, `dtype`.
 
 ## Adding a feature

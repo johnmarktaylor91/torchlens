@@ -42,13 +42,32 @@ _RANDOM_FUNCS = frozenset(
 _INPLACE_MARKERS = ("_",)
 
 
+def _always_draws(op: Any) -> bool:
+    """Whether an ATen overload draws random numbers on every call.
+
+    Torch's ``nondeterministic_seeded`` tag also covers ops whose draw is gated
+    by a ``train``/``training`` flag (the dropout family, ``lstm``, ``gru``,
+    ``scaled_dot_product_attention``); those are deterministic on the eval-mode
+    models the net runs. A sampler that always draws takes an explicit
+    ``Generator?`` argument and has no such gate.
+    """
+
+    if torch.Tag.nondeterministic_seeded not in getattr(op, "tags", ()):
+        return False
+    arguments = getattr(getattr(op, "_schema", None), "arguments", ())
+    has_generator = any(str(a.type).startswith("Generator") for a in arguments)
+    gated = any(a.name in {"train", "training"} for a in arguments)
+    return has_generator and not gated
+
+
 def _draws_random_numbers(feature: str) -> bool:
     """Whether a ``func:<name>`` coverage feature names an op that draws random numbers.
 
     The hand list above is the floor; beyond it the test is torch's own
-    ``nondeterministic_seeded`` tag on the ATen operator (``exponential_``,
-    ``uniform_``, ``random_`` and every other seeded sampler, so a Gumbel-softmax
-    forward counts as stochastic without a name being spelled here).
+    ``nondeterministic_seeded`` tag on an ATen sampler that always draws
+    (``exponential_``, ``uniform_``, ``random_``, ``cauchy_``, ..., so a
+    Gumbel-softmax forward counts as stochastic without a name being spelled
+    here), judged by ``_always_draws``.
     """
 
     if feature in _RANDOM_FUNCS:
@@ -62,10 +81,8 @@ def _draws_random_numbers(feature: str) -> bool:
         overloads = getattr(packet, "overloads", None)
         if not callable(overloads):
             continue
-        for overload_name in overloads():
-            tags = getattr(getattr(packet, overload_name), "tags", ())
-            if torch.Tag.nondeterministic_seeded in tags:
-                return True
+        if any(_always_draws(getattr(packet, overload_name)) for overload_name in overloads()):
+            return True
     return False
 
 
