@@ -510,10 +510,6 @@ _DIAGNOSTIC_AUDIT_STATE = frozenset(
         ("torchlens/_trace_core/op_store.py", "_AUDIT_READS"),
         ("torchlens/_trace_core/op_store.py", "_AUDIT_ROW_RELEASES"),
         ("torchlens/_trace_core/op_store.py", "_AUDIT_WRITE_EFFECTS"),
-        ("torchlens/_postprocess/__init__.py", "RECORDED_STEP_CLONE_READS"),
-        ("torchlens/_postprocess/__init__.py", "RECORDED_STEP_EFFECTIVE_WRITES"),
-        ("torchlens/_postprocess/__init__.py", "RECORDED_STEP_READS"),
-        ("torchlens/_postprocess/__init__.py", "RECORDED_STEP_WRITES"),
         # Monotone count of run-fold legality-grammar checks (F11 B2): a pure
         # test instrument read via legality_check_count(); never reset by
         # library code and never steers behavior.
@@ -528,10 +524,8 @@ _DIAGNOSTIC_AUDIT_STATE = frozenset(
 )
 """Diagnostic side-channels: audit instrumentation and last-run readbacks.
 
-The audit rows are armed only by an environment variable and stay empty in
-production runs (``TORCHLENS_POSTPROCESS_ASSERTIONS`` /
-``TORCHLENS_POSTPROCESS_READ_AUDIT`` off); they accumulate within one armed
-window and are scoped by the executor's begin/end pass. The validation
+The op-store audit rows are armed only through ``begin_cell_write_audit`` and
+stay empty in production runs. The validation
 last-run slots are overwritten per run and never steer a verdict.
 """
 

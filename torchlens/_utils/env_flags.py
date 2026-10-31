@@ -178,23 +178,6 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
             values=("", "none"),
         ),
         EnvFlagSpec(
-            name="TORCHLENS_POSTPROCESS_ASSERTIONS",
-            kind="bool",
-            reader="torchlens._postprocess",
-            description=(
-                "Arms the postprocess write-audit windows (inline closed-vocabulary "
-                "parser, ledgered: it adds the -O/-OO stripped-assertions refusal "
-                "and the audit-specific refusal code)."
-            ),
-        ),
-        EnvFlagSpec(
-            name="TORCHLENS_POSTPROCESS_WRITE_AUDIT",
-            kind="enum",
-            reader="torchlens._postprocess",
-            description="Write-audit mode: unset = enforce, 'record' = record.",
-            values=("", "record"),
-        ),
-        EnvFlagSpec(
             name="TORCHLENS_SUMMARY_STYLE",
             kind="enum",
             reader="torchlens.report._summary_charset",
@@ -204,13 +187,6 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
                 "failing toward ASCII."
             ),
             values=("", "ascii", "unicode"),
-        ),
-        EnvFlagSpec(
-            name="TORCHLENS_POSTPROCESS_READ_AUDIT",
-            kind="enum",
-            reader="torchlens._postprocess",
-            description="Read-audit mode: unset = off, 'record', or 'enforce'.",
-            values=("", "record", "enforce"),
         ),
         EnvFlagSpec(
             name="TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS",
