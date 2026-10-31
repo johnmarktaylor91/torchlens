@@ -110,6 +110,28 @@ def test_paddle_default_tlspec_round_trip_materializes_payloads(tmp_path: Path) 
     _assert_paddle_tensor_equal(_saved_output(loaded), expected)
 
 
+def test_paddle_tlspec_round_trip_keeps_scalar_shape(tmp_path: Path) -> None:
+    """A 0-d op output loads back 0-d, not ``[1]``.
+
+    ``np.ascontiguousarray`` promotes a 0-d host array to shape ``(1,)``; the
+    Paddle materializer passed its result straight to ``paddle.to_tensor``, so a
+    saved scalar came back one-dimensional.
+    """
+
+    x = paddle.to_tensor(np.asarray([[1.0, -2.0], [3.0, 4.0]], dtype=np.float32))
+    trace = tl.trace(lambda value: paddle.sum(value), x, backend="paddle")
+    saved = trace[trace.output_layers[0]].out
+    assert tuple(saved.shape) == ()
+    path = tmp_path / "paddle_scalar.tlspec"
+
+    trace.save(path)
+    loaded = tl.load(path)
+
+    restored = loaded[loaded.output_layers[0]].out
+    assert tuple(restored.shape) == ()
+    np.testing.assert_allclose(restored.numpy(), saved.numpy())
+
+
 def test_paddle_tlspec_manifest_runtime_fingerprint(tmp_path: Path) -> None:
     """Paddle manifest should include the real runtime fingerprint."""
 
