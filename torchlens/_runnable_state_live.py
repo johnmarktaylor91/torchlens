@@ -87,7 +87,11 @@ def _unalias_trace_payloads(trace: Any, changed: list[torch.Tensor]) -> None:
         # then a post-capture mutation its reference tripwire must still see.
         return
     from ._data_classes._state_adapter import state_items
+    from ._data_classes._trace_missing_attrs import is_live_trace
 
+    if not is_live_trace(trace):
+        # A PartialTrace (failed capture) or husked trace holds no layer payloads.
+        return
     storages = {
         (tensor.device, tensor.untyped_storage().data_ptr())
         for tensor in changed

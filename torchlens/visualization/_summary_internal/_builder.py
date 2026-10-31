@@ -36,7 +36,9 @@ def format_model_repr(trace: Trace) -> str:
             f"state={state})"
         )
 
-    layer_logs = trace._layer_logs or {}
+    # cleanup() deletes the layer store; a husked trace still has a repr.
+    husked = bool(trace.__dict__.get("_tl_cleaned_up", False))
+    layer_logs = {} if husked else (trace._layer_logs or {})
     # Weightsfree memo L7: the repr was an unmarked channel — a slice of a
     # hypothesis is a hypothesis, and so is the identity card. The claim
     # ladder rides the session discharge state (HYPOTHESIS / CORROBORATED /

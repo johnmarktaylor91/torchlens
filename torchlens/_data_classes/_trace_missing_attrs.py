@@ -99,3 +99,18 @@ def _raise_missing_trace_attribute(trace: Trace, name: str) -> Any:
     if hint is not None:
         raise AttributeError(f"{type(trace).__name__!s} object has no attribute {name!r}; {hint}")
     raise AttributeError(f"{type(trace).__name__!s} object has no attribute {name!r}")
+
+
+def is_live_trace(obj: Any) -> bool:
+    """Return whether ``obj`` is a ``Trace`` that still holds its stores.
+
+    Readers that accept any capture-shaped subject (a ``PartialTrace``, a
+    layer/module accessor, an ``Op``, a ``Recording``, or a trace husked by
+    ``cleanup()``) check this before reading a private Trace store, so only a
+    live Trace reaches the direct, fail-closed read and every other subject
+    keeps the reader's empty answer.
+    """
+
+    from .trace import Trace
+
+    return isinstance(obj, Trace) and not obj.__dict__.get("_tl_cleaned_up", False)

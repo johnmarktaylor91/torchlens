@@ -17,6 +17,7 @@ from .._capture_honesty import (
     poison_facts,
     refuse_presenter_subject,
 )
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 Audience = Literal["researcher", "practitioner", "auto"]
@@ -642,11 +643,13 @@ def _capture_summary_lines(log: Any) -> list[str]:
         core = factcore(log)
     except Exception:  # noqa: BLE001 -- cleaned/foreign logs keep the degraded report
         return [
-            f"- Layers logged: {_safe_len(log._layer_list)}.",
-            f"- Operations logged: {int(log._num_ops or 0)}.",
+            f"- Layers logged: {_safe_len(log._layer_list if is_live_trace(log) else None)}.",
+            f"- Operations logged: {int((log._num_ops if is_live_trace(log) else 0) or 0)}.",
         ]
     pass_counts = [
-        int(value) for value in (log._layer_num_calls or {}).values() if isinstance(value, int)
+        int(value)
+        for value in ((log._layer_num_calls if is_live_trace(log) else None) or {}).values()
+        if isinstance(value, int)
     ]
     max_ops = max(pass_counts, default=1)
     return [
@@ -680,7 +683,7 @@ def _backward_summary_lines(log: Any) -> list[str]:
 
     if not bool(getattr(log, "has_backward_pass", False)):
         return ["- No backward passes are recorded on this log."]
-    pass_count = int(log._num_backward_passes or 0)
+    pass_count = int((log._num_backward_passes if is_live_trace(log) else 0) or 0)
     grad_fn_count = len(getattr(getattr(log, "autograd", None), "grad_fns", None) or ())
     grad_fn_call_count = len(getattr(getattr(log, "autograd", None), "grad_fn_calls", None) or ())
     saved_grad_count = _safe_len(getattr(log, "saved_grad_ops", None))
@@ -903,7 +906,7 @@ def _shared_parameter_line(log: Any) -> str:
     """
 
     shared = 0
-    for param_log in log._param_logs or []:
+    for param_log in (log._param_logs if is_live_trace(log) else None) or []:
         used_by_ops = set(getattr(param_log, "used_by_ops", ()) or ())
         try:
             num_calls = int(getattr(param_log, "num_calls", 0) or 0)
@@ -978,7 +981,7 @@ def _operation_mix_line(log: Any) -> str:
 
     names = [
         str(getattr(layer, "func_name", "unknown"))
-        for layer in log._layer_list or []
+        for layer in (log._layer_list if is_live_trace(log) else None) or []
         if str(getattr(layer, "func_name", "none")) != "none"
     ]
     if not names:
@@ -1004,7 +1007,7 @@ def _operational_status_line(log: Any) -> str:
     cache_hit = bool(getattr(log, "capture_cache_hit", False))
     streamed = sum(
         1
-        for layer in log._layer_list or []
+        for layer in (log._layer_list if is_live_trace(log) else None) or []
         if getattr(layer, "out_ref", None) is not None
         or getattr(layer, "grad_ref", None) is not None
     )

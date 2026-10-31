@@ -169,10 +169,12 @@ def _validity_token(trace: Any) -> tuple[Any, ...]:
     """
 
     refs = trace.__dict__.get("_backward_gradfn_refs")
+    cleaned = bool(trace.__dict__.get("_tl_cleaned_up", False))
+    # cleanup() deletes the pass counter; the cleaned flag carries that change.
     return (
-        int(trace._num_backward_passes),
+        0 if cleaned else int(trace._num_backward_passes),
         None if refs is None else len(refs),
-        bool(trace.__dict__.get("_tl_cleaned_up", False)),
+        cleaned,
     )
 
 

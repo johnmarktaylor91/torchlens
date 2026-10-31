@@ -344,9 +344,14 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
         intervention evidence exists; ``None`` for an untouched log.
     """
 
+    from ._data_classes._trace_missing_attrs import is_live_trace
+
     replaced: list[str] = []
     fires = 0
-    for layer in log._layer_list or ():
+    # Export subjects include accessors, records, a PartialTrace and husked
+    # traces; only a live Trace has layers whose edit records count here.
+    layers = log._layer_list if is_live_trace(log) else None
+    for layer in layers or ():
         records = getattr(layer, "edits", None) or ()
         fires += len(records)
         if bool(getattr(layer, "is_edited", False)):

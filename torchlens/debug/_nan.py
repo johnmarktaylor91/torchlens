@@ -790,7 +790,10 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
 
     amp_disclosure: str | None = None
     if trace is not None:
-        low_precision = {str(getattr(op, "dtype", "")) for op in trace._layer_list} & {
+        from .._data_classes._trace_missing_attrs import is_live_trace
+
+        layers = trace._layer_list if is_live_trace(trace) else ()
+        low_precision = {str(getattr(op, "dtype", "")) for op in layers} & {
             "torch.float16",
             "torch.bfloat16",
         }
