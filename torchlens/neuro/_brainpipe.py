@@ -396,7 +396,7 @@ class ExtractionPlan:
             Tensor with leading stimulus dimension, or iterable of items.
         stimulus_ids:
             Optional per-stimulus identifiers (disk mode).
-        output_dir:
+        path:
             Artifact directory (disk mode) or ``None`` for in-memory.
         resume:
             Continue an interrupted artifact (disk mode).

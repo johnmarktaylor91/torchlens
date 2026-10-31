@@ -62,16 +62,16 @@ def run(
     output_transform: Any | None = None,
     fast_refused: str | None = None,
 ) -> Trace:
-    """Full-forward run with the active intervention spec from ``log``.
+    """Full-forward run with the active intervention spec from ``trace``.
 
     Re-executes ``model`` through TorchLens decorated wrappers with the current
     intervention spec installed in runtime context. A fresh ``Trace`` is
-    built off to the side, validated, then atomically swapped into ``log``.
+    built off to the side, validated, then atomically swapped into ``trace``.
     Concurrent reads during run are unsupported; no lock is taken.
 
     Parameters
     ----------
-    log:
+    trace:
         Trace to update in place after the fresh run validates.
     model:
         Model to execute through the run engine.
@@ -94,7 +94,7 @@ def run(
     Returns
     -------
     Trace
-        The same ``log`` object after atomic run-state replacement.
+        The same ``trace`` object after atomic run-state replacement.
     """
 
     replay_options = merge_replay_options(replay=replay)

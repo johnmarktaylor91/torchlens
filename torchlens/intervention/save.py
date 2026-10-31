@@ -195,7 +195,7 @@ def save_intervention(
 
     Parameters
     ----------
-    log:
+    trace:
         Trace-like object whose ``_intervention_spec`` should be persisted.
     path:
         Destination ``.tlspec`` directory path.

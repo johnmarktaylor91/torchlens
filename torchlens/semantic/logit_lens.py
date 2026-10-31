@@ -361,7 +361,7 @@ def logit_lens(
         user lens may carry a ``model_identity`` attribute (on the callable,
         the mapping, or each per-layer callable) holding the identity record
         of the model it was built for.
-    validate:
+    verify:
         Whether to check the lens. For the reconstructed default lens: re-project
         the last block's captured ``resid_post`` and compare against the
         captured logits. Fail-closed: validation that cannot run (missing

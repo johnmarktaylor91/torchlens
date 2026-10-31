@@ -27,7 +27,7 @@ def attribute(
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` from the model being attributed.
     method:
         Captum attribution object exposing ``attribute``.
@@ -156,7 +156,7 @@ def layer(trace: Any, site: Any) -> nn.Module:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` with a live source model reference.
     site:
         Module address, module pass label, layer selector, or layer object.

@@ -12,7 +12,7 @@ def encode(trace: Any, site: Any, sae: Any) -> Any:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` containing saved outs.
     site:
         Layer label, selector, or layer object to encode.
@@ -59,7 +59,7 @@ def reconstruct(trace: Any, site: Any, sae: Any) -> Any:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` containing saved outs.
     site:
         Layer label, selector, or layer object to reconstruct.

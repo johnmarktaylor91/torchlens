@@ -203,7 +203,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupted_graph: Any) -> An
         circuit runs as one call: pass every edge outside it,
         ``[e for name, e in graph.edges.items() if name not in kept]``.
         No edges returns an unpatched fork.
-    corrupt:
+    corrupted_graph:
         The :class:`ComponentGraph` of the corrupted input (same model,
         same shapes); each edge's corrupted contribution is
         ``corrupt.nodes[edge.sender.name].value``.

@@ -16,7 +16,7 @@ def montage(images: Sequence[Image.Image], max_items: int, max_size: int = 600) 
     ----------
     images:
         Input images to render.
-    max_n:
+    max_items:
         Maximum number of images to include.
     max_size:
         Maximum montage width or height.
@@ -29,7 +29,7 @@ def montage(images: Sequence[Image.Image], max_items: int, max_size: int = 600) 
     Raises
     ------
     ValueError
-        If ``max_n`` is less than one or ``images`` is empty.
+        If ``max_items`` is less than one or ``images`` is empty.
     """
 
     if max_items < 1:
@@ -58,7 +58,7 @@ def text_table(strings: Sequence[str], max_items: int) -> str:
     ----------
     strings:
         Text items to render.
-    max_n:
+    max_items:
         Maximum number of strings to include before a ``+N more`` row.
 
     Returns
@@ -69,7 +69,7 @@ def text_table(strings: Sequence[str], max_items: int) -> str:
     Raises
     ------
     ValueError
-        If ``max_n`` is less than one.
+        If ``max_items`` is less than one.
     """
 
     if max_items < 1:

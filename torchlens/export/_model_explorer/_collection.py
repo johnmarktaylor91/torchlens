@@ -40,7 +40,7 @@ def to_model_explorer_dict(trace: Any, **options: Any) -> dict[str, Any]:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace``.
     **options:
         Flat keyword spellings of :class:`ModelExplorerOptions` (an unknown

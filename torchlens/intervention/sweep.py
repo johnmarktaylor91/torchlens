@@ -43,11 +43,11 @@ def sweep(
         PyTorch module to capture.
     x:
         Positional input argument or argument container passed to ``tl.trace``.
-    at:
+    site:
         Intervention site target. Strings match either an exact TorchLens label
         or a function name; selectors and predicate callables are used directly.
     values:
-        Replacement values to sweep at ``at``.
+        Replacement values to sweep at ``site``.
     input_kwargs:
         Optional keyword inputs passed to ``model.forward``.
     names:
@@ -76,7 +76,7 @@ def sweep(
         collides with ``"baseline"``, or an explicit ``intervene`` argument
         is supplied.
     TypeError
-        If ``at`` cannot be used as a capture-time intervention predicate.
+        If ``site`` cannot be used as a capture-time intervention predicate.
     """
 
     # Resolve positional `values` (may be MISSING if it was skipped when param was keyword-only)

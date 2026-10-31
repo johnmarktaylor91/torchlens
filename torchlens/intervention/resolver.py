@@ -971,7 +971,7 @@ def resolve_sites(
 
     Parameters
     ----------
-    log:
+    trace:
         Model log whose captured layer-pass records should be searched.
     selector:
         Selector, target spec, frozen target spec, or non-strict bare string.

@@ -144,10 +144,10 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         Parameters
         ----------
-        vis_mode, vis_call_depth, vis_outpath, vis_graph_overrides, module, node_mode, \
+        vis_mode, vis_call_depth, path, vis_graph_overrides, module, node_mode, \
         node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn, vis_edge_overrides, \
         vis_grad_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
-        show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme, \
+        show_buffers, direction, vis_node_placement, vis_renderer, theme, \
         vis_intervention_mode, vis_show_cone, code_panel, order_siblings, show_containers,
         container_max_inline, show_input_transform_summary, show_orphans:
             Forwarded unchanged to :func:`torchlens.visualization._render_dot.draw`.
@@ -155,7 +155,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             from both inputs and outputs -- as a dashed, greyed cluster of edgeless nodes,
             instead of omitting them. Orphans must have been retained at capture time
             (capture with ``keep_orphans=True``).
-            ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
+            ``show_buffers`` accepts ``"never"``, ``"meaningful"``, or
             ``"always"``. ``direction`` accepts ``"bottomup"``, ``"topdown"``,
             ``"leftright"``, or ``"rightleft"``.
             ``vis_outpath=None`` (the default) writes a collision-safe file in
@@ -573,8 +573,8 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         Parameters
         ----------
-        vis_outpath, vis_graph_overrides, node_spec_fn, collapsed_node_spec_fn, \
-        vis_node_mode, vis_edge_overrides, vis_save_only, vis_fileformat, \
+        path, vis_graph_overrides, node_spec_fn, collapsed_node_spec_fn, \
+        vis_node_mode, vis_edge_overrides, vis_save_only, file_format, \
         vis_direction, code_panel, vis_mode, bwd, show_legend:
             Forwarded unchanged to
             :func:`torchlens.visualization._render_entrypoints.render_backward_graph`.
@@ -642,9 +642,9 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         Parameters
         ----------
-        vis_outpath, vis_graph_overrides, node_spec_fn, backward_node_spec_fn, \
-        vis_edge_overrides, vis_save_only, vis_fileformat, vis_direction, \
-        vis_mode, intervening_cluster, show_buffer_layers, bwd, show_legend:
+        path, vis_graph_overrides, node_spec_fn, backward_node_spec_fn, \
+        vis_edge_overrides, vis_save_only, file_format, vis_direction, \
+        vis_mode, intervening_cluster, show_buffers, bwd, show_legend:
             Forwarded unchanged to
             :func:`torchlens.visualization._render_entrypoints.render_combined_graph`.
 
@@ -941,8 +941,8 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         Parameters
         ----------
-        vis_mode, vis_call_depth, vis_outpath, vis_save_only, vis_fileformat, \
-        vis_buffers, vis_direction, vis_theme:
+        vis_mode, vis_call_depth, path, vis_save_only, file_format, \
+        show_buffers, vis_direction, theme:
             Forwarded unchanged to
             ``torchlens.experimental.dagua._bridge.render_trace_with_dagua``.
 
@@ -980,7 +980,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         Parameters
         ----------
-        vis_mode, vis_call_depth, show_buffer_layers, direction, include_grad_edges:
+        vis_mode, vis_call_depth, show_buffers, direction, include_grad_edges:
             Forwarded unchanged to
             :func:`torchlens.experimental.dagua.trace_to_dagua_graph`.
 

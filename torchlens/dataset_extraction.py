@@ -331,7 +331,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         Number of stimuli per forward pass.
     device:
         Optional device for model and stimuli.
-    output_dir:
+    path:
         Optional directory. When supplied, each batch is committed as an
         immutable shard under the v2 protocol and paths are returned.
     output_transform:
@@ -453,7 +453,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         left-padding that cannot be corrected, row-count drift, ragged
         refusals, pool/dtype geometry refusals, and id validation.
     DatasetExtractionResumeError
-        When the artifact in ``output_dir`` cannot be safely continued.
+        When the artifact in ``path`` cannot be safely continued.
     torchlens.errors.TransformContractError
         When the transform slot cannot be coerced or violates its plan.
 
@@ -633,7 +633,7 @@ def load_extraction(
 
     Parameters
     ----------
-    output_dir:
+    path:
         Directory previously written by disk-mode :func:`extract_dataset`.
     layers:
         Optional subset of output keys to load; defaults to every key.
@@ -758,7 +758,7 @@ def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, An
 
     Parameters
     ----------
-    output_dir:
+    path:
         Artifact directory.
     new_ids:
         Replacement identifiers, one per stimulus row, in row order.

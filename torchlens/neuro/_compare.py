@@ -456,7 +456,7 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
     - ``"rsa"``: ``tl.repgeom.compare_rdms(rdm(site, rdm_metric),
       rdm(target, rdm_metric), rsa_method)``.
     - ``"ridge"``: the cross-validated ridge score of the module docstring
-      (seeded ``n_folds`` split, penalty per fold by exact leave-one-out on
+      (seeded ``num_folds`` split, penalty per fold by exact leave-one-out on
       the training fold, mean Pearson r over target columns of the
       out-of-fold predictions).
     - ``"cka"``: linear CKA with the biased Gretton HSIC (the variant
@@ -484,7 +484,7 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
         ``"spearman"``, ``"pearson"`` or ``"kendall"`` (tau-a).
     ridge_alphas:
         Penalty grid (absolute, on centred features).
-    n_folds:
+    num_folds:
         Cross-validation folds for ridge (each training fold needs at least
         3 stimuli).
     num_resamples:

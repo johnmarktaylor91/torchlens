@@ -338,7 +338,7 @@ def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settin
     seed
         Seed of the re-initialization draws (default 0), drawn inside a forked
         random state that is restored afterwards.
-    keep_maps
+    keep_values
         Keep every randomized map in ``steps`` (default ``True``); past
         256 MiB of kept maps the test warns once and names
         ``keep_maps=False``.

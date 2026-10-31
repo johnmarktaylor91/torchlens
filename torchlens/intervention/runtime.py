@@ -1861,7 +1861,7 @@ def do(trace: Any, *args: Any, **kwargs: Any) -> Any:
 
     Parameters
     ----------
-    log:
+    trace:
         Trace-like object that will eventually receive the operation.
     *args:
         Positional arguments forwarded to ``log.do``.

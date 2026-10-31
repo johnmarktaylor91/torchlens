@@ -33,7 +33,7 @@ def model_explorer(
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination JSON path. Overlay sidecars and the manifest land next

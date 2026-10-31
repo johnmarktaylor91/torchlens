@@ -45,7 +45,7 @@ def model_explorer_diff(
     members:
         A TorchLens ``Bundle`` with exactly two members, or a two-item
         sequence of ``Trace`` objects (subject, reference).
-    out_dir:
+    path:
         Destination directory for the paired collections, per-pane
         ``bundle_delta`` node data, sync config, manifest, and README.
     label:

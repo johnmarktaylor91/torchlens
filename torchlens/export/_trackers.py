@@ -31,7 +31,7 @@ def tensorboard(trace: Any, writer: Any, *, step: int, prefix: str = "torchlens"
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to summarize.
     writer:
         Existing writer object, for example ``SummaryWriter``.
@@ -70,9 +70,9 @@ def wandb(trace: Any, to: Any | None = None, name: str = "torchlens_trace") -> d
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
-    run:
+    to:
         Optional existing W&B run object. If omitted, ``wandb.run`` is used when
         present, but a new run is not created.
     name:
@@ -150,7 +150,7 @@ def mlflow(
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     client:
         Optional ``mlflow`` module or ``mlflow.MlflowClient`` (or an object
@@ -314,9 +314,9 @@ def aim(trace: Any, to: Any | None = None, prefix: str = "torchlens") -> dict[st
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
-    run:
+    to:
         Optional object exposing ``track``, ``add_tag`` and item assignment.
     prefix:
         Metric, param and tag name prefix.
@@ -331,7 +331,7 @@ def aim(trace: Any, to: Any | None = None, prefix: str = "torchlens") -> dict[st
     Raises
     ------
     TypeError
-        If ``run`` lacks ``track``, ``add_tag`` or item assignment.
+        If ``to`` lacks ``track``, ``add_tag`` or item assignment.
     """
 
     metrics = _summary_metrics(trace)

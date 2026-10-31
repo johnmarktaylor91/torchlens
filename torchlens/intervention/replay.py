@@ -148,7 +148,7 @@ def push(
 
     Parameters
     ----------
-    log:
+    trace:
         Model log to mutate in place.
     replay:
         Grouped replay options (``ReplayOptions``: ``strict``, ``hooks``).
@@ -194,7 +194,7 @@ def push_from(
 
     Parameters
     ----------
-    log:
+    trace:
         Model log to mutate in place.
     site:
         Layer pass or selector resolving to the origin site. The origin's

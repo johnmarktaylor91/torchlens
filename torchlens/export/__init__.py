@@ -68,7 +68,7 @@ def model_explorer(trace: Any, path: str | Path, **kwargs: Any) -> Path:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
@@ -98,7 +98,7 @@ def model_explorer_diff(members: Any, path: str | Path, **kwargs: Any) -> Path:
     ----------
     members:
         Bundle or sequence of logs to compare.
-    out_dir:
+    path:
         Destination directory.
     **kwargs:
         Options forwarded verbatim (``label=``, ``privacy_profile=``).
@@ -205,7 +205,7 @@ def svg(trace: Any, path: str | Path, *, editable: bool = True) -> Path:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination SVG path.
@@ -249,7 +249,7 @@ def html(
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` or ``PartialTrace`` to export.
     path:
         Destination HTML path.
@@ -297,7 +297,7 @@ def chrome_trace(trace: Any, path: str | Path) -> Path:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
@@ -369,7 +369,7 @@ def speedscope(trace: Any, path: str | Path) -> Path:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
@@ -427,7 +427,7 @@ def flamegraph(trace: Any, path: str | Path) -> Path:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination folded-stack text path.
@@ -479,7 +479,7 @@ def memory_timeline(trace: Any, path: str | Path) -> Path:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
@@ -540,7 +540,7 @@ def memory_timeline_v2(trace: Any, path: str | Path) -> Path:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
@@ -625,7 +625,7 @@ def xarray(trace: Any) -> Any:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` whose saved tensor outs should be exported.
 
     Returns
@@ -745,7 +745,7 @@ def csv(trace: Any, path: str | Path, **kwargs: Any) -> Path:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination CSV path.
@@ -772,7 +772,7 @@ def parquet(trace: Any, path: str | Path, **kwargs: Any) -> Path:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination Parquet path.
@@ -820,7 +820,7 @@ def json(
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
@@ -1193,7 +1193,7 @@ def safetensors(trace: Any, path: str | Path) -> Path:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination ``.safetensors`` path (written atomically).

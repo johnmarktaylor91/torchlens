@@ -313,7 +313,7 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination JSON path; must end ``.json`` for netron's sniffer.
@@ -338,12 +338,12 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
         the memory-only serve, which has no file for it to sit beside;
         ``True`` demands it (and refuses ``path=None``); ``False`` opts
         out.
-    open:
+    serve:
         Serve through the installed netron package (loopback, ephemeral
         port) and open a browser tab / notebook widget.
     baseline:
         Optional reference for the ``torchlens.baseline`` diff slot
-        (netron #1544). A ``Trace`` is diffed against ``log``
+        (netron #1544). A ``Trace`` is diffed against ``trace``
         through ``torchlens.report.diff`` (``log - baseline``):
         each exported node carries its ``torchlens.diff.*`` facts (status,
         largest value delta, reference label, join verdict; row counts for

@@ -57,11 +57,11 @@ def bundle_diff(
         Baseline forwarded to ``bundle.delta_map``. Defaults to ``left``.
     on:
         Tensor field forwarded to ``bundle.delta_map``.
-    vis_outpath:
+    path:
         Output path, with or without a recognised extension.
     vis_save_only:
         Whether to suppress opening the rendered artifact.
-    vis_fileformat:
+    file_format:
         Output format. Any Graphviz-supported format (e.g., ``"svg"``,
         ``"pdf"``, ``"png"``). Accessibility metadata is only embedded for
         ``"svg"``.

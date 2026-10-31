@@ -1206,7 +1206,7 @@ class Bundle:
 
         Parameters
         ----------
-        log_or_logs:
+        traces:
             Model log or logs to add.
         names:
             Optional member name or names.
@@ -1243,7 +1243,7 @@ class Bundle:
 
         Parameters
         ----------
-        name_or_names:
+        names:
             Member name, Trace object, or a list of either.
         cascade_relations:
             Whether relation rows naming a removed member are dropped with

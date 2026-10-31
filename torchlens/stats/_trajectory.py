@@ -144,7 +144,7 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
     mask_input:
         ``True`` bans each row's own input token ids (the model input must be
         an integer tensor) before every reduction, final output included.
-    validate:
+    verify:
         As in ``logit_lens``; the lens is checked on the first batch.
 
     Returns

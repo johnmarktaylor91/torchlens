@@ -42,7 +42,7 @@ def explain(
 
     Parameters
     ----------
-    log:
+    trace:
         Completed ``Trace``-like object.
     audience:
         Report style. ``"researcher"`` includes graph-pattern detail,

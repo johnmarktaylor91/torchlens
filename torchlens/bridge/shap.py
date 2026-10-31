@@ -20,7 +20,7 @@ def explain(
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` with a live source model reference.
     background:
         SHAP background (reference) data, required. SHAP values are each
@@ -29,7 +29,7 @@ def explain(
         default.
     inputs:
         Optional inputs to explain. Defaults to the first tensor input saved
-        in ``log``.
+        in ``trace``.
     explainer_class:
         Optional explainer class or factory. Defaults to ``shap.DeepExplainer``.
     **kwargs:

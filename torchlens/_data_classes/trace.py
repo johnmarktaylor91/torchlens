@@ -1714,7 +1714,7 @@ class Trace(
             activation_transform: Optional function applied to each tensor before saving.
             grad_transform: Optional function applied to each grad before saving.
             save_raw_activations: Whether raw outs are retained when a transform is set.
-            save_raw_gradients: Whether raw grads are retained when a transform is set.
+            save_raw_grads: Whether raw grads are retained when a transform is set.
             save_mode: Tensor retention mode for saved activation and gradient payloads.
             keep_orphans: If True, orphan island ops remain in raw metadata and
                 are exposed via ``trace.graph.orphans``.

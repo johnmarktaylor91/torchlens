@@ -26,13 +26,13 @@ def cam(  # noqa: PLR0913 -- bridge door mirroring pytorch-grad-cam's constructo
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` with a live source model reference.
     site:
         Module address, module pass label, op label, layer selector, or layer
         object; resolved by :func:`layer`.
     inputs:
-        Optional input tensor. Defaults to the first tensor input saved in ``log``.
+        Optional input tensor. Defaults to the first tensor input saved in ``trace``.
     targets:
         Optional pytorch-grad-cam targets.
     cam_class:
@@ -156,7 +156,7 @@ def layer(trace: Any, site: Any) -> nn.Module:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace``.
     site:
         Site or module lookup.

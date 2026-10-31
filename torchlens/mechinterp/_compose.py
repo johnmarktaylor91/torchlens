@@ -33,7 +33,7 @@ def apply_norm_scale(
     ----------
     trace:
         The trace whose captured norm supplies the operating point.
-    stack:
+    components:
         Any component stack whose rows live in the norm's input space.
     norm:
         ``"final"`` (the dataflow-anchored final norm) or a norm module

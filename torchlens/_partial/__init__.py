@@ -240,7 +240,7 @@ class PartialTrace:
 
         Parameters
         ----------
-        vis_outpath:
+        path:
             Accepted for API symmetry; no file is written by this minimal renderer.
         **_:
             Ignored rendering keyword arguments accepted for compatibility.

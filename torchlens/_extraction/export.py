@@ -271,7 +271,7 @@ def export_extraction(
 
     Parameters
     ----------
-    output_dir:
+    path:
         Source artifact directory.
     dest:
         Destination directory (created; published atomically by rename).

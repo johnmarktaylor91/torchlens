@@ -177,9 +177,9 @@ class Direction:
         ----------
         api_key:
             Your Neuronpedia API key (under Settings on neuronpedia.org).
-        scan:
+        model_id:
             Neuronpedia's model id, for example ``"gemma-2-2b"``.
-        vector_label:
+        name:
             The name Neuronpedia shows for the vector.
         layer:
             Decoder layer (0-based). Defaults to the trailing index of the
@@ -187,7 +187,7 @@ class Direction:
         hook_type:
             ``"resid_post"`` (a decoder block's output, the default) or
             ``"resid_pre"`` (its input).
-        steer_strength:
+        default_steering_strength:
             The default steering strength Neuronpedia offers, from -100 to 100.
 
         Returns

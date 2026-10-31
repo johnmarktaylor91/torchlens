@@ -1304,7 +1304,7 @@ def open_extraction(
 
     Parameters
     ----------
-    output_dir:
+    path:
         Artifact directory written by disk-mode ``extract_dataset``.
     verify:
         ``"structural"`` (default: manifest/ledger well-formed, files

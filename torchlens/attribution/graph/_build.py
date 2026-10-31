@@ -544,14 +544,14 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
         object ``tl.splice_module(transcoder, input_route="in")`` would splice in.
         A cross-layer transcoder gives ``W_dec`` and ``b_dec`` as mappings
         from MLP module names to tensors.
-    embedding
+    embedding_module
         Module name whose output rows are the token vectors.
     target
-        ``None`` picks the salient logits (``max_n_logits`` and
-        ``desired_logit_prob``); a list of token ids names them.
-    max_n_logits
+        ``None`` picks the salient logits (``max_num_logits`` and
+        ``logit_probability_coverage``); a list of token ids names them.
+    max_num_logits
         Cap on the salient logits.
-    desired_logit_prob
+    logit_probability_coverage
         Keep the most probable logits until their probabilities sum to this.
     demeaned_logits
         ``True`` (default) makes each logit node its logit minus the mean

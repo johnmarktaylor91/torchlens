@@ -767,7 +767,7 @@ def draw_combined(
         Combined rendering currently supports only ``"unrolled"``.
     intervening_cluster:
         Placement mode for grad_fns without a corresponding forward op.
-    show_buffer_layers:
+    show_buffers:
         Buffer visibility mode for the forward side.
     bwd:
         Optional one-based backward pass number or numbers to render.
@@ -833,7 +833,7 @@ def show_bundle_graph(
     ----------
     bundle:
         ``torchlens.Bundle`` instance.
-    vis_outpath:
+    path:
         Output path for Graphviz rendering.
     vis_mode:
         ``"rolled"``, ``"unrolled"``, or ``"none"``.
@@ -850,7 +850,7 @@ def show_bundle_graph(
         Per-edge Graphviz style overrides keyed by ``(source, target)``.
     vis_save_only:
         If True, save without opening a viewer.
-    vis_fileformat:
+    file_format:
         Output file format.
     nodes:
         What the picture's nodes are (spelling documented-unstable).

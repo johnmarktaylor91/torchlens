@@ -299,7 +299,7 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
         :class:`SiteTarget`; for a read table the ``tl.attribution.seed(...)``
         it was read for. Left out for a direct-logit table, which fixes its
         own logits, and for an EDGE table, whose target is ``metric``.
-    corrupted
+    corrupted_input
         For an EDGE table only: the corrupted inputs it was scored with
         (``edge_scores``' ``corrupted_input=``), the same shape as ``inputs``.
     metric
@@ -312,14 +312,14 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
         row.
     k
         Units per ablated set (default 5).
-    ablation
+    edit
         ``"zero"`` (default), ``"mean"`` (each unit's mean over the batch), or
         a number or tensor (the baseline activation, broadcast to the site);
         an EDGE table is patched, not ablated, and takes only the default.
     controls
         Control sets beside the top-k set: ``"bottom"`` and ``"random"``
         (default both).
-    random_draws
+    num_random_draws
         Number of seeded random-k sets (default 10).
     per_unit
         Ablate every unit alone for the per-unit table and rank agreement

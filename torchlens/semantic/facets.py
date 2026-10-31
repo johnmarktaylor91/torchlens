@@ -453,7 +453,7 @@ class FacetSpec(_SelectionOperand):
 
         Parameters
         ----------
-        value_func:
+        value_fn:
             Callable that computes the read value.
         function_id:
             Recipe identifier.
@@ -1490,7 +1490,7 @@ def adding(*facets: RecipeFunc | Iterable[RecipeFunc]) -> Iterator[None]:
 
     Parameters
     ----------
-    recipes:
+    *facets:
         Recipe functions. A single iterable is also accepted for convenience.
 
     Yields
@@ -1564,7 +1564,7 @@ def snapshot(extra_facets: Sequence[RecipeFunc] | None = None) -> FacetRegistryS
 
     Parameters
     ----------
-    extra_recipes:
+    extra_facets:
         Per-trace additive recipes supplied to ``tl.trace(..., facets=[...])``.
 
     Returns

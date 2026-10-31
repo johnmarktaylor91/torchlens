@@ -212,7 +212,7 @@ def per_layer(
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` containing saved outs.
     benchmark:
         Callable benchmark accepting ``(out, layer=..., **kwargs)``.

@@ -116,7 +116,7 @@ def record(
         A spec with ``save_grad=True`` stays attached either way; disk payloads
         are always detached. ``backward_ready=True`` refuses an explicit
         ``True``.
-    save_grads, default_grad, grad_transform, save_raw_gradients:
+    save_grads, default_grad, grad_transform, save_raw_grads:
         Gradient capture options for a later ``Recording.backward()``.
         Gradient hooks are installed only when ``backward_ready=True``,
         ``save_grads=`` or ``default_grad=`` is given (``save_grads=None``

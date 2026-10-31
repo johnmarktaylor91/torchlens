@@ -403,7 +403,7 @@ def edge_scores(  # noqa: PLR0913 -- the public door: five keyword-only spec-pin
         :func:`component_graph` accepts; eager attention).
     inputs:
         The clean inputs (token ids ``[batch, pos]``).
-    corrupted:
+    corrupted_input:
         Keyword-only. The corrupted inputs, the same shape as ``inputs``.
     metric:
         Keyword-only. ``logits -> values``: the metric ``M`` from the
