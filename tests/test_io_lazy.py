@@ -269,6 +269,7 @@ def test_lazy_materialize_matches_eager_load_bit_exactly(tmp_path: Path) -> None
     assert torch.equal(lazy_tensor, eager_tensor)
 
 
+@pytest.mark.cuda
 def test_lazy_materialize_honors_cuda_map_location(tmp_path: Path) -> None:
     """Lazy materialization should respect ``map_location='cuda'`` when available."""
 

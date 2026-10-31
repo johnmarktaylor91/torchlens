@@ -83,6 +83,7 @@ def test_identity_distinguishes_dtype_and_shape_with_equal_bytes() -> None:
     assert len(digests) == 3
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA device")
 def test_identity_is_device_independent() -> None:
     """The same values on CPU and CUDA name the same rule."""

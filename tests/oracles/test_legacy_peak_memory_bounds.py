@@ -208,6 +208,7 @@ def test_cpu_backward_peak_is_the_largest_pass_peak() -> None:
 
 
 @cuda
+@pytest.mark.cuda
 def test_cuda_forward_peak_includes_a_freed_device_buffer() -> None:
     class DeviceTransient(nn.Module):
         def __init__(self) -> None:
@@ -233,6 +234,7 @@ def test_cuda_forward_peak_includes_a_freed_device_buffer() -> None:
 
 
 @cuda
+@pytest.mark.cuda
 def test_cuda_backward_peak_bounds_a_device_buffer_in_a_hook() -> None:
     samples: dict[str, list[int]] = {"entry": [], "alive": []}
     trace, out = _backward_hook_trace("cuda", samples)

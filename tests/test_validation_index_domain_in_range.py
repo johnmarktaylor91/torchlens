@@ -364,6 +364,7 @@ def test_corrupted_saved_gather_still_fails_validation(corrupt: str) -> None:
 
 
 @pytest.mark.heavy
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA leg: run on a GPU venue")
 def test_tiny_vjepa2_validates_on_cuda_without_a_device_assert(replay_record) -> None:
     model = _tiny_vjepa2().cuda()

@@ -62,6 +62,7 @@ Run memory-heavy real-world tests sequentially. Optional dependency tests should
 | `backend_tinygrad` | Requires the optional tinygrad runtime. |
 | `backend_paddle` | Requires the optional Paddle runtime. |
 | `tf_backend` | Requires the optional TensorFlow runtime. |
+| `cuda` | Needs a CUDA device. Skipped without one (`tests/conftest.py`); the GPU leg selects them with `-m cuda`. Every `skipif(not torch.cuda.is_available(), ...)` site carries it (`tests/test_marker_lint.py`). |
 
 Markers are additive: a test carrying `smoke` together with `heavy`/`slow`/`serial`/`rare`
 still runs under `-m smoke`, so those combinations are forbidden — drop `smoke` instead

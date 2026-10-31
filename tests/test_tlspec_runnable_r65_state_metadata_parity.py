@@ -276,6 +276,7 @@ def test_r65_staging_inside_inference_mode_stays_canonical(tmp_path: Path) -> No
         assert state_metadata_full_violations(value) == [], name
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA staged slots require CUDA")
 def test_r65_cuda_staged_state_satisfies_full_signature(tmp_path: Path) -> None:
     """Staged slots on a NON-CPU (CUDA) slot device exhibit ZERO full-signature violations.
@@ -320,6 +321,7 @@ def test_r65_cuda_staged_state_satisfies_full_signature(tmp_path: Path) -> None:
     assert rerun.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA state read")
 def test_r65_cuda_is_shared_read_stays_verified(tmp_path: Path) -> None:
     """A CUDA ``is_shared()`` state read saves and settles VERIFIED -- no read-divergence.
@@ -537,6 +539,7 @@ def test_r65_grad_presence_read_refuses_when_grad_present(tmp_path: Path) -> Non
     _assert_verified(GradRead(False), torch.randn(3), tmp_path / "nograd.tlspec")
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="pinned memory requires CUDA")
 def test_r65_pinned_read_refuses_when_pinned(tmp_path: Path) -> None:
     """``is_pinned()`` on a pinned captured buffer refuses (transport unpins)."""

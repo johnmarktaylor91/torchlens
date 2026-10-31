@@ -254,6 +254,7 @@ _CUDA = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA d
 
 
 @_CUDA
+@pytest.mark.cuda
 @pytest.mark.parametrize("scope", ["forward", "saved", "intervention"])
 def test_cuda_model_validates_with_host_saved_activations(scope: str) -> None:
     """A CUDA model validates with ``output_device="cpu"`` on every saving scope."""
@@ -264,6 +265,7 @@ def test_cuda_model_validates_with_host_saved_activations(scope: str) -> None:
 
 
 @_CUDA
+@pytest.mark.cuda
 def test_cuda_validator_capture_holds_activations_on_host() -> None:
     """The validator-equivalent capture keeps saved outs on the host under ``"cpu"``."""
 
@@ -309,6 +311,7 @@ def test_replay_still_detects_a_corrupted_saved_activation() -> None:
 
 
 @_CUDA
+@pytest.mark.cuda
 def test_cuda_replay_still_detects_a_corrupted_saved_activation() -> None:
     """With host-held activations of a CUDA model the tripwire still fires."""
 
@@ -316,6 +319,7 @@ def test_cuda_replay_still_detects_a_corrupted_saved_activation() -> None:
 
 
 @_CUDA
+@pytest.mark.cuda
 @pytest.mark.parametrize("model_name", ["GetAndSetItem", "InPlaceFuncs", "BatchNormModel"])
 def test_cuda_example_models_keep_their_verdict_with_host_activations(model_name: str) -> None:
     """Posthoc exemption proofs (``__setitem__`` coverage) also work across devices."""
@@ -330,6 +334,7 @@ def test_cuda_example_models_keep_their_verdict_with_host_activations(model_name
 
 
 @_CUDA
+@pytest.mark.cuda
 def test_cuda_tensor_nanequal_compares_values_across_devices() -> None:
     """``tensor_nanequal`` compares a CUDA and a CPU tensor by value instead of raising."""
 

@@ -261,6 +261,7 @@ def test_r67_is_pinned_observed_value_is_the_authority() -> None:
     assert _state_placement_canonical("is_shared", None) is None  # unknown -> refuse
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="pinned memory requires CUDA")
 def test_r67_pinned_state_read_refuses_via_observation(tmp_path: Path) -> None:
     """Observed True on a genuinely pinned CPU slot refuses -- through the observation."""

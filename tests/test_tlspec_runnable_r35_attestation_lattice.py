@@ -47,6 +47,7 @@ def _save(model: nn.Module, args: Any, path: Path) -> Path:
     return path
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_r35_device_diverged_run_is_never_attested(tmp_path: Path) -> None:
     """corr2_7 repro: a device-diverged poisoned run must be not_applicable."""

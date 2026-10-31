@@ -1024,6 +1024,14 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             if item.get_closest_marker("requires_assertions") is not None:
                 item.add_marker(skip_no_assertions)
 
+    # ``cuda`` capability marker: the GPU leg selects these with ``-m cuda``;
+    # without a device they skip here even if a site forgot its own skipif.
+    if not torch.cuda.is_available():
+        skip_no_cuda = pytest.mark.skip(reason="needs a CUDA device (cuda marker)")
+        for item in items:
+            if item.get_closest_marker("cuda") is not None:
+                item.add_marker(skip_no_cuda)
+
     collect_usage_stats = _is_full_usage_stats_run(config)
     _state._collect_usage_stats = collect_usage_stats
     if collect_usage_stats:

@@ -389,6 +389,7 @@ markers = [
     "backend_tinygrad: marks tests that require the optional tinygrad backend runtime",
     "backend_paddle: marks tests that require the optional paddle backend runtime",
     "tf_backend: marks tests that require the optional TensorFlow backend runtime",
+    "cuda: marks tests that need a CUDA device (skipped without one by tests/conftest.py; the GPU leg selects them with '-m cuda')",
     # The two composition SELECTION markers. ORTHOGONAL
     # selectors, never cost tiers: they compose with any smoke/heavy/slow tier and
     # never alter tier resolution or duration budgets. The marker ALGEBRA is declared
