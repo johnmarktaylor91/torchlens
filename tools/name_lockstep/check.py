@@ -177,9 +177,7 @@ def _present(corpus: Corpus, place: str, row: dict[str, Any]) -> bool:
     )
 
 
-def _stale(
-    corpus: Corpus, row: dict[str, Any], head_leaves: set[str], live_owners: set[str]
-) -> list[tuple[str, str]]:
+def _stale(corpus: Corpus, row: dict[str, Any], head_leaves: set[str]) -> list[tuple[str, str]]:
     """Return every place and ``path:line`` that still spells a gone name.
 
     Parameters
@@ -190,9 +188,6 @@ def _stale(
         Base row of a renamed or removed name.
     head_leaves
         Leaf names still used by head rows of the same kind.
-    live_owners
-        Classes through which a head member of the same leaf is still reached; their
-        ``Owner.leaf`` spells that current member, so it is not stale.
 
     Returns
     -------
@@ -203,7 +198,7 @@ def _stale(
     strengths: tuple[str, ...] = (spelling.QUALIFIED,)
     if row["name"] not in head_leaves:
         strengths += (spelling.CONTEXTUAL,)
-    patterns = spelling.spellings(row, exclude_owners=live_owners)
+    patterns = spelling.spellings(row)
     found: list[tuple[str, str]] = []
     for place in ("glossary", *(label for label, _, _ in PLACES)):
         for path, text in corpus.files.get(place, []):
@@ -275,13 +270,11 @@ def check_lockstep(
     """
 
     leaves: dict[str, set[str]] = {}
-    owners: dict[str, set[str]] = {}
+    live_owners: dict[str, set[str]] = {}
     for row in head_rows.values():
         leaves.setdefault(row["kind"], set()).add(row["name"])
         if row["kind"] == "member":
-            owners.setdefault(row["name"], set()).update(
-                {*row.get("owner_names", ()), str(row["path"]).split(".")[0]}
-            )
+            live_owners.setdefault(row["name"], set()).update(_owners(row))
     findings: list[Finding] = []
     for row in surface_diff.new:
         findings += _missing(corpus, row, "new")
@@ -289,12 +282,66 @@ def check_lockstep(
         new_row = head_rows[rename.new_id]
         findings += _missing(corpus, new_row, "renamed")
         old_row = {**new_row, "id": rename.old_id, "name": rename.old_name}
-        head, _, tail = str(new_row["path"]).rpartition(rename.new_name)
-        old_row["path"] = head + rename.old_name + tail
-        findings += _residue(corpus, old_row, rename.new_id, "renamed", leaves, owners)
+        old_row["path"] = str(new_row["path"])[: -len(rename.new_name)] + rename.old_name
+        gone = _retired_spelling(old_row, live_owners)
+        if gone is not None:
+            findings += _residue(corpus, gone, rename.new_id, "renamed", leaves)
     for row in surface_diff.removed:
-        findings += _residue(corpus, row, row["id"], "removed", leaves, owners)
+        gone = _retired_spelling(row, live_owners)
+        if gone is not None:
+            findings += _residue(corpus, gone, row["id"], "removed", leaves)
     return sorted(findings, key=dataclasses.astuple)
+
+
+def _owners(row: dict[str, Any]) -> set[str]:
+    """Return the classes a member row is reached through (its owners and its definer).
+
+    Parameters
+    ----------
+    row
+        A member row.
+
+    Returns
+    -------
+    set[str]
+        Class names.
+    """
+
+    return {*row.get("owner_names", ()), str(row["path"]).split(".")[0]}
+
+
+def _retired_spelling(
+    row: dict[str, Any], live_owners: dict[str, set[str]]
+) -> dict[str, Any] | None:
+    """Return a gone member row spelled only through the owners head no longer has.
+
+    A member that moved between classes of one owner (a ``Trace`` mixin method that
+    became a ``Trace`` property on another mixin) leaves ``Trace.leaf`` a current
+    spelling; only ``OldMixin.leaf`` is residue. Rows of other kinds are unchanged.
+
+    Parameters
+    ----------
+    row
+        Base row of a renamed or removed name.
+    live_owners
+        Head member leaf to the classes that still reach it.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        The row restricted to its retired owners, or ``None`` when every owner still
+        reaches the leaf (then no spelling of it is stale).
+    """
+
+    if row["kind"] != "member":
+        return row
+    live = live_owners.get(str(row["name"]), set())
+    retired = sorted(_owners(row) - live)
+    if not retired:
+        return None
+    definer = str(row["path"]).split(".")[0]
+    path = row["path"] if definer in retired else f"{retired[0]}.{row['name']}"
+    return {**row, "owner_names": retired, "path": path}
 
 
 def _missing(corpus: Corpus, row: dict[str, Any], change: str) -> list[Finding]:
@@ -323,12 +370,7 @@ def _missing(corpus: Corpus, row: dict[str, Any], change: str) -> list[Finding]:
 
 
 def _residue(
-    corpus: Corpus,
-    row: dict[str, Any],
-    report_id: str,
-    change: str,
-    leaves: dict[str, set[str]],
-    owners: dict[str, set[str]],
+    corpus: Corpus, row: dict[str, Any], report_id: str, change: str, leaves: dict[str, set[str]]
 ) -> list[Finding]:
     """Return a finding per place and line that still spells a gone name.
 
@@ -344,8 +386,6 @@ def _residue(
         ``renamed`` or ``removed``.
     leaves
         Head leaf names per kind.
-    owners
-        Head member leaf to the classes that reach it.
 
     Returns
     -------
@@ -353,8 +393,7 @@ def _residue(
         Stale-spelling findings.
     """
 
-    live_owners = owners.get(row["name"], set()) if row["kind"] == "member" else set()
     return [
         Finding(report_id, change, place, "stale", location, str(row["path"]))
-        for place, location in _stale(corpus, row, leaves.get(row["kind"], set()), live_owners)
+        for place, location in _stale(corpus, row, leaves.get(row["kind"], set()))
     ]

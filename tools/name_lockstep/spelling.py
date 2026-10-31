@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import dataclasses
 import re
-from collections.abc import Iterable
 from typing import Any
 
 ALIASES = ("tl", "torchlens")
@@ -75,9 +74,7 @@ def _namespace_path(row: dict[str, Any]) -> list[str]:
     return parts[1:-1]
 
 
-def spellings(
-    row: dict[str, Any], name: str | None = None, exclude_owners: Iterable[str] = ()
-) -> list[Spelling]:
+def spellings(row: dict[str, Any], name: str | None = None) -> list[Spelling]:
     """Return the patterns that find ``name`` (default: the row's own) as this row.
 
     Parameters
@@ -86,10 +83,6 @@ def spellings(
         An inventory row.
     name
         Leaf spelling to look for; defaults to ``row["name"]``.
-    exclude_owners
-        Owner classes left out of a member's qualified spelling, because a current
-        member of the same leaf is still reached through them (``Owner.leaf`` then
-        spells that member, not this row).
 
     Returns
     -------
@@ -108,21 +101,12 @@ def spellings(
         if middle:
             found.append(Spelling(re.compile(rf"(?<![\w.]){middle}{leaf}"), CONTEXTUAL))
     elif kind == "member":
-        owners = sorted(
-            {*row.get("owner_names", ()), str(row["path"]).split(".")[0]} - set(exclude_owners)
-        )
-        if owners:
-            owner_alt = "|".join(re.escape(owner) for owner in owners)
-            found.append(Spelling(re.compile(rf"(?<![\w.])(?:{owner_alt})\.{leaf}"), QUALIFIED))
-        # ``tl.leaf`` / ``torchlens.leaf`` is a root name, never a member of a class.
-        not_root = "".join(rf"(?<!(?<![\w.]){alias}\.)" for alias in ALIASES)
-        found.append(Spelling(re.compile(rf"{not_root}(?<=\.){leaf}"), CONTEXTUAL))
+        owners = sorted({*row.get("owner_names", ()), str(row["path"]).split(".")[0]})
+        owner_alt = "|".join(re.escape(owner) for owner in owners)
+        found.append(Spelling(re.compile(rf"(?<![\w.])(?:{owner_alt})\.{leaf}"), QUALIFIED))
+        found.append(Spelling(re.compile(rf"(?<=\.){leaf}"), CONTEXTUAL))
     elif kind == "param":
-        # A keyword argument: ``leaf=`` (ruff format's spelling), or ``leaf = `` right
-        # after ``(`` or ``,``; an assignment statement ``leaf = value`` is not one.
-        found.append(Spelling(re.compile(rf"(?<![\w.]){leaf}(?==(?!=))"), CONTEXTUAL))
-        after_open = r"(?:(?<=\()|(?<=,)|(?<=, ))"
-        found.append(Spelling(re.compile(rf"{after_open}{leaf}(?=\s+=(?!=))"), CONTEXTUAL))
+        found.append(Spelling(re.compile(rf"(?<![\w.]){leaf}(?=\s*=(?!=))"), CONTEXTUAL))
     found.append(Spelling(re.compile(rf"(?<![\w.]){leaf}"), LEAF))
     return [dataclasses.replace(item, leaf=literal) for item in found]
 

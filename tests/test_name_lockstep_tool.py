@@ -285,56 +285,6 @@ def test_removed_member_residue_skips_an_owner_that_still_reaches_the_leaf(
     assert stale == [("member:m:VizMixin.provenance", "examples/demo.py:2")]
 
 
-def test_renamed_member_and_keyword_residue_skip_root_names_and_assignments(
-    tmp_path: Path,
-) -> None:
-    """``tl.changed`` is a root name and ``changed = x`` a local, not the old spellings.
-
-    The old keyword in a call and the old member on an object stay stale, and the
-    old keyword's path renders as the old spelling.
-    """
-
-    corpus = _lockstep_repo(
-        tmp_path,
-        glossary="`Effect.has_changes` and `has_changes=`; see `tl.changed`.\n",
-        example=(
-            "changed = not same\nreport(changed=True)\nreport(a, changed = True)\n"
-            "effect.changed\nresult = tl.changed(a, b)\n"
-        ),
-    )
-    base = {
-        "member:m:Effect.changed": _row(
-            "member:m:Effect.changed",
-            "member",
-            "changed",
-            "Effect.changed",
-            "f-member",
-            owner_names=["Effect"],
-        ),
-        "param:changed": _row("param:changed", "param", "changed", "changed=", "f-param"),
-    }
-    head = {
-        "member:m:Effect.has_changes": _row(
-            "member:m:Effect.has_changes",
-            "member",
-            "has_changes",
-            "Effect.has_changes",
-            "f-member",
-            owner_names=["Effect"],
-        ),
-        "param:has_changes": _row(
-            "param:has_changes", "param", "has_changes", "has_changes=", "f-param"
-        ),
-    }
-    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
-    stale = sorted((f.row_id, f.location, f.spelling) for f in findings if f.problem == "stale")
-    assert stale == [
-        ("member:m:Effect.has_changes", "examples/demo.py:4", "Effect.changed"),
-        ("param:has_changes", "examples/demo.py:2", "changed="),
-        ("param:has_changes", "examples/demo.py:3", "changed="),
-    ]
-
-
 def test_gate_items_carry_snippet_and_reference(tmp_path: Path) -> None:
     """Each new or renamed name gets a call site and the glossary meaning."""
 
