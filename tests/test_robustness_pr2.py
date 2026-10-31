@@ -383,6 +383,52 @@ def test_shared_tensor_tree_walker_dedupes_and_handles_cycles() -> None:
 # ---------------------------------------------------------------------------
 
 
+class _SparseBuffer(nn.Module):
+    """A sparse COO adjacency buffer multiplied into dense features (stress row F1)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("adjacency", torch.eye(3).to_sparse())
+        self.linear = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.sparse.mm(self.adjacency, self.linear(x))
+
+
+@pytest.mark.smoke
+def test_sparse_buffer_refuses_typed_at_entry_naming_the_slot() -> None:
+    """A registered sparse buffer refuses with the variant code before session prep.
+
+    Before this check the buffer-write tracker read the buffer's storage at prep and
+    torch's bare ``NotImplementedError`` ("Cannot access storage of SparseTensorImpl")
+    escaped ``tl.trace`` untyped (wave-3 stress F1).
+    """
+
+    model = _SparseBuffer()
+    with pytest.raises(UnsupportedTensorVariantError) as exc_info:
+        tl.trace(model, [torch.randn(3, 4)])
+
+    fields = exc_info.value.fields
+    assert fields["code"] == "unsupported_tensor_variant"
+    offense = fields["offenses"][0]
+    assert offense["path"] == "model.adjacency"
+    assert offense["name"].startswith("sparse tensor (torch.sparse_coo)")
+    assert "to_dense()" in offense["reason"]
+    assert "model.adjacency" in str(exc_info.value)
+
+
+def test_sparse_parameter_refuses_typed_too() -> None:
+    """The check covers parameters as well as buffers (same loop, same code)."""
+
+    model = _Tiny()
+    model.a.weight = nn.Parameter(model.a.weight.detach().to_sparse())
+    with pytest.raises(UnsupportedTensorVariantError) as exc_info:
+        check_model_and_input_variants(model, torch.randn(2, 4), {})
+    offenses = exc_info.value.fields["offenses"]
+    assert offenses[0]["path"] == "model.a.weight"
+    assert offenses[0]["name"].startswith("sparse tensor (torch.sparse_coo)")
+
+
 def test_variant_refusal_carries_structured_offense_fields() -> None:
     """Callers branch on ``fields`` instead of parsing the prose bullets."""
 

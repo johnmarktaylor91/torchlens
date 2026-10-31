@@ -596,6 +596,23 @@ def check_model_and_input_variants(
                 )
                 break  # one message is enough — don't list every param.
             continue  # admitted uniform-meta state; variant checks above still ran
+        if _is_sparse_tensor(t):
+            # A registered sparse tensor has no dense storage for the state-write
+            # journal to snapshot (``buffer_writes._whole_storage_uint8`` raises
+            # torch's bare NotImplementedError at session prep): refuse typed at
+            # entry, naming the slot, instead of failing mid-prep (stress F1).
+            offenses.append(
+                _offense_entry(
+                    f"sparse tensor ({t.layout}) among model parameters/buffers",
+                    "TorchLens snapshots the storage of every registered parameter "
+                    "and buffer for its state-write journal, and sparse layouts have "
+                    "no dense storage to snapshot. Register the dense form "
+                    "(tensor.to_dense()) and convert it inside forward "
+                    "(.to_sparse()) where the sparse kernel is needed.",
+                    f"model.{name}",
+                    t,
+                )
+            )
         if tracing_kind is not None:
             offenses.append(
                 _offense_entry(
