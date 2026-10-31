@@ -8,7 +8,7 @@ sweep's name table, line up row for row:
 - ``export:tl.ns.X``: an export of a public namespace (its ``__all__``, else its public
   definitions and module-level data constants), including nested namespaces such as
   ``tl.experimental.dagua`` and a submodule that a root name of the same spelling
-  shadows (``tl.bundle``);
+  shadows (a root function ``tl.x`` beside a package ``torchlens/x``);
 - ``member:<module>:<Class>.<name>``: a public member of a reached TorchLens class, one
   row per defining class; stored fields declared only in the class's ``FIELD_POLICY``
   table count, and carry ``field_tables``, the module constants that list the field
@@ -353,8 +353,9 @@ def _walk_objects(package: types.ModuleType) -> Iterator[tuple[dict[str, Any], o
         yield _object_row("root", f"{ALIAS}.{name}", ALIAS, value, package.__name__), value
         namespace: object = value
         if not isinstance(value, types.ModuleType) and name in submodules:
-            # A root name that shadows its submodule (``tl.bundle``): the submodule's
-            # exports keep their import path ``torchlens.bundle.X``.
+            # A root name that shadows its submodule (a root function ``tl.x`` beside a
+            # package ``torchlens/x``): the submodule's exports keep their import path
+            # ``torchlens.x.X``.
             _, namespace = _safe_import(f"{package.__name__}.{name}")
         if not isinstance(namespace, types.ModuleType):
             continue

@@ -304,7 +304,12 @@ def test_real_package_inventory_covers_field_tables_and_shims() -> None:
     assert "torchlens._constants:MODEL_LOG_FIELD_ORDER" in durations["field_tables"]
     assert {
         "member:torchlens._vocab.trace_state:TraceState.APPENDED",
-        "export:tl.bundle.Bundle",
+        "root:tl.Bundle",
+        "export:tl.bundle.SuperOp",
         "export:tl.experimental.dagua.NodeSpec",
     } <= set(rows)
     assert rows["export:tl.io.TraceState"]["module"] == "torchlens._vocab.trace_state"
+    # ``tl.Bundle`` is the one spelling: the bundle namespace no longer exports the
+    # class, while the walk still reaches that namespace's own exports.
+    assert rows["root:tl.Bundle"]["module"] == "torchlens.bundle"
+    assert "export:tl.bundle.Bundle" not in rows
