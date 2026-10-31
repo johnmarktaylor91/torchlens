@@ -12,8 +12,8 @@ capture once with `tl.trace(model, x)`, then call `trace.draw(...)` as often as 
 | `roll=True` | `trace.draw(rolled=True)` | Repeated passes through one module are drawn once. |
 | `graph_dir="LR"` / `"TB"` | `trace.draw(direction="leftright")` / `"topdown"` | `"bottomup"` is the default. |
 | `hide_inner_tensors=True` (the default) | `trace.draw(collapse="auto")` | TorchLens draws every executed op by default; `collapse=` folds modules into boxes for an overview (`"none"`, `"auto"`, `"max"` or a level from 0 to 1). |
-| `save_graph=True, filename=..., directory=...` | `trace.draw(path="dir/name", file_format="png")` | Without `vis_save_only=True` the file also opens. |
-| `graph.visual_graph` (a `graphviz.Digraph`) | `trace.draw(...)` | By default `draw` returns the DOT source as a string. |
+| `save_graph=True, filename=..., directory=...` | `trace.draw(path="dir/name", file_format="png")` | The file is written and never opened unless `open_viewer=True`. |
+| `graph.visual_graph` (a `graphviz.Digraph`) | `trace.draw(...)` | `draw` returns a `tl.viz.Drawing`; `str(drawing)` is the DOT source. |
 | `mode="eval"`, `device=...`, `dtypes=...` | Set them on your model and input before tracing | |
 
 Their construct:

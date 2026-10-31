@@ -358,7 +358,7 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | Causal audit | `causal_audit`, `CausalAudit`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `edit`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `num_random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention`, `component`, `claim_kind`, `constant_row`, `rows_not_audited`, `corrupted_input`, `metric`, `edges`, `edge_table`, `edge_patch`, `example_reduction`, `logits_site`, `sets_not_measured`, `reason`, `trace` | unstable -- no deprecation shim owed |
 | Attribution graphs | `build_graph`, `AttributionGraph`, `GraphNode`, `transcoders`, `embedding_module`, `target`, `max_num_logits`, `logit_probability_coverage`, `demeaned_logits`, `logits_at`, `frozen`, `nodes`, `adjacency_matrix`, `node_values`, `constants`, `encoder_bias`, `decoder_bias`, `other`, `active_feature_indices`, `feature_activations`, `transcoder_sites`, `error_sites`, `error_vectors`, `input_token_ids`, `logit_token_ids`, `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`, `kind`, `site`, `position`, `feature_index`, `token`, `logit`, `error` | unstable -- no deprecation shim owed |
 | Attribution graph export | `to_neuronpedia`, `slug`, `model_id`, `tokenizer`, `prompt`, `node_influence_coverage`, `edge_influence_coverage`, `path` | unstable -- no deprecation shim owed |
-| Attribution graph overlay and upload | `graph_value`, `influence`, `activation`, `upload_to_neuronpedia`, `api_key` | unstable -- no deprecation shim owed |
+| Attribution graph overlay and upload | `influence`, `activation`, `upload_to_neuronpedia`, `api_key` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
@@ -2253,8 +2253,7 @@ shim owed*
   label rows (slate 8.7). See the "show_redundant_args" entry above.
 
 **direction="rightleft" (draw value)** — *unstable — no deprecation shim owed*
-: The fourth layout direction on `Trace.draw(direction=)`, `draw_backward(direction=)` and
-  `draw_combined(direction=)`: edges flow right to left (Graphviz `rankdir=RL`), beside
+: The fourth layout direction on `Trace.draw(direction=)` for the forward, backward and combined graphs: edges flow right to left (Graphviz `rankdir=RL`), beside
   `"bottomup"`, `"topdown"` and `"leftright"`. An unknown value refuses
   `visualization_direction_invalid` naming all four.
 
@@ -2264,15 +2263,15 @@ shim owed*
   `TorchLens graph written to <path>`, so a second bare draw never overwrites the first picture.
   An explicit `path=` is written exactly (overwriting) and printed only on a verbose trace.
 
-**show_module_paths / show_grad_values (draw_backward kwargs)** — *unstable — no deprecation shim owed; keyword-only*
-: Opt-in label rows on `Trace.draw_backward`: `show_module_paths=True` adds `module <address>` to
+**show_module_paths / show_grad_values (draw kwargs, `graph="backward"`)** — *unstable — no deprecation shim owed; keyword-only*
+: Opt-in label rows on `Trace.draw(graph="backward")`: `show_module_paths=True` adds `module <address>` to
   each backward node a module owns (`param <address>` on AccumulateGrad nodes); `show_grad_values=True`
   adds `grad norm <x>, absmax <y>` from the node's captured output gradient (`grad values not
   captured` when the capture kept none). Both default to `False`, leaving the default render
   unchanged.
 
-**theme (draw_backward kwarg)** — *unstable — no deprecation shim owed; keyword-only*
-: The skin preset on `Trace.draw_backward`, the same names `Trace.draw(theme=)` takes
+**theme (draw kwarg, `graph="backward"`)** — *unstable — no deprecation shim owed; keyword-only*
+: The skin preset on `Trace.draw(graph="backward")`, the same names the forward picture takes
   (`"torchlens"` default, `"paper"`, `"dark"`, `"colorblind"`, `"high_contrast"`): it sets the page
   colour, text ink, typography and the backward key's ink; backward node fills and gradient arrows
   keep their colours. The functional form with grouped options reads it from
@@ -2924,8 +2923,8 @@ deprecation shim owed*
   kept. Refusal codes `attribution_graph_export_argument_invalid` and
   `attribution_graph_export_unsupported`.
 
-**`tl.attribution.overlay` with an `AttributionGraph` (`graph_value`)** — *unstable — no deprecation shim owed*
-: `tl.attribution.overlay(trace, graph, *, reduce="abs_sum", graph_value=None)` paints an
+**`trace.draw(color_by=graph)` with an `AttributionGraph`** — *unstable — no deprecation shim owed*
+: `trace.draw(color_by=graph)` paints an
   attribution graph onto the trace it was built from: each site holding feature or error
   nodes gets the `reduce` total of its nodes' values over every position. `graph_value`
   (graph sources only) is `"influence"` (what `None` means: each node's influence on the
@@ -3123,7 +3122,7 @@ describe each surface in depth.
 | `tl.stats.RunningStats` | Always-on scalar spine accumulator (StreamingStat; D8) |
 | `tl.stats.TensorStats` | Frozen tensor statistics shared by tensor displays and narration; per-family evidence owns every claim |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
-| `tl.viz.Drawing` | Detached one-call render result. Always returned, never None |
+| `tl.viz.Drawing` | The picture every draw returns: DOT source (or animation HTML), format, written path; `save(path, editable=)`, `show()` |
 | `tl.stats.NarrationObserver` | Live stats-line echo mounted on the shipped observer surface |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
 | `tl.stats.narrate` | Create an echo observer (the live line density) for one site |
@@ -3834,8 +3833,6 @@ alphabetical order.
 | Spelling | Meaning |
 | --- | --- |
 | `Trace.activation_transform` | The callable applied to each forward output before it is saved, or `None` |
-| `Trace.add_node_overlay` | Register external per-node overlay scores, under a name, for later rendering |
-| `Trace.animate_ops` | Return a minimal HTML animation of the repeated ops at a site |
 | `Trace.annotate` | Attach user-owned annotation data or an image to the graph nodes picked by a selector |
 | `Trace.append_history` | List of dicts, one per run record added as chunks were appended to this trace; empty for a single run |
 | `Trace.archived_activations` | Mapping of label to inspection-only activation payloads from a runnable archive |
@@ -4011,7 +4008,6 @@ alphabetical order.
 | `Trace.recurrence_detection` | Whether loop and recurrence detection is enabled for the capture |
 | `Trace.relationship_evidence` | Dict with keys model, weights, input and graph, each a `Relationship` value saying how this trace relates to another trace or bundle member |
 | `Trace.remove` | Detach the hook attachments made by the most recent single-hook `attach_hooks` call |
-| `Trace.render_dagua_graph` | Render this trace with the experimental Dagua backend |
 | `Trace.replace_state_from` | Atomically replace this trace's run state with that of another `Trace` |
 | `Trace.root_module` | The `Module` record for the top-level model, `modules["self"]` |
 | `Trace.root_trace` | The ultimate root Trace of this fork or rerun lineage, or `None` |
@@ -4051,7 +4047,6 @@ alphabetical order.
 | `Trace.unknown_flop_ops` | Ledger of ops with unknown FLOPs, grouped by op name, with counts and example labels |
 | `Trace.validation_replay_status` | Machine-readable status of replay validation: unavailable, unverified, or the last completed result |
 | `Trace.verbose` | Whether timed progress messages are printed at each pipeline stage |
-| `Trace.visualization_field_audit` | Return the audit of which fields the visualization reads for this trace |
 | `Trace.walk_calls` | Yield every `ModuleCall` in the call tree in depth-first order |
 
 #### `tl.Op`

@@ -302,9 +302,9 @@ returns the graph, pruned by circuit-tracer's rule (`node_influence_coverage=0.8
 `edge_influence_coverage=0.98`), in Neuronpedia's published attribution-graph schema, and writes it
 to `path`; the file opens in Neuronpedia's graph viewer. DOCUMENTED-UNSTABLE.
 
-`tl.attribution.overlay(trace, graph)` paints the graph onto its trace for
-`trace.draw(color_by=...)`: each site holding feature or error nodes gets the total influence
-of its nodes (`graph_value="activation"` paints feature activations instead).
+`trace.draw(color_by=graph)` paints the graph onto its trace: each site holding feature or
+error nodes gets the total influence of its nodes (a mapping of site to value paints anything
+else, feature activations included).
 `tl.attribution.graph.upload_to_neuronpedia("g.json", api_key=os.environ["NEURONPEDIA_API_KEY"])` publishes the exported
 file on neuronpedia.org under the key's account and returns its URL;
 `direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], model_id="gemma-2-2b", name="honesty")`

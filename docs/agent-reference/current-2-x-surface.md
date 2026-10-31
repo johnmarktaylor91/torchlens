@@ -166,9 +166,8 @@
   gold); derived-semantics claims (`decode_output`/`output_table`) refuse
   `nongold_semantics_unavailable` on synthesized values and the first raw `Layer.out`
   read warns once per trace (`nongold_raw_value_read`, internal readers ack via
-  `torchlens._quickstart.internal_read()`). `render(model, ...)` (home
-  `torchlens._user_funcs.render`; `tl.render` root spelling awaits the F35 registration
-  sweep) is a curated facade over the resolver + `Trace.draw`: metadata-only pinned
+  `torchlens._quickstart.internal_read()`). `tl.draw(model, ...)` (home
+  `torchlens._quickstart.draw`; the root export rides the glossary regeneration) is a curated facade over the resolver + `Trace.draw`: metadata-only pinned
   eval/no-grad capture with flags/RNG/norm-buffers restored and state-dict-hash
   verified, `collapse="auto"` as its default (by design: THERE ONLY -- `Trace.draw`
   keeps `"none"`), detached `Drawing` (owns DOT/bytes/path/provenance/receipt,
@@ -1583,9 +1582,9 @@
   `Gemma2RMSNorm` serves `inv_rms` (its `rsqrt` output). Doc of record:
   `docs/reference/attribution.md`.
 - Attribution graph overlay and uploads (DOCUMENTED-UNSTABLE):
-  `tl.attribution.overlay(trace, graph, *, reduce="abs_sum", graph_value=None)` paints each
-  site holding feature or error nodes with the `reduce` total of its nodes' influence
-  (`graph_value="activation"`: feature activations) for `trace.draw(color_by=...)`.
+  `trace.draw(color_by=graph)` paints each site holding feature or error nodes with the
+  `abs_sum` total of its nodes' influence (a site-to-value mapping paints feature activations
+  or any other quantity).
   `tl.attribution.graph.upload_to_neuronpedia(exported, *, api_key)` publishes the dict
   `to_neuronpedia` returned (or its file) through Neuronpedia's documented two-step upload and
   returns the page URL; `Direction.upload_to_neuronpedia(*, api_key, scan, vector_label,
