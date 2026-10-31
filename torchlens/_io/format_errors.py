@@ -10,7 +10,7 @@ historical spelling unchanged.
 
 from __future__ import annotations
 
-from ..errors._base import CompatibilityError, TorchLensWarning
+from ..errors._base import CompatibilityError
 
 __tl_layer__ = "L0"
 __tl_vocabulary__ = True
@@ -84,20 +84,6 @@ class PreReleaseArtifactError(ArtifactError):
     """
 
 
-class ArtifactSchemaAgeWarning(TorchLensWarning):
-    """Warning emitted when a loaded artifact predates the runtime schema.
-
-    The artifact is between the rehydration floor and the current
-    ``tlspec_version``: it loads at its own recorded schema, and fields
-    introduced by later schema versions are absent rather than default-filled.
-
-    This is deliberately a ``UserWarning`` subclass, not a
-    ``DeprecationWarning``. It deprecates no API -- it reports the AGE of one
-    artifact -- and ``DeprecationWarning`` is hidden from end users by default,
-    which made the advisory effectively invisible at the one moment it matters.
-    """
-
-
 # Pickle-visible identity stays the historical facade path: persisted bundle
 # metadata references these classes by (module, qualname), and the guarded
 # unpickler allowlists exactly those paths -- the physical split must not
@@ -109,7 +95,6 @@ for _cls in (
     ArtifactRuntimeIncompatibleError,
     UnknownPersistedFieldError,
     PreReleaseArtifactError,
-    ArtifactSchemaAgeWarning,
 ):
     _cls.__module__ = "torchlens._io"
 del _cls

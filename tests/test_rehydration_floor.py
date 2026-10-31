@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import pickle
-import warnings
 from pathlib import Path
 
 import pytest
@@ -22,7 +21,6 @@ from torchlens._io import (
     MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
     ArtifactError,
-    ArtifactSchemaAgeWarning,
 )
 from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens.errors import ArtifactTooOldError
@@ -78,9 +76,7 @@ def test_current_artifacts_load_clean(tmp_path: Path) -> None:
     path = tmp_path / "current.tlspec"
     trace.save(path)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", ArtifactSchemaAgeWarning)
-        loaded = tl.load(path)
+    loaded = tl.load(path)
 
     assert isinstance(loaded, tl.Trace)
     assert [layer.layer_label for layer in loaded.layer_list] == [

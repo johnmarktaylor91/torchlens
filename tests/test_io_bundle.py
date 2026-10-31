@@ -22,7 +22,6 @@ from torchlens._io import (
     MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
     ArtifactError,
-    ArtifactSchemaAgeWarning,
     bundle as bundle_io,
 )
 from torchlens._io.manifest import Manifest
@@ -601,13 +600,13 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
             "io_format_below_floor",
             lambda manifest: manifest.__setitem__("tlspec_version", MIN_TLSPEC_VERSION - 1),
             "raise",
-            "below the supported rehydration floor",
+            "saved by torchlens 2.x",
         ),
         (
             "io_format_between_floor_and_current",
             lambda manifest: manifest.__setitem__("tlspec_version", MIN_TLSPEC_VERSION),
-            "schema_age_warning",
-            "older than runtime tlspec_version",
+            "raise",
+            "saved by torchlens 2.x",
         ),
         (
             "io_format_equal",
@@ -634,29 +633,15 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
             "999.0.0",
         ),
         (
-            # Gate G5 (compat ledger): a pre-floor writer of the running major
-            # release claiming a current-schema stamp is an ungoverned
-            # (writer, stamp) pair, so the pair-consistency refusal fires, not
-            # the old torchlens version-floor text (that hand-typed inequality
-            # was replaced by the governed ledger windows).
-            "torchlens_pair_ungoverned",
-            lambda manifest: manifest.__setitem__("torchlens_version", "2.0.0"),
-            "raise",
-            "no governed ledger window covers that writer",
-        ),
-        (
-            # A writer from an earlier major release refuses at the load door
-            # before any ledger lookup: one typed error naming the saver.
+            # A writer from an earlier major release refuses at the load door:
+            # one typed error naming the saver.
             "torchlens_earlier_major",
             lambda manifest: manifest.__setitem__("torchlens_version", "0.0.1"),
             "raise",
             "does not read files saved by torchlens 0.x",
         ),
         (
-            # Older-but-governed writer: the current runtime is the FIRST
-            # writer of the current stamp, so the test simulates a future
-            # runtime (see the scenario-specific monkeypatch in the body) to
-            # keep the older-writer info-log branch reachable under G5.
+            # An older writer of the same major release loads and is logged.
             "torchlens_older_supported",
             lambda manifest: manifest.__setitem__("torchlens_version", "2.36.0"),
             "info_log",
@@ -693,13 +678,6 @@ def test_bundle_version_policy_rows(
     _write_manifest(bundle_path, manifest)
     resolved_expected_text = expected_text() if callable(expected_text) else expected_text
 
-    if scenario == "torchlens_older_supported":
-        # The manifest writer (2.36.0) is a governed stamp-10 producer; pretend
-        # the runtime moved past it so the older-writer info-log branch runs
-        # (with the real runtime AT the first stamp-10 writer, every strictly
-        # older writer forms an ungoverned pair and refuses instead).
-        monkeypatch.setattr("torchlens._io.manifest.TORCHLENS_VERSION", "2.99.0")
-
     if expectation == "python_major_mismatch":
         (bundle_path / "metadata.pkl").write_bytes(b"not a pickle")
         with pytest.warns(UserWarning, match="python_version=999.0.0"):
@@ -717,20 +695,6 @@ def test_bundle_version_policy_rows(
     if expectation == "raise":
         with pytest.raises(ArtifactError, match=resolved_expected_text or ""):
             load(bundle_path)
-        return
-
-    if expectation == "schema_age_warning":
-        # A real between-floor writer stamped the pickled root state AND the
-        # manifest from the same TLSPEC_VERSION; a manifest-only edit is a
-        # spliced artifact and trips the manifest/metadata integrity anchor
-        # before the age advisory. Keep the fixture coherent.
-        metadata_path = bundle_path / "metadata.pkl"
-        state = pickle.loads(metadata_path.read_bytes())  # trusted bytes this test wrote
-        state["tlspec_version"] = MIN_TLSPEC_VERSION
-        metadata_path.write_bytes(pickle.dumps(state))
-        with pytest.warns(ArtifactSchemaAgeWarning, match=resolved_expected_text or ""):
-            loaded = load(bundle_path)
-        assert loaded.model_class_name == "_ConvBundleModel"
         return
 
     if expectation == "warning":

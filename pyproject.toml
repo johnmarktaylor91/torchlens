@@ -487,11 +487,6 @@ filterwarnings = [
     # torch-internal suffix exempts the whole third-party class without listing messages;
     # genuine TorchLens-originated UserWarnings still error.
     "default:(?s).*\\(Triggered internally at :UserWarning:torchlens(\\.|$)",
-    # Between-floor artifact-age advisory (grind r3, R15-F1). Recategorized from
-    # DeprecationWarning to the visible ArtifactSchemaAgeWarning (a UserWarning
-    # subclass) because it deprecates no API; legacy-bundle tests exercise it
-    # broadly, so it stays visible-not-fatal and is asserted locally.
-    "default:Bundle tlspec_version=.* is older than runtime tlspec_version=.*:UserWarning",
     # External: torchvision model init deprecations
     "ignore:The default weight initialization of.*:FutureWarning",
     # External: torch.meshgrid indexing argument

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import warnings
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,7 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TLSPEC_VERSION, ArtifactError, ArtifactSchemaAgeWarning
+from torchlens._io import TLSPEC_VERSION, ArtifactError
 from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.errors import BackendPayloadUnsupportedError
 from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
@@ -529,7 +528,7 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     assert lazy_out.requires_grad is True
 
 
-def test_fresh_unified_save_reports_current_version_with_no_schema_age_warning(
+def test_fresh_unified_save_reports_current_version(
     tmp_path: Path,
 ) -> None:
     """A same-runtime save/load round trip must not report a false "older" version.
@@ -541,8 +540,7 @@ def test_fresh_unified_save_reports_current_version_with_no_schema_age_warning(
     merge in ``_TlSpecWriter.write_trace_manifest`` let the stale constant win,
     so every freshly-saved bundle reported ``tlspec_version=1`` on disk and
     every same-runtime load raised a false "Bundle tlspec_version=1 is older
-    than the runtime ``tlspec_version``" advisory (an ``ArtifactSchemaAgeWarning``
-    today; a ``DeprecationWarning`` when the regression was first caught).
+    than the runtime ``tlspec_version``" refusal.
     """
 
     log = _captured_log()
@@ -552,9 +550,7 @@ def test_fresh_unified_save_reports_current_version_with_no_schema_age_warning(
     manifest = _read_manifest(path)
     assert manifest["tlspec_version"] == TLSPEC_VERSION
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", ArtifactSchemaAgeWarning)
-        loaded = tl.load(path)
+    loaded = tl.load(path)
     assert isinstance(loaded, tl.Trace)
 
 

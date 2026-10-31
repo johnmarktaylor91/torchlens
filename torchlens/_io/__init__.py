@@ -43,7 +43,6 @@ from .format_contract import (
 from .format_errors import (
     ArtifactError,
     ArtifactRuntimeIncompatibleError,
-    ArtifactSchemaAgeWarning,
     ArtifactTooNewError,
     ArtifactTooOldError,
     PreReleaseArtifactError,
@@ -62,7 +61,6 @@ __all__ = [
     "MIN_TORCHLENS_VERSION_TEXT",
     "TLSPEC_VERSION",
     "ArtifactRuntimeIncompatibleError",
-    "ArtifactSchemaAgeWarning",
     "ArtifactTooNewError",
     "ArtifactTooOldError",
     "BlobRef",

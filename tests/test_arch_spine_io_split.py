@@ -31,7 +31,6 @@ _FACADE_SPELLINGS = (
     "ArtifactRuntimeIncompatibleError",
     "UnknownPersistedFieldError",
     "PreReleaseArtifactError",
-    "ArtifactSchemaAgeWarning",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "BlobRef",
@@ -55,7 +54,6 @@ _PICKLE_VISIBLE_TYPES = (
     "ArtifactRuntimeIncompatibleError",
     "UnknownPersistedFieldError",
     "PreReleaseArtifactError",
-    "ArtifactSchemaAgeWarning",
     "BlobRef",
     "FieldPolicy",
 )
