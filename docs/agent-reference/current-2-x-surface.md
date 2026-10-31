@@ -1,6 +1,6 @@
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 116 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 115 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
@@ -1613,3 +1613,63 @@
   `intervention`, as do the `tl.attribution.CausalAuditSet` rows (without `site` and `component`). Refusals `attribution_audit_claim_unsupported`,
   `attribution_audit_claim_misaligned`, `attribution_eval_setting_invalid`; warning
   `attribution_audit_units_many`. Doc of record: `docs/reference/attribution.md`.
+
+## Visuals and kits namespace names
+
+Namespace homes and exports introduced by the visuals-and-kits rename:
+
+- `tl.attribution.Attribution`: Container for provisional input-attribution results.
+- `tl.attribution.AttributionMetric`: Frozen container for one attribution quality metric.
+- `tl.attribution.TokenAttribution`: Frozen result of the token-attribution two-liner.
+- `tl.bridge.huggingface_hub`: Hugging Face Hub publishing and loading helpers.
+- `tl.bridge.huggingface_hub.from_hub`: Download a TorchLens artifact from the Hub and load it safely.
+- `tl.bridge.huggingface_hub.push_to_hub`: Upload a TorchLens ``Trace`` or ``Bundle`` to the Hugging Face Hub.
+- `tl.bridge.pytorch_grad_cam`: pytorch-grad-cam bridge helpers.
+- `tl.bridge.pytorch_grad_cam.cam`: Run a pytorch-grad-cam method for a TorchLens site.
+- `tl.bridge.transformers.AttentionCall`: One recorded attention call.
+- `tl.bridge.transformers.AttentionRecording`: Per-head attention probabilities recorded by the TorchLens backend.
+- `tl.bridge.transformers.trace_image`: Trace an image model with PIL input and resolved preprocessing.
+- `tl.bridge.transformers.trace_multimodal`: Trace a Hugging Face multimodal model with dict-keyed input.
+- `tl.bridge.transformers.trace_text`: Trace a Hugging Face language model with raw text input.
+- `tl.errors.AttributionError`: Error raised for unsupported or invalid attribution requests.
+- `tl.errors.LogitLensError`: Raised when a logit lens cannot be built, validated, or applied.
+- `tl.errors.MissingFacetError`: Raised when a declared facet needs a different capture to be available.
+- `tl.facets.FacetFunction`: Registered facet recipe metadata.
+- `tl.facets.MissingGrad`: Sentinel for a known facet gradient that is not currently saved.
+- `tl.facets.adding`: Temporarily add recipes to snapshots constructed in this context.
+- `tl.facets.enable_transformer_lens_aliases`: Enable or disable opt-in TransformerLens-style facet aliases.
+- `tl.facets.functions`: List registered recipes, optionally filtered by scope and class-name glob.
+- `tl.mechinterp.HeadScores`: Per-head taxonomy scores.
+- `tl.mechinterp.LogitLens`: Result of a :func:`logit_lens` sweep across transformer blocks.
+- `tl.mechinterp.LogitLensPrediction`: Streaming per-layer prediction summary (one row per projected layer).
+- `tl.mechinterp.LogitLensPredictions`: Result of a streaming :func:`logit_lens_predictions` sweep.
+- `tl.mechinterp.PatchedRun`: The receipted product of one lowered counterfactual.
+- `tl.mechinterp.SavePlan`: A priced, composable retention plan (mikit D15).
+- `tl.mechinterp.patch_grid`: Run a labelled activation-patching grid (mikit section 7).
+- `tl.mechinterp.patching`: Prebuilt activation and attribution patching helpers for facets.
+- `tl.neuro.ExtractionPlan`: Immutable measured plan for one whole-model extraction sweep.
+- `tl.neuro.PlanSite`: One requested site's measured plan row.
+- `tl.observability.RunningStats`: Always-on scalar spine accumulator (StreamingStat; D8).
+- `tl.observability.RunningStatsResult`: Finalized spine statistics for one population.
+- `tl.stats.NarrationObserver`: Live stats-line echo mounted on the shipped observer surface.
+- `tl.stats.RunningStatsResult`: Finalized spine statistics for one population.
+- `tl.stats.narrate`: Create an echo observer (the live line density) for one site.
+- `tl.trackers.SeriesPoint`: One (step-span, block-truth, observation) sample of a series.
+- `tl.viz.NodeSpec`: Graphviz node attributes produced by TorchLens before user customization.
+- `tl.viz.ablation_grid`: Render the measured-intervention receipt grid (THE differentiator).
+- `tl.viz.attention`: Render an attention view to paper-ready PNG/SVG/PDF pages.
+- `tl.viz.attention_atlas`: Render the whole-model attention atlas (BertViz model view, matched).
+- `tl.viz.contact_sheet`: Render one page of the ranked overview contact sheet.
+- `tl.viz.histogram_waterfall`: Render the histogram waterfall (step x signed-log2-bin density).
+- `tl.viz.image_scatter`: Render a bounded 2D scatter with optional PIL thumbnails.
+- `tl.viz.intervention_diff`: Diff ``subject`` against ``reference``, site-key-first.
+- `tl.viz.lineplot`: Render one or more series as a compact PIL line plot.
+- `tl.viz.metric_strip`: Render a loss/entropy strip to paper output.
+- `tl.viz.nodes.channel_grid`: Create a grid visualizer for the first ``n`` activation channels.
+- `tl.viz.nodes.heatmap`: Create a channel-averaged 2D activation heatmap visualizer.
+- `tl.viz.nodes.histogram`: Create a compact value-distribution histogram visualizer.
+- `tl.viz.nodes.text_table`: Render a text batch as a Graphviz HTML-like table label.
+- `tl.viz.quantile_fan`: Render the quantile-fan strip for one series (the default view).
+- `tl.viz.site_detail`: Render the per-site detail sheet: every stream on one step axis.
+- `tl.viz.timeline`: Render one timeline v2 artifact as deterministic standalone SVG text.
+- `tl.viz.token_strip`: Render the paper-format token strip via matplotlib.

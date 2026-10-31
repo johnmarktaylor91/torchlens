@@ -2853,3 +2853,234 @@ deprecation shim owed*
   `slug` and `model_id` characters and the file size (`neuronpedia_upload_argument_invalid`).
   HTTP failures raise `neuronpedia_upload_http_error`, answers without their fields
   `neuronpedia_upload_response_invalid`.
+
+## Visuals and kits spellings
+
+Spellings introduced by the visuals-and-kits rename (attribution, facets, the `tl.viz` and
+`tl.neuro` homes, transformer views, statistics and bridges), one line each. The sections above
+describe each surface in depth.
+
+### Namespace names
+
+| Spelling | Meaning |
+| --- | --- |
+| `tl.attribution.Attribution` | Container for provisional input-attribution results |
+| `tl.bridge.transformers.trace_image` | Trace an image model with PIL input and resolved preprocessing |
+| `tl.bridge.transformers.trace_multimodal` | Trace a Hugging Face multimodal model with dict-keyed input |
+| `tl.bridge.transformers.trace_text` | Trace a Hugging Face language model with raw text input |
+| `tl.errors.AttributionError` | Error raised for unsupported or invalid attribution requests |
+| `tl.errors.MissingFacetError` | Raised when a declared facet needs a different capture to be available |
+| `tl.facets.FacetFunction` | Registered facet recipe metadata |
+| `tl.facets.MissingGrad` | Sentinel for a known facet gradient that is not currently saved |
+| `tl.facets.enable_transformer_lens_aliases` | Enable or disable opt-in TransformerLens-style facet aliases |
+| `tl.facets.functions` | List registered recipes, optionally filtered by scope and class-name glob |
+| `tl.mechinterp.HeadScores` | Per-head taxonomy scores |
+| `tl.mechinterp.LogitLensPrediction` | Streaming per-layer prediction summary (one row per projected layer) |
+| `tl.mechinterp.LogitLensPredictions` | Result of a streaming :func:`logit_lens_predictions` sweep |
+| `tl.mechinterp.PatchedRun` | The receipted product of one lowered counterfactual |
+| `tl.mechinterp.SavePlan` | A priced, composable retention plan (mikit D15) |
+| `tl.mechinterp.patch_head` | Patch one head (or its pattern) on a fused model via exact lowering |
+| `tl.mechinterp.patching` | Prebuilt activation and attribution patching helpers for facets |
+| `tl.neuro.ExtractionPlan` | Immutable measured plan for one whole-model extraction sweep |
+| `tl.neuro.PlanSite` | One requested site's measured plan row |
+| `tl.neuro.export_npz` | Export extracted features as npz interchange (D-21) |
+| `tl.neuro.plan_extraction` | Build a measured extraction plan from two real probe captures (D-15) |
+| `tl.observability.RunningStats` | Always-on scalar spine accumulator (StreamingStat; D8) |
+| `tl.observability.RunningStatsResult` | Finalized spine statistics for one population |
+| `tl.quickstart.Drawing` | Detached one-call render result. Always returned, never None |
+| `tl.stats.NarrationObserver` | Live stats-line echo mounted on the shipped observer surface |
+| `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
+| `tl.stats.narrate` | Create an echo observer (the live line density) for one site |
+| `tl.trackers.HistoryView` | Session-side read view over one run's committed history |
+| `tl.trackers.SeriesPoint` | One (step-span, block-truth, observation) sample of a series |
+| `tl.viz.NodeSpec` | Graphviz node attributes produced by TorchLens before user customization |
+| `tl.viz.attention_atlas` | Render the whole-model attention atlas (BertViz model view, matched) |
+| `tl.viz.contact_sheet` | Render one page of the ranked overview contact sheet |
+| `tl.viz.feature_maps` | Compute and store per-site spatial activation maps for graph nodes |
+| `tl.viz.histogram_waterfall` | Render the histogram waterfall (step x signed-log2-bin density) |
+| `tl.viz.image_scatter` | Render a bounded 2D scatter with optional PIL thumbnails |
+| `tl.viz.intervention_diff` | Diff ``subject`` against ``reference``, site-key-first |
+| `tl.viz.lineplot` | Render one or more series as a compact PIL line plot |
+| `tl.viz.metric_strip` | Render a loss/entropy strip to paper output |
+| `tl.viz.nodes.channel_grid` | Create a grid visualizer for the first ``n`` activation channels |
+| `tl.viz.nodes.heatmap` | Create a channel-averaged 2D activation heatmap visualizer |
+| `tl.viz.nodes.histogram` | Create a compact value-distribution histogram visualizer |
+| `tl.viz.nodes.mds_scatter` | Return a draw-time node callback for stored MDS scatter annotations |
+| `tl.viz.nodes.scree` | Return a draw-time node callback for stored scree annotations |
+| `tl.viz.nodes.text_table` | Render a text batch as a Graphviz HTML-like table label |
+| `tl.viz.prediction_table` | Render the top-k table to paginated paper pages (whole positions) |
+| `tl.viz.quantile_fan` | Render the quantile-fan strip for one series (the default view) |
+| `tl.viz.site_detail` | Render the per-site detail sheet: every stream on one step axis |
+| `tl.viz.timeline` | Render one timeline v2 artifact as deterministic standalone SVG text |
+| `tl.viz.token_strip` | Render the paper-format token strip via matplotlib |
+
+### Fields and methods
+
+| Spelling | Meaning |
+| --- | --- |
+| `AbsenceReason.remedy` | Optional capture instruction for actionable missing-payload cases |
+| `Attribution.target_repr` | Compact representation of the scalarization target |
+| `AttributionGraph.capture_status` | The capture's completeness verdict, as the trace reports it |
+| `AttributionGraph.frozen_sites` | Labels of the sites held at their captured values |
+| `AttributionGraph.has_demeaned_logits` | Whether a logit node's value is its logit minus the mean logit |
+| `CausalAuditSet.build_interventions` | The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect`` |
+| `CausalAuditSet.draw_index` | Index of the random draw (``0`` for ``"top"`` and ``"bottom"``) |
+| `CausalAuditUnit.build_interventions` | The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect`` |
+| `ComponentStack.topk` | Return the ``k`` largest rows as ``(label, score)`` pairs |
+| `ContributionScores.topk` | Return the ``k`` largest contributors at one (position, direction) |
+| `CurveStep.build_inputs` | The perturbed inputs of this step, shaped like the caller's ``inputs`` |
+| `CurveStep.build_interventions` | The recorded edits of this step, as ``(selection, edit)`` pairs |
+| `Drawing.file_format` | The rendered file format (``"pdf"``, ``"svg"``, ...) |
+| `Drawing.receipt` | Execution receipt from the pinned capture policy |
+| `ExtractionPlan.batch_size` | field of `ExtractionPlan` |
+| `ExtractionPlan.included_sites` | Return the sites in the run's save set |
+| `ExtractionPlan.input_signature` | field of `ExtractionPlan` |
+| `ExtractionPlan.memory_budget_bytes` | field of `ExtractionPlan` |
+| `ExtractionPlan.model_class` | field of `ExtractionPlan` |
+| `ExtractionPlan.num_stimuli` | field of `ExtractionPlan` |
+| `ExtractionPlan.peak_basis` | field of `ExtractionPlan` |
+| `ExtractionPlan.planned_passes` | Return exact planned forwards: warm-up + two probes (already run) + batches |
+| `ExtractionPlan.predicted_peak_bytes` | field of `ExtractionPlan` |
+| `ExtractionPlan.probe_batch_sizes` | field of `ExtractionPlan` |
+| `ExtractionPlan.probe_peak_pairs` | field of `ExtractionPlan` |
+| `ExtractionPlan.retained_bytes_per_batch` | Return fitted retained bytes for one batch across included sites |
+| `ExtractionPlan.safety_margin` | field of `ExtractionPlan` |
+| `ExtractionPlan.total_output_bytes` | Return fitted final artifact bytes across all stimuli |
+| `ExtractionPlan.transform_repr` | field of `ExtractionPlan` |
+| `FacetFunction.class_names` | Short class names matched by this recipe |
+| `FacetFunction.has_predicate` | Whether this recipe has an arbitrary predicate matcher |
+| `FacetFunction.qualnames` | Fully-qualified class names matched by this recipe |
+| `FacetFunction.target_scope` | Record scope the recipe targets |
+| `FacetRegistrySnapshot.functions` | Immutable active recipe entries |
+| `FacetSpec.apply_transforms` | Apply the transform chain to a value |
+| `FacetSpec.function_id` | Recipe identifier that produced this facet |
+| `FacetSpec.function_version` | Recipe version that produced this facet |
+| `FacetView.function_source` | Return recipe name provenance for this view |
+| `FamilyEvidence.is_sampled` | Whether this family rode the seeded gathered sample |
+| `GraphNode.token_id` | Token id: the input token at ``position`` (token nodes) or the target vocabulary id (logit nodes) |
+| `HeadScores.eligible_rows` | field of `HeadScores` |
+| `HeadScores.module_addresses` | field of `HeadScores` |
+| `HeadScores.topk` | Return the ``k`` highest-scoring heads as ``(address.headN, score)`` |
+| `HeadWeightViews.num_kv_heads` | field of `HeadWeightViews` |
+| `HistoryView.run_record` | field of `HistoryView` |
+| `InputProvenance.has_semantic_values` | True only when the values are caller-supplied real data. Gates derived-semantics claims |
+| `LogitLens.entries` | Per-layer projections in block execution order |
+| `LogitLens.final_logits` | The model's captured real output logits when readable, else ``None`` |
+| `LogitLens.is_validated` | Whether the reconstructed lens was numerically validated against the captured last-block ``resid_post`` -> logits pair |
+| `LogitLens.stacked` | Return all per-layer logits stacked on a new leading layer axis |
+| `LogitLensPredictions.is_validated` | Whether the reconstructed lens passed numeric validation |
+| `MissingGrad.raise_error` | Raise the missing-gradient tensor-use error |
+| `NarrationObserver.lines` | field of `NarrationObserver` |
+| `NarrationObserver.signal` | field of `NarrationObserver` |
+| `NarrationObserver.sink` | field of `NarrationObserver` |
+| `NarrationObserver.style` | field of `NarrationObserver` |
+| `PatchedRun.metric_value` | field of `PatchedRun` |
+| `PatchedRun.read_facet` | Read a facet from the patched rerun, refusing stale virtual reads |
+| `PatchedRun.receipt` | field of `PatchedRun` |
+| `PlanSite.bytes_at_batch` | Return fitted retained bytes for one batch of ``batch_size`` |
+| `PlanSite.bytes_fixed` | Batch-independent byte intercept from the two-point linear fit |
+| `PlanSite.bytes_per_stimulus` | Byte slope per stimulus from the two-point fit |
+| `PlanSite.exclusion_reason` | Actionable reason when excluded; never silently dropped |
+| `PlanSite.is_batch_invariant` | Whether the site's bytes did NOT scale with batch |
+| `PlanSite.is_included` | Whether the site is in the run's save set |
+| `PlanSite.transform_seconds` | Measured live transform time at the probe batch (D-15: the probe executes the transform chain; post-transform bytes and time are measured, never derived) |
+| `PlanSite.transformed_bytes` | Post-transform bytes at the probe batch, when a transform ran |
+| `PlanSite.transformed_shape` | Post-transform shape at the probe batch, when a transform ran |
+| `ProjectionSource.has_fused_qkv` | Whether the role is a column slice of a fused QKV weight |
+| `RandomizationTest.module_addresses` | Randomized modules, top (output side) first |
+| `ReadRow.is_detached` | ``True`` when ``value`` is a detached copy (always true in v1 for carried tensors) |
+| `ReadRow.is_frozen_requested` | field of `ReadRow` |
+| `ReadRow.is_frozen_resolved` | field of `ReadRow` |
+| `ReadRow.is_rescorable` | ``False`` on loaded tables (the runtime registry is not serialized) |
+| `ReadTable.is_rescorable` | Whether the table can be re-scored against its live trace |
+| `RunningStats.merge` | Fold another spine into this one |
+| `RunningStatsResult.count_finite` | field of `RunningStatsResult` |
+| `RunningStatsResult.count_nan` | field of `RunningStatsResult` |
+| `RunningStatsResult.count_negative` | field of `RunningStatsResult` |
+| `RunningStatsResult.count_neginf` | field of `RunningStatsResult` |
+| `RunningStatsResult.count_posinf` | field of `RunningStatsResult` |
+| `RunningStatsResult.count_total` | field of `RunningStatsResult` |
+| `RunningStatsResult.count_zero` | field of `RunningStatsResult` |
+| `RunningStatsResult.finite_absmax` | field of `RunningStatsResult` |
+| `RunningStatsResult.finite_max` | field of `RunningStatsResult` |
+| `RunningStatsResult.finite_min` | field of `RunningStatsResult` |
+| `RunningStatsResult.m2` | field of `RunningStatsResult` |
+| `RunningStatsResult.reduction_dtype` | field of `RunningStatsResult` |
+| `RunningStatsResult.sum_abs` | field of `RunningStatsResult` |
+| `RunningStatsResult.sum_squares` | field of `RunningStatsResult` |
+| `SavePlan.analyses` | field of `SavePlan` |
+| `SavePlan.describe` | Return the full per-site table as text |
+| `SavePlan.estimated_bytes` | Return the summed payload estimate for the named sites |
+| `SavePlan.module_subtrees` | field of `SavePlan` |
+| `SeriesPoint.is_coarsened` | field of `SeriesPoint` |
+| `TensorStats.has_no_finite_values` | Whether no element is finite (the fully poisoned case) |
+| `TensorStats.is_all_false` | bool family: every element false (exact) |
+| `TensorStats.is_all_true` | bool family: every element true (exact) |
+| `TensorStats.is_all_zero` | Whether every element is exactly zero (exact claim) |
+| `TensorStats.is_magnitude_based` | field of `TensorStats` |
+| `TensorStats.num_finite` | Elements with finite values |
+| `TensorStats.num_nan` | field of `TensorStats` |
+| `TensorStats.num_neginf` | field of `TensorStats` |
+| `TensorStats.num_nonfinite` | Total nonfinite elements |
+| `TensorStats.num_posinf` | field of `TensorStats` |
+| `TensorStats.num_true` | field of `TensorStats` |
+| `TensorStats.num_zero` | field of `TensorStats` |
+| `TensorStats.std` | field of `TensorStats` |
+| `TensorStats.std_evidence` | field of `TensorStats` |
+| `TensorStats.std_se` | field of `TensorStats` |
+| `TokenAttribution.completeness` | ``attribution_sum`` / ``target_delta`` / ``completeness_residual`` / ``residual_rel`` / ``target_delta_abs`` |
+| `TokenAttribution.convergence` | Grid-pair evidence: requested spelling, evaluated grids, residual and both stability norms per grid, and the stopping statement |
+| `TokenAttribution.cost` | Logical/physical call accounting incl. the batching audit evidence |
+| `TokenAttribution.display_tokens` | Display strings per raw token (marker cleanup only) |
+| `TokenAttribution.footer_lines` | Build the mandatory disclosure footer |
+| `TokenAttribution.offsets` | Character offsets per token, or ``None`` when the tokenizer cannot provide them (disclosed) |
+| `TokenAttribution.payload` | Build the renderer-neutral payload (the tviz contract) |
+| `TokenAttribution.raw_tokens` | Tokenizer tokens, never silently merged |
+| `TokenAttribution.special_tokens_mask` | 1 where the token is a tokenizer special, or ``None`` |
+| `TokenAttribution.target_repr` | Full target resolution disclosure incl. the decoded token |
+| `TokenAttributionPayload.to_markdown` | Render a plain-text fallback table with the footer lines |
+| `TrajectoryStats.compute_stats` | Return ``{layer: SpineResult}`` for one statistic (count, min, max, mean, ...) |
+| `TrajectoryStats.is_input_masked` | Whether each row's own input tokens were banned before reduction |
+| `TrajectoryStats.module_addresses` | Block addresses in depth order (one row per layer) |
+| `TrajectoryStats.num_examples` | Number of examples (batch rows) folded |
+| `TrajectoryStats.num_positions` | Sequence length every batch shared |
+| `VisualizationOptions.size_scale` | UNSTABLE size-channel scale transform (``"sqrt"``/``"linear"``); see ``Trace.draw`` |
+
+### Keywords
+
+| Spelling | Meaning |
+| --- | --- |
+| `draw_index=` | keyword of `tl.attribution.CausalAuditSet` |
+| `extra_facets=` | keyword of `tl.facets.snapshot` |
+| `frozen_sites=` | keyword of `tl.attribution.AttributionGraph` |
+| `function_id=` | keyword of `FacetSpec.computed`, `FacetSpec.from_home`, `tl.facets.FacetSpec` |
+| `function_version=` | keyword of `FacetSpec.computed`, `FacetSpec.from_home`, `tl.facets.FacetSpec` |
+| `functions=` | Immutable active recipe entries |
+| `has_demeaned_logits=` | keyword of `tl.attribution.AttributionGraph` |
+| `has_fused_qkv=` | keyword of `tl.mechinterp.ProjectionSource` |
+| `has_semantic_values=` | True only when the values are caller-supplied real data. Gates derived-semantics claims |
+| `is_batch_invariant=` | keyword of `tl.neuro.PlanSite` |
+| `is_coarsened=` | keyword of `tl.trackers.SeriesPoint` |
+| `is_detached=` | keyword of `tl.attribution.ReadRow` |
+| `is_frozen_requested=` | keyword of `tl.attribution.ReadRow` |
+| `is_frozen_resolved=` | keyword of `tl.attribution.ReadRow` |
+| `is_included=` | keyword of `tl.neuro.PlanSite` |
+| `is_input_masked=` | keyword of `tl.mechinterp.TrajectoryStats` |
+| `is_magnitude_based=` | keyword of `tl.stats.TensorStats` |
+| `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
+| `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
+| `num_examples=` | keyword of `tl.mechinterp.TrajectoryStats` |
+| `num_kv_heads=` | keyword of `tl.mechinterp.HeadWeightViews` |
+| `num_nan=` | keyword of `tl.stats.TensorStats` |
+| `num_neginf=` | keyword of `tl.stats.TensorStats` |
+| `num_ops=` | keyword of `tl.quickstart.Drawing` |
+| `num_posinf=` | keyword of `tl.stats.TensorStats` |
+| `num_positions=` | keyword of `tl.mechinterp.TrajectoryStats` |
+| `num_stimuli=` | keyword of `tl.neuro.ExtractionPlan`, `tl.neuro.plan_extraction` |
+| `num_true=` | keyword of `tl.stats.TensorStats` |
+| `num_zero=` | keyword of `tl.stats.TensorStats` |
+| `run_record=` | keyword of `tl.trackers.HistoryView` |
+| `signal=` | keyword of `tl.stats.NarrationObserver` |
+| `std_evidence=` | keyword of `tl.stats.TensorStats` |
+| `std_se=` | keyword of `tl.stats.TensorStats` |
+| `value_fn=` | keyword of `FacetSpec.computed` |

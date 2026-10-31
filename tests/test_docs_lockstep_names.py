@@ -13,7 +13,7 @@ import torchlens as tl
 # DECLARED-surface constant (cited by the reachable-surface gate in
 # tests/oracles/test_oracle_w0_surface.py and the denominator 3-root lint in
 # tests/oracles/test_oracle_w0_lints.py -- one cites the other, never forks).
-PUBLIC_SURFACE_SIZE = 116
+PUBLIC_SURFACE_SIZE = 115
 #: Docs carrying a parseable ``__all__`` count claim. AGENTS.md and torchlens/AGENTS.md
 #: no longer carry this prose directly (2026-10-01 docs move: "docs: move agent
 #: reference material out of startup instructions" / "docs: reserve nested instruction
