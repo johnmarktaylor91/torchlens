@@ -170,7 +170,7 @@ def render_backward_graph(
         f"<<FONT COLOR='{skin.default_font}'>"
         f"<B>{html_escape(self.model_class_name)} backward graph</B><br align='left'/>"
         f"{len(self.autograd.grad_fns)} grad_fn_handle nodes"
-        f"<br align='left'/>{self.num_backward_passes} backward pass(es)"
+        f"<br align='left'/>{self._num_backward_passes} backward pass(es)"
         f"{_format_backward_filter_caption(pass_filter)}"
         f"<br align='left'/>mode: {vis_mode}<br align='left'/></FONT>>"
     )
@@ -435,7 +435,7 @@ def render_combined_graph(
     graph_caption = (
         f"<<B>{html_escape(self.model_class_name)} combined forward/backward graph</B><br align='left'/>"
         f"{len(self)} forward nodes, {len(self.autograd.grad_fns)} grad_fn_handle nodes"
-        f"<br align='left'/>{self.num_backward_passes} backward pass(es)"
+        f"<br align='left'/>{self._num_backward_passes} backward pass(es)"
         f"{_format_backward_filter_caption(pass_filter)}<br align='left'/>>"
     )
     graph_args = {

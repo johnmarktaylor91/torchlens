@@ -2235,8 +2235,8 @@ def _add_grad_edge(
         }
         if (
             grad_passes
-            and self.num_backward_passes > 1
-            and grad_passes != set(range(1, self.num_backward_passes + 1))
+            and self._num_backward_passes > 1
+            and grad_passes != set(range(1, self._num_backward_passes + 1))
         ):
             edge_dict["label"] = f"bwd {int_list_to_compact_str(sorted(grad_passes))}"
         for arg_name, arg_val in overrides.grad_edge.items():  # type: ignore[union-attr]
