@@ -1400,7 +1400,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   trace is active.
 
 **Report disclosure helpers** *(spellings documented-unstable)*
-: `tl.report.amp_scaled_grads_hint(*, all_nonfinite=False)` returns the shared text that names a
+: `tl.debug.amp_scaled_grads_hint(*, all_nonfinite=False)` returns the shared text that names a
   possible `torch.amp.GradScaler` loss scale behind large or non-finite gradients and the
   `grad_scale=` remedy; it edits no rows or verdicts. `tl.report.flops_vs_dispatch(model,
   input_args=None, input_kwargs=None, *, sdpa_backend=None, **trace_kwargs)` runs the detached
@@ -2754,7 +2754,7 @@ deprecation shim owed*
   `AttentionCall` records (`module_name`, `probs`, `num_key_value_heads`,
   `mask_kind`, `sdpa_checked`), and `.nbytes` is the retained total.
 
-**Report (`tl.debug.Report`)** — *unstable — no deprecation shim owed*
+**Report (`tl.report.Report`)** — *unstable — no deprecation shim owed*
 : The one typed result of every report-shaped `tl.debug` helper (U42.2):
   `report_type`, `subject` and `status` (the lead), `to_dict()` (a plain,
   JSON-friendly payload; tensors and graph records summarized, never
@@ -2978,7 +2978,7 @@ deprecation shim owed*
 **Admin and debugging names**
 : `tl.clear_cache()` (also `tl.user_funcs.clear_cache`) empties the capture cache;
   `tl.observers.register_tensor_connection` registers a tensor connection;
-  `tl.report.isolated_capture` runs a capture in isolation; `Trace.capture_backward`
+  `tl.debug.isolated_capture` runs a capture in isolation; `Trace.capture_backward`
   (`TraceValidationMixin.capture_backward`) captures a backward pass for validation.
 ### Debugging tools and report results
 **DTypeRangeReport (`tl.debug.DTypeRangeReport`)** — *unstable — no deprecation shim owed*

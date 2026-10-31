@@ -97,7 +97,7 @@ def _synthetic_join_for(log: Any) -> None:
 def test_hot_path_device_time_refuses_without_join(mlp_log) -> None:
     """No joined session -> typed refusal, never silent zeros."""
 
-    from torchlens.report import hot_path
+    from torchlens.debug import hot_path
 
     with pytest.raises(TorchLensError) as excinfo:
         hot_path(mlp_log, by="device_time")
@@ -110,7 +110,7 @@ def test_hot_path_device_time_ranks_joined_ops(mlp_log) -> None:
     """Joined device nanoseconds rank source lines."""
 
     _synthetic_join_for(mlp_log)
-    from torchlens.report import hot_path_rows
+    from torchlens.debug import hot_path_rows
 
     rows, attrs = hot_path_rows(mlp_log, by="device_time")
     assert attrs["metric"] == "device_time"

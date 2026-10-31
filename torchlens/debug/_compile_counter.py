@@ -144,13 +144,13 @@ def count_compiles() -> Iterator[CompileCounts]:
     --------
     Verify the coexistence contract on a compiled model::
 
-        with tl.report.count_compiles() as during:
+        with tl.debug.count_compiles() as during:
             trace = tl.trace(model, x)
         assert during.frames_compiled == 0  # zero compiles during capture
 
-        with tl.report.count_compiles() as burst:
+        with tl.debug.count_compiles() as burst:
             model(x)  # the first call after capture may recompile a bounded burst
-        with tl.report.count_compiles() as steady:
+        with tl.debug.count_compiles() as steady:
             model(x)
         assert steady.frames_compiled == 0  # then steady state
     """

@@ -23,10 +23,10 @@ def main() -> None:
 
     trace = tl.trace(DebugModel(), torch.randn(2, 4))
 
-    nan_result = tl.report.bisect_nan(trace)
+    nan_result = tl.debug.bisect_nan(trace)
     print(nan_result.message)
 
-    hot = tl.report.hot_path(trace, by="memory").to_pandas()
+    hot = tl.debug.hot_path(trace, by="memory").to_pandas()
     print(hot.head())
 
 

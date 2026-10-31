@@ -9,20 +9,9 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING, Any
 
+from .._debug_report import Report
 from ..debug._audit import HealthReport
-from ..debug._compile_counter import count_compiles
-from ..debug._cost import hot_path, hot_path_rows
-from ..debug._first_bad import FirstBadThing, amp_scaled_grads_hint
 from ..debug._flops_vs_dispatch import FlopsCrossCheck, flops_vs_dispatch
-from ..debug._grad_fn_walk import GradFnNode, GradFnSketch, sketch_grad_fn, walk_grad_fn
-from ..debug._graph import LineageReport, compare, first_divergence, lineage
-from ..debug._graph_breaks import graph_breaks
-from ..debug._infer_input_shape import GuessInputShapeReport, guess_input_shape
-from ..debug._nan import BisectNanReport, FindNanReport, bisect_nan, find_nan
-from ..debug._nan_backward import BackwardNanReport, BackwardTransition, bisect_nan_backward
-from ..debug._params import compare_params
-from ..debug._precision import BisectPrecisionReport, bisect_precision
-from ..debug._recompute import recompute_candidates
 from ..intervention._topology.topology import compare_topology
 from ._cost_backward import (
     BackwardEstimate,
@@ -82,14 +71,10 @@ from ._summary_report import (
 )
 
 __all__ = [
-    "isolated_capture",
-    "FindNanReport",
-    "compare",
-    "compare_params",
     "compare_topology",
-    "find_nan",
     "FlopsCrossCheck",
     "HealthReport",
+    "Report",
     "ValidationStatus",
     "ValidationFailure",
     "ValidationDiagnostic",
@@ -131,7 +116,6 @@ __all__ = [
     "SummaryRow",
     "SummaryTotals",
     "ProfileReport",
-    "amp_scaled_grads_hint",
     "attributed_kernel_utilization",
     "backward_estimate",
     "backward_status",
@@ -146,28 +130,6 @@ __all__ = [
     "padding_waste",
     "roofline",
     "measure_clean_step",
-    "BackwardNanReport",
-    "BackwardTransition",
-    "bisect_nan",
-    "bisect_nan_backward",
-    "bisect_precision",
-    "BisectNanReport",
-    "BisectPrecisionReport",
-    "count_compiles",
-    "first_divergence",
-    "FirstBadThing",
-    "GradFnNode",
-    "GradFnSketch",
-    "graph_breaks",
-    "hot_path",
-    "hot_path_rows",
-    "guess_input_shape",
-    "GuessInputShapeReport",
-    "lineage",
-    "LineageReport",
-    "recompute_candidates",
-    "sketch_grad_fn",
-    "walk_grad_fn",
 ]
 
 
@@ -194,7 +156,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "CompatWindow": ("torchlens._ecosystem.compat", "CompatWindow"),
     "diff": ("torchlens.differential", "diff"),
     "DiffReport": ("torchlens.differential", "DiffReport"),
-    "isolated_capture": ("torchlens.debug._rerun", "isolated_capture"),
 }
 
 

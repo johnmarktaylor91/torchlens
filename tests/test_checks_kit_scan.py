@@ -45,7 +45,7 @@ def _model() -> nn.Module:
 def test_audit_params_clean_model_rows_and_export() -> None:
     """A fresh model audits with rows, coverage, and a versioned export."""
 
-    audit = torchlens.report.param_health(_model())
+    audit = torchlens.debug.param_health(_model())
 
     assert audit.schema_version == _records.CHECK_REPORT_SCHEMA_VERSION == 1
     assert len(audit.rows) == 9  # 6 params + 3 batchnorm buffers
@@ -67,7 +67,7 @@ def test_audit_params_nonfinite_named_critical() -> None:
         model[0].weight[0, 0] = float("nan")
         model[2].running_mean[0] = float("inf")
 
-    audit = torchlens.report.param_health(model)
+    audit = torchlens.debug.param_health(model)
 
     critical = {f.param_names[0]: f for f in audit.findings if f.severity == "critical"}
     assert set(critical) == {"0.weight", "2.running_mean"}
@@ -88,7 +88,7 @@ def test_audit_params_severity_mapping() -> None:
         "bounded": torch.linspace(-2.0, 2.0, 8),
     }
 
-    audit = torchlens.report.param_health(mapping, bounds={"bounded": (-1.0, 1.0)})
+    audit = torchlens.debug.param_health(mapping, bounds={"bounded": (-1.0, 1.0)})
 
     by_check = {(f.check_name, f.param_names[0]): f for f in audit.findings}
     assert by_check[("dtype_headroom", "near_max")].severity == "warning"
@@ -103,7 +103,7 @@ def test_audit_params_severity_mapping() -> None:
 def test_audit_params_tied_dedup_keeps_aliases() -> None:
     """Tied tensors are ONE row with every alias preserved (memo 4.4)."""
 
-    audit = torchlens.report.param_health(_TiedNet())
+    audit = torchlens.debug.param_health(_TiedNet())
 
     assert len(audit.rows) == 1
     row = audit.rows[0]
@@ -116,7 +116,7 @@ def test_audit_params_mapping_door_and_skip_reasons() -> None:
     """state_dict mapping enters the same door; meta/sparse skip with reason."""
 
     model = _model()
-    state_audit = torchlens.report.param_health(dict(model.state_dict()))
+    state_audit = torchlens.debug.param_health(dict(model.state_dict()))
     assert len(state_audit.rows) == 9
 
     mapping = {
@@ -125,7 +125,7 @@ def test_audit_params_mapping_door_and_skip_reasons() -> None:
         "not_a_tensor": 3.14,
         "fine": torch.ones(4),
     }
-    audit = torchlens.report.param_health(mapping)
+    audit = torchlens.debug.param_health(mapping)
     reasons = dict(audit.skipped)
     assert "meta" in reasons["meta_param"]
     assert "layout" in reasons["sparse"]
@@ -139,24 +139,24 @@ def test_audit_params_refusals_are_typed() -> None:
 
     model = _model()
     with pytest.raises(torchlens.errors.CheckConfigError) as bounds_exc:
-        torchlens.report.param_health(model, bounds={"nope": (0.0, 1.0)})
+        torchlens.debug.param_health(model, bounds={"nope": (0.0, 1.0)})
     assert bounds_exc.value.fields["code"] == "audit_bounds_unknown_name"
     assert bounds_exc.value.fields["remedy"]
 
     with pytest.raises(torchlens.errors.CheckConfigError) as within_exc:
-        torchlens.report.param_health(model, within=["ghost.weight"])
+        torchlens.debug.param_health(model, within=["ghost.weight"])
     assert within_exc.value.fields["code"] == "audit_within_unknown_name"
 
     with pytest.raises(torchlens.errors.CheckConfigError) as pair_exc:
-        torchlens.report.param_health(model, bounds={"0.weight": (1.0, -1.0)})
+        torchlens.debug.param_health(model, bounds={"0.weight": (1.0, -1.0)})
     assert pair_exc.value.fields["code"] == "check_bounds_invalid"
 
     with pytest.raises(torchlens.errors.CheckConfigError) as fraction_exc:
-        torchlens.report.param_health(model, max_fraction=1.5)
+        torchlens.debug.param_health(model, max_fraction=1.5)
     assert fraction_exc.value.fields["code"] == "check_fraction_invalid"
 
     with pytest.raises(torchlens.errors.CheckConfigError) as target_exc:
-        torchlens.report.param_health([1, 2, 3])
+        torchlens.debug.param_health([1, 2, 3])
     assert target_exc.value.fields["code"] == "check_target_invalid"
 
 
@@ -164,7 +164,7 @@ def test_audit_params_within_filters_exact_names() -> None:
     """within= audits exactly the named tensors, day-1 exact spelling."""
 
     model = _model()
-    audit = torchlens.report.param_health(model, within=["0.weight", "3.bias"])
+    audit = torchlens.debug.param_health(model, within=["0.weight", "3.bias"])
     assert sorted(row.name for row in audit.rows) == ["0.weight", "3.bias"]
 
 
@@ -173,10 +173,10 @@ def test_debug_door_and_knob_parity() -> None:
 
     import torchlens as tl
 
-    assert tl.debug.param_health is torchlens.report.param_health
-    assert tl.debug.ParamHealthReport is torchlens.report.ParamHealthReport
+    assert tl.debug.param_health is torchlens.debug.param_health
+    assert tl.debug.ParamHealthReport is torchlens.debug.ParamHealthReport
 
-    audit_defaults = signature(torchlens.report.param_health).parameters
+    audit_defaults = signature(torchlens.debug.param_health).parameters
     range_defaults = signature(tl.debug.dtype_range).parameters
     # Knob parity through the ONE constants module (memo 4.4).
     assert audit_defaults["max_fraction"].default == range_defaults["max_fraction"].default

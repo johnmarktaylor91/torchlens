@@ -327,7 +327,7 @@ def audit_trace(trace: Trace | PartialTrace) -> HealthReport:
                     message=bisect.message,
                     ops=(bisect.label,),
                     modules=(),
-                    follow_up="tl.report.bisect_nan(trace)",
+                    follow_up="tl.debug.bisect_nan(trace)",
                 )
             )
     else:
@@ -381,7 +381,7 @@ def audit_trace(trace: Trace | PartialTrace) -> HealthReport:
                 (
                     "bisect_nan_backward",
                     f"{num_backward} backward passes captured; select one with "
-                    "tl.report.bisect_nan_backward(trace, bwd=...)",
+                    "tl.debug.bisect_nan_backward(trace, bwd=...)",
                 )
             )
         else:
@@ -415,7 +415,7 @@ def audit_trace(trace: Trace | PartialTrace) -> HealthReport:
                         message=backward_bisect.message,
                         ops=(headline.label,) if headline.label else (),
                         modules=(headline.module,) if headline.module else (),
-                        follow_up="tl.report.bisect_nan_backward(trace)",
+                        follow_up="tl.debug.bisect_nan_backward(trace)",
                     )
                 )
 
@@ -423,12 +423,12 @@ def audit_trace(trace: Trace | PartialTrace) -> HealthReport:
     # checks: they never establish a model-health issue, so they are honestly
     # listed as skipped rather than counted as health checks that ran.
     skipped.append(
-        ("hot_path", "performance ranking, not a health check; run tl.report.hot_path(trace)")
+        ("hot_path", "performance ranking, not a health check; run tl.debug.hot_path(trace)")
     )
     skipped.append(
         (
             "recompute_candidates",
-            "performance ranking, not a health check; run tl.report.recompute_candidates(trace)",
+            "performance ranking, not a health check; run tl.debug.recompute_candidates(trace)",
         )
     )
     findings.sort(

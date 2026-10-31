@@ -345,7 +345,7 @@ def _inconclusive_deepcopy_report(
         seed_sensitivity_verdict="inconclusive" if seed_sensitivity else None,
         remedies=(
             "provide a model_factory-constructed fresh instance per run and "
-            "compare traces with tl.report.first_divergence",
+            "compare traces with tl.debug.first_divergence",
         ),
         message=(
             "inconclusive: the model cannot be deep-copied for isolated reruns "

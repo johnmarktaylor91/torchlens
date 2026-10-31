@@ -108,13 +108,13 @@ def test_one_label_across_every_nan_surface() -> None:
     outcome = exc.partial_log.trace.outcome
     assert outcome.boundary_label == error_label
 
-    live = tl.report.find_nan(_FaultModel(), x)
+    live = tl.debug.find_nan(_FaultModel(), x)
     assert live.found and live.label == error_label
     assert live.label_status == "final"
 
     completed = tl.trace(_FaultModel(), x)
     try:
-        bisected = tl.report.bisect_nan(completed)
+        bisected = tl.debug.bisect_nan(completed)
         assert bisected.found and bisected.label == error_label
         in_trace = completed.find_nan()
         assert in_trace.found and in_trace.label == error_label

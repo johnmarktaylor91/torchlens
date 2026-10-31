@@ -261,7 +261,7 @@ def dtype_range(
     """Audit saved activations for numeric-range and precision hazards.
 
     Non-finite classification reuses the same classifier as
-    :func:`torchlens.report.find_nan`. Range proximity is measured against the
+    :func:`torchlens.debug.find_nan`. Range proximity is measured against the
     saved output dtype's finite maximum. Downcast findings require recorded
     input dtypes that are wider within the same numeric category. Coverage is
     always reported because unsaved and non-tensor payloads are not inspected.

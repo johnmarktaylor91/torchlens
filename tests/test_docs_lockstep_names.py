@@ -342,7 +342,7 @@ CURATED_NAMESPACE_DOCS = {
 #: ``docs/agent-reference/current-2-x-surface.md`` carries the "Current 2.x Surface"
 #: prose that used to live directly in AGENTS.md (2026-10-01 docs move: "docs: move
 #: agent reference material out of startup instructions"), e.g. the
-#: ``tl.report.graph_breaks()`` mention -- its doc-of-record row stays
+#: ``tl.debug.graph_breaks()`` mention -- its doc-of-record row stays
 #: docs/reference/debug.md, but this is the common venue a bare mention counts from.
 CURATED_COMMON_VENUES = (
     "docs/reference/glossary.md",

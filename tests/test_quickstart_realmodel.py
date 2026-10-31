@@ -21,8 +21,6 @@ from torchlens._quickstart._primitive import state_dict_hash
 from torchlens.errors import SynthesizedValueReadWarning
 from torchlens.user_funcs import render
 
-pytestmark = pytest.mark.heavy
-
 
 @pytest.fixture(scope="module")
 def resnet18_eval() -> nn.Module:
@@ -32,6 +30,9 @@ def resnet18_eval() -> nn.Module:
     return torchvision.models.resnet18(weights="IMAGENET1K_V1").eval()
 
 
+# Tiers are additive: the resnet and gpt2 rungs are heavy; the three
+# multi-model riders below are slow only (heavy + slow contradicts).
+@pytest.mark.heavy
 class TestResnet18Rungs:
     """All three rungs on the README model; matched policy; restoration."""
 
@@ -89,6 +90,7 @@ class TestGpt2Rungs:
         transformers = pytest.importorskip("transformers")
         return transformers.AutoModelForCausalLM.from_pretrained("gpt2").eval()
 
+    @pytest.mark.heavy
     def test_string_is_a_gold_input_with_tokenizer_provenance(self, gpt2: nn.Module) -> None:
         """A prompt string is rung 1; the tokenizer record stays authoritative."""
 

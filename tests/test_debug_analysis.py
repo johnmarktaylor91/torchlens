@@ -119,14 +119,14 @@ def test_lineage_walks_ancestors_and_reports_bad_lookup() -> None:
     torch.manual_seed(0)
     trace = tl.trace(TinyMlp(), torch.randn(2, 4))
 
-    result = tl.report.lineage(trace, trace.output_layers[0], max_depth=2)
+    result = tl.debug.lineage(trace, trace.output_layers[0], max_depth=2)
     labels = [node[0] for node in result.nodes]
 
     assert result.start_label == "output_1:1"
     assert "linear_2_3:1" in labels
     assert all(depth <= 2 for _, depth, _, _, _ in result.nodes)
 
-    missing = tl.report.lineage(trace, "missing")
+    missing = tl.debug.lineage(trace, "missing")
     assert missing.nodes == []
     assert "unavailable" in missing.message
 
@@ -143,9 +143,9 @@ def test_compare_matches_diverges_and_skips_unsaved() -> None:
     trace_b = tl.trace(model_b, x + 0.01)
     unsaved = tl.trace(model_b, x, capture=tl.options.CaptureOptions(layers_to_save="none"))
 
-    same = tl.report.compare(trace_a, trace_a).to_pandas()
-    diff = tl.report.compare(trace_a, trace_b).to_pandas()
-    skipped = tl.report.compare(trace_a, unsaved).to_pandas()
+    same = tl.debug.compare(trace_a, trace_a).to_pandas()
+    diff = tl.debug.compare(trace_a, trace_b).to_pandas()
+    skipped = tl.debug.compare(trace_a, unsaved).to_pandas()
 
     assert same.attrs["matched"] > 0
     assert diff.attrs["value_diverged"] > 0
@@ -159,7 +159,7 @@ def test_compare_handles_recurrent_pass_records_without_layer_accessors() -> Non
     torch.manual_seed(2)
     trace = tl.trace(LoopMlp(), torch.randn(1, 4))
 
-    frame = tl.report.compare(trace, trace).to_pandas()
+    frame = tl.debug.compare(trace, trace).to_pandas()
 
     assert frame.attrs["matched"] > 0
     assert any(op.endswith(":2") for op in frame["op"])
@@ -168,7 +168,7 @@ def test_compare_handles_recurrent_pass_records_without_layer_accessors() -> Non
 def test_compare_defaults_are_locked() -> None:
     """compare exposes the specified tolerance defaults."""
 
-    params = signature(tl.report.compare).parameters
+    params = signature(tl.debug.compare).parameters
 
     assert params["rtol"].default == 1e-5
     assert params["atol"].default == 1e-8
@@ -233,8 +233,8 @@ def test_recompute_candidates_ranks_budget_and_excludes_zero_flops() -> None:
     trace = tl.trace(TinyCnn(), torch.randn(1, 1, 5, 5))
     flatten_trace = tl.trace(nn.Flatten(), torch.randn(1, 2, 2))
 
-    frame = tl.report.recompute_candidates(trace, budget_gb=1e-9).to_pandas()
-    zero = tl.report.recompute_candidates(flatten_trace).to_pandas()
+    frame = tl.debug.recompute_candidates(trace, budget_gb=1e-9).to_pandas()
+    zero = tl.debug.recompute_candidates(flatten_trace).to_pandas()
 
     assert len(frame) > 0
     assert bool(frame["suggested"].any())
@@ -253,7 +253,7 @@ def test_compare_params_matches_diverges_and_aligns_names() -> None:
     with torch.no_grad():
         model_b.net[0].bias.add_(1.0)
 
-    frame = tl.report.compare_params(model_a, model_b).to_pandas()
+    frame = tl.debug.compare_params(model_a, model_b).to_pandas()
 
     assert frame.attrs["value_diverged"] == 1
     assert frame.attrs["matched"] == len(frame) - 1
@@ -268,12 +268,12 @@ def test_compare_params_reports_one_sided_and_shape_mismatch() -> None:
     torch.manual_seed(8)
     small = nn.Linear(4, 2)
     wide = nn.Linear(4, 3)
-    frame = tl.report.compare_params(small, wide).to_pandas()
+    frame = tl.debug.compare_params(small, wide).to_pandas()
     assert frame.attrs["shape_mismatch"] == 2
     assert all(frame.loc[~frame["shape_match"], "reason"] == "shape-or-dtype-mismatch")
 
     stacked = nn.Sequential(nn.Linear(4, 2), nn.Linear(2, 2))
-    one_sided = tl.report.compare_params(nn.Sequential(nn.Linear(4, 2)), stacked).to_pandas()
+    one_sided = tl.debug.compare_params(nn.Sequential(nn.Linear(4, 2)), stacked).to_pandas()
     assert one_sided.attrs["only_b"] == 2
     assert set(one_sided.loc[one_sided["status"] == "only-b", "name"]) == {
         "1.weight",
@@ -290,8 +290,8 @@ def test_compare_params_include_buffers_covers_integer_buffers() -> None:
     model_b.load_state_dict(model_a.state_dict())
     model_b.num_batches_tracked.add_(5)
 
-    without = tl.report.compare_params(model_a, model_b).to_pandas()
-    frame = tl.report.compare_params(model_a, model_b, include_buffers=True).to_pandas()
+    without = tl.debug.compare_params(model_a, model_b).to_pandas()
+    frame = tl.debug.compare_params(model_a, model_b, include_buffers=True).to_pandas()
 
     assert "num_batches_tracked" not in set(without["name"])
     counter = frame.loc[frame["name"] == "num_batches_tracked"].iloc[0]
@@ -307,7 +307,7 @@ def test_compare_params_meta_tensors_are_incomparable_not_compared() -> None:
 
     with torch.device("meta"):
         meta_model = nn.Linear(4, 2)
-    frame = tl.report.compare_params(meta_model, nn.Linear(4, 2)).to_pandas()
+    frame = tl.debug.compare_params(meta_model, nn.Linear(4, 2)).to_pandas()
 
     assert frame.attrs["incomparable"] == 2
     assert all(frame["reason"] == "meta-tensor-has-no-data")
@@ -317,7 +317,7 @@ def test_compare_params_meta_tensors_are_incomparable_not_compared() -> None:
 def test_compare_params_defaults_are_locked() -> None:
     """compare_params exposes the specified defaults."""
 
-    params = signature(tl.report.compare_params).parameters
+    params = signature(tl.debug.compare_params).parameters
 
     assert params["rtol"].default == 1e-5
     assert params["atol"].default == 1e-8

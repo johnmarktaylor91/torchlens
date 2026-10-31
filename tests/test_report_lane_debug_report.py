@@ -1,4 +1,4 @@
-"""U42.2: every report-shaped diagnostic helper returns the one ``tl.debug.Report``.
+"""U42.2: every report-shaped diagnostic helper returns the one ``tl.report.Report``.
 
 One test per helper checks the common surface (type, lead facts, ``to_dict``,
 ``to_pandas``, the printed form). The six table helpers additionally pin that
@@ -78,19 +78,19 @@ def _helper_calls() -> dict[str, Callable[[dict[str, Any]], Any]]:
         "graph_breaks": lambda f: debug.graph_breaks(f["model"], f["x"]),
         "guess_input_shape": lambda f: debug.guess_input_shape(nn.Linear(4, 2)),
         "lineage": lambda f: debug.lineage(f["trace"], f["trace"].output_layers[0]),
-        "find_nan": lambda f: tl.report.find_nan(f["model"], f["x"]),
+        "find_nan": lambda f: tl.debug.find_nan(f["model"], f["x"]),
         "bisect_nan": lambda f: debug.bisect_nan(f["trace"]),
         "nan_report": lambda f: tl.debug.nonfinite_origin(f["model"], f["x"]),
         "bisect_nan_backward": lambda f: debug.bisect_nan_backward(f["grad_trace"]),
         "bisect_precision": lambda f: debug.bisect_precision(f["model"], f["x"]),
         "param_health": lambda f: tl.debug.param_health(f["model"]),
-        "first_bad_thing": lambda f: tl.report.find_nan(f["model"], f["x"]).first_bad_thing,
+        "first_bad_thing": lambda f: tl.debug.find_nan(f["model"], f["x"]).first_bad_thing,
         "hot_path": lambda f: debug.hot_path(f["trace"]),
         "dead_neurons": lambda f: debug.dead_neurons(f["trace"]),
-        "compare": lambda f: tl.report.compare(f["trace"], f["trace"]),
+        "compare": lambda f: tl.debug.compare(f["trace"], f["trace"]),
         "recompute_candidates": lambda f: debug.recompute_candidates(f["trace"]),
         "gradient_flow_audit": lambda f: tl.debug.grad_health(f["grad_trace"]),
-        "compare_params": lambda f: tl.report.compare_params(f["model"], f["model"]),
+        "compare_params": lambda f: tl.debug.compare_params(f["model"], f["model"]),
     }
 
 
@@ -103,11 +103,11 @@ def fixtures(model: nn.Module, x: torch.Tensor, trace: Any, grad_trace: Any) -> 
 def test_helper_returns_the_debug_report(helper: str, fixtures: dict[str, Any]) -> None:
     report = _helper_calls()[helper](fixtures)
 
-    assert isinstance(report, tl.debug.Report)
+    assert isinstance(report, tl.report.Report)
     assert isinstance(report, BoundedReport)
     assert report.report_type and report.subject and report.status
     payload = report.to_dict()
-    if type(report).to_dict is tl.debug.Report.to_dict:
+    if type(report).to_dict is tl.report.Report.to_dict:
         assert payload["report_type"] == report.report_type
         assert payload["status"] == report.status
     json.dumps(payload)
@@ -135,7 +135,7 @@ def test_param_audit_prints_exactly_as_before(model: nn.Module) -> None:
 
 
 def test_table_report_never_is_a_dataframe(trace: Any) -> None:
-    report = tl.report.hot_path(trace)
+    report = tl.debug.hot_path(trace)
 
     assert not isinstance(report, pd.DataFrame)
     assert not hasattr(report, "columns")
@@ -162,9 +162,9 @@ def _assert_same(report: Any, expected: Any) -> None:
 
 
 def test_hot_path_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = tl.report.hot_path_rows(trace, "flops")
+    rows, attrs = tl.debug.hot_path_rows(trace, "flops")
     columns = ["source_file:line", "op_count", "total_cost", "pct_total"]
-    _assert_same(tl.report.hot_path(trace), _frame(rows, columns, attrs))
+    _assert_same(tl.debug.hot_path(trace), _frame(rows, columns, attrs))
 
 
 def test_dead_neurons_frame_is_unchanged(trace: Any) -> None:
@@ -185,7 +185,7 @@ def test_compare_frame_is_unchanged(trace: Any) -> None:
         "allclose",
         "reason",
     ]
-    _assert_same(tl.report.compare(trace, trace), _frame(rows, columns, attrs))
+    _assert_same(tl.debug.compare(trace, trace), _frame(rows, columns, attrs))
 
 
 def test_gradient_flow_audit_frame_is_unchanged(grad_trace: Any) -> None:
@@ -217,7 +217,7 @@ def test_recompute_candidates_frame_is_unchanged(trace: Any) -> None:
     columns = ["op", "activation_memory", "flops_forward", "mem_per_flop", "suggested"]
     expected = _frame(rows, columns, {"total_freeable": sum(r["activation_memory"] for r in rows)})
     assert rows, "the fixture must yield candidates"
-    _assert_same(tl.report.recompute_candidates(trace), expected)
+    _assert_same(tl.debug.recompute_candidates(trace), expected)
 
 
 def test_compare_params_frame_is_unchanged() -> None:
@@ -250,4 +250,4 @@ def test_compare_params_frame_is_unchanged() -> None:
         "reason",
     ]
     expected = _frame(rows, columns, {"matched": 1, "value_diverged": 1})
-    _assert_same(tl.report.compare_params(left, right), expected)
+    _assert_same(tl.debug.compare_params(left, right), expected)

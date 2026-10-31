@@ -7,10 +7,10 @@ spelling on the left, the TorchLens spelling on the right.
 
 | torchviz | TorchLens | Notes |
 | --- | --- | --- |
-| `make_dot(y)` on a tensor you already have | `tl.report.sketch_grad_fn(y)` | Walks `y.grad_fn` after the fact, with no re-run and no capture. Returns the DOT source. |
-| `make_dot(y, params=dict(model.named_parameters()))` | `tl.report.sketch_grad_fn(y, params=dict(model.named_parameters()))`, or `model=model` | Same leaf-naming convention. |
-| `dot.render("graph", format="png")` | `tl.report.sketch_grad_fn(y, "graph", file_format="png")` | Writes `graph.png`; `view=True` opens it. |
-| The walk as data | `tl.report.walk_grad_fn(y)` | A `GradFnSketch` with nodes, edges and a truncation flag. |
+| `make_dot(y)` on a tensor you already have | `tl.debug.sketch_grad_fn(y)` | Walks `y.grad_fn` after the fact, with no re-run and no capture. Returns the DOT source. |
+| `make_dot(y, params=dict(model.named_parameters()))` | `tl.debug.sketch_grad_fn(y, params=dict(model.named_parameters()))`, or `model=model` | Same leaf-naming convention. |
+| `dot.render("graph", format="png")` | `tl.debug.sketch_grad_fn(y, "graph", file_format="png")` | Writes `graph.png`; `view=True` opens it. |
+| The walk as data | `tl.debug.walk_grad_fn(y)` | A `GradFnSketch` with nodes, edges and a truncation flag. |
 | `make_dot(..., show_attrs=True, show_saved=True)` | Capture a trace instead (see below) | The sketch stays structure-only by design: it never reads values. |
 | `make_dot_from_trace` (JIT trace) | `tl.trace(model, x).draw()` | The forward graph of every executed op. |
 
@@ -49,7 +49,7 @@ import torchlens as tl
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 1))
 y = model(torch.randn(2, 4)).sum()
-dot_source = tl.report.sketch_grad_fn(y, params=dict(model.named_parameters()))
+dot_source = tl.debug.sketch_grad_fn(y, params=dict(model.named_parameters()))
 RESULT = ("AddmmBackward0" in dot_source, "0.weight" in dot_source)
 ```
 

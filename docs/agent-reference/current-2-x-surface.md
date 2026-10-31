@@ -24,7 +24,7 @@
 - Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. Gradient helpers:
   `tl.hook_grad` (live or rerun backward hook), `tl.zero_grad`, `tl.scale_grad`, `tl.clamp_grad`,
   `tl.clip_grad` and `tl.add_grad_noise` edit gradients during the backward pass.
-- Report and statistics additions: `tl.report.amp_scaled_grads_hint` returns the GradScaler
+- Report and statistics additions: `tl.debug.amp_scaled_grads_hint` returns the GradScaler
   loss-scale disclosure text; `tl.report.flops_vs_dispatch` runs the two-way FLOP cross-check;
   `tl.stats.cosine_distance`, `tl.stats.relative_l1` and `tl.stats.relative_l2` are the 0-d
   output-difference metrics (relative metrics anchored on the first argument).
@@ -598,7 +598,7 @@
   caches stay intact with the warm artifact bitwise-reproduced afterward, and TorchLens wrapper
   install/uninstall costs a bounded burst of recompilations on the first compiled call
   after each capture, then steady state (measured: none on `resnet18`, six to seven frames on a tiny GPT-2;
-  verify with `tl.report.count_compiles()`; correlate breaks with `tl.report.graph_breaks()`). Compiled child
+  verify with `tl.debug.count_compiles()`; correlate breaks with `tl.debug.graph_breaks()`). Compiled child
   `nn.Module`s are still unwrapped to their eager source in both regimes. On torch < 2.6 (or a
   stance that fails to engage) the exact historical fallback holds: a Dynamo-traced region reached
   mid-capture is bypassed with a one-per-forward warning and the returned `Trace` honestly contains
@@ -1638,7 +1638,7 @@
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
   `tl.clear_cache()` (`tl.user_funcs.clear_cache`), `tl.observers.register_tensor_connection`
-  and `tl.report.isolated_capture`.
+  and `tl.debug.isolated_capture`.
 
 ## Debugging tools and report results
 

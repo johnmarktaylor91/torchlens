@@ -57,7 +57,7 @@ def _inference_remedies(model: nn.Module) -> str:
         "(2) pass input_size= with your shape -- a flat tuple, a sequence of "
         "tuples, or a mapping of forward keyword names to shapes, with "
         "torchlens.types.InputSpec for dtype/value-recipe hints; "
-        "(3) run torchlens.report.guess_input_shape(model, ...) directly with "
+        "(3) run torchlens.debug.guess_input_shape(model, ...) directly with "
         "hints and read its attempt diary"
     )
     if _is_hf_model(model):

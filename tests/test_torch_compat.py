@@ -494,7 +494,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_TRACING_TENSOR_TYPES": tc.HAS_TRACING_TENSOR_TYPES,
         # Compile rung-2 probes: set_stance (torch >= 2.6) lets capture run
         # compiled callables through their original eager Python, and Dynamo's
-        # compile counters back tl.report.count_compiles. Build-dependent, so
+        # compile counters back tl.debug.count_compiles. Build-dependent, so
         # mirror the live values.
         "HAS_SET_STANCE": tc.HAS_SET_STANCE,
         # CUDA-graph bindings exist only on CUDA builds; mirror the live value.

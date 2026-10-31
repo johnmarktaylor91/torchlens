@@ -9,7 +9,7 @@ re-homing them is one facade edit. `HealthReport` and `FlopsCrossCheck` are defi
 here but exported from `tl.report`.
 
 ## The report object (U42.2; DOCUMENTED-UNSTABLE)
-- Every report-shaped result is a `tl.debug.Report` (defined in
+- Every report-shaped result is a `tl.report.Report` (defined in
   `torchlens/_debug_report.py`, at the package root so `checks.ParamHealthReport` can
   subclass it without importing this package): `report_type`, `subject`,
   `status`, `to_dict()`, `to_pandas()`, and `str()` = a bounded card (lead line,

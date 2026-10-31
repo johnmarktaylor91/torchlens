@@ -55,7 +55,7 @@ in a probe diary) and the surface consumes the exact verified capture --
 the cost is "N probes + 1 verified capture", never a second capture after
 verification. When inference cannot help, the refusal teaches the exact
 next command, in order: pass the real call; pass `input_size=` (including
-the mapping form); call `torchlens.report.guess_input_shape` directly with
+the mapping form); call `torchlens.debug.guess_input_shape` directly with
 hints. For Hugging Face models the refusal says the better answer first: a
 real prompt string.
 

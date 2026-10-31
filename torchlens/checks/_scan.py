@@ -1,7 +1,7 @@
 """The ONE shared batched tensor-scan kernel (checks memo item 1 / 4.4).
 
 One kernel, two spellings: ``tl.debug.param_health`` shapes rows into a
-:class:`~torchlens.report.ParamHealthReport`, and the registry's scheduled scan
+:class:`~torchlens.debug.ParamHealthReport`, and the registry's scheduled scan
 consumes the same rows with report shaping skipped. Engineering contract
 (memo 4.4): batched per ``(device, dtype)`` group with ~1 host sync per
 group, integer counts exact, extrema carried as float64 SCALARS only --
@@ -251,7 +251,7 @@ def scan_named_tensors(
     bounds:
         Optional exact-name bounds mapping ``name -> (low, high)`` with
         either side ``None`` for one-sided bounds. Unknown names REFUSE
-        (memo 4.4) at the caller (:func:`torchlens.report.param_health`),
+        (memo 4.4) at the caller (:func:`torchlens.debug.param_health`),
         which validates against the full inventory before dedup.
 
     Returns
